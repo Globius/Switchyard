@@ -1,0 +1,10 @@
+==> haproxy/haproxy.cfg (haproxy, lines 138-146)
+backend pool_nextcloud
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-1-7-11000 10.60.1.7:11000 check weight 100

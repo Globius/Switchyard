@@ -1,0 +1,13 @@
+==> haproxy/haproxy.cfg (haproxy, lines 65-76)
+backend pool_billing
+    mode http
+    balance roundrobin
+    stick-table type ipv6 size 100000 expire 1800s
+    stick on src
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-1-2-443 10.60.1.2:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+    server 10-60-1-3-443 10.60.1.3:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100

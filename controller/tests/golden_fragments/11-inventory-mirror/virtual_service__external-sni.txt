@@ -1,0 +1,54 @@
+==> haproxy/haproxy.cfg (haproxy, lines 31-54)
+frontend vs_external-sni
+    mode http
+    bind 192.0.2.20:80
+    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/certs/external-sni.crtlist alpn h2,http/1.1
+    bind 192.0.2.20:6789
+    bind 192.0.2.20:8075
+    bind 192.0.2.20:8682
+    bind 192.0.2.20:8843 ssl crt-list /etc/switchyard/certs/external-sni.crtlist alpn http/1.1
+    bind 192.0.2.20:8880
+    option httplog
+    option forwardfor
+    tcp-request session reject if !{ src -f /etc/switchyard/haproxy/lists/cloudflare-ranges.cidr }
+    http-request set-var(txn.trusted) bool(true) if { src -f /etc/switchyard/haproxy/lists/cloudflare-ranges.cidr }
+    http-request set-src hdr(CF-Connecting-IP) if { var(txn.trusted) -m bool } { hdr(CF-Connecting-IP) -m found }
+    http-request del-header CF-Connecting-IP if !{ var(txn.trusted) -m bool }
+    http-request del-header X-Forwarded-For
+    http-request set-header X-Forwarded-Proto https if { ssl_fc }
+    http-request set-header X-Forwarded-Proto http if !{ ssl_fc }
+    http-request set-var(txn.host) req.hdr(host),field(1,:),lower
+    http-request redirect prefix "https://%[var(txn.host)]" code 301 if { dst_port 80 }
+    http-request redirect location /remote.php/dav/ code 301 if { var(txn.host) -m str files.files.example.org } { path_beg /.well-known/carddav }
+    http-request redirect location /remote.php/dav/ code 301 if { var(txn.host) -m str files.files.example.org } { path_beg /.well-known/caldav }
+    use_backend %[var(txn.host),map(/etc/switchyard/haproxy/maps/external-sni-host.map)] if { var(txn.host),map(/etc/switchyard/haproxy/maps/external-sni-host.map) -m found }
+    default_backend pool_ubiquiti
+
+==> certs/external-sni.crtlist (plaintext, whole file)
+/etc/switchyard/certs/corp-wild.pem *.corp.example.test corp.example.test
+/etc/switchyard/certs/prod-wild.pem *.prod.corp.example.test
+/etc/switchyard/certs/svc-wild.pem *.svc.example.net svc.example.net
+/etc/switchyard/certs/files-wild.pem *.files.example.org files.example.org
+/etc/switchyard/certs/home-wild.pem *.home.example.com home.example.com
+/etc/switchyard/certs/insurance.pem example-insurance.example.org
+
+==> haproxy/maps/external-sni-host.map (plaintext, whole file)
+billing.svc.example.net pool_billing
+chat.files.example.org pool_matrix
+example-insurance.example.org pool_insurance
+files.files.example.org pool_nextcloud
+headscale.svc.example.net pool_headscale
+ipam.prod.corp.example.test pool_ipam
+matrix.files.example.org pool_matrix
+office.prod.corp.example.test pool_office-online
+rancher.prod.corp.example.test pool_rancher
+recipes.home.example.com pool_mealie
+sso-admin.corp.example.test pool_keycloak
+sso.corp.example.test pool_keycloak
+store.prod.corp.example.test pool_pwd-store
+uisp.svc.example.net pool_ubiquiti
+
+==> haproxy/lists/cloudflare-ranges.cidr (plaintext, whole file)
+198.51.100.0/24
+203.0.113.0/24
+2001:db8:100::/40

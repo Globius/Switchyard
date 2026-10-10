@@ -1,0 +1,10 @@
+==> haproxy/haproxy.cfg (haproxy, lines 148-156)
+backend pool_office-online
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-6-3-80 10.60.6.3:80 check weight 100

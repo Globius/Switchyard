@@ -497,3 +497,43 @@ async def test_union_validation_errors_keep_field_paths_without_the_tag(api: Api
         f"{t}/policy-sets?apply=true", json={"kind": "bogus", "name": "x"}, headers=h
     )
     assert r.status_code == 422
+
+
+async def test_rendered_config_per_object_live_and_draft(api: Api) -> None:
+    h = await api.token()
+    rendered = f"{V1}/tenants/acme/pools/{POOL}/rendered"
+    live = await api.client.get(rendered, headers=h)
+    assert live.status_code == 200
+    [item] = live.json()["items"]
+    assert (item["file"], item["language"], item["se_group_id"]) == (
+        "haproxy/haproxy.cfg",
+        "haproxy",
+        str(GROUP),
+    )
+    assert len(item["fingerprint"]) == 64 and item["range"][0] <= item["range"][1]
+
+    cs = (
+        await api.client.post(f"{V1}/tenants/acme/change-sets", json={"summary": "x"}, headers=h)
+    ).json()["id"]
+    await api.client.patch(
+        f"{V1}/tenants/acme/pools/{POOL}?change_set={cs}",
+        json={"algorithm": "source"},
+        headers={**h, "If-Match": '"1"'},
+    )
+    draft = (await api.client.get(f"{rendered}?change_set={cs}", headers=h)).json()["items"][0]
+    assert "balance source" in draft["content"] and "balance source" not in item["content"]
+    assert draft["fingerprint"] != item["fingerprint"]
+
+    diff = (await api.client.get(f"{V1}/tenants/acme/change-sets/{cs}/diff", headers=h)).json()
+    [changed] = diff["se_groups"][0]["files"]
+    assert (changed["before"], changed["after"]) == (item["content"], draft["content"])
+    assert changed["status"] == "modified" and changed["diff"]
+
+    vs = await api.client.get(f"{V1}/tenants/acme/virtual-services/{VS}/rendered", headers=h)
+    assert vs.json()["items"][0]["content"].count("frontend vs_") >= 1
+    missing = await api.client.get(f"{V1}/tenants/acme/pools/{uuid.uuid4()}/rendered", headers=h)
+    assert missing.status_code == 404
+    unsupported = await api.client.get(
+        f"{V1}/tenants/acme/networks/{uuid.uuid4()}/rendered", headers=h
+    )
+    assert unsupported.status_code in (404, 405)

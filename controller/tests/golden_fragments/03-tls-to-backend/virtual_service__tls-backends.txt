@@ -1,0 +1,18 @@
+==> haproxy/haproxy.cfg (haproxy, lines 31-40)
+frontend vs_tls-backends
+    mode http
+    bind 192.0.2.22:443 ssl crt-list /etc/switchyard/certs/tls-backends.crtlist alpn h2,http/1.1
+    option httplog
+    option forwardfor
+    http-request del-header X-Forwarded-For
+    http-request set-header X-Forwarded-Proto https if { ssl_fc }
+    http-request set-header X-Forwarded-Proto http if !{ ssl_fc }
+    http-request set-var(txn.host) req.hdr(host),field(1,:),lower
+    use_backend %[var(txn.host),map(/etc/switchyard/haproxy/maps/tls-backends-host.map)] if { var(txn.host),map(/etc/switchyard/haproxy/maps/tls-backends-host.map) -m found }
+
+==> certs/tls-backends.crtlist (plaintext, whole file)
+/etc/switchyard/certs/wild-example-test.pem *.example.test
+
+==> haproxy/maps/tls-backends-host.map (plaintext, whole file)
+rancher.example.test pool_rancher
+uisp.example.test pool_ubiquiti

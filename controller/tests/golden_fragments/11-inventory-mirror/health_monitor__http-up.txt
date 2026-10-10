@@ -1,0 +1,134 @@
+==> haproxy/haproxy.cfg (haproxy, lines 65-76)
+backend pool_billing
+    mode http
+    balance roundrobin
+    stick-table type ipv6 size 100000 expire 1800s
+    stick on src
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-1-2-443 10.60.1.2:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+    server 10-60-1-3-443 10.60.1.3:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 78-86)
+backend pool_headscale
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-5-182-8080 10.60.5.182:8080 check weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 88-96)
+backend pool_insurance
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-61-0-3-443 10.61.0.3:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 98-106)
+backend pool_ipam
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-5-100-80 10.60.5.100:80 check weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 108-116)
+backend pool_keycloak
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-1-5-8080 10.60.1.5:8080 check weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 118-126)
+backend pool_matrix
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-61-0-3-443 10.61.0.3:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 128-136)
+backend pool_mealie
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-40-1-3-9925 10.40.1.3:9925 check weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 138-146)
+backend pool_nextcloud
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-1-7-11000 10.60.1.7:11000 check weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 148-156)
+backend pool_office-online
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-6-3-80 10.60.6.3:80 check weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 158-166)
+backend pool_pwd-store
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-0-5-8096 10.60.0.5:8096 check weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 168-176)
+backend pool_rancher
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-0-5-10002 10.60.0.5:10002 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
+
+==> haproxy/haproxy.cfg (haproxy, lines 190-198)
+backend pool_ubiquiti
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-1-4-8080 10.60.1.4:8080 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100
