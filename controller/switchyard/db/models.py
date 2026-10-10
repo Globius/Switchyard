@@ -91,6 +91,21 @@ class VipPoolRow(TenantOwnedMixin, Base):
     ranges: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False)
 
 
+class RoutingProfileRow(TenantOwnedMixin, Base):
+    """``routing_profile``: ``kind`` plus its settings as JSON (validated by the domain models)."""
+
+    __tablename__ = "routing_profile"
+    __table_args__ = (
+        *tenant_unique(),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        CheckConstraint("kind IN ('vrrp', 'bgp')", name="kind"),
+        CheckConstraint("version >= 1", name="version"),
+    )
+
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    spec: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+
+
 class SeGroupRow(TenantOwnedMixin, Base):
     """``se_group``."""
 
@@ -98,11 +113,13 @@ class SeGroupRow(TenantOwnedMixin, Base):
     __table_args__ = (
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        tenant_fk("routing_profile_id", "routing_profile"),
         enum_check("ha_mode", dm.HaMode),
         CheckConstraint("version >= 1", name="version"),
     )
 
     ha_mode: Mapped[str] = mapped_column(Text, nullable=False)
+    routing_profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     maxconn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20000"))
     canary_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("30"))
 

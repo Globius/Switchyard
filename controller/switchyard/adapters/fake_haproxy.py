@@ -31,7 +31,7 @@ _KNOWN = frozenset(
         *("ssl-default-bind-options", "ssl-default-server-options", "option", "retries"),
         *("timeout", "mode", "bind", "tcp-request", "http-request", "use_backend"),
         *("default_backend", "balance", "stick-table", "stick", "http-check"),
-        *("default-server", "server"),
+        *("default-server", "server", "monitor-uri", "no"),
     }
 )
 _ADMIN_TO_STATUS = {"ready": "UP", "drain": "DRAIN", "maint": "MAINT"}

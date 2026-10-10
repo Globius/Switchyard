@@ -22,6 +22,8 @@ to restore and the report says so.
 """
 
 import asyncio
+import contextlib
+import hashlib
 import logging
 import time
 from collections.abc import Sequence
@@ -33,24 +35,34 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
+from switchyard.adapters.agent import AgentEngine, AgentError
 from switchyard.adapters.haproxy import HaproxyEngine, HaproxyError, ServerStatus
 from switchyard.adapters.sandbox import SandboxValidator, require_valid
+from switchyard.adapters.secrets import SecretsReader
 from switchyard.db import audit_log
 from switchyard.db import changesets as store
 from switchyard.db.repository import load_snapshot
 from switchyard.db.store import ConcurrentModificationError, apply_delta
 from switchyard.db.tenancy import tenant_session
+from switchyard.domain import models as dm
 from switchyard.domain.changes import ChangeError, Draft, apply_ops
 from switchyard.domain.errors import DomainValidationError
 from switchyard.domain.models import SeGroup
 from switchyard.domain.snapshot import Snapshot
 from switchyard.domain.workflow import ChangeSetState, DeploymentState
 from switchyard.jobs import queue
-from switchyard.pipeline.canary import NoRoutingProbe, RoutingProbe, Sleep, canary_check
+from switchyard.pipeline.canary import (
+    AgentRoutingProbe,
+    NoRoutingProbe,
+    RoutingProbe,
+    Sleep,
+    canary_check,
+)
 from switchyard.pipeline.engines import EngineDirectory, EngineRecord
 from switchyard.pipeline.locks import PgGroupLocks
 from switchyard.render.escape import RenderError
 from switchyard.render.haproxy import RenderResult, render_haproxy
+from switchyard.render.routing import EngineSlot, render_agent_bundle
 from switchyard.services.context import Clock, Databases, utcnow
 
 log = logging.getLogger("switchyard.pipeline")
@@ -129,6 +141,16 @@ class _Plan:
     previous: RenderResult | None
     engines: list[tuple[EngineRecord, HaproxyEngine]] = field(default_factory=list)
     notes: dict[str, Any] = field(default_factory=dict)
+    agents: dict[str, AgentEngine] = field(default_factory=dict)
+    bundles: dict[str, dict[str, str]] = field(default_factory=dict)
+    previous_bundles: dict[str, dict[str, str]] = field(default_factory=dict)
+
+    @property
+    def changed(self) -> bool:
+        """True if the HAProxy files or any engine's routing bundle differ from before."""
+        if self.previous is None or self.previous.content_hash != self.target.content_hash:
+            return True
+        return self.bundles != self.previous_bundles
 
 
 class _RolloutFailedError(Exception):
@@ -147,6 +169,7 @@ class ApplyPipeline:
         *,
         sandbox: SandboxValidator | None = None,
         probe: RoutingProbe | None = None,
+        secrets: SecretsReader | None = None,
         lock_timeout_s: float = 300.0,
         canary_poll_s: float = 2.0,
         sleep: Sleep = asyncio.sleep,
@@ -159,7 +182,8 @@ class ApplyPipeline:
             engines: Finds and connects to each group's engines.
             sandbox: ``haproxy -c`` sandbox; skipped when ``None`` (the canary engine still
                 validates with its own HAProxy).
-            probe: Routing check for the canary; defaults to one that reports "not checked".
+            probe: Routing check for engines without an agent; defaults to "not checked".
+            secrets: Resolves BGP session passwords for the routing renderer.
             lock_timeout_s: How long to wait for another apply on the same SE group.
             canary_poll_s: Delay between canary polls.
             sleep: Injected for tests.
@@ -169,6 +193,7 @@ class ApplyPipeline:
         self._directory = engines
         self._sandbox = sandbox
         self._probe = probe or NoRoutingProbe()
+        self._secrets = secrets
         self._locks = PgGroupLocks(db.admin, timeout_s=lock_timeout_s)
         self._poll = canary_poll_s
         self._sleep = sleep
@@ -191,7 +216,7 @@ class ApplyPipeline:
                 raise PipelineStateError(f"change set {change_set_id} is not being applied")
             ops = await store.load_ops(session, change_set_id)
 
-        opened: list[HaproxyEngine] = []
+        opened: list[HaproxyEngine | AgentEngine] = []
         try:
             for _attempt in range(3):
                 base = await self._load_base(tenant_id)
@@ -237,16 +262,13 @@ class ApplyPipeline:
         tenant_id: UUID,
         base: Snapshot,
         draft: Draft,
-        opened: list[HaproxyEngine],
+        opened: list[HaproxyEngine | AgentEngine],
     ) -> list[_Plan]:
         plans: list[_Plan] = []
         for group in sorted(draft.snapshot.se_groups, key=lambda g: g.name):
             target = render_haproxy(draft.snapshot, group.id)
-            previous: RenderResult | None = None
-            if any(g.id == group.id for g in base.se_groups):
-                previous = render_haproxy(base, group.id)
-            if previous is not None and previous.content_hash == target.content_hash:
-                continue
+            existed = any(g.id == group.id for g in base.se_groups)
+            previous: RenderResult | None = render_haproxy(base, group.id) if existed else None
             if not _renders_anything(target) and previous is None:
                 continue  # a brand-new group with no services needs no push yet
             plan = _Plan(group=group, target=target, previous=previous)
@@ -255,14 +277,67 @@ class ApplyPipeline:
                 for r in await self._directory.list_engines(tenant_id, group.id)
                 if r.state.value == "enabled"
             ]
-            if not records:
-                raise _PlanError(f"SE group {group.name} has no enabled engines to deploy to")
             for record in records:
                 engine = await self._directory.connect(record)
                 opened.append(engine)
                 plan.engines.append((record, engine))
+                agent = await self._directory.connect_agent(record)
+                if agent is not None:
+                    opened.append(agent)
+                    plan.agents[record.name] = agent
+            await self._plan_bundles(plan, base, draft.snapshot, records)
+            if not plan.changed:
+                continue
+            if not records:
+                raise _PlanError(f"SE group {group.name} has no enabled engines to deploy to")
             plans.append(plan)
         return plans
+
+    async def _secrets_for(self, snapshot: Snapshot, group: SeGroup) -> dict[str, str]:
+        """Resolve the BGP session passwords the group's profile refers to."""
+        refs = {
+            peer.md5_ref
+            for profile in snapshot.routing_profiles
+            if profile.id == group.routing_profile_id and isinstance(profile, dm.BgpProfile)
+            for peer in profile.peers
+            if peer.md5_ref
+        }
+        found: dict[str, str] = {}
+        for ref in sorted(refs):
+            if self._secrets is None:
+                raise _PlanError("BGP passwords are configured but no secrets backend is available")
+            try:
+                found[ref] = await self._secrets.get(ref)
+            except LookupError as exc:
+                raise _PlanError(f"secret {ref} for BGP peer authentication not found") from exc
+        return found
+
+    async def _plan_bundles(
+        self, plan: _Plan, base: Snapshot, after: Snapshot, records: list[EngineRecord]
+    ) -> None:
+        """Render each agent-managed engine's routing files, before and after the change."""
+        group = plan.group
+        if not plan.agents or group.routing_profile_id is None:
+            return
+        if not _renders_anything(plan.target):
+            return
+        secrets_after = await self._secrets_for(after, group)
+        existed = plan.previous is not None
+        secrets_before = await self._secrets_for(base, group) if existed else {}
+        for index, record in enumerate(records):
+            if record.name not in plan.agents:
+                continue
+            if group.ha_mode is dm.HaMode.BGP and not record.mgmt_ip:
+                raise _PlanError(
+                    f"engine {record.name} needs mgmt_ip: it is used as the BGP router id"
+                )
+            slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
+            plan.bundles[record.name] = render_agent_bundle(after, group.id, slot, secrets_after)
+            if existed:
+                with contextlib.suppress(RenderError):
+                    plan.previous_bundles[record.name] = render_agent_bundle(
+                        base, group.id, slot, secrets_before
+                    )
 
     # -- execution -------------------------------------------------------------------------------
 
@@ -318,34 +393,56 @@ class ApplyPipeline:
             ]
             return await self._fail(tenant_id, change_set_id, message, failed, request_id, started)
 
+    async def _push_one(self, plan: _Plan, record: EngineRecord, engine: HaproxyEngine) -> None:
+        """Push HAProxy files, then the routing bundle, to one engine."""
+        previous_files = plan.previous.files if plan.previous else None
+        await engine.push(plan.target.files, previous=previous_files)
+        agent = plan.agents.get(record.name)
+        bundle = plan.bundles.get(record.name)
+        if agent is not None and bundle is not None:
+            result = await agent.apply_bundle(bundle_id(bundle), bundle)
+            if not result.ok:
+                note = " (previous files restored)" if result.restored_previous else ""
+                raise HaproxyError(
+                    f"{record.name}: agent rejected the routing bundle: {result.error}{note}"
+                )
+
     async def _rollout(self, plan: _Plan, pushed: list[tuple[HaproxyEngine, _Plan]]) -> None:
         """Validate, push to the canary, watch it, then push to the rest."""
         group, files = plan.group, plan.target.files
         canary_record, canary = plan.engines[0]
-        previous_files = plan.previous.files if plan.previous else None
         try:
             if self._sandbox is not None:
                 await require_valid(self._sandbox, files)
             await canary.validate(files)
             before: list[ServerStatus] = await canary.server_statuses()
-            await canary.push(files, previous=previous_files)
-            pushed.append((canary, plan))
-        except HaproxyError as exc:
+            pushed.append((canary, plan))  # recorded first: a half-applied push must be reverted
+            await self._push_one(plan, canary_record, canary)
+        except (HaproxyError, AgentError) as exc:
             raise _RolloutFailedError(plan, f"SE group {group.name}: {exc}") from exc
         plan.notes["canary"] = canary_record.name
+        probe: RoutingProbe = self._probe
+        agent = plan.agents.get(canary_record.name)
+        if agent is not None and canary_record.name in plan.bundles:
+            probe = AgentRoutingProbe(
+                agent,
+                expected_bundle=bundle_id(plan.bundles[canary_record.name]),
+                expected_hashes=file_hashes(plan.bundles[canary_record.name]),
+                sleep=self._sleep,
+            )
         try:
             result = await canary_check(
                 canary,
                 group=group,
                 expected_fingerprint=plan.target.fingerprint,
                 before=before,
-                probe=self._probe,
+                probe=probe,
                 window_s=float(group.canary_seconds),
                 poll_s=self._poll,
                 sleep=self._sleep,
                 monotonic=time.monotonic,
             )
-        except HaproxyError as exc:
+        except (HaproxyError, AgentError) as exc:
             raise _RolloutFailedError(plan, f"SE group {group.name}: canary check: {exc}") from exc
         plan.notes["canary_notes"] = list(result.notes)
         if not result.ok:
@@ -354,16 +451,18 @@ class ApplyPipeline:
             )
         for record, engine in plan.engines[1:]:
             try:
-                await engine.push(files, previous=previous_files)
                 pushed.append((engine, plan))
+                await self._push_one(plan, record, engine)
                 if await engine.fingerprint() != plan.target.fingerprint:
                     raise _RolloutFailedError(
                         plan,
                         f"SE group {group.name}: {record.name} is not running the pushed config",
                     )
-            except HaproxyError as exc:
+            except (HaproxyError, AgentError) as exc:
                 raise _RolloutFailedError(plan, f"SE group {group.name}: {exc}") from exc
         plan.notes["engines"] = [r.name for r, _ in plan.engines]
+        if plan.bundles:
+            plan.notes["bundles"] = {n: bundle_id(b) for n, b in sorted(plan.bundles.items())}
 
     async def _revert(self, pushed: Sequence[tuple[HaproxyEngine, _Plan]]) -> dict[UUID, list[str]]:
         """Put every engine that took the new configuration back. Never raises."""
@@ -382,6 +481,18 @@ class ApplyPipeline:
             except HaproxyError as exc:
                 log.error("reverting %s failed: %s", engine.name, exc)
                 entry.append(f"{engine.name}: REVERT FAILED: {exc}")
+            agent = plan.agents.get(engine.name)
+            before = plan.previous_bundles.get(engine.name)
+            if agent is not None and before is not None:
+                try:
+                    result = await agent.apply_bundle(bundle_id(before), before)
+                    entry.append(
+                        f"{engine.name}: routing "
+                        + ("reverted" if result.ok else f"REVERT FAILED: {result.error}")
+                    )
+                except AgentError as exc:
+                    log.error("reverting routing on %s failed: %s", engine.name, exc)
+                    entry.append(f"{engine.name}: routing REVERT FAILED: {exc}")
         return notes
 
     # -- outcomes --------------------------------------------------------------------------------
@@ -507,6 +618,19 @@ class ApplyPipeline:
 
 class _PlanError(Exception):
     """A planning problem that fails the change set (for example a group with no engines)."""
+
+
+def bundle_id(files: dict[str, str]) -> str:
+    """Identify a routing bundle by the hash of its files (what the agent reports back)."""
+    digest = hashlib.sha256()
+    for path in sorted(files):
+        digest.update(f"{path}\0{files[path]}\0".encode())
+    return digest.hexdigest()[:24]
+
+
+def file_hashes(files: dict[str, str]) -> dict[str, str]:
+    """SHA-256 of each file, as the agent reports them."""
+    return {p: hashlib.sha256(c.encode()).hexdigest() for p, c in files.items()}
 
 
 def _renders_anything(result: RenderResult) -> bool:

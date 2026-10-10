@@ -16,12 +16,13 @@ HAProxy facts used here:
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from switchyard.adapters.agent import AgentEngine, AgentStatus
 from switchyard.adapters.haproxy import HaproxyEngine, ServerStatus
-from switchyard.domain.models import SeGroup
+from switchyard.domain.models import HaMode, SeGroup
 
 Sleep = Callable[[float], Awaitable[None]]
 Monotonic = Callable[[], float]
@@ -152,3 +153,73 @@ async def canary_check(
             ok=False, problems=(f"{engine.name}: {result.detail}",), notes=tuple(notes)
         )
     return CanaryResult(ok=True, notes=tuple(notes))
+
+
+class AgentRoutingProbe:
+    """Confirms through the SE agent that routing really is in place.
+
+    Passes when the agent runs the pushed bundle (id and file hashes), the local HAProxy health
+    check is passing, the watchdog has not withdrawn routes, and: for BGP groups every neighbour is
+    ``Established``; for VRRP groups every instance is ``MASTER`` or ``BACKUP`` (not ``FAULT``).
+    Sessions take a few seconds to come up, so the probe polls for up to ``settle_s``.
+    """
+
+    def __init__(
+        self,
+        agent: AgentEngine,
+        *,
+        expected_bundle: str,
+        expected_hashes: Mapping[str, str],
+        settle_s: float = 15.0,
+        poll_s: float = 1.0,
+        sleep: Sleep = asyncio.sleep,
+    ) -> None:
+        """Create the probe for one canary engine."""
+        self._agent = agent
+        self._bundle = expected_bundle
+        self._hashes = dict(expected_hashes)
+        self._polls = max(int(settle_s / poll_s), 0) + 1
+        self._poll = poll_s
+        self._sleep = sleep
+
+    def _problems(self, group: SeGroup, status: AgentStatus) -> list[str]:
+        problems: list[str] = []
+        if status.bundle_id != self._bundle:
+            problems.append(
+                f"agent runs bundle {status.bundle_id or 'none'}, expected {self._bundle}"
+            )
+        for path, digest in sorted(self._hashes.items()):
+            if status.file_hashes.get(path) != digest:
+                problems.append(f"agent file {path} differs from the pushed one")
+        if not status.haproxy_healthy:
+            problems.append("the local HAProxy health check is failing")
+        if status.routes_withdrawn:
+            problems.append("the agent has withdrawn the BGP routes")
+        if group.ha_mode is HaMode.BGP:
+            if not status.bgp:
+                problems.append("no BGP session reported")
+            problems += [
+                f"BGP peer {s.peer} is {s.state}" for s in status.bgp if s.state != "Established"
+            ]
+        else:
+            if not status.vrrp:
+                problems.append("no VRRP instance reported")
+            problems += [
+                f"VRRP instance {v.name} is {v.state}"
+                for v in status.vrrp
+                if v.state not in {"MASTER", "BACKUP"}
+            ]
+        return problems
+
+    async def check(self, group: SeGroup, engine_name: str) -> ProbeResult:
+        """Poll the agent until routing is confirmed or the settle time is used up."""
+        problems: list[str] = []
+        for attempt in range(self._polls):
+            problems = self._problems(group, await self._agent.status())
+            if not problems:
+                return ProbeResult(
+                    True, True, f"{engine_name}: agent confirms bundle {self._bundle}"
+                )
+            if attempt + 1 < self._polls:
+                await self._sleep(self._poll)
+        return ProbeResult(True, False, "; ".join(problems))

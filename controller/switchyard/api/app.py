@@ -146,6 +146,7 @@ class EngineIn(BaseModel):
     dataplane_url: str
     credentials_ref: str | None = None
     mgmt_ip: str | None = None
+    agent_url: str | None = None
 
 
 # -- dependencies ---------------------------------------------------------------------------------
@@ -211,6 +212,7 @@ COLLECTIONS: dict[str, ObjectType] = {
     "health-monitors": ObjectType.HEALTH_MONITOR,
     "certificates": ObjectType.CERTIFICATE,
     "policy-sets": ObjectType.POLICY_SET,
+    "routing-profiles": ObjectType.ROUTING_PROFILE,
 }
 _MODELS: dict[ObjectType, type[BaseModel] | None] = {
     ObjectType.NETWORK: dm.Network,
@@ -221,6 +223,7 @@ _MODELS: dict[ObjectType, type[BaseModel] | None] = {
     ObjectType.HEALTH_MONITOR: dm.HealthMonitor,
     ObjectType.CERTIFICATE: dm.Certificate,
     ObjectType.POLICY_SET: None,
+    ObjectType.ROUTING_PROFILE: None,
 }
 _RESERVED = {"id", "tenant_id", "version"}
 
@@ -674,6 +677,7 @@ def create_app(services: ApiServices) -> FastAPI:
             dataplane_url=body.dataplane_url,
             credentials_ref=body.credentials_ref,
             mgmt_ip=body.mgmt_ip,
+            agent_url=body.agent_url,
             request_id=_rid(),
         )
         return {"id": str(e.id), "name": e.name, "url": e.dataplane_url, "state": e.state.value}

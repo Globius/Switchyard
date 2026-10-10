@@ -198,6 +198,8 @@ class SeGroup(TenantOwned):
         ha_mode: How VIPs are placed (BGP or VRRP).
         networks: Attached networks; VIPs must live in a ``vip`` network.
         maxconn: HAProxy global ``maxconn``.
+        routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and
+            a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.
         canary_seconds: How long the canary SE is watched after a push before the rest of the
             group is updated (0 skips the wait).
     """
@@ -206,6 +208,80 @@ class SeGroup(TenantOwned):
     networks: tuple[SeGroupNetwork, ...] = Field(min_length=1)
     maxconn: int = Field(default=20_000, ge=1, le=10_000_000)
     canary_seconds: int = Field(default=30, ge=0, le=600)
+    routing_profile_id: UUID | None = None
+
+
+InterfaceName = Annotated[str, AfterValidator(v.validate_interface)]
+
+
+class StaticRoute(Model):
+    """A static route installed on every engine of the group."""
+
+    prefix: IPNetwork
+    next_hop: IPAddress
+
+    @model_validator(mode="after")
+    def _same_family(self) -> Self:
+        if self.prefix.version != self.next_hop.version:
+            raise ValueError("prefix and next_hop must be the same IP version")
+        return self
+
+
+class BgpPeer(Model):
+    """An upstream BGP neighbour (for example a tenant's FortiGate VDOM).
+
+    Attributes:
+        peer_ip: Neighbour address.
+        remote_asn: Neighbour AS number.
+        md5_ref: OpenBao reference of the session password; the password itself is never stored.
+    """
+
+    peer_ip: IPAddress
+    remote_asn: int = Field(ge=1, le=4_294_967_295)
+    md5_ref: SecretRef | None = None
+
+
+class VrrpProfile(TenantOwned):
+    """Keepalived VRRP settings for an SE group.
+
+    Attributes:
+        vrid: Virtual router id (1-255); unique per L2 segment.
+        interface: Interface that carries VRRP advertisements.
+        advert_interval_s: Advertisement interval in seconds.
+        base_priority: Priority of the first engine; each next one gets ``priority_step`` less.
+        priority_step: Priority decrease per engine.
+        static_routes: Routes installed on every engine.
+    """
+
+    kind: Literal["vrrp"] = "vrrp"
+    vrid: int = Field(ge=1, le=255)
+    interface: InterfaceName
+    advert_interval_s: int = Field(default=1, ge=1, le=10)
+    base_priority: int = Field(default=150, ge=2, le=254)
+    priority_step: int = Field(default=10, ge=1, le=50)
+    static_routes: tuple[StaticRoute, ...] = ()
+
+
+class BgpProfile(TenantOwned):
+    """FRR BGP settings for an SE group (route health injection, ECMP).
+
+    Attributes:
+        asn: The engines' AS number.
+        bfd: Run BFD with the peers for sub-second failure detection.
+        peers: Upstream neighbours (at least one).
+        max_paths: ECMP width.
+        static_routes: Routes installed on every engine.
+    """
+
+    kind: Literal["bgp"] = "bgp"
+    asn: int = Field(ge=1, le=4_294_967_295)
+    bfd: bool = True
+    peers: tuple[BgpPeer, ...] = Field(min_length=1)
+    max_paths: int = Field(default=4, ge=1, le=64)
+    static_routes: tuple[StaticRoute, ...] = ()
+
+
+RoutingProfile = Annotated[VrrpProfile | BgpProfile, Field(discriminator="kind")]
 
 
 class RedirectAction(Model):

@@ -57,6 +57,8 @@ def _record(row: ServiceEngineRow) -> EngineRecord:
         dataplane_url=row.dataplane_url,
         credentials_ref=row.credentials_ref,
         state=EngineState(row.state),
+        agent_url=row.agent_url,
+        mgmt_ip=str(row.mgmt_ip).split("/")[0] if row.mgmt_ip else None,
     )
 
 
@@ -82,6 +84,7 @@ class EngineService:
         dataplane_url: str,
         credentials_ref: str | None = None,
         mgmt_ip: str | None = None,
+        agent_url: str | None = None,
         request_id: str | None = None,
     ) -> EngineRecord:
         """Add an engine to an SE group.
@@ -118,6 +121,7 @@ class EngineService:
                 name=name,
                 dataplane_url=url,
                 credentials_ref=credentials_ref,
+                agent_url=agent_url,
                 mgmt_ip=mgmt_ip,
             )
             session.add(row)

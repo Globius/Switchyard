@@ -386,7 +386,7 @@ class TestSelection:
         data = base_data()
         data["virtual_services"][0]["enabled"] = False
         text = cfg(data)
-        assert "frontend" not in text
+        assert "frontend vs_" not in text
         assert "backend" not in text
 
     def test_udp_is_skipped_with_a_warning(self) -> None:
@@ -466,7 +466,7 @@ class TestSelection:
         data = base_data()
         data["virtual_services"] = []
         text = cfg(data)
-        assert "frontend" not in text
+        assert "frontend vs_" not in text
         assert text.startswith("# Managed by Switchyard")
 
 
@@ -501,7 +501,11 @@ class TestTls:
             {"port": 8443, "tls": True},
             {"port": 80},
         ]
-        binds = [line for line in lines(cfg(data)) if line.startswith("bind")]
+        binds = [
+            line
+            for line in lines(cfg(data))
+            if line.startswith("bind") and "127.0.0.1:8404" not in line
+        ]
         assert binds == [
             "bind 192.0.2.20:80",
             f"bind 192.0.2.20:443 ssl crt-list {CRT} alpn h2,http/1.1",
@@ -662,6 +666,8 @@ class TestInjection:
             "http-check",
             "default-server",
             "server",
+            "monitor-uri",
+            "no",
         }
         for path, content in render(golden_like()).items():
             if path != "haproxy/haproxy.cfg":

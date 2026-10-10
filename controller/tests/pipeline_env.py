@@ -9,7 +9,9 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from switchyard.adapters.agent import FakeAgent
 from switchyard.adapters.fake_haproxy import FakeHaproxy
+from switchyard.adapters.secrets import MemorySecrets
 from switchyard.db.repository import add_snapshot, load_snapshot
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, admin_session, make_engine, tenant_session
 from switchyard.domain.changes import Action, ChangeOp, ObjectType
@@ -47,7 +49,7 @@ def world_data(**overrides: Any) -> dict[str, Any]:
     return data
 
 
-def engine_record(name: str) -> EngineRecord:
+def engine_record(name: str, *, agent: bool = False, mgmt_ip: str | None = None) -> EngineRecord:
     return EngineRecord(
         id=uuid.uuid5(uuid.NAMESPACE_DNS, name),
         tenant_id=TENANT,
@@ -56,6 +58,8 @@ def engine_record(name: str) -> EngineRecord:
         dataplane_url=f"http://{name}.invalid",
         credentials_ref=None,
         state=EngineState.ENABLED,
+        agent_url=f"{name}.invalid:7443" if agent else None,
+        mgmt_ip=mgmt_ip,
     )
 
 
@@ -63,27 +67,44 @@ def engine_record(name: str) -> EngineRecord:
 class World:
     db: Databases
     engines: dict[str, FakeHaproxy] = field(default_factory=dict)
+    agents: dict[str, FakeAgent] = field(default_factory=dict)
     service: ChangeSetService = field(init=False)
     pipeline: ApplyPipeline = field(init=False)
 
     def __post_init__(self) -> None:
         self.service = ChangeSetService(self.db)
 
-    def use_engines(self, *names: str, states: dict[str, EngineState] | None = None) -> None:
+    def use_engines(
+        self,
+        *names: str,
+        states: dict[str, EngineState] | None = None,
+        agents: bool = False,
+        secrets: dict[str, str] | None = None,
+    ) -> None:
         self.engines = {n: FakeHaproxy(n) for n in names}
+        self.agents = {n: FakeAgent(n) for n in names} if agents else {}
         records = []
-        for n in names:
-            rec = engine_record(n)
+        by_id = {}
+        for i, n in enumerate(names):
+            rec = engine_record(n, agent=agents, mgmt_ip=f"10.30.0.{11 + i}")
             if states and n in states:
                 rec = EngineRecord(**{**rec.__dict__, "state": states[n]})
             records.append((rec, self.engines[n]))
+            if agents:
+                by_id[rec.id] = self.agents[n]
 
-        directory = StaticEngineDirectory({GROUP: records})
+        directory = StaticEngineDirectory({GROUP: records}, by_id)
 
         async def no_sleep(_: float) -> None:
             return None
 
-        self.pipeline = ApplyPipeline(self.db, directory, sleep=no_sleep, lock_timeout_s=5)
+        self.pipeline = ApplyPipeline(
+            self.db,
+            directory,
+            sleep=no_sleep,
+            lock_timeout_s=5,
+            secrets=MemorySecrets(secrets or {}),
+        )
 
     async def prime(self) -> None:
         """Make every fake engine run the current state, as a deployed SE group would."""

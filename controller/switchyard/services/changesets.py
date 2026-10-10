@@ -48,7 +48,9 @@ from switchyard.services.errors import ConflictError, NotFoundError, PermissionD
 
 ROLE_RANK = {Role.VIEWER: 0, Role.OPERATOR: 1, Role.TENANT_ADMIN: 2, Role.SYSTEM_ADMIN: 3}
 #: Object types that only tenant administrators may change (infrastructure, not applications).
-INFRASTRUCTURE = frozenset({ObjectType.NETWORK, ObjectType.VIP_POOL, ObjectType.SE_GROUP})
+INFRASTRUCTURE = frozenset(
+    {ObjectType.NETWORK, ObjectType.VIP_POOL, ObjectType.SE_GROUP, ObjectType.ROUTING_PROFILE}
+)
 
 APPLY_JOB = "apply_change_set"
 

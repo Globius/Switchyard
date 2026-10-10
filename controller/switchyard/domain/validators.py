@@ -210,6 +210,24 @@ def validate_header_name(value: str) -> str:
     return value
 
 
+def validate_interface(value: str) -> str:
+    """Validate a network interface name (Linux ``IFNAMSIZ``: at most 15 characters).
+
+    Example:
+        >>> validate_interface("eth1")
+        'eth1'
+        >>> validate_interface("eth 1")
+        Traceback (most recent call last):
+            ...
+        ValueError: interface must be 1-15 characters of a-z, 0-9, '.', '_' or '-' (letter first)
+    """
+    if not re.fullmatch(r"[a-z][a-z0-9._-]{0,14}", value):
+        raise ValueError(
+            "interface must be 1-15 characters of a-z, 0-9, '.', '_' or '-' (letter first)"
+        )
+    return value
+
+
 def validate_secret_ref(value: str) -> str:
     """Validate an OpenBao path reference (never a secret itself).
 

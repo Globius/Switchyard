@@ -49,6 +49,7 @@ async def load_snapshot(session: AsyncSession) -> Snapshot:
         networks=await rows(m.NetworkRow, m.NetworkRow.id),
         vip_pools=await rows(m.VipPoolRow, m.VipPoolRow.id),
         se_groups=await rows(m.SeGroupRow, m.SeGroupRow.id),
+        routing_profiles=await rows(m.RoutingProfileRow, m.RoutingProfileRow.id),
         se_group_networks=await rows(m.SeGroupNetworkRow, m.SeGroupNetworkRow.se_group_id),
         health_monitors=await rows(m.HealthMonitorRow, m.HealthMonitorRow.id),
         certificates=await rows(m.CertificateRow, m.CertificateRow.id),

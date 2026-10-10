@@ -68,6 +68,7 @@ class ServiceEngineRow(TenantOwnedMixin, Base):
     mgmt_ip: Mapped[str | None] = mapped_column(INET)
     dataplane_url: Mapped[str] = mapped_column(Text, nullable=False)
     credentials_ref: Mapped[str | None] = mapped_column(Text)
+    agent_url: Mapped[str | None] = mapped_column(Text)
     state: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'enabled'"))
     pve_node: Mapped[str | None] = mapped_column(Text)
     vmid: Mapped[int | None] = mapped_column(Integer)

@@ -64,6 +64,19 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 ranges=[{"start": str(r.start), "end": str(r.end)} for r in vp.ranges],
             )
         )
+    for rp in snapshot.routing_profiles:
+        rows.append(
+            m.RoutingProfileRow(
+                id=rp.id,
+                version=rp.version,
+                tenant_id=rp.tenant_id,
+                name=rp.name,
+                kind=rp.kind,
+                spec=rp.model_dump(
+                    mode="json", exclude={"id", "version", "tenant_id", "name", "kind"}
+                ),
+            )
+        )
     for g in snapshot.se_groups:
         rows.append(
             m.SeGroupRow(
@@ -74,6 +87,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 ha_mode=g.ha_mode.value,
                 maxconn=g.maxconn,
                 canary_seconds=g.canary_seconds,
+                routing_profile_id=g.routing_profile_id,
             )
         )
     for hm in snapshot.health_monitors:
@@ -236,6 +250,7 @@ def rows_to_snapshot(
     networks: Iterable[m.NetworkRow],
     vip_pools: Iterable[m.VipPoolRow],
     se_groups: Iterable[m.SeGroupRow],
+    routing_profiles: Iterable[m.RoutingProfileRow],
     se_group_networks: Iterable[m.SeGroupNetworkRow],
     health_monitors: Iterable[m.HealthMonitorRow],
     certificates: Iterable[m.CertificateRow],
@@ -315,6 +330,7 @@ def rows_to_snapshot(
                 "ha_mode": g.ha_mode,
                 "maxconn": g.maxconn,
                 "canary_seconds": g.canary_seconds,
+                "routing_profile_id": g.routing_profile_id,
                 "networks": [
                     {"network_id": gn.network_id, "role": gn.role}
                     for gn in group_networks.get(g.id, [])
@@ -353,6 +369,17 @@ def rows_to_snapshot(
             for c in certificates
         ],
         "policy_sets": [_policy_to_dict(ps) for ps in policy_sets],
+        "routing_profiles": [
+            {
+                "id": r.id,
+                "version": r.version,
+                "tenant_id": r.tenant_id,
+                "name": r.name,
+                "kind": r.kind,
+                **r.spec,
+            }
+            for r in routing_profiles
+        ],
         "pools": [
             {
                 "id": p.id,

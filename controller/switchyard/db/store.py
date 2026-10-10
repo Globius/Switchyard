@@ -34,6 +34,7 @@ PARENT: dict[ObjectType, type[DeclarativeBase]] = {
     ObjectType.HEALTH_MONITOR: m.HealthMonitorRow,
     ObjectType.CERTIFICATE: m.CertificateRow,
     ObjectType.POLICY_SET: m.PolicySetRow,
+    ObjectType.ROUTING_PROFILE: m.RoutingProfileRow,
 }
 
 #: Child tables of each object type and the column that points at the parent.
@@ -57,6 +58,7 @@ _DELETE_ORDER = (
     ObjectType.HEALTH_MONITOR,
     ObjectType.VIP_POOL,
     ObjectType.SE_GROUP,
+    ObjectType.ROUTING_PROFILE,
     ObjectType.NETWORK,
 )
 

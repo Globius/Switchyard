@@ -30,6 +30,7 @@ from switchyard.domain.models import (
     Pool,
     Protocol,
     RedirectPolicySet,
+    RoutingProfile,
     SeGroup,
     Tenant,
     VipPool,
@@ -50,6 +51,7 @@ class Snapshot(Model):
         health_monitors: Health monitors.
         certificates: Certificate metadata.
         policy_sets: Redirect and allow-list policy sets.
+        routing_profiles: VRRP and BGP profiles of SE groups.
     """
 
     tenants: tuple[Tenant, ...] = ()
@@ -61,6 +63,7 @@ class Snapshot(Model):
     health_monitors: tuple[HealthMonitor, ...] = ()
     certificates: tuple[Certificate, ...] = ()
     policy_sets: tuple[PolicySet, ...] = Field(default=())
+    routing_profiles: tuple[RoutingProfile, ...] = Field(default=())
 
     def for_se_group(self, se_group_id: UUID) -> "Snapshot":
         """Return the subset of the snapshot a single SE group needs to render.
@@ -106,6 +109,9 @@ class Snapshot(Model):
             health_monitors=tuple(m for m in self.health_monitors if m.id in monitor_ids),
             certificates=tuple(c for c in self.certificates if c.id in cert_ids),
             policy_sets=tuple(p for p in self.policy_sets if p.id in policy_ids),
+            routing_profiles=tuple(
+                r for r in self.routing_profiles if r.id == group.routing_profile_id
+            ),
         )
 
 
@@ -133,6 +139,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     - ``duplicate_route``: a host/path match appears at most once per service.
     - ``certificate_coverage``: every route host of a TLS-terminating HTTP service is covered by
       a SAN of the service's certificates (wildcards cover exactly one label).
+    - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
 
     Returns:
@@ -151,6 +158,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     policies: Mapping[UUID, Any] = {p.id: p for p in snapshot.policy_sets}
     vip_pools = _index(snapshot.vip_pools)
     groups = _index(snapshot.se_groups)
+    profiles = _index(snapshot.routing_profiles)
 
     def check_ref(
         path: str, tenant_id: UUID, kind: str, ref: UUID, index: Mapping[UUID, Any]
@@ -190,6 +198,25 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         for i, gn in enumerate(g.networks):
             check_ref(
                 f"se_groups.{g.name}.networks[{i}]", g.tenant_id, "network", gn.network_id, networks
+            )
+    for g in snapshot.se_groups:
+        if g.routing_profile_id is None:
+            continue
+        profile = check_ref(
+            f"se_groups.{g.name}.routing_profile_id",
+            g.tenant_id,
+            "routing profile",
+            g.routing_profile_id,
+            profiles,
+        )
+        if profile is not None and profile.kind != g.ha_mode.value:
+            problems.append(
+                Problem(
+                    f"se_groups.{g.name}.routing_profile_id",
+                    "profile_kind_mismatch",
+                    f"ha_mode {g.ha_mode.value} needs a {g.ha_mode.value} routing profile, "
+                    f"not {profile.kind}",
+                )
             )
     for pool in snapshot.pools:
         if pool.health_monitor_id:
@@ -296,6 +323,7 @@ def _tenant_owned(snapshot: Snapshot) -> dict[str, Iterable[Any]]:
         "health_monitors": snapshot.health_monitors,
         "certificates": snapshot.certificates,
         "policy_sets": snapshot.policy_sets,
+        "routing_profiles": snapshot.routing_profiles,
     }
 
 

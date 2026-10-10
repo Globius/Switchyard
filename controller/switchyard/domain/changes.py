@@ -48,6 +48,7 @@ from switchyard.domain.models import (
     Network,
     PolicySet,
     Pool,
+    RoutingProfile,
     SeGroup,
     VipPool,
     VirtualService,
@@ -66,6 +67,7 @@ class ObjectType(enum.StrEnum):
     HEALTH_MONITOR = "health_monitor"
     CERTIFICATE = "certificate"
     POLICY_SET = "policy_set"
+    ROUTING_PROFILE = "routing_profile"
 
 
 class Action(enum.StrEnum):
@@ -86,6 +88,7 @@ COLLECTION: dict[ObjectType, str] = {
     ObjectType.HEALTH_MONITOR: "health_monitors",
     ObjectType.CERTIFICATE: "certificates",
     ObjectType.POLICY_SET: "policy_sets",
+    ObjectType.ROUTING_PROFILE: "routing_profiles",
 }
 
 _ADAPTERS: dict[ObjectType, TypeAdapter[Any]] = {
@@ -97,6 +100,7 @@ _ADAPTERS: dict[ObjectType, TypeAdapter[Any]] = {
     ObjectType.HEALTH_MONITOR: TypeAdapter(HealthMonitor),
     ObjectType.CERTIFICATE: TypeAdapter(Certificate),
     ObjectType.POLICY_SET: TypeAdapter(PolicySet),
+    ObjectType.ROUTING_PROFILE: TypeAdapter(RoutingProfile),
 }
 
 #: Fields the caller never supplies; the system owns them.
