@@ -1,5 +1,5 @@
 /** Queries and mutations for one virtual service. Keys mirror API paths. */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 
@@ -10,6 +10,8 @@ export type AdminState = components["schemas"]["AdminState"];
 export function useVs(tenant: string, id: string, changeSet?: string) {
   return useQuery({
     queryKey: ["t", tenant, "virtual-services", id, { changeSet }],
+    // Opening a draft changes the key; keep showing the form instead of flashing a skeleton.
+    placeholderData: keepPreviousData,
     queryFn: async () =>
       unwrap(
         await api.GET("/api/v1/tenants/{t}/virtual-services/{object_id}", {
