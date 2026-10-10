@@ -273,6 +273,13 @@ ENGINE_READ = {
     "url": "https://198.51.100.21:5555",
     "state": "enabled",
 }
+VIRTUAL_SERVICE_STATUS = {
+    "id": "00000000-0000-0000-0000-0000000000d1",
+    "name": "dns",
+    "protocol": "udp",
+    "state": "not_served",
+}
+
 ENGINE_STATUS = {
     "engine": "edge-1",
     "engine_id": ENGINE,
