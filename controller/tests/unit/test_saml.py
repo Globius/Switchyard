@@ -132,4 +132,4 @@ def test_authn_request_and_metadata() -> None:
     meta = etree.fromstring(sp_metadata(cfg(), acs_url=ACS).encode())
     ns = {"md": "urn:oasis:names:tc:SAML:2.0:metadata"}
     assert meta.get("entityID") == SP
-    assert meta.find("md:SPSSODescriptor/md:AssertionConsumerService", ns).get("Location") == ACS  # type: ignore[union-attr]
+    assert meta.find("md:SPSSODescriptor/md:AssertionConsumerService", ns).get("Location") == ACS

@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from lxml import etree
-from signxml import XMLSigner, methods
+from signxml import XMLSigner, methods  # type: ignore[attr-defined]
 
 IDP = "https://idp.example.test/entity"
 SP = "https://switchyard.example.test/api/v1/auth/saml/idp"
@@ -111,7 +111,7 @@ def sign(xml: str, idp: IdpKeys, *, what: str = "assertion") -> str:
     if what == "assertion":
         root.replace(target, signed)
         signed = root
-    return etree.tostring(signed).decode()
+    return str(etree.tostring(signed).decode())
 
 
 def encode(xml: str) -> str:
