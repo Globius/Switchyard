@@ -8,6 +8,7 @@ Engine credentials come from ``SWITCHYARD_SECRET_*`` variables (see ``EnvSecrets
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from switchyard.adapters.git import GitLabMirror, GitMirror
@@ -15,11 +16,13 @@ from switchyard.adapters.sandbox import DockerSandbox
 from switchyard.adapters.secrets import EnvSecrets
 from switchyard.config import database_url
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
-from switchyard.jobs.handlers import build_handlers
+from switchyard.jobs.handlers import POLL_STATUS_JOB, build_handlers
+from switchyard.jobs.scheduler import Scheduler
 from switchyard.jobs.worker import Worker
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
 from switchyard.services.context import Databases
+from switchyard.services.status import StatusService
 
 
 def databases() -> Databases:
@@ -48,8 +51,13 @@ def git_mirror() -> GitMirror | None:
     return GitLabMirror(url, project, token) if url and project and token else None
 
 
-def worker(db: Databases, worker_id: str) -> Worker:
-    """A worker with the apply and Git-mirror handlers."""
+def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
+    """A worker (apply, Git mirror, status polling) and the scheduler that feeds it."""
     sandbox = DockerSandbox() if os.environ.get("SWITCHYARD_SANDBOX") == "docker" else None
-    pipeline = ApplyPipeline(db, directory(db), sandbox=sandbox)
-    return Worker(db.admin, build_handlers(db, pipeline, git_mirror()), worker_id=worker_id)
+    engines = directory(db)
+    secrets = EnvSecrets()
+    pipeline = ApplyPipeline(db, engines, sandbox=sandbox, secrets=secrets)
+    status = StatusService(db, engines, secrets)
+    handlers = build_handlers(db, pipeline, git_mirror(), status)
+    scheduler = Scheduler(db.admin, {POLL_STATUS_JOB: timedelta(seconds=10)})
+    return Worker(db.admin, handlers, worker_id=worker_id), scheduler

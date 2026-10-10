@@ -18,19 +18,27 @@ from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.services.changesets import APPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
 GIT_MIRROR_JOB = "git_mirror"
 
 
+POLL_STATUS_JOB = "poll_status"
+
+
 def build_handlers(
-    db: Databases, pipeline: ApplyPipeline, mirror: GitMirror | None
+    db: Databases,
+    pipeline: ApplyPipeline,
+    mirror: GitMirror | None,
+    status: StatusService | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
         mirror: Git mirror; when ``None`` the ``git_mirror`` kind is not handled (jobs wait in the
             queue until a worker with a mirror runs).
     """
@@ -42,6 +50,12 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set}
+    if status is not None:
+
+        async def poll_status(job: Job) -> dict[str, Any]:
+            return {"polled": await status.poll_all()}
+
+        handlers[POLL_STATUS_JOB] = poll_status
     if mirror is not None:
 
         async def git_mirror(job: Job) -> dict[str, Any]:

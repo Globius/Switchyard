@@ -186,8 +186,9 @@ def run_worker(
     async def go() -> None:
         db = runtime.databases()
         stop = asyncio.Event()
+        worker, scheduler = runtime.worker(db, name)
         try:
-            await runtime.worker(db, name).run_forever(stop)
+            await asyncio.gather(worker.run_forever(stop), scheduler.run_forever(stop))
         finally:
             await db.dispose()
 

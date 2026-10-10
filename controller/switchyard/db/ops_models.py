@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     ForeignKeyConstraint,
     Index,
@@ -247,3 +248,26 @@ class ApiTokenRow(Base):
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
     last_used_at: Mapped[datetime | None] = _timestamp()
     revoked_at: Mapped[datetime | None] = _timestamp()
+
+
+class EngineStatusRow(Base):
+    """``engine_status``: the latest poll result of one engine (one row per engine)."""
+
+    __tablename__ = "engine_status"
+    __table_args__ = (ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),)
+
+    engine_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    se_group_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    reachable: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    haproxy_fingerprint: Mapped[str | None] = mapped_column(Text)
+    members: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    agent: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    drift: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    observed_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)

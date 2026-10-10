@@ -7,14 +7,17 @@ draft, ``?apply=true`` opens an implicit single-operation change set and applies
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
+from switchyard.adapters.secrets import SecretsReader
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import models as dm
@@ -32,6 +35,7 @@ from switchyard.services.changesets import ChangeSetDetail, ChangeSetService
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineService
 from switchyard.services.members import MemberService
+from switchyard.services.status import EngineStatus, StatusService
 from switchyard.services.tenants import TenantRecord, TenantService
 from switchyard.services.tokens import TokenService
 
@@ -48,9 +52,12 @@ class ApiServices:
     change_sets: ChangeSetService
     engines: EngineService
     members: MemberService
+    status: StatusService
 
 
-def build_services(db: Databases, directory: EngineDirectory) -> ApiServices:
+def build_services(
+    db: Databases, directory: EngineDirectory, secrets: SecretsReader | None = None
+) -> ApiServices:
     """Wire the services over one set of database handles."""
     return ApiServices(
         db=db,
@@ -59,6 +66,7 @@ def build_services(db: Databases, directory: EngineDirectory) -> ApiServices:
         change_sets=ChangeSetService(db),
         engines=EngineService(db),
         members=MemberService(db, directory),
+        status=StatusService(db, directory, secrets),
     )
 
 
@@ -728,6 +736,56 @@ def create_app(services: ApiServices) -> FastAPI:
     async def revoke_token(token: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
         await svc.tokens.revoke(who, tenant.id, token, request_id=_rid())
         return Response(status_code=204)
+
+    # live status
+    def status_json(s: EngineStatus) -> dict[str, Any]:
+        return {
+            "engine": s.name,
+            "engine_id": str(s.engine_id),
+            "se_group_id": str(s.se_group_id),
+            "reachable": s.reachable,
+            "error": s.error,
+            "haproxy_fingerprint": s.haproxy_fingerprint,
+            "members": s.members,
+            "agent": s.agent,
+            "drift": s.drift,
+            "observed_at": s.observed_at.isoformat(),
+        }
+
+    @router.get("/tenants/{t}/status/engines", tags=["status"])
+    async def engine_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [status_json(s) for s in await svc.status.list_status(who, tenant.id)]
+
+    @router.get("/tenants/{t}/status/stream", tags=["status"])
+    async def status_stream(
+        request: Request,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        follow: bool = True,
+        interval: Annotated[float, Query(ge=0.1, le=60)] = 2.0,
+    ) -> StreamingResponse:
+        """Server-sent events: the engine status whenever it changes (and once at the start)."""
+        import asyncio
+        import json
+
+        async def events() -> AsyncIterator[str]:
+            last = ""
+            while True:
+                payload = json.dumps(
+                    [status_json(s) for s in await svc.status.list_status(who, tenant.id)],
+                    sort_keys=True,
+                )
+                if payload != last:
+                    yield f"event: status\ndata: {payload}\n\n"
+                    last = payload
+                else:
+                    yield ": keep-alive\n\n"
+                if not follow or await request.is_disconnected():
+                    return
+                await asyncio.sleep(interval)
+
+        return StreamingResponse(events(), media_type="text/event-stream")
 
     # jobs and audit
     @router.get("/jobs/{job_id}", tags=["jobs"])
