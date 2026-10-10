@@ -52,6 +52,132 @@
         "title": "Accepted",
         "type": "object"
       },
+      "AccessLogEntry": {
+        "additionalProperties": false,
+        "description": "One parsed HAProxy HTTP log line.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "backend": {
+            "title": "Backend",
+            "type": "string"
+          },
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "client_ip": {
+            "title": "Client Ip",
+            "type": "string"
+          },
+          "duration_ms": {
+            "description": "Total time of the request (HAProxy `Tt`).",
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "frontend": {
+            "title": "Frontend",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "raw": {
+            "description": "The log line as stored.",
+            "title": "Raw",
+            "type": "string"
+          },
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "at",
+          "client_ip",
+          "frontend",
+          "backend",
+          "server",
+          "status",
+          "bytes",
+          "duration_ms",
+          "raw"
+        ],
+        "title": "AccessLogEntry",
+        "type": "object"
+      },
+      "AccessLogs": {
+        "additionalProperties": false,
+        "description": "A page of access log lines, newest first.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/AccessLogEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass back as `cursor` for older lines; null at the end.",
+            "title": "Next Cursor"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "available",
+          "entries"
+        ],
+        "title": "AccessLogs",
+        "type": "object"
+      },
       "Action": {
         "description": "What an operation does to its object.",
         "enum": [
@@ -3687,6 +3813,185 @@
         "title": "MemberStatus",
         "type": "object"
       },
+      "MetricPoint": {
+        "additionalProperties": false,
+        "description": "One sample of a series.",
+        "properties": {
+          "t": {
+            "format": "date-time",
+            "title": "T",
+            "type": "string"
+          },
+          "v": {
+            "title": "V",
+            "type": "number"
+          }
+        },
+        "required": [
+          "t",
+          "v"
+        ],
+        "title": "MetricPoint",
+        "type": "object"
+      },
+      "MetricSummary": {
+        "additionalProperties": false,
+        "description": "The latest value of each headline metric over the window.",
+        "properties": {
+          "active_connections": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current sessions.",
+            "title": "Active Connections"
+          },
+          "error_5xx_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Share of responses that are 5xx, 0 to 1.",
+            "title": "Error 5Xx Ratio"
+          },
+          "p95_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "95th percentile response time.",
+            "title": "P95 Ms"
+          },
+          "rps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HTTP/TCP requests per second.",
+            "title": "Rps"
+          }
+        },
+        "title": "MetricSummary",
+        "type": "object"
+      },
+      "MetricsOverview": {
+        "additionalProperties": false,
+        "description": "Headline numbers of every virtual service, for list columns.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MetricsOverviewItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "window_s": {
+            "title": "Window S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "available",
+          "window_s",
+          "items"
+        ],
+        "title": "MetricsOverview",
+        "type": "object"
+      },
+      "MetricsOverviewItem": {
+        "additionalProperties": false,
+        "description": "Headline numbers of one virtual service.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/MetricSummary"
+          },
+          "virtual_service_id": {
+            "format": "uuid",
+            "title": "Virtual Service Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "virtual_service_id",
+          "name",
+          "summary"
+        ],
+        "title": "MetricsOverviewItem",
+        "type": "object"
+      },
+      "MetricsRead": {
+        "additionalProperties": false,
+        "description": "Metrics of one virtual service, or why there are none.",
+        "properties": {
+          "available": {
+            "description": "False when no metrics backend is configured or it cannot be reached.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServiceMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why `available` is false.",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "MetricsRead",
+        "type": "object"
+      },
       "MonitorType": {
         "description": "Health monitor kind.",
         "enum": [
@@ -6071,6 +6376,62 @@
           "total"
         ],
         "title": "ServiceHealthCounts",
+        "type": "object"
+      },
+      "ServiceMetrics": {
+        "additionalProperties": false,
+        "description": "Time series and headline numbers of one virtual service.",
+        "properties": {
+          "active_connections": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "title": "Active Connections",
+            "type": "array"
+          },
+          "error_5xx_ratio": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "title": "Error 5Xx Ratio",
+            "type": "array"
+          },
+          "p95_ms": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "title": "P95 Ms",
+            "type": "array"
+          },
+          "rps": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "title": "Rps",
+            "type": "array"
+          },
+          "step_s": {
+            "title": "Step S",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/MetricSummary"
+          },
+          "window_s": {
+            "title": "Window S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window_s",
+          "step_s",
+          "summary",
+          "rps",
+          "p95_ms",
+          "error_5xx_ratio",
+          "active_connections"
+        ],
+        "title": "ServiceMetrics",
         "type": "object"
       },
       "Snapshot": {
@@ -15758,6 +16119,128 @@
         "x-required-role": "operator"
       }
     },
+    "/api/v1/tenants/{t}/metrics/virtual-services": {
+      "get": {
+        "description": "Requests per second, 5xx ratio and current sessions per service over the last `window_s` seconds, for the list columns. `p95_ms` is only in the per-service route. `available: false` when no backend is configured. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "metrics_overview_api_v1_tenants__t__metrics_virtual_services_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Seconds back from now.",
+            "in": "query",
+            "name": "window_s",
+            "required": false,
+            "schema": {
+              "default": 900,
+              "description": "Seconds back from now.",
+              "maximum": 86400,
+              "minimum": 60,
+              "title": "Window S",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "available": true,
+                  "items": [
+                    {
+                      "name": "shop",
+                      "summary": {
+                        "active_connections": 42,
+                        "error_5xx_ratio": 0.002,
+                        "p95_ms": 18.0,
+                        "rps": 120.5
+                      },
+                      "virtual_service_id": "0192f3a0-0000-7000-8000-000000000013"
+                    }
+                  ],
+                  "window_s": 900
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsOverview"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Headline metrics of every virtual service",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
     "/api/v1/tenants/{t}/networks": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
@@ -22314,7 +22797,7 @@
     },
     "/api/v1/tenants/{t}/status/stream": {
       "get": {
-        "description": "Server-sent events: the engine status whenever it changes (and once at the start).\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "description": "A `text/event-stream` of what changes in the tenant. Events: `status`: The status of every engine, at the start and whenever any of it changes.; `vs_state`: State and health of every virtual service, at the start and whenever any changes.; `job_progress`: One job whenever its state or a stage changes (unfinished jobs are sent at the start).; `revision_applied`: A new revision became the desired state (not sent for the revision at the start). Every `data:` line is JSON (the payload models are under `x-sse-events`; `status` and `vs_state` carry an array). The first events are a full snapshot, so a client that reconnects simply starts over (`Last-Event-ID` is not used). Comment lines `: keep-alive` fill the quiet intervals. The database is polled every `interval` seconds; `follow=false` sends one snapshot and closes.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
         "operationId": "status_stream_api_v1_tenants__t__status_stream_get",
         "parameters": [
           {
@@ -22378,7 +22861,7 @@
                 }
               }
             },
-            "description": "`text/event-stream`; each `status` event carries the JSON array of `GET /status/engines`."
+            "description": "`text/event-stream`."
           },
           "401": {
             "content": {
@@ -22421,11 +22904,43 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Stream engine status (server-sent events)",
+        "summary": "Live events (server-sent events)",
         "tags": [
           "status"
         ],
-        "x-required-role": "viewer"
+        "x-required-role": "viewer",
+        "x-sse-events": {
+          "job_progress": {
+            "data": {
+              "$ref": "#/components/schemas/Job"
+            },
+            "description": "One job whenever its state or a stage changes (unfinished jobs are sent at the start)."
+          },
+          "revision_applied": {
+            "data": {
+              "$ref": "#/components/schemas/RevisionSummary"
+            },
+            "description": "A new revision became the desired state (not sent for the revision at the start)."
+          },
+          "status": {
+            "data": {
+              "items": {
+                "$ref": "#/components/schemas/EngineStatusRead"
+              },
+              "type": "array"
+            },
+            "description": "The status of every engine, at the start and whenever any of it changes."
+          },
+          "vs_state": {
+            "data": {
+              "items": {
+                "$ref": "#/components/schemas/VirtualServiceStatusRead"
+              },
+              "type": "array"
+            },
+            "description": "State and health of every virtual service, at the start and whenever any changes."
+          }
+        }
       }
     },
     "/api/v1/tenants/{t}/status/virtual-services": {
@@ -25239,6 +25754,414 @@
           "virtual-services"
         ],
         "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/virtual-services/{object_id}/logs": {
+      "get": {
+        "description": "HAProxy HTTP log lines of the service, newest first, parsed into fields. Filter with `since`/`until` (default: the last hour), `q` (substring of the raw line) and `status_class` (2, 3, 4 or 5). Page with `limit` and `cursor`. Read from Loki with the tenant label enforced; `available: false` when no log backend is configured. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "service_logs_api_v1_tenants__t__virtual_services__object_id__logs_get",
+        "parameters": [
+          {
+            "description": "Object id.",
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Object Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only events at or after this time (ISO 8601).",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Only events before this time (ISO 8601).",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "description": "Free text.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Only responses of this class: 2, 3, 4 or 5.",
+            "in": "query",
+            "name": "status_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 2,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Class"
+            }
+          },
+          {
+            "description": "`next_cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "available": true,
+                  "entries": [
+                    {
+                      "at": "2026-10-10T08:30:00Z",
+                      "backend": "pool_web",
+                      "bytes": 512,
+                      "client_ip": "198.51.100.7",
+                      "duration_ms": 13,
+                      "frontend": "vs_shop",
+                      "method": "GET",
+                      "path": "/cart",
+                      "raw": "198.51.100.7:51514 [10/Oct/2026:08:30:00.123] vs_shop pool_web/web-1 0/0/1/12/13 200 512 - - ---- 1/1/0/0/0 0/0 \"GET /cart HTTP/1.1\"",
+                      "server": "web-1",
+                      "status": 200
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AccessLogs"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`cursor` is not a value this endpoint returned."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Access log of a virtual service",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/virtual-services/{object_id}/metrics": {
+      "get": {
+        "description": "Requests per second, 95th percentile response time, 5xx ratio and current sessions over the last `window_s` seconds, one point per `step_s`, plus the latest value of each as `summary`. Read from Prometheus and Loki with the tenant label enforced. `available: false` (with a `reason`) when no backend is configured or it fails; a single value is `null` when the backend has no data for it, which is not zero. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "service_metrics_api_v1_tenants__t__virtual_services__object_id__metrics_get",
+        "parameters": [
+          {
+            "description": "Object id.",
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Object Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Seconds back from now.",
+            "in": "query",
+            "name": "window_s",
+            "required": false,
+            "schema": {
+              "default": 3600,
+              "description": "Seconds back from now.",
+              "maximum": 604800,
+              "minimum": 60,
+              "title": "Window S",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Seconds between points; default fits ~120 points.",
+            "in": "query",
+            "name": "step_s",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3600,
+                  "minimum": 5,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Seconds between points; default fits ~120 points.",
+              "title": "Step S"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "available": true,
+                  "metrics": {
+                    "active_connections": [
+                      {
+                        "t": "2026-10-10T08:30:00Z",
+                        "v": 42
+                      }
+                    ],
+                    "error_5xx_ratio": [
+                      {
+                        "t": "2026-10-10T08:30:00Z",
+                        "v": 0.002
+                      }
+                    ],
+                    "p95_ms": [
+                      {
+                        "t": "2026-10-10T08:30:00Z",
+                        "v": 18.0
+                      }
+                    ],
+                    "rps": [
+                      {
+                        "t": "2026-10-10T08:30:00Z",
+                        "v": 120.5
+                      }
+                    ],
+                    "step_s": 30,
+                    "summary": {
+                      "active_connections": 42,
+                      "error_5xx_ratio": 0.002,
+                      "p95_ms": 18.0,
+                      "rps": 120.5
+                    },
+                    "window_s": 3600
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Metrics of a virtual service",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/virtual-services/{object_id}/rendered": {

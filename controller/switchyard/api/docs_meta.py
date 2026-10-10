@@ -89,6 +89,9 @@ PARAMS: dict[str, str] = {
     "since": "Only events at or after this time (ISO 8601).",
     "until": "Only events before this time (ISO 8601).",
     "q": "Free text.",
+    "status_class": "Only responses of this class: 2, 3, 4 or 5.",
+    "window_s": "Seconds back from now.",
+    "step_s": "Seconds between points.",
     "types": "Restrict to these object types (repeat the parameter).",
     "provider": "Identity provider id.",
     "code": "Authorization code from the provider.",
@@ -367,6 +370,7 @@ def enrich(schema: dict[str, Any]) -> None:
     """
     prefix = "/api/v1"
     schema["tags"] = TAGS
+    _add_sse_catalog(schema)
     components = schema.setdefault("components", {})
     components["securitySchemes"] = {
         "bearerAuth": {
@@ -462,6 +466,28 @@ def enrich(schema: dict[str, Any]) -> None:
                 example = request_example(method, path)
                 if content is not None and example is not None and "example" not in content:
                     content["example"] = example
+
+
+def _add_sse_catalog(schema: dict[str, Any]) -> None:
+    """Publish the stream's event payload models as components and list them on the operation."""
+    from pydantic import TypeAdapter
+
+    from switchyard.api.stream_models import EVENTS
+
+    op = schema["paths"]["/api/v1/tenants/{t}/status/stream"]["get"]
+    catalog: dict[str, Any] = {}
+    for name, (model, is_array, when) in EVENTS.items():
+        generated = TypeAdapter(model).json_schema(ref_template="#/components/schemas/{model}")
+        for key, definition in generated.pop("$defs", {}).items():
+            schema["components"]["schemas"].setdefault(key, definition)
+        title = generated.get("title", model.__name__)
+        schema["components"]["schemas"].setdefault(title, generated)
+        ref = {"$ref": f"#/components/schemas/{title}"}
+        catalog[name] = {
+            "description": when,
+            "data": {"type": "array", "items": ref} if is_array else ref,
+        }
+    op["x-sse-events"] = catalog
 
 
 def _problem(schema: dict[str, Any]) -> dict[str, Any]:

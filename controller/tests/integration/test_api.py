@@ -802,3 +802,48 @@ async def test_stale_operation_reports_the_conflict_and_the_diff_has_impact(api:
     diff = (await api.client.get(f"{V1}/tenants/acme/change-sets/{cs}/diff", headers=h)).json()
     assert [s["id"] for s in diff["impact"]["services"]] == [str(VS)]
     assert diff["impact"]["vips"] and diff["impact"]["se_groups"][0]["name"]
+
+
+async def test_metrics_and_logs_are_tenant_scoped_and_degrade_when_unconfigured(api: Api) -> None:
+    from datetime import UTC, datetime
+
+    from switchyard.adapters.telemetry import FakeTelemetry
+    from switchyard.domain.telemetry import AccessLogEntry
+
+    h = await api.token(Role.VIEWER)
+    base = f"{V1}/tenants/acme"
+    off = (await api.client.get(f"{base}/virtual-services/{VS}/metrics", headers=h)).json()
+    assert off["available"] is False and off["reason"]
+    assert (await api.client.get(f"{base}/virtual-services/{VS}/logs", headers=h)).json()[
+        "entries"
+    ] == []
+    fake = FakeTelemetry()
+    fake.entries = [
+        AccessLogEntry(
+            at=datetime.now(UTC),
+            client_ip="192.0.2.1",
+            frontend="vs_web",
+            backend="pool_web",
+            server="s",
+            status=502,
+            bytes=1,
+            duration_ms=1,
+            raw="x",
+        )
+    ]
+    api.services.telemetry = fake
+    on = (await api.client.get(f"{base}/virtual-services/{VS}/metrics", headers=h)).json()
+    assert on["available"] and on["metrics"]["summary"]["rps"] == 2.0
+    over = (await api.client.get(f"{base}/metrics/virtual-services", headers=h)).json()
+    assert over["available"] and over["items"]
+    logs = (
+        await api.client.get(f"{base}/virtual-services/{VS}/logs?status_class=5", headers=h)
+    ).json()
+    assert [e["status"] for e in logs["entries"]] == [502]
+    none = (
+        await api.client.get(f"{base}/virtual-services/{VS}/logs?status_class=2", headers=h)
+    ).json()
+    assert none["entries"] == []
+    missing = await api.client.get(f"{base}/virtual-services/{uuid.uuid4()}/metrics", headers=h)
+    assert missing.status_code == 404
+    assert set(fake.asked) == {TENANT}

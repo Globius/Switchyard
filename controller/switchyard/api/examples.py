@@ -491,3 +491,60 @@ SUMMARY = {
         "created_at": WHEN,
     },
 }
+
+METRICS = {
+    "available": True,
+    "reason": None,
+    "metrics": {
+        "window_s": 3600,
+        "step_s": 30,
+        "summary": {
+            "rps": 120.5,
+            "p95_ms": 18.0,
+            "error_5xx_ratio": 0.002,
+            "active_connections": 42,
+        },
+        "rps": [{"t": WHEN, "v": 120.5}],
+        "p95_ms": [{"t": WHEN, "v": 18.0}],
+        "error_5xx_ratio": [{"t": WHEN, "v": 0.002}],
+        "active_connections": [{"t": WHEN, "v": 42}],
+    },
+}
+METRICS_OVERVIEW = {
+    "available": True,
+    "reason": None,
+    "window_s": 900,
+    "items": [
+        {
+            "virtual_service_id": VIRTUAL_SERVICE,
+            "name": "shop",
+            "summary": {
+                "rps": 120.5,
+                "p95_ms": 18.0,
+                "error_5xx_ratio": 0.002,
+                "active_connections": 42,
+            },
+        }
+    ],
+}
+ACCESS_LOGS = {
+    "available": True,
+    "reason": None,
+    "entries": [
+        {
+            "at": WHEN,
+            "client_ip": "198.51.100.7",
+            "frontend": "vs_shop",
+            "backend": "pool_web",
+            "server": "web-1",
+            "status": 200,
+            "bytes": 512,
+            "duration_ms": 13,
+            "method": "GET",
+            "path": "/cart",
+            "raw": "198.51.100.7:51514 [10/Oct/2026:08:30:00.123] vs_shop pool_web/web-1 "
+            '0/0/1/12/13 200 512 - - ---- 1/1/0/0/0 0/0 "GET /cart HTTP/1.1"',
+        }
+    ],
+    "next_cursor": None,
+}

@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 from switchyard.domain import models as dm
 from switchyard.domain.changes import Action, DraftStatus, ObjectType
 from switchyard.domain.snapshot import Snapshot
+from switchyard.domain.telemetry import AccessLogEntry, MetricSummary, ServiceMetrics
 from switchyard.domain.workflow import ChangeSetState, EngineState, Role
 
 
@@ -676,6 +677,47 @@ class NextFree(ApiModel):
     """A suggested free address; nothing is reserved."""
 
     address: str
+
+
+# -- telemetry -------------------------------------------------------------------------------------
+
+
+class MetricsRead(ApiModel):
+    """Metrics of one virtual service, or why there are none."""
+
+    available: bool = Field(
+        description="False when no metrics backend is configured or it cannot be reached."
+    )
+    reason: str | None = Field(default=None, description="Why `available` is false.")
+    metrics: ServiceMetrics | None = None
+
+
+class MetricsOverviewItem(ApiModel):
+    """Headline numbers of one virtual service."""
+
+    virtual_service_id: UUID
+    name: str
+    summary: MetricSummary
+
+
+class MetricsOverview(ApiModel):
+    """Headline numbers of every virtual service, for list columns."""
+
+    available: bool
+    reason: str | None = None
+    window_s: int
+    items: list[MetricsOverviewItem]
+
+
+class AccessLogs(ApiModel):
+    """A page of access log lines, newest first."""
+
+    available: bool
+    reason: str | None = None
+    entries: list[AccessLogEntry]
+    next_cursor: str | None = Field(
+        default=None, description="Pass back as `cursor` for older lines; null at the end."
+    )
 
 
 # -- jobs and audit --------------------------------------------------------------------------------

@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.secrets import SecretsReader
+from switchyard.adapters.telemetry import Telemetry, TelemetryError
 from switchyard.api import docs_meta, job_models, overview
 from switchyard.api import examples as ex
 from switchyard.api.overview import SearchResults, TenantSummary
@@ -33,6 +34,7 @@ from switchyard.api.schemas import (
     PROBLEM_RESPONSES,
     VALIDATION_RESPONSE,
     Accepted,
+    AccessLogs,
     ApplyIn,
     AuditActionRead,
     AuditEventRead,
@@ -57,6 +59,9 @@ from switchyard.api.schemas import (
     Me,
     MemberStateIn,
     MemberStateResult,
+    MetricsOverview,
+    MetricsOverviewItem,
+    MetricsRead,
     NextFree,
     OpenIn,
     OpsIn,
@@ -76,6 +81,7 @@ from switchyard.api.schemas import (
     VipPoolUsage,
     VirtualServiceStatusRead,
 )
+from switchyard.api.stream_models import EVENTS
 from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain.changes import (
@@ -124,6 +130,7 @@ class ApiServices:
     cert_jobs: CertificateJobs
     jobs: JobService
     certs: CertificateService | None = None
+    telemetry: Telemetry | None = None
     enrollment: EnrollmentService | None = None
     sessions: SessionService | None = None
 
@@ -135,6 +142,7 @@ def build_services(
     certs: CertificateService | None = None,
     enrollment: EnrollmentService | None = None,
     sessions: SessionService | None = None,
+    telemetry: Telemetry | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles."""
     return ApiServices(
@@ -151,6 +159,7 @@ def build_services(
         certs=certs,
         enrollment=enrollment,
         sessions=sessions,
+        telemetry=telemetry,
     )
 
 
@@ -1253,6 +1262,160 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         if object_type in RENDERED_TYPES:
             _rendered_route(router, slug, object_type)
 
+    # telemetry
+    async def _service_name(svc: ApiServices, tenant: TenantRecord, service_id: UUID) -> str:
+        from switchyard.db.repository import load_snapshot
+
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+        found = next((s for s in snapshot.virtual_services if s.id == service_id), None)
+        if found is None:
+            raise ApiError(404, f"virtual-services {service_id} not found")
+        return found.name
+
+    @router.get(
+        "/tenants/{t}/virtual-services/{object_id}/metrics",
+        tags=["virtual-services"],
+        summary="Metrics of a virtual service",
+        description=(
+            "Requests per second, 95th percentile response time, 5xx ratio and current sessions "
+            "over the last `window_s` seconds, one point per `step_s`, plus the latest value of "
+            "each as `summary`. Read from Prometheus and Loki with the tenant label enforced. "
+            "`available: false` (with a `reason`) when no backend is configured or it fails; a "
+            "single value is `null` when the backend has no data for it, which is not zero. "
+            "Requires any role in the tenant."
+        ),
+        response_model=MetricsRead,
+        responses=_ok(ex.METRICS),
+    )
+    async def service_metrics(
+        object_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        window_s: Annotated[
+            int, Query(ge=60, le=604800, description="Seconds back from now.")
+        ] = 3600,
+        step_s: Annotated[
+            int | None,
+            Query(ge=5, le=3600, description="Seconds between points; default fits ~120 points."),
+        ] = None,
+    ) -> MetricsRead:
+        name = await _service_name(svc, tenant, object_id)
+        if svc.telemetry is None:
+            return MetricsRead(available=False, reason="no metrics backend is configured")
+        step = step_s or max(5, window_s // 120)
+        try:
+            found = await svc.telemetry.metrics(tenant.id, name, window_s=window_s, step_s=step)
+        except TelemetryError as exc:
+            return MetricsRead(available=False, reason=str(exc))
+        return MetricsRead(available=True, metrics=found)
+
+    @router.get(
+        "/tenants/{t}/metrics/virtual-services",
+        tags=["virtual-services"],
+        summary="Headline metrics of every virtual service",
+        description=(
+            "Requests per second, 5xx ratio and current sessions per service over the last "
+            "`window_s` seconds, for the list columns. `p95_ms` is only in the per-service "
+            "route. `available: false` when no backend is configured. Requires any role in "
+            "the tenant."
+        ),
+        response_model=MetricsOverview,
+        responses=_ok(ex.METRICS_OVERVIEW),
+    )
+    async def metrics_overview(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        window_s: Annotated[
+            int, Query(ge=60, le=86400, description="Seconds back from now.")
+        ] = 900,
+    ) -> MetricsOverview:
+        from switchyard.db.repository import load_snapshot
+
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+        if svc.telemetry is None:
+            return MetricsOverview(
+                available=False,
+                reason="no metrics backend is configured",
+                window_s=window_s,
+                items=[],
+            )
+        names = sorted(s.name for s in snapshot.virtual_services if s.enabled)
+        try:
+            found = await svc.telemetry.summaries(tenant.id, names, window_s=window_s)
+        except TelemetryError as exc:
+            return MetricsOverview(available=False, reason=str(exc), window_s=window_s, items=[])
+        by_name = {s.name: s.id for s in snapshot.virtual_services}
+        return MetricsOverview(
+            available=True,
+            window_s=window_s,
+            items=[
+                MetricsOverviewItem(virtual_service_id=by_name[n], name=n, summary=v)
+                for n, v in sorted(found.items())
+            ],
+        )
+
+    @router.get(
+        "/tenants/{t}/virtual-services/{object_id}/logs",
+        tags=["virtual-services"],
+        summary="Access log of a virtual service",
+        description=(
+            "HAProxy HTTP log lines of the service, newest first, parsed into fields. Filter "
+            "with `since`/`until` (default: the last hour), `q` (substring of the raw line) and "
+            "`status_class` (2, 3, 4 or 5). Page with `limit` and `cursor`. Read from Loki with "
+            "the tenant label enforced; `available: false` when no log backend is configured. "
+            "Requires any role in the tenant."
+        ),
+        response_model=AccessLogs,
+        responses=_ok(ex.ACCESS_LOGS),
+    )
+    async def service_logs(
+        object_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
+        status_class: Annotated[int | None, Query(ge=2, le=5)] = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> AccessLogs:
+        name = await _service_name(svc, tenant, object_id)
+        if svc.telemetry is None:
+            return AccessLogs(available=False, reason="no log backend is configured", entries=[])
+        end = until or datetime.now(UTC)
+        if cursor:
+            try:
+                end = _EPOCH + timedelta(microseconds=int(cursor))
+            except ValueError:
+                raise ApiError(400, "cursor is not valid") from None
+        start = since or end - timedelta(hours=1)
+        try:
+            found = await svc.telemetry.logs(
+                tenant.id,
+                name,
+                since=start,
+                until=end,
+                limit=limit + 1,
+                contains=q,
+                status_class=status_class,
+            )
+        except TelemetryError as exc:
+            return AccessLogs(available=False, reason=str(exc), entries=[])
+        window = found[:limit]
+        more = len(found) > limit
+        return AccessLogs(
+            available=True,
+            entries=window,
+            next_cursor=(
+                str((window[-1].at - _EPOCH) // timedelta(microseconds=1)) if more else None
+            ),
+        )
+
     # search and summary
     @router.get(
         "/tenants/{t}/search",
@@ -2049,12 +2212,20 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     @router.get(
         "/tenants/{t}/status/stream",
         tags=["status"],
-        summary="Stream engine status (server-sent events)",
+        summary="Live events (server-sent events)",
+        description=(
+            "A `text/event-stream` of what changes in the tenant. Events: "
+            + "; ".join(f"`{n}`: {d}" for n, (_, _, d) in EVENTS.items())
+            + " Every `data:` line is JSON (the payload models are under `x-sse-events`; "
+            "`status` and `vs_state` carry an array). The first events are a full snapshot, "
+            "so a client that reconnects simply starts over (`Last-Event-ID` is not used). "
+            "Comment lines `: keep-alive` fill the quiet intervals. The database is polled every "
+            "`interval` seconds; `follow=false` sends one snapshot and closes."
+        ),
         response_class=StreamingResponse,
         responses={
             200: {
-                "description": "`text/event-stream`; each `status` event carries the JSON array "
-                "of `GET /status/engines`.",
+                "description": "`text/event-stream`.",
                 "content": {"text/event-stream": {"schema": {"type": "string"}}},
             }
         },
@@ -2067,24 +2238,77 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         follow: bool = True,
         interval: Annotated[float, Query(ge=0.1, le=60)] = 2.0,
     ) -> StreamingResponse:
-        """Server-sent events: the engine status whenever it changes (and once at the start)."""
         import asyncio
         import json
 
+        def frame(counter: int, name: str, data: Any) -> str:
+            return f"id: {counter}\nevent: {name}\ndata: {json.dumps(data, sort_keys=True)}\n\n"
+
         async def events() -> AsyncIterator[str]:
-            last = ""
+            counter = 0
+            last: dict[str, str] = {}
+            jobs_seen: dict[UUID, str] = {}
+            revision: int | None = None
+            first = True
             while True:
-                payload = json.dumps(
-                    [
-                        EngineStatusRead.model_validate(status_json(s)).model_dump(mode="json")
-                        for s in await svc.status.list_status(who, tenant.id)
-                    ],
-                    sort_keys=True,
-                )
-                if payload != last:
-                    yield f"event: status\ndata: {payload}\n\n"
-                    last = payload
-                else:
+                sent = False
+                engines = [
+                    EngineStatusRead.model_validate(status_json(s)).model_dump(mode="json")
+                    for s in await svc.status.list_status(who, tenant.id)
+                ]
+                states = [
+                    VirtualServiceStatusRead.model_validate(
+                        {
+                            "id": v.id,
+                            "name": v.name,
+                            "protocol": v.protocol,
+                            "state": v.state,
+                            "health": v.health,
+                            "members_up": v.members_up,
+                            "members_total": v.members_total,
+                        }
+                    ).model_dump(mode="json")
+                    for v in await svc.status.virtual_services(who, tenant.id)
+                ]
+                for name, payload in (("status", engines), ("vs_state", states)):
+                    text = json.dumps(payload, sort_keys=True)
+                    if last.get(name) != text:
+                        counter += 1
+                        last[name] = text
+                        sent = True
+                        yield frame(counter, name, payload)
+                page = await svc.jobs.list(who, tenant.id, limit=20)
+                for row in reversed(page.items):
+                    job = job_models.Job.from_row(row).model_dump(mode="json")
+                    text = json.dumps(job, sort_keys=True)
+                    if jobs_seen.get(row.id) == text:
+                        continue
+                    unfinished = job["state"] in {"queued", "running"}
+                    if not first or unfinished:
+                        counter += 1
+                        sent = True
+                        yield frame(counter, "job_progress", job)
+                    jobs_seen[row.id] = text
+                latest = await svc.change_sets.revisions(who, tenant.id, limit=1)
+                if latest and latest[0].number != revision:
+                    if revision is not None:
+                        counter += 1
+                        sent = True
+                        r = latest[0]
+                        yield frame(
+                            counter,
+                            "revision_applied",
+                            RevisionSummary(
+                                number=r.number,
+                                author=r.author,
+                                summary=r.summary,
+                                git_sha=r.git_sha,
+                                created_at=r.created_at,
+                            ).model_dump(mode="json"),
+                        )
+                    revision = latest[0].number
+                first = False
+                if not sent:
                     yield ": keep-alive\n\n"
                 if not follow or await request.is_disconnected():
                     return
