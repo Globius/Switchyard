@@ -94,7 +94,7 @@ Rules for all tickets (CLAUDE.md): tests, docstrings, user-visible behavior in `
 
 ---
 
-## T7. UDP field rules and the `udp` health monitor (M6, ADR 0013)
+## T7. UDP field rules and the `udp` health monitor (M6, ADR 0013, ADR 0020) — DONE
 
 **Problem.** The UI forms need to know which fields a UDP service and its pool may use, and which monitor type to offer.
 
