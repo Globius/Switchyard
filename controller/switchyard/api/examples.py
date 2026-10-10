@@ -288,6 +288,7 @@ ENGINE_STATUS = {
         "routes_withdrawn": False,
         "bgp": [],
         "vrrp": [{"name": "VI_edge", "state": "MASTER"}],
+        "ipvs": [],
         "file_hashes": {"haproxy/haproxy.cfg": "sha256:ab12"},
     },
     "drift": [{"kind": "haproxy_config", "expected": "9d2e7c41", "actual": "00000000"}],
@@ -385,3 +386,19 @@ ME = {
     "tenants": [{"id": TENANT, "name": "acme", "role": "tenant-admin"}],
 }
 HEALTH = {"status": "ok"}
+PROTOCOL_RULES = {
+    "protocol": "udp",
+    "service_forbidden": [
+        "certificate_ids",
+        "policy_set_ids",
+        "allow_list_id",
+        "enforce_allow_list",
+        "restore_client_ip_header",
+        "routes",
+    ],
+    "port_forbidden": ["tls", "proxy_protocol", "http2", "https_redirect_port"],
+    "pool_forbidden": ["tls", "tls_verify", "persistence"],
+    "algorithms": ["roundrobin", "leastconn", "source"],
+    "monitor_types": ["udp"],
+    "member_port_required": True,
+}

@@ -32,7 +32,7 @@ const (
 type AgentClient interface {
 	// Writes a signed bundle atomically and reloads only the units whose files changed.
 	ApplyBundle(ctx context.Context, in *ApplyBundleRequest, opts ...grpc.CallOption) (*ApplyBundleResponse, error)
-	// Reports file hashes, BGP sessions, VRRP state and local HAProxy health.
+	// Reports file hashes, BGP sessions, VRRP state, IPVS real servers and local HAProxy health.
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*Status, error)
 	// Streams a status snapshot every time something changes (and at least every 30 seconds).
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Status], error)
@@ -93,7 +93,7 @@ type Agent_WatchClient = grpc.ServerStreamingClient[Status]
 type AgentServer interface {
 	// Writes a signed bundle atomically and reloads only the units whose files changed.
 	ApplyBundle(context.Context, *ApplyBundleRequest) (*ApplyBundleResponse, error)
-	// Reports file hashes, BGP sessions, VRRP state and local HAProxy health.
+	// Reports file hashes, BGP sessions, VRRP state, IPVS real servers and local HAProxy health.
 	GetStatus(context.Context, *GetStatusRequest) (*Status, error)
 	// Streams a status snapshot every time something changes (and at least every 30 seconds).
 	Watch(*WatchRequest, grpc.ServerStreamingServer[Status]) error

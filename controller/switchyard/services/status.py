@@ -7,7 +7,9 @@ Drift is reported, never corrected (CLAUDE.md): a manual hotfix must be noticed,
 """
 
 import asyncio
+import dataclasses
 import logging
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -15,7 +17,7 @@ from uuid import UUID
 
 from sqlalchemy import delete, func, select
 
-from switchyard.adapters.agent import AgentEngine, AgentError, AgentStatus
+from switchyard.adapters.agent import AgentEngine, AgentError, AgentStatus, IpvsRealServer
 from switchyard.adapters.haproxy import HaproxyEngine, HaproxyError
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.db import audit_log
@@ -23,6 +25,7 @@ from switchyard.db.models import TenantRow
 from switchyard.db.ops_models import EngineStatusRow, ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
+from switchyard.domain.models import Protocol
 from switchyard.domain.snapshot import Snapshot
 from switchyard.pipeline.apply import bundle_id, file_hashes
 from switchyard.pipeline.bundles import BundleError, engine_files
@@ -53,9 +56,63 @@ class EngineStatus:
     observed_at: datetime
 
 
+_IPVS_STATUS = {"up": "UP", "down": "DOWN", "drain": "DRAIN"}
+#: Worst state first: a pool member served on several UDP ports reports the worst of them.
+_IPVS_ORDER = ("DOWN", "DRAIN", "UP")
+
+
+def ipvs_members(
+    reported: Iterable[IpvsRealServer], names: Mapping[tuple[str, str, int], tuple[str, str]]
+) -> list[dict[str, str]]:
+    """Turn IPVS real servers into HAProxy-shaped member rows (``backend``, ``server``, ``status``).
+
+    Args:
+        reported: What the agent reports.
+        names: ``(service, member address, member port)`` to ``(pool backend, server name)``,
+            built from the desired state; servers it does not know are skipped.
+
+    Example:
+        >>> row = IpvsRealServer("dns", "192.0.2.5", 53, "10.0.0.1", 53, "down")
+        >>> ipvs_members([row], {("dns", "10.0.0.1", 53): ("pool_dns", "10-0-0-1-53")})
+        [{'backend': 'pool_dns', 'server': '10-0-0-1-53', 'status': 'DOWN'}]
+    """
+    worst: dict[tuple[str, str], str] = {}
+    for s in reported:
+        key = names.get((s.service, s.address, s.member_port))
+        if key is None:
+            continue
+        state = _IPVS_STATUS.get(s.state, "DOWN")
+        if key not in worst or _IPVS_ORDER.index(state) < _IPVS_ORDER.index(worst[key]):
+            worst[key] = state
+    return [
+        {"backend": backend, "server": server, "status": state}
+        for (backend, server), state in sorted(worst.items())
+    ]
+
+
+def _udp_member_names(
+    snapshot: Snapshot, group_id: UUID
+) -> dict[tuple[str, str, int], tuple[str, str]]:
+    pools = {p.id: p for p in snapshot.pools}
+    out: dict[tuple[str, str, int], tuple[str, str]] = {}
+    for svc in snapshot.virtual_services:
+        if (
+            svc.se_group_id != group_id
+            or not svc.enabled
+            or svc.protocol is not Protocol.UDP
+            or svc.default_pool_id not in pools
+        ):
+            continue
+        pool = pools[svc.default_pool_id]
+        for m in pool.members:
+            out[(svc.name, str(m.address), m.port or 0)] = (f"pool_{pool.name}", m.server_name)
+    return out
+
+
 @dataclass
 class _Expected:
     fingerprint: str | None = None
+    udp_members: dict[tuple[str, str, int], tuple[str, str]] = field(default_factory=dict)
     bundles: dict[str, dict[str, str]] = field(default_factory=dict)  # engine name -> hashes
 
 
@@ -67,6 +124,7 @@ def _agent_json(status: AgentStatus) -> dict[str, Any]:
         "routes_withdrawn": status.routes_withdrawn,
         "bgp": [{"peer": s.peer, "state": s.state, "remote_asn": s.remote_asn} for s in status.bgp],
         "vrrp": [{"name": v.name, "state": v.state} for v in status.vrrp],
+        "ipvs": [dataclasses.asdict(s) for s in status.ipvs],
         "file_hashes": dict(status.file_hashes),
     }
 
@@ -100,6 +158,7 @@ class StatusService:
             return out
         if "frontend vs_" in rendered.files["haproxy/haproxy.cfg"]:
             out.fingerprint = rendered.fingerprint
+        out.udp_members = _udp_member_names(snapshot, group_id)
         group = next((g for g in snapshot.se_groups if g.id == group_id), None)
         if group is None or out.fingerprint is None:
             return out
@@ -156,6 +215,7 @@ class StatusService:
             if agent is not None:
                 status = await agent.status()
                 agent_json = _agent_json(status)
+                members += ipvs_members(status.ipvs, expected.udp_members)
                 wanted = expected.bundles.get(record.name)
                 if wanted is not None:
                     if status.bundle_id != wanted["__bundle_id__"]:

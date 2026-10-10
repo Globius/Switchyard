@@ -106,3 +106,37 @@ func TestInvalidPrefixesAreRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestUDPPrefixesFollowIPVSNotHAProxy(t *testing.T) {
+	haproxy := false
+	udpBad := map[string]bool{}
+	r := &rec{}
+	w := &Watchdog{
+		Runner: r, Threshold: 1,
+		VIPsFile: vips(t, `{"asn":65010,"prefixes":["192.0.2.20/32","192.0.2.22/32"],`+
+			`"udp_prefixes":["192.0.2.22/32"],"udp_only_prefixes":["192.0.2.22/32"]}`),
+		Check:        func(context.Context) bool { return haproxy },
+		UDPUnhealthy: func(context.Context) map[string]bool { return udpBad },
+	}
+	ctx := context.Background()
+	w.Tick(ctx)
+	if len(r.calls) != 1 || !strings.Contains(r.calls[0], "no network 192.0.2.20/32") {
+		t.Fatalf("a failing HAProxy withdraws only the non-UDP VIP: %v", r.calls)
+	}
+	haproxy = true
+	udpBad["192.0.2.22"] = true
+	w.Tick(ctx)
+	if len(r.calls) != 3 || !strings.Contains(r.calls[1], "network 192.0.2.20/32") ||
+		strings.Contains(r.calls[1], "no network") ||
+		!strings.Contains(r.calls[2], "no network 192.0.2.22/32") {
+		t.Fatalf("HAProxy recovers and the UDP VIP with no healthy real server goes: %v", r.calls)
+	}
+	udpBad = map[string]bool{}
+	w.Tick(ctx)
+	if len(r.calls) != 4 || strings.Contains(r.calls[3], "no network") {
+		t.Fatalf("the UDP VIP is announced again: %v", r.calls)
+	}
+	if _, withdrawn := w.State(); withdrawn {
+		t.Fatal("nothing should be withdrawn now")
+	}
+}

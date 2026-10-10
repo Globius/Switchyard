@@ -8,7 +8,7 @@ option go_package = "switchyard/agent/gen/switchyard/agent/v1;agentv1";
 service Agent {
   // Writes a signed bundle atomically and reloads only the units whose files changed.
   rpc ApplyBundle(ApplyBundleRequest) returns (ApplyBundleResponse);
-  // Reports file hashes, BGP sessions, VRRP state and local HAProxy health.
+  // Reports file hashes, BGP sessions, VRRP state, IPVS real servers and local HAProxy health.
   rpc GetStatus(GetStatusRequest) returns (Status);
   // Streams a status snapshot every time something changes (and at least every 30 seconds).
   rpc Watch(WatchRequest) returns (stream Status);
@@ -54,6 +54,24 @@ message VrrpInstance {
   string state = 2;  // MASTER, BACKUP, FAULT
 }
 
+// One IPVS real server of a UDP virtual service, in the same shape as an HAProxy member: keyed
+// by virtual service (VIP, port) and member (address, port), with state, weight and counters.
+message IpvsRealServer {
+  string service = 1;         // virtual service name, from the rendered keepalived.conf
+  string vip = 2;
+  uint32 port = 3;
+  string address = 4;         // the real server
+  uint32 member_port = 5;
+  string state = 6;           // up, down, drain
+  uint32 weight = 7;
+  uint64 active_conns = 8;
+  uint64 inactive_conns = 9;
+  uint64 in_packets = 10;     // client to server
+  uint64 out_packets = 11;
+  uint64 in_bytes = 12;
+  uint64 out_bytes = 13;
+}
+
 message Status {
   string agent_version = 1;
   string bundle_id = 2;                 // id of the last applied bundle
@@ -63,4 +81,6 @@ message Status {
   bool haproxy_healthy = 6;             // local health check result
   bool routes_withdrawn = 7;            // the watchdog has withdrawn BGP prefixes
   int64 observed_at_unix = 8;
+  repeated IpvsRealServer ipvs = 9;     // UDP real servers; empty when no UDP service is rendered
+  bool keepalived_running = 10;         // only meaningful when `ipvs` is expected
 }

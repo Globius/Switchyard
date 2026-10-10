@@ -126,6 +126,55 @@ async def test_validation_errors_point_at_the_field(api: Api) -> None:
     assert {"name", "bogus"} <= paths
 
 
+async def test_protocol_field_rules_describe_what_a_form_may_offer(api: Api) -> None:
+    h = await api.token()
+    udp = (await api.client.get(f"{V1}/schema/virtual-service?protocol=udp", headers=h)).json()
+    assert "certificate_ids" in udp["service_forbidden"]
+    assert {"tls", "proxy_protocol", "http2", "https_redirect_port"} <= set(udp["port_forbidden"])
+    assert {"tls", "persistence"} <= set(udp["pool_forbidden"])
+    assert "random" not in udp["algorithms"]
+    assert (udp["monitor_types"], udp["member_port_required"]) == (["udp"], True)
+    http = (await api.client.get(f"{V1}/schema/virtual-service?protocol=http", headers=h)).json()
+    assert http["service_forbidden"] == [] and "udp" not in http["monitor_types"]
+    bad = await api.client.get(f"{V1}/schema/virtual-service?protocol=sctp", headers=h)
+    assert bad.status_code == 422 and bad.json()["errors"][0]["path"] == "protocol"
+    assert (await api.client.get(f"{V1}/schema/virtual-service?protocol=udp")).status_code == 401
+
+
+async def test_udp_service_fields_are_rejected_on_their_own_path(api: Api) -> None:
+    h = await api.token()
+    cs = (
+        await api.client.post(f"{V1}/tenants/acme/change-sets", json={"summary": "wg"}, headers=h)
+    ).json()["id"]
+    made = await api.client.post(
+        f"{V1}/tenants/acme/pools?change_set={cs}",
+        json={
+            "name": "wg",
+            "tls": True,
+            "members": [{"id": str(uuid.uuid4()), "address": "10.20.0.50", "port": 51820}],
+        },
+        headers=h,
+    )
+    assert made.status_code == 202, made.text
+    created = await api.client.post(
+        f"{V1}/tenants/acme/virtual-services?change_set={cs}",
+        json={
+            "name": "wg",
+            "se_group_id": str(GROUP),
+            "protocol": "udp",
+            "vip": "192.0.2.40",
+            "ports": [{"port": 51820, "proxy_protocol": True}],
+            "default_pool_id": made.json()["object_id"],
+        },
+        headers=h,
+    )
+    assert created.status_code == 202, created.text
+    diff = (await api.client.get(f"{V1}/tenants/acme/change-sets/{cs}/diff", headers=h)).json()
+    found = {(p["path"], p["code"]) for p in diff["problems"]}
+    assert ("virtual_services.wg.ports[0].proxy_protocol", "udp_field_not_allowed") in found
+    assert ("pools.wg.tls", "udp_field_not_allowed") in found
+
+
 async def test_draft_flow_over_http(api: Api) -> None:
     h = await api.token()
     opened = await api.client.post(

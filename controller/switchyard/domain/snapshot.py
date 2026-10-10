@@ -18,12 +18,15 @@ from pydantic import Field
 
 from switchyard.domain import validators as v
 from switchyard.domain.errors import DomainValidationError, Problem
+from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDDEN_SERVICE_FIELDS
 from switchyard.domain.models import (
+    Algorithm,
     AllowListPolicySet,
     Certificate,
     Entity,
     HealthMonitor,
     Model,
+    MonitorType,
     Network,
     NetworkRole,
     PolicySet,
@@ -135,7 +138,9 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     - ``vip_outside_pool``: with a ``vip_pool_id``, the VIP is inside one of the pool's ranges.
     - ``check_port_unknown``: a monitored member without a port needs a monitor ``port``.
     - ``port_collision``: no two services bind the same VIP, port and transport.
-    - ``pool_protocol_mismatch``: a pool is not shared between HTTP and TCP services.
+    - ``pool_protocol_mismatch``: a pool is not shared between services of different protocols.
+    - ``udp_field_not_allowed``, ``udp_algorithm_unsupported``, ``udp_member_port_required`` and
+      ``monitor_protocol_mismatch``: the UDP field rules of ADR 0020, each on the offending field.
     - ``duplicate_route``: a host/path match appears at most once per service.
     - ``certificate_coverage``: every route host of a TLS-terminating HTTP service is covered by
       a SAN of the service's certificates (wildcards cover exactly one label).
@@ -288,9 +293,13 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
 
         _check_routes(s, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
+        if s.protocol is Protocol.UDP:
+            _check_udp_service(s, base, problems)
 
         transport = "udp" if s.protocol is Protocol.UDP else "tcp"
         listeners += [v.Listener(s.name, s.vip, p.port, transport) for p in s.ports]
+
+    _check_udp_pools(snapshot, pool_protocols, monitors, problems)
 
     for first, second in v.find_port_collisions(listeners):
         problems.append(
@@ -307,7 +316,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 Problem(
                     f"pools.{name}",
                     "pool_protocol_mismatch",
-                    "pool is used by both http and tcp/udp services",
+                    "pool is used by services of different protocols "
+                    f"({', '.join(sorted(p.value for p in protocols))})",
                 )
             )
     return sorted(problems)
@@ -372,6 +382,90 @@ def _check_vip(
             f"{s.vip} is not usable on SE group {group.name}: {detail}",
         )
     )
+
+
+def _check_udp_service(s: VirtualService, base: str, problems: list[Problem]) -> None:
+    """Reject the fields a UDP service cannot use, each on its own path (ADR 0020)."""
+    for field in UDP_FORBIDDEN_SERVICE_FIELDS:
+        if getattr(s, field):
+            problems.append(
+                Problem(f"{base}.{field}", "udp_field_not_allowed", f"{field} is not valid on udp")
+            )
+    for i, port in enumerate(s.ports):
+        for field in UDP_FORBIDDEN_PORT_FIELDS:
+            if getattr(port, field) not in (False, None):
+                problems.append(
+                    Problem(
+                        f"{base}.ports[{i}].{field}",
+                        "udp_field_not_allowed",
+                        f"{field} is not valid on udp",
+                    )
+                )
+
+
+def _check_udp_pools(
+    snapshot: Snapshot,
+    pool_protocols: Mapping[UUID, set[Protocol]],
+    monitors: Mapping[UUID, HealthMonitor],
+    problems: list[Problem],
+) -> None:
+    """Check pools against the protocol of the services that use them.
+
+    ``udp`` monitors belong on UDP pools only, ``tcp``/``http`` monitors on UDP pools never, and a
+    UDP pool cannot use TLS, persistence, ``random`` or members without a port.
+    """
+    for pool in snapshot.pools:
+        protocols = pool_protocols.get(pool.id, set())
+        base = f"pools.{pool.name}"
+        monitor = monitors.get(pool.health_monitor_id) if pool.health_monitor_id else None
+        if protocols == {Protocol.UDP}:
+            if pool.tls:
+                problems.append(
+                    Problem(
+                        f"{base}.tls", "udp_field_not_allowed", "tls is not valid on a udp pool"
+                    )
+                )
+            if pool.persistence is not None:
+                problems.append(
+                    Problem(
+                        f"{base}.persistence",
+                        "udp_field_not_allowed",
+                        "persistence is not valid on a udp pool; use the source algorithm",
+                    )
+                )
+            if pool.algorithm is Algorithm.RANDOM:
+                problems.append(
+                    Problem(
+                        f"{base}.algorithm",
+                        "udp_algorithm_unsupported",
+                        "IPVS has no random scheduler; use roundrobin, leastconn or source",
+                    )
+                )
+            for member in pool.members:
+                if member.port is None:
+                    problems.append(
+                        Problem(
+                            f"{base}.members.{member.server_name}.port",
+                            "udp_member_port_required",
+                            "a member of a udp pool needs a port",
+                        )
+                    )
+            if monitor is not None and monitor.type is not MonitorType.UDP:
+                problems.append(
+                    Problem(
+                        f"{base}.health_monitor_id",
+                        "monitor_protocol_mismatch",
+                        f"a {monitor.type} monitor cannot check a udp pool; use a udp monitor",
+                    )
+                )
+        elif monitor is not None and monitor.type is MonitorType.UDP and protocols:
+            problems.append(
+                Problem(
+                    f"{base}.health_monitor_id",
+                    "monitor_protocol_mismatch",
+                    "a udp monitor can only check a pool used by udp services",
+                )
+            )
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:

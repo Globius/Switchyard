@@ -1,5 +1,6 @@
-// Package watchdog withdraws BGP prefixes while the local HAProxy is unhealthy and announces them
-// again when it recovers. It never waits on the controller: failover is local.
+// Package watchdog withdraws BGP prefixes while the service behind them is unhealthy and announces
+// them again when it recovers: the local HAProxy for HTTP and TCP VIPs, keepalived and its IPVS
+// real servers for UDP VIPs. It never waits on the controller: failover is local.
 package watchdog
 
 import (
@@ -17,6 +18,11 @@ import (
 type VIPs struct {
 	ASN      uint32   `json:"asn"`
 	Prefixes []string `json:"prefixes"`
+	// UDPPrefixes are the prefixes served by IPVS; they also need keepalived and a healthy real server.
+	UDPPrefixes []string `json:"udp_prefixes"`
+	// UDPOnlyPrefixes are the UDP prefixes no HAProxy service uses; HAProxy health does not
+	// affect them.
+	UDPOnlyPrefixes []string `json:"udp_only_prefixes"`
 }
 
 // Watchdog is the route health injection state machine.
@@ -25,18 +31,21 @@ type Watchdog struct {
 	VIPsFile  string
 	Check     func(ctx context.Context) bool
 	Threshold int // consecutive failures before withdrawing
+	// UDPUnhealthy returns the VIP addresses (without prefix length) whose UDP services cannot
+	// serve. Optional; without it UDP prefixes follow the HAProxy check like any other.
+	UDPUnhealthy func(ctx context.Context) map[string]bool
 
 	mu        sync.Mutex
-	failures  int
+	failures  map[string]int
 	healthy   bool
-	withdrawn bool
+	withdrawn map[string]bool
 }
 
-// State returns the last health result and whether prefixes are withdrawn.
+// State returns the last HAProxy health result and whether any prefix is withdrawn.
 func (w *Watchdog) State() (healthy, withdrawn bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.healthy, w.withdrawn
+	return w.healthy, len(w.withdrawn) > 0
 }
 
 func (w *Watchdog) load() (*VIPs, error) {
@@ -59,19 +68,23 @@ func (w *Watchdog) load() (*VIPs, error) {
 	return &v, nil
 }
 
-func (w *Watchdog) apply(ctx context.Context, v *VIPs, verb string) error {
-	for _, p := range v.Prefixes {
-		args := []string{
-			"-c", "configure terminal",
-			"-c", fmt.Sprintf("router bgp %d", v.ASN),
-			"-c", "address-family ipv4 unicast",
-			"-c", verb + "network " + p,
-		}
-		if _, err := w.Runner.Run(ctx, "vtysh", args...); err != nil {
-			return err
-		}
+func (w *Watchdog) apply(ctx context.Context, v *VIPs, prefix, verb string) error {
+	args := []string{
+		"-c", "configure terminal",
+		"-c", fmt.Sprintf("router bgp %d", v.ASN),
+		"-c", "address-family ipv4 unicast",
+		"-c", verb + "network " + prefix,
 	}
-	return nil
+	_, err := w.Runner.Run(ctx, "vtysh", args...)
+	return err
+}
+
+func set(list []string) map[string]bool {
+	out := map[string]bool{}
+	for _, p := range list {
+		out[p] = true
+	}
+	return out
 }
 
 // Tick runs one health check and changes route announcements if the state requires it.
@@ -80,28 +93,42 @@ func (w *Watchdog) Tick(ctx context.Context) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.healthy = ok
+	if w.failures == nil {
+		w.failures, w.withdrawn = map[string]int{}, map[string]bool{}
+	}
 	vips, err := w.load()
 	if err != nil {
 		// No BGP configuration (VRRP mode) or an unreadable file: nothing to withdraw.
-		w.failures = 0
+		w.failures = map[string]int{}
 		return nil
 	}
-	if ok {
-		w.failures = 0
-		if w.withdrawn {
-			if err := w.apply(ctx, vips, ""); err != nil {
+	udp, udpOnly := set(vips.UDPPrefixes), set(vips.UDPOnlyPrefixes)
+	var udpBad map[string]bool
+	if w.UDPUnhealthy != nil && len(udp) > 0 {
+		udpBad = w.UDPUnhealthy(ctx)
+	}
+	for _, p := range vips.Prefixes {
+		healthy := ok || udpOnly[p]
+		if prefix, perr := netip.ParsePrefix(p); perr == nil && udp[p] && udpBad[prefix.Addr().String()] {
+			healthy = false
+		}
+		if healthy {
+			w.failures[p] = 0
+			if w.withdrawn[p] {
+				if err := w.apply(ctx, vips, p, ""); err != nil {
+					return err
+				}
+				delete(w.withdrawn, p)
+			}
+			continue
+		}
+		w.failures[p]++
+		if w.failures[p] >= w.Threshold && !w.withdrawn[p] {
+			if err := w.apply(ctx, vips, p, "no "); err != nil {
 				return err
 			}
-			w.withdrawn = false
+			w.withdrawn[p] = true
 		}
-		return nil
-	}
-	w.failures++
-	if w.failures >= w.Threshold && !w.withdrawn {
-		if err := w.apply(ctx, vips, "no "); err != nil {
-			return err
-		}
-		w.withdrawn = true
 	}
 	return nil
 }

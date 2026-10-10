@@ -70,8 +70,38 @@ class VrrpInstance(_message.Message):
     state: str
     def __init__(self, name: _Optional[str] = ..., state: _Optional[str] = ...) -> None: ...
 
+class IpvsRealServer(_message.Message):
+    __slots__ = ("service", "vip", "port", "address", "member_port", "state", "weight", "active_conns", "inactive_conns", "in_packets", "out_packets", "in_bytes", "out_bytes")
+    SERVICE_FIELD_NUMBER: _ClassVar[int]
+    VIP_FIELD_NUMBER: _ClassVar[int]
+    PORT_FIELD_NUMBER: _ClassVar[int]
+    ADDRESS_FIELD_NUMBER: _ClassVar[int]
+    MEMBER_PORT_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    WEIGHT_FIELD_NUMBER: _ClassVar[int]
+    ACTIVE_CONNS_FIELD_NUMBER: _ClassVar[int]
+    INACTIVE_CONNS_FIELD_NUMBER: _ClassVar[int]
+    IN_PACKETS_FIELD_NUMBER: _ClassVar[int]
+    OUT_PACKETS_FIELD_NUMBER: _ClassVar[int]
+    IN_BYTES_FIELD_NUMBER: _ClassVar[int]
+    OUT_BYTES_FIELD_NUMBER: _ClassVar[int]
+    service: str
+    vip: str
+    port: int
+    address: str
+    member_port: int
+    state: str
+    weight: int
+    active_conns: int
+    inactive_conns: int
+    in_packets: int
+    out_packets: int
+    in_bytes: int
+    out_bytes: int
+    def __init__(self, service: _Optional[str] = ..., vip: _Optional[str] = ..., port: _Optional[int] = ..., address: _Optional[str] = ..., member_port: _Optional[int] = ..., state: _Optional[str] = ..., weight: _Optional[int] = ..., active_conns: _Optional[int] = ..., inactive_conns: _Optional[int] = ..., in_packets: _Optional[int] = ..., out_packets: _Optional[int] = ..., in_bytes: _Optional[int] = ..., out_bytes: _Optional[int] = ...) -> None: ...
+
 class Status(_message.Message):
-    __slots__ = ("agent_version", "bundle_id", "file_hashes", "bgp", "vrrp", "haproxy_healthy", "routes_withdrawn", "observed_at_unix")
+    __slots__ = ("agent_version", "bundle_id", "file_hashes", "bgp", "vrrp", "haproxy_healthy", "routes_withdrawn", "observed_at_unix", "ipvs", "keepalived_running")
     class FileHashesEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -87,6 +117,8 @@ class Status(_message.Message):
     HAPROXY_HEALTHY_FIELD_NUMBER: _ClassVar[int]
     ROUTES_WITHDRAWN_FIELD_NUMBER: _ClassVar[int]
     OBSERVED_AT_UNIX_FIELD_NUMBER: _ClassVar[int]
+    IPVS_FIELD_NUMBER: _ClassVar[int]
+    KEEPALIVED_RUNNING_FIELD_NUMBER: _ClassVar[int]
     agent_version: str
     bundle_id: str
     file_hashes: _containers.ScalarMap[str, str]
@@ -95,4 +127,6 @@ class Status(_message.Message):
     haproxy_healthy: bool
     routes_withdrawn: bool
     observed_at_unix: int
-    def __init__(self, agent_version: _Optional[str] = ..., bundle_id: _Optional[str] = ..., file_hashes: _Optional[_Mapping[str, str]] = ..., bgp: _Optional[_Iterable[_Union[BgpSession, _Mapping]]] = ..., vrrp: _Optional[_Iterable[_Union[VrrpInstance, _Mapping]]] = ..., haproxy_healthy: _Optional[bool] = ..., routes_withdrawn: _Optional[bool] = ..., observed_at_unix: _Optional[int] = ...) -> None: ...
+    ipvs: _containers.RepeatedCompositeFieldContainer[IpvsRealServer]
+    keepalived_running: bool
+    def __init__(self, agent_version: _Optional[str] = ..., bundle_id: _Optional[str] = ..., file_hashes: _Optional[_Mapping[str, str]] = ..., bgp: _Optional[_Iterable[_Union[BgpSession, _Mapping]]] = ..., vrrp: _Optional[_Iterable[_Union[VrrpInstance, _Mapping]]] = ..., haproxy_healthy: _Optional[bool] = ..., routes_withdrawn: _Optional[bool] = ..., observed_at_unix: _Optional[int] = ..., ipvs: _Optional[_Iterable[_Union[IpvsRealServer, _Mapping]]] = ..., keepalived_running: _Optional[bool] = ...) -> None: ...

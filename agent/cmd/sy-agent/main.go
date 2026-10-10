@@ -26,6 +26,7 @@ import (
 	pb "switchyard/agent/gen/switchyard/agent/v1"
 	"switchyard/agent/internal/bundle"
 	"switchyard/agent/internal/enroll"
+	"switchyard/agent/internal/ipvs"
 	"switchyard/agent/internal/runner"
 	"switchyard/agent/internal/server"
 	"switchyard/agent/internal/status"
@@ -73,9 +74,19 @@ func main() {
 			return resp.StatusCode == http.StatusOK
 		},
 	}
+	keepalivedConf := filepath.Join(*root, "keepalived", "keepalived.conf")
+	wd.UDPUnhealthy = func(ctx context.Context) map[string]bool {
+		servers, err := ipvs.Collect(ctx, run, keepalivedConf)
+		if err != nil {
+			log.Printf("ipvs: %v", err)
+			return nil // unknown is not unhealthy: do not withdraw routes on a failed listing
+		}
+		_, aerr := run.Run(ctx, "systemctl", "is-active", "--quiet", "keepalived")
+		return ipvs.UnhealthyVIPs(servers, aerr == nil)
+	}
 	collector := &status.Collector{
 		Runner: run, StateDir: *stateDir, Hashes: applier.Hashes, BundleID: applier.LastBundleID,
-		Health: wd.State, Now: time.Now,
+		Health: wd.State, Now: time.Now, KeepalivedConf: keepalivedConf,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

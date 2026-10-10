@@ -7,6 +7,7 @@ global_defs {
     router_id {{ engine }}
 }
 
+{% if instance %}
 vrrp_script sy_haproxy {
     script "/usr/bin/curl -fsS --max-time 2 http://127.0.0.1:8404/healthz"
     interval 2
@@ -40,3 +41,35 @@ vrrp_instance {{ instance }} {
     notify_backup "/bin/sh -c 'echo BACKUP > /run/switchyard/vrrp-{{ instance }}.state'"
     notify_fault "/bin/sh -c 'echo FAULT > /run/switchyard/vrrp-{{ instance }}.state'"
 }
+{% endif %}
+{% for vs in virtual_servers %}
+
+# UDP service {{ vs.service }}
+virtual_server {{ vs.vip }} {{ vs.port }} {
+    delay_loop {{ vs.delay_loop }}
+    lb_algo {{ vs.scheduler }}
+    lb_kind NAT
+    protocol UDP
+{% for m in vs.members %}
+    real_server {{ m.address }} {{ m.port }} {
+        weight {{ m.weight }}
+{% if vs.checked %}
+        UDP_CHECK {
+            connect_timeout {{ vs.timeout }}
+            retry {{ vs.retry }}
+            delay_before_retry {{ vs.delay_loop }}
+{% if vs.check_port %}
+            connect_port {{ vs.check_port }}
+{% endif %}
+{% if vs.payload %}
+            payload {{ vs.payload }}
+{% endif %}
+{% if vs.require_reply %}
+            require_reply
+{% endif %}
+        }
+{% endif %}
+    }
+{% endfor %}
+}
+{% endfor %}

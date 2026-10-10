@@ -64,7 +64,7 @@ class AgentServicer:
         raise NotImplementedError('Method not implemented!')
 
     def GetStatus(self, request, context):
-        """Reports file hashes, BGP sessions, VRRP state and local HAProxy health.
+        """Reports file hashes, BGP sessions, VRRP state, IPVS real servers and local HAProxy health.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
