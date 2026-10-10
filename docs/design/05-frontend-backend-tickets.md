@@ -79,7 +79,7 @@ Rules for all tickets (CLAUDE.md): tests, docstrings, user-visible behavior in `
 
 ---
 
-## T6. UDP "not served yet" state (new gap, from ADR 0013) — ship before UDP is offered in the UI
+## T6. UDP "not served yet" state (new gap, from ADR 0013) — DONE — ship before UDP is offered in the UI
 
 **Problem.** A `protocol: udp` virtual service is accepted and stored, but the HAProxy renderer skips it (a warning in the render result, `docs/render.md`) and nothing serves it until M6. Today the API never shows that warning, so the UI would show a service that looks configured but carries no traffic.
 

@@ -306,6 +306,7 @@ async def test_every_read_route_answers_with_its_declared_model(api: Api) -> Non
         f"{t}/change-sets",
         f"{t}/revisions",
         f"{t}/status/engines",
+        f"{t}/status/virtual-services",
         f"{t}/audit-events",
         f"{t}/tokens",
         f"{t}/se-groups/{group}/engines",
