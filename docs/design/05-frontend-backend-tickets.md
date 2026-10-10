@@ -115,12 +115,16 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 
 ### G1-1. Permission matrix as code, `GET /permissions`, 403 detail
 
+**Status.** Built (ADR 0031, [auth.md](../auth.md)).
+
 - `domain/permissions.py`: the matrix of 02 as data (`(verb, object) → minimum role`); services replace their `require_role(...)` literals with it. Behavior changes against today: job retry/cancel needs the role of the originating action; tokens cannot create tokens; `required_role` in the 403.
 - `GET /api/v1/permissions` (any authenticated caller) → `[{verb, object, min_role}]`, plus the ordered `roles` list. The UI's `can(verb, object)` is `role_in(tenant) ≥ min_role`.
 - 403 and 401 problems gain a `code` member: `session_expired`, `csrf`, `role_required` (+ `required_role`), `user_disabled`.
 - **Acceptance.** A parametrized test calls every route with a token of each role and compares the status with the matrix; a test fails when the table in 02, the code and `/permissions` disagree; OpenAPI documents `code` and `required_role`.
 
 ### G1-2. Sessions: refresh, grants recomputation, `/me` additions
+
+**Status.** Built (ADR 0031, [auth.md](../auth.md)).
 
 - Lifetimes 4 h absolute / 30 min idle (break-glass 1 h / 15 min). Grants recomputed from stored groups and current mappings when older than 60 s; session revoked if no grant is left.
 - `POST /auth/refresh` (CSRF required) → the `Me` payload after recomputation; it does not extend the absolute lifetime.
@@ -143,11 +147,15 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 
 ### G1-5. Role mappings
 
+**Status.** Built (ADR 0031, [auth.md](../auth.md)).
+
 - System-wide `GET/POST /role-mappings`, `GET/PATCH/DELETE /role-mappings/{id}`; per tenant `GET/POST /tenants/{t}/role-mappings`, `PATCH/DELETE …/{id}`. Fields and who may use which in 02 (tenant-admin: `viewer` and `operator`, own tenant only). `If-Match` on `version`. Duplicate (`provider`, `group`, `tenant`) → 409.
 - Remove `oidc_group` from tenant create, update and read, from `examples.py` and from the model; migration logs old values to the audit log (`tenant.oidc_group_dropped`) then drops the column. Update `syctl` accordingly; `syctl idp map` keeps working and writes the same rows.
 - **Acceptance.** A tenant-admin gets 403 `role_required` creating a `tenant-admin` mapping and 404 touching another tenant's mapping; the OpenAPI breaking-change check is allowed for `oidc_group` in this MR only; audit events for each change.
 
 ### G1-6. Users
+
+**Status.** Built (ADR 0031, [auth.md](../auth.md)).
 
 - `user_account` upserted at every sign-in. System-admin: `GET /users`, `GET /users/{id}` (with `effective_grants`), `POST /users/{id}/disable|enable|revoke-sessions`, `DELETE /users/{id}`. Tenant-admin: `GET /tenants/{t}/users`. Details and field list in 02.
 - `user_session.user_id` links sessions; `revoke-sessions` ends them at once; a disabled user is refused at sign-in (`/login?error=disabled`) and by `authenticate`.

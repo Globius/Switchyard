@@ -48,6 +48,20 @@ class Page[T](ApiModel):
 # -- problems -------------------------------------------------------------------------------------
 
 
+ProblemCode = Literal[
+    "unauthenticated",
+    "invalid_token",
+    "session_expired",
+    "csrf",
+    "forbidden",
+    "role_required",
+    "user_disabled",
+]
+"""401/403 ``code`` values: no credentials, bad bearer token, session ended (401, sign in again),
+missing or wrong CSRF header, no access to this tenant, role too weak (also sends
+``required_role``), the person was disabled by an administrator."""
+
+
 class ProblemDetail(ApiModel):
     """One field-level finding inside a problem response (``errors[]``)."""
 
@@ -63,6 +77,13 @@ class ProblemOut(ApiModel):
     title: str
     status: int
     detail: str
+    code: ProblemCode | None = Field(
+        default=None,
+        description="Stable identifier clients can switch on; always set on 401 and 403.",
+    )
+    required_role: Role | None = Field(
+        default=None, description="With `code: role_required`: the weakest role that may do this."
+    )
     errors: list[ProblemDetail] | None = None
 
 
@@ -222,7 +243,6 @@ class TenantRead(ApiModel):
     id: UUID
     name: str
     version: int
-    oidc_group: str | None = None
     quotas: dict[str, int] = Field(description="Object-count limits by object type.")
     require_approval: bool
 
@@ -298,12 +318,36 @@ class AuthProviders(ApiModel):
     break_glass: bool = Field(description="Whether the local break-glass login is enabled.")
 
 
+class GrantSourceRead(ApiModel):
+    """The provider group that granted a role."""
+
+    provider: str
+    group: str
+
+
 class MeTenant(ApiModel):
     """A tenant the caller can act in and the role held there."""
 
     id: UUID
     name: str
     role: Role
+    via: list[GrantSourceRead] = Field(
+        description="The provider groups that granted this role; empty for break-glass and tokens."
+    )
+
+
+class MeSession(ApiModel):
+    """The lifetime of the caller's cookie session."""
+
+    expires_at: datetime = Field(
+        description="Absolute end of the session; refresh does not move it."
+    )
+    idle_timeout_seconds: int = Field(
+        description="The session ends after this long without a call."
+    )
+    grants_computed_at: datetime = Field(
+        description="When roles were last recomputed from the provider groups and the mappings."
+    )
 
 
 class Me(ApiModel):
@@ -318,7 +362,157 @@ class Me(ApiModel):
     csrf_token: str | None = Field(
         description="Send as `X-CSRF-Token` on writes made with the session cookie."
     )
+    session: MeSession | None = Field(description="Null for API tokens.")
     tenants: list[MeTenant]
+
+
+PermissionVerb = Literal[
+    "apply",
+    "apply_bypass",
+    "approve",
+    "cancel",
+    "change",
+    "create",
+    "deploy",
+    "disable",
+    "edit",
+    "enable",
+    "list",
+    "manage",
+    "read",
+    "reject",
+    "request_approval",
+    "retry",
+    "rollback",
+    "set_state",
+    "write",
+]
+PermissionObject = Literal[
+    "application",
+    "break_glass",
+    "certificate",
+    "change_set",
+    "draft",
+    "engine",
+    "enrollment_token",
+    "identity_provider",
+    "infrastructure",
+    "job",
+    "job_own",
+    "member",
+    "quota",
+    "require_approval",
+    "revision",
+    "role_mapping",
+    "role_mapping_privileged",
+    "sdn",
+    "se_group",
+    "system_token",
+    "tenant",
+    "tenant_data",
+    "tenant_user",
+    "token",
+    "user",
+]
+
+
+class PermissionRead(ApiModel):
+    """One cell of the permission matrix. `verb` and `object` are published as enums."""
+
+    verb: PermissionVerb
+    object: PermissionObject
+    min_role: Role = Field(description="The weakest role that may do this.")
+    description: str = Field(description="One sentence for tooltips.")
+
+
+class PermissionMatrix(ApiModel):
+    """The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`."""
+
+    roles: list[Role] = Field(description="Roles from weakest to strongest.")
+    permissions: list[PermissionRead]
+
+
+class RoleMappingRead(ApiModel):
+    """A provider group that grants a role."""
+
+    id: UUID
+    provider_id: UUID
+    provider: str
+    group_name: str
+    label: str | None = Field(description="Free text for opaque group ids.")
+    tenant_id: UUID | None = Field(description="Null only for `system-admin`.")
+    tenant: str | None
+    role: Role
+    version: int
+    created_by: str
+    created_at: datetime
+
+
+class RoleMappingIn(ApiModel):
+    """Create a mapping on a tenant route (`/tenants/{t}/role-mappings`)."""
+
+    provider: str = Field(description="Provider id or name.")
+    group_name: str
+    label: str | None = None
+    role: Role
+
+
+class SystemRoleMappingIn(RoleMappingIn):
+    """Create a mapping on the system-wide route."""
+
+    tenant_id: UUID | None = Field(
+        default=None, description="The tenant; omit for `system-admin`, required otherwise."
+    )
+
+
+class RoleMappingPatch(ApiModel):
+    """Change a mapping; send only the fields to change. The tenant of a mapping is fixed."""
+
+    group_name: str | None = None
+    label: str | None = None
+    role: Role | None = None
+
+
+class EffectiveGrantRead(ApiModel):
+    """What a person can do in one tenant now."""
+
+    tenant_id: UUID | None = Field(description="Null for `system-admin`.")
+    tenant: str | None
+    role: Role
+    via: list[GrantSourceRead]
+
+
+class UserRead(ApiModel):
+    """A person who has signed in."""
+
+    id: UUID
+    provider_id: UUID
+    provider: str
+    username: str
+    email: str | None
+    groups: list[str] = Field(
+        description="Groups from the last sign-in; empty on the tenant route."
+    )
+    first_login_at: datetime
+    last_login_at: datetime
+    last_seen_at: datetime
+    disabled_at: datetime | None
+    grants: list[EffectiveGrantRead] = Field(
+        description="Effective grants now; on the tenant route only that tenant's."
+    )
+
+
+class UserDetail(UserRead):
+    """A user with the number of live sessions."""
+
+    subject: str
+    active_sessions: int
+
+
+class SessionsRevoked(ApiModel):
+    """How many sessions `revoke-sessions` ended."""
+
+    revoked: int
 
 
 # -- change sets -----------------------------------------------------------------------------------
@@ -671,7 +865,6 @@ class TenantIn(ApiModel):
     """Create a tenant."""
 
     name: str
-    oidc_group: str | None = None
     quotas: dict[str, int] = Field(default_factory=dict)
     require_approval: bool = False
 
@@ -679,7 +872,6 @@ class TenantIn(ApiModel):
 class TenantPatch(ApiModel):
     """Change a tenant; send only the fields to change."""
 
-    oidc_group: str | None = None
     quotas: dict[str, int] | None = None
     require_approval: bool | None = None
 

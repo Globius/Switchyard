@@ -168,7 +168,6 @@ TENANT_READ = {
     "id": TENANT,
     "name": "acme",
     "version": 2,
-    "oidc_group": "acme-admins",
     "quotas": {"virtual_services": 50},
     "require_approval": True,
 }
@@ -383,8 +382,78 @@ ME = {
     "break_glass": False,
     "auth": "session",
     "csrf_token": "c3JmLXRva2Vu",
-    "tenants": [{"id": TENANT, "name": "acme", "role": "tenant-admin"}],
+    "session": {
+        "expires_at": "2026-10-10T16:00:00Z",
+        "idle_timeout_seconds": 1800,
+        "grants_computed_at": "2026-10-10T12:00:30Z",
+    },
+    "tenants": [
+        {
+            "id": TENANT,
+            "name": "acme",
+            "role": "tenant-admin",
+            "via": [{"provider": "authentik", "group": "acme-admins"}],
+        }
+    ],
 }
+PERMISSIONS = {
+    "roles": ["viewer", "operator", "tenant-admin", "system-admin"],
+    "permissions": [
+        {
+            "verb": "read",
+            "object": "tenant_data",
+            "min_role": "viewer",
+            "description": "Read everything in the tenant.",
+        },
+        {
+            "verb": "apply",
+            "object": "change_set",
+            "min_role": "operator",
+            "description": "Apply a change set when the tenant does not require approval.",
+        },
+        {
+            "verb": "manage",
+            "object": "engine",
+            "min_role": "tenant-admin",
+            "description": "Register, enable, disable, retire or remove service engines.",
+        },
+    ],
+}
+ROLE_MAPPING = {
+    "id": "0192f3a0-0000-7000-8000-000000000041",
+    "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+    "provider": "authentik",
+    "group_name": "acme-ops",
+    "label": "Acme operators",
+    "tenant_id": TENANT,
+    "tenant": "acme",
+    "role": "operator",
+    "version": 1,
+    "created_by": "user:authentik:alice",
+    "created_at": "2026-10-10T12:00:00Z",
+}
+USER_READ = {
+    "id": "0192f3a0-0000-7000-8000-000000000051",
+    "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+    "provider": "authentik",
+    "username": "alice",
+    "email": "alice@example.test",
+    "groups": ["acme-ops"],
+    "first_login_at": "2026-10-01T08:00:00Z",
+    "last_login_at": "2026-10-10T11:58:00Z",
+    "last_seen_at": "2026-10-10T12:00:00Z",
+    "disabled_at": None,
+    "grants": [
+        {
+            "tenant_id": TENANT,
+            "tenant": "acme",
+            "role": "operator",
+            "via": [{"provider": "authentik", "group": "acme-ops"}],
+        }
+    ],
+}
+USER_DETAIL = USER_READ | {"subject": "u-1", "active_sessions": 1}
+SESSIONS_REVOKED = {"revoked": 2}
 HEALTH = {"status": "ok"}
 PROTOCOL_RULES = {
     "protocol": "udp",

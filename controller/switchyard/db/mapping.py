@@ -33,7 +33,6 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 id=t.id,
                 version=t.version,
                 name=t.name,
-                oidc_group=t.oidc_group,
                 quotas=t.quotas,
                 require_approval=t.require_approval,
             )
@@ -290,7 +289,6 @@ def rows_to_snapshot(
                 "id": t.id,
                 "version": t.version,
                 "name": t.name,
-                "oidc_group": t.oidc_group,
                 "quotas": t.quotas,
                 "require_approval": t.require_approval,
             }

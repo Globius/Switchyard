@@ -40,7 +40,7 @@ from switchyard.services.certs import (
     inspect_pem,
     secret_ref_for,
 )
-from switchyard.services.changesets import ChangeSetService, require_role
+from switchyard.services.changesets import ChangeSetService, require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import NotFoundError, PermissionDeniedError
 
@@ -88,7 +88,7 @@ class CertificateJobs:
         """Queue issuance (or reissue) of a certificate and return the job id."""
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-        require_role(principal, Role.OPERATOR)
+        require(principal, "manage", "certificate")
         async with admin_session(self._db.admin) as session:
             return await queue.enqueue(
                 session,
@@ -115,7 +115,7 @@ class CertificateJobs:
         """Queue a renewal of one existing certificate."""
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-        require_role(principal, Role.OPERATOR)
+        require(principal, "manage", "certificate")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             snapshot = await load_snapshot(session)
         cert = next((c for c in snapshot.certificates if c.id == certificate_id), None)
@@ -190,7 +190,7 @@ class CertificateService:
         """
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-        require_role(principal, Role.OPERATOR)
+        require(principal, "manage", "certificate")
         issued = await self._store(tenant_id, name, pem)
         async with admin_session(self._db.admin) as session:
             await audit_log.record(

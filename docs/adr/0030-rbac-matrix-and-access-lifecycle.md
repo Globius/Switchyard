@@ -1,6 +1,6 @@
 # 0030. Permission matrix, multi-group grants, role refresh, users and token scope
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-10
 
 ## Context

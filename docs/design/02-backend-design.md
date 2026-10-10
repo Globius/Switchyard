@@ -101,7 +101,7 @@ The API is versioned REST under `/api/v1`, scoped by tenant in the path, and the
 
 ### Auth and RBAC
 
-Status: login, sessions, per-tenant roles and break-glass are built (ADR 0012); the matrix, refresh, users, token split, identity-provider API and SAML in this section are the G1 work (ADR 0030, tickets in `05-frontend-backend-tickets.md`). Where the two differ the text says "today" and "G1".
+Status: login, sessions, per-tenant roles and break-glass are built (ADR 0012). Built from G1 (ADR 0030, ADR 0031, [auth.md](../auth.md)): the permission matrix and `GET /permissions`, problem `code` members, `POST /auth/refresh` with grants recomputed every 60 s, the 4 h / 30 min lifetimes, `user_account` and the users API, role-mapping CRUD, `tenant.oidc_group` removed, `/login?error=` redirects. Still to build (tickets in `05-frontend-backend-tickets.md`): identity-provider API and test sign-in, break-glass administration, system tokens, SAML request signing and metadata import. Where the text says "G1" for a built item, read it as built.
 
 #### Sign-in
 

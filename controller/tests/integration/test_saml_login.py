@@ -217,4 +217,4 @@ async def test_metadata_lists_the_acs_and_can_be_downloaded(rig: Rig) -> None:
 
 async def test_the_oidc_callback_path_does_not_accept_saml_providers(rig: Rig) -> None:
     r = await rig.client.get(f"{V1}/auth/callback/corp", params={"code": "x", "state": "y"})
-    assert r.status_code in (400, 401)
+    assert r.status_code == 302 and r.headers["location"].startswith("/login?error=")

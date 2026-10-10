@@ -29,6 +29,7 @@ from switchyard.db import changesets as store
 from switchyard.db.models import TenantRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import tenant_session
+from switchyard.domain import permissions
 from switchyard.domain.changes import (
     ChangeOp,
     Draft,
@@ -46,7 +47,7 @@ from switchyard.render.haproxy import RenderResult, RenderWarning, render_haprox
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import ConflictError, NotFoundError, PermissionDeniedError
 
-ROLE_RANK = {Role.VIEWER: 0, Role.OPERATOR: 1, Role.TENANT_ADMIN: 2, Role.SYSTEM_ADMIN: 3}
+ROLE_RANK = permissions.ROLE_RANK
 #: Object types that only tenant administrators may change (infrastructure, not applications).
 INFRASTRUCTURE = frozenset(
     {ObjectType.NETWORK, ObjectType.VIP_POOL, ObjectType.SE_GROUP, ObjectType.ROUTING_PROFILE}
@@ -128,7 +129,22 @@ class Preview:
 def require_role(principal: Principal, minimum: Role) -> None:
     """Raise :class:`PermissionDeniedError` unless the principal holds at least ``minimum``."""
     if ROLE_RANK[principal.role] < ROLE_RANK[minimum]:
-        raise PermissionDeniedError(f"{principal.actor} needs the {minimum} role")
+        raise PermissionDeniedError(
+            f"{principal.actor} needs the {minimum.value} role", required_role=minimum.value
+        )
+
+
+def require(principal: Principal, verb: str, obj: str) -> None:
+    """Raise :class:`PermissionDeniedError` unless the principal may do ``(verb, obj)``.
+
+    The minimum role comes from the permission matrix
+    (:data:`switchyard.domain.permissions.MATRIX`), so services never repeat a role literal.
+
+    Example:
+        ``require(principal, "apply", "change_set")`` passes for an operator and fails for a viewer
+        with ``required_role == "operator"``.
+    """
+    require_role(principal, permissions.min_role(verb, obj))
 
 
 def _require_tenant(principal: Principal, tenant_id: UUID) -> None:
@@ -136,11 +152,12 @@ def _require_tenant(principal: Principal, tenant_id: UUID) -> None:
         raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
 
 
-def _check_ops_allowed(principal: Principal, ops: Sequence[ChangeOp]) -> None:
+def check_ops_allowed(principal: Principal, ops: Sequence[ChangeOp]) -> None:
+    """Raise unless the principal may change these objects (infrastructure needs a tenant admin)."""
     if any(op.object_type in INFRASTRUCTURE for op in ops):
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, "write", "infrastructure")
     else:
-        require_role(principal, Role.OPERATOR)
+        require(principal, "write", "application")
 
 
 def fill_member_ids(op: ChangeOp) -> ChangeOp:
@@ -271,7 +288,7 @@ class ChangeSetService:
     ) -> ChangeSetDetail:
         """Open an empty draft."""
         _require_tenant(principal, tenant_id)
-        require_role(principal, Role.OPERATOR)
+        require(principal, "edit", "draft")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             base_revision = await store.current_revision(session, tenant_id)
             record = await store.insert_change_set(
@@ -307,7 +324,7 @@ class ChangeSetService:
             ConflictError: If the change set can no longer be edited.
         """
         _require_tenant(principal, tenant_id)
-        _check_ops_allowed(principal, ops)
+        check_ops_allowed(principal, ops)
         new_ops = [fill_member_ids(op) for op in ops]
         async with tenant_session(self._db.app, [tenant_id]) as session:
             record = await self._editable(session, change_set_id, principal, request_id)
@@ -337,13 +354,13 @@ class ChangeSetService:
     ) -> ChangeSetDetail:
         """Remove the operation at ``position`` (0-based)."""
         _require_tenant(principal, tenant_id)
-        require_role(principal, Role.OPERATOR)
+        require(principal, "edit", "draft")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             record = await self._editable(session, change_set_id, principal, request_id)
             existing = await store.load_ops(session, change_set_id)
             if not 0 <= position < len(existing):
                 raise NotFoundError(f"operation {position} does not exist")
-            _check_ops_allowed(principal, [existing[position]])
+            check_ops_allowed(principal, [existing[position]])
             remaining = [op for i, op in enumerate(existing) if i != position]
             base = await load_snapshot(session)
             apply_ops(base, remaining, tenant_id=tenant_id)
@@ -369,7 +386,7 @@ class ChangeSetService:
     ) -> store.ChangeSetRecord:
         """Throw a change set away. Applied and running change sets cannot be discarded."""
         _require_tenant(principal, tenant_id)
-        require_role(principal, Role.OPERATOR)
+        require(principal, "edit", "draft")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             record = await self._locked(session, change_set_id)
             if record.state not in {
@@ -403,7 +420,7 @@ class ChangeSetService:
     ) -> store.ChangeSetRecord:
         """Freeze a draft for review. Any later edit voids the request."""
         _require_tenant(principal, tenant_id)
-        require_role(principal, Role.OPERATOR)
+        require(principal, "request_approval", "change_set")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             record = await self._locked(session, change_set_id)
             if record.state not in {ChangeSetState.DRAFT, ChangeSetState.FAILED}:
@@ -437,7 +454,7 @@ class ChangeSetService:
     ) -> store.ChangeSetRecord:
         """Send a pending change set back to draft with a comment."""
         _require_tenant(principal, tenant_id)
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, "reject", "change_set")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             record = await self._locked(session, change_set_id)
             self._require_other_user(record, principal)
@@ -470,7 +487,7 @@ class ChangeSetService:
         The approver must hold the ``tenant-admin`` role and must not be the author.
         """
         _require_tenant(principal, tenant_id)
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, "approve", "change_set")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             record = await self._locked(session, change_set_id)
             self._require_other_user(record, principal)
@@ -516,7 +533,7 @@ class ChangeSetService:
         and must give a reason that is recorded.
         """
         _require_tenant(principal, tenant_id)
-        require_role(principal, Role.OPERATOR)
+        require(principal, "apply", "change_set")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             record = await self._locked(session, change_set_id)
             if record.state not in {ChangeSetState.DRAFT, ChangeSetState.FAILED}:
@@ -589,7 +606,7 @@ class ChangeSetService:
         so a rollback is validated and canaried too (there is no fast path).
         """
         _require_tenant(principal, tenant_id)
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, "rollback", "revision")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             revision = await store.get_revision(session, tenant_id, number)
             if revision is None:

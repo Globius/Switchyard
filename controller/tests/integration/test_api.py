@@ -293,11 +293,12 @@ async def test_member_state_and_engines_over_http(api: Api) -> None:
 
 async def test_tokens_can_be_issued_and_revoked(api: Api) -> None:
     h = await api.token()
-    made = await api.client.post(
+    by_token = await api.client.post(
         f"{V1}/tenants/acme/tokens", json={"name": "ci", "role": "operator"}, headers=h
     )
-    assert made.status_code == 201
-    token = made.json()["token"]
+    assert by_token.status_code == 403 and by_token.json()["code"] == "forbidden"
+    assert "cannot create tokens" in by_token.json()["detail"]
+    token, record = await api.services.tokens.create(ROOT, TENANT, "ci", Role.OPERATOR)
     ok = await api.client.get(
         f"{V1}/tenants/acme/pools", headers={"Authorization": f"Bearer {token}"}
     )
@@ -305,8 +306,8 @@ async def test_tokens_can_be_issued_and_revoked(api: Api) -> None:
     above = await api.client.post(
         f"{V1}/tenants/acme/tokens", json={"name": "boss", "role": "system-admin"}, headers=h
     )
-    assert above.status_code in {403, 422}
-    await api.client.delete(f"{V1}/tenants/acme/tokens/{made.json()['id']}", headers=h)
+    assert above.status_code == 403
+    await api.client.delete(f"{V1}/tenants/acme/tokens/{record.id}", headers=h)
     again = await api.client.get(
         f"{V1}/tenants/acme/pools", headers={"Authorization": f"Bearer {token}"}
     )
