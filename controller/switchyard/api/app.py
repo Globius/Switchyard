@@ -128,6 +128,7 @@ from switchyard.services.changesets import (
     ChangeSetDetail,
     ChangeSetService,
     check_ops_allowed,
+    require,
 )
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineDetail, EngineService
@@ -3290,8 +3291,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         filters: Annotated[AuditFilters, Depends()],
         tenant: Annotated[str | None, Query(description="Tenant id or name.")] = None,
     ) -> Page[Any]:
-        if not who.is_system:
-            raise ApiError(403, "the system-wide audit log needs the system-admin role")
+        require(who, "manage", "tenant")
         if tenant:
             filters.tenant_id = (await svc.tenants.resolve(who, tenant)).id
         async with admin_session(svc.db.admin) as session:
