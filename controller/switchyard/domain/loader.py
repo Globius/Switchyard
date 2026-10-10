@@ -14,7 +14,7 @@ Example:
 """
 
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from switchyard.domain.snapshot import Snapshot
@@ -66,3 +66,31 @@ def snapshot_from_mapping(data: Mapping[str, Any]) -> Snapshot:
         for index, member in enumerate(pool.get("members", [])):
             member.setdefault("id", symbolic_uuid(f"{pool.get('id', '')}/member/{index}"))
     return Snapshot.model_validate(converted)
+
+
+def reassign_ids(snapshot: Snapshot, new_id: Callable[[], uuid.UUID]) -> Snapshot:
+    """Return a copy of ``snapshot`` with every id replaced consistently by ``new_id()``.
+
+    Used to turn fixture ids (UUIDv5) into real UUIDv7 ids when seeding a database. References are
+    rewritten with the same mapping, so the copy is valid exactly when the original is.
+
+    Example:
+        >>> snap = snapshot_from_mapping({"tenants": [{"id": "acme", "name": "acme"}]})
+        >>> fresh = reassign_ids(snap, lambda: uuid.UUID(int=7))
+        >>> fresh.tenants[0].id == uuid.UUID(int=7)
+        True
+    """
+    mapping: dict[uuid.UUID, uuid.UUID] = {}
+
+    def walk(node: Any) -> Any:
+        if isinstance(node, uuid.UUID):
+            if node not in mapping:
+                mapping[node] = new_id()
+            return mapping[node]
+        if isinstance(node, dict):
+            return {k: walk(v) for k, v in node.items()}
+        if isinstance(node, list | tuple):
+            return [walk(v) for v in node]
+        return node
+
+    return Snapshot.model_validate(walk(snapshot.model_dump(mode="python")))

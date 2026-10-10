@@ -1,0 +1,132 @@
+# Demo tenant for local development: `syctl seed --example`.
+# Made-up names and RFC 5737 / RFC 1918 example addresses only. Ids are symbolic; the seed command
+# replaces them with fresh UUIDv7 values.
+tenants:
+  - id: demo
+    name: demo
+networks:
+  - id: net-lb
+    tenant_id: demo
+    name: lb
+    cidr: 192.0.2.0/24
+    gateway: 192.0.2.1
+  - id: net-backend
+    tenant_id: demo
+    name: backend
+    cidr: 10.20.0.0/24
+vip_pools:
+  - id: pool-vips
+    tenant_id: demo
+    name: vips
+    network_id: net-lb
+    ranges:
+      - start: 192.0.2.10
+        end: 192.0.2.50
+se_groups:
+  - id: sg-edge
+    tenant_id: demo
+    name: edge
+    ha_mode: vrrp
+    networks:
+      - network_id: net-lb
+        role: vip
+      - network_id: net-backend
+        role: backend
+certificates:
+  - id: cert-wild
+    tenant_id: demo
+    name: demo-wildcard
+    source: cloudflare_origin
+    sans:
+      - "*.demo.example.test"
+      - demo.example.test
+    not_after: "2038-01-01T00:00:00+00:00"
+    secret_ref: kv/tenants/demo/certs/demo-wildcard
+health_monitors:
+  - id: hm-http
+    tenant_id: demo
+    name: http-up
+    type: http
+    http:
+      path: /healthz
+      expect_status: [200, 204]
+  - id: hm-tcp
+    tenant_id: demo
+    name: tcp-connect
+    type: tcp
+policy_sets:
+  - id: ps-dav
+    tenant_id: demo
+    name: nextcloud-dav
+    kind: redirect
+    rules:
+      - match:
+          path_prefix: /.well-known/carddav
+        redirect:
+          location: /remote.php/dav/
+      - match:
+          path_prefix: /.well-known/caldav
+        redirect:
+          location: /remote.php/dav/
+pools:
+  - id: pool-app
+    tenant_id: demo
+    name: app
+    health_monitor_id: hm-http
+    members:
+      - address: 10.20.0.11
+        port: 8080
+      - address: 10.20.0.12
+        port: 8080
+  - id: pool-files
+    tenant_id: demo
+    name: files
+    health_monitor_id: hm-http
+    persistence:
+      type: source_ip
+    members:
+      - address: 10.20.0.21
+        port: 11000
+  - id: pool-k8s
+    tenant_id: demo
+    name: k8s-api
+    algorithm: leastconn
+    health_monitor_id: hm-tcp
+    members:
+      - address: 10.20.0.31
+        port: 6443
+      - address: 10.20.0.32
+        port: 6443
+virtual_services:
+  - id: vs-web
+    tenant_id: demo
+    se_group_id: sg-edge
+    name: web
+    protocol: http
+    vip: 192.0.2.20
+    vip_pool_id: pool-vips
+    ports:
+      - port: 443
+        tls: true
+        http2: true
+      - port: 80
+        https_redirect_port: 443
+    certificate_ids: [cert-wild]
+    policy_set_ids: [ps-dav]
+    routes:
+      - match:
+          host: app.demo.example.test
+        pool_id: pool-app
+      - match:
+          host: files.demo.example.test
+        pool_id: pool-files
+  - id: vs-k8s
+    tenant_id: demo
+    se_group_id: sg-edge
+    name: k8s-api
+    protocol: tcp
+    vip: 192.0.2.21
+    vip_pool_id: pool-vips
+    ports:
+      - port: 6443
+    default_pool_id: pool-k8s
