@@ -23,7 +23,7 @@ const ME = {
   id: "s1",
   is_system: false,
   name: "Alice",
-  tenants: [{ id: "t1", name: "acme", role: "operator" }],
+  tenants: [{ id: "t1", name: "acme", role: "operator", via: [] }],
 };
 
 const server = setupServer(
@@ -34,6 +34,21 @@ const server = setupServer(
     }),
   ),
   http.get("*/api/v1/me", () => HttpResponse.json(ME)),
+  http.get("*/api/v1/permissions", () =>
+    HttpResponse.json({
+      roles: ["viewer", "operator", "tenant-admin", "system-admin"],
+      permissions: [
+        { verb: "read", object: "tenant_data", min_role: "viewer", description: "Read." },
+        { verb: "apply", object: "change_set", min_role: "operator", description: "Apply." },
+        {
+          verb: "rollback",
+          object: "revision",
+          min_role: "tenant-admin",
+          description: "Roll back.",
+        },
+      ],
+    }),
+  ),
 );
 beforeAll(() => server.listen());
 afterEach(() => {
@@ -63,11 +78,14 @@ describe("session hooks", () => {
     const { result } = renderHook(() => ({ me: useMe(), can: useCan("t1"), other: useCan("t2") }), {
       wrapper: W,
     });
-    expect(result.current.can("read").allowed).toBe(false);
-    await waitFor(() => expect(result.current.me.data?.name).toBe("Alice"));
-    expect(result.current.can("apply").allowed).toBe(true);
-    expect(result.current.can("rollback").reason).toBe("Requires the tenant-admin role");
-    expect(result.current.other("read").allowed).toBe(false);
+    expect(result.current.can("read", "tenant_data").allowed).toBe(false);
+    await waitFor(() => expect(result.current.can("read", "tenant_data").allowed).toBe(true));
+    expect(result.current.me.data?.name).toBe("Alice");
+    expect(result.current.can("apply", "change_set").allowed).toBe(true);
+    expect(result.current.can("rollback", "revision").reason).toBe(
+      "Roll back. (needs tenant-admin)",
+    );
+    expect(result.current.other("read", "tenant_data").allowed).toBe(false);
   });
 
   it("sends the CSRF token on writes and clears state on logout", async () => {
