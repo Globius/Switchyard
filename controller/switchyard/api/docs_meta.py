@@ -55,6 +55,12 @@ TAGS: list[dict[str, str]] = [
     {"name": "jobs", "description": "Background jobs: progress, logs, retry and cancel."},
     {"name": "audit", "description": "The append-only audit log and its action catalog."},
     {"name": "tokens", "description": "API tokens for machines."},
+    {
+        "name": "access",
+        "description": "Role mappings, users, the permission matrix and session refresh.",
+    },
+    {"name": "identity providers", "description": "OIDC and SAML providers, with test sign-in."},
+    {"name": "break-glass", "description": "The local emergency administrator and system tokens."},
 ]
 
 PARAMS: dict[str, str] = {
@@ -94,6 +100,12 @@ PARAMS: dict[str, str] = {
     "step_s": "Seconds between points.",
     "types": "Restrict to these object types (repeat the parameter).",
     "provider": "Identity provider id.",
+    "idp": "Identity provider id.",
+    "test_id": "Id returned by the test sign-in start.",
+    "mapping": "Role mapping id.",
+    "user": "User id.",
+    "tenant": "Only this tenant (id or name).",
+    "disabled": "`true` for disabled users only, `false` for enabled ones.",
     "code": "Authorization code from the provider.",
     "error": "Error code from the provider.",
     "return_to": "Local path to return to after sign-in.",
@@ -187,6 +199,45 @@ DESCRIPTIONS: dict[str, str] = {
     "DELETE /tenants/{t}/tokens/{token}": "Revokes a token; it stops working at once.",
 }
 
+DESCRIPTIONS.update(
+    {
+        "GET /identity-providers/{idp}": "One identity provider. Secrets are never returned: "
+        "`client_secret_set` says whether one exists.",
+        "DELETE /identity-providers/{idp}": "Deletes a provider and the role mappings that name it.",
+        "GET /role-mappings": "All role mappings, system-wide and per tenant; narrow with `tenant`.",
+        "POST /role-mappings": "Maps a provider group to a role, either system-wide "
+        "(`system-admin`) or for a tenant. `409` if the provider, group and tenant already map.",
+        "GET /role-mappings/{mapping}": "One role mapping with its provider, group, role and version.",
+        "PATCH /role-mappings/{mapping}": "Changes the role or label of a mapping; `If-Match` on its "
+        "version.",
+        "DELETE /role-mappings/{mapping}": "Deletes a mapping. Users lose the grant at their next "
+        "refresh (within a minute).",
+        "GET /tenants/{t}/role-mappings": "Role mappings of this tenant. Tenant administrators see "
+        "and manage `viewer` and `operator` mappings of their own tenant only.",
+        "POST /tenants/{t}/role-mappings": "Maps a provider group to `viewer` or `operator` in this "
+        "tenant (`403` for a stronger role).",
+        "PATCH /tenants/{t}/role-mappings/{mapping}": "Changes a mapping of this tenant.",
+        "DELETE /tenants/{t}/role-mappings/{mapping}": "Deletes a mapping of this tenant.",
+        "GET /users": "Everyone who has signed in, with last sign-in and state. Filter by `tenant`, "
+        "`disabled` and `q`; page with `cursor`.",
+        "GET /users/{user}": "One user with their effective grants and the groups that gave them.",
+        "DELETE /users/{user}": "Deletes the user record and ends their sessions; they can sign in "
+        "again.",
+        "POST /users/{user}/disable": "Refuses the user at sign-in and ends their sessions.",
+        "POST /users/{user}/enable": "Lets a disabled user sign in again.",
+        "POST /users/{user}/revoke-sessions": "Ends all of the user's sessions at once.",
+        "GET /tenants/{t}/users": "People with a grant in this tenant, showing only this tenant's "
+        "grants.",
+        "GET /system/break-glass": "Whether the break-glass login is on, why, until when, and "
+        "whether an administrator is enrolled.",
+        "DELETE /system/break-glass/admin": "Removes the break-glass administrator and its secret.",
+        "POST /system/break-glass/admin/confirm": "Finishes enrolment with a code from the "
+        "authenticator; an unconfirmed administrator cannot sign in.",
+        "GET /system/tokens": "System API tokens (never the secret).",
+        "DELETE /system/tokens/{token}": "Revokes a system token; it stops working at once.",
+    }
+)
+
 _RENDERED = (
     "The configuration fragment(s) this object produces for each SE group that uses it, "
     "with the fingerprint of the whole file. With `change_set` the draft's output. Pure "
@@ -205,6 +256,20 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("POST", r"/enroll", "public", True),
     ("POST", r"/auth/logout", "authenticated", False),
     ("GET", r"/me", "authenticated", False),
+    ("(GET|POST)", r"/auth/refresh|/permissions", "authenticated", False),
+    ("POST", r"/auth/refresh", "authenticated", False),
+    (
+        "(GET|POST|PATCH|PUT|DELETE)",
+        r"/(identity-providers|role-mappings|system|users)(/.*)?",
+        "system-admin",
+        False,
+    ),
+    (
+        "(GET|POST|PATCH|DELETE)",
+        r"/tenants/\{t\}/(role-mappings|users)(/.*)?",
+        "tenant-admin",
+        False,
+    ),
     ("GET", r"/schema/virtual-service", "authenticated", False),
     ("GET", r"/jobs/\{job_id\}", "authenticated", False),
     ("GET", r"/audit-actions", "authenticated", False),
@@ -341,6 +406,32 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "mgmt_ip": "198.51.100.21",
         "agent_url": "198.51.100.21:7443",
     },
+    "POST /identity-providers": {
+        "protocol": "oidc",
+        "name": "authentik",
+        "issuer_url": "https://sso.example.test/application/o/switchyard",
+        "client_id": "switchyard",
+        "client_secret_ref": "kv/idp/authentik",
+        "groups_claim": "groups",
+    },
+    "POST /role-mappings": {
+        "provider": "authentik",
+        "group_name": "switchyard-admins",
+        "role": "system-admin",
+    },
+    "POST /tenants/{t}/role-mappings": {
+        "provider": "authentik",
+        "group_name": "acme-operators",
+        "role": "operator",
+    },
+    "PATCH /identity-providers/{idp}": {"protocol": "oidc", "enabled": False},
+    "POST /identity-providers/{idp}/test": {"return_to": "/admin/identity-providers"},
+    "PATCH /role-mappings/{mapping}": {"role": "tenant-admin"},
+    "PATCH /tenants/{t}/role-mappings/{mapping}": {"role": "viewer"},
+    "POST /system/break-glass/admin/confirm": {"totp": "123456"},
+    "PUT /system/break-glass": {"enabled": True, "ttl_minutes": 30, "reason": "SSO outage"},
+    "POST /system/break-glass/admin": {"username": "breakglass"},
+    "POST /system/tokens": {"name": "bootstrap", "ttl_days": 30},
     "POST /tenants/{t}/tokens": {"name": "ci", "role": "operator", "ttl_days": 90},
 }
 

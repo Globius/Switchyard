@@ -12,7 +12,7 @@ Design everything per screen: entities and fields, states, interactions and endp
 `/api/v1/redoc`), `docs/api.md`, ADRs 0006–0020, 0040, `domain/models.py`.
 
 Legend: ✅ implemented and in OpenAPI · ⚠️ implemented with a stated limit · ❌ not backed by an API (design it, mark it
-"blocked on API") · 🔜 owned by the G1 auth tickets (see 05), not in OpenAPI yet.
+"blocked on API") · G1 (identity providers, mappings, users, system tokens, break-glass, permissions) is ✅ since ADR 0030–0032.
 
 ---
 
@@ -25,7 +25,7 @@ OpenAPI has a typed request and response, an example, its error responses and it
 | Area | Status |
 | --- | --- |
 | Login (OIDC, SAML, break-glass), session cookie + CSRF, `GET /me` | ✅ |
-| Identity providers, role mappings, users, system tokens, `GET /permissions`, `POST /auth/refresh`, break-glass administration | 🔜 G1 (05). Admin and access screens are designed now and tagged "blocked on API" |
+| Identity providers (OIDC, SAML, test sign-in), role mappings, users, system tokens, `GET /permissions`, `POST /auth/refresh`, break-glass administration | ✅ (G1, ADR 0030–0032; spec in 05) |
 | Typed reads, `ETag`, `If-Match`, problem+json with field paths, `conflict` on stale versions | ✅ |
 | Rendered config per object, typed diff with files, `warnings`, `impact` | ✅ |
 | Jobs: list, stages, log, retry, cancel, kind enum | ✅ |
@@ -77,7 +77,7 @@ VM and the record, *Remove* only the record; deploy does not create enrollment t
 
 ## 3. Screens
 
-Each screen lists entities and fields (names are API field names), states beyond the standard ones, key interactions, and endpoints. All paths are under `/api/v1`. `{t}` = tenant. Roles are the minimum role from `x-required-role`; take enable/disable of controls from `GET /permissions` once G1 lands (🔜), from the role table in `docs/api.md` until then.
+Each screen lists entities and fields (names are API field names), states beyond the standard ones, key interactions, and endpoints. All paths are under `/api/v1`. `{t}` = tenant. Roles are the minimum role from `x-required-role`; take enable/disable of controls from `GET /permissions` (`can(verb, object)`).
 
 ### 3.1 App shell
 - **Regions:** top bar (tenant switcher, command palette trigger, user menu, theme toggle, SSE connection indicator), left section nav, bottom change-set bar (only with an open draft), toast area.
@@ -172,11 +172,11 @@ Screens: list (open drafts, history), full-screen review (tabs Objects / Config 
 - **Endpoints:** `GET jobs?state&kind&cursor&limit`, `GET jobs/{id}`, `GET jobs/{id}/log`, `POST jobs/{id}/retry|cancel` ✅.
 
 ### 3.16 Admin and access
-- **Tenants (system-admin):** `name`, `quotas`, `require_approval` toggle (audited). `GET/POST /tenants`, `GET/PATCH/DELETE /tenants/{t}` ✅. `oidc_group` is a legacy field that G1-5 removes (replaced by role mappings) 🔜.
-- **Tenant access and settings (tenant-admin):** members and role mappings 🔜 (G1-5, G1-6); tokens ✅.
-- **Tenant API tokens:** list `id`, `name`, `role`, `revoked`, `expires_at`; create (`name`, `role`, `ttl_days`) returns the plaintext `token` **once** — copy-once dialog. Revoke is runtime + confirm. ✅. **System tokens** (separate admin page) 🔜 G1-7.
+- **Tenants (system-admin):** `name`, `quotas`, `require_approval` toggle (audited). `GET/POST /tenants`, `GET/PATCH/DELETE /tenants/{t}` ✅. Access is granted by role mappings (✅), not by a tenant field.
+- **Tenant access and settings (tenant-admin):** members (`GET tenants/{t}/users`) and role mappings (`…/role-mappings`) ✅; tokens ✅.
+- **Tenant API tokens:** list `id`, `name`, `role`, `revoked`, `expires_at`; create (`name`, `role`, `ttl_days`) returns the plaintext `token` **once** — copy-once dialog. Revoke is runtime + confirm. ✅. **System tokens** (separate admin page): `GET/POST /system/tokens`, `DELETE /system/tokens/{id}` ✅.
 - **Audit log:** tenant view `GET tenants/{t}/audit-events` and system view `GET /audit-events?tenant=` (system-admin): filters `actor`, `action` (`change_set.*` prefix), `object`, `since`, `until`, `q`; cursor; each event has `at`, `tenant_id`, `actor`, `action`, `object`, `diff`, `request_id`. Labels and filter options from `GET /audit-actions` (action, category, description). ✅
-- **Users, identity providers, role mappings, break-glass administration, system tokens:** 🔜 G1-3 to G1-7 (see 05). Design from the spec in 02 and the ticket text; mark "blocked on API".
+- **Users, identity providers, role mappings, break-glass administration, system tokens:** ✅ (`/users`, `/identity-providers`, `/role-mappings`, `/system/break-glass`, `/system/tokens`; field lists and rules in 05 G1-1…G1-7 and ADR 0030–0032).
 
 ---
 
@@ -196,8 +196,10 @@ Errors are `application/problem+json` (`type`, `title`, `status`, `detail`, `err
 | auth | `GET /auth/login/{provider}` | public | Start a login |
 | auth | `POST /auth/logout` | authenticated | Log out |
 | auth | `GET /auth/providers` | public | List login providers |
+| auth | `POST /auth/refresh` | authenticated | Recompute my roles now |
 | auth | `GET /auth/saml/{provider}/metadata` | public | SAML service-provider metadata |
 | auth | `GET /me` | authenticated | Who am I |
+| auth | `GET /permissions` | authenticated | The permission matrix |
 | tenants | `GET /tenants` | authenticated | List tenants |
 | tenants | `POST /tenants` | system-admin | Create a tenant |
 | tenants | `DELETE /tenants/{t}` | system-admin | Delete a tenant |
@@ -302,11 +304,42 @@ Errors are `application/problem+json` (`type`, `title`, `status`, `detail`, `err
 | audit | `GET /audit-actions` | authenticated | Catalog of audit event actions |
 | audit | `GET /audit-events` | system-admin | List audit events across tenants (system-admin) |
 | audit | `GET /tenants/{t}/audit-events` | viewer | List audit events, newest first |
+| tokens | `GET /system/tokens` | system-admin | List system API tokens |
+| tokens | `POST /system/tokens` | system-admin | Create a system API token (shown once) |
+| tokens | `DELETE /system/tokens/{token}` | system-admin | Revoke a system API token |
 | tokens | `GET /tenants/{t}/tokens` | tenant-admin | List API tokens |
 | tokens | `POST /tenants/{t}/tokens` | tenant-admin | Create an API token (shown once) |
 | tokens | `DELETE /tenants/{t}/tokens/{token}` | tenant-admin | Revoke a token |
+| access | `GET /role-mappings` | system-admin | List role mappings (system-wide) |
+| access | `POST /role-mappings` | system-admin | Create a role mapping (system-wide) |
+| access | `DELETE /role-mappings/{mapping}` | system-admin | Delete a role mapping |
+| access | `GET /role-mappings/{mapping}` | system-admin | Get a role mapping |
+| access | `PATCH /role-mappings/{mapping}` | system-admin | Change a role mapping |
+| access | `GET /tenants/{t}/role-mappings` | tenant-admin | List a tenant's role mappings |
+| access | `POST /tenants/{t}/role-mappings` | tenant-admin | Create a role mapping in a tenant |
+| access | `DELETE /tenants/{t}/role-mappings/{mapping}` | tenant-admin | Delete a role mapping in a tenant |
+| access | `PATCH /tenants/{t}/role-mappings/{mapping}` | tenant-admin | Change a role mapping in a tenant |
+| access | `GET /tenants/{t}/users` | tenant-admin | List people with access to a tenant |
+| access | `GET /users` | system-admin | List users |
+| access | `DELETE /users/{user}` | system-admin | Delete a user |
+| access | `GET /users/{user}` | system-admin | Get a user |
+| access | `POST /users/{user}/disable` | system-admin | Disable a user |
+| access | `POST /users/{user}/enable` | system-admin | Enable a user |
+| access | `POST /users/{user}/revoke-sessions` | system-admin | End a user's sessions |
+| identity providers | `GET /identity-providers` | system-admin | List identity providers |
+| identity providers | `POST /identity-providers` | system-admin | Create an identity provider |
+| identity providers | `DELETE /identity-providers/{idp}` | system-admin | Delete an identity provider |
+| identity providers | `GET /identity-providers/{idp}` | system-admin | Get an identity provider |
+| identity providers | `PATCH /identity-providers/{idp}` | system-admin | Change an identity provider |
+| identity providers | `POST /identity-providers/{idp}/test` | system-admin | Start a test sign-in |
+| identity providers | `GET /identity-providers/{idp}/test/{test_id}` | system-admin | Read the result of a test sign-in |
+| break-glass | `GET /system/break-glass` | system-admin | Break-glass login status |
+| break-glass | `PUT /system/break-glass` | system-admin | Switch break-glass login on or off |
+| break-glass | `DELETE /system/break-glass/admin` | system-admin | Remove the break-glass administrator |
+| break-glass | `POST /system/break-glass/admin` | system-admin | Enrol the break-glass administrator |
+| break-glass | `POST /system/break-glass/admin/confirm` | system-admin | Confirm the authenticator |
 
-**Not backed by an API yet:** G1 endpoints (🔜), health-monitor test, per-prefix route withdrawal, host online state of
+**Not backed by an API yet:** health-monitor test, per-prefix route withdrawal, host online state of
 Proxmox nodes, a telemetry pipeline behind metrics and logs, label filters (dropped).
 
 ---
@@ -339,4 +372,4 @@ Proxmox nodes, a telemetry pipeline behind metrics and logs, label filters (drop
 2. **Give Claude Design:** this file, `docs/api.md`, `docs/api/openapi.json` (or the live `/api/v1/docs` and `/api/v1/redoc`), `docs/design/05-frontend-backend-tickets.md` (G1 spec for the access screens), and ADRs 0007, 0012, 0016, 0030, 0040.
 3. **Order of screens (U1 first):** app shell + change-set bar → tenant switcher → VS list/detail/wizard → pools, monitors, certificates, policies → review (Objects/Config/Impact), apply progress, approval, conflicts → revisions and rollback. U2: live status, SE groups, routing profiles, jobs, tenant home, metrics. U3: networks/IPAM, SE deploy. U4: certificate issuance, admin and access.
 4. **For every screen deliver:** empty, loading, error, open draft, pending approval, read-only and (where status exists) drift/stale states; 1280 px and 1920 px; light and dark.
-5. **Mark "blocked on API"** only for the ❌ and 🔜 items: monitor test, per-prefix withdrawal, host online state, the G1 access screens; and show the "no data source" state for metrics and logs.
+5. **Mark "blocked on API"** only for the ❌ items: monitor test, per-prefix withdrawal, host online state; and show the "no data source" state for metrics and logs.

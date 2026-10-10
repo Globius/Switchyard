@@ -38,8 +38,10 @@ syctl idp map authentik acme-admins tenant-admin --tenant acme
 syctl idp list
 ```
 
-Roles are decided at login from the group claim, so a changed mapping applies at the next login
-(sessions last eight hours, one hour idle). The break-glass administrator is created with
+Roles come from the group claim: a changed mapping applies within a minute without signing anyone out
+(sessions last four hours, 30 minutes idle; `POST /auth/refresh` applies it at once), and a person with
+no remaining grant is signed out. Administrators can end a person's sessions or disable them
+(`/users/{id}/revoke-sessions`, `/disable`). See [auth.md](auth.md). The break-glass administrator is created with
 `syctl local-admin` and stays unusable until `SWITCHYARD_BREAK_GLASS=1`. See ADR 0012.
 
 ## Using the API from the command line

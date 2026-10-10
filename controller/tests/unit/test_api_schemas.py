@@ -22,6 +22,7 @@ FREE_FORM = {
     "JobRead.result",
     "Job.result",
     "AuditEventRead.diff",
+    "IdpTestResult.claims",
 }
 
 

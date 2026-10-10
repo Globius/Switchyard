@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKeyConstraint,
+    Index,
     Integer,
     Text,
     UniqueConstraint,
@@ -65,7 +66,26 @@ class IdentityProviderRow(Base):
     email_claim: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'email'"))
     groups_claim: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'groups'"))
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
+class IdpTestRow(Base):
+    """``idp_test``: a test sign-in; its outcome is kept five minutes and read once."""
+
+    __tablename__ = "idp_test"
+    __table_args__ = (
+        ForeignKeyConstraint(["provider_id"], ["identity_provider.id"], ondelete="CASCADE"),
+        CheckConstraint("status IN ('pending', 'done')", name="status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    provider_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    expires_at: Mapped[datetime] = _timestamp(nullable=False)
 
 
 class IdpRoleMappingRow(Base):
@@ -89,6 +109,37 @@ class IdpRoleMappingRow(Base):
     #: Not called ``tenant_id``: this table is system-wide, not tenant-owned (no RLS).
     scope_tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     role: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Free text for opaque group ids (Entra ID object ids), so screens can show a name.
+    label: Mapped[str | None] = mapped_column(Text)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    created_by: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'system:cli'")
+    )
+    created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
+class UserAccountRow(Base):
+    """``user_account``: everyone seen at sign-in. No secrets, passwords, tokens or other claims."""
+
+    __tablename__ = "user_account"
+    __table_args__ = (
+        ForeignKeyConstraint(["provider_id"], ["identity_provider.id"], ondelete="CASCADE"),
+        UniqueConstraint("provider_id", "subject", name="uq_user_account_provider_subject"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    provider_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    username: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(Text)
+    #: Groups as last returned by the provider (at most 200).
+    groups: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    first_login_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    last_login_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    last_seen_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    disabled_at: Mapped[datetime | None] = _timestamp()
 
 
 class LoginStateRow(Base):
@@ -106,6 +157,9 @@ class LoginStateRow(Base):
     #: SAML: the ``AuthnRequest`` id the response must answer (``InResponseTo``).
     request_id: Mapped[str | None] = mapped_column(Text)
     return_to: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'/'"))
+    #: ``login`` (creates a session) or ``test`` (an administrator's test sign-in: no session).
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'login'"))
+    test_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     expires_at: Mapped[datetime] = _timestamp(nullable=False)
 
 
@@ -129,6 +183,8 @@ class UserSessionRow(Base):
     __table_args__ = (
         UniqueConstraint("token_hash"),
         ForeignKeyConstraint(["provider_id"], ["identity_provider.id"], ondelete="SET NULL"),
+        ForeignKeyConstraint(["user_id"], ["user_account.id"], ondelete="CASCADE"),
+        Index("ix_user_session_user_id", "user_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -136,8 +192,15 @@ class UserSessionRow(Base):
     csrf_token: Mapped[str] = mapped_column(Text, nullable=False)
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     provider_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    #: The person (null for break-glass, which has no ``user_account`` row).
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     name: Mapped[str] = mapped_column(Text, nullable=False)
     email: Mapped[str | None] = mapped_column(Text)
+    #: Groups the provider returned at sign-in; grants are recomputed from these (ADR 0030).
+    groups: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    grants_computed_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
     grants: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
@@ -159,3 +222,19 @@ class LocalAdminRow(Base):
     failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     locked_until: Mapped[datetime | None] = _timestamp()
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    #: Null until the TOTP enrollment was confirmed with a valid code; such an admin cannot log in.
+    totp_confirmed_at: Mapped[datetime | None] = _timestamp()
+    last_login_at: Mapped[datetime | None] = _timestamp()
+
+
+class BreakGlassSettingRow(Base):
+    """``break_glass_setting``: the single row that says whether break-glass was switched on."""
+
+    __tablename__ = "break_glass_setting"
+    __table_args__ = (CheckConstraint("id = 1", name="singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, server_default=text("1"))
+    enabled_until: Mapped[datetime | None] = _timestamp()
+    enabled_by: Mapped[str | None] = mapped_column(Text)
+    enabled_at: Mapped[datetime | None] = _timestamp()
+    reason: Mapped[str | None] = mapped_column(Text)

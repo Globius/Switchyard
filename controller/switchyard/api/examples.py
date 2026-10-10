@@ -168,7 +168,6 @@ TENANT_READ = {
     "id": TENANT,
     "name": "acme",
     "version": 2,
-    "oidc_group": "acme-admins",
     "quotas": {"virtual_services": 50},
     "require_approval": True,
 }
@@ -407,8 +406,78 @@ ME = {
     "break_glass": False,
     "auth": "session",
     "csrf_token": "c3JmLXRva2Vu",
-    "tenants": [{"id": TENANT, "name": "acme", "role": "tenant-admin"}],
+    "session": {
+        "expires_at": "2026-10-10T16:00:00Z",
+        "idle_timeout_seconds": 1800,
+        "grants_computed_at": "2026-10-10T12:00:30Z",
+    },
+    "tenants": [
+        {
+            "id": TENANT,
+            "name": "acme",
+            "role": "tenant-admin",
+            "via": [{"provider": "authentik", "group": "acme-admins"}],
+        }
+    ],
 }
+PERMISSIONS = {
+    "roles": ["viewer", "operator", "tenant-admin", "system-admin"],
+    "permissions": [
+        {
+            "verb": "read",
+            "object": "tenant_data",
+            "min_role": "viewer",
+            "description": "Read everything in the tenant.",
+        },
+        {
+            "verb": "apply",
+            "object": "change_set",
+            "min_role": "operator",
+            "description": "Apply a change set when the tenant does not require approval.",
+        },
+        {
+            "verb": "manage",
+            "object": "engine",
+            "min_role": "tenant-admin",
+            "description": "Register, enable, disable, retire or remove service engines.",
+        },
+    ],
+}
+ROLE_MAPPING = {
+    "id": "0192f3a0-0000-7000-8000-000000000041",
+    "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+    "provider": "authentik",
+    "group_name": "acme-ops",
+    "label": "Acme operators",
+    "tenant_id": TENANT,
+    "tenant": "acme",
+    "role": "operator",
+    "version": 1,
+    "created_by": "user:authentik:alice",
+    "created_at": "2026-10-10T12:00:00Z",
+}
+USER_READ = {
+    "id": "0192f3a0-0000-7000-8000-000000000051",
+    "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+    "provider": "authentik",
+    "username": "alice",
+    "email": "alice@example.test",
+    "groups": ["acme-ops"],
+    "first_login_at": "2026-10-01T08:00:00Z",
+    "last_login_at": "2026-10-10T11:58:00Z",
+    "last_seen_at": "2026-10-10T12:00:00Z",
+    "disabled_at": None,
+    "grants": [
+        {
+            "tenant_id": TENANT,
+            "tenant": "acme",
+            "role": "operator",
+            "via": [{"provider": "authentik", "group": "acme-ops"}],
+        }
+    ],
+}
+USER_DETAIL = USER_READ | {"subject": "u-1", "active_sessions": 1}
+SESSIONS_REVOKED = {"revoked": 2}
 HEALTH = {"status": "ok"}
 PROTOCOL_RULES = {
     "protocol": "udp",
@@ -547,4 +616,102 @@ ACCESS_LOGS = {
         }
     ],
     "next_cursor": None,
+}
+
+IDP_OIDC = {
+    "protocol": "oidc",
+    "id": "0192f3a0-0000-7000-8000-000000000042",
+    "name": "authentik",
+    "enabled": True,
+    "version": 1,
+    "created_at": "2026-10-01T08:00:00Z",
+    "warnings": [],
+    "issuer_url": "https://sso.example.test/application/o/switchyard",
+    "client_id": "switchyard",
+    "client_secret_ref": "kv/idp/authentik",
+    "client_secret_set": True,
+    "scopes": "openid profile email",
+    "username_claim": "preferred_username",
+    "email_claim": "email",
+    "groups_claim": "groups",
+}
+IDP_SAML = {
+    "protocol": "saml",
+    "id": "0192f3a0-0000-7000-8000-000000000043",
+    "name": "corp",
+    "enabled": True,
+    "version": 1,
+    "created_at": "2026-10-01T08:00:00Z",
+    "warnings": [],
+    "idp_metadata_url": "https://idp.example.test/metadata",
+    "idp_entity_id": "https://idp.example.test/entity",
+    "sso_url": "https://idp.example.test/sso",
+    "signing_certificates": ["-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"],
+    "sp_entity_id": "https://switchyard.example.test/api/v1/auth/saml/0192f3a0-0000-7000-8000-000000000043",
+    "name_id_format": None,
+    "sign_requests": False,
+    "sp_signing_key_ref": None,
+    "sp_signing_certificate": None,
+    "attribute_username": "username",
+    "attribute_email": "email",
+    "attribute_groups": "groups",
+    "acs_url": "https://switchyard.example.test/api/v1/auth/callback/0192f3a0-0000-7000-8000-000000000043",
+    "sp_metadata_url": "https://switchyard.example.test/api/v1/auth/saml/0192f3a0-0000-7000-8000-000000000043/metadata",
+}
+IDP_TEST_STARTED = {
+    "test_id": "0192f3a0-0000-7000-8000-000000000044",
+    "authorize_url": "https://sso.example.test/authorize?client_id=switchyard&state=...",
+}
+IDP_TEST_RESULT = {
+    "status": "done",
+    "subject": "u-1",
+    "username": "alice",
+    "email": "alice@example.test",
+    "groups": ["acme-ops"],
+    "claims": {"sub": "u-1", "preferred_username": "alice", "groups": ["acme-ops"]},
+    "would_grant": [
+        {
+            "tenant": "acme",
+            "role": "operator",
+            "via": {"provider": "authentik", "group": "acme-ops"},
+        }
+    ],
+    "warnings": [],
+    "error": None,
+}
+BREAK_GLASS = {
+    "forced_by_deployment": False,
+    "enabled": True,
+    "enabled_until": "2026-10-10T16:00:00Z",
+    "enabled_by": "user:authentik:alice",
+    "reason": "SSO outage, incident 4711",
+    "admin": {
+        "username": "breakglass",
+        "totp_confirmed": True,
+        "created_at": "2026-10-01T08:00:00Z",
+        "last_login_at": None,
+        "locked_until": None,
+    },
+}
+BREAK_GLASS_ENROLLMENT = {
+    "username": "breakglass",
+    "password": "shown-once-aaaaaaaaaaaaaaaa",
+    "totp_secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+    "otpauth_uri": "otpauth://totp/Switchyard:breakglass?secret=JBSWY3DPEHPK3PXP&issuer=Switchyard",
+}
+SYSTEM_TOKEN_READ = {
+    "id": "0192f3a0-0000-7000-8000-000000000045",
+    "name": "bootstrap",
+    "role": "system-admin",
+    "revoked": False,
+    "expires_at": "2026-11-09T12:00:00Z",
+    "created_by": "user:authentik:alice",
+    "created_at": "2026-10-10T12:00:00Z",
+    "last_used_at": None,
+}
+SYSTEM_TOKEN_CREATED = {
+    "id": "0192f3a0-0000-7000-8000-000000000045",
+    "token": "sy_shown-once",
+    "role": "system-admin",
+    "expires_at": "2026-11-09T12:00:00Z",
 }
