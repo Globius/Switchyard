@@ -33,7 +33,7 @@ Desired state is stored as normal relational tables with foreign keys, so refere
 
 | Table | Key columns | Notes |
 | --- | --- | --- |
-| `tenant` | id, name, oidc\_group, quotas (jsonb) | Root of ownership; `system` tenant for shared objects |
+| `tenant` | id, name, quotas (jsonb), require\_approval | Root of ownership; `system` tenant for shared objects |
 | `network` | tenant\_id, sdn\_zone, vnet, cidr, gateway, vlan\_or\_vni, managed (bool) | `managed` = created by the controller vs. attached |
 | `vip_pool` / `vip_allocation` | network\_id, ranges / pool\_id, ip, owner\_ref | Unique (pool, ip); allocation tied to a VS VIP |
 | `se_group` | tenant\_id, template\_id, vm\_size, vm\_count, ha\_mode, routing\_profile\_id | `ha_mode` = `bgp` or `vrrp` |
@@ -54,7 +54,12 @@ Desired state is stored as normal relational tables with foreign keys, so refere
 | `deployment` | revision\_id, se\_group\_id, state, rendered\_hash, error | One per SE group touched by a revision |
 | `job` | kind, payload, state, run\_after, attempts, locked\_by | The job queue |
 | `audit_event` | actor, tenant\_id, action, object\_ref, diff (jsonb), at | Append-only |
-| `identity_provider` | name, protocol (oidc / saml), metadata or issuer URL, client\_secret\_ref, claim mapping, enabled | Several active at once; role mappings in a child table per tenant |
+| `identity_provider` | name, protocol (oidc / saml), issuer URL or SAML settings (jsonb), client\_secret\_ref, claim mapping, enabled, version | Several active at once |
+| `idp_role_mapping` | provider\_id, group\_name, label, scope\_tenant\_id (null = system-admin), role, version | Group to role per tenant; exact match; no RLS (system-wide; ADR 0012, 0030) |
+| `user_account` | provider\_id, subject, username, email, groups, first\_login\_at, last\_login\_at, last\_seen\_at, disabled\_at | Seen at sign-in; no secrets (ADR 0030) |
+| `user_session` | user\_id, token\_hash, csrf\_token, groups, grants (jsonb), grants\_computed\_at, expires\_at, revoked\_at | Only the cookie's SHA-256 is stored |
+| `local_admin` | username, password\_hash, totp\_secret\_ref, totp\_confirmed\_at, failed\_attempts, locked\_until | Break-glass; the TOTP secret lives in OpenBao |
+| `system_setting` | key, value (jsonb), updated\_by, updated\_at | Break-glass switch and its expiry |
 
 ### Tenancy and edits
 
@@ -87,7 +92,7 @@ The API is versioned REST under `/api/v1`, scoped by tenant in the path, and the
 
 - **Writes go through a change set:** `POST/PATCH/DELETE` on an object take a `?change_set=` id, or open an implicit single-op change set when the client asks for `?apply=true`. That keeps the CLI convenient without a second write path.
 - **Draft reads:** every `GET` (single object and list) accepts `?change_set=<id>` and returns the state with that draft's ops applied in memory. Each object carries `draft_status` (`unchanged`, `modified`, `created`, `deleted`) and the list of changed fields, so the UI can mark them.
-- **Optional approval (four-eyes):** a per-tenant `require_approval` setting (with an optional SE-group scope). When it's on, `POST …/change-sets/{id}/request-approval` freezes the draft as `pending_approval`; `…/approve` (which then applies it) and `…/reject` (with a comment, which reopens the draft) need the `approver` permission and a user other than the author. Any change to the ops voids the request. System-admin break-glass applies bypass approval with a mandatory reason. Every request, approval, rejection, bypass and toggle change writes an `audit_event` and goes to syslog.
+- **Optional approval (four-eyes):** a per-tenant `require_approval` setting (with an optional SE-group scope). When it's on, `POST …/change-sets/{id}/request-approval` freezes the draft as `pending_approval`; `…/approve` (which then applies it) and `…/reject` (with a comment, which reopens the draft) need the `tenant-admin` role (there is no separate approver permission; ADR 0030) and a user other than the author and the requester. Any change to the ops voids the request. System-admin break-glass applies bypass approval with a mandatory reason. Every request, approval, rejection, bypass and toggle change writes an `audit_event` and goes to syslog.
 - **Concurrency:** each object returns an `ETag` of its `version`. Updates need `If-Match`, and a stale version gets `412`.
 - **Async:** anything that touches SEs, Proxmox, Cloudflare or ACME returns `202` with a job id; clients poll `/jobs/{id}` or subscribe to the SSE stream.
 - **Errors:** RFC 9457 problem+json, with a field path for validation errors so the UI can mark the exact input.
@@ -96,9 +101,72 @@ The API is versioned REST under `/api/v1`, scoped by tenant in the path, and the
 
 ### Auth and RBAC
 
-- **Users:** any number of identity providers at once, each OIDC (authorization code + PKCE, via Authlib) or SAML 2.0 (via pysaml2). The first ones are Authentik and Entra ID. The login page lists the enabled providers. Each provider has its own claim or attribute mapping for username and groups, and its own group-to-role mapping per tenant. After login the API issues its own short-lived session, so the rest of the backend doesn't care which provider was used. A local break-glass admin (password + TOTP, disabled by default) covers an outage of every provider.
-- **Machines:** per-tenant API tokens (hashed, scoped, expiring) for CI and automation.
-- **Roles:** `system-admin`, `tenant-admin` (everything in a tenant, including SE groups and networks), `operator` (apps, certs, drain, apply), `viewer`. A role grants a verb on an object type within a tenant. The check runs as a FastAPI dependency on every route, and RLS backs it up in the database.
+Status: login, sessions, per-tenant roles and break-glass are built (ADR 0012); the matrix, refresh, users, token split, identity-provider API and SAML in this section are the G1 work (ADR 0030, tickets in `05-frontend-backend-tickets.md`). Where the two differ the text says "today" and "G1".
+
+#### Sign-in
+
+- **Providers:** any number of identity providers at once, each OIDC (authorization code + PKCE, `httpx` and `joserfc`; ADR 0012) or SAML 2.0 (SP-initiated web SSO only; the library is the implementer's choice, and pysaml2 needs the `xmlsec1` binary in the image). The first ones are Authentik and Entra ID. The login page lists the enabled providers. Today only OIDC works and SAML rows are refused.
+- **Routes:** `GET /auth/providers` (public), `GET /auth/login/{provider}` (redirects; both protocols), `GET /auth/callback/{provider}` (OIDC) and `POST /auth/callback/{provider}` (SAML assertion consumer service), `POST /auth/break-glass`, `POST /auth/logout`, `POST /auth/refresh` (G1), `GET /me`. A failed browser login redirects to `/login?error=<code>` with code `provider_error`, `expired`, `no_access` or `disabled` (G1; today the browser lands on a JSON error).
+- **Our own session:** random cookie value stored as SHA-256, `HttpOnly`, `SameSite=Strict`, `Secure` behind HTTPS. Lifetimes today: 8 h absolute, 1 h idle. G1: **4 h absolute, 30 min idle; break-glass 1 h and 15 min.** Writes made with the cookie (any method except GET, HEAD, OPTIONS) must send `X-CSRF-Token` with the value from `GET /me`; bearer tokens are exempt. Session errors are `application/problem+json` with a stable `code` member: `session_expired` (401), `csrf` (403), `role_required` (403, also carries `required_role`), `user_disabled` (403).
+- **Identity-provider settings** (system-admin, G1; secrets only as references): common: `name`, `protocol`, `enabled`, `username_claim`, `email_claim`, `groups_claim`. OIDC: `issuer_url`, `client_id`, `client_secret_ref` (or a write-only `client_secret`, which the controller stores in OpenBao and never returns), `scopes`. SAML: `idp_metadata_url` or `idp_metadata_xml`, `idp_entity_id`, `sso_url`, `signing_certificates` (public, PEM), `sp_entity_id` (default `<public_url>/api/v1/auth/saml/{id}`), `name_id_format`, `sign_requests` with an optional `sp_signing_key_ref`, and `attribute_username`, `attribute_email`, `attribute_groups`. Unsigned responses and assertions are always refused. `GET /auth/saml/{provider}/metadata` returns the SP metadata XML (public, so an IdP can fetch it by URL; the UI offers the same as a download). SAML rules: the `InResponseTo` must match a stored, single-use login state (RelayState carries its id); assertion ids are remembered until `NotOnOrAfter`; 60 s clock skew; no IdP-initiated sign-in; the ACS is exempt from CSRF because no session exists yet.
+- **Test sign-in** (system-admin, G1): `POST /identity-providers/{id}/test` creates a login state marked `purpose: test` and returns `{test_id, authorize_url}`; the UI opens that URL. The ordinary callback sees the purpose, creates **no session**, and stores the outcome for five minutes. `GET /identity-providers/{id}/test/{test_id}` returns `pending`, or `{subject, username, email, groups, claims, would_grant: [{tenant, role, via}], warnings}`. `claims` is the decoded claim set with signatures, tokens and the raw ID token removed; warnings say things like "the groups claim is missing" or "no mapping matches these groups". It is read once and then deleted.
+
+#### Break-glass
+
+A local administrator (password + TOTP) for when every provider is down. Lockout and audit as today (five failures lock it for 15 minutes; every attempt writes an `audit_event`). It is **on** when `SWITCHYARD_BREAK_GLASS=1` (forced by the deployment, the only way when nobody can sign in) **or** a system-admin has switched it on for a limited time (G1). G1 endpoints, all system-admin:
+
+- `GET /system/break-glass` → `{forced_by_deployment, enabled, enabled_until, admin: {username, totp_confirmed, created_at, last_login_at, locked_until} | null}`.
+- `PUT /system/break-glass` with `{enabled, ttl_minutes?, reason}`; enabling needs a confirmed administrator and a `reason`, and defaults to 240 minutes (maximum 1440). Disabling clears it; it has no effect while the deployment forces it on. Both are audited.
+- `POST /system/break-glass/admin` creates or replaces the administrator: the controller generates the password and the TOTP secret, stores the TOTP secret in OpenBao and returns `{username, password, totp_secret, otpauth_uri}` once. The administrator cannot sign in until `POST /system/break-glass/admin/confirm` receives a valid `{totp}` code. `DELETE` removes it. `syctl local-admin` stays for the offline case.
+
+#### Roles and the permission matrix
+
+Roles are `viewer < operator < tenant-admin < system-admin`. They **nest**: each does everything the weaker ones do. `viewer` reads; `operator` runs applications (virtual services, pools, monitors, policies, certificates) and day-to-day operation; `tenant-admin` also owns the tenant's infrastructure, engines, approvals, tokens and who gets access; `system-admin` is outside any tenant and owns tenants, identity providers and the controller itself. The check runs as a FastAPI dependency on every route and RLS backs it up in the database. The matrix below is the specification; `domain/permissions.py` holds the same data, `GET /permissions` serves it, and a test compares the table, the code and the real status codes (ADR 0030). Roles are held per tenant; "own tenant" means the tenant in the path.
+
+| Verb | Object | viewer | operator | tenant-admin | system-admin |
+| --- | --- | --- | --- | --- | --- |
+| read | everything in the tenant: objects, drafts, rendered config, revisions, change sets, engines, status, jobs, audit events | ✅ | ✅ | ✅ | ✅ |
+| create / update / delete (via change set) | virtual service, pool and members, health monitor, policy set, certificate record | – | ✅ | ✅ | ✅ |
+| create / update / delete (via change set) | network, VIP pool, SE group, routing profile | – | – | ✅ | ✅ |
+| edit draft | open, add and remove ops, discard (any operator may edit any draft; editing voids a pending approval) | – | ✅ | ✅ | ✅ |
+| request approval | change set | – | ✅ | ✅ | ✅ |
+| approve / reject | change set (not the author or the requester) | – | – | ✅ | ✅ |
+| apply | change set, when the tenant does not require approval | – | ✅ | ✅ | ✅ |
+| apply, bypassing approval ("break glass") | change set, with a recorded reason | – | – | – | ✅ |
+| rollback | revision | – | – | ✅ | ✅ |
+| runtime | pool member state (enable, disable, drain) | – | ✅ | ✅ | ✅ |
+| runtime | import, issue, renew certificates | – | ✅ | ✅ | ✅ |
+| runtime | retry or cancel a job | – | own action only (see note) | ✅ | ✅ |
+| infrastructure | register, enable, disable, retire, remove engine; enrollment token; deploy SE group; apply SDN | – | – | ✅ | ✅ |
+| tenant settings | turn `require_approval` on | – | – | ✅ | ✅ |
+| tenant settings | turn `require_approval` off; change quotas | – | – | – | ✅ |
+| access | list, create, revoke tenant API tokens (never above own role; a token cannot create tokens) | – | – | ✅ | ✅ |
+| access | role mappings of own tenant, for roles `viewer` and `operator` | – | – | ✅ | ✅ |
+| access | role mappings for `tenant-admin` or `system-admin`; any other tenant's | – | – | – | ✅ |
+| access | list users with a grant in own tenant (`GET /tenants/{t}/users`) | – | – | ✅ | ✅ |
+| system | create or delete tenants; identity providers; users and their sessions; system tokens; break-glass | – | – | – | ✅ |
+
+Note on jobs: retry and cancel need the role of the action that created the job, so an operator can retry or cancel an apply of their own change set but not a deployment, retirement or SDN job (today any operator can; G1 tightens it). The matrix says who may *try*, not whether a change is valid: an operator allowed to delete a pool still gets a `problem` if the pool is in use.
+
+The questions the UI asked, answered:
+
+- **Can an operator create or delete pools, monitors and policies?** Yes, and virtual services and certificate records too. Not networks, VIP pools, SE groups or routing profiles (the existing `INFRASTRUCTURE` set).
+- **Can an operator register engines?** No. Every engine and deployment action needs `tenant-admin`.
+- **Who approves a change set?** Only a `tenant-admin` (or `system-admin`) who is neither its author nor the person who requested approval. Operators request but never approve. There is no separate `approver` permission.
+- **Can the UI know before the click?** Yes (G1): `GET /permissions` returns the matrix, and a 403 carries `code: role_required` and `required_role`.
+
+#### Several groups, role changes and the users table
+
+- **Several groups:** a person's grants are the union of every mapping their groups match, per tenant. Roles nest, so within a tenant the union **is** the highest role; across tenants grants stay separate (admin in one, viewer in another). One `system-admin` mapping makes the person system-admin everywhere. Group names match exactly and case-sensitively, with no wildcards. `/me` returns for each tenant the `role` and the `via` list (`{provider, group}`) that produced it. This is what the code does today; G1 adds `via`.
+- **When changes apply:** the session keeps the provider's groups from login and recomputes grants from them against the *current* mappings when the last computation is more than 60 s old, and at once on `POST /auth/refresh`. So a mapping edit applies within a minute without ending sessions, and a person left with no grants has the session revoked. A change of *group membership at the provider* is seen only at the next sign-in, which sessions force every four hours; to cut access sooner use `POST /users/{id}/revoke-sessions` or disable the user. Today grants are frozen at login (ADR 0012); this replaces that.
+- **`tenant.oidc_group`:** removed in G1. Login never read it, it duplicated the mappings and it did not say which provider or role it meant. Existing values are written to the audit log and the column is dropped. Use role mappings.
+- **Users table** (`user_account`, G1): created or updated at every sign-in: `id`, `provider_id` (null for break-glass), `subject`, `username`, `email`, `groups` (as last returned, at most 200), `first_login_at`, `last_login_at`, `last_seen_at` (updated at most once a minute), `disabled_at`. Unique on (`provider_id`, `subject`). No passwords, tokens or other claims. All system-admin: `GET /users` (filters `q`, `provider`, `tenant`, `disabled`), `GET /users/{id}` (adds `effective_grants`: what this person can do now, computed from the stored groups and current mappings, with `via`), `POST /users/{id}/disable` and `/enable`, `POST /users/{id}/revoke-sessions`, `DELETE /users/{id}` (removes the row and its sessions; the person reappears at their next sign-in). A disabled user is refused at sign-in and their sessions end. `GET /tenants/{t}/users` gives a tenant-admin the same list limited to people with a grant in that tenant, showing only that tenant's grants.
+- **Role-mapping resource** (G1): `id`, `provider_id`, `group_name`, `label` (free text, for opaque group ids), `tenant_id` (null only for `system-admin`), `role`, `version`, `created_by`, `created_at`. System-wide: `GET/POST /role-mappings`, `GET/PATCH/DELETE /role-mappings/{id}` (system-admin; filters `provider`, `tenant`, `group`). Per tenant: `GET/POST /tenants/{t}/role-mappings`, `PATCH/DELETE /tenants/{t}/role-mappings/{id}` (tenant-admin; roles `viewer` and `operator` only; own tenant only). Unique on (`provider_id`, `group_name`, `tenant_id`). Every change is audited.
+
+#### API tokens
+
+- **Tenant tokens:** `GET/POST /tenants/{t}/tokens`, `DELETE /tenants/{t}/tokens/{id}`; roles `viewer`, `operator` or `tenant-admin`, never above the creator's role; hashed, expiring (90 days by default), shown once; a token cannot create tokens (G1). These routes exist today; the service also allows a `system-admin` token, but no route can create one.
+- **System tokens** (G1): `GET/POST /system/tokens`, `DELETE /system/tokens/{id}`; system-admin only; role fixed to `system-admin`; 30 days by default, 90 at most; for bootstrap and controller-level automation. They are listed apart from tenant tokens and their use is audited.
 
 ## Change pipeline
 
@@ -275,4 +343,4 @@ Build order runs from the core outward. Each milestone produces something usable
   - [x] Done: UDP and the WireGuard rebuild are phase 2 (M6) in both docs; the UDP design is in its own section and ADR 0013.
 - [x] Which OIDC provider: the existing Keycloak, Authentik or Entra ID?
   - [x] Support any OIDC/SAML provider. We'll tie it to Authentik (and Entra ID if it allows for more than one IDP)
-  - [ ] Done: multiple identity providers (OIDC and SAML) at once, each with its own group-to-role mapping. Auth section and data model updated.
+  - [x] Done: multiple identity providers (OIDC and SAML) at once, each with its own group-to-role mapping. Auth section and data model updated; permission matrix, role refresh, users table and token scope settled in ADR 0030.
