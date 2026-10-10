@@ -1,0 +1,6 @@
+/etc/switchyard/certs/corp-wild.pem *.corp.example.test corp.example.test
+/etc/switchyard/certs/prod-wild.pem *.prod.corp.example.test
+/etc/switchyard/certs/svc-wild.pem *.svc.example.net svc.example.net
+/etc/switchyard/certs/files-wild.pem *.files.example.org files.example.org
+/etc/switchyard/certs/home-wild.pem *.home.example.com home.example.com
+/etc/switchyard/certs/insurance.pem example-insurance.example.org

@@ -1,0 +1,107 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+certificates:
+- id: c-k8s
+  tenant_id: t-acme
+  name: k8s-example-test
+  source: upload
+  sans:
+  - k8s.example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/k8s-example-test
+pools:
+- id: p-api
+  tenant_id: t-acme
+  name: k8s-api
+  members:
+  - address: 10.20.6.27
+    port: 6443
+  - address: 10.20.6.28
+    port: 6443
+  - address: 10.20.6.29
+    port: 6443
+  health_monitor_id: hm-tcp
+  algorithm: leastconn
+- id: p-reg
+  tenant_id: t-acme
+  name: k8s-registration
+  members:
+  - address: 10.20.6.27
+    port: 9345
+  - address: 10.20.6.28
+    port: 9345
+- id: p-ingress
+  tenant_id: t-acme
+  name: k8s-ingress
+  members:
+  - address: 10.20.6.30
+  - address: 10.20.6.31
+  health_monitor_id: hm-tcp-80
+health_monitors:
+- id: hm-tcp
+  tenant_id: t-acme
+  name: tcp-connect
+  type: tcp
+  interval_s: 3
+  timeout_s: 2
+- id: hm-tcp-80
+  tenant_id: t-acme
+  name: tcp-80
+  type: tcp
+  port: 80
+virtual_services:
+- id: v-k8s
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: k8s-api
+  protocol: tcp
+  vip: 192.0.2.27
+  ports:
+  - port: 6443
+  default_pool_id: p-api
+- id: v-reg
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: k8s-registration
+  protocol: tcp
+  vip: 192.0.2.28
+  ports:
+  - port: 9345
+    proxy_protocol: true
+  default_pool_id: p-reg
+- id: v-ing
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: k8s-ingress
+  protocol: tcp
+  vip: 192.0.2.29
+  ports:
+  - port: 80
+  - port: 443
+    tls: true
+  certificate_ids:
+  - c-k8s
+  default_pool_id: p-ingress

@@ -1,0 +1,326 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+certificates:
+- id: c-corp
+  tenant_id: t-acme
+  name: corp-wild
+  source: cloudflare_origin
+  sans:
+  - '*.corp.example.test'
+  - corp.example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/corp-wild
+- id: c-prod
+  tenant_id: t-acme
+  name: prod-wild
+  source: cloudflare_origin
+  sans:
+  - '*.prod.corp.example.test'
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/prod-wild
+- id: c-corpb
+  tenant_id: t-acme
+  name: svc-wild
+  source: cloudflare_origin
+  sans:
+  - '*.svc.example.net'
+  - svc.example.net
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/svc-wild
+- id: c-lost
+  tenant_id: t-acme
+  name: files-wild
+  source: cloudflare_origin
+  sans:
+  - '*.files.example.org'
+  - files.example.org
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/files-wild
+- id: c-mig
+  tenant_id: t-acme
+  name: home-wild
+  source: cloudflare_origin
+  sans:
+  - '*.home.example.com'
+  - home.example.com
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/home-wild
+- id: c-ins
+  tenant_id: t-acme
+  name: insurance
+  source: cloudflare_origin
+  sans:
+  - example-insurance.example.org
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/insurance
+pools:
+- id: ip-ubnt
+  tenant_id: t-acme
+  name: ubiquiti
+  members:
+  - address: 10.60.1.4
+    port: 8080
+  tls: true
+  health_monitor_id: hm-http
+- id: ip-sso
+  tenant_id: t-acme
+  name: keycloak
+  members:
+  - address: 10.60.1.5
+    port: 8080
+  health_monitor_id: hm-http
+- id: ip-store
+  tenant_id: t-acme
+  name: pwd-store
+  members:
+  - address: 10.60.0.5
+    port: 8096
+  health_monitor_id: hm-http
+- id: ip-office
+  tenant_id: t-acme
+  name: office-online
+  members:
+  - address: 10.60.6.3
+    port: 80
+  health_monitor_id: hm-http
+- id: ip-ipam
+  tenant_id: t-acme
+  name: ipam
+  members:
+  - address: 10.60.5.100
+    port: 80
+  health_monitor_id: hm-http
+- id: ip-rancher
+  tenant_id: t-acme
+  name: rancher
+  members:
+  - address: 10.60.0.5
+    port: 10002
+  tls: true
+  health_monitor_id: hm-http
+- id: ip-ins
+  tenant_id: t-acme
+  name: insurance
+  members:
+  - address: 10.61.0.3
+    port: 443
+  tls: true
+  health_monitor_id: hm-http
+- id: ip-bill
+  tenant_id: t-acme
+  name: billing
+  members:
+  - address: 10.60.1.2
+    port: 443
+  - address: 10.60.1.3
+    port: 443
+  tls: true
+  persistence:
+    type: source_ip
+    timeout_s: 1800
+  health_monitor_id: hm-http
+- id: ip-hs
+  tenant_id: t-acme
+  name: headscale
+  members:
+  - address: 10.60.5.182
+    port: 8080
+  health_monitor_id: hm-http
+- id: ip-nc
+  tenant_id: t-acme
+  name: nextcloud
+  members:
+  - address: 10.60.1.7
+    port: 11000
+  health_monitor_id: hm-http
+- id: ip-matrix
+  tenant_id: t-acme
+  name: matrix
+  members:
+  - address: 10.61.0.3
+    port: 443
+  tls: true
+  health_monitor_id: hm-http
+- id: ip-mealie
+  tenant_id: t-acme
+  name: mealie
+  members:
+  - address: 10.40.1.3
+    port: 9925
+  health_monitor_id: hm-http
+- id: ip-rke
+  tenant_id: t-acme
+  name: rke-nodes
+  members:
+  - address: 10.60.6.27
+  - address: 10.60.6.28
+  - address: 10.60.6.29
+  - address: 10.60.6.30
+  - address: 10.60.6.31
+  - address: 10.60.6.32
+  health_monitor_id: hm-tcp-rke
+- id: ip-wg
+  tenant_id: t-acme
+  name: wireguard
+  members:
+  - address: 10.60.0.5
+    port: 51820
+health_monitors:
+- id: hm-http
+  tenant_id: t-acme
+  name: http-up
+  type: http
+  http:
+    path: /
+    expect_status:
+    - 200
+    - 204
+    - 301
+    - 302
+    - 401
+- id: hm-tcp-rke
+  tenant_id: t-acme
+  name: tcp-6443
+  type: tcp
+  port: 6443
+policy_sets:
+- id: ps-cf
+  tenant_id: t-acme
+  name: cloudflare-ranges
+  kind: allow_list
+  managed_by: cloudflare
+  cidrs:
+  - 198.51.100.0/24
+  - 203.0.113.0/24
+  - 2001:db8:100::/40
+virtual_services:
+- id: iv-sni
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: external-sni
+  protocol: http
+  vip: 192.0.2.20
+  ports:
+  - port: 443
+    tls: true
+    http2: true
+  - port: 80
+    https_redirect_port: 443
+  - port: 8880
+  - port: 8843
+    tls: true
+  - port: 8075
+  - port: 6789
+  - port: 8682
+  certificate_ids:
+  - c-corp
+  - c-prod
+  - c-corpb
+  - c-lost
+  - c-mig
+  - c-ins
+  routes:
+  - match:
+      host: files.files.example.org
+      path_prefix: /.well-known/carddav
+    redirect:
+      location: /remote.php/dav/
+      code: 301
+    order: 1
+  - match:
+      host: files.files.example.org
+      path_prefix: /.well-known/caldav
+    redirect:
+      location: /remote.php/dav/
+      code: 301
+    order: 2
+  - match:
+      host: sso.corp.example.test
+    pool_id: ip-sso
+  - match:
+      host: sso-admin.corp.example.test
+    pool_id: ip-sso
+  - match:
+      host: store.prod.corp.example.test
+    pool_id: ip-store
+  - match:
+      host: office.prod.corp.example.test
+    pool_id: ip-office
+  - match:
+      host: ipam.prod.corp.example.test
+    pool_id: ip-ipam
+  - match:
+      host: rancher.prod.corp.example.test
+    pool_id: ip-rancher
+  - match:
+      host: uisp.svc.example.net
+    pool_id: ip-ubnt
+  - match:
+      host: billing.svc.example.net
+    pool_id: ip-bill
+  - match:
+      host: headscale.svc.example.net
+    pool_id: ip-hs
+  - match:
+      host: files.files.example.org
+    pool_id: ip-nc
+  - match:
+      host: example-insurance.example.org
+    pool_id: ip-ins
+  - match:
+      host: chat.files.example.org
+    pool_id: ip-matrix
+  - match:
+      host: matrix.files.example.org
+    pool_id: ip-matrix
+  - match:
+      host: recipes.home.example.com
+    pool_id: ip-mealie
+  default_pool_id: ip-ubnt
+  allow_list_id: ps-cf
+  enforce_allow_list: true
+  restore_client_ip_header: CF-Connecting-IP
+- id: iv-rke
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: rke-prd-clus-01
+  protocol: tcp
+  vip: 192.0.2.27
+  ports:
+  - port: 80
+  - port: 443
+  - port: 6443
+  - port: 9345
+  default_pool_id: ip-rke
+- id: iv-wg
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: wireguard
+  protocol: udp
+  vip: 192.0.2.22
+  ports:
+  - port: 51820
+  default_pool_id: ip-wg

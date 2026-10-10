@@ -1,0 +1,14 @@
+billing.svc.example.net pool_billing
+chat.files.example.org pool_matrix
+example-insurance.example.org pool_insurance
+files.files.example.org pool_nextcloud
+headscale.svc.example.net pool_headscale
+ipam.prod.corp.example.test pool_ipam
+matrix.files.example.org pool_matrix
+office.prod.corp.example.test pool_office-online
+rancher.prod.corp.example.test pool_rancher
+recipes.home.example.com pool_mealie
+sso-admin.corp.example.test pool_keycloak
+sso.corp.example.test pool_keycloak
+store.prod.corp.example.test pool_pwd-store
+uisp.svc.example.net pool_ubiquiti

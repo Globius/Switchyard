@@ -1,0 +1,1 @@
+virtual service wireguard: udp is rendered by the keepalived renderer, not haproxy.cfg

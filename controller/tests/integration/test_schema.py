@@ -62,7 +62,7 @@ def full_data() -> dict:  # type: ignore[type-arg]
         algorithm="leastconn",
     )
     pool["members"].append(
-        {"address": "10.20.0.12", "weight": 50, "admin_state": "drain", "name": "b"}
+        {"address": "10.20.0.12", "port": 80, "weight": 50, "admin_state": "drain", "name": "b"}
     )
     data["pools"].append(
         {
