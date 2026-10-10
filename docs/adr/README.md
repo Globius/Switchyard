@@ -26,3 +26,4 @@ Date: YYYY-MM-DD
 | [0004](0004-renderer-determinism-and-safety.md) | The renderer is deterministic, validated by real binaries, and rejects unsafe values | Accepted |
 | [0005](0005-schema-and-id-conventions.md) | Schema conventions: UUIDv7, `version`, composite tenant foreign keys, text enums | Accepted |
 | [0006](0006-http-routing-semantics.md) | HTTP routing order, allow lists and drain semantics | Accepted |
+| [0008](0008-agent-routing-and-status.md) | The SE agent, routing profiles, and status/drift | Accepted |

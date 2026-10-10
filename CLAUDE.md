@@ -15,7 +15,7 @@ update the doc in the same merge request and add an ADR in `docs/adr/`.
 
 ## Status
 
-M1 (core and render) is built: domain models, PostgreSQL schema with RLS, the HAProxy renderer with
+M1�M3 are built (core and render; change pipeline, API and jobs; agent, routing and status). M1 is: domain models, PostgreSQL schema with RLS, the HAProxy renderer with
 golden tests, and `syctl render` / `syctl seed --example`. Milestones: backend M1–M5 (phase 1), UI U1–U4
 trailing one step behind. The current milestone and its task list live in `docs/prompts/` and the GitLab
 issues. How objects render: `docs/render.md`. Decisions: `docs/adr/`.

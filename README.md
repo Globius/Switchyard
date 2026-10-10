@@ -4,7 +4,7 @@ Multi-tenant load balancer controller for Proxmox: HAProxy service engines, BGP/
 change-set based API, CLI (`syctl`) and web UI. An open-source replacement for VMware NSX ALB (Avi).
 
 **Status:** milestone M1 (core and render) is implemented: `syctl render` produces a validated,
-deterministic `haproxy.cfg` from PostgreSQL. Next: M2 (change sets and push).
+deterministic `haproxy.cfg` from PostgreSQL. M2 (change sets, API, jobs) and M3 (sy-agent, VRRP/BGP routing, status and drift) are implemented. Next: M4 (Proxmox).
 
 ## Design docs
 
