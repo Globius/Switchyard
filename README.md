@@ -3,7 +3,8 @@
 Multi-tenant load balancer controller for Proxmox: HAProxy service engines, BGP/VRRP VIP placement, and a
 change-set based API, CLI (`syctl`) and web UI. An open-source replacement for VMware NSX ALB (Avi).
 
-**Status:** design complete, milestone M1 (core and render) in progress.
+**Status:** milestone M1 (core and render) is implemented: `syctl render` produces a validated,
+deterministic `haproxy.cfg` from PostgreSQL. Next: M2 (change sets and push).
 
 ## Design docs
 
@@ -12,6 +13,8 @@ change-set based API, CLI (`syctl`) and web UI. An open-source replacement for V
 | [Replacement plan](docs/design/01-replacement-plan.md) | Avi → open-source feature mapping, architecture, migration |
 | [Backend design](docs/design/02-backend-design.md) | Data model, API, change pipeline, agent, jobs, security, milestones |
 | [Frontend design](docs/design/03-frontend-design.md) | Screens, change-set UX, frontend stack, Claude Design handoff |
+| [Render guide](docs/render.md) | How each object maps to HAProxy configuration |
+| [ADRs](docs/adr/README.md) | Decisions locked in so far |
 
 These are snapshots of the living docs; each file links to its online version.
 
