@@ -10,9 +10,9 @@ import hmac
 import uuid
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
-from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import Annotated, Any, cast
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any, Literal, cast
 from urllib.parse import parse_qs
 from uuid import UUID
 
@@ -21,8 +21,10 @@ from fastapi.responses import StreamingResponse
 
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.secrets import SecretsReader, SecretsWriter
+from switchyard.adapters.telemetry import Telemetry, TelemetryError
+from switchyard.api import docs_meta, job_models, overview
 from switchyard.api import examples as ex
-from switchyard.api import job_models
+from switchyard.api.overview import SearchResults, TenantSummary
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.api.rendered_models import RenderedConfig, RenderedFragment
 from switchyard.api.schemas import (
@@ -32,7 +34,9 @@ from switchyard.api.schemas import (
     PROBLEM_RESPONSES,
     VALIDATION_RESPONSE,
     Accepted,
+    AccessLogs,
     ApplyIn,
+    AuditActionRead,
     AuditEventRead,
     AuthProviders,
     BreakGlassConfirmIn,
@@ -66,6 +70,10 @@ from switchyard.api.schemas import (
     Me,
     MemberStateIn,
     MemberStateResult,
+    MetricsOverview,
+    MetricsOverviewItem,
+    MetricsRead,
+    NextFree,
     OpenIn,
     OpsIn,
     Page,
@@ -91,8 +99,12 @@ from switchyard.api.schemas import (
     TokenRead,
     UserDetail,
     UserRead,
+    VipAllocation,
+    VipPoolUsage,
     VirtualServiceStatusRead,
 )
+from switchyard.api.stream_models import EVENTS
+from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import permissions
 from switchyard.domain.changes import (
@@ -103,6 +115,7 @@ from switchyard.domain.changes import (
     ObjectType,
 )
 from switchyard.domain.field_rules import protocol_rules
+from switchyard.domain.impact import impact as impact_of
 from switchyard.domain.models import CertSource, Protocol
 from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
@@ -115,9 +128,10 @@ from switchyard.services.changesets import (
     ChangeSetDetail,
     ChangeSetService,
     check_ops_allowed,
+    require,
 )
 from switchyard.services.context import Databases, Principal
-from switchyard.services.engines import EngineService
+from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.identity_providers import (
     IdentityProviderRecord,
@@ -134,7 +148,7 @@ from switchyard.services.sessions import (
     SessionService,
     UserDisabledError,
 )
-from switchyard.services.status import EngineStatus, StatusService
+from switchyard.services.status import EngineStatus, StatusService, virtual_service_states
 from switchyard.services.tenants import TenantRecord, TenantService
 from switchyard.services.tokens import TokenService
 from switchyard.services.users import UserRecord, UserService
@@ -159,6 +173,7 @@ class ApiServices:
     role_mappings: RoleMappingService
     users: UserService
     certs: CertificateService | None = None
+    telemetry: Telemetry | None = None
     enrollment: EnrollmentService | None = None
     sessions: SessionService | None = None
     identity_providers: IdentityProviderService | None = None
@@ -172,6 +187,7 @@ def build_services(
     certs: CertificateService | None = None,
     enrollment: EnrollmentService | None = None,
     sessions: SessionService | None = None,
+    telemetry: Telemetry | None = None,
     *,
     identity_providers: IdentityProviderService | None = None,
     break_glass: BreakGlassService | None = None,
@@ -212,6 +228,7 @@ def build_services(
         certs=certs,
         enrollment=enrollment,
         sessions=sessions,
+        telemetry=telemetry,
         identity_providers=identity_providers,
         break_glass=break_glass,
     )
@@ -403,6 +420,23 @@ def _ok(
     return out | (extra or {})
 
 
+def _engine_json(d: EngineDetail) -> dict[str, Any]:
+    e = d.record
+    return {
+        "id": str(e.id),
+        "name": e.name,
+        "url": e.dataplane_url,
+        "state": e.state.value,
+        "se_group_id": str(e.se_group_id),
+        "mgmt_ip": e.mgmt_ip,
+        "agent_url": e.agent_url,
+        "pve_node": d.pve_node,
+        "vmid": d.vmid,
+        "agent_enrolled": d.agent_cert_serial is not None,
+        "agent_cert_serial": d.agent_cert_serial,
+    }
+
+
 def _object_json(obj: Any, status: DraftStatus, changed: tuple[str, ...]) -> dict[str, Any]:
     data: dict[str, Any] = obj.model_dump(mode="json")
     data["draft_status"] = status.value
@@ -443,10 +477,271 @@ async def _view(
     return out
 
 
-def _page(items: list[dict[str, Any]], cursor: str | None, limit: int) -> Page[Any]:
-    items = sorted(items, key=lambda o: (o["name"], o["id"]))
+AUDIT_DESCRIPTION = (
+    "Append-only record of who did what. Filter by `actor` and `action` (exact, or a prefix when "
+    "the value ends in `*`, for example `change_set.*`; the names are in `GET /audit-actions`), "
+    "by `object` (exact reference such as `change_set:<id>` or `job:<id>`), by time (`since` "
+    "inclusive, `until` exclusive) and by free text `q` (substring of actor, action or object). "
+    "Newest first; page with `limit` (1-500) and `cursor`."
+)
+
+
+@dataclass
+class AuditFilters:
+    """Query parameters shared by the audit routes."""
+
+    actor: Annotated[str | None, Query()] = None
+    action: Annotated[str | None, Query()] = None
+    object: Annotated[str | None, Query()] = None
+    since: Annotated[datetime | None, Query()] = None
+    until: Annotated[datetime | None, Query()] = None
+    q: Annotated[str | None, Query(max_length=200)] = None
+    cursor: Annotated[str | None, Query()] = None
+    limit: Annotated[int, Query(ge=1, le=500)] = 100
+    tenant_id: UUID | None = field(default=None, init=False)
+
+
+async def _audit_page(session: Any, f: AuditFilters) -> Page[Any]:
+    from sqlalchemy import and_, or_, select
+
+    from switchyard.db.ops_models import AuditEventRow as A
+
+    def matches(column: Any, value: str) -> Any:
+        if value.endswith("*"):
+            return column.like(_like_escape(value[:-1]) + "%", escape="\\")
+        return column == value
+
+    stmt = select(A).order_by(A.at.desc(), A.id.desc()).limit(f.limit + 1)
+    if f.tenant_id:
+        stmt = stmt.where(A.tenant_id == f.tenant_id)
+    if f.actor:
+        stmt = stmt.where(matches(A.actor, f.actor))
+    if f.action:
+        stmt = stmt.where(matches(A.action, f.action))
+    if f.object:
+        stmt = stmt.where(matches(A.object_ref, f.object))
+    if f.since:
+        stmt = stmt.where(A.at >= f.since)
+    if f.until:
+        stmt = stmt.where(A.at < f.until)
+    if f.q:
+        like = "%" + _like_escape(f.q) + "%"
+        stmt = stmt.where(
+            or_(
+                A.actor.ilike(like, escape="\\"),
+                A.action.ilike(like, escape="\\"),
+                A.object_ref.ilike(like, escape="\\"),
+            )
+        )
+    if f.cursor:
+        try:
+            at_text, id_text = f.cursor.split("|", 1)
+            after = (_EPOCH + timedelta(microseconds=int(at_text)), UUID(id_text))
+        except ValueError:
+            raise ApiError(400, "cursor is not valid") from None
+        stmt = stmt.where(or_(A.at < after[0], and_(A.at == after[0], A.id < after[1])))
+    rows = list((await session.execute(stmt)).scalars())
+    window = rows[: f.limit]
+    return Page(
+        items=[
+            AuditEventRead(
+                at=r.at,
+                tenant_id=r.tenant_id,
+                actor=r.actor,
+                action=r.action,
+                object=r.object_ref,
+                diff=r.diff,
+                request_id=r.request_id,
+            )
+            for r in window
+        ],
+        next_cursor=(
+            f"{(window[-1].at - _EPOCH) // timedelta(microseconds=1)}|{window[-1].id}"
+            if len(rows) > f.limit
+            else None
+        ),
+    )
+
+
+async def _pool_usage(
+    services: ApiServices,
+    who: Principal,
+    tenant: TenantRecord,
+    pool_id: UUID,
+    change_set: UUID | None,
+) -> VipPoolUsage:
+    """Usage of one VIP pool, live or as a draft would leave it."""
+    from switchyard.db.repository import load_snapshot
+    from switchyard.domain import ipam
+
+    statuses: dict[UUID, DraftStatus] = {}
+    if change_set is None:
+        async with tenant_session(services.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+    else:
+        _, draft = await services.change_sets.draft_view(who, tenant.id, change_set)
+        snapshot = draft.snapshot
+        statuses = {
+            o.object_id: o.status
+            for o in draft.objects
+            if o.object_type is ObjectType.VIRTUAL_SERVICE
+        }
+    pool = next((p for p in snapshot.vip_pools if p.id == pool_id), None)
+    network = next((n for n in snapshot.networks if pool and n.id == pool.network_id), None)
+    if pool is None or network is None:
+        raise ApiError(404, f"vip-pools {pool_id} not found")
+    addresses = ipam.pool_addresses(pool, network)
+    inside = set(addresses)
+    held = sorted(
+        (v for v in snapshot.virtual_services if v.vip in inside),
+        key=lambda v: (int(v.vip), v.name),
+    )
+    taken = {v.vip for v in held}
+    try:
+        next_free: str | None = str(ipam.allocate(pool, network, taken))
+    except ipam.PoolExhaustedError:
+        next_free = None
+    return VipPoolUsage(
+        pool_id=pool.id,
+        total=len(addresses),
+        used=len(taken),
+        free=len(addresses) - len(taken),
+        allocations=[
+            VipAllocation(
+                address=str(v.vip),
+                virtual_service_id=v.id,
+                virtual_service_name=v.name,
+                enabled=v.enabled,
+                draft_status=statuses.get(v.id, DraftStatus.UNCHANGED),
+            )
+            for v in held
+        ],
+        next_free=next_free,
+    )
+
+
+@dataclass
+class ListFilters:
+    """Filters every object list accepts."""
+
+    name: Annotated[str | None, Query(description="Exactly this name.")] = None
+    q: Annotated[
+        str | None, Query(description="Substring of the name, case-insensitive.", max_length=200)
+    ] = None
+    sort: Annotated[
+        Literal["name", "-name"], Query(description="Order by name, ascending or descending.")
+    ] = "name"
+
+
+@dataclass
+class VirtualServiceFilters(ListFilters):
+    """Extra filters of virtual services."""
+
+    se_group: Annotated[UUID | None, Query(description="Served by this SE group.")] = None
+    protocol: Annotated[Protocol | None, Query(description="`http`, `tcp` or `udp`.")] = None
+    enabled: Annotated[bool | None, Query(description="Only enabled or only disabled.")] = None
+    pool: Annotated[UUID | None, Query(description="Uses this pool (default or in a route).")] = (
+        None
+    )
+    certificate: Annotated[UUID | None, Query(description="Uses this certificate.")] = None
+
+
+@dataclass
+class PoolFilters(ListFilters):
+    """Extra filters of pools."""
+
+    health_monitor: Annotated[UUID | None, Query(description="Checked by this monitor.")] = None
+
+
+@dataclass
+class KindFilters(ListFilters):
+    """Extra filter of the collections that are unions on ``kind``."""
+
+    kind: Annotated[str | None, Query(description="Only this `kind`.")] = None
+
+
+@dataclass
+class SeGroupFilters(ListFilters):
+    """Extra filter of SE groups."""
+
+    ha_mode: Annotated[str | None, Query(description="`bgp` or `vrrp`.")] = None
+
+
+@dataclass
+class CertificateFilters(ListFilters):
+    """Extra filters of certificates."""
+
+    source: Annotated[CertSource | None, Query(description="How it was obtained.")] = None
+    expires_within_days: Annotated[
+        int | None, Query(ge=0, le=3650, description="Expires within this many days (or already).")
+    ] = None
+
+
+FILTERS: dict[str, type[ListFilters]] = {
+    "virtual-services": VirtualServiceFilters,
+    "pools": PoolFilters,
+    "policy-sets": KindFilters,
+    "routing-profiles": KindFilters,
+    "se-groups": SeGroupFilters,
+    "certificates": CertificateFilters,
+}
+
+
+def _filtered(items: list[dict[str, Any]], f: ListFilters) -> list[dict[str, Any]]:
+    """Apply the list filters to object dicts (JSON form)."""
+    out = items
+    if f.name:
+        out = [o for o in out if o["name"] == f.name]
+    if f.q:
+        needle = f.q.lower()
+        out = [o for o in out if needle in o["name"].lower()]
+    if isinstance(f, VirtualServiceFilters):
+        if f.se_group:
+            out = [o for o in out if o["se_group_id"] == str(f.se_group)]
+        if f.protocol:
+            out = [o for o in out if o["protocol"] == f.protocol.value]
+        if f.enabled is not None:
+            out = [o for o in out if o["enabled"] is f.enabled]
+        if f.pool:
+            want = str(f.pool)
+            out = [
+                o
+                for o in out
+                if o.get("default_pool_id") == want
+                or any(r.get("pool_id") == want for r in o.get("routes", []))
+            ]
+        if f.certificate:
+            out = [o for o in out if str(f.certificate) in o.get("certificate_ids", [])]
+    if isinstance(f, PoolFilters) and f.health_monitor:
+        out = [o for o in out if o.get("health_monitor_id") == str(f.health_monitor)]
+    if isinstance(f, KindFilters) and f.kind:
+        out = [o for o in out if o.get("kind") == f.kind]
+    if isinstance(f, SeGroupFilters) and f.ha_mode:
+        out = [o for o in out if o.get("ha_mode") == f.ha_mode]
+    if isinstance(f, CertificateFilters):
+        if f.source:
+            out = [o for o in out if o.get("source") == f.source.value]
+        if f.expires_within_days is not None:
+            limit_at = datetime.now(UTC) + timedelta(days=f.expires_within_days)
+            out = [
+                o
+                for o in out
+                if datetime.fromisoformat(str(o["not_after"]).replace("Z", "+00:00")) <= limit_at
+            ]
+    return out
+
+
+def _page(
+    items: list[dict[str, Any]], cursor: str | None, limit: int, descending: bool = False
+) -> Page[Any]:
+    items = sorted(items, key=lambda o: (o["name"], o["id"]), reverse=descending)
     if cursor:
-        items = [o for o in items if (o["name"], o["id"]) > tuple(cursor.split("|", 1))]
+        after = tuple(cursor.split("|", 1))
+        items = [
+            o
+            for o in items
+            if ((o["name"], o["id"]) < after if descending else (o["name"], o["id"]) > after)
+        ]
     window = items[:limit]
     nxt = f"{window[-1]['name']}|{window[-1]['id']}" if len(items) > limit else None
     return Page(items=window, next_cursor=nxt)
@@ -489,6 +784,7 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
     tag = slug
     noun = slug.replace("-", " ")
     sample = ex.OBJECTS[slug]
+    filter_type = FILTERS.get(slug, ListFilters)
     create_in: Any = api.create
     patch_in: Any = api.patch
     read_out: Any = api.read
@@ -505,16 +801,14 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
         tenant: Tenant,
         who: Who,
         services: Services,
-        name: str | None = None,
+        filters: Annotated[Any, Depends(filter_type)],
         change_set: UUID | None = None,
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> Page[Any]:
         """List the tenant's objects of this type, by name; with ``change_set`` the draft view."""
-        items = await _view(services, who, tenant, object_type, change_set)
-        if name:
-            items = [o for o in items if o["name"] == name]
-        return _page(items, cursor, limit)
+        items = _filtered(await _view(services, who, tenant, object_type, change_set), filters)
+        return _page(items, cursor, limit, descending=filters.sort == "-name")
 
     @router.get(
         base + "/{object_id}",
@@ -706,8 +1000,16 @@ def _problem_json_openapi(app: FastAPI) -> dict[str, Any]:
                 content["application/problem+json"] = {"schema": problem_ref}
     for unused in ("HTTPValidationError", "ValidationError"):
         schema["components"]["schemas"].pop(unused, None)
+    docs_meta.enrich(schema)
     app.openapi_schema = schema
     return schema
+
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _like_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _uuid_cursor(cursor: str | None) -> UUID | None:
@@ -746,6 +1048,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         ),
         separate_input_output_schemas=False,
         docs_url="/api/v1/docs",
+        redoc_url="/api/v1/redoc",
         openapi_url="/api/v1/openapi.json",
     )
     app.state.services = services
@@ -1163,6 +1466,297 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         if object_type in RENDERED_TYPES:
             _rendered_route(router, slug, object_type)
 
+    # telemetry
+    async def _service_name(svc: ApiServices, tenant: TenantRecord, service_id: UUID) -> str:
+        from switchyard.db.repository import load_snapshot
+
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+        found = next((s for s in snapshot.virtual_services if s.id == service_id), None)
+        if found is None:
+            raise ApiError(404, f"virtual-services {service_id} not found")
+        return found.name
+
+    @router.get(
+        "/tenants/{t}/virtual-services/{object_id}/metrics",
+        tags=["virtual-services"],
+        summary="Metrics of a virtual service",
+        description=(
+            "Requests per second, 95th percentile response time, 5xx ratio and current sessions "
+            "over the last `window_s` seconds, one point per `step_s`, plus the latest value of "
+            "each as `summary`. Read from Prometheus and Loki with the tenant label enforced. "
+            "`available: false` (with a `reason`) when no backend is configured or it fails; a "
+            "single value is `null` when the backend has no data for it, which is not zero. "
+            "Requires any role in the tenant."
+        ),
+        response_model=MetricsRead,
+        responses=_ok(ex.METRICS),
+    )
+    async def service_metrics(
+        object_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        window_s: Annotated[
+            int, Query(ge=60, le=604800, description="Seconds back from now.")
+        ] = 3600,
+        step_s: Annotated[
+            int | None,
+            Query(ge=5, le=3600, description="Seconds between points; default fits ~120 points."),
+        ] = None,
+    ) -> MetricsRead:
+        name = await _service_name(svc, tenant, object_id)
+        if svc.telemetry is None:
+            return MetricsRead(available=False, reason="no metrics backend is configured")
+        step = step_s or max(5, window_s // 120)
+        try:
+            found = await svc.telemetry.metrics(tenant.id, name, window_s=window_s, step_s=step)
+        except TelemetryError as exc:
+            return MetricsRead(available=False, reason=str(exc))
+        return MetricsRead(available=True, metrics=found)
+
+    @router.get(
+        "/tenants/{t}/metrics/virtual-services",
+        tags=["virtual-services"],
+        summary="Headline metrics of every virtual service",
+        description=(
+            "Requests per second, 5xx ratio and current sessions per service over the last "
+            "`window_s` seconds, for the list columns. `p95_ms` is only in the per-service "
+            "route. `available: false` when no backend is configured. Requires any role in "
+            "the tenant."
+        ),
+        response_model=MetricsOverview,
+        responses=_ok(ex.METRICS_OVERVIEW),
+    )
+    async def metrics_overview(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        window_s: Annotated[
+            int, Query(ge=60, le=86400, description="Seconds back from now.")
+        ] = 900,
+    ) -> MetricsOverview:
+        from switchyard.db.repository import load_snapshot
+
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+        if svc.telemetry is None:
+            return MetricsOverview(
+                available=False,
+                reason="no metrics backend is configured",
+                window_s=window_s,
+                items=[],
+            )
+        names = sorted(s.name for s in snapshot.virtual_services if s.enabled)
+        try:
+            found = await svc.telemetry.summaries(tenant.id, names, window_s=window_s)
+        except TelemetryError as exc:
+            return MetricsOverview(available=False, reason=str(exc), window_s=window_s, items=[])
+        by_name = {s.name: s.id for s in snapshot.virtual_services}
+        return MetricsOverview(
+            available=True,
+            window_s=window_s,
+            items=[
+                MetricsOverviewItem(virtual_service_id=by_name[n], name=n, summary=v)
+                for n, v in sorted(found.items())
+            ],
+        )
+
+    @router.get(
+        "/tenants/{t}/virtual-services/{object_id}/logs",
+        tags=["virtual-services"],
+        summary="Access log of a virtual service",
+        description=(
+            "HAProxy HTTP log lines of the service, newest first, parsed into fields. Filter "
+            "with `since`/`until` (default: the last hour), `q` (substring of the raw line) and "
+            "`status_class` (2, 3, 4 or 5). Page with `limit` and `cursor`. Read from Loki with "
+            "the tenant label enforced; `available: false` when no log backend is configured. "
+            "Requires any role in the tenant."
+        ),
+        response_model=AccessLogs,
+        responses=_ok(ex.ACCESS_LOGS),
+    )
+    async def service_logs(
+        object_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
+        status_class: Annotated[int | None, Query(ge=2, le=5)] = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> AccessLogs:
+        name = await _service_name(svc, tenant, object_id)
+        if svc.telemetry is None:
+            return AccessLogs(available=False, reason="no log backend is configured", entries=[])
+        end = until or datetime.now(UTC)
+        if cursor:
+            try:
+                end = _EPOCH + timedelta(microseconds=int(cursor))
+            except ValueError:
+                raise ApiError(400, "cursor is not valid") from None
+        start = since or end - timedelta(hours=1)
+        try:
+            found = await svc.telemetry.logs(
+                tenant.id,
+                name,
+                since=start,
+                until=end,
+                limit=limit + 1,
+                contains=q,
+                status_class=status_class,
+            )
+        except TelemetryError as exc:
+            return AccessLogs(available=False, reason=str(exc), entries=[])
+        window = found[:limit]
+        more = len(found) > limit
+        return AccessLogs(
+            available=True,
+            entries=window,
+            next_cursor=(
+                str((window[-1].at - _EPOCH) // timedelta(microseconds=1)) if more else None
+            ),
+        )
+
+    # search and summary
+    @router.get(
+        "/tenants/{t}/search",
+        tags=["search"],
+        summary="Find objects by name",
+        description=(
+            "Backs the command palette. Case-insensitive substring match on object names; "
+            "virtual services also match their VIP, certificates their SANs and pools their "
+            "member addresses. Best match first (exact, prefix, substring). Restrict with "
+            "`types` (repeat the parameter). Requires any role in the tenant."
+        ),
+        response_model=SearchResults,
+        responses=_ok(ex.SEARCH),
+    )
+    async def search_objects(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        q: Annotated[str, Query(min_length=1, max_length=200)],
+        types: Annotated[list[ObjectType] | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    ) -> SearchResults:
+        from switchyard.db.repository import load_snapshot
+
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+        return overview.search(snapshot, q, types or list(ObjectType), limit)
+
+    @router.get(
+        "/tenants/{t}/summary",
+        tags=["status"],
+        summary="Tenant home summary",
+        description=(
+            "One call for the tenant home: virtual services by health, pool members that are "
+            "not `UP`, drifted and unreachable engines, certificates expiring within 30 days, "
+            "job counts, open drafts and the latest revision. Lists are capped at 50. Health "
+            "rules are those of `GET /status/virtual-services`. Requires any role in the tenant."
+        ),
+        response_model=TenantSummary,
+        responses=_ok(ex.SUMMARY),
+    )
+    async def tenant_summary(tenant: Tenant, who: Who, svc: Services) -> TenantSummary:
+        from sqlalchemy import func, select
+
+        from switchyard.db.ops_models import ChangeSetRow, JobRow
+        from switchyard.db.repository import load_snapshot
+
+        statuses = await svc.status.list_status(who, tenant.id)
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+            jobs = {
+                r[0]: r[1]
+                for r in await session.execute(
+                    select(JobRow.state, func.count()).group_by(JobRow.state)
+                )
+            }
+            drafts = {
+                r[0]: r[1]
+                for r in await session.execute(
+                    select(ChangeSetRow.state, func.count()).group_by(ChangeSetRow.state)
+                )
+            }
+        revisions = await svc.change_sets.revisions(who, tenant.id, limit=1)
+        latest = (
+            overview.LatestRevision(
+                number=revisions[0].number,
+                author=revisions[0].author,
+                summary=revisions[0].summary,
+                created_at=revisions[0].created_at,
+            )
+            if revisions
+            else None
+        )
+        return overview.summarize(
+            snapshot=snapshot,
+            statuses=statuses,
+            services=virtual_service_states(snapshot, statuses),
+            jobs=overview.JobCounts(
+                queued=jobs.get(JobState.QUEUED.value, 0),
+                running=jobs.get(JobState.RUNNING.value, 0),
+                failed=jobs.get(JobState.FAILED.value, 0) + jobs.get(JobState.DEAD.value, 0),
+            ),
+            open_drafts=drafts.get(ChangeSetState.DRAFT.value, 0),
+            pending_approval=drafts.get(ChangeSetState.PENDING_APPROVAL.value, 0),
+            latest_revision=latest,
+            now=datetime.now(UTC),
+        )
+
+    # IPAM
+    @router.get(
+        "/tenants/{t}/vip-pools/{pool_id}/allocations",
+        tags=["vip-pools"],
+        summary="Usage and allocations of a VIP pool",
+        description=(
+            "How many addresses the pool has, how many are held and by which virtual service. An "
+            "address is held by the service that carries it as `vip`; there is no separate "
+            "reservation, so *releasing* an address means changing the service's `vip` or "
+            "deleting the service in a change set. With `change_set` the answer is the pool as "
+            "that draft would leave it (`draft_status` per holder). `next_free` is the address a "
+            "new service would get. Requires any role in the tenant."
+        ),
+        response_model=VipPoolUsage,
+        responses=_ok(ex.VIP_POOL_USAGE),
+    )
+    async def vip_pool_allocations(
+        pool_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+    ) -> VipPoolUsage:
+        return await _pool_usage(svc, who, tenant, pool_id, change_set)
+
+    @router.post(
+        "/tenants/{t}/vip-pools/{pool_id}/next-free",
+        tags=["vip-pools"],
+        summary="Suggest the next free address of a VIP pool",
+        description=(
+            "Returns the lowest free usable address. Nothing is reserved: two callers can get "
+            "the same address and the validator rejects the second service that uses it. `409` "
+            "when the pool is exhausted. Requires any role in the tenant."
+        ),
+        response_model=NextFree,
+        responses=_ok(ex.NEXT_FREE),
+    )
+    async def vip_pool_next_free(
+        pool_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+    ) -> NextFree:
+        usage = await _pool_usage(svc, who, tenant, pool_id, change_set)
+        if usage.next_free is None:
+            raise ApiError(409, "the VIP pool has no free address")
+        return NextFree(address=usage.next_free)
+
     # change sets
     @router.get(
         "/tenants/{t}/change-sets",
@@ -1269,7 +1863,19 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     async def diff(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
         """Objects touched, rule `problems` (block apply), `warnings` (never block) and files."""
         preview = await svc.change_sets.preview(who, tenant.id, cs)
+        base, _ = await svc.change_sets.draft_view(who, tenant.id, cs)
+        found = impact_of(base, preview.draft)
+        names = {g.id: g.name for snap in (base, preview.draft.snapshot) for g in snap.se_groups}
         return {
+            "impact": {
+                "services": [
+                    {"id": str(i), "name": n, "vip": v, "se_group_id": str(g)}
+                    for i, n, v, g in found.services
+                ],
+                "vips": list(found.vips),
+                "se_groups": [{"id": str(g), "name": names[g]} for g in found.se_group_ids],
+                "hostnames": list(found.hostnames),
+            },
             "objects": [
                 {
                     "type": o.object_type.value,
@@ -1364,6 +1970,11 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         "/tenants/{t}/revisions",
         tags=["revisions"],
         summary="List revisions",
+        description=(
+            "Applied revisions, newest first. `object` (an object id of any type) keeps the "
+            "revisions whose change set had an operation on that object: the History tab of an "
+            "object page. Page with `limit` and `cursor`. Requires any role in the tenant."
+        ),
         response_model=Page[RevisionSummary],
         responses=_ok({"items": [ex.REVISION_SUMMARY], "next_cursor": None}),
     )
@@ -1371,12 +1982,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         tenant: Tenant,
         who: Who,
         svc: Services,
+        object: UUID | None = None,  # noqa: A002 - the query parameter is part of the API
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> Page[Any]:
-        """List applied revisions, newest first."""
+        """List applied revisions, newest first; ``object`` keeps those that touched an object."""
         records = await svc.change_sets.revisions(
-            who, tenant.id, limit=limit + 1, before=_int_cursor(cursor)
+            who, tenant.id, limit=limit + 1, before=_int_cursor(cursor), object_id=object
         )
         window = records[:limit]
         return Page(
@@ -1448,9 +2060,46 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         group: UUID, tenant: Tenant, who: Who, svc: Services
     ) -> list[dict[str, Any]]:
         return [
-            {"id": str(e.id), "name": e.name, "url": e.dataplane_url, "state": e.state.value}
-            for e in await svc.engines.list_engines(who, tenant.id, group)
+            _engine_json(d) for d in await svc.engines.describe(who, tenant.id, se_group_id=group)
         ]
+
+    @router.get(
+        "/tenants/{t}/engines",
+        tags=["engines"],
+        summary="List every engine of the tenant",
+        description=(
+            "All service engines across SE groups, by group then name, with Proxmox placement "
+            "(`pve_node`, `vmid`) and agent enrollment. Filter with `se_group` and `state`. "
+            "Live health is in `GET /status/engines`. Requires any role in the tenant."
+        ),
+        response_model=list[EngineRead],
+        responses=_ok([ex.ENGINE_READ]),
+    )
+    async def list_tenant_engines(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        se_group: UUID | None = None,
+        state: EngineState | None = None,
+    ) -> list[dict[str, Any]]:
+        return [
+            _engine_json(d)
+            for d in await svc.engines.describe(who, tenant.id, se_group_id=se_group, state=state)
+        ]
+
+    @router.get(
+        "/tenants/{t}/engines/{engine}",
+        tags=["engines"],
+        summary="Get one engine",
+        description="One engine with placement and enrollment. `404` if it is not in the tenant.",
+        response_model=EngineRead,
+        responses=_ok(ex.ENGINE_READ),
+    )
+    async def get_engine(engine: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        found = await svc.engines.describe(who, tenant.id, engine_id=engine)
+        if not found:
+            raise ApiError(404, f"engine {engine} not found")
+        return _engine_json(found[0])
 
     @router.post(
         "/tenants/{t}/se-groups/{group}/engines",
@@ -1474,7 +2123,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             agent_url=body.agent_url,
             request_id=_rid(),
         )
-        return {"id": str(e.id), "name": e.name, "url": e.dataplane_url, "state": e.state.value}
+        return _engine_json(EngineDetail(e))
 
     @router.put(
         "/tenants/{t}/engines/{engine}/state",
@@ -2381,19 +3030,35 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     ) -> list[dict[str, Any]]:
         """UDP services are `serving` (IPVS); `not_served` is reserved for unrenderable ones."""
         return [
-            {"id": v.id, "name": v.name, "protocol": v.protocol, "state": v.state}
+            {
+                "id": v.id,
+                "name": v.name,
+                "protocol": v.protocol,
+                "state": v.state,
+                "health": v.health,
+                "members_up": v.members_up,
+                "members_total": v.members_total,
+            }
             for v in await svc.status.virtual_services(who, tenant.id)
         ]
 
     @router.get(
         "/tenants/{t}/status/stream",
         tags=["status"],
-        summary="Stream engine status (server-sent events)",
+        summary="Live events (server-sent events)",
+        description=(
+            "A `text/event-stream` of what changes in the tenant. Events: "
+            + "; ".join(f"`{n}`: {d}" for n, (_, _, d) in EVENTS.items())
+            + " Every `data:` line is JSON (the payload models are under `x-sse-events`; "
+            "`status` and `vs_state` carry an array). The first events are a full snapshot, "
+            "so a client that reconnects simply starts over (`Last-Event-ID` is not used). "
+            "Comment lines `: keep-alive` fill the quiet intervals. The database is polled every "
+            "`interval` seconds; `follow=false` sends one snapshot and closes."
+        ),
         response_class=StreamingResponse,
         responses={
             200: {
-                "description": "`text/event-stream`; each `status` event carries the JSON array "
-                "of `GET /status/engines`.",
+                "description": "`text/event-stream`.",
                 "content": {"text/event-stream": {"schema": {"type": "string"}}},
             }
         },
@@ -2406,24 +3071,77 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         follow: bool = True,
         interval: Annotated[float, Query(ge=0.1, le=60)] = 2.0,
     ) -> StreamingResponse:
-        """Server-sent events: the engine status whenever it changes (and once at the start)."""
         import asyncio
         import json
 
+        def frame(counter: int, name: str, data: Any) -> str:
+            return f"id: {counter}\nevent: {name}\ndata: {json.dumps(data, sort_keys=True)}\n\n"
+
         async def events() -> AsyncIterator[str]:
-            last = ""
+            counter = 0
+            last: dict[str, str] = {}
+            jobs_seen: dict[UUID, str] = {}
+            revision: int | None = None
+            first = True
             while True:
-                payload = json.dumps(
-                    [
-                        EngineStatusRead.model_validate(status_json(s)).model_dump(mode="json")
-                        for s in await svc.status.list_status(who, tenant.id)
-                    ],
-                    sort_keys=True,
-                )
-                if payload != last:
-                    yield f"event: status\ndata: {payload}\n\n"
-                    last = payload
-                else:
+                sent = False
+                engines = [
+                    EngineStatusRead.model_validate(status_json(s)).model_dump(mode="json")
+                    for s in await svc.status.list_status(who, tenant.id)
+                ]
+                states = [
+                    VirtualServiceStatusRead.model_validate(
+                        {
+                            "id": v.id,
+                            "name": v.name,
+                            "protocol": v.protocol,
+                            "state": v.state,
+                            "health": v.health,
+                            "members_up": v.members_up,
+                            "members_total": v.members_total,
+                        }
+                    ).model_dump(mode="json")
+                    for v in await svc.status.virtual_services(who, tenant.id)
+                ]
+                for name, payload in (("status", engines), ("vs_state", states)):
+                    text = json.dumps(payload, sort_keys=True)
+                    if last.get(name) != text:
+                        counter += 1
+                        last[name] = text
+                        sent = True
+                        yield frame(counter, name, payload)
+                page = await svc.jobs.list(who, tenant.id, limit=20)
+                for row in reversed(page.items):
+                    job = job_models.Job.from_row(row).model_dump(mode="json")
+                    text = json.dumps(job, sort_keys=True)
+                    if jobs_seen.get(row.id) == text:
+                        continue
+                    unfinished = job["state"] in {"queued", "running"}
+                    if not first or unfinished:
+                        counter += 1
+                        sent = True
+                        yield frame(counter, "job_progress", job)
+                    jobs_seen[row.id] = text
+                latest = await svc.change_sets.revisions(who, tenant.id, limit=1)
+                if latest and latest[0].number != revision:
+                    if revision is not None:
+                        counter += 1
+                        sent = True
+                        r = latest[0]
+                        yield frame(
+                            counter,
+                            "revision_applied",
+                            RevisionSummary(
+                                number=r.number,
+                                author=r.author,
+                                summary=r.summary,
+                                git_sha=r.git_sha,
+                                created_at=r.created_at,
+                            ).model_dump(mode="json"),
+                        )
+                    revision = latest[0].number
+                first = False
+                if not sent:
                     yield ": keep-alive\n\n"
                 if not follow or await request.is_disconnected():
                     return
@@ -2476,7 +3194,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         who: Who,
         svc: Services,
         state: JobState | None = None,
-        kind: str | None = None,
+        kind: job_models.JobKind | None = None,
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> Any:
@@ -2541,33 +3259,61 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         "/tenants/{t}/audit-events",
         tags=["audit"],
         summary="List audit events, newest first",
-        response_model=list[AuditEventRead],
-        responses=_ok([ex.AUDIT_EVENT]),
+        description=AUDIT_DESCRIPTION + " Requires any role in the tenant.",
+        response_model=Page[AuditEventRead],
+        responses=_ok({"items": [ex.AUDIT_EVENT], "next_cursor": None}),
     )
     async def audit_events(
-        tenant: Tenant, who: Who, svc: Services, limit: Annotated[int, Query(ge=1, le=500)] = 100
-    ) -> list[dict[str, Any]]:
-        from sqlalchemy import select
-
-        from switchyard.db.ops_models import AuditEventRow
-
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        filters: Annotated[AuditFilters, Depends()],
+    ) -> Page[Any]:
         async with tenant_session(svc.db.app, [tenant.id]) as session:
-            rows = (
-                await session.execute(
-                    select(AuditEventRow).order_by(AuditEventRow.at.desc()).limit(limit)
-                )
-            ).scalars()
-            return [
-                {
-                    "at": r.at,
-                    "actor": r.actor,
-                    "action": r.action,
-                    "object": r.object_ref,
-                    "diff": r.diff,
-                    "request_id": r.request_id,
-                }
-                for r in rows
-            ]
+            return await _audit_page(session, filters)
+
+    @router.get(
+        "/audit-events",
+        tags=["audit"],
+        summary="List audit events across tenants (system-admin)",
+        description=(
+            AUDIT_DESCRIPTION
+            + " This route spans every tenant and the system-level events that belong to none "
+            "(sign-ins, tenant creation); narrow it with `tenant` (id or name). Requires "
+            "`system-admin`."
+        ),
+        response_model=Page[AuditEventRead],
+        responses=_ok({"items": [ex.AUDIT_EVENT], "next_cursor": None}),
+    )
+    async def system_audit_events(
+        who: Who,
+        svc: Services,
+        filters: Annotated[AuditFilters, Depends()],
+        tenant: Annotated[str | None, Query(description="Tenant id or name.")] = None,
+    ) -> Page[Any]:
+        require(who, "manage", "tenant")
+        if tenant:
+            filters.tenant_id = (await svc.tenants.resolve(who, tenant)).id
+        async with admin_session(svc.db.admin) as session:
+            return await _audit_page(session, filters)
+
+    @router.get(
+        "/audit-actions",
+        tags=["audit"],
+        summary="Catalog of audit event actions",
+        description=(
+            "Every `action` an audit event can carry, with its category (the part before the "
+            "dot) and a one-sentence description, for labels and filters. Any authenticated "
+            "caller."
+        ),
+        response_model=list[AuditActionRead],
+        responses=_ok([ex.AUDIT_ACTION]),
+    )
+    async def audit_actions(who: Who) -> list[AuditActionRead]:
+        return [
+            AuditActionRead(action=a.action, category=a.category, description=a.description)
+            for a in CATALOG
+        ]
 
     app.include_router(router)
     app.openapi = lambda: _problem_json_openapi(app)  # type: ignore[method-assign]

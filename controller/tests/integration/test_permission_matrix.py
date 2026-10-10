@@ -136,6 +136,20 @@ for _slug in COLLECTIONS_APP + COLLECTIONS_INFRA:
     ROUTES[("PATCH", f"/tenants/{{t}}/{_slug}/{{object_id}}")] = _write
     ROUTES[("DELETE", f"/tenants/{{t}}/{_slug}/{{object_id}}")] = _write
     ROUTES[("GET", f"/tenants/{{t}}/{_slug}/{{object_id}}/rendered")] = READ
+for _read in (
+    ("GET", "/tenants/{t}/engines"),
+    ("GET", "/tenants/{t}/engines/{engine}"),
+    ("GET", "/tenants/{t}/metrics/virtual-services"),
+    ("GET", "/tenants/{t}/search"),
+    ("GET", "/tenants/{t}/summary"),
+    ("GET", "/tenants/{t}/vip-pools/{pool_id}/allocations"),
+    ("POST", "/tenants/{t}/vip-pools/{pool_id}/next-free"),
+    ("GET", "/tenants/{t}/virtual-services/{object_id}/logs"),
+    ("GET", "/tenants/{t}/virtual-services/{object_id}/metrics"),
+):
+    ROUTES[_read] = READ
+ROUTES[("GET", "/audit-actions")] = ANY
+ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
 ROUTES.pop(("GET", "/tenants/{t}/networks/{object_id}/rendered"), None)
 ROUTES.pop(("GET", "/tenants/{t}/vip-pools/{object_id}/rendered"), None)
 ROUTES.pop(("GET", "/tenants/{t}/routing-profiles/{object_id}/rendered"), None)

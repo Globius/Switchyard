@@ -221,7 +221,24 @@ async def test_draft_flow_over_http(api: Api) -> None:
     revs = (await api.client.get(f"{V1}/tenants/acme/revisions", headers=h)).json()
     assert [r["number"] for r in revs["items"]] == [1]
     audit = (await api.client.get(f"{V1}/tenants/acme/audit-events", headers=h)).json()
-    assert "change_set.applied" in {e["action"] for e in audit}
+    assert "change_set.applied" in {e["action"] for e in audit["items"]}
+    only = (
+        await api.client.get(f"{V1}/tenants/acme/audit-events?action=change_set.*", headers=h)
+    ).json()
+    assert only["items"] and all(e["action"].startswith("change_set.") for e in only["items"])
+    first = (await api.client.get(f"{V1}/tenants/acme/audit-events?limit=1", headers=h)).json()
+    assert first["next_cursor"]
+    nxt = (
+        await api.client.get(
+            f"{V1}/tenants/acme/audit-events?limit=1&cursor={first['next_cursor']}", headers=h
+        )
+    ).json()
+    assert "items" in nxt, (nxt, first)
+    assert nxt["items"] and nxt["items"][0] != first["items"][0]
+    none = (await api.client.get(f"{V1}/tenants/acme/audit-events?q=zzz-no-such", headers=h)).json()
+    assert none == {"items": [], "next_cursor": None}
+    bad = await api.client.get(f"{V1}/tenants/acme/audit-events?cursor=x", headers=h)
+    assert bad.status_code == 400
 
 
 async def test_apply_true_creates_deletes_and_rolls_back(api: Api) -> None:
@@ -626,3 +643,208 @@ async def test_rendered_config_per_object_live_and_draft(api: Api) -> None:
         f"{V1}/tenants/acme/networks/{uuid.uuid4()}/rendered", headers=h
     )
     assert unsupported.status_code in (404, 405)
+
+
+async def test_vip_pool_allocations_and_next_free(api: Api) -> None:
+    from switchyard.domain.loader import symbolic_uuid
+
+    h = await api.token(Role.VIEWER)
+    pool = symbolic_uuid("vp-main")
+    usage = (
+        await api.client.get(f"{V1}/tenants/acme/vip-pools/{pool}/allocations", headers=h)
+    ).json()
+    assert usage["total"] == 41 and usage["used"] == 1 and usage["free"] == 40
+    assert usage["allocations"][0]["address"] == "192.0.2.20"
+    assert usage["allocations"][0]["virtual_service_id"] == str(VS)
+    assert usage["next_free"] == "192.0.2.10"
+    nxt = await api.client.post(f"{V1}/tenants/acme/vip-pools/{pool}/next-free", headers=h)
+    assert nxt.json() == {"address": "192.0.2.10"}
+    missing = await api.client.get(
+        f"{V1}/tenants/acme/vip-pools/{uuid.uuid4()}/allocations", headers=h
+    )
+    assert missing.status_code == 404
+
+
+async def test_system_audit_engines_and_revision_history(api: Api) -> None:
+    from switchyard.domain.loader import symbolic_uuid
+
+    tenant_admin = await api.token()
+    root = await api.token(Role.SYSTEM_ADMIN)
+    # The cross-tenant log is for system administrators only.
+    assert (await api.client.get(f"{V1}/audit-events", headers=tenant_admin)).status_code == 403
+    page = (await api.client.get(f"{V1}/audit-events?limit=5", headers=root)).json()
+    assert page["items"] and "tenant_id" in page["items"][0]
+    scoped = (await api.client.get(f"{V1}/audit-events?tenant=acme&limit=500", headers=root)).json()
+    assert all(e["tenant_id"] == str(TENANT) for e in scoped["items"])
+    actions = (await api.client.get(f"{V1}/audit-actions", headers=tenant_admin)).json()
+    assert {"action": "job.retried", "category": "job"}.items() <= next(
+        a for a in actions if a["action"] == "job.retried"
+    ).items()
+    # Engines: tenant-wide list, one engine, filters.
+    made = await api.client.post(
+        f"{V1}/tenants/acme/se-groups/{GROUP}/engines",
+        json={"name": "e1", "dataplane_url": "https://192.0.2.9:5555", "mgmt_ip": "192.0.2.9"},
+        headers=tenant_admin,
+    )
+    assert made.status_code == 201 and made.json()["agent_enrolled"] is False
+    engines = (await api.client.get(f"{V1}/tenants/acme/engines", headers=tenant_admin)).json()
+    assert engines and {"pve_node", "vmid", "agent_enrolled", "se_group_id"} <= engines[0].keys()
+    one = await api.client.get(
+        f"{V1}/tenants/acme/engines/{engines[0]['id']}", headers=tenant_admin
+    )
+    assert one.json()["name"] == engines[0]["name"]
+    none = (
+        await api.client.get(f"{V1}/tenants/acme/engines?state=disabled", headers=tenant_admin)
+    ).json()
+    assert none == []
+    assert (
+        await api.client.get(f"{V1}/tenants/acme/engines/{uuid.uuid4()}", headers=tenant_admin)
+    ).status_code == 404
+    # Revision history of one object.
+    pool = symbolic_uuid("pool-web")
+    h = tenant_admin
+    r = await api.client.patch(
+        f"{V1}/tenants/acme/pools/{pool}?apply=true",
+        json={"tls": True},
+        headers={**h, "If-Match": '"1"'},
+    )
+    assert r.status_code == 202
+    await api.run_jobs()
+    hist = (await api.client.get(f"{V1}/tenants/acme/revisions?object={pool}", headers=h)).json()
+    assert len(hist["items"]) == 1
+    other = (
+        await api.client.get(f"{V1}/tenants/acme/revisions?object={uuid.uuid4()}", headers=h)
+    ).json()
+    assert other["items"] == []
+    states = (await api.client.get(f"{V1}/tenants/acme/status/virtual-services", headers=h)).json()
+    assert all(
+        s["health"] in {"healthy", "degraded", "down", "unknown", "disabled"} for s in states
+    )
+
+
+async def test_search_and_summary(api: Api) -> None:
+    h = await api.token(Role.VIEWER)
+    found = (await api.client.get(f"{V1}/tenants/acme/search?q=WEB", headers=h)).json()
+    assert found["hits"] and found["hits"][0]["name"].lower().startswith("web")
+    by_vip = (await api.client.get(f"{V1}/tenants/acme/search?q=192.0.2.20", headers=h)).json()
+    assert [x["matched"] for x in by_vip["hits"]][:1] == ["vip"]
+    only = (
+        await api.client.get(f"{V1}/tenants/acme/search?q=web&types=pool&limit=1", headers=h)
+    ).json()
+    assert {x["type"] for x in only["hits"]} <= {"pool"}
+    assert (await api.client.get(f"{V1}/tenants/acme/search?q=", headers=h)).status_code == 422
+    summary = (await api.client.get(f"{V1}/tenants/acme/summary", headers=h)).json()
+    assert summary["services"]["total"] >= 1
+    assert {"jobs", "open_drafts", "latest_revision", "expiring_certificates"} <= summary.keys()
+
+
+async def test_list_filters_and_sort(api: Api) -> None:
+    h = await api.token(Role.VIEWER)
+    base = f"{V1}/tenants/acme/virtual-services"
+    everything = (await api.client.get(base, headers=h)).json()["items"]
+    assert everything
+    names = [o["name"] for o in everything]
+    desc = (await api.client.get(f"{base}?sort=-name", headers=h)).json()["items"]
+    assert [o["name"] for o in desc] == sorted(names, reverse=True)
+    found = (await api.client.get(f"{base}?q={names[0][:2].upper()}", headers=h)).json()["items"]
+    assert names[0] in {o["name"] for o in found}
+    none = (await api.client.get(f"{base}?protocol=udp&enabled=false", headers=h)).json()
+    assert none["items"] == []
+    by_group = (await api.client.get(f"{base}?se_group={GROUP}", headers=h)).json()["items"]
+    assert len(by_group) == len(everything)
+    assert (await api.client.get(f"{base}?sort=color", headers=h)).status_code == 422
+    certs = f"{V1}/tenants/acme/certificates"
+    soon = (await api.client.get(f"{certs}?expires_within_days=0", headers=h)).json()
+    assert isinstance(soon["items"], list)
+    pools = (await api.client.get(f"{V1}/tenants/acme/pools?q=zzz", headers=h)).json()
+    assert pools["items"] == []
+
+
+async def test_stale_operation_reports_the_conflict_and_the_diff_has_impact(api: Api) -> None:
+    h = await api.token()
+    cs = (
+        await api.client.post(f"{V1}/tenants/acme/change-sets", json={"summary": "x"}, headers=h)
+    ).json()["id"]
+    stale = await api.client.post(
+        f"{V1}/tenants/acme/change-sets/{cs}/ops",
+        json={
+            "ops": [
+                {
+                    "object_type": "pool",
+                    "object_id": str(POOL),
+                    "action": "update",
+                    "body": {"algorithm": "leastconn"},
+                    "expected_version": 99,
+                }
+            ]
+        },
+        headers=h,
+    )
+    assert stale.status_code == 412
+    conflict = stale.json()["conflict"]
+    assert conflict["object_type"] == "pool" and conflict["expected_version"] == 99
+    assert conflict["current_version"] == 1
+    ok = await api.client.post(
+        f"{V1}/tenants/acme/change-sets/{cs}/ops",
+        json={
+            "ops": [
+                {
+                    "object_type": "pool",
+                    "object_id": str(POOL),
+                    "action": "update",
+                    "body": {"algorithm": "leastconn"},
+                    "expected_version": conflict["current_version"],
+                }
+            ]
+        },
+        headers=h,
+    )
+    assert ok.status_code == 200
+    diff = (await api.client.get(f"{V1}/tenants/acme/change-sets/{cs}/diff", headers=h)).json()
+    assert [s["id"] for s in diff["impact"]["services"]] == [str(VS)]
+    assert diff["impact"]["vips"] and diff["impact"]["se_groups"][0]["name"]
+
+
+async def test_metrics_and_logs_are_tenant_scoped_and_degrade_when_unconfigured(api: Api) -> None:
+    from datetime import UTC, datetime
+
+    from switchyard.adapters.telemetry import FakeTelemetry
+    from switchyard.domain.telemetry import AccessLogEntry
+
+    h = await api.token(Role.VIEWER)
+    base = f"{V1}/tenants/acme"
+    off = (await api.client.get(f"{base}/virtual-services/{VS}/metrics", headers=h)).json()
+    assert off["available"] is False and off["reason"]
+    assert (await api.client.get(f"{base}/virtual-services/{VS}/logs", headers=h)).json()[
+        "entries"
+    ] == []
+    fake = FakeTelemetry()
+    fake.entries = [
+        AccessLogEntry(
+            at=datetime.now(UTC),
+            client_ip="192.0.2.1",
+            frontend="vs_web",
+            backend="pool_web",
+            server="s",
+            status=502,
+            bytes=1,
+            duration_ms=1,
+            raw="x",
+        )
+    ]
+    api.services.telemetry = fake
+    on = (await api.client.get(f"{base}/virtual-services/{VS}/metrics", headers=h)).json()
+    assert on["available"] and on["metrics"]["summary"]["rps"] == 2.0
+    over = (await api.client.get(f"{base}/metrics/virtual-services", headers=h)).json()
+    assert over["available"] and over["items"]
+    logs = (
+        await api.client.get(f"{base}/virtual-services/{VS}/logs?status_class=5", headers=h)
+    ).json()
+    assert [e["status"] for e in logs["entries"]] == [502]
+    none = (
+        await api.client.get(f"{base}/virtual-services/{VS}/logs?status_class=2", headers=h)
+    ).json()
+    assert none["entries"] == []
+    missing = await api.client.get(f"{base}/virtual-services/{uuid.uuid4()}/metrics", headers=h)
+    assert missing.status_code == 404
+    assert set(fake.asked) == {TENANT}

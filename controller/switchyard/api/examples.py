@@ -211,6 +211,14 @@ DIFF = {
     ],
     "problems": [],
     "warnings": [],
+    "impact": {
+        "services": [
+            {"id": VIRTUAL_SERVICE, "name": "shop", "vip": "192.0.2.100", "se_group_id": SE_GROUP}
+        ],
+        "vips": ["192.0.2.100"],
+        "se_groups": [{"id": SE_GROUP, "name": "edge"}],
+        "hostnames": ["shop.example.test"],
+    },
     "se_groups": [
         {
             "id": SE_GROUP,
@@ -264,12 +272,22 @@ ENGINE_READ = {
     "name": "edge-1",
     "url": "https://198.51.100.21:5555",
     "state": "enabled",
+    "se_group_id": SE_GROUP,
+    "mgmt_ip": "192.0.2.21",
+    "agent_url": "192.0.2.21:7443",
+    "pve_node": "pve1",
+    "vmid": 9101,
+    "agent_enrolled": True,
+    "agent_cert_serial": "3f2a9c",
 }
 VIRTUAL_SERVICE_STATUS = {
     "id": "00000000-0000-0000-0000-0000000000d1",
     "name": "dns",
     "protocol": "udp",
     "state": "serving",
+    "health": "degraded",
+    "members_up": 3,
+    "members_total": 4,
 }
 
 ENGINE_STATUS = {
@@ -340,8 +358,14 @@ JOB_LOG = {
     "job_id": JOB,
     "lines": [{"at": WHEN, "level": "info", "message": "attempt 1 claimed by worker-1"}],
 }
+AUDIT_ACTION = {
+    "action": "change_set.applied",
+    "category": "change_set",
+    "description": "A change set finished applying and became a revision.",
+}
 AUDIT_EVENT = {
     "at": WHEN,
+    "tenant_id": TENANT,
     "actor": "user:alice",
     "action": "change_set.apply",
     "object": f"change_set:{CHANGE_SET}",
@@ -470,6 +494,128 @@ PROTOCOL_RULES = {
     "algorithms": ["roundrobin", "leastconn", "source"],
     "monitor_types": ["udp"],
     "member_port_required": True,
+}
+
+VIP_POOL_USAGE = {
+    "pool_id": VIP_POOL,
+    "total": 99,
+    "used": 1,
+    "free": 98,
+    "allocations": [
+        {
+            "address": "192.0.2.100",
+            "virtual_service_id": VIRTUAL_SERVICE,
+            "virtual_service_name": "shop",
+            "enabled": True,
+            "draft_status": "unchanged",
+        }
+    ],
+    "next_free": "192.0.2.101",
+}
+NEXT_FREE = {"address": "192.0.2.101"}
+
+SEARCH = {
+    "query": "shop",
+    "hits": [
+        {
+            "type": "virtual_service",
+            "id": VIRTUAL_SERVICE,
+            "name": "shop",
+            "matched": "name",
+            "detail": "192.0.2.100",
+        }
+    ],
+    "truncated": False,
+}
+SUMMARY = {
+    "services": {"total": 4, "healthy": 2, "degraded": 1, "down": 0, "unknown": 0, "disabled": 1},
+    "failing_members": [
+        {
+            "engine": "edge-1",
+            "engine_id": ENGINE,
+            "backend": "pool_web",
+            "server": "web-2",
+            "status": "DOWN",
+        }
+    ],
+    "drifted_engines": [
+        {
+            "engine": "edge-2",
+            "engine_id": ENGINE,
+            "se_group_id": SE_GROUP,
+            "kinds": ["haproxy_config"],
+        }
+    ],
+    "unreachable_engines": [],
+    "expiring_certificates": [
+        {"id": CERTIFICATE, "name": "shop", "not_after": "2026-10-25T00:00:00Z", "days_left": 14}
+    ],
+    "jobs": {"queued": 0, "running": 1, "failed": 0},
+    "open_drafts": 2,
+    "pending_approval": 0,
+    "latest_revision": {
+        "number": 42,
+        "author": "user:alice",
+        "summary": "Add shop",
+        "created_at": WHEN,
+    },
+}
+
+METRICS = {
+    "available": True,
+    "reason": None,
+    "metrics": {
+        "window_s": 3600,
+        "step_s": 30,
+        "summary": {
+            "rps": 120.5,
+            "p95_ms": 18.0,
+            "error_5xx_ratio": 0.002,
+            "active_connections": 42,
+        },
+        "rps": [{"t": WHEN, "v": 120.5}],
+        "p95_ms": [{"t": WHEN, "v": 18.0}],
+        "error_5xx_ratio": [{"t": WHEN, "v": 0.002}],
+        "active_connections": [{"t": WHEN, "v": 42}],
+    },
+}
+METRICS_OVERVIEW = {
+    "available": True,
+    "reason": None,
+    "window_s": 900,
+    "items": [
+        {
+            "virtual_service_id": VIRTUAL_SERVICE,
+            "name": "shop",
+            "summary": {
+                "rps": 120.5,
+                "p95_ms": 18.0,
+                "error_5xx_ratio": 0.002,
+                "active_connections": 42,
+            },
+        }
+    ],
+}
+ACCESS_LOGS = {
+    "available": True,
+    "reason": None,
+    "entries": [
+        {
+            "at": WHEN,
+            "client_ip": "198.51.100.7",
+            "frontend": "vs_shop",
+            "backend": "pool_web",
+            "server": "web-1",
+            "status": 200,
+            "bytes": 512,
+            "duration_ms": 13,
+            "method": "GET",
+            "path": "/cart",
+            "raw": "198.51.100.7:51514 [10/Oct/2026:08:30:00.123] vs_shop pool_web/web-1 "
+            '0/0/1/12/13 200 512 - - ---- 1/1/0/0/0 0/0 "GET /cart HTTP/1.1"',
+        }
+    ],
+    "next_cursor": None,
 }
 
 IDP_OIDC = {

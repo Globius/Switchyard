@@ -182,6 +182,7 @@ def serve(
         runtime.certificates(db, secrets),
         runtime.enrollment(db, secrets),
         runtime.sessions(db, secrets),
+        runtime.telemetry(),
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
     uvicorn.run(create_app(services, public_url=public_url), host=host, port=port)

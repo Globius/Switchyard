@@ -163,6 +163,7 @@ async def test_status_endpoints(pg_url: str) -> None:
             )
             assert s.status_code == 200
             assert s.headers["content-type"].startswith("text/event-stream")
-            assert s.text.startswith("event: status\ndata: ")
-            data = json.loads(s.text.split("data: ", 1)[1].strip())
+            assert s.text.startswith("id: 1\nevent: status\ndata: ")
+            data = json.loads(s.text.split("data: ", 1)[1].split("\n", 1)[0])
             assert len(data) == 2
+            assert "event: vs_state\ndata: " in s.text

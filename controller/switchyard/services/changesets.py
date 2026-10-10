@@ -579,12 +579,23 @@ class ChangeSetService:
     # -- revisions ---------------------------------------------------------------------------------
 
     async def revisions(
-        self, principal: Principal, tenant_id: UUID, *, limit: int = 50, before: int | None = None
+        self,
+        principal: Principal,
+        tenant_id: UUID,
+        *,
+        limit: int = 50,
+        before: int | None = None,
+        object_id: UUID | None = None,
     ) -> list[store.RevisionRecord]:
-        """List a tenant's revisions, newest first (``before`` is the number to continue after)."""
+        """List a tenant's revisions, newest first (``before`` is the number to continue after).
+
+        ``object_id`` keeps the revisions whose change set touched that object.
+        """
         _require_tenant(principal, tenant_id)
         async with tenant_session(self._db.app, [tenant_id]) as session:
-            return await store.list_revisions(session, tenant_id, limit=limit, before=before)
+            return await store.list_revisions(
+                session, tenant_id, limit=limit, before=before, object_id=object_id
+            )
 
     async def revision(
         self, principal: Principal, tenant_id: UUID, number: int

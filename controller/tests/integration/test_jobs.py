@@ -155,8 +155,10 @@ async def test_tenant_scoping(pg_url: str) -> None:
 async def test_retry_a_dead_job(pg_url: str) -> None:
     async with world(pg_url) as w:
         async with admin_session(w.db.admin) as s:
-            job_id = await queue.enqueue(s, "boom", {}, tenant_id=TENANT, max_attempts=1)
-        await Worker(w.db.admin, {"boom": boom}, worker_id="t").run_once()
+            job_id = await queue.enqueue(
+                s, "sync_cloudflare_ips", {}, tenant_id=TENANT, max_attempts=1
+            )
+        await Worker(w.db.admin, {"sync_cloudflare_ips": boom}, worker_id="t").run_once()
         svc = JobService(w.db)
         dead = await svc.get(principal(), TENANT, job_id)
         assert (dead.state, dead.attempts, dead.last_error) == ("dead", 1, "RuntimeError: nope")
@@ -191,7 +193,7 @@ async def test_cancel_only_queued_jobs_and_free_the_change_set(pg_url: str) -> N
 async def test_a_failed_attempt_is_retrying_not_finished(pg_url: str) -> None:
     async with world(pg_url) as w:
         async with admin_session(w.db.admin) as s:
-            job_id = await queue.enqueue(s, "boom", {}, tenant_id=TENANT)
-        await Worker(w.db.admin, {"boom": boom}, worker_id="t").run_once()
+            job_id = await queue.enqueue(s, "sync_cloudflare_ips", {}, tenant_id=TENANT)
+        await Worker(w.db.admin, {"sync_cloudflare_ips": boom}, worker_id="t").run_once()
         job = Job.from_row(await JobService(w.db).get(principal(), TENANT, job_id))
         assert (job.state, job.attempts, job.retrying, job.ok) == (JobState.QUEUED, 1, True, None)

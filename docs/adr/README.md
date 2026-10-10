@@ -40,4 +40,5 @@ Date: YYYY-MM-DD
 | [0030](0030-rbac-matrix-and-access-lifecycle.md) | Permission matrix, multi-group grants, role refresh, users and token scope | Accepted |
 | [0031](0031-access-refresh-users-and-codes.md) | How access refresh, users and error codes are implemented | Accepted |
 | [0032](0032-idp-admin-test-signin-break-glass.md) | Identity-provider administration, test sign-in, break-glass enrolment, system tokens | Accepted |
+| [0040](0040-api-completeness-for-the-ui.md) | API completeness for the UI: audit, IPAM, health, telemetry, events, documentation rules | Accepted |
 | [0018](0018-saml-login.md) | SAML 2.0 login (signxml, signed assertions, replay cache, SP metadata) | Accepted |

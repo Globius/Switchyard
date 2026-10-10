@@ -103,6 +103,8 @@ def problem(
         body.update(extra)
     if errors:
         body["errors"] = errors
+    if extra:
+        body |= extra
     return JSONResponse(body, status_code=status, media_type=PROBLEM, headers=headers)
 
 
@@ -164,7 +166,21 @@ def install_handlers(app: FastAPI) -> None:
     add(AlreadyExistsError, lambda e: problem(409, str(e)))
     add(ConflictError, lambda e: problem(409, str(e)))
     add(ConcurrentModificationError, lambda e: problem(409, str(e)))
-    add(StaleVersionError, lambda e: problem(412, str(e)))
+    add(
+        StaleVersionError,
+        lambda e: problem(
+            412,
+            str(e),
+            extra={
+                "conflict": {
+                    "object_type": e.object_type.value,
+                    "object_id": str(e.object_id),
+                    "expected_version": e.expected,
+                    "current_version": e.actual,
+                }
+            },
+        ),
+    )
     add(PreconditionFailedError, lambda e: problem(412, str(e)))
     add(
         OperationInvalidError,

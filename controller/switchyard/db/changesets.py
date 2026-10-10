@@ -285,9 +285,17 @@ async def get_revision(
 
 
 async def list_revisions(
-    session: AsyncSession, tenant_id: UUID, *, limit: int = 50, before: int | None = None
+    session: AsyncSession,
+    tenant_id: UUID,
+    *,
+    limit: int = 50,
+    before: int | None = None,
+    object_id: UUID | None = None,
 ) -> list[RevisionRecord]:
-    """Return a tenant's revisions, newest first; ``before`` keeps only numbers below it."""
+    """Return a tenant's revisions, newest first; ``before`` keeps only numbers below it.
+
+    With ``object_id`` only revisions whose change set had an operation on that object.
+    """
     query = (
         select(RevisionRow)
         .where(RevisionRow.tenant_id == tenant_id)
@@ -296,6 +304,12 @@ async def list_revisions(
     )
     if before is not None:
         query = query.where(RevisionRow.number < before)
+    if object_id is not None:
+        query = query.where(
+            RevisionRow.change_set_id.in_(
+                select(ChangeOpRow.change_set_id).where(ChangeOpRow.object_id == object_id)
+            )
+        )
     rows = (await session.execute(query)).scalars()
     return [_revision(r) for r in rows]
 

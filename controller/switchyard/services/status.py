@@ -9,7 +9,7 @@ Drift is reported, never corrected (CLAUDE.md): a manual hotfix must be noticed,
 import asyncio
 import dataclasses
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -25,12 +25,12 @@ from switchyard.db.models import TenantRow
 from switchyard.db.ops_models import EngineStatusRow, ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
-from switchyard.domain.models import Protocol
+from switchyard.domain.models import Protocol, VirtualService
 from switchyard.domain.snapshot import Snapshot
 from switchyard.pipeline.apply import bundle_id, file_hashes
 from switchyard.pipeline.bundles import BundleError, engine_files
 from switchyard.pipeline.engines import EngineDirectory, EngineRecord
-from switchyard.render.escape import RenderError
+from switchyard.render.escape import RenderError, ident
 from switchyard.render.haproxy import render_haproxy
 from switchyard.render.routing import EngineSlot
 from switchyard.services.context import Databases, Principal
@@ -125,9 +125,69 @@ class VirtualServiceStatus:
     name: str
     protocol: str
     state: str
+    health: str = "unknown"
+    members_up: int = 0
+    members_total: int = 0
 
 
-def virtual_service_states(snapshot: Snapshot) -> list[VirtualServiceStatus]:
+def is_up(status: str) -> bool:
+    """HAProxy reports `UP`, `UP 1/2`, `DOWN`, `DRAIN`, `MAINT`, `NOLB` and the like."""
+    return status.upper().startswith("UP")
+
+
+def virtual_service_health(
+    snapshot: Snapshot, service: VirtualService, statuses: Sequence["EngineStatus"]
+) -> tuple[str, int, int]:
+    """Work out ``(health, members_up, members_total)`` of one virtual service.
+
+    Rule (the API documents it too): look at the reported member rows of the service's pools
+    (default pool and route pools) on the reachable engines of its SE group.
+
+    - ``disabled``: the service is disabled.
+    - ``unknown``: no engine of the group is reachable, or no engine has reported the pools yet.
+    - ``healthy``: every reported row is ``UP`` and every reachable engine of the group reported.
+    - ``down``: no row is ``UP``, or a pool without members.
+    - ``degraded``: some rows are ``UP``, or some reachable engine of the group did not report.
+
+    Draining and disabled members are not ``UP``, so draining the last member makes a service
+    ``down`` on purpose.
+
+    Example:
+        >>> virtual_service_health(snapshot, service, [])  # doctest: +SKIP
+        ('unknown', 0, 0)
+    """
+    if not service.enabled:
+        return "disabled", 0, 0
+    pool_ids = [r.pool_id for r in service.routes if r.pool_id]
+    if service.default_pool_id:
+        pool_ids.append(service.default_pool_id)
+    pools = [p for p in snapshot.pools if p.id in set(pool_ids)]
+    if not pools:
+        return "healthy", 0, 0
+    if any(not p.members for p in pools):
+        return "down", 0, 0
+    backends = {"pool_" + ident(p.name) for p in pools}
+    engines = [s for s in statuses if s.se_group_id == service.se_group_id and s.reachable]
+    if not engines:
+        return "unknown", 0, 0
+    rows = [[m for m in e.members if m["backend"] in backends] for e in engines]
+    reported = [r for r in rows if r]
+    flat = [m for r in reported for m in r]
+    if not flat:
+        return "unknown", 0, 0
+    up = sum(1 for m in flat if is_up(m["status"]))
+    if up == 0:
+        health = "down"
+    elif up == len(flat) and len(reported) == len(engines):
+        health = "healthy"
+    else:
+        health = "degraded"
+    return health, up, len(flat)
+
+
+def virtual_service_states(
+    snapshot: Snapshot, statuses: Sequence["EngineStatus"] = ()
+) -> list[VirtualServiceStatus]:
     """Derive the state of every virtual service from the desired state.
 
     UDP services are ``serving`` since M6 (IPVS renders them). ``not_served`` stays in the contract
@@ -140,7 +200,8 @@ def virtual_service_states(snapshot: Snapshot) -> list[VirtualServiceStatus]:
     out = []
     for s in snapshot.virtual_services:
         state = "serving" if s.enabled else "disabled"
-        out.append(VirtualServiceStatus(s.id, s.name, str(s.protocol), state))
+        health, up, total = virtual_service_health(snapshot, s, statuses)
+        out.append(VirtualServiceStatus(s.id, s.name, str(s.protocol), state, health, up, total))
     return sorted(out, key=lambda v: v.name)
 
 
@@ -357,7 +418,8 @@ class StatusService:
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
         async with tenant_session(self._db.app, [tenant_id]) as session:
-            return virtual_service_states(await load_snapshot(session))
+            snapshot = await load_snapshot(session)
+        return virtual_service_states(snapshot, await self._stored(tenant_id))
 
     async def list_status(self, principal: Principal, tenant_id: UUID) -> list[EngineStatus]:
         """Return the stored status of a tenant's engines."""

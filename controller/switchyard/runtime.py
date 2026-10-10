@@ -28,6 +28,7 @@ from switchyard.adapters.pki import OpenBaoPki
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
 from switchyard.adapters.secrets import EnvSecrets, OpenBaoSecrets, SecretsReader
+from switchyard.adapters.telemetry import HttpTelemetry, Telemetry
 from switchyard.config import database_url
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
 from switchyard.jobs.handlers import POLL_STATUS_JOB, build_handlers
@@ -148,6 +149,17 @@ def certificates(db: Databases, secrets: SecretsReader | None = None) -> Certifi
         return None
     dns = cloudflare()
     return CertificateService(db, store, ChangeSetService(db), cloudflare=dns, acme=acme(dns))
+
+
+def telemetry() -> Telemetry | None:
+    """Prometheus (and Loki) for metrics and logs, if ``SWITCHYARD_PROMETHEUS_URL`` is set.
+
+    ``SWITCHYARD_LOKI_URL`` adds access logs and the 95th percentile.
+    """
+    prometheus = os.environ.get("SWITCHYARD_PROMETHEUS_URL")
+    if not prometheus:
+        return None
+    return HttpTelemetry(prometheus, os.environ.get("SWITCHYARD_LOKI_URL"))
 
 
 def git_mirror() -> GitMirror | None:

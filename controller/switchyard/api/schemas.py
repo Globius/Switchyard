@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 from switchyard.domain import models as dm
 from switchyard.domain.changes import Action, DraftStatus, ObjectType
 from switchyard.domain.snapshot import Snapshot
+from switchyard.domain.telemetry import AccessLogEntry, MetricSummary, ServiceMetrics
 from switchyard.domain.workflow import ChangeSetState, EngineState, Role
 
 
@@ -70,6 +71,20 @@ class ProblemDetail(ApiModel):
     message: str
 
 
+class StaleConflict(ApiModel):
+    """Extension member of a `412` caused by an operation's `expected_version`.
+
+    To resolve: `GET` the object (its current state is "theirs", the `ETag` is
+    `current_version`), compare with what the client had read (the base) and the operation's
+    `body` ("yours"), then resend the operation with `expected_version: current_version`.
+    """
+
+    object_type: ObjectType
+    object_id: UUID
+    expected_version: int
+    current_version: int
+
+
 class ProblemOut(ApiModel):
     """An RFC 9457 ``application/problem+json`` error body."""
 
@@ -85,6 +100,9 @@ class ProblemOut(ApiModel):
         default=None, description="With `code: role_required`: the weakest role that may do this."
     )
     errors: list[ProblemDetail] | None = None
+    conflict: StaleConflict | None = Field(
+        default=None, description="Present on a stale-version `412` from a change-set operation."
+    )
 
 
 PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -266,12 +284,30 @@ class TokenCreated(ApiModel):
 
 
 class EngineRead(ApiModel):
-    """A service engine."""
+    """A service engine (SE VM) with where it runs and whether its agent has enrolled.
+
+    Live health (reachable, drift, BGP/VRRP) is in `GET /status/engines`, not here.
+    """
 
     id: UUID
     name: str
     url: str = Field(description="Data Plane API URL.")
     state: EngineState
+    se_group_id: UUID
+    mgmt_ip: str | None = Field(default=None, description="Management address (BGP router id).")
+    agent_url: str | None = Field(default=None, description="`host:port` of `sy-agent`, if any.")
+    pve_node: str | None = Field(
+        default=None, description="Proxmox node of the VM; null for a hand-built engine."
+    )
+    vmid: int | None = Field(
+        default=None, description="Proxmox VM id; null for a hand-built engine."
+    )
+    agent_enrolled: bool = Field(
+        description="True once `sy-agent enroll` has traded a token for a client certificate."
+    )
+    agent_cert_serial: str | None = Field(
+        default=None, description="Serial of the agent's client certificate."
+    )
 
 
 class EnrollmentToken(ApiModel):
@@ -867,12 +903,42 @@ class DiffGroup(ApiModel):
     files: list[DiffFile]
 
 
+class ImpactService(ApiModel):
+    """A virtual service a change reaches."""
+
+    id: UUID
+    name: str
+    vip: str
+    se_group_id: UUID
+
+
+class ImpactGroup(ApiModel):
+    """An SE group whose engines would receive new configuration."""
+
+    id: UUID
+    name: str
+
+
+class DiffImpact(ApiModel):
+    """What a change set reaches, for the review's Impact tab.
+
+    A service is listed when it is created, changed or deleted, or uses a changed pool, health
+    monitor, certificate, policy set, SE group, network, VIP pool or routing profile.
+    """
+
+    services: list[ImpactService]
+    vips: list[str] = Field(description="VIP addresses of those services, ascending.")
+    se_groups: list[ImpactGroup]
+    hostnames: list[str] = Field(description="Route hosts of those services, sorted.")
+
+
 class ChangeSetDiff(ApiModel):
     """What applying a change set would change."""
 
     objects: list[DiffObject]
     problems: list[DiffProblem]
     warnings: list[DiffWarning]
+    impact: DiffImpact
     se_groups: list[DiffGroup]
 
 
@@ -974,13 +1040,35 @@ class VirtualServiceState(StrEnum):
     NOT_SERVED = "not_served"
 
 
+class VirtualServiceHealth(StrEnum):
+    """Health of a virtual service worked out from its pool members' check results."""
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    DOWN = "down"
+    UNKNOWN = "unknown"
+    DISABLED = "disabled"
+
+
 class VirtualServiceStatusRead(ApiModel):
-    """State of one virtual service; `not_served` is reserved for one no engine can render."""
+    """State and health of one virtual service.
+
+    `state` says whether the data plane renders it (`not_served` is reserved for one no engine
+    can render). `health` says whether it can serve: look at the reported member rows of its
+    pools (default and route pools) on the reachable engines of its SE group. `disabled`: the
+    service is disabled. `unknown`: no engine of the group is reachable or none has reported
+    yet. `healthy`: every row is `UP` and every reachable engine reported. `down`: no row is
+    `UP`, or a pool has no members. `degraded`: some rows are `UP`, or a reachable engine did not
+    report. Draining members are not `UP`.
+    """
 
     id: UUID
     name: str
     protocol: str
     state: VirtualServiceState
+    health: VirtualServiceHealth
+    members_up: int = Field(description="Reported member rows that are `UP`, across engines.")
+    members_total: int = Field(description="Reported member rows of the service's pools.")
 
 
 class DriftKind(StrEnum):
@@ -1016,6 +1104,81 @@ class EngineStatusRead(ApiModel):
     observed_at: datetime
 
 
+# -- IPAM ------------------------------------------------------------------------------------------
+
+
+class VipAllocation(ApiModel):
+    """One address of a VIP pool that a virtual service holds."""
+
+    address: str
+    virtual_service_id: UUID
+    virtual_service_name: str
+    enabled: bool
+    draft_status: DraftStatus = Field(
+        description="`unchanged` for live reads; with `?change_set=` the draft's treatment."
+    )
+
+
+class VipPoolUsage(ApiModel):
+    """How much of a VIP pool is in use. Addresses are held by the services that carry them."""
+
+    pool_id: UUID
+    total: int = Field(description="Usable addresses in the pool's ranges.")
+    used: int
+    free: int
+    allocations: list[VipAllocation]
+    next_free: str | None = Field(
+        description="The address a new service would get (lowest free), or null when exhausted."
+    )
+
+
+class NextFree(ApiModel):
+    """A suggested free address; nothing is reserved."""
+
+    address: str
+
+
+# -- telemetry -------------------------------------------------------------------------------------
+
+
+class MetricsRead(ApiModel):
+    """Metrics of one virtual service, or why there are none."""
+
+    available: bool = Field(
+        description="False when no metrics backend is configured or it cannot be reached."
+    )
+    reason: str | None = Field(default=None, description="Why `available` is false.")
+    metrics: ServiceMetrics | None = None
+
+
+class MetricsOverviewItem(ApiModel):
+    """Headline numbers of one virtual service."""
+
+    virtual_service_id: UUID
+    name: str
+    summary: MetricSummary
+
+
+class MetricsOverview(ApiModel):
+    """Headline numbers of every virtual service, for list columns."""
+
+    available: bool
+    reason: str | None = None
+    window_s: int
+    items: list[MetricsOverviewItem]
+
+
+class AccessLogs(ApiModel):
+    """A page of access log lines, newest first."""
+
+    available: bool
+    reason: str | None = None
+    entries: list[AccessLogEntry]
+    next_cursor: str | None = Field(
+        default=None, description="Pass back as `cursor` for older lines; null at the end."
+    )
+
+
 # -- jobs and audit --------------------------------------------------------------------------------
 
 
@@ -1030,10 +1193,21 @@ class JobRead(ApiModel):
     result: dict[str, Any] | None = Field(default=None, description="Shape depends on `kind`.")
 
 
+class AuditActionRead(ApiModel):
+    """One kind of audit event."""
+
+    action: str = Field(description="The dotted name found in `AuditEventRead.action`.")
+    category: str = Field(description="The part of `action` before the first dot.")
+    description: str
+
+
 class AuditEventRead(ApiModel):
     """One audit-log entry."""
 
     at: datetime
+    tenant_id: UUID | None = Field(
+        default=None, description="The tenant concerned; null for system-level events."
+    )
     actor: str
     action: str
     object: str | None = None
