@@ -1,0 +1,59 @@
+! Managed by Switchyard. Do not edit: changes are reported as drift.
+! SE group: {{ group }}, engine: {{ engine }}
+frr defaults traditional
+hostname {{ engine }}
+log syslog informational
+!
+{% for net in v4_vips %}
+ip prefix-list SY-VIPS seq {{ loop.index * 5 }} permit {{ net }}
+{% endfor %}
+{% for net in v6_vips %}
+ipv6 prefix-list SY-VIPS6 seq {{ loop.index * 5 }} permit {{ net }}
+{% endfor %}
+route-map SY-OUT permit 10
+ match ip address prefix-list SY-VIPS
+route-map SY-OUT permit 20
+ match ipv6 address prefix-list SY-VIPS6
+route-map SY-IN deny 10
+!
+router bgp {{ asn }}
+ bgp router-id {{ router_id }}
+ no bgp default ipv4-unicast
+ bgp bestpath as-path multipath-relax
+{% for peer in peers %}
+ neighbor {{ peer.ip }} remote-as {{ peer.asn }}
+{% if peer.password %}
+ neighbor {{ peer.ip }} password {{ peer.password }}
+{% endif %}
+{% if bfd %}
+ neighbor {{ peer.ip }} bfd
+{% endif %}
+{% endfor %}
+ !
+ address-family ipv4 unicast
+{% for net in v4_vips %}
+  network {{ net }}
+{% endfor %}
+{% for peer in v4_peers %}
+  neighbor {{ peer }} activate
+  neighbor {{ peer }} route-map SY-OUT out
+  neighbor {{ peer }} route-map SY-IN in
+{% endfor %}
+  maximum-paths {{ max_paths }}
+ exit-address-family
+ !
+ address-family ipv6 unicast
+{% for net in v6_vips %}
+  network {{ net }}
+{% endfor %}
+{% for peer in v6_peers %}
+  neighbor {{ peer }} activate
+  neighbor {{ peer }} route-map SY-OUT out
+  neighbor {{ peer }} route-map SY-IN in
+{% endfor %}
+  maximum-paths {{ max_paths }}
+ exit-address-family
+!
+{% for route in routes %}
+{{ route }}
+{% endfor %}

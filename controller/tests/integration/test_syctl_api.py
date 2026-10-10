@@ -1,0 +1,149 @@
+"""``syctl api ...`` against a real server (uvicorn) over HTTP, run in a worker thread."""
+
+import asyncio
+import json
+import socket
+import uuid
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+import pytest
+import pytest_asyncio
+import uvicorn
+from typer.testing import CliRunner
+
+from switchyard.api.app import build_services, create_app
+from switchyard.cli import app as cli
+from switchyard.domain.workflow import Role
+from switchyard.jobs.handlers import build_handlers
+from switchyard.jobs.worker import Worker
+from switchyard.pipeline.engines import StaticEngineDirectory
+from tests.pipeline_env import GROUP, TENANT, World, engine_record, principal, world
+
+pytestmark = pytest.mark.usefixtures("owner_engine")
+
+
+class Server:
+    def __init__(self, w: World, url: str, token: str) -> None:
+        self.w, self.url, self.token = w, url, token
+        self.runner = CliRunner()
+
+    async def syctl(self, *args: str) -> tuple[int, str]:
+        """Run ``syctl api ...`` in a thread (it brings its own event loop) and return the output."""
+        result = await asyncio.to_thread(self.runner.invoke, cli, ["api", *args])
+        return result.exit_code, result.output
+
+    async def drain_jobs(self) -> None:
+        worker = Worker(
+            self.w.db.admin, build_handlers(self.w.db, self.w.pipeline, None), worker_id="t"
+        )
+        while await worker.run_once():
+            await asyncio.sleep(0)
+
+
+@pytest_asyncio.fixture
+async def server(
+    pg_url: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> AsyncIterator[Server]:
+    async with world(pg_url) as w:
+        directory = StaticEngineDirectory(
+            {GROUP: [(engine_record(n), e) for n, e in w.engines.items()]}
+        )
+        services = build_services(w.db, directory)
+        token, _ = await services.tokens.create(
+            principal(Role.SYSTEM_ADMIN, "root"), None, "cli", Role.SYSTEM_ADMIN
+        )
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+        config = uvicorn.Config(
+            create_app(services), host="127.0.0.1", port=port, log_level="warning"
+        )
+        http = uvicorn.Server(config)
+        task = asyncio.create_task(http.serve())
+        while not http.started:
+            await asyncio.sleep(0.05)
+        monkeypatch.setenv("SYCTL_CONFIG", str(tmp_path / "syctl.json"))
+        monkeypatch.delenv("SYCTL_URL", raising=False)
+        monkeypatch.delenv("SYCTL_TOKEN", raising=False)
+        try:
+            yield Server(w, f"http://127.0.0.1:{port}", token)
+        finally:
+            http.should_exit = True
+            await task
+
+
+async def test_login_whoami_list_apply_get_delete_status(server: Server, tmp_path: Path) -> None:
+    code, out = await server.syctl("whoami")
+    assert code == 1 and "not logged in" in out
+
+    code, out = await server.syctl("login", "--url", server.url, "--token", "sy_wrong")
+    assert code == 1 and "401" in out
+
+    code, out = await server.syctl("login", "--url", server.url, "--token", server.token)
+    assert code == 0 and "logged in as token:cli" in out
+    saved = json.loads((tmp_path / "syctl.json").read_text())
+    assert saved["token"] == server.token
+
+    code, out = await server.syctl("whoami")
+    assert code == 0 and "system administrator" in out and "acme: system-admin" in out
+
+    code, out = await server.syctl("list", "pools", "-t", "acme")
+    assert code == 0 and out.startswith("web\t")
+
+    body = tmp_path / "pool.json"
+    body.write_text(
+        json.dumps(
+            {
+                "name": "api",
+                "members": [{"id": str(uuid.uuid4()), "address": "10.20.0.12", "port": 8080}],
+            }
+        )
+    )
+    applying = asyncio.create_task(server.syctl("apply", "pools", "-f", str(body), "-t", "acme"))
+    for _ in range(100):  # play the worker while the CLI waits for the job
+        await server.drain_jobs()
+        if applying.done():
+            break
+        await asyncio.sleep(0.1)
+    code, out = await applying
+    assert code == 0, out
+    assert "change set" in out
+
+    code, out = await server.syctl("get", "pools", "api", "-t", "acme")
+    assert code == 0 and json.loads(out)["members"][0]["address"] == "10.20.0.12"
+    code, out = await server.syctl("get", "pools", "nope", "-t", "acme")
+    assert code == 1 and "no pools named nope" in out
+
+    pool_id = json.loads((await server.syctl("get", "pools", "api", "-t", "acme"))[1])["id"]
+    deleting = asyncio.create_task(server.syctl("delete", "pools", pool_id, "-t", "acme"))
+    for _ in range(100):
+        await server.drain_jobs()
+        if deleting.done():
+            break
+        await asyncio.sleep(0.1)
+    code, out = await deleting
+    assert code == 0 and "deleted" in out
+    assert "api\t" not in (await server.syctl("list", "pools", "-t", "acme"))[1]
+
+
+async def test_errors_show_the_field_problems(server: Server, tmp_path: Path) -> None:
+    await server.syctl("login", "--url", server.url, "--token", server.token)
+    body = tmp_path / "bad.json"
+    body.write_text(json.dumps({"name": "Bad Name!", "members": []}))
+    code, out = await server.syctl("apply", "pools", "-f", str(body), "-t", "acme", "--no-wait")
+    assert code == 1 and "422" in out
+    code, out = await server.syctl("list", "pools", "-t", "nope")
+    assert code == 1 and "404" in out
+
+
+async def test_status_and_job_commands(server: Server) -> None:
+    from switchyard.services.status import StatusService
+
+    await StatusService(server.w.db, server.w.pipeline._directory).poll_all()
+    await server.syctl("login", "--url", server.url, "--token", server.token)
+    code, out = await server.syctl("status", "-t", "acme")
+    assert code == 0 and "UNREACHABLE" not in out
+    code, out = await server.syctl("job", "00000000-0000-0000-0000-000000000000")
+    assert code == 1 and "404" in out
+    assert TENANT

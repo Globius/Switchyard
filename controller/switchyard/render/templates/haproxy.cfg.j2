@@ -1,0 +1,37 @@
+# Managed by Switchyard. Do not edit: changes are reported as drift.
+# SE group: {{ group }}
+# switchyard-render: sha256:{{ fingerprint }}
+
+global
+    log /dev/log local0
+    maxconn {{ maxconn }}
+    stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
+    ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+    ssl-default-server-options ssl-min-ver TLSv1.2
+
+defaults
+    log global
+    option dontlognull
+    option redispatch
+    retries 3
+    timeout connect 5s
+    timeout client 50s
+    timeout server 50s
+    timeout http-request 10s
+    timeout http-keep-alive 10s
+    timeout tunnel 1h
+
+# Local health endpoint for keepalived's check script and the agent's route-health watchdog.
+frontend sy_local_health
+    mode http
+    bind 127.0.0.1:8404
+    monitor-uri /healthz
+    no log
+{% for f in frontends %}
+
+{% include "frontend.j2" %}
+{% endfor %}
+{% for b in backends %}
+
+{% include "backend.j2" %}
+{% endfor %}

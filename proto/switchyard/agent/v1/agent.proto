@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package switchyard.agent.v1;
+
+option go_package = "switchyard/agent/gen/switchyard/agent/v1;agentv1";
+
+// The SE agent. It only ever writes under /etc/switchyard/ and reloads an allowlisted set of units.
+service Agent {
+  // Writes a signed bundle atomically and reloads only the units whose files changed.
+  rpc ApplyBundle(ApplyBundleRequest) returns (ApplyBundleResponse);
+  // Reports file hashes, BGP sessions, VRRP state and local HAProxy health.
+  rpc GetStatus(GetStatusRequest) returns (Status);
+  // Streams a status snapshot every time something changes (and at least every 30 seconds).
+  rpc Watch(WatchRequest) returns (stream Status);
+}
+
+message File {
+  // Relative to /etc/switchyard/, for example "frr/frr.conf".
+  string path = 1;
+  bytes content = 2;
+}
+
+// The signed payload. Serialised with deterministic marshalling and carried as bytes so the
+// signature covers exactly what the agent parses.
+message Bundle {
+  string id = 1;
+  repeated File files = 2;
+}
+
+message ApplyBundleRequest {
+  bytes bundle = 1;     // a serialised Bundle
+  bytes signature = 2;  // Ed25519 signature of `bundle`
+}
+
+message ApplyBundleResponse {
+  bool ok = 1;
+  string error = 2;
+  repeated string changed_files = 3;
+  repeated string reloaded_units = 4;
+  bool restored_previous = 5;  // a reload failed and the previous files were put back
+}
+
+message GetStatusRequest {}
+message WatchRequest {}
+
+message BgpSession {
+  string peer = 1;
+  string state = 2;  // Established, Active, Idle, ...
+  uint32 remote_asn = 3;
+}
+
+message VrrpInstance {
+  string name = 1;
+  string state = 2;  // MASTER, BACKUP, FAULT
+}
+
+message Status {
+  string agent_version = 1;
+  string bundle_id = 2;                 // id of the last applied bundle
+  map<string, string> file_hashes = 3;  // sha256 of each managed file
+  repeated BgpSession bgp = 4;
+  repeated VrrpInstance vrrp = 5;
+  bool haproxy_healthy = 6;             // local health check result
+  bool routes_withdrawn = 7;            // the watchdog has withdrawn BGP prefixes
+  int64 observed_at_unix = 8;
+}

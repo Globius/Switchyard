@@ -1,0 +1,1191 @@
+"""The FastAPI application: ``/api/v1``.
+
+Authentication is a bearer API token (see :mod:`switchyard.services.tokens`); OIDC/SAML login will
+issue short-lived sessions in front of the same principal model. Errors are RFC 9457 problem+json.
+Writes to desired state always go through a change set: ``?change_set=<id>`` adds an operation to a
+draft, ``?apply=true`` opens an implicit single-operation change set and applies it.
+"""
+
+import hmac
+import uuid
+from collections.abc import AsyncIterator
+from contextvars import ContextVar
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field, create_model
+
+from switchyard.adapters.pki import PkiError
+from switchyard.adapters.secrets import SecretsReader
+from switchyard.api.problems import ApiError, install_handlers
+from switchyard.db.tenancy import admin_session, tenant_session
+from switchyard.domain import models as dm
+from switchyard.domain.changes import (
+    COLLECTION,
+    Action,
+    ChangeOp,
+    DraftStatus,
+    ObjectType,
+)
+from switchyard.domain.models import CertSource
+from switchyard.domain.workflow import ChangeSetState, EngineState, Role
+from switchyard.ids import uuid7
+from switchyard.pipeline.engines import EngineDirectory
+from switchyard.services.certificates import CertificateJobs, CertificateService
+from switchyard.services.changesets import ChangeSetDetail, ChangeSetService
+from switchyard.services.context import Databases, Principal
+from switchyard.services.engines import EngineService
+from switchyard.services.enrollment import EnrollmentError, EnrollmentService
+from switchyard.services.infra import DeployRequest, InfraJobs
+from switchyard.services.members import MemberService
+from switchyard.services.sessions import LoginError, SessionInfo, SessionService
+from switchyard.services.status import EngineStatus, StatusService
+from switchyard.services.tenants import TenantRecord, TenantService
+from switchyard.services.tokens import TokenService
+
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
+
+
+@dataclass
+class ApiServices:
+    """Everything the routes call."""
+
+    db: Databases
+    tenants: TenantService
+    tokens: TokenService
+    change_sets: ChangeSetService
+    engines: EngineService
+    members: MemberService
+    status: StatusService
+    infra: InfraJobs
+    cert_jobs: CertificateJobs
+    certs: CertificateService | None = None
+    enrollment: EnrollmentService | None = None
+    sessions: SessionService | None = None
+
+
+def build_services(
+    db: Databases,
+    directory: EngineDirectory,
+    secrets: SecretsReader | None = None,
+    certs: CertificateService | None = None,
+    enrollment: EnrollmentService | None = None,
+    sessions: SessionService | None = None,
+) -> ApiServices:
+    """Wire the services over one set of database handles."""
+    return ApiServices(
+        db=db,
+        tenants=TenantService(db),
+        tokens=TokenService(db),
+        change_sets=ChangeSetService(db),
+        engines=EngineService(db),
+        members=MemberService(db, directory),
+        status=StatusService(db, directory, secrets),
+        infra=InfraJobs(db),
+        cert_jobs=CertificateJobs(db),
+        certs=certs,
+        enrollment=enrollment,
+        sessions=sessions,
+    )
+
+
+# -- response models ------------------------------------------------------------------------------
+
+
+class Page(BaseModel):
+    """A page of results."""
+
+    items: list[dict[str, Any]]
+    next_cursor: str | None = None
+
+
+class Accepted(BaseModel):
+    """Returned when a write was queued or recorded in a change set."""
+
+    change_set_id: UUID
+    object_id: UUID | None = None
+    job_id: UUID | None = None
+    op_index: int | None = None
+
+
+class BreakGlassIn(BaseModel):
+    """Body of ``POST /auth/break-glass``."""
+
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=200)
+    totp: str = Field(min_length=6, max_length=8)
+
+
+class EnrollIn(BaseModel):
+    """Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential)."""
+
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(max_length=200)
+    csr: str = Field(max_length=16384, description="PEM certificate request made by the agent.")
+
+
+class CertImportIn(BaseModel):
+    """Body of ``POST /certificates/import``."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    pem: str = Field(max_length=65536, description="Certificate chain followed by the private key.")
+
+
+class CertIssueIn(BaseModel):
+    """Body of ``POST /certificates/issue``."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    source: Literal["acme", "cloudflare_origin"]
+    sans: list[str] = Field(min_length=1, max_length=50)
+
+
+class DeployIn(BaseModel):
+    """Body of ``POST /se-groups/{id}/deploy``."""
+
+    model_config = ConfigDict(extra="forbid")
+    count: int = Field(ge=1, le=16, description="Total engines the group should have afterwards.")
+    nodes: list[str] = Field(min_length=1, description="Proxmox nodes to spread new VMs over.")
+    template_vmid: int = Field(ge=100)
+    mgmt_pool_id: UUID
+    pool: str | None = Field(default=None, max_length=64)
+    credentials_ref: str | None = None
+    ssh_public_keys: str | None = Field(default=None, max_length=8192)
+
+
+class OpIn(BaseModel):
+    """One operation in a change set."""
+
+    model_config = ConfigDict(extra="forbid")
+    object_type: ObjectType
+    object_id: UUID
+    action: Action
+    body: dict[str, Any] | None = None
+    expected_version: int | None = None
+
+
+class OpsIn(BaseModel):
+    """Operations to append to a change set."""
+
+    ops: list[OpIn] = Field(min_length=1)
+
+
+class OpenIn(BaseModel):
+    """Open a draft."""
+
+    summary: str = Field(default="", max_length=500)
+
+
+class ReasonIn(BaseModel):
+    """A free-text reason or comment."""
+
+    comment: str = Field(min_length=1, max_length=1000)
+
+
+class ApplyIn(BaseModel):
+    """Options for apply."""
+
+    break_glass_reason: str | None = Field(default=None, max_length=1000)
+
+
+class MemberStateIn(BaseModel):
+    """New runtime state for a pool member."""
+
+    state: dm.AdminState
+
+
+class TenantIn(BaseModel):
+    """Create a tenant."""
+
+    name: str
+    oidc_group: str | None = None
+    quotas: dict[str, int] = Field(default_factory=dict)
+    require_approval: bool = False
+
+
+class TokenIn(BaseModel):
+    """Create an API token."""
+
+    name: str
+    role: Role
+    ttl_days: int | None = Field(default=90, ge=1, le=3650)
+
+
+class EngineIn(BaseModel):
+    """Register a service engine."""
+
+    name: str
+    dataplane_url: str
+    credentials_ref: str | None = None
+    mgmt_ip: str | None = None
+    agent_url: str | None = None
+
+
+# -- dependencies ---------------------------------------------------------------------------------
+
+
+def _services(request: Request) -> ApiServices:
+    services: ApiServices = request.app.state.services
+    return services
+
+
+Services = Annotated[ApiServices, Depends(_services)]
+
+
+SESSION_COOKIE = "sy_session"
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+async def current_identity(
+    request: Request, services: Services, authorization: Annotated[str | None, Header()] = None
+) -> Principal:
+    """Authenticate the request: a bearer API token, or the session cookie plus a CSRF header.
+
+    Bearer tokens are for machines and are not subject to CSRF. A cookie session must send
+    ``X-CSRF-Token`` (the value from ``GET /me``) on every request that changes something.
+    """
+    headers = {"WWW-Authenticate": "Bearer"}
+    if authorization and authorization.lower().startswith("bearer "):
+        principal = await services.tokens.authenticate(authorization[7:].strip())
+        if principal is None:
+            raise ApiError(401, "invalid, expired or revoked token", headers=headers)
+        return principal
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if cookie and services.sessions is not None:
+        info = await services.sessions.authenticate(cookie)
+        if info is None:
+            raise ApiError(401, "your session has expired; log in again", headers=headers)
+        if request.method not in SAFE_METHODS and not hmac.compare_digest(
+            request.headers.get("x-csrf-token", ""), info.csrf_token
+        ):
+            raise ApiError(403, "missing or wrong X-CSRF-Token header")
+        request.state.session = info
+        return info.principal()
+    raise ApiError(
+        401, "send an API token as 'Authorization: Bearer <token>' or log in", headers=headers
+    )
+
+
+FullWho = Annotated[Principal, Depends(current_identity)]
+
+
+async def current_principal(request: Request, who: FullWho, services: Services) -> Principal:
+    """The authenticated principal, narrowed to the tenant in the path (``{t}``) if there is one.
+
+    A person can hold different roles in different tenants. Services check ``principal.role``, so
+    inside a tenant route it must be the role held *in that tenant*.
+    """
+    t = request.path_params.get("t")
+    if t is None or not who.tenant_roles:
+        return who
+    record = await services.tenants.resolve(who, t)
+    return who.for_tenant(record.id)
+
+
+Who = Annotated[Principal, Depends(current_principal)]
+
+
+async def current_tenant(t: str, who: Who, services: Services) -> TenantRecord:
+    """Resolve the ``{t}`` path segment (name or id) and check access."""
+    return await services.tenants.resolve(who, t)
+
+
+Tenant = Annotated[TenantRecord, Depends(current_tenant)]
+
+
+def _rid() -> str | None:
+    return request_id_var.get()
+
+
+def _etag(version: int) -> str:
+    return f'"{version}"'
+
+
+def _if_match(value: str | None) -> int:
+    if value is None:
+        raise ApiError(428, "send If-Match with the object's ETag")
+    try:
+        return int(value.strip().strip('"'))
+    except ValueError:
+        raise ApiError(400, "If-Match must be an ETag from this API") from None
+
+
+# -- the generic object routes --------------------------------------------------------------------
+
+COLLECTIONS: dict[str, ObjectType] = {
+    "networks": ObjectType.NETWORK,
+    "vip-pools": ObjectType.VIP_POOL,
+    "se-groups": ObjectType.SE_GROUP,
+    "virtual-services": ObjectType.VIRTUAL_SERVICE,
+    "pools": ObjectType.POOL,
+    "health-monitors": ObjectType.HEALTH_MONITOR,
+    "certificates": ObjectType.CERTIFICATE,
+    "policy-sets": ObjectType.POLICY_SET,
+    "routing-profiles": ObjectType.ROUTING_PROFILE,
+}
+_MODELS: dict[ObjectType, type[BaseModel] | None] = {
+    ObjectType.NETWORK: dm.Network,
+    ObjectType.VIP_POOL: dm.VipPool,
+    ObjectType.SE_GROUP: dm.SeGroup,
+    ObjectType.VIRTUAL_SERVICE: dm.VirtualService,
+    ObjectType.POOL: dm.Pool,
+    ObjectType.HEALTH_MONITOR: dm.HealthMonitor,
+    ObjectType.CERTIFICATE: dm.Certificate,
+    ObjectType.POLICY_SET: None,
+    ObjectType.ROUTING_PROFILE: None,
+}
+_RESERVED = {"id", "tenant_id", "version"}
+
+
+def _body_models(name: str, model: type[BaseModel]) -> tuple[type[BaseModel], type[BaseModel]]:
+    """Create/patch request models: the domain fields without id, tenant and version."""
+    create: dict[str, Any] = {}
+    patch: dict[str, Any] = {}
+    for key, field in model.model_fields.items():
+        if key in _RESERVED:
+            continue
+        create[key] = (field.annotation, field)
+        patch[key] = (field.annotation | None, None)  # type: ignore[operator]
+    config = ConfigDict(extra="forbid")
+    return (
+        create_model(f"{name}Create", __config__=config, **create),
+        create_model(f"{name}Patch", __config__=config, **patch),
+    )
+
+
+def _object_json(obj: Any, status: DraftStatus, changed: tuple[str, ...]) -> dict[str, Any]:
+    data: dict[str, Any] = obj.model_dump(mode="json")
+    data["draft_status"] = status.value
+    data["changed_fields"] = list(changed)
+    return data
+
+
+async def _view(
+    services: ApiServices,
+    who: Principal,
+    tenant: TenantRecord,
+    object_type: ObjectType,
+    change_set: UUID | None,
+) -> list[dict[str, Any]]:
+    from switchyard.db.repository import load_snapshot
+
+    attr = COLLECTION[object_type]
+    if change_set is None:
+        async with tenant_session(services.db.app, [tenant.id]) as session:
+            base = await load_snapshot(session)
+        return [_object_json(o, DraftStatus.UNCHANGED, ()) for o in getattr(base, attr)]
+    base, draft = await services.change_sets.draft_view(who, tenant.id, change_set)
+    by_id = {(o.object_type, o.object_id): o for o in draft.objects}
+    out = []
+    for obj in getattr(draft.snapshot, attr):
+        info = by_id.get((object_type, obj.id))
+        out.append(
+            _object_json(
+                obj,
+                info.status if info else DraftStatus.UNCHANGED,
+                info.changed_fields if info else (),
+            )
+        )
+    for info in draft.objects:
+        if info.object_type is object_type and info.status is DraftStatus.DELETED:
+            old = next(o for o in getattr(base, attr) if o.id == info.object_id)
+            out.append(_object_json(old, DraftStatus.DELETED, ()))
+    return out
+
+
+def _page(items: list[dict[str, Any]], cursor: str | None, limit: int) -> Page:
+    items = sorted(items, key=lambda o: (o["name"], o["id"]))
+    if cursor:
+        items = [o for o in items if (o["name"], o["id"]) > tuple(cursor.split("|", 1))]
+    window = items[:limit]
+    nxt = f"{window[-1]['name']}|{window[-1]['id']}" if len(items) > limit else None
+    return Page(items=window, next_cursor=nxt)
+
+
+async def _write(
+    services: ApiServices,
+    who: Principal,
+    tenant: TenantRecord,
+    op: ChangeOp,
+    change_set: UUID | None,
+    apply: bool,
+    summary: str,
+) -> Accepted:
+    if change_set is None and not apply:
+        raise ApiError(400, "pass ?change_set=<id> to add to a draft, or ?apply=true to apply now")
+    if change_set is not None:
+        detail = await services.change_sets.add_ops(
+            who, tenant.id, change_set, [op], request_id=_rid()
+        )
+        return Accepted(
+            change_set_id=change_set, object_id=op.object_id, op_index=len(detail.ops) - 1
+        )
+    opened = await services.change_sets.open(who, tenant.id, summary, request_id=_rid())
+    try:
+        await services.change_sets.add_ops(
+            who, tenant.id, opened.record.id, [op], request_id=_rid()
+        )
+        job = await services.change_sets.apply(who, tenant.id, opened.record.id, request_id=_rid())
+    except Exception:
+        await services.change_sets.discard(who, tenant.id, opened.record.id, request_id=_rid())
+        raise
+    return Accepted(change_set_id=opened.record.id, object_id=op.object_id, job_id=job)
+
+
+def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> None:
+    model = _MODELS[object_type]
+    base = f"/tenants/{{t}}/{slug}"
+    tag = slug
+    if model is None:  # policy sets: a union, so bodies stay free-form dicts validated on apply
+        create_in: Any = dict[str, Any]
+        patch_in: Any = dict[str, Any]
+    else:
+        create_in, patch_in = _body_models(model.__name__, model)
+
+    @router.get(base, tags=[tag], name=f"list_{slug}")
+    async def list_objects(
+        tenant: Tenant,
+        who: Who,
+        services: Services,
+        name: str | None = None,
+        change_set: UUID | None = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> Page:
+        items = await _view(services, who, tenant, object_type, change_set)
+        if name:
+            items = [o for o in items if o["name"] == name]
+        return _page(items, cursor, limit)
+
+    @router.get(base + "/{object_id}", tags=[tag], name=f"get_{slug}")
+    async def get_object(
+        object_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        services: Services,
+        response: Response,
+        change_set: UUID | None = None,
+    ) -> dict[str, Any]:
+        for item in await _view(services, who, tenant, object_type, change_set):
+            if item["id"] == str(object_id):
+                response.headers["ETag"] = _etag(item["version"])
+                return item
+        raise ApiError(404, f"{slug} {object_id} not found")
+
+    @router.post(base, tags=[tag], status_code=202, name=f"create_{slug}")
+    async def create_object(
+        body: create_in,
+        tenant: Tenant,
+        who: Who,
+        services: Services,
+        change_set: UUID | None = None,
+        apply: bool = False,
+        object_id: UUID | None = None,
+    ) -> Accepted:
+        data = body if isinstance(body, dict) else body.model_dump(mode="json", exclude_unset=True)
+        op = ChangeOp(
+            object_type=object_type, object_id=object_id or uuid7(), action=Action.CREATE, body=data
+        )
+        return await _write(
+            services, who, tenant, op, change_set, apply, f"create {slug}/{data.get('name')}"
+        )
+
+    @router.patch(base + "/{object_id}", tags=[tag], status_code=202, name=f"update_{slug}")
+    async def update_object(
+        object_id: UUID,
+        body: patch_in,
+        tenant: Tenant,
+        who: Who,
+        services: Services,
+        change_set: UUID | None = None,
+        apply: bool = False,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Accepted:
+        data = body if isinstance(body, dict) else body.model_dump(mode="json", exclude_unset=True)
+        op = ChangeOp(
+            object_type=object_type,
+            object_id=object_id,
+            action=Action.UPDATE,
+            body=data,
+            expected_version=_if_match(if_match),
+        )
+        return await _write(
+            services, who, tenant, op, change_set, apply, f"update {slug}/{object_id}"
+        )
+
+    @router.delete(base + "/{object_id}", tags=[tag], status_code=202, name=f"delete_{slug}")
+    async def delete_object(
+        object_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        services: Services,
+        change_set: UUID | None = None,
+        apply: bool = False,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Accepted:
+        op = ChangeOp(
+            object_type=object_type,
+            object_id=object_id,
+            action=Action.DELETE,
+            expected_version=_if_match(if_match),
+        )
+        return await _write(
+            services, who, tenant, op, change_set, apply, f"delete {slug}/{object_id}"
+        )
+
+
+# -- application ----------------------------------------------------------------------------------
+
+
+def _detail_json(detail: ChangeSetDetail) -> dict[str, Any]:
+    r = detail.record
+    return {
+        "id": str(r.id),
+        "state": r.state.value,
+        "author": r.author,
+        "summary": r.summary,
+        "base_revision": r.base_revision,
+        "approver": r.approver,
+        "reject_comment": r.reject_comment,
+        "error": r.error,
+        "created_at": r.created_at.isoformat(),
+        "ops": [o.model_dump(mode="json") for o in detail.ops],
+    }
+
+
+def create_app(services: ApiServices, *, public_url: str | None = None) -> FastAPI:
+    """Build the application over ready-made services.
+
+    Args:
+        services: The wired services.
+        public_url: External base URL (``https://switchyard.example.test``), used to build login
+            redirect URIs and to decide whether cookies are ``Secure``.
+    """
+    app = FastAPI(
+        title="Switchyard API",
+        version="1.0.0",
+        description="Multi-tenant load balancer controller.",
+        docs_url="/api/v1/docs",
+        openapi_url="/api/v1/openapi.json",
+    )
+    app.state.services = services
+    app.state.public_url = public_url
+    install_handlers(app)
+
+    @app.middleware("http")
+    async def request_id(request: Request, call_next: Any) -> Response:
+        rid = request.headers.get("x-request-id") or uuid.uuid4().hex
+        token = request_id_var.set(rid)
+        try:
+            response: Response = await call_next(request)
+        finally:
+            request_id_var.reset(token)
+        response.headers["X-Request-ID"] = rid
+        return response
+
+    router = APIRouter(prefix="/api/v1")
+
+    @router.get("/healthz", tags=["meta"])
+    async def healthz() -> dict[str, str]:
+        return {"status": "ok"}
+
+    # login
+    def callback_url(request: Request, provider: str) -> str:
+        base = request.app.state.public_url or str(request.base_url)
+        return f"{base.rstrip('/')}/api/v1/auth/callback/{provider}"
+
+    def set_session_cookie(
+        request: Request, response: Response, cookie: str, info: SessionInfo
+    ) -> None:
+        secure = (request.app.state.public_url or str(request.base_url)).startswith("https")
+        response.set_cookie(
+            SESSION_COOKIE,
+            cookie,
+            max_age=int((info.expires_at - datetime.now(UTC)).total_seconds()),
+            httponly=True,
+            samesite="strict",
+            secure=secure,
+            path="/",
+        )
+
+    def require_sessions(svc: ApiServices) -> SessionService:
+        if svc.sessions is None:
+            raise ApiError(503, "login is not configured on this controller")
+        return svc.sessions
+
+    @router.get("/auth/providers", tags=["auth"])
+    async def auth_providers(svc: Services) -> dict[str, Any]:
+        """Identity providers users can log in with, and whether break-glass login is on."""
+        sessions = require_sessions(svc)
+        return {
+            "providers": [
+                {"id": str(p.id), "name": p.name, "protocol": p.protocol}
+                for p in await sessions.providers()
+            ],
+            "break_glass": sessions.break_glass_enabled,
+        }
+
+    @router.get("/auth/login/{provider}", tags=["auth"], status_code=302)
+    async def auth_login(
+        provider: str, request: Request, svc: Services, return_to: str | None = None
+    ) -> Response:
+        """Redirect the browser to the identity provider."""
+        sessions = require_sessions(svc)
+        try:
+            url = await sessions.begin_login(
+                provider, redirect_uri=callback_url(request, provider), return_to=return_to
+            )
+        except LoginError as exc:
+            raise ApiError(400, str(exc)) from exc
+        return Response(status_code=302, headers={"Location": url})
+
+    @router.get("/auth/callback/{provider}", tags=["auth"], status_code=302)
+    async def auth_callback(
+        provider: str,
+        request: Request,
+        svc: Services,
+        code: str | None = None,
+        state: str | None = None,
+        error: str | None = None,
+    ) -> Response:
+        """Finish the login, set the session cookie and send the browser back to the app."""
+        sessions = require_sessions(svc)
+        if error or not code or not state:
+            raise ApiError(400, "the identity provider reported an error: " + (error or "no code"))
+        try:
+            result = await sessions.complete_login(
+                state=state, code=code, redirect_uri=callback_url(request, provider)
+            )
+        except LoginError as exc:
+            raise ApiError(401, str(exc)) from exc
+        response = Response(status_code=302, headers={"Location": result.return_to})
+        set_session_cookie(request, response, result.cookie, result.session)
+        return response
+
+    @router.post("/auth/break-glass", tags=["auth"])
+    async def auth_break_glass(
+        body: BreakGlassIn, request: Request, response: Response, svc: Services
+    ) -> dict[str, Any]:
+        """Log in the local administrator (password + TOTP). Off unless enabled."""
+        sessions = require_sessions(svc)
+        try:
+            result = await sessions.break_glass_login(body.username, body.password, body.totp)
+        except LoginError as exc:
+            raise ApiError(401, str(exc)) from exc
+        set_session_cookie(request, response, result.cookie, result.session)
+        return await me_payload(svc, result.session.principal(), result.session)
+
+    @router.post("/auth/logout", status_code=204, tags=["auth"])
+    async def auth_logout(request: Request, who: FullWho, svc: Services) -> Response:
+        """End the session (requires the CSRF header)."""
+        cookie = request.cookies.get(SESSION_COOKIE)
+        if cookie and svc.sessions is not None:
+            await svc.sessions.logout(cookie)
+        response = Response(status_code=204)
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        return response
+
+    async def me_payload(
+        svc: ApiServices, who: Principal, session: SessionInfo | None
+    ) -> dict[str, Any]:
+        tenants = await svc.tenants.list_tenants(who)
+        return {
+            "id": str(session.id) if session else None,
+            "name": session.name if session else who.actor,
+            "email": session.email if session else None,
+            "is_system": who.is_system,
+            "break_glass": bool(session and session.break_glass),
+            "auth": "session" if session else "token",
+            "csrf_token": session.csrf_token if session else None,
+            "tenants": [
+                {"id": str(t.id), "name": t.name, "role": who.role_in(t.id).value} for t in tenants
+            ],
+        }
+
+    @router.get("/me", tags=["auth"])
+    async def me(request: Request, who: FullWho, svc: Services) -> dict[str, Any]:
+        """Who am I, in which tenants, and with which role in each."""
+        return await me_payload(svc, who, getattr(request.state, "session", None))
+
+    # tenants
+    @router.get("/tenants", tags=["tenants"])
+    async def list_tenants(who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [t.__dict__ | {"id": str(t.id)} for t in await svc.tenants.list_tenants(who)]
+
+    @router.post("/tenants", status_code=201, tags=["tenants"])
+    async def create_tenant(body: TenantIn, who: Who, svc: Services) -> dict[str, Any]:
+        t = await svc.tenants.create(
+            who,
+            body.name,
+            oidc_group=body.oidc_group,
+            quotas=body.quotas,
+            require_approval=body.require_approval,
+            request_id=_rid(),
+        )
+        return t.__dict__ | {"id": str(t.id)}
+
+    @router.get("/tenants/{t}", tags=["tenants"])
+    async def get_tenant(tenant: Tenant, response: Response) -> dict[str, Any]:
+        response.headers["ETag"] = _etag(tenant.version)
+        return tenant.__dict__ | {"id": str(tenant.id)}
+
+    @router.patch("/tenants/{t}", tags=["tenants"])
+    async def patch_tenant(
+        body: dict[str, Any],
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        t = await svc.tenants.update(
+            who, tenant.id, expected_version=_if_match(if_match), changes=body, request_id=_rid()
+        )
+        return t.__dict__ | {"id": str(t.id)}
+
+    @router.delete("/tenants/{t}", status_code=204, tags=["tenants"])
+    async def delete_tenant(tenant: Tenant, who: Who, svc: Services) -> Response:
+        await svc.tenants.delete(who, tenant.id, request_id=_rid())
+        return Response(status_code=204)
+
+    for slug, object_type in COLLECTIONS.items():
+        _object_routes(router, slug, object_type)
+
+    # change sets
+    @router.get("/tenants/{t}/change-sets", tags=["change-sets"])
+    async def list_change_sets(
+        tenant: Tenant, who: Who, svc: Services, state: ChangeSetState | None = None
+    ) -> list[dict[str, Any]]:
+        records = await svc.change_sets.list_change_sets(
+            who, tenant.id, states={state} if state else None
+        )
+        return [
+            {"id": str(r.id), "state": r.state.value, "author": r.author, "summary": r.summary}
+            for r in records
+        ]
+
+    @router.post("/tenants/{t}/change-sets", status_code=201, tags=["change-sets"])
+    async def open_change_set(
+        body: OpenIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return _detail_json(
+            await svc.change_sets.open(who, tenant.id, body.summary, request_id=_rid())
+        )
+
+    @router.get("/tenants/{t}/change-sets/{cs}", tags=["change-sets"])
+    async def get_change_set(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        return _detail_json(await svc.change_sets.get(who, tenant.id, cs))
+
+    @router.post("/tenants/{t}/change-sets/{cs}/ops", tags=["change-sets"])
+    async def add_ops(
+        cs: UUID, body: OpsIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        ops = [ChangeOp(**o.model_dump()) for o in body.ops]
+        return _detail_json(
+            await svc.change_sets.add_ops(who, tenant.id, cs, ops, request_id=_rid())
+        )
+
+    @router.delete("/tenants/{t}/change-sets/{cs}/ops/{index}", tags=["change-sets"])
+    async def remove_op(
+        cs: UUID, index: int, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return _detail_json(
+            await svc.change_sets.remove_op(who, tenant.id, cs, index, request_id=_rid())
+        )
+
+    @router.get("/tenants/{t}/change-sets/{cs}/diff", tags=["change-sets"])
+    async def diff(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        preview = await svc.change_sets.preview(who, tenant.id, cs)
+        return {
+            "objects": [
+                {
+                    "type": o.object_type.value,
+                    "id": str(o.object_id),
+                    "name": o.name,
+                    "status": o.status.value,
+                    "changed_fields": list(o.changed_fields),
+                }
+                for o in preview.draft.objects
+            ],
+            "problems": [p.__dict__ for p in preview.draft.problems],
+            "se_groups": [
+                {
+                    "id": str(g.se_group_id),
+                    "name": g.name,
+                    "error": g.error,
+                    "files": [f.__dict__ for f in g.files],
+                }
+                for g in preview.groups
+            ],
+        }
+
+    @router.post("/tenants/{t}/change-sets/{cs}/apply", status_code=202, tags=["change-sets"])
+    async def apply(
+        cs: UUID, tenant: Tenant, who: Who, svc: Services, body: ApplyIn | None = None
+    ) -> dict[str, str]:
+        job = await svc.change_sets.apply(
+            who,
+            tenant.id,
+            cs,
+            break_glass_reason=body.break_glass_reason if body else None,
+            request_id=_rid(),
+        )
+        return {"job_id": str(job)}
+
+    @router.post("/tenants/{t}/change-sets/{cs}/discard", tags=["change-sets"])
+    async def discard(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
+        r = await svc.change_sets.discard(who, tenant.id, cs, request_id=_rid())
+        return {"state": r.state.value}
+
+    @router.post("/tenants/{t}/change-sets/{cs}/request-approval", tags=["change-sets"])
+    async def request_approval(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
+        r = await svc.change_sets.request_approval(who, tenant.id, cs, request_id=_rid())
+        return {"state": r.state.value}
+
+    @router.post("/tenants/{t}/change-sets/{cs}/approve", status_code=202, tags=["change-sets"])
+    async def approve(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
+        return {"job_id": str(await svc.change_sets.approve(who, tenant.id, cs, request_id=_rid()))}
+
+    @router.post("/tenants/{t}/change-sets/{cs}/reject", tags=["change-sets"])
+    async def reject(
+        cs: UUID, body: ReasonIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        r = await svc.change_sets.reject(who, tenant.id, cs, body.comment, request_id=_rid())
+        return {"state": r.state.value}
+
+    # revisions
+    @router.get("/tenants/{t}/revisions", tags=["revisions"])
+    async def revisions(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [
+            {
+                "number": r.number,
+                "author": r.author,
+                "summary": r.summary,
+                "git_sha": r.git_sha,
+                "created_at": r.created_at.isoformat(),
+            }
+            for r in await svc.change_sets.revisions(who, tenant.id)
+        ]
+
+    @router.get("/tenants/{t}/revisions/{n}", tags=["revisions"])
+    async def revision(n: int, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        r = await svc.change_sets.revision(who, tenant.id, n)
+        return {
+            "number": r.number,
+            "author": r.author,
+            "summary": r.summary,
+            "git_sha": r.git_sha,
+            "snapshot": r.snapshot,
+        }
+
+    @router.post("/tenants/{t}/revisions/{n}/rollback", status_code=201, tags=["revisions"])
+    async def rollback(n: int, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        return _detail_json(await svc.change_sets.rollback(who, tenant.id, n, request_id=_rid()))
+
+    # runtime
+    @router.put("/tenants/{t}/pools/{pool}/members/{member}/state", tags=["pools"])
+    async def member_state(
+        pool: UUID, member: UUID, body: MemberStateIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        r = await svc.members.set_state(who, tenant.id, pool, member, body.state, request_id=_rid())
+        return {"state": r.state.value, "applied": r.applied, "failed": r.failed}
+
+    # engines
+    @router.get("/tenants/{t}/se-groups/{group}/engines", tags=["engines"])
+    async def list_engines(
+        group: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> list[dict[str, Any]]:
+        return [
+            {"id": str(e.id), "name": e.name, "url": e.dataplane_url, "state": e.state.value}
+            for e in await svc.engines.list_engines(who, tenant.id, group)
+        ]
+
+    @router.post("/tenants/{t}/se-groups/{group}/engines", status_code=201, tags=["engines"])
+    async def add_engine(
+        group: UUID, body: EngineIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        e = await svc.engines.register(
+            who,
+            tenant.id,
+            se_group_id=group,
+            name=body.name,
+            dataplane_url=body.dataplane_url,
+            credentials_ref=body.credentials_ref,
+            mgmt_ip=body.mgmt_ip,
+            agent_url=body.agent_url,
+            request_id=_rid(),
+        )
+        return {"id": str(e.id), "name": e.name, "url": e.dataplane_url, "state": e.state.value}
+
+    @router.put("/tenants/{t}/engines/{engine}/state", tags=["engines"])
+    async def engine_state(
+        engine: UUID, state: EngineState, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        e = await svc.engines.set_state(who, tenant.id, engine, state, request_id=_rid())
+        return {"state": e.state.value}
+
+    @router.delete("/tenants/{t}/engines/{engine}", status_code=204, tags=["engines"])
+    async def remove_engine(engine: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
+        await svc.engines.remove(who, tenant.id, engine, request_id=_rid())
+        return Response(status_code=204)
+
+    # tokens
+    @router.get("/tenants/{t}/tokens", tags=["tokens"])
+    async def list_tokens(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": str(r.id),
+                "name": r.name,
+                "role": r.role.value,
+                "revoked": r.revoked_at is not None,
+                "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+            }
+            for r in await svc.tokens.list_tokens(who, tenant.id)
+        ]
+
+    @router.post("/tenants/{t}/tokens", status_code=201, tags=["tokens"])
+    async def create_token(
+        body: TokenIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        from datetime import timedelta
+
+        plaintext, record = await svc.tokens.create(
+            who,
+            tenant.id,
+            body.name,
+            body.role,
+            ttl=timedelta(days=body.ttl_days) if body.ttl_days else None,
+            request_id=_rid(),
+        )
+        return {"id": str(record.id), "token": plaintext, "role": record.role.value}
+
+    @router.delete("/tenants/{t}/tokens/{token}", status_code=204, tags=["tokens"])
+    async def revoke_token(token: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
+        await svc.tokens.revoke(who, tenant.id, token, request_id=_rid())
+        return Response(status_code=204)
+
+    # agent enrollment
+    @router.post(
+        "/tenants/{t}/engines/{engine}/enrollment-token", status_code=201, tags=["engines"]
+    )
+    async def enrollment_token(
+        engine: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Create a one-time token (shown once) for ``sy-agent enroll``."""
+        if svc.enrollment is None:
+            raise ApiError(503, "enrollment is not configured on this controller")
+        token, expires = await svc.enrollment.create_token(
+            who, tenant.id, engine, request_id=_rid()
+        )
+        return {"token": token, "expires_at": expires.isoformat()}
+
+    @router.post("/enroll", tags=["engines"])
+    async def enroll(body: EnrollIn, svc: Services) -> dict[str, str]:
+        """Trade an enrollment or renewal token and a CSR for the agent's certificate."""
+        if svc.enrollment is None:
+            raise ApiError(503, "enrollment is not configured on this controller")
+        try:
+            result = await svc.enrollment.redeem(body.token, body.csr)
+        except EnrollmentError as exc:
+            raise ApiError(401, str(exc), headers={"WWW-Authenticate": "Bearer"}) from exc
+        except PkiError as exc:
+            raise ApiError(422, str(exc)) from exc
+        return {
+            "engine": result.engine,
+            "certificate": result.cert_pem,
+            "ca": result.ca_pem,
+            "bundle_public_key": result.bundle_public_key,
+            "renewal_token": result.renewal_token,
+            "not_after": result.not_after.isoformat(),
+        }
+
+    # certificates
+    @router.post("/tenants/{t}/certificates/import", status_code=202, tags=["certificates"])
+    async def import_certificate(
+        body: CertImportIn,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+        apply: bool = False,
+    ) -> Accepted:
+        """Store an uploaded certificate and key, and add the certificate object to a change set."""
+        if svc.certs is None:
+            raise ApiError(503, "no secrets backend is configured for certificates")
+        data = await svc.certs.import_pem(who, tenant.id, body.name, body.pem)
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE, object_id=uuid7(), action=Action.CREATE, body=data
+        )
+        return await _write(
+            svc, who, tenant, op, change_set, apply, f"import certificate {body.name}"
+        )
+
+    @router.post("/tenants/{t}/certificates/issue", status_code=202, tags=["certificates"])
+    async def issue_certificate(
+        body: CertIssueIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Queue issuance through ACME DNS-01 or Cloudflare Origin CA."""
+        job = await svc.cert_jobs.request_issue(
+            who,
+            tenant.id,
+            name=body.name,
+            source=CertSource(body.source),
+            sans=tuple(body.sans),
+            request_id=_rid(),
+        )
+        return {"job_id": str(job)}
+
+    @router.post(
+        "/tenants/{t}/certificates/{certificate}/renew", status_code=202, tags=["certificates"]
+    )
+    async def renew_certificate(
+        certificate: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Queue a renewal of one certificate."""
+        job = await svc.cert_jobs.request_renew(who, tenant.id, certificate, request_id=_rid())
+        return {"job_id": str(job)}
+
+    # infrastructure jobs
+    @router.post("/tenants/{t}/networks/apply-sdn", status_code=202, tags=["infrastructure"])
+    async def apply_sdn(tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
+        """Create or update the Proxmox SDN objects of the tenant's managed networks."""
+        job = await svc.infra.request_sdn_apply(who, tenant.id, request_id=_rid())
+        return {"job_id": str(job)}
+
+    @router.post("/tenants/{t}/engines/{engine}/retire", status_code=202, tags=["infrastructure"])
+    async def retire_engine(
+        engine: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Disable an engine, destroy its VM and remove it (refused for the last serving engine)."""
+        job = await svc.infra.request_retire(who, tenant.id, engine, request_id=_rid())
+        return {"job_id": str(job)}
+
+    @router.post("/tenants/{t}/se-groups/{group}/deploy", status_code=202, tags=["infrastructure"])
+    async def deploy_group(
+        group: UUID, body: DeployIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Grow an SE group to ``count`` engines by cloning the SE template on Proxmox."""
+        request = DeployRequest(
+            tenant_id=tenant.id,
+            se_group_id=group,
+            count=body.count,
+            nodes=tuple(body.nodes),
+            template_vmid=body.template_vmid,
+            mgmt_pool_id=body.mgmt_pool_id,
+            pool=body.pool,
+            credentials_ref=body.credentials_ref,
+            ssh_public_keys=body.ssh_public_keys,
+        )
+        job = await svc.infra.request_deploy(who, tenant.id, request, request_id=_rid())
+        return {"job_id": str(job)}
+
+    # live status
+    def status_json(s: EngineStatus) -> dict[str, Any]:
+        return {
+            "engine": s.name,
+            "engine_id": str(s.engine_id),
+            "se_group_id": str(s.se_group_id),
+            "reachable": s.reachable,
+            "error": s.error,
+            "haproxy_fingerprint": s.haproxy_fingerprint,
+            "members": s.members,
+            "agent": s.agent,
+            "drift": s.drift,
+            "observed_at": s.observed_at.isoformat(),
+        }
+
+    @router.get("/tenants/{t}/status/engines", tags=["status"])
+    async def engine_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [status_json(s) for s in await svc.status.list_status(who, tenant.id)]
+
+    @router.get("/tenants/{t}/status/stream", tags=["status"])
+    async def status_stream(
+        request: Request,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        follow: bool = True,
+        interval: Annotated[float, Query(ge=0.1, le=60)] = 2.0,
+    ) -> StreamingResponse:
+        """Server-sent events: the engine status whenever it changes (and once at the start)."""
+        import asyncio
+        import json
+
+        async def events() -> AsyncIterator[str]:
+            last = ""
+            while True:
+                payload = json.dumps(
+                    [status_json(s) for s in await svc.status.list_status(who, tenant.id)],
+                    sort_keys=True,
+                )
+                if payload != last:
+                    yield f"event: status\ndata: {payload}\n\n"
+                    last = payload
+                else:
+                    yield ": keep-alive\n\n"
+                if not follow or await request.is_disconnected():
+                    return
+                await asyncio.sleep(interval)
+
+        return StreamingResponse(events(), media_type="text/event-stream")
+
+    # jobs and audit
+    @router.get("/jobs/{job_id}", tags=["jobs"])
+    async def get_job(job_id: UUID, who: Who, svc: Services) -> dict[str, Any]:
+        from sqlalchemy import select
+
+        from switchyard.db.ops_models import JobRow
+
+        ctx = (
+            admin_session(svc.db.admin)
+            if who.is_system
+            else tenant_session(svc.db.app, sorted(who.tenant_ids))
+        )
+        async with ctx as session:
+            row = (
+                await session.execute(select(JobRow).where(JobRow.id == job_id))
+            ).scalar_one_or_none()
+        if row is None:
+            raise ApiError(404, "job not found")
+        return {
+            "id": str(row.id),
+            "kind": row.kind,
+            "state": row.state,
+            "attempts": row.attempts,
+            "error": row.last_error,
+            "result": row.result,
+        }
+
+    @router.get("/tenants/{t}/audit-events", tags=["audit"])
+    async def audit_events(
+        tenant: Tenant, who: Who, svc: Services, limit: Annotated[int, Query(ge=1, le=500)] = 100
+    ) -> list[dict[str, Any]]:
+        from sqlalchemy import select
+
+        from switchyard.db.ops_models import AuditEventRow
+
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            rows = (
+                await session.execute(
+                    select(AuditEventRow).order_by(AuditEventRow.at.desc()).limit(limit)
+                )
+            ).scalars()
+            return [
+                {
+                    "at": r.at.isoformat(),
+                    "actor": r.actor,
+                    "action": r.action,
+                    "object": r.object_ref,
+                    "diff": r.diff,
+                    "request_id": r.request_id,
+                }
+                for r in rows
+            ]
+
+    app.include_router(router)
+    return app

@@ -1,0 +1,21 @@
+frontend vs_{{ f.name }}
+    mode {{ f.mode }}
+{% for bind in f.binds %}
+    {{ bind }}
+{% endfor %}
+    option {{ "httplog" if f.mode == "http" else "tcplog" }}
+{% if f.mode == "http" %}
+    option forwardfor
+{% endif %}
+{% for rule in f.connection_rules %}
+    {{ rule }}
+{% endfor %}
+{% for rule in f.request_rules %}
+    {{ rule }}
+{% endfor %}
+{% for rule in f.routing_rules %}
+    {{ rule }}
+{% endfor %}
+{% if f.default_backend %}
+    default_backend {{ f.default_backend }}
+{% endif %}

@@ -1,0 +1,61 @@
+# Same gates as controller/Makefile.
+# CI is paused while we build and test locally. Delete this block to re-enable.
+workflow:
+  rules:
+    - when: never
+
+stages: [check]
+
+default:
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  cache:
+    key: uv-$CI_COMMIT_REF_SLUG
+    paths: [.cache/uv]
+
+variables:
+  UV_CACHE_DIR: $CI_PROJECT_DIR/.cache/uv
+
+.controller:
+  stage: check
+  before_script:
+    - cd controller
+    - uv sync --frozen
+
+lint:
+  extends: .controller
+  script:
+    - uv run ruff check .
+    - uv run ruff format --check .
+
+typecheck:
+  extends: .controller
+  script:
+    - uv run mypy
+
+test:
+  extends: .controller
+  # Docker-backed tests (PostgreSQL, HAProxy) need a Docker daemon; use the dind service.
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    TESTCONTAINERS_HOST_OVERRIDE: docker
+  script:
+    - uv run pytest --cov --cov-report=term-missing --cov-report=xml
+    - uv run coverage report --include="switchyard/domain/*,switchyard/render/*,switchyard/pipeline/*" --fail-under=85
+  coverage: '/TOTAL.*\s+(\d+(?:\.\d+)?)%/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: controller/coverage.xml
+
+openapi-breaking:
+  extends: .controller
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+  script:
+    - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - git show origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:docs/api/openapi.json > /tmp/old-openapi.json || exit 0
+    - uv run python -m switchyard.api.openapi_check /tmp/old-openapi.json ../docs/api/openapi.json
