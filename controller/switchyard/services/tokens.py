@@ -19,7 +19,7 @@ from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain.validators import validate_name
 from switchyard.domain.workflow import Role
 from switchyard.ids import uuid7
-from switchyard.services.changesets import ROLE_RANK, require_role
+from switchyard.services.changesets import ROLE_RANK, require
 from switchyard.services.context import Clock, Databases, Principal, utcnow
 from switchyard.services.errors import NotFoundError, PermissionDeniedError
 
@@ -89,8 +89,10 @@ class TokenService:
         token (``tenant_id=None``, role ``system-admin``) needs a system administrator.
         """
         validate_name(name)
+        if principal.actor.startswith("token:"):
+            raise PermissionDeniedError("an API token cannot create tokens")
         if role is Role.SYSTEM_ADMIN:
-            require_role(principal, Role.SYSTEM_ADMIN)
+            require(principal, "manage", "system_token")
             if tenant_id is not None:
                 raise ValueError("a system-admin token belongs to no tenant")
         else:
@@ -98,7 +100,7 @@ class TokenService:
                 raise ValueError("this role needs a tenant")
             if not principal.can_access(tenant_id):
                 raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-            require_role(principal, Role.TENANT_ADMIN)
+            require(principal, "manage", "token")
             if ROLE_RANK[role] > ROLE_RANK[principal.role]:
                 raise PermissionDeniedError("cannot issue a token above your own role")
         plaintext = PREFIX + secrets.token_urlsafe(16)
@@ -130,7 +132,7 @@ class TokenService:
         """List a tenant's tokens (tenant administrators and up)."""
         if not principal.can_access(tenant_id):
             raise NotFoundError("tenant not found")
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, "manage", "token")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             rows = (
                 await session.execute(select(ApiTokenRow).order_by(ApiTokenRow.created_at))
@@ -148,7 +150,7 @@ class TokenService:
         """Revoke a token. Revoked tokens stop working immediately."""
         if not principal.can_access(tenant_id):
             raise NotFoundError("tenant not found")
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, "manage", "token")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             result = await session.execute(
                 update(ApiTokenRow)

@@ -21,9 +21,8 @@ from switchyard.adapters.pki import PkiError, PkiSigner
 from switchyard.db import audit_log
 from switchyard.db.ops_models import EnrollmentTokenRow, ServiceEngineRow
 from switchyard.db.tenancy import admin_session, tenant_session
-from switchyard.domain.workflow import Role
 from switchyard.ids import uuid7
-from switchyard.services.changesets import require_role
+from switchyard.services.changesets import require
 from switchyard.services.context import Clock, Databases, Principal, utcnow
 from switchyard.services.errors import NotFoundError, PermissionDeniedError
 from switchyard.services.tokens import hash_token
@@ -93,7 +92,7 @@ class EnrollmentService:
         """Create a one-time token for an engine. Shown once; returns ``(token, expires_at)``."""
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, "create", "enrollment_token")
         token = ENROLL_PREFIX + secrets.token_urlsafe(24)
         expires = self._clock() + ENROLL_TTL
         async with tenant_session(self._db.app, [tenant_id]) as session:

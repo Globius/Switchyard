@@ -25,11 +25,10 @@ from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import ipam
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
-from switchyard.domain.workflow import Role
 from switchyard.ids import uuid7
 from switchyard.jobs import queue
 from switchyard.pipeline.locks import PgGroupLocks
-from switchyard.services.changesets import require_role
+from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import PermissionDeniedError
 
@@ -123,7 +122,7 @@ class InfraJobs:
         self, principal: Principal, tenant_id: UUID, *, request_id: str | None = None
     ) -> UUID:
         """Queue ``apply_sdn`` and return the job id."""
-        self._check(principal, tenant_id)
+        self._check(principal, tenant_id, "apply", "sdn")
         async with admin_session(self._db.admin) as session:
             return await queue.enqueue(
                 session,
@@ -143,7 +142,7 @@ class InfraJobs:
         request_id: str | None = None,
     ) -> UUID:
         """Queue ``deploy_se_group`` and return the job id."""
-        self._check(principal, tenant_id)
+        self._check(principal, tenant_id, "deploy", "se_group")
         if request.tenant_id != tenant_id:
             raise PermissionDeniedError("request is for another tenant")
         async with admin_session(self._db.admin) as session:
@@ -165,7 +164,7 @@ class InfraJobs:
         request_id: str | None = None,
     ) -> UUID:
         """Queue the removal of an engine and its VM and return the job id."""
-        self._check(principal, tenant_id)
+        self._check(principal, tenant_id, "manage", "engine")
         async with admin_session(self._db.admin) as session:
             return await queue.enqueue(
                 session,
@@ -177,10 +176,10 @@ class InfraJobs:
             )
 
     @staticmethod
-    def _check(principal: Principal, tenant_id: UUID) -> None:
+    def _check(principal: Principal, tenant_id: UUID, verb: str, obj: str) -> None:
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, verb, obj)
 
 
 class InfraService:

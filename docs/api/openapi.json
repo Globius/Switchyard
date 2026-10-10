@@ -1880,6 +1880,54 @@
         "title": "DriftKind",
         "type": "string"
       },
+      "EffectiveGrantRead": {
+        "additionalProperties": false,
+        "description": "What a person can do in one tenant now.",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "tenant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for `system-admin`.",
+            "title": "Tenant Id"
+          },
+          "via": {
+            "items": {
+              "$ref": "#/components/schemas/GrantSourceRead"
+            },
+            "title": "Via",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "tenant",
+          "role",
+          "via"
+        ],
+        "title": "EffectiveGrantRead",
+        "type": "object"
+      },
       "EngineIn": {
         "additionalProperties": false,
         "description": "Register a service engine.",
@@ -2156,6 +2204,26 @@
           "expires_at"
         ],
         "title": "EnrollmentToken",
+        "type": "object"
+      },
+      "GrantSourceRead": {
+        "additionalProperties": false,
+        "description": "The provider group that granted a role.",
+        "properties": {
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "group"
+        ],
+        "title": "GrantSourceRead",
         "type": "object"
       },
       "GroupResult": {
@@ -3182,6 +3250,17 @@
             "title": "Name",
             "type": "string"
           },
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MeSession"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for API tokens."
+          },
           "tenants": {
             "items": {
               "$ref": "#/components/schemas/MeTenant"
@@ -3197,9 +3276,40 @@
           "break_glass",
           "auth",
           "csrf_token",
+          "session",
           "tenants"
         ],
         "title": "Me",
+        "type": "object"
+      },
+      "MeSession": {
+        "additionalProperties": false,
+        "description": "The lifetime of the caller's cookie session.",
+        "properties": {
+          "expires_at": {
+            "description": "Absolute end of the session; refresh does not move it.",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "grants_computed_at": {
+            "description": "When roles were last recomputed from the provider groups and the mappings.",
+            "format": "date-time",
+            "title": "Grants Computed At",
+            "type": "string"
+          },
+          "idle_timeout_seconds": {
+            "description": "The session ends after this long without a call.",
+            "title": "Idle Timeout Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expires_at",
+          "idle_timeout_seconds",
+          "grants_computed_at"
+        ],
+        "title": "MeSession",
         "type": "object"
       },
       "MeTenant": {
@@ -3217,12 +3327,21 @@
           },
           "role": {
             "$ref": "#/components/schemas/Role"
+          },
+          "via": {
+            "description": "The provider groups that granted this role; empty for break-glass and tokens.",
+            "items": {
+              "$ref": "#/components/schemas/GrantSourceRead"
+            },
+            "title": "Via",
+            "type": "array"
           }
         },
         "required": [
           "id",
           "name",
-          "role"
+          "role",
+          "via"
         ],
         "title": "MeTenant",
         "type": "object"
@@ -4131,6 +4250,35 @@
         "title": "Page[SeGroupRead]",
         "type": "object"
       },
+      "Page_UserRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque cursor of the next page, or null on the last page.",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[UserRead]",
+        "type": "object"
+      },
       "Page_VipPoolRead_": {
         "additionalProperties": false,
         "properties": {
@@ -4187,6 +4335,112 @@
           "items"
         ],
         "title": "Page[VirtualServiceRead]",
+        "type": "object"
+      },
+      "PermissionMatrix": {
+        "additionalProperties": false,
+        "description": "The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.",
+        "properties": {
+          "permissions": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionRead"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "roles": {
+            "description": "Roles from weakest to strongest.",
+            "items": {
+              "$ref": "#/components/schemas/Role"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles",
+          "permissions"
+        ],
+        "title": "PermissionMatrix",
+        "type": "object"
+      },
+      "PermissionRead": {
+        "additionalProperties": false,
+        "description": "One cell of the permission matrix. `verb` and `object` are published as enums.",
+        "properties": {
+          "description": {
+            "description": "One sentence for tooltips.",
+            "title": "Description",
+            "type": "string"
+          },
+          "min_role": {
+            "$ref": "#/components/schemas/Role",
+            "description": "The weakest role that may do this."
+          },
+          "object": {
+            "enum": [
+              "application",
+              "break_glass",
+              "certificate",
+              "change_set",
+              "draft",
+              "engine",
+              "enrollment_token",
+              "identity_provider",
+              "infrastructure",
+              "job",
+              "job_own",
+              "member",
+              "quota",
+              "require_approval",
+              "revision",
+              "role_mapping",
+              "role_mapping_privileged",
+              "sdn",
+              "se_group",
+              "system_token",
+              "tenant",
+              "tenant_data",
+              "tenant_user",
+              "token",
+              "user"
+            ],
+            "title": "Object",
+            "type": "string"
+          },
+          "verb": {
+            "enum": [
+              "apply",
+              "apply_bypass",
+              "approve",
+              "cancel",
+              "change",
+              "create",
+              "deploy",
+              "disable",
+              "edit",
+              "enable",
+              "list",
+              "manage",
+              "read",
+              "reject",
+              "request_approval",
+              "retry",
+              "rollback",
+              "set_state",
+              "write"
+            ],
+            "title": "Verb",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verb",
+          "object",
+          "min_role",
+          "description"
+        ],
+        "title": "PermissionRead",
         "type": "object"
       },
       "PersistenceSourceIp": {
@@ -4622,6 +4876,27 @@
         "additionalProperties": false,
         "description": "An RFC 9457 ``application/problem+json`` error body.",
         "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "unauthenticated",
+                  "invalid_token",
+                  "session_expired",
+                  "csrf",
+                  "forbidden",
+                  "role_required",
+                  "user_disabled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stable identifier clients can switch on; always set on 401 and 403.",
+            "title": "Code"
+          },
           "detail": {
             "title": "Detail",
             "type": "string"
@@ -4639,6 +4914,17 @@
               }
             ],
             "title": "Errors"
+          },
+          "required_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Role"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `code: role_required`: the weakest role that may do this."
           },
           "status": {
             "title": "Status",
@@ -5170,6 +5456,173 @@
         "title": "Role",
         "type": "string"
       },
+      "RoleMappingIn": {
+        "additionalProperties": false,
+        "description": "Create a mapping on a tenant route (`/tenants/{t}/role-mappings`).",
+        "properties": {
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "provider": {
+            "description": "Provider id or name.",
+            "title": "Provider",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "provider",
+          "group_name",
+          "role"
+        ],
+        "title": "RoleMappingIn",
+        "type": "object"
+      },
+      "RoleMappingPatch": {
+        "additionalProperties": false,
+        "description": "Change a mapping; send only the fields to change. The tenant of a mapping is fixed.",
+        "properties": {
+          "group_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Name"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Role"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RoleMappingPatch",
+        "type": "object"
+      },
+      "RoleMappingRead": {
+        "additionalProperties": false,
+        "description": "A provider group that grants a role.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free text for opaque group ids.",
+            "title": "Label"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "tenant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null only for `system-admin`.",
+            "title": "Tenant Id"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "provider",
+          "group_name",
+          "label",
+          "tenant_id",
+          "tenant",
+          "role",
+          "version",
+          "created_by",
+          "created_at"
+        ],
+        "title": "RoleMappingRead",
+        "type": "object"
+      },
       "RouteMatch": {
         "additionalProperties": false,
         "description": "Request match: an optional host (exact or ``*.`` wildcard) and an optional path.",
@@ -5518,6 +5971,21 @@
         "title": "SeGroupRead",
         "type": "object"
       },
+      "SessionsRevoked": {
+        "additionalProperties": false,
+        "description": "How many sessions `revoke-sessions` ended.",
+        "properties": {
+          "revoked": {
+            "title": "Revoked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revoked"
+        ],
+        "title": "SessionsRevoked",
+        "type": "object"
+      },
       "Snapshot": {
         "additionalProperties": false,
         "description": "All desired-state objects visible to a render or a validation run.\n\nAttributes:\n    tenants: Tenants that own the objects below.\n    networks: Networks.\n    vip_pools: VIP pools.\n    se_groups: SE groups.\n    virtual_services: Virtual services.\n    pools: Pools.\n    health_monitors: Health monitors.\n    certificates: Certificate metadata.\n    policy_sets: Redirect and allow-list policy sets.\n    routing_profiles: VRRP and BGP profiles of SE groups.",
@@ -5698,6 +6166,55 @@
         "title": "StaticRoute",
         "type": "object"
       },
+      "SystemRoleMappingIn": {
+        "additionalProperties": false,
+        "description": "Create a mapping on the system-wide route.",
+        "properties": {
+          "group_name": {
+            "title": "Group Name",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "provider": {
+            "description": "Provider id or name.",
+            "title": "Provider",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The tenant; omit for `system-admin`, required otherwise.",
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "provider",
+          "group_name",
+          "role"
+        ],
+        "title": "SystemRoleMappingIn",
+        "type": "object"
+      },
       "Tenant": {
         "additionalProperties": false,
         "description": "Root of ownership. The ``system`` tenant holds shared objects.",
@@ -5710,18 +6227,6 @@
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "oidc_group": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Oidc Group"
           },
           "quotas": {
             "additionalProperties": {
@@ -5757,17 +6262,6 @@
             "title": "Name",
             "type": "string"
           },
-          "oidc_group": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Oidc Group"
-          },
           "quotas": {
             "additionalProperties": {
               "type": "integer"
@@ -5791,17 +6285,6 @@
         "additionalProperties": false,
         "description": "Change a tenant; send only the fields to change.",
         "properties": {
-          "oidc_group": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Oidc Group"
-          },
           "quotas": {
             "anyOf": [
               {
@@ -5843,17 +6326,6 @@
           "name": {
             "title": "Name",
             "type": "string"
-          },
-          "oidc_group": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Oidc Group"
           },
           "quotas": {
             "additionalProperties": {
@@ -6005,6 +6477,202 @@
           }
         },
         "title": "UdpCheck",
+        "type": "object"
+      },
+      "UserDetail": {
+        "additionalProperties": false,
+        "description": "A user with the number of live sessions.",
+        "properties": {
+          "active_sessions": {
+            "title": "Active Sessions",
+            "type": "integer"
+          },
+          "disabled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled At"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "first_login_at": {
+            "format": "date-time",
+            "title": "First Login At",
+            "type": "string"
+          },
+          "grants": {
+            "description": "Effective grants now; on the tenant route only that tenant's.",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveGrantRead"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "groups": {
+            "description": "Groups from the last sign-in; empty on the tenant route.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_login_at": {
+            "format": "date-time",
+            "title": "Last Login At",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "provider",
+          "username",
+          "email",
+          "groups",
+          "first_login_at",
+          "last_login_at",
+          "last_seen_at",
+          "disabled_at",
+          "grants",
+          "subject",
+          "active_sessions"
+        ],
+        "title": "UserDetail",
+        "type": "object"
+      },
+      "UserRead": {
+        "additionalProperties": false,
+        "description": "A person who has signed in.",
+        "properties": {
+          "disabled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled At"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "first_login_at": {
+            "format": "date-time",
+            "title": "First Login At",
+            "type": "string"
+          },
+          "grants": {
+            "description": "Effective grants now; on the tenant route only that tenant's.",
+            "items": {
+              "$ref": "#/components/schemas/EffectiveGrantRead"
+            },
+            "title": "Grants",
+            "type": "array"
+          },
+          "groups": {
+            "description": "Groups from the last sign-in; empty on the tenant route.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_login_at": {
+            "format": "date-time",
+            "title": "Last Login At",
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_id": {
+            "format": "uuid",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_id",
+          "provider",
+          "username",
+          "email",
+          "groups",
+          "first_login_at",
+          "last_login_at",
+          "last_seen_at",
+          "disabled_at",
+          "grants"
+        ],
+        "title": "UserRead",
         "type": "object"
       },
       "VipPool": {
@@ -7325,11 +7993,22 @@
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
                   "name": "Alice Example",
+                  "session": {
+                    "expires_at": "2026-10-10T16:00:00Z",
+                    "grants_computed_at": "2026-10-10T12:00:30Z",
+                    "idle_timeout_seconds": 1800
+                  },
                   "tenants": [
                     {
                       "id": "0192f3a0-0000-7000-8000-000000000001",
                       "name": "acme",
-                      "role": "tenant-admin"
+                      "role": "tenant-admin",
+                      "via": [
+                        {
+                          "group": "acme-admins",
+                          "provider": "authentik"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -7626,6 +8305,113 @@
         ]
       }
     },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "Recompute grants from the stored provider groups and the current mappings.\n\nRole changes otherwise apply within a minute; this applies them at once. The session's\nabsolute lifetime is not extended. A person left with no grant is signed out (401\n`session_expired`). Needs the CSRF header; API tokens just get their `Me` back.",
+        "operationId": "auth_refresh_api_v1_auth_refresh_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "auth": "session",
+                  "break_glass": false,
+                  "csrf_token": "c3JmLXRva2Vu",
+                  "email": "alice@example.test",
+                  "id": "0192f3a0-0000-7000-8000-000000000031",
+                  "is_system": false,
+                  "name": "Alice Example",
+                  "session": {
+                    "expires_at": "2026-10-10T16:00:00Z",
+                    "grants_computed_at": "2026-10-10T12:00:30Z",
+                    "idle_timeout_seconds": 1800
+                  },
+                  "tenants": [
+                    {
+                      "id": "0192f3a0-0000-7000-8000-000000000001",
+                      "name": "acme",
+                      "role": "tenant-admin",
+                      "via": [
+                        {
+                          "group": "acme-admins",
+                          "provider": "authentik"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recompute my roles now",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/saml/{provider}/metadata": {
       "get": {
         "description": "Public, so an identity provider can fetch it by URL. `?download=1` sets a filename.",
@@ -7885,11 +8671,22 @@
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
                   "name": "Alice Example",
+                  "session": {
+                    "expires_at": "2026-10-10T16:00:00Z",
+                    "grants_computed_at": "2026-10-10T12:00:30Z",
+                    "idle_timeout_seconds": 1800
+                  },
                   "tenants": [
                     {
                       "id": "0192f3a0-0000-7000-8000-000000000001",
                       "name": "acme",
-                      "role": "tenant-admin"
+                      "role": "tenant-admin",
+                      "via": [
+                        {
+                          "group": "acme-admins",
+                          "provider": "authentik"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -7944,6 +8741,667 @@
         "summary": "Who am I",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/permissions": {
+      "get": {
+        "description": "Which role may do what. `can(verb, object)` is `role_in(tenant) >= min_role`.",
+        "operationId": "get_permissions_api_v1_permissions_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "permissions": [
+                    {
+                      "description": "Read everything in the tenant.",
+                      "min_role": "viewer",
+                      "object": "tenant_data",
+                      "verb": "read"
+                    },
+                    {
+                      "description": "Apply a change set when the tenant does not require approval.",
+                      "min_role": "operator",
+                      "object": "change_set",
+                      "verb": "apply"
+                    },
+                    {
+                      "description": "Register, enable, disable, retire or remove service engines.",
+                      "min_role": "tenant-admin",
+                      "object": "engine",
+                      "verb": "manage"
+                    }
+                  ],
+                  "roles": [
+                    "viewer",
+                    "operator",
+                    "tenant-admin",
+                    "system-admin"
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionMatrix"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The permission matrix",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/role-mappings": {
+      "get": {
+        "description": "Every mapping, optionally filtered by provider (id or name), tenant or group.",
+        "operationId": "list_role_mappings_api_v1_role_mappings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-10T12:00:00Z",
+                    "created_by": "user:authentik:alice",
+                    "group_name": "acme-ops",
+                    "id": "0192f3a0-0000-7000-8000-000000000041",
+                    "label": "Acme operators",
+                    "provider": "authentik",
+                    "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                    "role": "operator",
+                    "tenant": "acme",
+                    "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                    "version": 1
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RoleMappingRead"
+                  },
+                  "title": "Response List Role Mappings Api V1 Role Mappings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List role mappings (system-wide)",
+        "tags": [
+          "access"
+        ]
+      },
+      "post": {
+        "operationId": "create_role_mapping_api_v1_role_mappings_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemRoleMappingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T12:00:00Z",
+                  "created_by": "user:authentik:alice",
+                  "group_name": "acme-ops",
+                  "id": "0192f3a0-0000-7000-8000-000000000041",
+                  "label": "Acme operators",
+                  "provider": "authentik",
+                  "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                  "role": "operator",
+                  "tenant": "acme",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RoleMappingRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Create a role mapping (system-wide)",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/v1/role-mappings/{mapping}": {
+      "delete": {
+        "operationId": "delete_role_mapping_api_v1_role_mappings__mapping__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mapping",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a role mapping",
+        "tags": [
+          "access"
+        ]
+      },
+      "get": {
+        "operationId": "get_role_mapping_api_v1_role_mappings__mapping__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mapping",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T12:00:00Z",
+                  "created_by": "user:authentik:alice",
+                  "group_name": "acme-ops",
+                  "id": "0192f3a0-0000-7000-8000-000000000041",
+                  "label": "Acme operators",
+                  "provider": "authentik",
+                  "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                  "role": "operator",
+                  "tenant": "acme",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RoleMappingRead"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "ETag": {
+                "description": "The object's version as a quoted integer, for example `\"3\"`. Send it back as `If-Match` on PATCH and DELETE.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a role mapping",
+        "tags": [
+          "access"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_role_mapping_api_v1_role_mappings__mapping__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mapping",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleMappingPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T12:00:00Z",
+                  "created_by": "user:authentik:alice",
+                  "group_name": "acme-ops",
+                  "id": "0192f3a0-0000-7000-8000-000000000041",
+                  "label": "Acme operators",
+                  "provider": "authentik",
+                  "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                  "role": "operator",
+                  "tenant": "acme",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RoleMappingRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Change a role mapping",
+        "tags": [
+          "access"
         ]
       }
     },
@@ -8095,7 +9553,6 @@
                   {
                     "id": "0192f3a0-0000-7000-8000-000000000001",
                     "name": "acme",
-                    "oidc_group": "acme-admins",
                     "quotas": {
                       "virtual_services": 50
                     },
@@ -8197,7 +9654,6 @@
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
-                  "oidc_group": "acme-admins",
                   "quotas": {
                     "virtual_services": 50
                   },
@@ -8344,7 +9800,6 @@
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
-                  "oidc_group": "acme-admins",
                   "quotas": {
                     "virtual_services": 50
                   },
@@ -8474,7 +9929,6 @@
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
-                  "oidc_group": "acme-admins",
                   "quotas": {
                     "virtual_services": 50
                   },
@@ -16597,6 +18051,471 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/role-mappings": {
+      "get": {
+        "operationId": "list_tenant_role_mappings_api_v1_tenants__t__role_mappings_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-10T12:00:00Z",
+                    "created_by": "user:authentik:alice",
+                    "group_name": "acme-ops",
+                    "id": "0192f3a0-0000-7000-8000-000000000041",
+                    "label": "Acme operators",
+                    "provider": "authentik",
+                    "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                    "role": "operator",
+                    "tenant": "acme",
+                    "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                    "version": 1
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RoleMappingRead"
+                  },
+                  "title": "Response List Tenant Role Mappings Api V1 Tenants  T  Role Mappings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a tenant's role mappings",
+        "tags": [
+          "access"
+        ]
+      },
+      "post": {
+        "description": "A tenant administrator may map `viewer` and `operator` here, nothing stronger.",
+        "operationId": "create_tenant_role_mapping_api_v1_tenants__t__role_mappings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleMappingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T12:00:00Z",
+                  "created_by": "user:authentik:alice",
+                  "group_name": "acme-ops",
+                  "id": "0192f3a0-0000-7000-8000-000000000041",
+                  "label": "Acme operators",
+                  "provider": "authentik",
+                  "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                  "role": "operator",
+                  "tenant": "acme",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RoleMappingRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Create a role mapping in a tenant",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/role-mappings/{mapping}": {
+      "delete": {
+        "operationId": "delete_tenant_role_mapping_api_v1_tenants__t__role_mappings__mapping__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mapping",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a role mapping in a tenant",
+        "tags": [
+          "access"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_tenant_role_mapping_api_v1_tenants__t__role_mappings__mapping__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "mapping",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Mapping",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleMappingPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T12:00:00Z",
+                  "created_by": "user:authentik:alice",
+                  "group_name": "acme-ops",
+                  "id": "0192f3a0-0000-7000-8000-000000000041",
+                  "label": "Acme operators",
+                  "provider": "authentik",
+                  "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                  "role": "operator",
+                  "tenant": "acme",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RoleMappingRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Change a role mapping in a tenant",
+        "tags": [
+          "access"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/routing-profiles": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.",
@@ -19278,6 +21197,201 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/users": {
+      "get": {
+        "description": "People with a grant in this tenant, showing only this tenant's grants.",
+        "operationId": "list_tenant_users_api_v1_tenants__t__users_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "disabled",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Disabled"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "email": "alice@example.test",
+                      "first_login_at": "2026-10-01T08:00:00Z",
+                      "grants": [
+                        {
+                          "role": "operator",
+                          "tenant": "acme",
+                          "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                          "via": [
+                            {
+                              "group": "acme-ops",
+                              "provider": "authentik"
+                            }
+                          ]
+                        }
+                      ],
+                      "groups": [
+                        "acme-ops"
+                      ],
+                      "id": "0192f3a0-0000-7000-8000-000000000051",
+                      "last_login_at": "2026-10-10T11:58:00Z",
+                      "last_seen_at": "2026-10-10T12:00:00Z",
+                      "provider": "authentik",
+                      "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                      "username": "alice"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Page_UserRead_"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List people with access to a tenant",
+        "tags": [
+          "access"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/vip-pools": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.",
@@ -21013,6 +23127,704 @@
         "summary": "Rendered config of a virtual service",
         "tags": [
           "virtual-services"
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "description": "People who have signed in, newest sign-in first. `q` searches name and e-mail.",
+        "operationId": "list_users_api_v1_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant"
+            }
+          },
+          {
+            "in": "query",
+            "name": "disabled",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Disabled"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "email": "alice@example.test",
+                      "first_login_at": "2026-10-01T08:00:00Z",
+                      "grants": [
+                        {
+                          "role": "operator",
+                          "tenant": "acme",
+                          "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                          "via": [
+                            {
+                              "group": "acme-ops",
+                              "provider": "authentik"
+                            }
+                          ]
+                        }
+                      ],
+                      "groups": [
+                        "acme-ops"
+                      ],
+                      "id": "0192f3a0-0000-7000-8000-000000000051",
+                      "last_login_at": "2026-10-10T11:58:00Z",
+                      "last_seen_at": "2026-10-10T12:00:00Z",
+                      "provider": "authentik",
+                      "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                      "username": "alice"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Page_UserRead_"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List users",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/v1/users/{user}": {
+      "delete": {
+        "description": "Remove the record and its sessions; the person reappears at their next sign-in.",
+        "operationId": "delete_user_api_v1_users__user__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a user",
+        "tags": [
+          "access"
+        ]
+      },
+      "get": {
+        "description": "A user with what they can do now (`grants`, with the groups that gave it).",
+        "operationId": "get_user_api_v1_users__user__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "active_sessions": 1,
+                  "email": "alice@example.test",
+                  "first_login_at": "2026-10-01T08:00:00Z",
+                  "grants": [
+                    {
+                      "role": "operator",
+                      "tenant": "acme",
+                      "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                      "via": [
+                        {
+                          "group": "acme-ops",
+                          "provider": "authentik"
+                        }
+                      ]
+                    }
+                  ],
+                  "groups": [
+                    "acme-ops"
+                  ],
+                  "id": "0192f3a0-0000-7000-8000-000000000051",
+                  "last_login_at": "2026-10-10T11:58:00Z",
+                  "last_seen_at": "2026-10-10T12:00:00Z",
+                  "provider": "authentik",
+                  "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                  "subject": "u-1",
+                  "username": "alice"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetail"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a user",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/v1/users/{user}/disable": {
+      "post": {
+        "description": "Refuse the person at sign-in and end every session of theirs at once.",
+        "operationId": "disable_user_api_v1_users__user__disable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "active_sessions": 1,
+                  "email": "alice@example.test",
+                  "first_login_at": "2026-10-01T08:00:00Z",
+                  "grants": [
+                    {
+                      "role": "operator",
+                      "tenant": "acme",
+                      "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                      "via": [
+                        {
+                          "group": "acme-ops",
+                          "provider": "authentik"
+                        }
+                      ]
+                    }
+                  ],
+                  "groups": [
+                    "acme-ops"
+                  ],
+                  "id": "0192f3a0-0000-7000-8000-000000000051",
+                  "last_login_at": "2026-10-10T11:58:00Z",
+                  "last_seen_at": "2026-10-10T12:00:00Z",
+                  "provider": "authentik",
+                  "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                  "subject": "u-1",
+                  "username": "alice"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetail"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disable a user",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/v1/users/{user}/enable": {
+      "post": {
+        "operationId": "enable_user_api_v1_users__user__enable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "active_sessions": 1,
+                  "email": "alice@example.test",
+                  "first_login_at": "2026-10-01T08:00:00Z",
+                  "grants": [
+                    {
+                      "role": "operator",
+                      "tenant": "acme",
+                      "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                      "via": [
+                        {
+                          "group": "acme-ops",
+                          "provider": "authentik"
+                        }
+                      ]
+                    }
+                  ],
+                  "groups": [
+                    "acme-ops"
+                  ],
+                  "id": "0192f3a0-0000-7000-8000-000000000051",
+                  "last_login_at": "2026-10-10T11:58:00Z",
+                  "last_seen_at": "2026-10-10T12:00:00Z",
+                  "provider": "authentik",
+                  "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                  "subject": "u-1",
+                  "username": "alice"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UserDetail"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enable a user",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/v1/users/{user}/revoke-sessions": {
+      "post": {
+        "operationId": "revoke_user_sessions_api_v1_users__user__revoke_sessions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "revoked": 2
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/SessionsRevoked"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "End a user's sessions",
+        "tags": [
+          "access"
         ]
       }
     }

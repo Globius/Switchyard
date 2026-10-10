@@ -163,7 +163,10 @@ async def test_retry_a_dead_job(pg_url: str) -> None:
 
         with pytest.raises(PermissionDeniedError):
             await svc.retry(principal(Role.VIEWER), TENANT, job_id)
-        again = await svc.retry(principal(Role.OPERATOR), TENANT, job_id, request_id="r")
+        with pytest.raises(PermissionDeniedError) as denied:  # not an operator's own action
+            await svc.retry(principal(Role.OPERATOR), TENANT, job_id)
+        assert denied.value.required_role == "tenant-admin"
+        again = await svc.retry(principal(Role.TENANT_ADMIN), TENANT, job_id, request_id="r")
         assert (again.state, again.attempts, again.finished_at) == ("queued", 0, None)
         with pytest.raises(ConflictError):
             await svc.retry(principal(), TENANT, job_id)  # now queued

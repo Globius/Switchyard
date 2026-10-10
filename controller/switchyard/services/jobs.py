@@ -16,13 +16,21 @@ from switchyard.db import audit_log
 from switchyard.db import changesets as store
 from switchyard.db.ops_models import JobRow
 from switchyard.db.tenancy import admin_session, tenant_session
-from switchyard.domain.workflow import ChangeSetState, JobState, Role
+from switchyard.domain.workflow import ChangeSetState, JobState
 from switchyard.jobs import queue
-from switchyard.services.changesets import _require_tenant, require_role
+from switchyard.services.changesets import _require_tenant, require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import ConflictError, NotFoundError
 
 APPLY_KIND = "apply_change_set"
+#: Jobs an operator starts (applying a change set, issuing or renewing certificates). An operator
+#: may retry or cancel these; everything else (deployments, SDN, retirement) needs a tenant admin.
+OPERATOR_JOB_KINDS = frozenset({APPLY_KIND, "issue_cert", "renew_certs"})
+
+
+def _require_job_role(principal: Principal, job: JobRow, verb: str) -> None:
+    """Check the role needed to retry or cancel ``job``: the role of the action that created it."""
+    require(principal, verb, "job_own" if job.kind in OPERATOR_JOB_KINDS else "job")
 
 
 @dataclass(frozen=True)
@@ -106,13 +114,16 @@ class JobService:
     async def retry(
         self, principal: Principal, tenant_id: UUID, job_id: UUID, *, request_id: str | None = None
     ) -> JobRow:
-        """Queue a ``dead`` job again with a fresh attempt budget (operator).
+        """Queue a ``dead`` job again with a fresh attempt budget.
+
+        An operator may retry the jobs of their own actions; any other job needs a tenant admin.
 
         Raises:
             ConflictError: If the job is not ``dead`` or ``failed``.
         """
-        require_role(principal, Role.OPERATOR)
+        require(principal, "retry", "job_own")
         job = await self.get(principal, tenant_id, job_id)
+        _require_job_role(principal, job, "retry")
         if not await queue.retry(self._db.admin, job.id):
             raise ConflictError(f"a {job.state} job cannot be retried; only dead jobs can")
         await self._audit(principal, tenant_id, job, "job.retried", request_id)
@@ -121,15 +132,16 @@ class JobService:
     async def cancel(
         self, principal: Principal, tenant_id: UUID, job_id: UUID, *, request_id: str | None = None
     ) -> JobRow:
-        """Cancel a job that has not started (operator).
+        """Cancel a job that has not started (same role rule as :meth:`retry`).
 
         A cancelled apply job puts its change set in ``failed``, so it can be applied again.
 
         Raises:
             ConflictError: If the job already started or finished.
         """
-        require_role(principal, Role.OPERATOR)
+        require(principal, "cancel", "job_own")
         job = await self.get(principal, tenant_id, job_id)
+        _require_job_role(principal, job, "cancel")
         if not await queue.cancel(self._db.admin, job.id):
             raise ConflictError(f"a {job.state} job cannot be cancelled; only queued jobs can")
         if job.kind == APPLY_KIND and job.change_set_id is not None:

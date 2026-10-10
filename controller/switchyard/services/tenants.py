@@ -16,15 +16,13 @@ from switchyard.db import models as m
 from switchyard.db.models import TenantRow
 from switchyard.db.tenancy import admin_session
 from switchyard.domain.validators import validate_name
-from switchyard.domain.workflow import Role
 from switchyard.ids import uuid7
-from switchyard.services.changesets import require_role
+from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import (
     AlreadyExistsError,
     ConflictError,
     NotFoundError,
-    PermissionDeniedError,
 )
 
 _OBJECT_TABLES = (
@@ -46,7 +44,6 @@ class TenantRecord:
     id: UUID
     name: str
     version: int
-    oidc_group: str | None
     quotas: dict[str, int]
     require_approval: bool
 
@@ -56,7 +53,6 @@ def _record(row: TenantRow) -> TenantRecord:
         id=row.id,
         name=row.name,
         version=row.version,
-        oidc_group=row.oidc_group,
         quotas=dict(row.quotas),
         require_approval=row.require_approval,
     )
@@ -102,13 +98,12 @@ class TenantService:
         principal: Principal,
         name: str,
         *,
-        oidc_group: str | None = None,
         quotas: dict[str, int] | None = None,
         require_approval: bool = False,
         request_id: str | None = None,
     ) -> TenantRecord:
         """Create a tenant (system administrators only)."""
-        require_role(principal, Role.SYSTEM_ADMIN)
+        require(principal, "manage", "tenant")
         validate_name(name)
         async with admin_session(self._db.admin) as session:
             if (await session.execute(select(TenantRow.id).where(TenantRow.name == name))).first():
@@ -116,7 +111,6 @@ class TenantService:
             row = TenantRow(
                 id=uuid7(),
                 name=name,
-                oidc_group=oidc_group,
                 quotas=quotas or {},
                 require_approval=require_approval,
             )
@@ -141,21 +135,23 @@ class TenantService:
         changes: dict[str, Any],
         request_id: str | None = None,
     ) -> TenantRecord:
-        """Change ``oidc_group``, ``quotas`` or ``require_approval``.
+        """Change ``quotas`` or ``require_approval``.
 
         System administrators may change any of them; tenant administrators may only toggle
         ``require_approval`` for their own tenant (turning approval *on* is always allowed; turning
         it off needs a system administrator, so a compromised tenant account cannot drop review).
         """
-        allowed = {"oidc_group", "quotas", "require_approval"}
+        allowed = {"quotas", "require_approval"}
         if unknown := set(changes) - allowed:
             raise ValueError(f"cannot change: {', '.join(sorted(unknown))}")
         if not principal.can_access(tenant_id):
             raise NotFoundError("tenant not found")
         if not principal.is_system:
-            require_role(principal, Role.TENANT_ADMIN)
-            if set(changes) - {"require_approval"} or changes.get("require_approval") is False:
-                raise PermissionDeniedError("only a system administrator may make this change")
+            require(principal, "enable", "require_approval")
+            if set(changes) - {"require_approval"}:
+                require(principal, "change", "quota")
+            if changes.get("require_approval") is False:
+                require(principal, "disable", "require_approval")
         async with admin_session(self._db.admin) as session:
             row = (
                 await session.execute(
@@ -184,7 +180,7 @@ class TenantService:
         self, principal: Principal, tenant_id: UUID, *, request_id: str | None = None
     ) -> None:
         """Delete an empty tenant (system administrators only)."""
-        require_role(principal, Role.SYSTEM_ADMIN)
+        require(principal, "manage", "tenant")
         async with admin_session(self._db.admin) as session:
             row = (
                 await session.execute(select(TenantRow).where(TenantRow.id == tenant_id))

@@ -129,7 +129,6 @@ class Tenant(Entity):
     """Root of ownership. The ``system`` tenant holds shared objects."""
 
     name: Name
-    oidc_group: str | None = Field(default=None, max_length=255)
     quotas: dict[str, int] = Field(default_factory=dict)
     require_approval: bool = False
 
