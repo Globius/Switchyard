@@ -1,0 +1,20 @@
+# Local development services. `docker compose -f deploy/dev/compose.yaml up -d --wait`
+name: switchyard-dev
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres  # dev only
+      POSTGRES_DB: switchyard
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d switchyard"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  pgdata:

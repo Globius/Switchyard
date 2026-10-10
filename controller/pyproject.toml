@@ -1,0 +1,79 @@
+[project]
+name = "switchyard"
+version = "0.1.0"
+description = "Switchyard controller: multi-tenant HAProxy service-engine control plane"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "pydantic>=2.9",
+  "sqlalchemy[asyncio]>=2.0.36",
+  "alembic>=1.14",
+  "psycopg[binary]>=3.2",
+  "jinja2>=3.1.4",
+  "typer>=0.15",
+  "pyyaml>=6.0",
+]
+
+[project.scripts]
+syctl = "switchyard.cli:app"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6.0",
+  "hypothesis>=6.120",
+  "testcontainers[postgres]>=4.9",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "pre-commit>=4.0",
+  "types-PyYAML>=6.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["tests/golden"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "D", "S", "PT", "T20"]
+ignore = ["D203", "D213", "RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D", "S101", "S105", "S106", "S608"]
+"switchyard/db/migrations/**" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["switchyard", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["testcontainers.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+  "docker: needs a Docker daemon (PostgreSQL or HAProxy containers)",
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["switchyard"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
