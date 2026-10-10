@@ -246,12 +246,30 @@ class TokenCreated(ApiModel):
 
 
 class EngineRead(ApiModel):
-    """A service engine."""
+    """A service engine (SE VM) with where it runs and whether its agent has enrolled.
+
+    Live health (reachable, drift, BGP/VRRP) is in `GET /status/engines`, not here.
+    """
 
     id: UUID
     name: str
     url: str = Field(description="Data Plane API URL.")
     state: EngineState
+    se_group_id: UUID
+    mgmt_ip: str | None = Field(default=None, description="Management address (BGP router id).")
+    agent_url: str | None = Field(default=None, description="`host:port` of `sy-agent`, if any.")
+    pve_node: str | None = Field(
+        default=None, description="Proxmox node of the VM; null for a hand-built engine."
+    )
+    vmid: int | None = Field(
+        default=None, description="Proxmox VM id; null for a hand-built engine."
+    )
+    agent_enrolled: bool = Field(
+        description="True once `sy-agent enroll` has traded a token for a client certificate."
+    )
+    agent_cert_serial: str | None = Field(
+        default=None, description="Serial of the agent's client certificate."
+    )
 
 
 class EnrollmentToken(ApiModel):
@@ -515,13 +533,35 @@ class VirtualServiceState(StrEnum):
     NOT_SERVED = "not_served"
 
 
+class VirtualServiceHealth(StrEnum):
+    """Health of a virtual service worked out from its pool members' check results."""
+
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    DOWN = "down"
+    UNKNOWN = "unknown"
+    DISABLED = "disabled"
+
+
 class VirtualServiceStatusRead(ApiModel):
-    """State of one virtual service; `not_served` is reserved for one no engine can render."""
+    """State and health of one virtual service.
+
+    `state` says whether the data plane renders it (`not_served` is reserved for one no engine
+    can render). `health` says whether it can serve: look at the reported member rows of its
+    pools (default and route pools) on the reachable engines of its SE group. `disabled`: the
+    service is disabled. `unknown`: no engine of the group is reachable or none has reported
+    yet. `healthy`: every row is `UP` and every reachable engine reported. `down`: no row is
+    `UP`, or a pool has no members. `degraded`: some rows are `UP`, or a reachable engine did not
+    report. Draining members are not `UP`.
+    """
 
     id: UUID
     name: str
     protocol: str
     state: VirtualServiceState
+    health: VirtualServiceHealth
+    members_up: int = Field(description="Reported member rows that are `UP`, across engines.")
+    members_total: int = Field(description="Reported member rows of the service's pools.")
 
 
 class DriftKind(StrEnum):
@@ -605,10 +645,21 @@ class JobRead(ApiModel):
     result: dict[str, Any] | None = Field(default=None, description="Shape depends on `kind`.")
 
 
+class AuditActionRead(ApiModel):
+    """One kind of audit event."""
+
+    action: str = Field(description="The dotted name found in `AuditEventRead.action`.")
+    category: str = Field(description="The part of `action` before the first dot.")
+    description: str
+
+
 class AuditEventRead(ApiModel):
     """One audit-log entry."""
 
     at: datetime
+    tenant_id: UUID | None = Field(
+        default=None, description="The tenant concerned; null for system-level events."
+    )
     actor: str
     action: str
     object: str | None = None

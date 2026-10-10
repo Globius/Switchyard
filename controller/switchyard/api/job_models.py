@@ -1,8 +1,9 @@
 """Response models for the job endpoints (ticket T5, ADR 0016)."""
 
-__all__ = ["Job", "JobLog", "JobStage", "LogLine", "Page"]
+__all__ = ["Job", "JobKind", "JobLog", "JobStage", "LogLine", "Page"]
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
@@ -12,6 +13,36 @@ from switchyard.api.schemas import ApiModel, Page
 from switchyard.db.ops_models import JobRow
 from switchyard.domain.workflow import JobState
 from switchyard.jobs.progress import StageState
+
+
+class JobKind(StrEnum):
+    """Every kind of background job, for filters and labels.
+
+    Attributes:
+        APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,
+            commit). Result: `ApplyJobResult`.
+        DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.
+        RETIRE_ENGINE: Destroys an engine's VM and removes its record.
+        APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.
+        ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the
+            `system:certs` change set that records it.
+        RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.
+        SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.
+        POLL_STATUS: Scheduled engine status poll and drift detection.
+        GIT_MIRROR: Pushes a revision to the Git mirror.
+        GC: Scheduled housekeeping.
+    """
+
+    APPLY_CHANGE_SET = "apply_change_set"
+    DEPLOY_SE_GROUP = "deploy_se_group"
+    RETIRE_ENGINE = "retire_engine"
+    APPLY_SDN = "apply_sdn"
+    ISSUE_CERT = "issue_cert"
+    RENEW_CERTS = "renew_certs"
+    SYNC_CLOUDFLARE_IPS = "sync_cloudflare_ips"
+    POLL_STATUS = "poll_status"
+    GIT_MIRROR = "git_mirror"
+    GC = "gc"
 
 
 class JobStage(ApiModel):
@@ -56,7 +87,7 @@ class Job(ApiModel):
     """A background job."""
 
     id: UUID
-    kind: str
+    kind: JobKind
     state: JobState
     tenant_id: UUID | None = None
     change_set_id: UUID | None = None
@@ -84,7 +115,7 @@ class Job(ApiModel):
         ok = result.get("ok") if isinstance(result, dict) and "ok" in result else None
         return cls(
             id=row.id,
-            kind=row.kind,
+            kind=JobKind(row.kind),
             state=JobState(row.state),
             tenant_id=row.tenant_id,
             change_set_id=row.change_set_id,

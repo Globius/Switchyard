@@ -10,7 +10,7 @@ import hmac
 import uuid
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from urllib.parse import parse_qs
@@ -33,6 +33,7 @@ from switchyard.api.schemas import (
     VALIDATION_RESPONSE,
     Accepted,
     ApplyIn,
+    AuditActionRead,
     AuditEventRead,
     AuthProviders,
     BreakGlassIn,
@@ -74,6 +75,7 @@ from switchyard.api.schemas import (
     VipPoolUsage,
     VirtualServiceStatusRead,
 )
+from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain.changes import (
     COLLECTION,
@@ -92,7 +94,7 @@ from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
 from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import ChangeSetDetail, ChangeSetService
 from switchyard.services.context import Databases, Principal
-from switchyard.services.engines import EngineService
+from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.jobs import JobService
@@ -276,6 +278,23 @@ def _ok(
     return out | (extra or {})
 
 
+def _engine_json(d: EngineDetail) -> dict[str, Any]:
+    e = d.record
+    return {
+        "id": str(e.id),
+        "name": e.name,
+        "url": e.dataplane_url,
+        "state": e.state.value,
+        "se_group_id": str(e.se_group_id),
+        "mgmt_ip": e.mgmt_ip,
+        "agent_url": e.agent_url,
+        "pve_node": d.pve_node,
+        "vmid": d.vmid,
+        "agent_enrolled": d.agent_cert_serial is not None,
+        "agent_cert_serial": d.agent_cert_serial,
+    }
+
+
 def _object_json(obj: Any, status: DraftStatus, changed: tuple[str, ...]) -> dict[str, Any]:
     data: dict[str, Any] = obj.model_dump(mode="json")
     data["draft_status"] = status.value
@@ -314,6 +333,92 @@ async def _view(
             old = next(o for o in getattr(base, attr) if o.id == info.object_id)
             out.append(_object_json(old, DraftStatus.DELETED, ()))
     return out
+
+
+AUDIT_DESCRIPTION = (
+    "Append-only record of who did what. Filter by `actor` and `action` (exact, or a prefix when "
+    "the value ends in `*`, for example `change_set.*`; the names are in `GET /audit-actions`), "
+    "by `object` (exact reference such as `change_set:<id>` or `job:<id>`), by time (`since` "
+    "inclusive, `until` exclusive) and by free text `q` (substring of actor, action or object). "
+    "Newest first; page with `limit` (1-500) and `cursor`."
+)
+
+
+@dataclass
+class AuditFilters:
+    """Query parameters shared by the audit routes."""
+
+    actor: Annotated[str | None, Query()] = None
+    action: Annotated[str | None, Query()] = None
+    object: Annotated[str | None, Query()] = None
+    since: Annotated[datetime | None, Query()] = None
+    until: Annotated[datetime | None, Query()] = None
+    q: Annotated[str | None, Query(max_length=200)] = None
+    cursor: Annotated[str | None, Query()] = None
+    limit: Annotated[int, Query(ge=1, le=500)] = 100
+    tenant_id: UUID | None = field(default=None, init=False)
+
+
+async def _audit_page(session: Any, f: AuditFilters) -> Page[Any]:
+    from sqlalchemy import and_, or_, select
+
+    from switchyard.db.ops_models import AuditEventRow as A
+
+    def matches(column: Any, value: str) -> Any:
+        if value.endswith("*"):
+            return column.like(_like_escape(value[:-1]) + "%", escape="\\")
+        return column == value
+
+    stmt = select(A).order_by(A.at.desc(), A.id.desc()).limit(f.limit + 1)
+    if f.tenant_id:
+        stmt = stmt.where(A.tenant_id == f.tenant_id)
+    if f.actor:
+        stmt = stmt.where(matches(A.actor, f.actor))
+    if f.action:
+        stmt = stmt.where(matches(A.action, f.action))
+    if f.object:
+        stmt = stmt.where(matches(A.object_ref, f.object))
+    if f.since:
+        stmt = stmt.where(A.at >= f.since)
+    if f.until:
+        stmt = stmt.where(A.at < f.until)
+    if f.q:
+        like = "%" + _like_escape(f.q) + "%"
+        stmt = stmt.where(
+            or_(
+                A.actor.ilike(like, escape="\\"),
+                A.action.ilike(like, escape="\\"),
+                A.object_ref.ilike(like, escape="\\"),
+            )
+        )
+    if f.cursor:
+        try:
+            at_text, id_text = f.cursor.split("|", 1)
+            after = (_EPOCH + timedelta(microseconds=int(at_text)), UUID(id_text))
+        except ValueError:
+            raise ApiError(400, "cursor is not valid") from None
+        stmt = stmt.where(or_(A.at < after[0], and_(A.at == after[0], A.id < after[1])))
+    rows = list((await session.execute(stmt)).scalars())
+    window = rows[: f.limit]
+    return Page(
+        items=[
+            AuditEventRead(
+                at=r.at,
+                tenant_id=r.tenant_id,
+                actor=r.actor,
+                action=r.action,
+                object=r.object_ref,
+                diff=r.diff,
+                request_id=r.request_id,
+            )
+            for r in window
+        ],
+        next_cursor=(
+            f"{(window[-1].at - _EPOCH) // timedelta(microseconds=1)}|{window[-1].id}"
+            if len(rows) > f.limit
+            else None
+        ),
+    )
 
 
 async def _pool_usage(
@@ -1277,6 +1382,11 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         "/tenants/{t}/revisions",
         tags=["revisions"],
         summary="List revisions",
+        description=(
+            "Applied revisions, newest first. `object` (an object id of any type) keeps the "
+            "revisions whose change set had an operation on that object: the History tab of an "
+            "object page. Page with `limit` and `cursor`. Requires any role in the tenant."
+        ),
         response_model=Page[RevisionSummary],
         responses=_ok({"items": [ex.REVISION_SUMMARY], "next_cursor": None}),
     )
@@ -1284,12 +1394,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         tenant: Tenant,
         who: Who,
         svc: Services,
+        object: UUID | None = None,  # noqa: A002 - the query parameter is part of the API
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> Page[Any]:
-        """List applied revisions, newest first."""
+        """List applied revisions, newest first; ``object`` keeps those that touched an object."""
         records = await svc.change_sets.revisions(
-            who, tenant.id, limit=limit + 1, before=_int_cursor(cursor)
+            who, tenant.id, limit=limit + 1, before=_int_cursor(cursor), object_id=object
         )
         window = records[:limit]
         return Page(
@@ -1361,9 +1472,46 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         group: UUID, tenant: Tenant, who: Who, svc: Services
     ) -> list[dict[str, Any]]:
         return [
-            {"id": str(e.id), "name": e.name, "url": e.dataplane_url, "state": e.state.value}
-            for e in await svc.engines.list_engines(who, tenant.id, group)
+            _engine_json(d) for d in await svc.engines.describe(who, tenant.id, se_group_id=group)
         ]
+
+    @router.get(
+        "/tenants/{t}/engines",
+        tags=["engines"],
+        summary="List every engine of the tenant",
+        description=(
+            "All service engines across SE groups, by group then name, with Proxmox placement "
+            "(`pve_node`, `vmid`) and agent enrollment. Filter with `se_group` and `state`. "
+            "Live health is in `GET /status/engines`. Requires any role in the tenant."
+        ),
+        response_model=list[EngineRead],
+        responses=_ok([ex.ENGINE_READ]),
+    )
+    async def list_tenant_engines(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        se_group: UUID | None = None,
+        state: EngineState | None = None,
+    ) -> list[dict[str, Any]]:
+        return [
+            _engine_json(d)
+            for d in await svc.engines.describe(who, tenant.id, se_group_id=se_group, state=state)
+        ]
+
+    @router.get(
+        "/tenants/{t}/engines/{engine}",
+        tags=["engines"],
+        summary="Get one engine",
+        description="One engine with placement and enrollment. `404` if it is not in the tenant.",
+        response_model=EngineRead,
+        responses=_ok(ex.ENGINE_READ),
+    )
+    async def get_engine(engine: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        found = await svc.engines.describe(who, tenant.id, engine_id=engine)
+        if not found:
+            raise ApiError(404, f"engine {engine} not found")
+        return _engine_json(found[0])
 
     @router.post(
         "/tenants/{t}/se-groups/{group}/engines",
@@ -1387,7 +1535,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             agent_url=body.agent_url,
             request_id=_rid(),
         )
-        return {"id": str(e.id), "name": e.name, "url": e.dataplane_url, "state": e.state.value}
+        return _engine_json(EngineDetail(e))
 
     @router.put(
         "/tenants/{t}/engines/{engine}/state",
@@ -1665,7 +1813,15 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     ) -> list[dict[str, Any]]:
         """UDP services are `serving` (IPVS); `not_served` is reserved for unrenderable ones."""
         return [
-            {"id": v.id, "name": v.name, "protocol": v.protocol, "state": v.state}
+            {
+                "id": v.id,
+                "name": v.name,
+                "protocol": v.protocol,
+                "state": v.state,
+                "health": v.health,
+                "members_up": v.members_up,
+                "members_total": v.members_total,
+            }
             for v in await svc.status.virtual_services(who, tenant.id)
         ]
 
@@ -1760,7 +1916,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         who: Who,
         svc: Services,
         state: JobState | None = None,
-        kind: str | None = None,
+        kind: job_models.JobKind | None = None,
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> Any:
@@ -1825,13 +1981,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         "/tenants/{t}/audit-events",
         tags=["audit"],
         summary="List audit events, newest first",
-        description=(
-            "Append-only record of who did what in the tenant. Filter by `actor` and `action` "
-            "(exact, or a prefix when the value ends in `*`, for example `change_set.*`), by "
-            "`object` (exact reference such as `change_set:<id>`), by time (`since` inclusive, "
-            "`until` exclusive) and by free text `q` (substring of actor, action or object). "
-            "Page with `limit` and `cursor`. Requires any role in the tenant."
-        ),
+        description=AUDIT_DESCRIPTION + " Requires any role in the tenant.",
         response_model=Page[AuditEventRead],
         responses=_ok({"items": [ex.AUDIT_EVENT], "next_cursor": None}),
     )
@@ -1839,72 +1989,54 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         tenant: Tenant,
         who: Who,
         svc: Services,
-        actor: str | None = None,
-        action: str | None = None,
-        object: str | None = None,  # noqa: A002 - the query parameter is part of the API
-        since: datetime | None = None,
-        until: datetime | None = None,
-        q: Annotated[str | None, Query(max_length=200)] = None,
-        cursor: str | None = None,
-        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+        filters: Annotated[AuditFilters, Depends()],
     ) -> Page[Any]:
-        from sqlalchemy import and_, or_, select
-
-        from switchyard.db.ops_models import AuditEventRow as A
-
-        def matches(column: Any, value: str) -> Any:
-            if value.endswith("*"):
-                return column.like(_like_escape(value[:-1]) + "%", escape="\\")
-            return column == value
-
-        stmt = select(A).order_by(A.at.desc(), A.id.desc()).limit(limit + 1)
-        if actor:
-            stmt = stmt.where(matches(A.actor, actor))
-        if action:
-            stmt = stmt.where(matches(A.action, action))
-        if object:
-            stmt = stmt.where(matches(A.object_ref, object))
-        if since:
-            stmt = stmt.where(A.at >= since)
-        if until:
-            stmt = stmt.where(A.at < until)
-        if q:
-            like = "%" + _like_escape(q) + "%"
-            stmt = stmt.where(
-                or_(
-                    A.actor.ilike(like, escape="\\"),
-                    A.action.ilike(like, escape="\\"),
-                    A.object_ref.ilike(like, escape="\\"),
-                )
-            )
-        if cursor:
-            try:
-                at_text, id_text = cursor.split("|", 1)
-                after = (_EPOCH + timedelta(microseconds=int(at_text)), UUID(id_text))
-            except ValueError:
-                raise ApiError(400, "cursor is not valid") from None
-            stmt = stmt.where(or_(A.at < after[0], and_(A.at == after[0], A.id < after[1])))
         async with tenant_session(svc.db.app, [tenant.id]) as session:
-            rows = list((await session.execute(stmt)).scalars())
-        window = rows[:limit]
-        return Page(
-            items=[
-                AuditEventRead(
-                    at=r.at,
-                    actor=r.actor,
-                    action=r.action,
-                    object=r.object_ref,
-                    diff=r.diff,
-                    request_id=r.request_id,
-                )
-                for r in window
-            ],
-            next_cursor=(
-                f"{(window[-1].at - _EPOCH) // timedelta(microseconds=1)}|{window[-1].id}"
-                if len(rows) > limit
-                else None
-            ),
-        )
+            return await _audit_page(session, filters)
+
+    @router.get(
+        "/audit-events",
+        tags=["audit"],
+        summary="List audit events across tenants (system-admin)",
+        description=(
+            AUDIT_DESCRIPTION
+            + " This route spans every tenant and the system-level events that belong to none "
+            "(sign-ins, tenant creation); narrow it with `tenant` (id or name). Requires "
+            "`system-admin`."
+        ),
+        response_model=Page[AuditEventRead],
+        responses=_ok({"items": [ex.AUDIT_EVENT], "next_cursor": None}),
+    )
+    async def system_audit_events(
+        who: Who,
+        svc: Services,
+        filters: Annotated[AuditFilters, Depends()],
+        tenant: Annotated[str | None, Query(description="Tenant id or name.")] = None,
+    ) -> Page[Any]:
+        if not who.is_system:
+            raise ApiError(403, "the system-wide audit log needs the system-admin role")
+        if tenant:
+            filters.tenant_id = (await svc.tenants.resolve(who, tenant)).id
+        async with admin_session(svc.db.admin) as session:
+            return await _audit_page(session, filters)
+
+    @router.get(
+        "/audit-actions",
+        tags=["audit"],
+        summary="Catalog of audit event actions",
+        description=(
+            "Every `action` an audit event can carry, with its category (the part before the "
+            "dot) and a one-sentence description, for labels and filters. Any authenticated "
+            "caller."
+        ),
+        response_model=list[AuditActionRead],
+        responses=_ok([ex.AUDIT_ACTION]),
+    )
+    async def audit_actions(who: Who) -> list[AuditActionRead]:
+        return [
+            AuditActionRead(action=a.action, category=a.category, description=a.description)
+            for a in CATALOG
+        ]
 
     app.include_router(router)
     app.openapi = lambda: _problem_json_openapi(app)  # type: ignore[method-assign]

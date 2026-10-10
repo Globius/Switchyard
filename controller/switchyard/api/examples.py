@@ -265,12 +265,22 @@ ENGINE_READ = {
     "name": "edge-1",
     "url": "https://198.51.100.21:5555",
     "state": "enabled",
+    "se_group_id": SE_GROUP,
+    "mgmt_ip": "192.0.2.21",
+    "agent_url": "192.0.2.21:7443",
+    "pve_node": "pve1",
+    "vmid": 9101,
+    "agent_enrolled": True,
+    "agent_cert_serial": "3f2a9c",
 }
 VIRTUAL_SERVICE_STATUS = {
     "id": "00000000-0000-0000-0000-0000000000d1",
     "name": "dns",
     "protocol": "udp",
     "state": "serving",
+    "health": "degraded",
+    "members_up": 3,
+    "members_total": 4,
 }
 
 ENGINE_STATUS = {
@@ -341,8 +351,14 @@ JOB_LOG = {
     "job_id": JOB,
     "lines": [{"at": WHEN, "level": "info", "message": "attempt 1 claimed by worker-1"}],
 }
+AUDIT_ACTION = {
+    "action": "change_set.applied",
+    "category": "change_set",
+    "description": "A change set finished applying and became a revision.",
+}
 AUDIT_EVENT = {
     "at": WHEN,
+    "tenant_id": TENANT,
     "actor": "user:alice",
     "action": "change_set.apply",
     "object": f"change_set:{CHANGE_SET}",

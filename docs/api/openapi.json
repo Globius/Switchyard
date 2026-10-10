@@ -480,6 +480,33 @@
         "title": "ApplyJobResult",
         "type": "object"
       },
+      "AuditActionRead": {
+        "additionalProperties": false,
+        "description": "One kind of audit event.",
+        "properties": {
+          "action": {
+            "description": "The dotted name found in `AuditEventRead.action`.",
+            "title": "Action",
+            "type": "string"
+          },
+          "category": {
+            "description": "The part of `action` before the first dot.",
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "category",
+          "description"
+        ],
+        "title": "AuditActionRead",
+        "type": "object"
+      },
       "AuditEventRead": {
         "additionalProperties": false,
         "description": "One audit-log entry.",
@@ -530,6 +557,19 @@
               }
             ],
             "title": "Request Id"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The tenant concerned; null for system-level events.",
+            "title": "Tenant Id"
           }
         },
         "required": [
@@ -1935,15 +1975,73 @@
       },
       "EngineRead": {
         "additionalProperties": false,
-        "description": "A service engine.",
+        "description": "A service engine (SE VM) with where it runs and whether its agent has enrolled.\n\nLive health (reachable, drift, BGP/VRRP) is in `GET /status/engines`, not here.",
         "properties": {
+          "agent_cert_serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Serial of the agent's client certificate.",
+            "title": "Agent Cert Serial"
+          },
+          "agent_enrolled": {
+            "description": "True once `sy-agent enroll` has traded a token for a client certificate.",
+            "title": "Agent Enrolled",
+            "type": "boolean"
+          },
+          "agent_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`host:port` of `sy-agent`, if any.",
+            "title": "Agent Url"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
           },
+          "mgmt_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Management address (BGP router id).",
+            "title": "Mgmt Ip"
+          },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "pve_node": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proxmox node of the VM; null for a hand-built engine.",
+            "title": "Pve Node"
+          },
+          "se_group_id": {
+            "format": "uuid",
+            "title": "Se Group Id",
             "type": "string"
           },
           "state": {
@@ -1953,13 +2051,27 @@
             "description": "Data Plane API URL.",
             "title": "Url",
             "type": "string"
+          },
+          "vmid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Proxmox VM id; null for a hand-built engine.",
+            "title": "Vmid"
           }
         },
         "required": [
           "id",
           "name",
           "url",
-          "state"
+          "state",
+          "se_group_id",
+          "agent_enrolled"
         ],
         "title": "EngineRead",
         "type": "object"
@@ -2845,8 +2957,7 @@
             "type": "string"
           },
           "kind": {
-            "title": "Kind",
-            "type": "string"
+            "$ref": "#/components/schemas/JobKind"
           },
           "max_attempts": {
             "title": "Max Attempts",
@@ -2946,6 +3057,23 @@
         ],
         "title": "JobAccepted",
         "type": "object"
+      },
+      "JobKind": {
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.",
+        "enum": [
+          "apply_change_set",
+          "deploy_se_group",
+          "retire_engine",
+          "apply_sdn",
+          "issue_cert",
+          "renew_certs",
+          "sync_cloudflare_ips",
+          "poll_status",
+          "git_mirror",
+          "gc"
+        ],
+        "title": "JobKind",
+        "type": "string"
       },
       "JobLog": {
         "additionalProperties": false,
@@ -6602,6 +6730,18 @@
         "title": "VirtualServiceCreate",
         "type": "object"
       },
+      "VirtualServiceHealth": {
+        "description": "Health of a virtual service worked out from its pool members' check results.",
+        "enum": [
+          "healthy",
+          "degraded",
+          "down",
+          "unknown",
+          "disabled"
+        ],
+        "title": "VirtualServiceHealth",
+        "type": "string"
+      },
       "VirtualServicePatch": {
         "additionalProperties": false,
         "properties": {
@@ -6960,12 +7100,25 @@
       },
       "VirtualServiceStatusRead": {
         "additionalProperties": false,
-        "description": "State of one virtual service; `not_served` is reserved for one no engine can render.",
+        "description": "State and health of one virtual service.\n\n`state` says whether the data plane renders it (`not_served` is reserved for one no engine\ncan render). `health` says whether it can serve: look at the reported member rows of its\npools (default and route pools) on the reachable engines of its SE group. `disabled`: the\nservice is disabled. `unknown`: no engine of the group is reachable or none has reported\nyet. `healthy`: every row is `UP` and every reachable engine reported. `down`: no row is\n`UP`, or a pool has no members. `degraded`: some rows are `UP`, or a reachable engine did not\nreport. Draining members are not `UP`.",
         "properties": {
+          "health": {
+            "$ref": "#/components/schemas/VirtualServiceHealth"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "members_total": {
+            "description": "Reported member rows of the service's pools.",
+            "title": "Members Total",
+            "type": "integer"
+          },
+          "members_up": {
+            "description": "Reported member rows that are `UP`, across engines.",
+            "title": "Members Up",
+            "type": "integer"
           },
           "name": {
             "title": "Name",
@@ -6983,7 +7136,10 @@
           "id",
           "name",
           "protocol",
-          "state"
+          "state",
+          "health",
+          "members_up",
+          "members_total"
         ],
         "title": "VirtualServiceStatusRead",
         "type": "object"
@@ -7432,6 +7588,334 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/audit-actions": {
+      "get": {
+        "description": "Every `action` an audit event can carry, with its category (the part before the dot) and a one-sentence description, for labels and filters. Any authenticated caller.",
+        "operationId": "audit_actions_api_v1_audit_actions_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "action": "change_set.applied",
+                    "category": "change_set",
+                    "description": "A change set finished applying and became a revision."
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AuditActionRead"
+                  },
+                  "title": "Response Audit Actions Api V1 Audit Actions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog of audit event actions",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/api/v1/audit-events": {
+      "get": {
+        "description": "Append-only record of who did what. Filter by `actor` and `action` (exact, or a prefix when the value ends in `*`, for example `change_set.*`; the names are in `GET /audit-actions`), by `object` (exact reference such as `change_set:<id>` or `job:<id>`), by time (`since` inclusive, `until` exclusive) and by free text `q` (substring of actor, action or object). Newest first; page with `limit` (1-500) and `cursor`. This route spans every tenant and the system-level events that belong to none (sign-ins, tenant creation); narrow it with `tenant` (id or name). Requires `system-admin`.",
+        "operationId": "system_audit_events_api_v1_audit_events_get",
+        "parameters": [
+          {
+            "description": "Tenant id or name.",
+            "in": "query",
+            "name": "tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant id or name.",
+              "title": "Tenant"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "object",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Object"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "action": "change_set.apply",
+                      "actor": "user:alice",
+                      "at": "2026-10-10T08:30:00Z",
+                      "object": "change_set:0192f3a0-0000-7000-8000-000000000020",
+                      "request_id": "b7d4c2e0a1f34b6e",
+                      "tenant_id": "0192f3a0-0000-7000-8000-000000000001"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AuditEventRead_"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List audit events across tenants (system-admin)",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
     "/api/v1/auth/break-glass": {
       "post": {
         "description": "Log in the local administrator (password + TOTP). Off unless enabled.",
@@ -8690,7 +9174,7 @@
     },
     "/api/v1/tenants/{t}/audit-events": {
       "get": {
-        "description": "Append-only record of who did what in the tenant. Filter by `actor` and `action` (exact, or a prefix when the value ends in `*`, for example `change_set.*`), by `object` (exact reference such as `change_set:<id>`), by time (`since` inclusive, `until` exclusive) and by free text `q` (substring of actor, action or object). Page with `limit` and `cursor`. Requires any role in the tenant.",
+        "description": "Append-only record of who did what. Filter by `actor` and `action` (exact, or a prefix when the value ends in `*`, for example `change_set.*`; the names are in `GET /audit-actions`), by `object` (exact reference such as `change_set:<id>` or `job:<id>`), by time (`since` inclusive, `until` exclusive) and by free text `q` (substring of actor, action or object). Newest first; page with `limit` (1-500) and `cursor`. Requires any role in the tenant.",
         "operationId": "audit_events_api_v1_tenants__t__audit_events_get",
         "parameters": [
           {
@@ -8857,7 +9341,8 @@
                       "actor": "user:alice",
                       "at": "2026-10-10T08:30:00Z",
                       "object": "change_set:0192f3a0-0000-7000-8000-000000000020",
-                      "request_id": "b7d4c2e0a1f34b6e"
+                      "request_id": "b7d4c2e0a1f34b6e",
+                      "tenant_id": "0192f3a0-0000-7000-8000-000000000001"
                     }
                   ]
                 },
@@ -11466,6 +11951,147 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/engines": {
+      "get": {
+        "description": "All service engines across SE groups, by group then name, with Proxmox placement (`pve_node`, `vmid`) and agent enrollment. Filter with `se_group` and `state`. Live health is in `GET /status/engines`. Requires any role in the tenant.",
+        "operationId": "list_tenant_engines_api_v1_tenants__t__engines_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "se_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Se Group"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EngineState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "agent_cert_serial": "3f2a9c",
+                    "agent_enrolled": true,
+                    "agent_url": "192.0.2.21:7443",
+                    "id": "0192f3a0-0000-7000-8000-000000000022",
+                    "mgmt_ip": "192.0.2.21",
+                    "name": "edge-1",
+                    "pve_node": "pve1",
+                    "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
+                    "state": "enabled",
+                    "url": "https://198.51.100.21:5555",
+                    "vmid": 9101
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EngineRead"
+                  },
+                  "title": "Response List Tenant Engines Api V1 Tenants  T  Engines Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List every engine of the tenant",
+        "tags": [
+          "engines"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/engines/{engine}": {
       "delete": {
         "operationId": "remove_engine_api_v1_tenants__t__engines__engine__delete",
@@ -11522,6 +12148,116 @@
           }
         },
         "summary": "Remove an engine record",
+        "tags": [
+          "engines"
+        ]
+      },
+      "get": {
+        "description": "One engine with placement and enrollment. `404` if it is not in the tenant.",
+        "operationId": "get_engine_api_v1_tenants__t__engines__engine__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engine",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engine",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "agent_cert_serial": "3f2a9c",
+                  "agent_enrolled": true,
+                  "agent_url": "192.0.2.21:7443",
+                  "id": "0192f3a0-0000-7000-8000-000000000022",
+                  "mgmt_ip": "192.0.2.21",
+                  "name": "edge-1",
+                  "pve_node": "pve1",
+                  "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
+                  "state": "enabled",
+                  "url": "https://198.51.100.21:5555",
+                  "vmid": 9101
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/EngineRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get one engine",
         "tags": [
           "engines"
         ]
@@ -12811,7 +13547,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "$ref": "#/components/schemas/JobKind"
                 },
                 {
                   "type": "null"
@@ -16474,7 +17210,7 @@
     },
     "/api/v1/tenants/{t}/revisions": {
       "get": {
-        "description": "List applied revisions, newest first.",
+        "description": "Applied revisions, newest first. `object` (an object id of any type) keeps the revisions whose change set had an operation on that object: the History tab of an object page. Page with `limit` and `cursor`. Requires any role in the tenant.",
         "operationId": "revisions_api_v1_tenants__t__revisions_get",
         "parameters": [
           {
@@ -16484,6 +17220,23 @@
             "schema": {
               "title": "T",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "object",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Object"
             }
           },
           {
@@ -18159,10 +18912,17 @@
               "application/json": {
                 "example": [
                   {
+                    "agent_cert_serial": "3f2a9c",
+                    "agent_enrolled": true,
+                    "agent_url": "192.0.2.21:7443",
                     "id": "0192f3a0-0000-7000-8000-000000000022",
+                    "mgmt_ip": "192.0.2.21",
                     "name": "edge-1",
+                    "pve_node": "pve1",
+                    "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
                     "state": "enabled",
-                    "url": "https://198.51.100.21:5555"
+                    "url": "https://198.51.100.21:5555",
+                    "vmid": 9101
                   }
                 ],
                 "schema": {
@@ -18276,10 +19036,17 @@
             "content": {
               "application/json": {
                 "example": {
+                  "agent_cert_serial": "3f2a9c",
+                  "agent_enrolled": true,
+                  "agent_url": "192.0.2.21:7443",
                   "id": "0192f3a0-0000-7000-8000-000000000022",
+                  "mgmt_ip": "192.0.2.21",
                   "name": "edge-1",
+                  "pve_node": "pve1",
+                  "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
                   "state": "enabled",
-                  "url": "https://198.51.100.21:5555"
+                  "url": "https://198.51.100.21:5555",
+                  "vmid": 9101
                 },
                 "schema": {
                   "$ref": "#/components/schemas/EngineRead"
@@ -19198,7 +19965,10 @@
               "application/json": {
                 "example": [
                   {
+                    "health": "degraded",
                     "id": "00000000-0000-0000-0000-0000000000d1",
+                    "members_total": 4,
+                    "members_up": 3,
                     "name": "dns",
                     "protocol": "udp",
                     "state": "serving"

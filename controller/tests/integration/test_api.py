@@ -662,3 +662,60 @@ async def test_vip_pool_allocations_and_next_free(api: Api) -> None:
         f"{V1}/tenants/acme/vip-pools/{uuid.uuid4()}/allocations", headers=h
     )
     assert missing.status_code == 404
+
+
+async def test_system_audit_engines_and_revision_history(api: Api) -> None:
+    from switchyard.domain.loader import symbolic_uuid
+
+    tenant_admin = await api.token()
+    root = await api.token(Role.SYSTEM_ADMIN)
+    # The cross-tenant log is for system administrators only.
+    assert (await api.client.get(f"{V1}/audit-events", headers=tenant_admin)).status_code == 403
+    page = (await api.client.get(f"{V1}/audit-events?limit=5", headers=root)).json()
+    assert page["items"] and "tenant_id" in page["items"][0]
+    scoped = (await api.client.get(f"{V1}/audit-events?tenant=acme&limit=500", headers=root)).json()
+    assert all(e["tenant_id"] == str(TENANT) for e in scoped["items"])
+    actions = (await api.client.get(f"{V1}/audit-actions", headers=tenant_admin)).json()
+    assert {"action": "job.retried", "category": "job"}.items() <= next(
+        a for a in actions if a["action"] == "job.retried"
+    ).items()
+    # Engines: tenant-wide list, one engine, filters.
+    made = await api.client.post(
+        f"{V1}/tenants/acme/se-groups/{GROUP}/engines",
+        json={"name": "e1", "dataplane_url": "https://192.0.2.9:5555", "mgmt_ip": "192.0.2.9"},
+        headers=tenant_admin,
+    )
+    assert made.status_code == 201 and made.json()["agent_enrolled"] is False
+    engines = (await api.client.get(f"{V1}/tenants/acme/engines", headers=tenant_admin)).json()
+    assert engines and {"pve_node", "vmid", "agent_enrolled", "se_group_id"} <= engines[0].keys()
+    one = await api.client.get(
+        f"{V1}/tenants/acme/engines/{engines[0]['id']}", headers=tenant_admin
+    )
+    assert one.json()["name"] == engines[0]["name"]
+    none = (
+        await api.client.get(f"{V1}/tenants/acme/engines?state=disabled", headers=tenant_admin)
+    ).json()
+    assert none == []
+    assert (
+        await api.client.get(f"{V1}/tenants/acme/engines/{uuid.uuid4()}", headers=tenant_admin)
+    ).status_code == 404
+    # Revision history of one object.
+    pool = symbolic_uuid("pool-web")
+    h = tenant_admin
+    r = await api.client.patch(
+        f"{V1}/tenants/acme/pools/{pool}?apply=true",
+        json={"tls": True},
+        headers={**h, "If-Match": '"1"'},
+    )
+    assert r.status_code == 202
+    await api.run_jobs()
+    hist = (await api.client.get(f"{V1}/tenants/acme/revisions?object={pool}", headers=h)).json()
+    assert len(hist["items"]) == 1
+    other = (
+        await api.client.get(f"{V1}/tenants/acme/revisions?object={uuid.uuid4()}", headers=h)
+    ).json()
+    assert other["items"] == []
+    states = (await api.client.get(f"{V1}/tenants/acme/status/virtual-services", headers=h)).json()
+    assert all(
+        s["health"] in {"healthy", "degraded", "down", "unknown", "disabled"} for s in states
+    )

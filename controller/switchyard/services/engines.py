@@ -5,6 +5,7 @@ registers them. An engine row says where its Data Plane API is and which secret 
 credentials; the controller never stores the credentials themselves.
 """
 
+from dataclasses import dataclass
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -46,6 +47,23 @@ def validate_dataplane_url(url: str) -> str:
     if not ok:
         raise ValueError("dataplane_url must be http(s)://host[:port]")
     return f"{parsed.scheme}://{parsed.netloc}"
+
+
+@dataclass(frozen=True)
+class EngineDetail:
+    """An engine with its placement and enrollment state, as the API shows it.
+
+    Attributes:
+        record: The registration (where its Data Plane API and agent are).
+        pve_node: Proxmox node the VM runs on (``None`` for a hand-built engine).
+        vmid: Proxmox VM id (``None`` for a hand-built engine).
+        agent_cert_serial: Serial of the agent's client certificate once it has enrolled.
+    """
+
+    record: EngineRecord
+    pve_node: str | None = None
+    vmid: int | None = None
+    agent_cert_serial: str | None = None
 
 
 def _record(row: ServiceEngineRow) -> EngineRecord:
@@ -150,6 +168,33 @@ class EngineService:
             if se_group_id:
                 query = query.where(ServiceEngineRow.se_group_id == se_group_id)
             return [_record(r) for r in (await session.execute(query)).scalars()]
+
+    async def describe(
+        self,
+        principal: Principal,
+        tenant_id: UUID,
+        *,
+        se_group_id: UUID | None = None,
+        state: EngineState | None = None,
+        engine_id: UUID | None = None,
+    ) -> list[EngineDetail]:
+        """List engines with placement and enrollment, filtered by group, state or id."""
+        if not principal.can_access(tenant_id):
+            raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            query = select(ServiceEngineRow).order_by(
+                ServiceEngineRow.se_group_id, ServiceEngineRow.name
+            )
+            if se_group_id:
+                query = query.where(ServiceEngineRow.se_group_id == se_group_id)
+            if state:
+                query = query.where(ServiceEngineRow.state == state.value)
+            if engine_id:
+                query = query.where(ServiceEngineRow.id == engine_id)
+            return [
+                EngineDetail(_record(r), r.pve_node, r.vmid, r.agent_cert_serial)
+                for r in (await session.execute(query)).scalars()
+            ]
 
     async def set_state(
         self,
