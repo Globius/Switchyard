@@ -199,13 +199,13 @@ Only the first two rows come from Claude Design's stated assumptions (highest ro
 
 04 was written against M1–M3. Re-audited against `main` after M6 and SAML. **Closed since 04:** typed responses (T2), rendered config (T3), policy/routing unions (T4), jobs list/stages/log/retry/cancel (T5), diff `warnings` (T6), UDP rules and monitor (T7), certificate import/issue/renew, SE group deploy and engine retire, network SDN apply, enrollment tokens, `/me`, login (OIDC, SAML, break-glass), `status/virtual-services`, `?change_set=` drafts, cursor pagination on change sets and revisions. **G1 identity administration** (providers, mappings, users, system tokens, refresh, permissions) is owned by the G1 tickets above and is not repeated here.
 
-Still missing for a UI build, one ticket each (status is updated in this table as they land). All of A1–A12 except A3 landed with ADR 0040; the Claude Design follow-ups (items 3–14 of its request) are folded in.
+Still missing for a UI build, one ticket each (status is updated in this table as they land). A1–A12 landed with ADR 0040 and A3, A13 with ADR 0041; the Claude Design follow-ups (items 3–14 of its request) are folded in.
 
 | Id | Gap | Ticket | Status |
 | --- | --- | --- | --- |
 | A1 | Audit log has only `limit`: no filter by actor, action, object, time, no cursor | `GET …/audit-events?actor&action&object&since&until&q&cursor&limit` returning `Page` | done |
 | A2 | No IP usage or allocations for VIP pools; no "release" | `GET …/vip-pools/{id}/allocations` (total, used, free, holders with draft status, `next_free`), `POST …/vip-pools/{id}/next-free` (suggest an address). VIPs are held by the service that carries them, so *release* means changing or deleting that service; there is no separate release call | done (ADR 0040) |
-| A3 | Health monitor "test against one member" | `POST …/health-monitors/{id}/test` `{pool_id, member_id}` → `{ok, latency_ms, detail}` | open |
+| A3 | Health monitor "test against one member" | `POST …/health-monitors/{id}/test` `{pool_id, member_id}` → `{ok, latency_ms, detail, engine, target}` (ADR 0041) | done |
 | A4 | Tenant search for the command palette | `GET …/search?q&types` over all object names | done |
 | A5 | Tenant home needs one call, not eight | `GET …/summary` (service states, failing members, drifted engines, expiring certificates, running jobs, open drafts, latest revision) | done |
 | A6 | Engines: only per-group list, thin read model | `GET …/engines`, `GET …/engines/{id}` with `mgmt_ip`, `agent_url`, `se_group_id`, enrollment state, VM placement | done (host online state not exposed) |
@@ -215,7 +215,7 @@ Still missing for a UI build, one ticket each (status is updated in this table a
 | A10 | Finer live events (G5) | SSE `job_progress`, `vs_state`, `revision_applied` next to `status`; catalog under `x-sse-events` in OpenAPI (`member_status` and `bgp_session` are covered by `status`) | done |
 | A11 | OpenAPI completeness | Every route: summary, description, request and response models, example, error responses with problem codes, auth and role note, pagination note. A test fails when one is missing. ReDoc beside Swagger UI; `docs/api/openapi.json` checked | done |
 | A12 | Docs match reality | `docs/api.md`, `docs/operating.md`, README, 04 (mark anything without an API) | done |
-| A13 | `routes_withdrawn` is one boolean but withdrawal is per prefix (ADR 0020); Design asked for the list | Agent reports `withdrawn_prefixes[]`; status gains `agent.withdrawn_prefixes` | open |
+| A13 | `routes_withdrawn` is one boolean but withdrawal is per prefix (ADR 0020); Design asked for the list | Agent reports `withdrawn_prefixes[]`; status gains `agent.withdrawn_prefixes` (ADR 0041) | done |
 | A14 | Design asked for enumerated state values (BGP, VRRP, IPVS, HAProxy member status), job kinds, the audit action catalog, apply-under-approval behaviour, retire vs remove, deploy and tokens | Documented in `docs/api.md`, 04 and ADR 0040; `JobKind` enum and `GET /audit-actions` in OpenAPI | done |
 
 ## Follow-ups (not blocking U1; ticket when the milestone starts)
@@ -225,5 +225,5 @@ Still missing for a UI build, one ticket each (status is updated in this table a
 | G4 | Metrics and logs endpoints (Prometheus/Loki adapter, tenant-label enforced) + Grafana proxy | U2 — API done; telemetry pipeline open |
 | G5 | Finer SSE events (`member_status`, `vs_health`, `bgp_session`, `revision_applied`) and a typed catalog | U2 — done |
 | G8 | Conflict (three-way) response on stale `expected_version`; diff "impact" section | U1/U2 — done |
-| G9 | VIP allocations/usage/release; health-monitor test; cert issue/renew; SE deploy | U3–U4 — VIP allocations, cert issue/renew, SE deploy done; monitor test open (A3) |
+| G9 | VIP allocations/usage/release; health-monitor test; cert issue/renew; SE deploy | U3–U4 — VIP allocations, cert issue/renew, SE deploy done; monitor test done (A3) |
 | G10 | `?label=`, `?se_group=` filters, sorting, audit filters/cursor | U1 — done |

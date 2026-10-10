@@ -86,7 +86,7 @@ func main() {
 	}
 	collector := &status.Collector{
 		Runner: run, StateDir: *stateDir, Hashes: applier.Hashes, BundleID: applier.LastBundleID,
-		Health: wd.State, Now: time.Now, KeepalivedConf: keepalivedConf,
+		Health: wd.State, Withdrawn: wd.Withdrawn, Now: time.Now, KeepalivedConf: keepalivedConf,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -111,7 +111,7 @@ func main() {
 		log.Fatal(err)
 	}
 	grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
-	pb.RegisterAgentServer(grpcServer, &server.Server{Applier: applier, Collector: collector})
+	pb.RegisterAgentServer(grpcServer, &server.Server{Applier: applier, Collector: collector, Root: *root})
 	go func() { <-ctx.Done(); grpcServer.GracefulStop() }()
 	log.Printf("sy-agent %s listening on %s", status.Version, *listen)
 	if err := grpcServer.Serve(lis); err != nil {

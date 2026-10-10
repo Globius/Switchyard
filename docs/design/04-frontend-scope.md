@@ -38,8 +38,8 @@ OpenAPI has a typed request and response, an example, its error responses and it
 | Engines: tenant list, placement (`pve_node`, `vmid`), enrollment state | ✅ (host online state ❌) |
 | Certificates: import (PEM), issue (ACME, Origin CA), renew | ✅ (jobs; result carries the `system:certs` change set) |
 | SE group deploy, engine retire, network SDN apply | ✅ |
-| Health monitor "test against one member" | ❌ (planned, see 05 A3) |
-| Per-prefix BGP withdrawal list | ❌ (`routes_withdrawn` is a single flag; planned, see 05 A13) |
+| Health monitor "test against one member" | ✅ `POST health-monitors/{id}/test` (runs on an engine through the agent; needs an upgraded agent and a member already applied) |
+| Per-prefix BGP withdrawal list | ✅ `agent.withdrawn_prefixes[]` (ADR 0041) |
 | `?label=` filters | ❌ dropped: objects have no labels |
 
 **Rules that came out of the audit** (details in ADR 0040): a VIP is held by the service that carries it; apply on a
@@ -123,7 +123,7 @@ Steps: basics (`name`, `protocol`, `se_group_id`) → VIP (`vip_pool_id` pick or
 
 ### 3.8 Health monitors
 - **Fields:** `name`, `type` (tcp|http|udp), `interval_s`, `timeout_s`, `rise`, `fall`, `port`, `http{method GET|HEAD|OPTIONS, path, host, expect_status[]}` (http only); "pools using it" (`GET pools?health_monitor={id}`).
-- **Interactions:** edit; "test against one member" ❌ (planned, 05 A3: design it, mark "blocked on API").
+- **Interactions:** edit; **Test against one member:** `POST health-monitors/{id}/test` ✅ with `{pool_id, member_id, engine_id?, port?, http_path?, expect_status?, timeout_s?}` → `{ok, latency_ms, detail, engine, target, protocol}`; saves nothing. States: running, pass, fail (detail), refused (`409`: member not applied yet), agent unreachable (`502`).
 - **Endpoints:** CRUD ✅.
 
 ### 3.9 Certificates
@@ -146,7 +146,7 @@ Steps: basics (`name`, `protocol`, `se_group_id`) → VIP (`vip_pool_id` pick or
 ### 3.12 SE groups, engines, routing profiles
 - **SE group fields:** `name`, `ha_mode` (bgp|vrrp), `networks[]` (`network_id`, `role` vip|backend|mgmt), `maxconn`, `canary_seconds`, `routing_profile_id`. Filter `ha_mode`.
 - **Engines (SEs):** `GET engines` (all) / `GET se-groups/{g}/engines`; fields `id`, `name`, `url`, `state`, `se_group_id`, `mgmt_ip`, `agent_url`, `pve_node`, `vmid`, `agent_enrolled`, `agent_cert_serial`. Live per engine from `status/engines`: `reachable`, `error`, `haproxy_fingerprint`, `drift[]`, `observed_at`, `agent{version, bundle_id, haproxy_healthy, routes_withdrawn, bgp[], vrrp[], ipvs[]}`.
-- **State values for chips:** BGP session `state` (FRR): `Idle`, `Connect`, `Active`, `OpenSent`, `OpenConfirm`, `Established` (only `Established` is healthy); VRRP `state`: `MASTER`, `BACKUP`, `FAULT`; IPVS real server `state`: `up`, `down`, `drain`. `routes_withdrawn` is one boolean (some prefix is withdrawn); the list of withdrawn prefixes is ❌ (planned, 05 A13).
+- **State values for chips:** BGP session `state` (FRR): `Idle`, `Connect`, `Active`, `OpenSent`, `OpenConfirm`, `Established` (only `Established` is healthy); VRRP `state`: `MASTER`, `BACKUP`, `FAULT`; IPVS real server `state`: `up`, `down`, `drain`. `routes_withdrawn` is true while any prefix is withdrawn; `withdrawn_prefixes[]` lists them.
 - **Interactions:** register (hand-built), enable/disable (runtime, `Live`), **Remove** (record only, VM keeps running), **Retire** (destroys the VM and removes the record; refused for the last serving engine; job), **Deploy** (`count`, `nodes`, `template_vmid`, `mgmt_pool_id`, optional `ssh_public_keys` for people to log in to the VM — the controller never uses SSH; job), **Create enrollment token** per engine (deploy does not create them; show the `sy-agent enroll` command). Host online state ❌.
 - **Routing profiles** (shapes in §5): VRRP profile or BGP profile with peers. Filter `kind`.
 - **Endpoints:** SE groups CRUD ✅; engines `GET/POST se-groups/{g}/engines`, `GET engines`, `GET engines/{id}`, `PUT engines/{id}/state?state=`, `DELETE engines/{id}`, `POST engines/{id}/retire`, `POST engines/{id}/enrollment-token`, `POST se-groups/{g}/deploy` ✅ (tenant-admin); `GET status/engines` ✅; routing profiles CRUD ✅.
@@ -246,6 +246,7 @@ Errors are `application/problem+json` (`type`, `title`, `status`, `detail`, `err
 | pools | `PUT /tenants/{t}/pools/{pool}/members/{member}/state` | operator | Set a pool member's runtime state |
 | health-monitors | `GET /tenants/{t}/health-monitors` | viewer | List health monitors |
 | health-monitors | `POST /tenants/{t}/health-monitors` | operator | Create one of the health monitors |
+| health-monitors | `POST /tenants/{t}/health-monitors/{monitor_id}/test` | operator | Test a health monitor against one pool member |
 | health-monitors | `DELETE /tenants/{t}/health-monitors/{object_id}` | operator | Delete one of the health monitors |
 | health-monitors | `GET /tenants/{t}/health-monitors/{object_id}` | viewer | Get one of the health monitors |
 | health-monitors | `PATCH /tenants/{t}/health-monitors/{object_id}` | operator | Change one of the health monitors |
@@ -339,7 +340,7 @@ Errors are `application/problem+json` (`type`, `title`, `status`, `detail`, `err
 | break-glass | `POST /system/break-glass/admin` | system-admin | Enrol the break-glass administrator |
 | break-glass | `POST /system/break-glass/admin/confirm` | system-admin | Confirm the authenticator |
 
-**Not backed by an API yet:** health-monitor test, per-prefix route withdrawal, host online state of
+**Not backed by an API yet:** host online state of
 Proxmox nodes, a telemetry pipeline behind metrics and logs, label filters (dropped).
 
 ---
@@ -372,4 +373,4 @@ Proxmox nodes, a telemetry pipeline behind metrics and logs, label filters (drop
 2. **Give Claude Design:** this file, `docs/api.md`, `docs/api/openapi.json` (or the live `/api/v1/docs` and `/api/v1/redoc`), `docs/design/05-frontend-backend-tickets.md` (G1 spec for the access screens), and ADRs 0007, 0012, 0016, 0030, 0040.
 3. **Order of screens (U1 first):** app shell + change-set bar → tenant switcher → VS list/detail/wizard → pools, monitors, certificates, policies → review (Objects/Config/Impact), apply progress, approval, conflicts → revisions and rollback. U2: live status, SE groups, routing profiles, jobs, tenant home, metrics. U3: networks/IPAM, SE deploy. U4: certificate issuance, admin and access.
 4. **For every screen deliver:** empty, loading, error, open draft, pending approval, read-only and (where status exists) drift/stale states; 1280 px and 1920 px; light and dark.
-5. **Mark "blocked on API"** only for the ❌ items: monitor test, per-prefix withdrawal, host online state; and show the "no data source" state for metrics and logs.
+5. **Mark "blocked on API"** only for the ❌ items: host online state; and show the "no data source" state for metrics and logs.

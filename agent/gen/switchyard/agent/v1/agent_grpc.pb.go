@@ -22,6 +22,7 @@ const (
 	Agent_ApplyBundle_FullMethodName = "/switchyard.agent.v1.Agent/ApplyBundle"
 	Agent_GetStatus_FullMethodName   = "/switchyard.agent.v1.Agent/GetStatus"
 	Agent_Watch_FullMethodName       = "/switchyard.agent.v1.Agent/Watch"
+	Agent_ProbeMember_FullMethodName = "/switchyard.agent.v1.Agent/ProbeMember"
 )
 
 // AgentClient is the client API for Agent service.
@@ -36,6 +37,9 @@ type AgentClient interface {
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*Status, error)
 	// Streams a status snapshot every time something changes (and at least every 30 seconds).
 	Watch(ctx context.Context, in *WatchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Status], error)
+	// Runs one health probe from this engine against a pool member that is in the applied
+	// configuration. Anything else is refused: this is not a general network tool.
+	ProbeMember(ctx context.Context, in *ProbeRequest, opts ...grpc.CallOption) (*ProbeResponse, error)
 }
 
 type agentClient struct {
@@ -85,6 +89,16 @@ func (c *agentClient) Watch(ctx context.Context, in *WatchRequest, opts ...grpc.
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Agent_WatchClient = grpc.ServerStreamingClient[Status]
 
+func (c *agentClient) ProbeMember(ctx context.Context, in *ProbeRequest, opts ...grpc.CallOption) (*ProbeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProbeResponse)
+	err := c.cc.Invoke(ctx, Agent_ProbeMember_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentServer is the server API for Agent service.
 // All implementations must embed UnimplementedAgentServer
 // for forward compatibility.
@@ -97,6 +111,9 @@ type AgentServer interface {
 	GetStatus(context.Context, *GetStatusRequest) (*Status, error)
 	// Streams a status snapshot every time something changes (and at least every 30 seconds).
 	Watch(*WatchRequest, grpc.ServerStreamingServer[Status]) error
+	// Runs one health probe from this engine against a pool member that is in the applied
+	// configuration. Anything else is refused: this is not a general network tool.
+	ProbeMember(context.Context, *ProbeRequest) (*ProbeResponse, error)
 	mustEmbedUnimplementedAgentServer()
 }
 
@@ -115,6 +132,9 @@ func (UnimplementedAgentServer) GetStatus(context.Context, *GetStatusRequest) (*
 }
 func (UnimplementedAgentServer) Watch(*WatchRequest, grpc.ServerStreamingServer[Status]) error {
 	return status.Errorf(codes.Unimplemented, "method Watch not implemented")
+}
+func (UnimplementedAgentServer) ProbeMember(context.Context, *ProbeRequest) (*ProbeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ProbeMember not implemented")
 }
 func (UnimplementedAgentServer) mustEmbedUnimplementedAgentServer() {}
 func (UnimplementedAgentServer) testEmbeddedByValue()               {}
@@ -184,6 +204,24 @@ func _Agent_Watch_Handler(srv interface{}, stream grpc.ServerStream) error {
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Agent_WatchServer = grpc.ServerStreamingServer[Status]
 
+func _Agent_ProbeMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProbeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServer).ProbeMember(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Agent_ProbeMember_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServer).ProbeMember(ctx, req.(*ProbeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Agent_ServiceDesc is the grpc.ServiceDesc for Agent service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -198,6 +236,10 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetStatus",
 			Handler:    _Agent_GetStatus_Handler,
+		},
+		{
+			MethodName: "ProbeMember",
+			Handler:    _Agent_ProbeMember_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

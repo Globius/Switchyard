@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
+	"sort"
 	"sync"
 
 	"switchyard/agent/internal/runner"
@@ -46,6 +47,18 @@ func (w *Watchdog) State() (healthy, withdrawn bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.healthy, len(w.withdrawn) > 0
+}
+
+// Withdrawn returns the withdrawn prefixes, sorted.
+func (w *Watchdog) Withdrawn() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make([]string, 0, len(w.withdrawn))
+	for p := range w.withdrawn {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (w *Watchdog) load() (*VIPs, error) {

@@ -12,6 +12,29 @@ service Agent {
   rpc GetStatus(GetStatusRequest) returns (Status);
   // Streams a status snapshot every time something changes (and at least every 30 seconds).
   rpc Watch(WatchRequest) returns (stream Status);
+  // Runs one health probe from this engine against a pool member that is in the applied
+  // configuration. Anything else is refused: this is not a general network tool.
+  rpc ProbeMember(ProbeRequest) returns (ProbeResponse);
+}
+
+message ProbeRequest {
+  string protocol = 1;                 // tcp, http or udp
+  string address = 2;                  // must appear as a server in the applied HAProxy or IPVS config
+  uint32 port = 3;
+  uint32 timeout_ms = 4;               // 100 to 10000
+  string http_method = 5;              // GET, HEAD or OPTIONS
+  string http_path = 6;
+  string http_host = 7;
+  repeated uint32 expect_status = 8;   // empty means any 2xx or 3xx
+  bytes udp_payload = 9;               // sent as is
+  bytes udp_expect = 10;               // the reply must contain this; empty means any reply
+}
+
+message ProbeResponse {
+  bool ok = 1;
+  uint32 latency_ms = 2;
+  string detail = 3;                   // what was received, or why it failed (never a stack trace)
+  bool refused = 4;                    // the target is not a configured member
 }
 
 message File {
@@ -83,4 +106,5 @@ message Status {
   int64 observed_at_unix = 8;
   repeated IpvsRealServer ipvs = 9;     // UDP real servers; empty when no UDP service is rendered
   bool keepalived_running = 10;         // only meaningful when `ipvs` is expected
+  repeated string withdrawn_prefixes = 11;  // BGP prefixes the watchdog has withdrawn, sorted
 }

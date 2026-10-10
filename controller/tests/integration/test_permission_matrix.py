@@ -148,6 +148,7 @@ for _read in (
     ("GET", "/tenants/{t}/virtual-services/{object_id}/metrics"),
 ):
     ROUTES[_read] = READ
+ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
 ROUTES[("GET", "/audit-actions")] = ANY
 ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
 ROUTES.pop(("GET", "/tenants/{t}/networks/{object_id}/rendered"), None)
@@ -157,6 +158,10 @@ ROUTES.pop(("GET", "/tenants/{t}/routing-profiles/{object_id}/rendered"), None)
 # valid request bodies, so the role check (not body validation) decides the status
 NOW = "2038-01-01T00:00:00+00:00"
 BODIES: dict[tuple[str, str], Any] = {
+    ("POST", "/tenants/{t}/health-monitors/{monitor_id}/test"): {
+        "pool_id": "{uuid}",
+        "member_id": "{uuid}",
+    },
     ("POST", "/tenants"): {"name": "newco"},
     ("PATCH", "/tenants/{t}"): {"require_approval": True},
     ("POST", "/tenants/{t}/change-sets"): {},
@@ -275,7 +280,7 @@ def fill(path: str) -> str:
         "test_id",
     ):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
-    for key in ("pool", "member", "group"):
+    for key in ("pool", "member", "group", "monitor_id", "pool_id"):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
     return out.replace("{index}", "0").replace("{n}", "1").replace("{provider}", "nobody")
 

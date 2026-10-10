@@ -6,6 +6,42 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class ProbeRequest(_message.Message):
+    __slots__ = ("protocol", "address", "port", "timeout_ms", "http_method", "http_path", "http_host", "expect_status", "udp_payload", "udp_expect")
+    PROTOCOL_FIELD_NUMBER: _ClassVar[int]
+    ADDRESS_FIELD_NUMBER: _ClassVar[int]
+    PORT_FIELD_NUMBER: _ClassVar[int]
+    TIMEOUT_MS_FIELD_NUMBER: _ClassVar[int]
+    HTTP_METHOD_FIELD_NUMBER: _ClassVar[int]
+    HTTP_PATH_FIELD_NUMBER: _ClassVar[int]
+    HTTP_HOST_FIELD_NUMBER: _ClassVar[int]
+    EXPECT_STATUS_FIELD_NUMBER: _ClassVar[int]
+    UDP_PAYLOAD_FIELD_NUMBER: _ClassVar[int]
+    UDP_EXPECT_FIELD_NUMBER: _ClassVar[int]
+    protocol: str
+    address: str
+    port: int
+    timeout_ms: int
+    http_method: str
+    http_path: str
+    http_host: str
+    expect_status: _containers.RepeatedScalarFieldContainer[int]
+    udp_payload: bytes
+    udp_expect: bytes
+    def __init__(self, protocol: _Optional[str] = ..., address: _Optional[str] = ..., port: _Optional[int] = ..., timeout_ms: _Optional[int] = ..., http_method: _Optional[str] = ..., http_path: _Optional[str] = ..., http_host: _Optional[str] = ..., expect_status: _Optional[_Iterable[int]] = ..., udp_payload: _Optional[bytes] = ..., udp_expect: _Optional[bytes] = ...) -> None: ...
+
+class ProbeResponse(_message.Message):
+    __slots__ = ("ok", "latency_ms", "detail", "refused")
+    OK_FIELD_NUMBER: _ClassVar[int]
+    LATENCY_MS_FIELD_NUMBER: _ClassVar[int]
+    DETAIL_FIELD_NUMBER: _ClassVar[int]
+    REFUSED_FIELD_NUMBER: _ClassVar[int]
+    ok: bool
+    latency_ms: int
+    detail: str
+    refused: bool
+    def __init__(self, ok: _Optional[bool] = ..., latency_ms: _Optional[int] = ..., detail: _Optional[str] = ..., refused: _Optional[bool] = ...) -> None: ...
+
 class File(_message.Message):
     __slots__ = ("path", "content")
     PATH_FIELD_NUMBER: _ClassVar[int]
@@ -101,7 +137,7 @@ class IpvsRealServer(_message.Message):
     def __init__(self, service: _Optional[str] = ..., vip: _Optional[str] = ..., port: _Optional[int] = ..., address: _Optional[str] = ..., member_port: _Optional[int] = ..., state: _Optional[str] = ..., weight: _Optional[int] = ..., active_conns: _Optional[int] = ..., inactive_conns: _Optional[int] = ..., in_packets: _Optional[int] = ..., out_packets: _Optional[int] = ..., in_bytes: _Optional[int] = ..., out_bytes: _Optional[int] = ...) -> None: ...
 
 class Status(_message.Message):
-    __slots__ = ("agent_version", "bundle_id", "file_hashes", "bgp", "vrrp", "haproxy_healthy", "routes_withdrawn", "observed_at_unix", "ipvs", "keepalived_running")
+    __slots__ = ("agent_version", "bundle_id", "file_hashes", "bgp", "vrrp", "haproxy_healthy", "routes_withdrawn", "observed_at_unix", "ipvs", "keepalived_running", "withdrawn_prefixes")
     class FileHashesEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -119,6 +155,7 @@ class Status(_message.Message):
     OBSERVED_AT_UNIX_FIELD_NUMBER: _ClassVar[int]
     IPVS_FIELD_NUMBER: _ClassVar[int]
     KEEPALIVED_RUNNING_FIELD_NUMBER: _ClassVar[int]
+    WITHDRAWN_PREFIXES_FIELD_NUMBER: _ClassVar[int]
     agent_version: str
     bundle_id: str
     file_hashes: _containers.ScalarMap[str, str]
@@ -129,4 +166,5 @@ class Status(_message.Message):
     observed_at_unix: int
     ipvs: _containers.RepeatedCompositeFieldContainer[IpvsRealServer]
     keepalived_running: bool
-    def __init__(self, agent_version: _Optional[str] = ..., bundle_id: _Optional[str] = ..., file_hashes: _Optional[_Mapping[str, str]] = ..., bgp: _Optional[_Iterable[_Union[BgpSession, _Mapping]]] = ..., vrrp: _Optional[_Iterable[_Union[VrrpInstance, _Mapping]]] = ..., haproxy_healthy: _Optional[bool] = ..., routes_withdrawn: _Optional[bool] = ..., observed_at_unix: _Optional[int] = ..., ipvs: _Optional[_Iterable[_Union[IpvsRealServer, _Mapping]]] = ..., keepalived_running: _Optional[bool] = ...) -> None: ...
+    withdrawn_prefixes: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, agent_version: _Optional[str] = ..., bundle_id: _Optional[str] = ..., file_hashes: _Optional[_Mapping[str, str]] = ..., bgp: _Optional[_Iterable[_Union[BgpSession, _Mapping]]] = ..., vrrp: _Optional[_Iterable[_Union[VrrpInstance, _Mapping]]] = ..., haproxy_healthy: _Optional[bool] = ..., routes_withdrawn: _Optional[bool] = ..., observed_at_unix: _Optional[int] = ..., ipvs: _Optional[_Iterable[_Union[IpvsRealServer, _Mapping]]] = ..., keepalived_running: _Optional[bool] = ..., withdrawn_prefixes: _Optional[_Iterable[str]] = ...) -> None: ...

@@ -83,6 +83,7 @@ PARAMS: dict[str, str] = {
     "pool": "Pool id.",
     "member": "Pool member id.",
     "pool_id": "VIP pool id.",
+    "monitor_id": "Health monitor id.",
     "certificate": "Certificate id.",
     "token": "API token id.",
     "state": "Filter by state.",
@@ -288,6 +289,7 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("(GET|POST)", r"/tenants/\{t\}/tokens(/\{token\})?", "tenant-admin", False),
     ("DELETE", r"/tenants/\{t\}/tokens/\{token\}", "tenant-admin", False),
     ("POST", r"/tenants/\{t\}/vip-pools/\{pool_id\}/next-free", "viewer", False),
+    ("POST", r"/tenants/\{t\}/health-monitors/\{monitor_id\}/test", "operator", False),
     ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/[a-z-]+(/\{object_id\})?", "operator", False),
     (
         "POST",
@@ -405,6 +407,10 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "credentials_ref": "kv/tenants/acme/engines/dataplane",
         "mgmt_ip": "198.51.100.21",
         "agent_url": "198.51.100.21:7443",
+    },
+    "POST /tenants/{t}/health-monitors/{monitor_id}/test": {
+        "pool_id": ex.POOL,
+        "member_id": ex.MEMBER,
     },
     "POST /identity-providers": {
         "protocol": "oidc",

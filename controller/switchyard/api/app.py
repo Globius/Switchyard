@@ -19,6 +19,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
+from switchyard.adapters.agent import AgentError
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.secrets import SecretsReader, SecretsWriter
 from switchyard.adapters.telemetry import Telemetry, TelemetryError
@@ -73,11 +74,14 @@ from switchyard.api.schemas import (
     MetricsOverview,
     MetricsOverviewItem,
     MetricsRead,
+    MonitorTestIn,
+    MonitorTestOut,
     NextFree,
     OpenIn,
     OpsIn,
     Page,
     PermissionMatrix,
+    ProblemOut,
     ProtocolRulesRead,
     ReasonIn,
     RevisionRead,
@@ -140,6 +144,7 @@ from switchyard.services.identity_providers import (
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.jobs import JobService
 from switchyard.services.members import MemberService
+from switchyard.services.probes import MonitorTestService
 from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
 from switchyard.services.sessions import (
     LoginError,
@@ -174,6 +179,7 @@ class ApiServices:
     users: UserService
     certs: CertificateService | None = None
     telemetry: Telemetry | None = None
+    monitor_tests: MonitorTestService = None  # type: ignore[assignment]
     enrollment: EnrollmentService | None = None
     sessions: SessionService | None = None
     identity_providers: IdentityProviderService | None = None
@@ -229,6 +235,7 @@ def build_services(
         enrollment=enrollment,
         sessions=sessions,
         telemetry=telemetry,
+        monitor_tests=MonitorTestService(db, directory),
         identity_providers=identity_providers,
         break_glass=break_glass,
     )
@@ -1466,6 +1473,46 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         if object_type in RENDERED_TYPES:
             _rendered_route(router, slug, object_type)
 
+    @router.post(
+        "/tenants/{t}/health-monitors/{monitor_id}/test",
+        tags=["health-monitors"],
+        summary="Test a health monitor against one pool member",
+        description=(
+            "Runs the monitor once from an engine (through its agent) against one member and "
+            "returns pass or fail, the latency and what came back. Nothing is saved. Overrides "
+            "(`port`, `http_path`, `expect_status`, `timeout_s`) replace the monitor's values for "
+            "this run. The agent only probes members that are in its applied configuration, so "
+            "a member added in a draft cannot be tested until it is applied (`409`). A UDP test "
+            "needs the member to reply. `502` when the engine's agent cannot be reached."
+        ),
+        response_model=MonitorTestOut,
+        responses=_ok(
+            ex.MONITOR_TEST,
+            extra={
+                502: {"model": ProblemOut, "description": "The engine's agent cannot be reached."}
+            },
+        ),
+    )
+    async def test_monitor(
+        monitor_id: UUID, body: MonitorTestIn, tenant: Tenant, who: Who, svc: Services
+    ) -> MonitorTestOut:
+        try:
+            result = await svc.monitor_tests.test(
+                who,
+                tenant.id,
+                monitor_id,
+                pool_id=body.pool_id,
+                member_id=body.member_id,
+                engine_id=body.engine_id,
+                port=body.port,
+                http_path=body.http_path,
+                expect_status=tuple(body.expect_status) if body.expect_status is not None else None,
+                timeout_s=body.timeout_s,
+            )
+        except AgentError as exc:
+            raise ApiError(502, str(exc)) from exc
+        return MonitorTestOut(**result.__dict__)
+
     # telemetry
     async def _service_name(svc: ApiServices, tenant: TenantRecord, service_id: UUID) -> str:
         from switchyard.db.repository import load_snapshot
@@ -1708,7 +1755,6 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             now=datetime.now(UTC),
         )
 
-    # IPAM
     @router.get(
         "/tenants/{t}/vip-pools/{pool_id}/allocations",
         tags=["vip-pools"],

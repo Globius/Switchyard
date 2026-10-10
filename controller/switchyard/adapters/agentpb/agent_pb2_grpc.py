@@ -50,6 +50,11 @@ class AgentStub:
                 request_serializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.WatchRequest.SerializeToString,
                 response_deserializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.Status.FromString,
                 _registered_method=True)
+        self.ProbeMember = channel.unary_unary(
+                '/switchyard.agent.v1.Agent/ProbeMember',
+                request_serializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeRequest.SerializeToString,
+                response_deserializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeResponse.FromString,
+                _registered_method=True)
 
 
 class AgentServicer:
@@ -77,6 +82,14 @@ class AgentServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ProbeMember(self, request, context):
+        """Runs one health probe from this engine against a pool member that is in the applied
+        configuration. Anything else is refused: this is not a general network tool.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AgentServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -94,6 +107,11 @@ def add_AgentServicer_to_server(servicer, server):
                     servicer.Watch,
                     request_deserializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.WatchRequest.FromString,
                     response_serializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.Status.SerializeToString,
+            ),
+            'ProbeMember': grpc.unary_unary_rpc_method_handler(
+                    servicer.ProbeMember,
+                    request_deserializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeRequest.FromString,
+                    response_serializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -178,6 +196,33 @@ class Agent:
             '/switchyard.agent.v1.Agent/Watch',
             switchyard_dot_agent_dot_v1_dot_agent__pb2.WatchRequest.SerializeToString,
             switchyard_dot_agent_dot_v1_dot_agent__pb2.Status.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ProbeMember(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/switchyard.agent.v1.Agent/ProbeMember',
+            switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeRequest.SerializeToString,
+            switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeResponse.FromString,
             options,
             channel_credentials,
             insecure,

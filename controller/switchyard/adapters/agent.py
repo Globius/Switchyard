@@ -109,7 +109,47 @@ class AgentStatus:
     ipvs: tuple[IpvsRealServer, ...] = ()
     haproxy_healthy: bool = False
     routes_withdrawn: bool = False
+    withdrawn_prefixes: tuple[str, ...] = ()
     observed_at_unix: int = 0
+
+
+@dataclass(frozen=True)
+class ProbeRequest:
+    """One health probe to run from an engine against a configured pool member.
+
+    Attributes:
+        protocol: ``tcp``, ``http`` or ``udp``.
+        address: Member address; the agent refuses anything not in its applied configuration.
+        port: Member (or check) port.
+        timeout_ms: 100 to 10000.
+        http_method: ``GET``, ``HEAD`` or ``OPTIONS`` (http only).
+        http_path: Request path (http only).
+        http_host: ``Host`` header (http only).
+        expect_status: Accepted status codes; empty means 2xx or 3xx.
+        udp_payload: Datagram to send (udp only).
+        udp_expect: Bytes the reply must contain; empty means any reply.
+    """
+
+    protocol: str
+    address: str
+    port: int
+    timeout_ms: int = 3000
+    http_method: str = "GET"
+    http_path: str = "/"
+    http_host: str = ""
+    expect_status: tuple[int, ...] = ()
+    udp_payload: bytes = b""
+    udp_expect: bytes = b""
+
+
+@dataclass(frozen=True)
+class ProbeResult:
+    """Outcome of a probe."""
+
+    ok: bool
+    latency_ms: int
+    detail: str
+    refused: bool = False
 
 
 class AgentEngine(Protocol):
@@ -126,6 +166,10 @@ class AgentEngine(Protocol):
 
     async def status(self) -> AgentStatus:
         """Return a status snapshot."""
+        ...
+
+    async def probe(self, request: ProbeRequest) -> ProbeResult:
+        """Run one health probe from this engine against a configured pool member."""
         ...
 
     def watch(self) -> AsyncIterator[AgentStatus]:
@@ -209,6 +253,7 @@ def _status(message: agent_pb2.Status) -> AgentStatus:
         ),
         haproxy_healthy=message.haproxy_healthy,
         routes_withdrawn=message.routes_withdrawn,
+        withdrawn_prefixes=tuple(message.withdrawn_prefixes),
         observed_at_unix=message.observed_at_unix,
     )
 
@@ -278,6 +323,35 @@ class GrpcAgent:
                 f"{self._name}: {exc.code().name}: {exc.details()}"
             ) from exc
 
+    async def probe(self, request: ProbeRequest) -> ProbeResult:
+        """Ask the agent to run the probe."""
+        try:
+            response = await self._stub.ProbeMember(
+                agent_pb2.ProbeRequest(
+                    protocol=request.protocol,
+                    address=request.address,
+                    port=request.port,
+                    timeout_ms=request.timeout_ms,
+                    http_method=request.http_method,
+                    http_path=request.http_path,
+                    http_host=request.http_host,
+                    expect_status=list(request.expect_status),
+                    udp_payload=request.udp_payload,
+                    udp_expect=request.udp_expect,
+                ),
+                timeout=request.timeout_ms / 1000 + 5,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise AgentUnreachableError(
+                f"{self._name}: {exc.code().name}: {exc.details()}"
+            ) from exc
+        return ProbeResult(
+            ok=response.ok,
+            latency_ms=response.latency_ms,
+            detail=response.detail,
+            refused=response.refused,
+        )
+
     async def watch(self) -> AsyncIterator[AgentStatus]:
         """Stream status snapshots until the connection ends."""
         try:
@@ -306,6 +380,9 @@ class FakeAgent:
         self.ipvs: tuple[IpvsRealServer, ...] = ()
         self.healthy = True
         self.withdrawn = False
+        self.withdrawn_prefixes: tuple[str, ...] = ()
+        self.probe_result = ProbeResult(ok=True, latency_ms=1, detail="connected")
+        self.probes: list[ProbeRequest] = []
         self.fail_next: str | None = None
 
     @property
@@ -337,8 +414,14 @@ class FakeAgent:
             vrrp=self.vrrp,
             ipvs=self.ipvs,
             haproxy_healthy=self.healthy,
-            routes_withdrawn=self.withdrawn,
+            routes_withdrawn=self.withdrawn or bool(self.withdrawn_prefixes),
+            withdrawn_prefixes=self.withdrawn_prefixes,
         )
+
+    async def probe(self, request: ProbeRequest) -> ProbeResult:
+        """Record the request and return the prepared result."""
+        self.probes.append(request)
+        return self.probe_result
 
     async def watch(self) -> AsyncIterator[AgentStatus]:
         """Yield the current status once."""
