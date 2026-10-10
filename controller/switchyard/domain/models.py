@@ -439,6 +439,8 @@ class HealthMonitor(TenantOwned):
 
     Attributes:
         type: ``tcp`` connect check or ``http`` request check.
+        port: Port to check. Required when pool members have no port of their own; otherwise
+            members are checked on their service port.
         interval_s: Seconds between checks.
         timeout_s: Seconds before a check fails.
         rise: Consecutive successes to mark a server up.
@@ -447,6 +449,7 @@ class HealthMonitor(TenantOwned):
     """
 
     type: MonitorType
+    port: Port | None = None
     interval_s: int = Field(default=5, ge=1, le=300)
     timeout_s: int = Field(default=3, ge=1, le=300)
     rise: int = Field(default=2, ge=1, le=100)

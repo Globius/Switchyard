@@ -1,0 +1,7 @@
+backend {{ b.name }}
+{% for line in b.lines %}
+    {{ line }}
+{% endfor %}
+{% for server in b.servers %}
+    {{ server }}
+{% endfor %}

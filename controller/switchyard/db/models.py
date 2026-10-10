@@ -138,6 +138,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
     )
 
     type: Mapped[str] = mapped_column(Text, nullable=False)
+    port: Mapped[int | None] = mapped_column(Integer)
     interval_s: Mapped[int] = mapped_column(Integer, nullable=False)
     timeout_s: Mapped[int] = mapped_column(Integer, nullable=False)
     rise: Mapped[int] = mapped_column(Integer, nullable=False)

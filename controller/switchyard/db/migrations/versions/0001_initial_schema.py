@@ -125,6 +125,7 @@ def upgrade() -> None:
     op.create_table(
         "health_monitor",
         sa.Column("type", sa.Text(), nullable=False),
+        sa.Column("port", sa.Integer(), nullable=True),
         sa.Column("interval_s", sa.Integer(), nullable=False),
         sa.Column("timeout_s", sa.Integer(), nullable=False),
         sa.Column("rise", sa.Integer(), nullable=False),

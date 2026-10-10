@@ -46,7 +46,7 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "D", "S",
 ignore = ["D203", "D213", "RUF012"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D", "S101", "S105", "S106", "S608", "PT011"]
+"tests/**" = ["D", "S101", "S105", "S106", "S608", "PT011", "E501"]
 "switchyard/db/migrations/**" = ["D", "S608", "E501", "UP", "RUF", "I"]
 
 [tool.ruff.lint.pydocstyle]
@@ -59,7 +59,7 @@ plugins = ["pydantic.mypy"]
 files = ["switchyard", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["testcontainers.*"]
+module = ["testcontainers.*", "docker.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -179,6 +179,15 @@ def test_tcp_and_udp_same_port_not_a_collision() -> None:
     assert codes(data) == []
 
 
+def test_monitored_member_without_port_needs_a_monitor_port() -> None:
+    data = base_data()
+    data["health_monitors"] = [{"id": "hm", "tenant_id": "t-acme", "name": "tcp", "type": "tcp"}]
+    data["pools"][0].update(health_monitor_id="hm", members=[{"address": "10.20.0.11"}])
+    assert codes(data) == ["check_port_unknown"]
+    data["health_monitors"][0]["port"] = 8080
+    assert codes(data) == []
+
+
 def test_wrong_policy_kind() -> None:
     data = base_data()
     data["policy_sets"] = [

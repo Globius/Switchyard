@@ -127,6 +127,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     - ``vip_outside_network``: the VIP is a usable host address in one of the SE group's ``vip``
       networks.
     - ``vip_outside_pool``: with a ``vip_pool_id``, the VIP is inside one of the pool's ranges.
+    - ``check_port_unknown``: a monitored member without a port needs a monitor ``port``.
     - ``port_collision``: no two services bind the same VIP, port and transport.
     - ``pool_protocol_mismatch``: a pool is not shared between HTTP and TCP services.
     - ``duplicate_route``: a host/path match appears at most once per service.
@@ -192,13 +193,23 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
             )
     for pool in snapshot.pools:
         if pool.health_monitor_id:
-            check_ref(
+            monitor = check_ref(
                 f"pools.{pool.name}.health_monitor_id",
                 pool.tenant_id,
                 "health monitor",
                 pool.health_monitor_id,
                 monitors,
             )
+            if monitor is not None and monitor.port is None:
+                for member in pool.members:
+                    if member.port is None:
+                        problems.append(
+                            Problem(
+                                f"pools.{pool.name}.members.{member.server_name}",
+                                "check_port_unknown",
+                                "member has no port and its health monitor has no port to check",
+                            )
+                        )
 
     pool_protocols: dict[UUID, set[Protocol]] = defaultdict(set)
     listeners: list[v.Listener] = []
