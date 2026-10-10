@@ -19,7 +19,7 @@ from sqlalchemy import delete, select
 
 from switchyard.adapters.proxmox import Proxmox, ProxmoxError, SdnSubnet, VmSpec
 from switchyard.db import audit_log
-from switchyard.db.ops_models import ServiceEngineRow
+from switchyard.db.ops_models import SdnObjectRow, ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import ipam
@@ -197,25 +197,65 @@ class InfraService:
             return await load_snapshot(session)
 
     async def apply_sdn(self, tenant_id: UUID) -> dict[str, Any]:
-        """Create the SDN zones, VNets and subnets of the tenant's managed networks, then apply.
+        """Reconcile Proxmox SDN with the tenant's managed networks, then apply.
 
-        Idempotent. Networks that are only attached (``managed: false``) are left alone.
+        Creates the zones, VNets and subnets of managed networks and records the zones and VNets
+        this call created. Then deletes recorded VNets (and zones) that no managed network uses
+        any more. Objects that existed before, and attached (``managed: false``) networks, are
+        never touched. Idempotent.
+
+        Returns:
+            ``{"networks": [...], "removed": ["vnet:x", "zone:y", ...]}``.
         """
         snapshot = await self._snapshot(tenant_id)
         managed = [n for n in snapshot.networks if n.managed and n.sdn_zone and n.vnet]
+        wanted_vnets = {n.vnet for n in managed}
+        wanted_zones = {n.sdn_zone for n in managed}
         done: list[str] = []
+        removed: list[str] = []
         async with self._locks.hold([SDN_LOCK_ID]):
             for net in sorted(managed, key=lambda n: n.name):
                 if net.sdn_zone is None or net.vnet is None:
                     continue
-                await self._pve.ensure_zone(net.sdn_zone)
-                await self._pve.ensure_vnet(net.vnet, net.sdn_zone, tag=net.vlan_or_vni)
+                if await self._pve.ensure_zone(net.sdn_zone):
+                    await self._record(tenant_id, "zone", net.sdn_zone)
+                if await self._pve.ensure_vnet(net.vnet, net.sdn_zone, tag=net.vlan_or_vni):
+                    await self._record(tenant_id, "vnet", net.vnet)
                 gateway = str(net.gateway) if net.gateway else None
                 await self._pve.ensure_subnet(net.vnet, SdnSubnet(str(net.cidr), gateway))
                 done.append(net.name)
-            if done:
+            recorded = await self._recorded(tenant_id)
+            for kind, name in sorted(recorded, key=lambda r: (r[0] != "vnet", r[1])):
+                if kind == "vnet" and name not in wanted_vnets:
+                    await self._pve.delete_vnet(name)
+                    await self._forget(tenant_id, kind, name)
+                    removed.append(f"vnet:{name}")
+            for kind, name in sorted(recorded):
+                if kind == "zone" and name not in wanted_zones:
+                    if await self._pve.zone_vnets(name):
+                        continue  # someone else's VNet lives there: leave the zone alone
+                    await self._pve.delete_zone(name)
+                    await self._forget(tenant_id, kind, name)
+                    removed.append(f"zone:{name}")
+            if done or removed:
                 await self._pve.apply_sdn()
-        return {"networks": done}
+        return {"networks": done, "removed": removed}
+
+    async def _record(self, tenant_id: UUID, kind: str, name: str) -> None:
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            if await session.get(SdnObjectRow, (tenant_id, kind, name)) is None:
+                session.add(SdnObjectRow(tenant_id=tenant_id, kind=kind, name=name))
+
+    async def _recorded(self, tenant_id: UUID) -> list[tuple[str, str]]:
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            rows = (await session.execute(select(SdnObjectRow))).scalars().all()
+            return [(r.kind, r.name) for r in rows]
+
+    async def _forget(self, tenant_id: UUID, kind: str, name: str) -> None:
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            row = await session.get(SdnObjectRow, (tenant_id, kind, name))
+            if row is not None:
+                await session.delete(row)
 
     async def deploy_se_group(self, request: DeployRequest) -> dict[str, Any]:
         """Grow an SE group to ``request.count`` engines.

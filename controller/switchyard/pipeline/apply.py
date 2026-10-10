@@ -46,7 +46,7 @@ from switchyard.db.repository import load_snapshot
 from switchyard.db.store import ConcurrentModificationError, apply_delta
 from switchyard.db.tenancy import tenant_session
 from switchyard.domain import models as dm
-from switchyard.domain.changes import ChangeError, Draft, apply_ops
+from switchyard.domain.changes import ChangeError, Draft, ObjectType, apply_ops
 from switchyard.domain.errors import DomainValidationError
 from switchyard.domain.models import SeGroup
 from switchyard.domain.snapshot import Snapshot
@@ -596,6 +596,17 @@ class ApplyPipeline:
                 },
                 request_id=request_id,
             )
+            if delta.deleted.get(ObjectType.NETWORK):
+                # Deleted networks leave Proxmox SDN objects behind; the SDN job removes the ones
+                # the controller created (ADR 0017).
+                await queue.enqueue(
+                    session,
+                    "apply_sdn",
+                    {"tenant_id": str(tenant_id)},
+                    tenant_id=tenant_id,
+                    max_attempts=1,
+                    request_id=request_id,
+                )
             if revision is not None:
                 await queue.enqueue(
                     session,

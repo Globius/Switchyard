@@ -85,6 +85,53 @@ async def test_apply_sdn_creates_objects_once_and_applies(pg_url: str) -> None:
         assert len(pve.subnets["vlb"]) == 1
 
 
+async def unmanage(w: World, *names: str) -> None:
+    async with admin_session(w.db.admin) as s:
+        for name in names:
+            await s.execute(text(f"UPDATE network SET managed = false WHERE name = '{name}'"))
+
+
+async def test_apply_sdn_removes_only_what_the_controller_created(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        await infra.apply_sdn(TENANT)
+        assert await count(w, "SELECT count(*) FROM sdn_object") == 4  # zone1 + 3 vnets
+        await unmanage(w, "mgmt")
+        result = await infra.apply_sdn(TENANT)
+        assert result["removed"] == ["vnet:vmgmt"]
+        assert set(pve.vnets) == {"vlb", "vbe"} and "zone1" in pve.zones
+        await unmanage(w, "lb", "backend")
+        result = await infra.apply_sdn(TENANT)
+        assert result["removed"] == ["vnet:vbe", "vnet:vlb", "zone:zone1"]
+        assert not pve.vnets and not pve.zones
+        assert await count(w, "SELECT count(*) FROM sdn_object") == 0
+        assert (await infra.apply_sdn(TENANT))["removed"] == []  # nothing left to do
+
+
+async def test_apply_sdn_never_deletes_objects_it_did_not_create(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        pve.zones["zone1"] = "vxlan"  # exists before the controller touches it
+        infra = InfraService(w.db, pve)
+        await infra.apply_sdn(TENANT)
+        assert await count(w, "SELECT count(*) FROM sdn_object WHERE kind = 'zone'") == 0
+        await unmanage(w, "lb", "backend", "mgmt")
+        await infra.apply_sdn(TENANT)
+        assert not pve.vnets and "zone1" in pve.zones
+
+
+async def test_apply_sdn_keeps_a_zone_that_holds_a_foreign_vnet(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        await infra.apply_sdn(TENANT)
+        await pve.ensure_vnet("hand-made", "zone1")
+        await unmanage(w, "lb", "backend", "mgmt")
+        await infra.apply_sdn(TENANT)
+        assert set(pve.vnets) == {"hand-made"} and "zone1" in pve.zones
+
+
 async def test_deploy_creates_vms_registers_engines_and_spreads_over_nodes(pg_url: str) -> None:
     async with world(pg_url, infra_data()) as w:
         pve = FakeProxmox()

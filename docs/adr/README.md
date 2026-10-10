@@ -34,3 +34,4 @@ Date: YYYY-MM-DD
 | [0014](0014-typed-api-contract.md) | Typed API contract: response models, `kind` unions, cursors, diff warnings | Accepted |
 | [0015](0015-rendered-config-per-object.md) | Rendered configuration per object, and typed diff files | Accepted |
 | [0016](0016-job-model-stages-and-actions.md) | Job model: stages, log, retry and cancel | Accepted |
+| [0017](0017-sdn-cleanup.md) | Proxmox SDN cleanup when a managed network is deleted | Accepted |

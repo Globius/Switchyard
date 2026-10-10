@@ -24,6 +24,10 @@ class Api:
         assert request.headers["authorization"] == "PVEAPIToken=sy@pve!ctl=secret"
         if request.method == "GET" and path in self.existing:
             return httpx.Response(200, json={"data": {}})
+        if request.method == "GET" and path == "/cluster/sdn/vnets":
+            return httpx.Response(
+                200, json={"data": [{"vnet": "v1", "zone": "z1"}, {"vnet": "v2", "zone": "z2"}]}
+            )
         if request.method == "GET" and path.endswith("/subnets"):
             return httpx.Response(200, json={"data": []})
         if request.method == "GET" and path == "/cluster/nextid":
@@ -99,6 +103,17 @@ async def test_ensure_calls_are_idempotent() -> None:
     assert posts["/cluster/sdn/zones"]["peers"] == ["10.0.0.1,10.0.0.2"]
     assert posts["/cluster/sdn/vnets"]["tag"] == ["100"]
     assert posts["/cluster/sdn/vnets/v2/subnets"]["gateway"] == ["192.0.2.1"]
+
+
+async def test_zone_cleanup_calls() -> None:
+    api = Api()
+    pve = client(api)
+    assert await pve.zone_vnets("z1") == ["v1"]
+    await pve.delete_zone("z1")
+    assert ("DELETE", "/cluster/sdn/zones/z1") in [(m, p) for m, p, _ in api.requests]
+    assert await pve.ensure_zone("z3") is True
+    api.existing.add("/cluster/sdn/zones/z4")
+    assert await pve.ensure_zone("z4") is False
 
 
 async def test_destroy_of_a_missing_vm_is_a_no_op_and_errors_surface() -> None:
