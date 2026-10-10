@@ -10,6 +10,8 @@ OpenBao KV v2; otherwise from ``SWITCHYARD_SECRET_*`` variables (see ``EnvSecret
 store new certificates. Proxmox: ``SWITCHYARD_PVE_URL``, ``SWITCHYARD_PVE_TOKEN_ID`` and the token
 secret. Certificates: ``SWITCHYARD_CLOUDFLARE_TOKEN`` (DNS-01, Origin CA, IP ranges) and, for ACME,
 ``SWITCHYARD_ACME_DIRECTORY``, ``SWITCHYARD_ACME_EMAIL`` and ``SWITCHYARD_ACME_ACCOUNT_KEY_FILE``.
+Agents: ``SWITCHYARD_BUNDLE_KEY_FILE`` (Ed25519 key that signs bundles) and, for enrollment,
+OpenBao PKI (``SWITCHYARD_PKI_MOUNT``, ``SWITCHYARD_PKI_ROLE``).
 """
 
 import os
@@ -17,8 +19,10 @@ from datetime import timedelta
 from pathlib import Path
 
 from switchyard.adapters.acme import AcmeIssuer, new_account_key
+from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
 from switchyard.adapters.git import GitLabMirror, GitMirror
+from switchyard.adapters.pki import OpenBaoPki
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
 from switchyard.adapters.secrets import EnvSecrets, OpenBaoSecrets, SecretsReader
@@ -36,6 +40,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
+from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.infra import InfraService
 from switchyard.services.status import StatusService
 
@@ -55,7 +60,34 @@ def directory(db: Databases) -> DbEngineDirectory:
         ca_file=Path(ca) if ca else None,
         client_cert=(Path(cert), Path(key)) if cert and key else None,
     )
-    return DbEngineDirectory(db, secrets_backend(), tls)
+    return DbEngineDirectory(db, secrets_backend(), tls, signer=bundle_signer())
+
+
+def bundle_signer() -> BundleSigner | None:
+    """The Ed25519 key that signs agent bundles, from ``SWITCHYARD_BUNDLE_KEY_FILE`` (PKCS#8 PEM).
+
+    Without it engines are treated as having no agent.
+    """
+    path = os.environ.get("SWITCHYARD_BUNDLE_KEY_FILE")
+    return BundleSigner.from_pem(Path(path).read_text()) if path else None
+
+
+def enrollment(db: Databases, secrets: SecretsReader | None = None) -> EnrollmentService | None:
+    """Agent enrollment, if OpenBao PKI and a bundle signing key are configured.
+
+    The PKI mount and role default to ``pki`` and ``agents`` (``SWITCHYARD_PKI_MOUNT`` and
+    ``SWITCHYARD_PKI_ROLE``).
+    """
+    store = secrets or secrets_backend()
+    signer = bundle_signer()
+    if not isinstance(store, OpenBaoSecrets) or signer is None:
+        return None
+    pki = OpenBaoPki(
+        store,
+        mount=os.environ.get("SWITCHYARD_PKI_MOUNT", "pki"),
+        role=os.environ.get("SWITCHYARD_PKI_ROLE", "agents"),
+    )
+    return EnrollmentService(db, pki, signer.public_b64())
 
 
 def secrets_backend() -> SecretsReader:

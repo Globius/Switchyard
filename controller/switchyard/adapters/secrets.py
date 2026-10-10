@@ -173,6 +173,14 @@ class OpenBaoSecrets:
         if response.status_code >= 400:
             raise SecretBackendError(f"OpenBao write of {ref}: HTTP {response.status_code}")
 
+    async def call(self, path: str, body: dict[str, object]) -> dict[str, object]:
+        """POST ``body`` to an OpenBao API path such as ``pki/sign/agents``; return ``data``."""
+        response = await self._request("POST", f"/v1/{path.lstrip('/')}", body)
+        if response.status_code >= 400:
+            raise SecretBackendError(f"OpenBao call to {path}: HTTP {response.status_code}")
+        data = response.json().get("data")
+        return data if isinstance(data, dict) else {}
+
     async def close(self) -> None:
         """Close the HTTP client."""
         await self._http.aclose()

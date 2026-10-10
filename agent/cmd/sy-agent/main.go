@@ -25,6 +25,7 @@ import (
 
 	pb "switchyard/agent/gen/switchyard/agent/v1"
 	"switchyard/agent/internal/bundle"
+	"switchyard/agent/internal/enroll"
 	"switchyard/agent/internal/runner"
 	"switchyard/agent/internal/server"
 	"switchyard/agent/internal/status"
@@ -32,6 +33,9 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "enroll" || os.Args[1] == "renew") {
+		os.Exit(runEnroll(os.Args[1], os.Args[2:]))
+	}
 	listen := flag.String("listen", ":7443", "address to listen on")
 	root := flag.String("root", "/etc/switchyard", "managed directory root")
 	certFile := flag.String("cert", "/etc/switchyard/agent/tls.crt", "server certificate")
@@ -117,8 +121,8 @@ func loadPublicKey(path string) (ed25519.PublicKey, error) {
 }
 
 func serverTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
+	reloader := &enroll.Reloader{CertPath: certFile, KeyPath: keyFile}
+	if _, err := reloader.GetCertificate(nil); err != nil {
 		return nil, err
 	}
 	caPEM, err := os.ReadFile(caFile)
@@ -130,9 +134,62 @@ func serverTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
 		return nil, os.ErrInvalid
 	}
 	return &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		ClientCAs:    pool,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		MinVersion:   tls.VersionTLS13,
+		GetCertificate: reloader.GetCertificate, // renewed certificates are picked up without a restart
+		ClientCAs:      pool,
+		ClientAuth:     tls.RequireAndVerifyClientCert,
+		MinVersion:     tls.VersionTLS13,
 	}, nil
+}
+
+// runEnroll implements "sy-agent enroll" (first certificate, with a one-time token) and
+// "sy-agent renew" (with the rotating renewal token saved by the previous run).
+func runEnroll(mode string, args []string) int {
+	fs := flag.NewFlagSet(mode, flag.ExitOnError)
+	controller := fs.String("controller", "", "controller base URL, for example https://switchyard.example.test")
+	token := fs.String("token", "", "one-time enrollment token")
+	tokenFile := fs.String("token-file", "", "file holding the enrollment token (cloud-init writes it)")
+	dir := fs.String("dir", "/etc/switchyard/agent", "agent state directory")
+	trust := fs.String("controller-ca", "", "CA file that signs the controller's HTTPS certificate (default: system roots)")
+	_ = fs.Parse(args)
+
+	value := strings.TrimSpace(*token)
+	switch {
+	case mode == "renew":
+		raw, err := os.ReadFile(filepath.Join(*dir, enroll.RenewTokenFile))
+		if err != nil {
+			log.Printf("renew: %v", err)
+			return 1
+		}
+		value = strings.TrimSpace(string(raw))
+	case value == "" && *tokenFile != "":
+		raw, err := os.ReadFile(*tokenFile)
+		if err != nil {
+			log.Printf("enroll: %v", err)
+			return 1
+		}
+		value = strings.TrimSpace(string(raw))
+	}
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	if *trust != "" {
+		pemBytes, err := os.ReadFile(*trust)
+		pool := x509.NewCertPool()
+		if err != nil || !pool.AppendCertsFromPEM(pemBytes) {
+			log.Printf("enroll: cannot use controller CA %s", *trust)
+			return 1
+		}
+		httpClient.Transport = &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}}
+	}
+	host, _ := os.Hostname()
+	engine, err := enroll.Run(context.Background(), enroll.Config{
+		ControllerURL: *controller, Token: value, Dir: *dir, Hostname: host, HTTP: httpClient,
+	})
+	if err != nil {
+		log.Printf("%s: %v", mode, err)
+		return 1
+	}
+	if *tokenFile != "" && mode == "enroll" {
+		_ = os.Remove(*tokenFile) // the token is single use; do not leave it lying around
+	}
+	log.Printf("%s: certificate for engine %s saved in %s", mode, engine, *dir)
+	return 0
 }

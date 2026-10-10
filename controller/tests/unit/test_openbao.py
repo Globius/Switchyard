@@ -72,3 +72,32 @@ async def test_expired_token_triggers_one_new_login() -> None:
 async def test_failed_login_is_a_backend_error() -> None:
     with pytest.raises(SecretBackendError, match="login failed"):
         await client(Bao(), secret_id="bad").get("kv/a/b")
+
+
+async def test_pki_signing_goes_through_the_role_endpoint() -> None:
+    from datetime import timedelta
+
+    from switchyard.adapters.pki import OpenBaoPki, PkiError
+    from switchyard.services.certs import generate_key_and_csr
+
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/auth/approle/login":
+            return httpx.Response(200, json={"auth": {"client_token": "t"}})
+        assert request.url.path == "/v1/pki/sign/agents"
+        seen.append(json.loads(request.content))
+        if len(seen) == 2:
+            return httpx.Response(200, json={"data": {}})
+        data = {"certificate": "CERT", "issuing_ca": "CA", "serial_number": "AA:BB:cc"}
+        return httpx.Response(200, json={"data": data})
+
+    bao = OpenBaoSecrets("https://bao:8200", "r", "good", transport=httpx.MockTransport(handler))
+    pki = OpenBaoPki(bao)
+    csr = generate_key_and_csr(("x.example.test",))[1]
+    signed = await pki.sign(csr, common_name="se-a", ip_sans=("10.0.0.5",), ttl=timedelta(days=7))
+    assert (signed.cert_pem, signed.ca_pem, signed.serial) == ("CERT", "CA", "aabbcc")
+    assert seen[0]["ip_sans"] == "10.0.0.5" and seen[0]["ttl"] == "604800s"
+    assert seen[0]["common_name"] == "se-a"
+    with pytest.raises(PkiError, match="no certificate"):
+        await pki.sign(csr, common_name="se-a", ip_sans=(), ttl=timedelta(days=1))

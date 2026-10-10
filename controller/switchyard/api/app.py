@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Respons
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
+from switchyard.adapters.pki import PkiError
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.db.tenancy import admin_session, tenant_session
@@ -36,6 +37,7 @@ from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import ChangeSetDetail, ChangeSetService
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineService
+from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.members import MemberService
 from switchyard.services.status import EngineStatus, StatusService
@@ -59,6 +61,7 @@ class ApiServices:
     infra: InfraJobs
     cert_jobs: CertificateJobs
     certs: CertificateService | None = None
+    enrollment: EnrollmentService | None = None
 
 
 def build_services(
@@ -66,6 +69,7 @@ def build_services(
     directory: EngineDirectory,
     secrets: SecretsReader | None = None,
     certs: CertificateService | None = None,
+    enrollment: EnrollmentService | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles."""
     return ApiServices(
@@ -79,6 +83,7 @@ def build_services(
         infra=InfraJobs(db),
         cert_jobs=CertificateJobs(db),
         certs=certs,
+        enrollment=enrollment,
     )
 
 
@@ -99,6 +104,14 @@ class Accepted(BaseModel):
     object_id: UUID | None = None
     job_id: UUID | None = None
     op_index: int | None = None
+
+
+class EnrollIn(BaseModel):
+    """Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential)."""
+
+    model_config = ConfigDict(extra="forbid")
+    token: str = Field(max_length=200)
+    csr: str = Field(max_length=16384, description="PEM certificate request made by the agent.")
 
 
 class CertImportIn(BaseModel):
@@ -778,6 +791,41 @@ def create_app(services: ApiServices) -> FastAPI:
     async def revoke_token(token: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
         await svc.tokens.revoke(who, tenant.id, token, request_id=_rid())
         return Response(status_code=204)
+
+    # agent enrollment
+    @router.post(
+        "/tenants/{t}/engines/{engine}/enrollment-token", status_code=201, tags=["engines"]
+    )
+    async def enrollment_token(
+        engine: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Create a one-time token (shown once) for ``sy-agent enroll``."""
+        if svc.enrollment is None:
+            raise ApiError(503, "enrollment is not configured on this controller")
+        token, expires = await svc.enrollment.create_token(
+            who, tenant.id, engine, request_id=_rid()
+        )
+        return {"token": token, "expires_at": expires.isoformat()}
+
+    @router.post("/enroll", tags=["engines"])
+    async def enroll(body: EnrollIn, svc: Services) -> dict[str, str]:
+        """Trade an enrollment or renewal token and a CSR for the agent's certificate."""
+        if svc.enrollment is None:
+            raise ApiError(503, "enrollment is not configured on this controller")
+        try:
+            result = await svc.enrollment.redeem(body.token, body.csr)
+        except EnrollmentError as exc:
+            raise ApiError(401, str(exc), headers={"WWW-Authenticate": "Bearer"}) from exc
+        except PkiError as exc:
+            raise ApiError(422, str(exc)) from exc
+        return {
+            "engine": result.engine,
+            "certificate": result.cert_pem,
+            "ca": result.ca_pem,
+            "bundle_public_key": result.bundle_public_key,
+            "renewal_token": result.renewal_token,
+            "not_after": result.not_after.isoformat(),
+        }
 
     # certificates
     @router.post("/tenants/{t}/certificates/import", status_code=202, tags=["certificates"])

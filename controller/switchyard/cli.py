@@ -174,7 +174,13 @@ def serve(
 
     db = runtime.databases()
     secrets = runtime.secrets_backend()
-    services = build_services(db, runtime.directory(db), secrets, runtime.certificates(db, secrets))
+    services = build_services(
+        db,
+        runtime.directory(db),
+        secrets,
+        runtime.certificates(db, secrets),
+        runtime.enrollment(db, secrets),
+    )
     uvicorn.run(create_app(services), host=host, port=port)
 
 

@@ -30,5 +30,4 @@ controller to see what each SE is really running.
 
 - HAProxy drift is detected through the render fingerprint comment. A manual edit that leaves that
   comment untouched is not seen; closing this needs an engine call that returns the running config.
-- Agent enrolment (one-time token to a client certificate from the controller PKI) is delivered with
-  M4, because it is part of deploying an SE from the template (cloud-init).
+- Agent enrolment is described in ADR 0011.

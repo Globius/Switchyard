@@ -86,6 +86,21 @@ class AcmeIssuer:
             net.account = messages.RegistrationResource(uri=exc.location, body=registration)
         return acme
 
+    @staticmethod
+    async def _call(function: Callable[..., Any], *args: Any) -> Any:
+        """Run a blocking ACME call in a thread; retry when the CA rejects the anti-replay nonce.
+
+        Servers may answer ``badNonce`` at any time; the protocol says to retry with a fresh one.
+        """
+        for attempt in range(3):
+            try:
+                return await asyncio.to_thread(function, *args)
+            except (errors.BadNonce, messages.Error) as exc:
+                bad_nonce = isinstance(exc, errors.BadNonce) or exc.code == "badNonce"
+                if not bad_nonce or attempt == 2:
+                    raise
+        raise AssertionError("unreachable")  # pragma: no cover
+
     async def issue(self, csr_pem: str) -> str:
         """Order, validate by DNS-01 and finalize. Returns the full chain as PEM.
 
@@ -94,10 +109,12 @@ class AcmeIssuer:
         """
         records: list[tuple[str, str]] = []
         try:
-            acme = await asyncio.to_thread(self._account)
-            order = await asyncio.to_thread(acme.new_order, csr_pem.encode())
+            acme = await self._call(self._account)
+            order = await self._call(acme.new_order, csr_pem.encode())
             pending: list[Any] = []
             for authz in order.authorizations:
+                if authz.body.status == messages.STATUS_VALID:
+                    continue  # the CA remembers an earlier validation of this name
                 challenge = next(
                     (c for c in authz.body.challenges if isinstance(c.chall, challenges.DNS01)),
                     None,
@@ -111,11 +128,9 @@ class AcmeIssuer:
             if self._dns_wait:
                 await self._sleep(self._dns_wait)
             for challenge in pending:
-                await asyncio.to_thread(
-                    acme.answer_challenge, challenge, challenge.response(self._key)
-                )
+                await self._call(acme.answer_challenge, challenge, challenge.response(self._key))
             deadline = datetime.datetime.now() + datetime.timedelta(seconds=self._timeout)
-            done = await asyncio.to_thread(acme.poll_and_finalize, order, deadline)
+            done = await self._call(acme.poll_and_finalize, order, deadline)
             return str(done.fullchain_pem)
         except (errors.Error, CloudflareError, OSError, ValueError) as exc:
             raise AcmeError(f"ACME issuance failed: {exc}") from exc

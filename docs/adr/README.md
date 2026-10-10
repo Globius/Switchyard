@@ -29,3 +29,4 @@ Date: YYYY-MM-DD
 | [0008](0008-agent-routing-and-status.md) | The SE agent, routing profiles, and status/drift | Accepted |
 | [0009](0009-infrastructure-jobs.md) | Infrastructure jobs: SDN, IPAM and SE group deployment | Accepted |
 | [0010](0010-certificates-and-cloudflare.md) | Certificates, OpenBao and the Cloudflare allow list | Accepted |
+| [0011](0011-agent-enrollment.md) | Agent enrollment and certificate renewal | Accepted |

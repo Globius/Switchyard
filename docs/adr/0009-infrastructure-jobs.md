@@ -30,6 +30,6 @@ networks, addresses from pools, and SE VMs cloned from the template.
 ## Not yet covered
 
 - Removing SDN objects when a network is deleted, and shrinking a group (scale-in), are not implemented.
-- Agent enrolment (one-time token to a client certificate) is still open; new VMs use the template's
-  baked-in trust and the `ssh_public_keys` cloud-init input for operator access only.
+- Agent enrolment exists (ADR 0011), but `deploy_se_group` does not hand tokens to new VMs yet; that
+  belongs to the SE template.
 - The SE template itself (`se-image/`) is not built here.

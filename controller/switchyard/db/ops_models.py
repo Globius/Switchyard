@@ -250,6 +250,34 @@ class ApiTokenRow(Base):
     revoked_at: Mapped[datetime | None] = _timestamp()
 
 
+class EnrollmentTokenRow(Base):
+    """``enrollment_token``: one-time (``enroll``) or rotating (``renew``) agent credentials.
+
+    Only the SHA-256 of the token is stored. A token works once: using it sets ``used_at``.
+    """
+
+    __tablename__ = "enrollment_token"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "engine_id"],
+            ["service_engine.tenant_id", "service_engine.id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("token_hash"),
+        CheckConstraint("kind IN ('enroll', 'renew')", name="kind"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    engine_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = _timestamp(nullable=False)
+    used_at: Mapped[datetime | None] = _timestamp()
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
 class EngineStatusRow(Base):
     """``engine_status``: the latest poll result of one engine (one row per engine)."""
 

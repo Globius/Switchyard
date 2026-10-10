@@ -434,6 +434,29 @@
         "title": "EngineState",
         "type": "string"
       },
+      "EnrollIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential).",
+        "properties": {
+          "csr": {
+            "description": "PEM certificate request made by the agent.",
+            "maxLength": 16384,
+            "title": "Csr",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 200,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "csr"
+        ],
+        "title": "EnrollIn",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2114,6 +2137,52 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/enroll": {
+      "post": {
+        "description": "Trade an enrollment or renewal token and a CSR for the agent's certificate.",
+        "operationId": "enroll_api_v1_enroll_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Enroll Api V1 Enroll Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enroll",
+        "tags": [
+          "engines"
+        ]
+      }
+    },
     "/api/v1/healthz": {
       "get": {
         "operationId": "healthz_api_v1_healthz_get",
@@ -4258,6 +4327,79 @@
           }
         },
         "summary": "Remove Engine",
+        "tags": [
+          "engines"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/engines/{engine}/enrollment-token": {
+      "post": {
+        "description": "Create a one-time token (shown once) for ``sy-agent enroll``.",
+        "operationId": "enrollment_token_api_v1_tenants__t__engines__engine__enrollment_token_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engine",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engine",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Enrollment Token Api V1 Tenants  T  Engines  Engine  Enrollment Token Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enrollment Token",
         "tags": [
           "engines"
         ]
