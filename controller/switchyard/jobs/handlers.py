@@ -14,6 +14,7 @@ from switchyard.db.ops_models import RevisionRow
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
+from switchyard.jobs.progress import JobProgress
 from switchyard.jobs.queue import Job
 from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
@@ -67,7 +68,12 @@ def build_handlers(
     async def apply_change_set(job: Job) -> dict[str, Any]:
         tenant_id = UUID(job.payload["tenant_id"])
         change_set_id = UUID(job.payload["change_set_id"])
-        report = await pipeline.run(tenant_id, change_set_id, request_id=job.request_id)
+        report = await pipeline.run(
+            tenant_id,
+            change_set_id,
+            request_id=job.request_id,
+            progress=JobProgress(db.admin, job.id),
+        )
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set}

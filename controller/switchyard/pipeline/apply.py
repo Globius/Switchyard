@@ -27,6 +27,7 @@ import hashlib
 import logging
 import time
 from collections.abc import Sequence
+from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -51,6 +52,7 @@ from switchyard.domain.models import SeGroup
 from switchyard.domain.snapshot import Snapshot
 from switchyard.domain.workflow import ChangeSetState, DeploymentState
 from switchyard.jobs import queue
+from switchyard.jobs.progress import APPLY_STAGES, JobProgress
 from switchyard.pipeline.bundles import BundleError, engine_files
 from switchyard.pipeline.canary import (
     AgentRoutingProbe,
@@ -203,14 +205,24 @@ class ApplyPipeline:
     # -- entry point -----------------------------------------------------------------------------
 
     async def run(
-        self, tenant_id: UUID, change_set_id: UUID, *, request_id: str | None = None
+        self,
+        tenant_id: UUID,
+        change_set_id: UUID,
+        *,
+        request_id: str | None = None,
+        progress: JobProgress | None = None,
     ) -> ApplyReport:
         """Apply a change set that is in the ``applying`` state.
+
+        ``progress`` receives the stages (lock, render, validate, canary, rollout, commit) with
+        their timing and errors; the worker passes the recorder of the job running the pipeline.
 
         Raises:
             PipelineStateError: If the change set does not exist or is not ``applying``.
         """
         started = self._clock()
+        rec = progress or JobProgress(None, None)
+        await rec.plan(APPLY_STAGES)
         async with tenant_session(self._db.app, [tenant_id]) as session:
             change_set = await store.get_change_set(session, change_set_id)
             if change_set is None or change_set.state is not ChangeSetState.APPLYING:
@@ -222,18 +234,21 @@ class ApplyPipeline:
             for _attempt in range(3):
                 base = await self._load_base(tenant_id)
                 try:
-                    draft = apply_ops(base, ops, tenant_id=tenant_id)
-                    self._require_valid(draft)
-                    plans = await self._plan(tenant_id, base, draft, opened)
+                    async with rec.stage("render"):
+                        draft = apply_ops(base, ops, tenant_id=tenant_id)
+                        self._require_valid(draft)
+                        plans = await self._plan(tenant_id, base, draft, opened)
                 except (ChangeError, DomainValidationError, RenderError, _PlanError) as exc:
                     return await self._fail(
                         tenant_id, change_set_id, str(exc), [], request_id, started
                     )
-                async with self._locks.hold(p.group.id for p in plans):
+                async with AsyncExitStack() as stack:
+                    async with rec.stage("lock"):
+                        await stack.enter_async_context(self._locks.hold(p.group.id for p in plans))
                     if await self._load_base(tenant_id) != base:
                         continue  # state moved while waiting for the locks; plan again
                     return await self._execute(
-                        tenant_id, change_set_id, base, draft, plans, request_id, started
+                        tenant_id, change_set_id, base, draft, plans, request_id, started, rec
                     )
             return await self._fail(
                 tenant_id,
@@ -246,6 +261,7 @@ class ApplyPipeline:
         finally:
             for engine in opened:
                 await engine.close()
+            await rec.skip_pending()
 
     # -- planning --------------------------------------------------------------------------------
 
@@ -334,12 +350,13 @@ class ApplyPipeline:
         plans: list[_Plan],
         request_id: str | None,
         started: datetime,
+        rec: JobProgress,
     ) -> ApplyReport:
         pushed: list[tuple[HaproxyEngine, _Plan]] = []
         outcomes: list[GroupOutcome] = []
         try:
             for plan in plans:
-                await self._rollout(plan, pushed)
+                await self._rollout(plan, pushed, rec)
                 outcomes.append(_outcome(plan, DeploymentState.SUCCEEDED))
         except _RolloutFailedError as exc:
             reverted = await self._revert(pushed)
@@ -363,9 +380,10 @@ class ApplyPipeline:
             )
             return await self._fail(tenant_id, change_set_id, message, [], request_id, started)
         try:
-            return await self._commit(
-                tenant_id, change_set_id, base, draft, plans, outcomes, request_id, started
-            )
+            async with rec.stage("commit"):
+                return await self._commit(
+                    tenant_id, change_set_id, base, draft, plans, outcomes, request_id, started
+                )
         except (ConcurrentModificationError, IntegrityError) as exc:
             reverted = await self._revert(pushed)
             message = f"the database changed during the rollout ({exc}); engines were reverted"
@@ -409,19 +427,52 @@ class ApplyPipeline:
                 f"{record.name}: agent rejected the routing bundle: {result.error}{note}"
             )
 
-    async def _rollout(self, plan: _Plan, pushed: list[tuple[HaproxyEngine, _Plan]]) -> None:
+    async def _rollout(
+        self, plan: _Plan, pushed: list[tuple[HaproxyEngine, _Plan]], rec: JobProgress
+    ) -> None:
         """Validate, push to the canary, watch it, then push to the rest."""
         group, files = plan.group, plan.target.files
         canary_record, canary = plan.engines[0]
         try:
-            if self._sandbox is not None:
-                await require_valid(self._sandbox, files)
-            await canary.validate(files)
-            before: list[ServerStatus] = await canary.server_statuses()
-            pushed.append((canary, plan))  # recorded first: a half-applied push must be reverted
-            await self._push_one(plan, canary_record, canary)
+            async with rec.stage("validate"):
+                if self._sandbox is not None:
+                    await require_valid(self._sandbox, files)
+                await canary.validate(files)
+                before: list[ServerStatus] = await canary.server_statuses()
         except (HaproxyError, AgentError) as exc:
             raise _RolloutFailedError(plan, f"SE group {group.name}: {exc}") from exc
+        try:
+            async with rec.stage("canary"):
+                pushed.append((canary, plan))  # recorded first: a half-applied push is reverted
+                await self._push_one(plan, canary_record, canary)
+                await self._watch_canary(plan, canary_record, canary, before)
+        except (HaproxyError, AgentError) as exc:
+            raise _RolloutFailedError(plan, f"SE group {group.name}: {exc}") from exc
+        async with rec.stage("rollout"):
+            for record, engine in plan.engines[1:]:
+                try:
+                    pushed.append((engine, plan))
+                    await self._push_one(plan, record, engine)
+                    if await engine.fingerprint() != plan.target.fingerprint:
+                        raise _RolloutFailedError(
+                            plan,
+                            f"SE group {group.name}: {record.name} is not running the "
+                            "pushed config",
+                        )
+                except (HaproxyError, AgentError) as exc:
+                    raise _RolloutFailedError(plan, f"SE group {group.name}: {exc}") from exc
+        plan.notes["engines"] = [r.name for r, _ in plan.engines]
+        if plan.bundles:
+            plan.notes["bundles"] = {n: bundle_id(b) for n, b in sorted(plan.bundles.items())}
+
+    async def _watch_canary(
+        self,
+        plan: _Plan,
+        canary_record: EngineRecord,
+        canary: HaproxyEngine,
+        before: list[ServerStatus],
+    ) -> None:
+        group = plan.group
         plan.notes["canary"] = canary_record.name
         probe: RoutingProbe = self._probe
         agent = plan.agents.get(canary_record.name)
@@ -451,20 +502,6 @@ class ApplyPipeline:
             raise _RolloutFailedError(
                 plan, f"SE group {group.name}: canary failed: " + "; ".join(result.problems)
             )
-        for record, engine in plan.engines[1:]:
-            try:
-                pushed.append((engine, plan))
-                await self._push_one(plan, record, engine)
-                if await engine.fingerprint() != plan.target.fingerprint:
-                    raise _RolloutFailedError(
-                        plan,
-                        f"SE group {group.name}: {record.name} is not running the pushed config",
-                    )
-            except (HaproxyError, AgentError) as exc:
-                raise _RolloutFailedError(plan, f"SE group {group.name}: {exc}") from exc
-        plan.notes["engines"] = [r.name for r, _ in plan.engines]
-        if plan.bundles:
-            plan.notes["bundles"] = {n: bundle_id(b) for n, b in sorted(plan.bundles.items())}
 
     async def _revert(self, pushed: Sequence[tuple[HaproxyEngine, _Plan]]) -> dict[UUID, list[str]]:
         """Put every engine that took the new configuration back. Never raises."""

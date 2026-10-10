@@ -422,6 +422,7 @@
         "title": "ApplyIn",
         "type": "object"
       },
+<<<<<<< HEAD
       "AuditEventRead": {
         "additionalProperties": false,
         "description": "One audit-log entry.",
@@ -713,6 +714,39 @@
         "additionalProperties": false,
         "properties": {
           "asn": {
+=======
+      "ApplyJobResult": {
+        "description": "Result of an ``apply_change_set`` job.\n\n``ok: false`` means the change set was rejected or reverted: the job *finished* and will not be\nretried. Compare ``Job.retrying``.",
+        "properties": {
+          "change_set_id": {
+            "format": "uuid",
+            "title": "Change Set Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/GroupResult"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "revision_number": {
+>>>>>>> 35ab6ad (Jobs: stages with timing, tenant job list, log, retry and cancel (T5), ADR 0016)
             "anyOf": [
               {
                 "type": "integer"
@@ -721,6 +755,7 @@
                 "type": "null"
               }
             ],
+<<<<<<< HEAD
             "title": "Asn"
           },
           "bfd": {
@@ -909,6 +944,16 @@
           "remote_asn"
         ],
         "title": "BgpSessionStatus",
+=======
+            "title": "Revision Number"
+          }
+        },
+        "required": [
+          "ok",
+          "change_set_id"
+        ],
+        "title": "ApplyJobResult",
+>>>>>>> 35ab6ad (Jobs: stages with timing, tenant job list, log, retry and cancel (T5), ADR 0016)
         "type": "object"
       },
       "BreakGlassIn": {
@@ -2012,9 +2057,78 @@
         "title": "EnrollIn",
         "type": "object"
       },
+<<<<<<< HEAD
       "EnrollOut": {
         "additionalProperties": false,
         "description": "The agent's certificate and renewal credentials.",
+=======
+      "GroupResult": {
+        "description": "What an apply did to one SE group.",
+        "properties": {
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "rendered_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rendered Hash"
+          },
+          "se_group": {
+            "title": "Se Group",
+            "type": "string"
+          },
+          "se_group_id": {
+            "format": "uuid",
+            "title": "Se Group Id",
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "succeeded",
+                  "failed",
+                  "reverted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "required": [
+          "se_group_id",
+          "se_group",
+          "state"
+        ],
+        "title": "GroupResult",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+>>>>>>> 35ab6ad (Jobs: stages with timing, tenant job list, log, retry and cancel (T5), ADR 0016)
         "properties": {
           "bundle_public_key": {
             "title": "Bundle Public Key",
@@ -2523,6 +2637,7 @@
         "title": "IpRange",
         "type": "object"
       },
+<<<<<<< HEAD
       "JobAccepted": {
         "additionalProperties": false,
         "description": "A job was queued; poll ``GET /jobs/{job_id}``.",
@@ -2542,11 +2657,205 @@
       "JobRead": {
         "additionalProperties": false,
         "description": "A queued or finished background job.",
+=======
+      "Job": {
+        "description": "A background job.",
+>>>>>>> 35ab6ad (Jobs: stages with timing, tenant job list, log, retry and cancel (T5), ADR 0016)
         "properties": {
           "attempts": {
             "title": "Attempts",
             "type": "integer"
           },
+<<<<<<< HEAD
+=======
+          "change_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Set Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error of the latest failed attempt.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For finished jobs that report one (apply): whether the work succeeded.",
+            "title": "Ok"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplyJobResult"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "retrying": {
+            "description": "True while a failed attempt waits for its next try (state `queued`, attempts > 0). A reverted or rejected apply is not retrying: it is `succeeded` with `ok: false`.",
+            "title": "Retrying",
+            "type": "boolean"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/JobStage"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "created_at",
+          "attempts",
+          "max_attempts",
+          "retrying"
+        ],
+        "title": "Job",
+        "type": "object"
+      },
+      "JobLog": {
+        "description": "The log of a job (the latest 500 lines).",
+        "properties": {
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LogLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "job_id",
+          "lines"
+        ],
+        "title": "JobLog",
+        "type": "object"
+      },
+      "JobPage": {
+        "description": "A page of jobs, newest first.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "JobPage",
+        "type": "object"
+      },
+      "JobStage": {
+        "description": "One step of a job, with timing.\n\nThe apply pipeline has lock, render, validate, canary, rollout and commit.",
+        "properties": {
+>>>>>>> 35ab6ad (Jobs: stages with timing, tenant job list, log, retry and cancel (T5), ADR 0016)
           "error": {
             "anyOf": [
               {
@@ -2558,6 +2867,7 @@
             ],
             "title": "Error"
           },
+<<<<<<< HEAD
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -2572,11 +2882,19 @@
               {
                 "additionalProperties": true,
                 "type": "object"
+=======
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+>>>>>>> 35ab6ad (Jobs: stages with timing, tenant job list, log, retry and cancel (T5), ADR 0016)
               },
               {
                 "type": "null"
               }
             ],
+<<<<<<< HEAD
             "description": "Shape depends on `kind`.",
             "title": "Result"
           },
@@ -2696,6 +3014,77 @@
           "role"
         ],
         "title": "MeTenant",
+=======
+            "title": "Finished At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/StageState"
+          }
+        },
+        "required": [
+          "name",
+          "state"
+        ],
+        "title": "JobStage",
+        "type": "object"
+      },
+      "JobState": {
+        "description": "Lifecycle of a background job.",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "dead",
+          "cancelled"
+        ],
+        "title": "JobState",
+        "type": "string"
+      },
+      "LogLine": {
+        "description": "One line of a job's log.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "info",
+              "error"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "level",
+          "message"
+        ],
+        "title": "LogLine",
+>>>>>>> 35ab6ad (Jobs: stages with timing, tenant job list, log, retry and cancel (T5), ADR 0016)
         "type": "object"
       },
       "MemberStateIn": {
@@ -4726,6 +5115,7 @@
         "title": "SeGroupPatch",
         "type": "object"
       },
+<<<<<<< HEAD
       "SeGroupRead": {
         "additionalProperties": false,
         "description": "SeGroup as returned by the API.",
@@ -5030,6 +5420,19 @@
         ],
         "title": "Tenant",
         "type": "object"
+=======
+      "StageState": {
+        "description": "State of one job stage.",
+        "enum": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed",
+          "skipped"
+        ],
+        "title": "StageState",
+        "type": "string"
+>>>>>>> 35ab6ad (Jobs: stages with timing, tenant job list, log, retry and cancel (T5), ADR 0016)
       },
       "TenantIn": {
         "additionalProperties": false,
@@ -11256,6 +11659,396 @@
         "summary": "Change one of the health monitors",
         "tags": [
           "health-monitors"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs": {
+      "get": {
+        "operationId": "list_jobs_api_v1_tenants__t__jobs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Jobs",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_tenant_job_api_v1_tenants__t__jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Tenant Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_job_api_v1_tenants__t__jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs/{job_id}/log": {
+      "get": {
+        "operationId": "get_job_log_api_v1_tenants__t__jobs__job_id__log_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobLog"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job Log",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs/{job_id}/retry": {
+      "post": {
+        "operationId": "retry_job_api_v1_tenants__t__jobs__job_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Job",
+        "tags": [
+          "jobs"
         ]
       }
     },

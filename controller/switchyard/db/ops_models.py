@@ -203,6 +203,7 @@ class JobRow(Base):
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         enum_check("state", JobState),
         Index("ix_job_state_run_after", "state", "run_after"),
+        Index("ix_job_tenant_created", "tenant_id", "created_at", "id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -223,6 +224,14 @@ class JobRow(Base):
     request_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
     finished_at: Mapped[datetime | None] = _timestamp()
+    started_at: Mapped[datetime | None] = _timestamp()
+    change_set_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    stages: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    log: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
 
 
 class ApiTokenRow(Base):

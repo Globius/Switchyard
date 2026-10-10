@@ -25,6 +25,7 @@ from switchyard.db.ops_models import JobRow
 from switchyard.db.tenancy import admin_session
 from switchyard.domain.workflow import JobState
 from switchyard.ids import uuid7
+from switchyard.jobs.progress import MAX_LOG_LINES, log_line
 
 
 @dataclass(frozen=True)
@@ -72,9 +73,11 @@ async def enqueue(
 ) -> UUID:
     """Add a job in the caller's transaction and return its id."""
     job_id = uuid7()
+    change_set_id = payload.get("change_set_id")
     row = JobRow(
         id=job_id,
         tenant_id=tenant_id,
+        change_set_id=UUID(change_set_id) if change_set_id else None,
         kind=kind,
         payload=payload,
         max_attempts=max_attempts,
@@ -107,6 +110,12 @@ async def claim(engine: AsyncEngine, worker_id: str, kinds: set[str] | None = No
         row.locked_by = worker_id
         row.locked_at = func.now()
         row.heartbeat_at = func.now()
+        if row.started_at is None:
+            row.started_at = func.now()
+        row.stages = []  # each attempt reports its own stages
+        row.log = [*row.log, log_line("info", f"attempt {row.attempts} claimed by {worker_id}")][
+            -MAX_LOG_LINES:
+        ]
         await session.flush()
         return Job(
             id=row.id,
@@ -157,6 +166,9 @@ async def fail(
         ).scalar_one()
         row.last_error = error[:4000]
         row.locked_by = None
+        row.log = [*row.log, log_line("error", f"attempt {row.attempts} failed: {error[:500]}")][
+            -MAX_LOG_LINES:
+        ]
         if row.attempts >= row.max_attempts:
             row.state = JobState.DEAD.value
             row.finished_at = func.now()
@@ -193,3 +205,40 @@ async def reclaim_stale(engine: AsyncEngine, silent_for: timedelta) -> int:
                 row.state = JobState.QUEUED.value
                 row.run_after = func.now()
         return len(rows)
+
+
+async def cancel(engine: AsyncEngine, job_id: UUID) -> bool:
+    """Cancel a job that has not started. Returns False if it is no longer ``queued``.
+
+    A running job is never interrupted: its handler may be halfway through a rollout.
+    """
+    async with admin_session(engine) as session:
+        row = (
+            await session.execute(select(JobRow).where(JobRow.id == job_id).with_for_update())
+        ).scalar_one_or_none()
+        if row is None or row.state != JobState.QUEUED.value:
+            return False
+        row.state = JobState.CANCELLED.value
+        row.finished_at = func.now()
+        row.log = [*row.log, log_line("info", "cancelled")][-MAX_LOG_LINES:]
+        return True
+
+
+async def retry(engine: AsyncEngine, job_id: UUID) -> bool:
+    """Queue a ``dead`` or ``failed`` job again with a fresh attempt budget.
+
+    Returns False if the job is in another state.
+    """
+    async with admin_session(engine) as session:
+        row = (
+            await session.execute(select(JobRow).where(JobRow.id == job_id).with_for_update())
+        ).scalar_one_or_none()
+        if row is None or row.state not in {JobState.DEAD.value, JobState.FAILED.value}:
+            return False
+        row.state = JobState.QUEUED.value
+        row.attempts = 0
+        row.run_after = func.now()
+        row.finished_at = None
+        row.last_error = None
+        row.log = [*row.log, log_line("info", "queued again by hand")][-MAX_LOG_LINES:]
+        return True

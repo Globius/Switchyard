@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.api import examples as ex
+from switchyard.api import job_models
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.api.schemas import (
     ETAG_HEADER,
@@ -75,7 +76,7 @@ from switchyard.domain.changes import (
     ObjectType,
 )
 from switchyard.domain.models import CertSource
-from switchyard.domain.workflow import ChangeSetState, EngineState
+from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
 from switchyard.services.certificates import CertificateJobs, CertificateService
@@ -84,6 +85,7 @@ from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.infra import DeployRequest, InfraJobs
+from switchyard.services.jobs import JobService
 from switchyard.services.members import MemberService
 from switchyard.services.sessions import LoginError, SessionInfo, SessionService
 from switchyard.services.status import EngineStatus, StatusService
@@ -106,6 +108,7 @@ class ApiServices:
     status: StatusService
     infra: InfraJobs
     cert_jobs: CertificateJobs
+    jobs: JobService
     certs: CertificateService | None = None
     enrollment: EnrollmentService | None = None
     sessions: SessionService | None = None
@@ -130,6 +133,7 @@ def build_services(
         status=StatusService(db, directory, secrets),
         infra=InfraJobs(db),
         cert_jobs=CertificateJobs(db),
+        jobs=JobService(db),
         certs=certs,
         enrollment=enrollment,
         sessions=sessions,
@@ -1473,6 +1477,79 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "error": row.last_error,
             "result": row.result,
         }
+
+    @router.get(
+        "/tenants/{t}/jobs",
+        tags=["jobs"],
+        summary="List a tenant's jobs, newest first",
+        response_model=job_models.Page[job_models.Job],
+        responses=_ok({"items": [ex.JOB_FULL], "next_cursor": None}),
+    )
+    async def list_jobs(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        state: JobState | None = None,
+        kind: str | None = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> Any:
+        try:
+            page = await svc.jobs.list(
+                who, tenant.id, state=state, kind=kind, cursor=cursor, limit=limit
+            )
+        except ValueError:
+            raise ApiError(400, "cursor is not valid") from None
+        return job_models.Page[job_models.Job](
+            items=[job_models.Job.from_row(r) for r in page.items], next_cursor=page.next_cursor
+        )
+
+    @router.get(
+        "/tenants/{t}/jobs/{job_id}",
+        tags=["jobs"],
+        summary="Get a job with its stages",
+        response_model=job_models.Job,
+        responses=_ok(ex.JOB_FULL),
+    )
+    async def get_tenant_job(job_id: UUID, tenant: Tenant, who: Who, svc: Services) -> Any:
+        return job_models.Job.from_row(await svc.jobs.get(who, tenant.id, job_id))
+
+    @router.get(
+        "/tenants/{t}/jobs/{job_id}/log",
+        tags=["jobs"],
+        summary="Get a job's log",
+        response_model=job_models.JobLog,
+        responses=_ok(ex.JOB_LOG),
+    )
+    async def get_job_log(job_id: UUID, tenant: Tenant, who: Who, svc: Services) -> Any:
+        row = await svc.jobs.get(who, tenant.id, job_id)
+        return job_models.JobLog(
+            job_id=row.id, lines=[job_models.LogLine.model_validate(x) for x in row.log]
+        )
+
+    @router.post(
+        "/tenants/{t}/jobs/{job_id}/retry",
+        tags=["jobs"],
+        summary="Queue a dead job again",
+        response_model=job_models.Job,
+        responses=_ok(ex.JOB_FULL),
+    )
+    async def retry_job(job_id: UUID, tenant: Tenant, who: Who, svc: Services) -> Any:
+        return job_models.Job.from_row(
+            await svc.jobs.retry(who, tenant.id, job_id, request_id=_rid())
+        )
+
+    @router.post(
+        "/tenants/{t}/jobs/{job_id}/cancel",
+        tags=["jobs"],
+        summary="Cancel a job that has not started",
+        response_model=job_models.Job,
+        responses=_ok(ex.JOB_FULL),
+    )
+    async def cancel_job(job_id: UUID, tenant: Tenant, who: Who, svc: Services) -> Any:
+        return job_models.Job.from_row(
+            await svc.jobs.cancel(who, tenant.id, job_id, request_id=_rid())
+        )
 
     @router.get(
         "/tenants/{t}/audit-events",
