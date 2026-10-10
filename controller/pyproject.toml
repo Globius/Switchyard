@@ -15,6 +15,8 @@ dependencies = [
   "docker>=7.2.0",
   "fastapi>=0.143.0",
   "uvicorn>=0.54.0",
+  "grpcio>=1.84.0",
+  "cryptography>=50.0.2",
 ]
 
 [project.scripts]
@@ -31,6 +33,7 @@ dev = [
   "mypy>=1.13",
   "pre-commit>=4.0",
   "types-PyYAML>=6.0",
+  "grpcio-tools>=1.84.0",
 ]
 
 [build-system]
@@ -43,14 +46,15 @@ module-root = ""
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["tests/golden"]
+extend-exclude = ["tests/golden", "switchyard/adapters/agentpb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "D", "S", "PT", "T20"]
 ignore = ["D203", "D213", "RUF012", "N818"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["D", "S101", "S105", "S106", "S608", "PT011", "E501"]
+"tests/**" = ["D", "S101", "S105", "S106", "S608", "PT011", "E501", "S603", "S607", "PT018"]
+"tools_gen_proto.py" = ["E501", "S603", "E402", "D"]
 "switchyard/db/migrations/**" = ["D", "S608", "E501", "UP", "RUF", "I"]
 
 [tool.ruff.lint.pydocstyle]
@@ -61,14 +65,15 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["switchyard", "tests"]
+exclude = ["switchyard/adapters/agentpb/"]
 
 [[tool.mypy.overrides]]
-module = ["testcontainers.*", "docker.*"]
+module = ["testcontainers.*", "docker.*", "grpc.*", "grpc_tools.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "switchyard"]
-addopts = "-ra --strict-markers --doctest-modules --ignore-glob=switchyard/db/migrations/*"
+addopts = "-ra --strict-markers --doctest-modules --ignore-glob=switchyard/db/migrations/* --ignore-glob=switchyard/adapters/agentpb/*"
 markers = [
   "docker: needs a Docker daemon (PostgreSQL or HAProxy containers)",
 ]

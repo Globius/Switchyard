@@ -41,3 +41,5 @@ backup_*.json
 .idea/
 .DS_Store
 Thumbs.db
+agent/sy-agent
+agent/sy-agent.exe
