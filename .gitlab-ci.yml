@@ -45,3 +45,12 @@ test:
       coverage_report:
         coverage_format: cobertura
         path: controller/coverage.xml
+
+openapi-breaking:
+  extends: .controller
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+  script:
+    - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - git show origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:docs/api/openapi.json > /tmp/old-openapi.json || exit 0
+    - uv run python -m switchyard.api.openapi_check /tmp/old-openapi.json ../docs/api/openapi.json

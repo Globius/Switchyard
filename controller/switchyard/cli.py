@@ -8,6 +8,7 @@ Exit codes: 0 success, 1 not found / already exists, 2 invalid state or unrender
 """
 
 import asyncio
+import contextlib
 import sys
 from collections.abc import Coroutine
 from pathlib import Path
@@ -158,3 +159,66 @@ def render(
             target.write_bytes(content.encode("utf-8"))
         typer.echo(f"wrote {len(result.files)} files to {root}", err=True)
     typer.echo(f"content hash {result.content_hash}", err=True)
+
+
+@app.command()
+def serve(
+    host: Annotated[str, typer.Option(help="Bind address.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option(help="Bind port.")] = 8000,
+) -> None:
+    """Run the HTTP API (uvicorn)."""
+    import uvicorn
+
+    from switchyard import runtime
+    from switchyard.api.app import build_services, create_app
+
+    db = runtime.databases()
+    uvicorn.run(create_app(build_services(db, runtime.directory(db))), host=host, port=port)
+
+
+@app.command("worker")
+def run_worker(
+    name: Annotated[str, typer.Option(help="Worker id recorded on claimed jobs.")] = "worker-1",
+) -> None:
+    """Run a job worker until interrupted."""
+    from switchyard import runtime
+
+    async def go() -> None:
+        db = runtime.databases()
+        stop = asyncio.Event()
+        try:
+            await runtime.worker(db, name).run_forever(stop)
+        finally:
+            await db.dispose()
+
+    with contextlib.suppress(KeyboardInterrupt):
+        run(go())
+
+
+@app.command("token")
+def create_system_token(
+    name: Annotated[str, typer.Option(help="Token name.")] = "bootstrap",
+    url: DatabaseUrl = DEFAULT_DATABASE_URL,
+) -> None:
+    """Create a system-admin API token directly in the database (bootstrap and recovery)."""
+    from switchyard import runtime
+    from switchyard.domain.workflow import Role
+    from switchyard.services.context import Databases, Principal
+    from switchyard.services.tokens import TokenService
+
+    async def go() -> str:
+        db = (
+            runtime.databases()
+            if url == DEFAULT_DATABASE_URL
+            else Databases(
+                app=make_engine(url, role=APP_ROLE), admin=make_engine(url, role=ADMIN_ROLE)
+            )
+        )
+        try:
+            root = Principal(actor="cli:bootstrap", role=Role.SYSTEM_ADMIN)
+            plaintext, _ = await TokenService(db).create(root, None, name, Role.SYSTEM_ADMIN)
+            return plaintext
+        finally:
+            await db.dispose()
+
+    typer.echo(run(go()))

@@ -46,7 +46,7 @@ from switchyard.render.haproxy import RenderResult, render_haproxy
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import ConflictError, NotFoundError, PermissionDeniedError
 
-_ROLE_RANK = {Role.VIEWER: 0, Role.OPERATOR: 1, Role.TENANT_ADMIN: 2, Role.SYSTEM_ADMIN: 3}
+ROLE_RANK = {Role.VIEWER: 0, Role.OPERATOR: 1, Role.TENANT_ADMIN: 2, Role.SYSTEM_ADMIN: 3}
 #: Object types that only tenant administrators may change (infrastructure, not applications).
 INFRASTRUCTURE = frozenset({ObjectType.NETWORK, ObjectType.VIP_POOL, ObjectType.SE_GROUP})
 
@@ -107,7 +107,7 @@ class Preview:
 
 def require_role(principal: Principal, minimum: Role) -> None:
     """Raise :class:`PermissionDeniedError` unless the principal holds at least ``minimum``."""
-    if _ROLE_RANK[principal.role] < _ROLE_RANK[minimum]:
+    if ROLE_RANK[principal.role] < ROLE_RANK[minimum]:
         raise PermissionDeniedError(f"{principal.actor} needs the {minimum} role")
 
 

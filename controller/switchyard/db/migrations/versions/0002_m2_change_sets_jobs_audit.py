@@ -74,7 +74,10 @@ def upgrade() -> None:
             name=op.f("ck_api_token_role"),
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenant.id"], name=op.f("fk_api_token_tenant_id_tenant")
+            ["tenant_id"],
+            ["tenant.id"],
+            name=op.f("fk_api_token_tenant_id_tenant"),
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_api_token")),
         sa.UniqueConstraint("token_hash", name=op.f("uq_api_token_token_hash")),
@@ -95,7 +98,10 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenant.id"], name=op.f("fk_audit_event_tenant_id_tenant")
+            ["tenant_id"],
+            ["tenant.id"],
+            name=op.f("fk_audit_event_tenant_id_tenant"),
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_audit_event")),
     )
@@ -134,7 +140,10 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint("version >= 1", name=op.f("ck_change_set_version")),
         sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenant.id"], name=op.f("fk_change_set_tenant_id_tenant")
+            ["tenant_id"],
+            ["tenant.id"],
+            name=op.f("fk_change_set_tenant_id_tenant"),
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_change_set")),
         sa.UniqueConstraint("tenant_id", "id", name=op.f("uq_change_set_tenant_id_id")),
@@ -176,7 +185,9 @@ def upgrade() -> None:
             "state IN ('queued', 'running', 'succeeded', 'failed', 'dead')",
             name=op.f("ck_job_state"),
         ),
-        sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"], name=op.f("fk_job_tenant_id_tenant")),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"], ["tenant.id"], name=op.f("fk_job_tenant_id_tenant"), ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_job")),
     )
     op.create_index("ix_job_state_run_after", "job", ["state", "run_after"], unique=False)
@@ -198,7 +209,10 @@ def upgrade() -> None:
         ),
         sa.CheckConstraint("number >= 1", name=op.f("ck_revision_number")),
         sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenant.id"], name=op.f("fk_revision_tenant_id_tenant")
+            ["tenant_id"],
+            ["tenant.id"],
+            name=op.f("fk_revision_tenant_id_tenant"),
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_revision")),
         sa.UniqueConstraint("tenant_id", "id", name=op.f("uq_revision_tenant_id_id")),
@@ -229,7 +243,10 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenant.id"], name=op.f("fk_change_op_tenant_id_tenant")
+            ["tenant_id"],
+            ["tenant.id"],
+            name=op.f("fk_change_op_tenant_id_tenant"),
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_change_op")),
         sa.UniqueConstraint(
@@ -275,7 +292,10 @@ def upgrade() -> None:
             name=op.f("fk_deployment_tenant_id_se_group_id_se_group"),
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenant.id"], name=op.f("fk_deployment_tenant_id_tenant")
+            ["tenant_id"],
+            ["tenant.id"],
+            name=op.f("fk_deployment_tenant_id_tenant"),
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_deployment")),
     )
@@ -309,7 +329,10 @@ def upgrade() -> None:
             name=op.f("fk_service_engine_tenant_id_se_group_id_se_group"),
         ),
         sa.ForeignKeyConstraint(
-            ["tenant_id"], ["tenant.id"], name=op.f("fk_service_engine_tenant_id_tenant")
+            ["tenant_id"],
+            ["tenant.id"],
+            name=op.f("fk_service_engine_tenant_id_tenant"),
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_service_engine")),
         sa.UniqueConstraint("se_group_id", "name", name=op.f("uq_service_engine_se_group_id_name")),

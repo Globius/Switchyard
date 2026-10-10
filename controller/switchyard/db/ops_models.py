@@ -57,7 +57,7 @@ class ServiceEngineRow(TenantOwnedMixin, Base):
     __tablename__ = "service_engine"
     __table_args__ = (
         *tenant_unique(),
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         tenant_fk("se_group_id", "se_group"),
         UniqueConstraint("se_group_id", "name"),
         enum_check("state", EngineState),
@@ -80,7 +80,7 @@ class ChangeSetRow(EntityMixin, Base):
     __tablename__ = "change_set"
     __table_args__ = (
         UniqueConstraint("tenant_id", "id"),
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         enum_check("state", ChangeSetState),
         CheckConstraint("version >= 1", name="version"),
     )
@@ -106,7 +106,7 @@ class ChangeOpRow(Base):
 
     __tablename__ = "change_op"
     __table_args__ = (
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         tenant_fk("change_set_id", "change_set", cascade=True),
         UniqueConstraint("change_set_id", "position"),
         enum_check("object_type", ObjectType),
@@ -131,7 +131,7 @@ class RevisionRow(Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "id"),
         UniqueConstraint("tenant_id", "number"),
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         CheckConstraint("number >= 1", name="number"),
     )
 
@@ -151,7 +151,7 @@ class DeploymentRow(Base):
 
     __tablename__ = "deployment"
     __table_args__ = (
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         tenant_fk("revision_id", "revision"),
         tenant_fk("se_group_id", "se_group"),
         enum_check("state", DeploymentState),
@@ -179,7 +179,7 @@ class AuditEventRow(Base):
 
     __tablename__ = "audit_event"
     __table_args__ = (
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="SET NULL"),
         Index("ix_audit_event_tenant_id_at", "tenant_id", "at"),
     )
 
@@ -198,7 +198,7 @@ class JobRow(Base):
 
     __tablename__ = "job"
     __table_args__ = (
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         enum_check("state", JobState),
         Index("ix_job_state_run_after", "state", "run_after"),
     )
@@ -228,7 +228,7 @@ class ApiTokenRow(Base):
 
     __tablename__ = "api_token"
     __table_args__ = (
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         UniqueConstraint("token_hash"),
         enum_check("role", Role),
         CheckConstraint(
