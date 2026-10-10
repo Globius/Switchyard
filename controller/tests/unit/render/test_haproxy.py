@@ -317,7 +317,7 @@ class TestBackends:
         ]
         servers = [line for line in lines(cfg(data)) if line.startswith("server")]
         assert servers == [
-            "server 10-20-0-11-80 10.20.0.11:80 weight 0",
+            "server 10-20-0-11-80 10.20.0.11:80 weight 30 disabled",
             "server 10-20-0-12-80 10.20.0.12:80 weight 100 disabled",
             "server 10-20-0-13-80 10.20.0.13:80 weight 100",
         ]

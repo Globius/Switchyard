@@ -40,9 +40,13 @@ service (decision confirmed with the owner on 2026-10-10). The daily `sync_cloud
 therefore edit one object (`managed_by: cloudflare`) instead of every virtual service. M1's scope
 note said policy sets are "redirect rules only for now"; this adds one small kind.
 
-**Drain** is `weight 0` in the rendered config. HAProxy 3.2 has no `drain` server keyword in
-configuration (only the runtime `set server ... state drain`). `disabled` renders as the `disabled`
-keyword. The Runtime API will set live state in M2 without a reload.
+**Drain and disabled** both render as the `disabled` keyword. HAProxy 3.2 has no `drain` server
+keyword in configuration (only the runtime `set server ... state drain`), and a configuration reload
+is graceful: connections already established on the old worker finish there, so a drained server
+that starts a new worker in maintenance is indistinguishable in practice. The runtime endpoint
+(`PUT /pools/{id}/members/{m}/state`) keeps the difference: it sets `drain`, `maint` or `ready` through
+the Runtime API without a reload and stores the state, so the next render reproduces it. (An earlier
+draft rendered drain as `weight 0`; that would have left a re-enabled server at weight 0.)
 
 **Other defaults chosen**
 

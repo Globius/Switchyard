@@ -475,8 +475,7 @@ class _Renderer:
             )
             if mode == "http":
                 parts.append("sni req.hdr(host),field(1,:),lower")
-        weight = 0 if member.admin_state is dm.AdminState.DRAIN else member.weight
-        parts.append(f"weight {weight}")
-        if member.admin_state is dm.AdminState.DISABLED:
-            parts.append("disabled")
+        parts.append(f"weight {member.weight}")
+        if member.admin_state is not dm.AdminState.ENABLED:
+            parts.append("disabled")  # drain and disabled both start out of rotation
         return " ".join(parts)
