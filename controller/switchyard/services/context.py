@@ -1,7 +1,7 @@
 """Shared types for the service layer: who is acting, and which databases they use."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -50,6 +50,27 @@ class Principal:
     actor: str
     role: Role
     tenant_ids: frozenset[UUID] = frozenset()
+    tenant_roles: tuple[tuple[UUID, Role], ...] = ()
+
+    def role_in(self, tenant_id: UUID) -> Role:
+        """The role held in ``tenant_id``.
+
+        API tokens hold one role in one tenant, so ``role`` is the answer. Users who log in can hold
+        different roles in different tenants; ``tenant_roles`` lists them.
+        """
+        if self.is_system:
+            return Role.SYSTEM_ADMIN
+        return dict(self.tenant_roles).get(tenant_id, self.role)
+
+    def for_tenant(self, tenant_id: UUID) -> "Principal":
+        """Return the principal as seen inside one tenant: ``role`` becomes the role held there.
+
+        Services check ``principal.role``; the API calls this for every route under a tenant so the
+        checks use the role the person has in *that* tenant, not their highest role anywhere.
+        """
+        if not self.tenant_roles or self.is_system:
+            return self
+        return replace(self, role=self.role_in(tenant_id))
 
     @property
     def is_system(self) -> bool:

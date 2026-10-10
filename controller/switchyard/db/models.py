@@ -30,7 +30,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, CIDR, INET, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from switchyard.db import ops_models  # noqa: F401  (registers the M2 tables on the metadata)
+from switchyard.db import (
+    auth_models,  # noqa: F401  (registers the login tables)
+    ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
+)
 from switchyard.db.base import (
     Base,
     EntityMixin,

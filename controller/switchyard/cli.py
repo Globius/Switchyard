@@ -9,6 +9,7 @@ Exit codes: 0 success, 1 not found / already exists, 2 invalid state or unrender
 
 import asyncio
 import contextlib
+import os
 import sys
 from collections.abc import Coroutine
 from pathlib import Path
@@ -180,8 +181,10 @@ def serve(
         secrets,
         runtime.certificates(db, secrets),
         runtime.enrollment(db, secrets),
+        runtime.sessions(db, secrets),
     )
-    uvicorn.run(create_app(services), host=host, port=port)
+    public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
+    uvicorn.run(create_app(services, public_url=public_url), host=host, port=port)
 
 
 @app.command("worker")
@@ -231,3 +234,149 @@ def create_system_token(
             await db.dispose()
 
     typer.echo(run(go()))
+
+
+idp_app = typer.Typer(help="Identity providers for user login (OIDC).", no_args_is_help=True)
+app.add_typer(idp_app, name="idp")
+
+
+def _databases(url: str) -> Any:
+    from switchyard import runtime
+    from switchyard.services.context import Databases
+
+    if url == DEFAULT_DATABASE_URL:
+        return runtime.databases()
+    return Databases(app=make_engine(url, role=APP_ROLE), admin=make_engine(url, role=ADMIN_ROLE))
+
+
+@idp_app.command("add")
+def idp_add(
+    name: Annotated[str, typer.Argument(help="Short name shown on the login page.")],
+    issuer: Annotated[str, typer.Option(help="OIDC issuer URL (https://...).")],
+    client_id: Annotated[str, typer.Option(help="OAuth client id.")],
+    client_secret_ref: Annotated[
+        str | None, typer.Option(help="Secret reference of the client secret.")
+    ] = None,
+    groups_claim: Annotated[str, typer.Option(help="ID-token claim with the groups.")] = "groups",
+    username_claim: Annotated[str, typer.Option(help="Claim shown as the user name.")] = (
+        "preferred_username"
+    ),
+    url: DatabaseUrl = DEFAULT_DATABASE_URL,
+) -> None:
+    """Add an OIDC identity provider."""
+    from switchyard.services.idp import IdentityProviderAdmin
+
+    async def go() -> None:
+        db = _databases(url)
+        try:
+            await IdentityProviderAdmin(db).add_provider(
+                name,
+                issuer,
+                client_id,
+                client_secret_ref=client_secret_ref,
+                groups_claim=groups_claim,
+                username_claim=username_claim,
+            )
+        finally:
+            await db.dispose()
+
+    run(go())
+    typer.echo(f"added identity provider {name}")
+
+
+@idp_app.command("map")
+def idp_map(
+    provider: Annotated[str, typer.Argument(help="Provider name.")],
+    group: Annotated[str, typer.Argument(help="Group name in the provider's groups claim.")],
+    role: Annotated[str, typer.Argument(help="viewer, operator, tenant-admin or system-admin.")],
+    tenant: Annotated[str | None, typer.Option(help="Tenant (not for system-admin).")] = None,
+    url: DatabaseUrl = DEFAULT_DATABASE_URL,
+) -> None:
+    """Grant a role to members of a provider group."""
+    from switchyard.domain.workflow import Role
+    from switchyard.services.idp import IdentityProviderAdmin
+
+    async def go() -> None:
+        db = _databases(url)
+        try:
+            await IdentityProviderAdmin(db).map_group(provider, group, Role(role), tenant=tenant)
+        finally:
+            await db.dispose()
+
+    run(go())
+    typer.echo(f"{group} -> {role}" + (f" in {tenant}" if tenant else ""))
+
+
+@idp_app.command("list")
+def idp_list(url: DatabaseUrl = DEFAULT_DATABASE_URL) -> None:
+    """List providers and their group mappings."""
+    from switchyard.services.idp import IdentityProviderAdmin
+
+    async def go() -> list[Any]:
+        db = _databases(url)
+        try:
+            return await IdentityProviderAdmin(db).list_providers()
+        finally:
+            await db.dispose()
+
+    for p in run(go()):
+        typer.echo(f"{p.name} {'enabled' if p.enabled else 'DISABLED'} {p.issuer_url}")
+        for group, tenant, role in p.mappings:
+            typer.echo(f"  {group} -> {role.value}" + (f" in {tenant}" if tenant else ""))
+
+
+@idp_app.command("enable")
+def idp_enable(
+    provider: str, url: DatabaseUrl = DEFAULT_DATABASE_URL, disable: bool = False
+) -> None:
+    """Enable a provider (or disable it with --disable)."""
+    from switchyard.services.idp import IdentityProviderAdmin
+
+    async def go() -> None:
+        db = _databases(url)
+        try:
+            await IdentityProviderAdmin(db).set_enabled(provider, not disable)
+        finally:
+            await db.dispose()
+
+    run(go())
+
+
+@app.command("local-admin")
+def local_admin(
+    username: Annotated[str, typer.Argument(help="Break-glass user name.")] = "breakglass",
+    url: DatabaseUrl = DEFAULT_DATABASE_URL,
+) -> None:
+    """Create the break-glass administrator (password + TOTP) and print the TOTP secret once.
+
+    The password is read from the terminal. The TOTP secret is stored in the secrets backend under
+    ``kv/switchyard/break-glass/<username>`` (needs OpenBao); login stays off until
+    ``SWITCHYARD_BREAK_GLASS=1``.
+    """
+    import base64
+    import secrets as pysecrets
+
+    from switchyard import runtime
+    from switchyard.adapters.secrets import OpenBaoSecrets
+    from switchyard.services.oidc import OidcClient
+    from switchyard.services.sessions import SessionService
+
+    password = typer.prompt("Password (16+ characters)", hide_input=True, confirmation_prompt=True)
+    store = runtime.secrets_backend()
+    if not isinstance(store, OpenBaoSecrets):
+        raise typer.BadParameter("storing the TOTP secret needs OpenBao to be configured")
+    ref = f"kv/switchyard/break-glass/{username}"
+    totp = base64.b32encode(pysecrets.token_bytes(20)).decode()
+
+    async def go() -> None:
+        db = _databases(url)
+        try:
+            await store.put(ref, totp)
+            await SessionService(db, OidcClient(), store).create_local_admin(
+                username, password, ref
+            )
+        finally:
+            await db.dispose()
+
+    run(go())
+    typer.echo(f"TOTP secret (add it to an authenticator app now, it is not shown again): {totp}")

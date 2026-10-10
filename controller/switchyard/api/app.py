@@ -6,10 +6,12 @@ Writes to desired state always go through a change set: ``?change_set=<id>`` add
 draft, ``?apply=true`` opens an implicit single-operation change set and applies it.
 """
 
+import hmac
 import uuid
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -40,6 +42,7 @@ from switchyard.services.engines import EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.members import MemberService
+from switchyard.services.sessions import LoginError, SessionInfo, SessionService
 from switchyard.services.status import EngineStatus, StatusService
 from switchyard.services.tenants import TenantRecord, TenantService
 from switchyard.services.tokens import TokenService
@@ -62,6 +65,7 @@ class ApiServices:
     cert_jobs: CertificateJobs
     certs: CertificateService | None = None
     enrollment: EnrollmentService | None = None
+    sessions: SessionService | None = None
 
 
 def build_services(
@@ -70,6 +74,7 @@ def build_services(
     secrets: SecretsReader | None = None,
     certs: CertificateService | None = None,
     enrollment: EnrollmentService | None = None,
+    sessions: SessionService | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles."""
     return ApiServices(
@@ -84,6 +89,7 @@ def build_services(
         cert_jobs=CertificateJobs(db),
         certs=certs,
         enrollment=enrollment,
+        sessions=sessions,
     )
 
 
@@ -104,6 +110,15 @@ class Accepted(BaseModel):
     object_id: UUID | None = None
     job_id: UUID | None = None
     op_index: int | None = None
+
+
+class BreakGlassIn(BaseModel):
+    """Body of ``POST /auth/break-glass``."""
+
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=200)
+    totp: str = Field(min_length=6, max_length=8)
 
 
 class EnrollIn(BaseModel):
@@ -223,17 +238,54 @@ def _services(request: Request) -> ApiServices:
 Services = Annotated[ApiServices, Depends(_services)]
 
 
-async def current_principal(
-    services: Services, authorization: Annotated[str | None, Header()] = None
+SESSION_COOKIE = "sy_session"
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+async def current_identity(
+    request: Request, services: Services, authorization: Annotated[str | None, Header()] = None
 ) -> Principal:
-    """Authenticate the bearer token."""
+    """Authenticate the request: a bearer API token, or the session cookie plus a CSRF header.
+
+    Bearer tokens are for machines and are not subject to CSRF. A cookie session must send
+    ``X-CSRF-Token`` (the value from ``GET /me``) on every request that changes something.
+    """
     headers = {"WWW-Authenticate": "Bearer"}
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise ApiError(401, "send an API token as 'Authorization: Bearer <token>'", headers=headers)
-    principal = await services.tokens.authenticate(authorization[7:].strip())
-    if principal is None:
-        raise ApiError(401, "invalid, expired or revoked token", headers=headers)
-    return principal
+    if authorization and authorization.lower().startswith("bearer "):
+        principal = await services.tokens.authenticate(authorization[7:].strip())
+        if principal is None:
+            raise ApiError(401, "invalid, expired or revoked token", headers=headers)
+        return principal
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if cookie and services.sessions is not None:
+        info = await services.sessions.authenticate(cookie)
+        if info is None:
+            raise ApiError(401, "your session has expired; log in again", headers=headers)
+        if request.method not in SAFE_METHODS and not hmac.compare_digest(
+            request.headers.get("x-csrf-token", ""), info.csrf_token
+        ):
+            raise ApiError(403, "missing or wrong X-CSRF-Token header")
+        request.state.session = info
+        return info.principal()
+    raise ApiError(
+        401, "send an API token as 'Authorization: Bearer <token>' or log in", headers=headers
+    )
+
+
+FullWho = Annotated[Principal, Depends(current_identity)]
+
+
+async def current_principal(request: Request, who: FullWho, services: Services) -> Principal:
+    """The authenticated principal, narrowed to the tenant in the path (``{t}``) if there is one.
+
+    A person can hold different roles in different tenants. Services check ``principal.role``, so
+    inside a tenant route it must be the role held *in that tenant*.
+    """
+    t = request.path_params.get("t")
+    if t is None or not who.tenant_roles:
+        return who
+    record = await services.tenants.resolve(who, t)
+    return who.for_tenant(record.id)
 
 
 Who = Annotated[Principal, Depends(current_principal)]
@@ -507,8 +559,14 @@ def _detail_json(detail: ChangeSetDetail) -> dict[str, Any]:
     }
 
 
-def create_app(services: ApiServices) -> FastAPI:
-    """Build the application over ready-made services."""
+def create_app(services: ApiServices, *, public_url: str | None = None) -> FastAPI:
+    """Build the application over ready-made services.
+
+    Args:
+        services: The wired services.
+        public_url: External base URL (``https://switchyard.example.test``), used to build login
+            redirect URIs and to decide whether cookies are ``Secure``.
+    """
     app = FastAPI(
         title="Switchyard API",
         version="1.0.0",
@@ -517,6 +575,7 @@ def create_app(services: ApiServices) -> FastAPI:
         openapi_url="/api/v1/openapi.json",
     )
     app.state.services = services
+    app.state.public_url = public_url
     install_handlers(app)
 
     @app.middleware("http")
@@ -535,6 +594,124 @@ def create_app(services: ApiServices) -> FastAPI:
     @router.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    # login
+    def callback_url(request: Request, provider: str) -> str:
+        base = request.app.state.public_url or str(request.base_url)
+        return f"{base.rstrip('/')}/api/v1/auth/callback/{provider}"
+
+    def set_session_cookie(
+        request: Request, response: Response, cookie: str, info: SessionInfo
+    ) -> None:
+        secure = (request.app.state.public_url or str(request.base_url)).startswith("https")
+        response.set_cookie(
+            SESSION_COOKIE,
+            cookie,
+            max_age=int((info.expires_at - datetime.now(UTC)).total_seconds()),
+            httponly=True,
+            samesite="strict",
+            secure=secure,
+            path="/",
+        )
+
+    def require_sessions(svc: ApiServices) -> SessionService:
+        if svc.sessions is None:
+            raise ApiError(503, "login is not configured on this controller")
+        return svc.sessions
+
+    @router.get("/auth/providers", tags=["auth"])
+    async def auth_providers(svc: Services) -> dict[str, Any]:
+        """Identity providers users can log in with, and whether break-glass login is on."""
+        sessions = require_sessions(svc)
+        return {
+            "providers": [
+                {"id": str(p.id), "name": p.name, "protocol": p.protocol}
+                for p in await sessions.providers()
+            ],
+            "break_glass": sessions.break_glass_enabled,
+        }
+
+    @router.get("/auth/login/{provider}", tags=["auth"], status_code=302)
+    async def auth_login(
+        provider: str, request: Request, svc: Services, return_to: str | None = None
+    ) -> Response:
+        """Redirect the browser to the identity provider."""
+        sessions = require_sessions(svc)
+        try:
+            url = await sessions.begin_login(
+                provider, redirect_uri=callback_url(request, provider), return_to=return_to
+            )
+        except LoginError as exc:
+            raise ApiError(400, str(exc)) from exc
+        return Response(status_code=302, headers={"Location": url})
+
+    @router.get("/auth/callback/{provider}", tags=["auth"], status_code=302)
+    async def auth_callback(
+        provider: str,
+        request: Request,
+        svc: Services,
+        code: str | None = None,
+        state: str | None = None,
+        error: str | None = None,
+    ) -> Response:
+        """Finish the login, set the session cookie and send the browser back to the app."""
+        sessions = require_sessions(svc)
+        if error or not code or not state:
+            raise ApiError(400, "the identity provider reported an error: " + (error or "no code"))
+        try:
+            result = await sessions.complete_login(
+                state=state, code=code, redirect_uri=callback_url(request, provider)
+            )
+        except LoginError as exc:
+            raise ApiError(401, str(exc)) from exc
+        response = Response(status_code=302, headers={"Location": result.return_to})
+        set_session_cookie(request, response, result.cookie, result.session)
+        return response
+
+    @router.post("/auth/break-glass", tags=["auth"])
+    async def auth_break_glass(
+        body: BreakGlassIn, request: Request, response: Response, svc: Services
+    ) -> dict[str, Any]:
+        """Log in the local administrator (password + TOTP). Off unless enabled."""
+        sessions = require_sessions(svc)
+        try:
+            result = await sessions.break_glass_login(body.username, body.password, body.totp)
+        except LoginError as exc:
+            raise ApiError(401, str(exc)) from exc
+        set_session_cookie(request, response, result.cookie, result.session)
+        return await me_payload(svc, result.session.principal(), result.session)
+
+    @router.post("/auth/logout", status_code=204, tags=["auth"])
+    async def auth_logout(request: Request, who: FullWho, svc: Services) -> Response:
+        """End the session (requires the CSRF header)."""
+        cookie = request.cookies.get(SESSION_COOKIE)
+        if cookie and svc.sessions is not None:
+            await svc.sessions.logout(cookie)
+        response = Response(status_code=204)
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        return response
+
+    async def me_payload(
+        svc: ApiServices, who: Principal, session: SessionInfo | None
+    ) -> dict[str, Any]:
+        tenants = await svc.tenants.list_tenants(who)
+        return {
+            "id": str(session.id) if session else None,
+            "name": session.name if session else who.actor,
+            "email": session.email if session else None,
+            "is_system": who.is_system,
+            "break_glass": bool(session and session.break_glass),
+            "auth": "session" if session else "token",
+            "csrf_token": session.csrf_token if session else None,
+            "tenants": [
+                {"id": str(t.id), "name": t.name, "role": who.role_in(t.id).value} for t in tenants
+            ],
+        }
+
+    @router.get("/me", tags=["auth"])
+    async def me(request: Request, who: FullWho, svc: Services) -> dict[str, Any]:
+        """Who am I, in which tenants, and with which role in each."""
+        return await me_payload(svc, who, getattr(request.state, "session", None))
 
     # tenants
     @router.get("/tenants", tags=["tenants"])

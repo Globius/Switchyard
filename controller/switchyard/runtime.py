@@ -10,8 +10,10 @@ OpenBao KV v2; otherwise from ``SWITCHYARD_SECRET_*`` variables (see ``EnvSecret
 store new certificates. Proxmox: ``SWITCHYARD_PVE_URL``, ``SWITCHYARD_PVE_TOKEN_ID`` and the token
 secret. Certificates: ``SWITCHYARD_CLOUDFLARE_TOKEN`` (DNS-01, Origin CA, IP ranges) and, for ACME,
 ``SWITCHYARD_ACME_DIRECTORY``, ``SWITCHYARD_ACME_EMAIL`` and ``SWITCHYARD_ACME_ACCOUNT_KEY_FILE``.
-Agents: ``SWITCHYARD_BUNDLE_KEY_FILE`` (Ed25519 key that signs bundles) and, for enrollment,
-OpenBao PKI (``SWITCHYARD_PKI_MOUNT``, ``SWITCHYARD_PKI_ROLE``).
+Login: ``SWITCHYARD_PUBLIC_URL`` (external base URL, for redirect URIs and Secure cookies),
+``SWITCHYARD_BREAK_GLASS=1`` (allow the local administrator). Agents:
+``SWITCHYARD_BUNDLE_KEY_FILE`` (Ed25519 key that signs bundles) and, for enrollment, OpenBao PKI
+(``SWITCHYARD_PKI_MOUNT``, ``SWITCHYARD_PKI_ROLE``).
 """
 
 import os
@@ -42,6 +44,8 @@ from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.infra import InfraService
+from switchyard.services.oidc import OidcClient
+from switchyard.services.sessions import SessionService
 from switchyard.services.status import StatusService
 
 
@@ -88,6 +92,16 @@ def enrollment(db: Databases, secrets: SecretsReader | None = None) -> Enrollmen
         role=os.environ.get("SWITCHYARD_PKI_ROLE", "agents"),
     )
     return EnrollmentService(db, pki, signer.public_b64())
+
+
+def sessions(db: Databases, secrets: SecretsReader | None = None) -> SessionService:
+    """Browser login. ``SWITCHYARD_BREAK_GLASS=1`` switches the local administrator login on."""
+    return SessionService(
+        db,
+        OidcClient(),
+        secrets or secrets_backend(),
+        break_glass_enabled=os.environ.get("SWITCHYARD_BREAK_GLASS") == "1",
+    )
 
 
 def secrets_backend() -> SecretsReader:

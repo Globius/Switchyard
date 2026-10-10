@@ -30,3 +30,4 @@ Date: YYYY-MM-DD
 | [0009](0009-infrastructure-jobs.md) | Infrastructure jobs: SDN, IPAM and SE group deployment | Accepted |
 | [0010](0010-certificates-and-cloudflare.md) | Certificates, OpenBao and the Cloudflare allow list | Accepted |
 | [0011](0011-agent-enrollment.md) | Agent enrollment and certificate renewal | Accepted |
+| [0012](0012-user-login-and-sessions.md) | User login, sessions and per-tenant roles | Accepted |
