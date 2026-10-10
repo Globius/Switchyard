@@ -181,6 +181,27 @@ Only the first two rows come from Claude Design's stated assumptions (highest ro
 
 ---
 
+## Gap audit of 2026-10-10 (origin/main against 04)
+
+04 was written against M1–M3. Re-audited against `main` after M6 and SAML. **Closed since 04:** typed responses (T2), rendered config (T3), policy/routing unions (T4), jobs list/stages/log/retry/cancel (T5), diff `warnings` (T6), UDP rules and monitor (T7), certificate import/issue/renew, SE group deploy and engine retire, network SDN apply, enrollment tokens, `/me`, login (OIDC, SAML, break-glass), `status/virtual-services`, `?change_set=` drafts, cursor pagination on change sets and revisions. **G1 identity administration** (providers, mappings, users, system tokens, refresh, permissions) is owned by the G1 tickets above and is not repeated here.
+
+Still missing for a UI build, one ticket each (status is updated in this table as they land):
+
+| Id | Gap | Ticket | Status |
+| --- | --- | --- | --- |
+| A1 | Audit log has only `limit`: no filter by actor, action, object, time, no cursor | `GET …/audit-events?actor&action&object&since&until&q&cursor&limit` returning `Page` | open |
+| A2 | No IP usage or allocations for VIP pools; no "release" | `GET …/vip-pools/{id}/usage` (used, free, allocations by service), `POST …/vip-pools/{id}/next-free` (suggest an address). VIPs are held by the service that carries them, so *release* means changing or deleting that service; there is no separate release call | open |
+| A3 | Health monitor "test against one member" | `POST …/health-monitors/{id}/test` `{pool_id, member_id}` → `{ok, latency_ms, detail}` | open |
+| A4 | Tenant search for the command palette | `GET …/search?q&types` over all object names | open |
+| A5 | Tenant home needs one call, not eight | `GET …/summary` (service states, failing members, drifted engines, expiring certificates, running jobs, open drafts, latest revision) | open |
+| A6 | Engines: only per-group list, thin read model | `GET …/engines`, `GET …/engines/{id}` with `mgmt_ip`, `agent_url`, `se_group_id`, enrollment state, VM placement | open |
+| A7 | List filters and sort: `?se_group=`, `?protocol=`, `?enabled=`, `?sort=` | on virtual services, pools, engines. **`?label=` is dropped: objects have no labels** (decision recorded in 04) | open |
+| A8 | Change-set conflicts and impact (G8) | Stale `expected_version` returns 409 `stale_version` with `{object, expected, current, theirs}` per op; diff gains `impact` (VIPs, SE groups, hostnames touched) | open |
+| A9 | Metrics and logs (G4) | `MetricsAdapter` (Prometheus) and `LogsAdapter` (Loki) behind `GET …/virtual-services/{id}/metrics` and `…/logs`; both answer `available: false` when not configured | open |
+| A10 | Finer live events (G5) | SSE `job_progress`, `vs_state`, `revision_applied`, `member_status` next to `status`; typed catalog in OpenAPI | open |
+| A11 | OpenAPI completeness | Every route: summary, description, request and response models, example, error responses with problem codes, auth and role note, pagination note. A test fails when one is missing. ReDoc beside Swagger UI; `docs/api/openapi.json` checked | open |
+| A12 | Docs match reality | `docs/api.md`, `docs/operating.md`, README, 04 (mark anything without an API) | open |
+
 ## Follow-ups (not blocking U1; ticket when the milestone starts)
 
 | Gap | Ticket | Milestone |
