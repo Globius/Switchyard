@@ -71,7 +71,7 @@ class RenderWarning:
     """A structured renderer warning, as shown in a change set's diff.
 
     Attributes:
-        code: Stable identifier (``udp_not_served``).
+        code: Stable identifier of the warning.
         path: Dotted path of the object concerned (``virtual_services.dns``).
         message: Human-readable text (the same text ``RenderResult.warnings`` carries).
     """
@@ -249,15 +249,7 @@ class _Renderer:
         frontends: list[dict[str, Any]] = []
         for svc in services:
             if svc.protocol is dm.Protocol.UDP:
-                message = (
-                    f"virtual service {svc.name}: udp is rendered by the keepalived renderer, "
-                    "not haproxy.cfg"
-                )
-                self.warnings.append(message)
-                self.notices.append(
-                    RenderWarning("udp_not_served", f"virtual_services.{svc.name}", message)
-                )
-                continue
+                continue  # IPVS serves it; the routing renderer writes it to keepalived.conf
             mode = "http" if svc.protocol is dm.Protocol.HTTP else "tcp"
             for pool_id in self._pool_ids(svc):
                 self.pool_modes[pool_id] = mode

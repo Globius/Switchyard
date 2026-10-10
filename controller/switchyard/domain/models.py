@@ -54,7 +54,7 @@ class NetworkRole(enum.StrEnum):
 
 
 class Protocol(enum.StrEnum):
-    """Virtual service protocol. ``udp`` renders to IPVS, not HAProxy (milestone M3+)."""
+    """Virtual service protocol. ``udp`` renders to IPVS via Keepalived, not HAProxy (M6)."""
 
     HTTP = "http"
     TCP = "tcp"
@@ -83,6 +83,7 @@ class MonitorType(enum.StrEnum):
 
     TCP = "tcp"
     HTTP = "http"
+    UDP = "udp"
 
 
 class CertSource(enum.StrEnum):
@@ -400,6 +401,12 @@ class VirtualService(TenantOwned):
         numbers = [p.port for p in self.ports]
         if len(set(numbers)) != len(numbers):
             raise ValueError("ports must be unique")
+        if self.protocol is Protocol.UDP:
+            # Fields a UDP service cannot use are rejected per field by the snapshot validator
+            # (``errors[].path`` addresses each one); only the one it needs is required here.
+            if self.default_pool_id is None:
+                raise ValueError("a udp service needs default_pool_id")
+            return self
         if any(p.tls for p in self.ports) and not self.certificate_ids:
             raise ValueError("a TLS port needs at least one certificate")
         if self.protocol is Protocol.HTTP:
@@ -414,8 +421,6 @@ class VirtualService(TenantOwned):
                 raise ValueError("http2 and https_redirect_port are only valid for http services")
             if self.restore_client_ip_header is not None:
                 raise ValueError("restore_client_ip_header is only valid for http services")
-        if self.protocol is Protocol.UDP and any(p.tls or p.proxy_protocol for p in self.ports):
-            raise ValueError("a udp service cannot use tls or proxy_protocol")
         if (self.enforce_allow_list or self.restore_client_ip_header) and not self.allow_list_id:
             raise ValueError("enforce_allow_list and restore_client_ip_header need allow_list_id")
         tls_ports = {p.port for p in self.ports if p.tls}
@@ -514,18 +519,38 @@ class HttpCheck(Model):
         return self
 
 
+class UdpCheck(Model):
+    """UDP health probe (Keepalived ``UDP_CHECK``), sent to the member's check port.
+
+    A UDP check always marks the server down on an ICMP port-unreachable. Without ``payload_hex``
+    it sends an empty datagram; with ``require_reply`` the server must also answer.
+
+    Attributes:
+        payload_hex: Datagram to send, as lowercase hex (at most 256 bytes).
+        require_reply: Mark the server down unless it answers the probe.
+
+    Example:
+        >>> UdpCheck(payload_hex="00ff", require_reply=True).require_reply
+        True
+    """
+
+    payload_hex: str | None = Field(default=None, pattern=r"^([0-9a-f]{2}){1,256}$")
+    require_reply: bool = False
+
+
 class HealthMonitor(TenantOwned):
     """Active health check, shareable across pools.
 
     Attributes:
-        type: ``tcp`` connect check or ``http`` request check.
+        type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).
         port: Port to check. Required when pool members have no port of their own; otherwise
             members are checked on their service port.
         interval_s: Seconds between checks.
         timeout_s: Seconds before a check fails.
         rise: Consecutive successes to mark a server up.
         fall: Consecutive failures to mark a server down.
-        http: Request details; required for ``http`` and forbidden for ``tcp``.
+        http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.
+        udp: Optional probe details; only valid for ``udp``.
     """
 
     type: MonitorType
@@ -535,13 +560,16 @@ class HealthMonitor(TenantOwned):
     rise: int = Field(default=2, ge=1, le=100)
     fall: int = Field(default=3, ge=1, le=100)
     http: HttpCheck | None = None
+    udp: UdpCheck | None = None
 
     @model_validator(mode="after")
     def _http(self) -> Self:
         if self.type is MonitorType.HTTP and self.http is None:
             raise ValueError("an http monitor needs an http block")
-        if self.type is MonitorType.TCP and self.http is not None:
-            raise ValueError("a tcp monitor cannot have an http block")
+        if self.type is not MonitorType.HTTP and self.http is not None:
+            raise ValueError(f"a {self.type} monitor cannot have an http block")
+        if self.type is not MonitorType.UDP and self.udp is not None:
+            raise ValueError(f"a {self.type} monitor cannot have a udp block")
         return self
 
 

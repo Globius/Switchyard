@@ -2,14 +2,23 @@
 
 import io
 import tarfile
+from pathlib import Path
 
 import docker
 import pytest
 
 from tests.routing_support import case_names, render_case
 
-KEEPALIVED = "osixia/keepalived:2.0.20"
+SE_TOOLS = "switchyard-test/se-tools:trixie"
 FRR = "quay.io/frrouting/frr:10.2.1"
+
+
+def se_tools_image() -> str:
+    """Build (once, then cached) the image with the SE image's keepalived, ipvsadm and nftables."""
+    client = docker.from_env()
+    path = Path(__file__).parent.parent / "images" / "se-tools"
+    client.images.build(path=str(path), tag=SE_TOOLS, rm=True)
+    return SE_TOOLS
 
 
 def run(image: str, path: str, content: str, command: str) -> tuple[int, str]:
@@ -42,9 +51,23 @@ _KEEPALIVED = (
 
 
 def keepalived_ok(conf: str) -> tuple[bool, str]:
-    code, out = run(KEEPALIVED, "/tmp/k.conf", conf, _KEEPALIVED)  # noqa: S108
-    problems = ("Unknown keyword", "Error", "Unable", "Non-existent", "not found")
+    code, out = run(se_tools_image(), "/tmp/k.conf", conf, _KEEPALIVED)  # noqa: S108
+    problems = (
+        "Unknown keyword",
+        "Error",
+        "Unable",
+        "Non-existent",
+        "not found",
+        "Disabling",
+        "WARNING",
+        "Warning",
+    )
     return code == 0 and not any(p in out for p in problems), out
+
+
+def nft_ok(rules: str) -> tuple[bool, str]:
+    code, out = run(se_tools_image(), "/tmp/r.nft", rules, "nft -c -f /tmp/r.nft 2>&1")  # noqa: S108
+    return code == 0, out
 
 
 def frr_ok(conf: str) -> tuple[bool, str]:
@@ -62,6 +85,9 @@ def test_every_rendered_file_is_accepted(name: str) -> None:
     for engine, files in render_case(name).items():
         if "keepalived/keepalived.conf" in files:
             ok, out = keepalived_ok(files["keepalived/keepalived.conf"])
+            assert ok, f"{name}/{engine}: {out}"
+        if "nftables/switchyard-udp.nft" in files:
+            ok, out = nft_ok(files["nftables/switchyard-udp.nft"])
             assert ok, f"{name}/{engine}: {out}"
         if "frr/frr.conf" in files:
             ok, out = frr_ok(files["frr/frr.conf"])

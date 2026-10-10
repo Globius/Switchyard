@@ -38,8 +38,28 @@ directory; object names have no dots because the API rewrites dots in file names
 Certificates and keys are **not** rendered. A `crt-list` line points to
 `/etc/switchyard/certs/<certificate name>.pem`, which the controller sends to the agent in the signed bundle (key material comes from OpenBao; see ADR 0010).
 
-Disabled services and pools that no enabled service uses are not rendered. UDP services are skipped
-with a warning, because they render to IPVS (a later milestone).
+Disabled services and pools that no enabled service uses are not rendered. UDP services are not part of
+`haproxy.cfg`: they render to IPVS `virtual_server` blocks in `keepalived/keepalived.conf` (see below).
+
+## UDP (IPVS)
+
+Each port of an enabled UDP service becomes one `virtual_server <vip> <port>` with `lb_kind NAT` and
+`protocol UDP`, sorted by VIP and port. Scheduler: `roundrobin` `rr`, `leastconn` `lc`, `source` `sh`;
+when the members' effective weights differ `wrr` / `wlc` (`sh` stays). Members: `drain` renders weight
+0, `disabled` is omitted. A pool monitor of type `udp` renders `UDP_CHECK` per real server:
+`delay_loop` is the interval, `retry` is `fall`, `connect_timeout` the timeout, `connect_port` the
+monitor port, `payload` the hex payload and `require_reply` when set (`rise` has no UDP_CHECK
+equivalent). A pool without a monitor has no check. A member in another address family than the VIP is
+a render error.
+
+| Group mode | Files |
+| --- | --- |
+| VRRP | `keepalived.conf` holds the `vrrp_instance` and the virtual servers |
+| BGP | `keepalived.conf` holds the virtual servers only (no `vrrp_instance`), written only while the group has an enabled UDP service; `frr/vips.json` gains `udp_prefixes` and `udp_only_prefixes` |
+| Either, with UDP | `nftables/switchyard-udp.nft` (masquerade for the real servers) and `sysctl/switchyard-udp.conf` (`ip_forward`, `vs.conntrack`) |
+
+The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.conf` and link
+`/etc/switchyard/sysctl/switchyard-udp.conf` into `/etc/sysctl.d/` (ADR 0020).
 
 ## Object mapping
 

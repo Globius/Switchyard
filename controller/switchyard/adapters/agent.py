@@ -63,6 +63,41 @@ class VrrpInstance:
 
 
 @dataclass(frozen=True)
+class IpvsRealServer:
+    """One IPVS real server of a UDP virtual service (same member shape as HAProxy's).
+
+    Attributes:
+        service: Virtual service name, taken from the rendered ``keepalived.conf``.
+        vip: Virtual service address.
+        port: Virtual service port.
+        address: Real server address.
+        member_port: Real server port.
+        state: ``up``, ``down`` (configured but not in the IPVS table) or ``drain`` (weight 0).
+        weight: Current IPVS weight.
+        active_conns: Active connection entries.
+        inactive_conns: Inactive connection entries.
+        in_packets: Packets from clients.
+        out_packets: Packets to clients.
+        in_bytes: Bytes from clients.
+        out_bytes: Bytes to clients.
+    """
+
+    service: str
+    vip: str
+    port: int
+    address: str
+    member_port: int
+    state: str
+    weight: int = 0
+    active_conns: int = 0
+    inactive_conns: int = 0
+    in_packets: int = 0
+    out_packets: int = 0
+    in_bytes: int = 0
+    out_bytes: int = 0
+
+
+@dataclass(frozen=True)
 class AgentStatus:
     """What an agent reports."""
 
@@ -71,6 +106,7 @@ class AgentStatus:
     file_hashes: Mapping[str, str] = field(default_factory=dict)
     bgp: tuple[BgpSession, ...] = ()
     vrrp: tuple[VrrpInstance, ...] = ()
+    ipvs: tuple[IpvsRealServer, ...] = ()
     haproxy_healthy: bool = False
     routes_withdrawn: bool = False
     observed_at_unix: int = 0
@@ -153,6 +189,24 @@ def _status(message: agent_pb2.Status) -> AgentStatus:
         file_hashes=dict(message.file_hashes),
         bgp=tuple(BgpSession(s.peer, s.state, s.remote_asn) for s in message.bgp),
         vrrp=tuple(VrrpInstance(v.name, v.state) for v in message.vrrp),
+        ipvs=tuple(
+            IpvsRealServer(
+                s.service,
+                s.vip,
+                s.port,
+                s.address,
+                s.member_port,
+                s.state,
+                s.weight,
+                s.active_conns,
+                s.inactive_conns,
+                s.in_packets,
+                s.out_packets,
+                s.in_bytes,
+                s.out_bytes,
+            )
+            for s in message.ipvs
+        ),
         haproxy_healthy=message.haproxy_healthy,
         routes_withdrawn=message.routes_withdrawn,
         observed_at_unix=message.observed_at_unix,
@@ -249,6 +303,7 @@ class FakeAgent:
         self.bundle_id = ""
         self.bgp: tuple[BgpSession, ...] = ()
         self.vrrp: tuple[VrrpInstance, ...] = ()
+        self.ipvs: tuple[IpvsRealServer, ...] = ()
         self.healthy = True
         self.withdrawn = False
         self.fail_next: str | None = None
@@ -280,6 +335,7 @@ class FakeAgent:
             file_hashes={p: hashlib.sha256(c.encode()).hexdigest() for p, c in self.files.items()},
             bgp=self.bgp,
             vrrp=self.vrrp,
+            ipvs=self.ipvs,
             haproxy_healthy=self.healthy,
             routes_withdrawn=self.withdrawn,
         )

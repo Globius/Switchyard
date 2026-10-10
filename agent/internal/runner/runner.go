@@ -35,7 +35,7 @@ func (e Exec) Run(ctx context.Context, name string, args ...string) ([]byte, err
 	return exec.CommandContext(ctx, name, args...).CombinedOutput() // #nosec G204 - allowlisted
 }
 
-// Default returns a Runner that may start systemctl and vtysh only.
+// Default returns a Runner that may start systemctl, vtysh and ipvsadm (read-only listings) only.
 func Default() Exec {
-	return Exec{Allowed: map[string]bool{"systemctl": true, "vtysh": true}}
+	return Exec{Allowed: map[string]bool{"systemctl": true, "vtysh": true, "ipvsadm": true}}
 }

@@ -1,0 +1,167 @@
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/24
+vip_pools:
+- id: vp-main
+  tenant_id: t-acme
+  name: main
+  network_id: net-lb
+  ranges:
+  - start: 192.0.2.10
+    end: 192.0.2.50
+se_groups:
+- id: seg-1
+  tenant_id: t-acme
+  name: edge
+  ha_mode: bgp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+  routing_profile_id: rp-1
+certificates:
+- id: cert-wild
+  tenant_id: t-acme
+  name: wild-example-test
+  source: cloudflare_origin
+  sans:
+  - '*.example.test'
+  - example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/wild-example-test
+pools:
+- id: pool-web
+  tenant_id: t-acme
+  name: web
+  members:
+  - address: 10.20.0.11
+    port: 8080
+- id: pool-k8s
+  tenant_id: t-acme
+  name: k8s
+  members:
+  - address: 10.20.0.30
+    port: 6443
+- id: pool-dns
+  tenant_id: t-acme
+  name: dns
+  algorithm: leastconn
+  health_monitor_id: hm-udp
+  members:
+  - address: 10.20.0.40
+    port: 53
+  - address: 10.20.0.41
+    port: 53
+    weight: 50
+  - address: 10.20.0.42
+    port: 53
+    admin_state: drain
+  - address: 10.20.0.43
+    port: 53
+    admin_state: disabled
+- id: pool-wg
+  tenant_id: t-acme
+  name: wireguard
+  algorithm: source
+  members:
+  - address: 10.20.0.50
+    port: 51820
+virtual_services:
+- id: vs-web
+  tenant_id: t-acme
+  se_group_id: seg-1
+  name: web
+  protocol: http
+  vip: 192.0.2.20
+  vip_pool_id: vp-main
+  ports:
+  - port: 443
+    tls: true
+    http2: true
+  - port: 80
+    https_redirect_port: 443
+  certificate_ids:
+  - cert-wild
+  routes:
+  - match:
+      host: app.example.test
+    pool_id: pool-web
+- id: vs-api
+  tenant_id: t-acme
+  se_group_id: seg-1
+  name: api
+  protocol: tcp
+  vip: 192.0.2.21
+  ports:
+  - port: 6443
+  default_pool_id: pool-k8s
+- id: vs-dns
+  tenant_id: t-acme
+  se_group_id: seg-1
+  name: dns
+  protocol: udp
+  vip: 192.0.2.22
+  ports:
+  - port: 53
+  - port: 5353
+  default_pool_id: pool-dns
+- id: vs-wg
+  tenant_id: t-acme
+  se_group_id: seg-1
+  name: wireguard
+  protocol: udp
+  vip: 192.0.2.23
+  ports:
+  - port: 51820
+  default_pool_id: pool-wg
+routing_profiles:
+- id: rp-1
+  tenant_id: t-acme
+  name: edge-routing
+  kind: bgp
+  asn: 65010
+  bfd: true
+  max_paths: 4
+  peers:
+  - peer_ip: 10.30.0.1
+    remote_asn: 65001
+    md5_ref: kv/bgp/peer-1
+  - peer_ip: 10.30.0.2
+    remote_asn: 65001
+  static_routes:
+  - prefix: 10.99.0.0/16
+    next_hop: 10.30.0.1
+render:
+  se_group: seg-1
+  engines:
+  - name: se-a
+    index: 0
+    router_id: 10.30.0.11
+  - name: se-b
+    index: 1
+    router_id: 10.30.0.12
+  secrets:
+    kv/bgp/peer-1: example-password-1
+health_monitors:
+- id: hm-udp
+  tenant_id: t-acme
+  name: dns-udp
+  type: udp
+  port: 5353
+  interval_s: 4
+  timeout_s: 2
+  fall: 4
+  udp:
+    payload_hex: '0000010000010000000000000000010001'
+    require_reply: true
