@@ -380,3 +380,218 @@ def local_admin(
 
     run(go())
     typer.echo(f"TOTP secret (add it to an authenticator app now, it is not shown again): {totp}")
+
+
+api_app = typer.Typer(
+    help="Work with a running controller over its HTTP API.", no_args_is_help=True
+)
+app.add_typer(api_app, name="api")
+
+#: Replaced in tests to talk to an in-process application instead of the network.
+API_TRANSPORT: Any = None
+
+
+def _api() -> Any:
+    from switchyard.client import ApiClient, load_profile
+
+    return ApiClient(load_profile(), transport=API_TRANSPORT)
+
+
+def _api_run(coro: Coroutine[Any, Any, Any]) -> Any:
+    from switchyard.client import ApiClientError
+
+    try:
+        return run(coro)
+    except ApiClientError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        for err in exc.errors:
+            typer.echo(f"  {err.get('path')}: {err.get('message')}", err=True)
+        raise typer.Exit(1) from exc
+
+
+Tenant = Annotated[str, typer.Option("--tenant", "-t", help="Tenant name or id.")]
+
+
+@api_app.command("login")
+def api_login(
+    url: Annotated[str, typer.Option(help="Controller base URL.")],
+    token: Annotated[str, typer.Option(help="API token (stored in a file readable by you only).")],
+) -> None:
+    """Check the token against the controller and save it for later commands."""
+    from switchyard.client import ApiClient, Profile, save_profile
+
+    async def go() -> Any:
+        client = ApiClient(Profile(url, token), transport=API_TRANSPORT)
+        try:
+            return await client.request("GET", "/me")
+        finally:
+            await client.close()
+
+    me = _api_run(go())
+    path = save_profile(Profile(url, token))
+    typer.echo(f"logged in as {me['name']}; saved to {path}")
+
+
+@api_app.command("whoami")
+def api_whoami() -> None:
+    """Show who the controller thinks you are and your role in each tenant."""
+
+    async def go() -> Any:
+        client = _api()
+        try:
+            return await client.request("GET", "/me")
+        finally:
+            await client.close()
+
+    me = _api_run(go())
+    typer.echo(f"{me['name']} ({'system administrator' if me['is_system'] else 'user'})")
+    for t in me["tenants"]:
+        typer.echo(f"  {t['name']}: {t['role']}")
+
+
+@api_app.command("list")
+def api_list(collection: str, tenant: Tenant) -> None:
+    """List objects: virtual-services, pools, health-monitors, certificates, ..."""
+
+    async def go() -> list[dict[str, Any]]:
+        client = _api()
+        try:
+            items: list[dict[str, Any]] = []
+            cursor: str | None = None
+            while True:
+                page = await client.request(
+                    "GET",
+                    f"/tenants/{tenant}/{collection}",
+                    params={"cursor": cursor} if cursor else None,
+                )
+                items += page["items"]
+                cursor = page.get("next_cursor")
+                if not cursor:
+                    return items
+        finally:
+            await client.close()
+
+    for item in _api_run(go()):
+        typer.echo(f"{item['name']}\t{item['id']}\tv{item['version']}")
+
+
+@api_app.command("get")
+def api_get(collection: str, ref: str, tenant: Tenant) -> None:
+    """Print one object as JSON (``ref`` is its name or id)."""
+    import json
+
+    async def go() -> Any:
+        client = _api()
+        try:
+            page = await client.request(
+                "GET", f"/tenants/{tenant}/{collection}", params={"name": ref}
+            )
+            found = [o for o in page["items"] if o["name"] == ref or o["id"] == ref]
+            if not found:
+                page = await client.request("GET", f"/tenants/{tenant}/{collection}")
+                found = [o for o in page["items"] if o["id"] == ref]
+            return found[0] if found else None
+        finally:
+            await client.close()
+
+    obj = _api_run(go())
+    if obj is None:
+        typer.echo(f"error: no {collection} named {ref}", err=True)
+        raise typer.Exit(1)
+    typer.echo(json.dumps(obj, indent=2, sort_keys=True))
+
+
+@api_app.command("apply")
+def api_apply(
+    collection: str,
+    file: Annotated[Path, typer.Option("--file", "-f", help="JSON file with the object body.")],
+    tenant: Tenant,
+    wait: Annotated[bool, typer.Option(help="Wait for the change to be rolled out.")] = True,
+) -> None:
+    """Create an object from a JSON file and roll it out (one change set)."""
+    import json
+
+    body = json.loads(file.read_text())
+
+    async def go() -> Any:
+        client = _api()
+        try:
+            accepted = await client.request(
+                "POST", f"/tenants/{tenant}/{collection}", json_body=body, params={"apply": "true"}
+            )
+            if wait:
+                await client.wait_job(accepted["job_id"])
+            return accepted
+        finally:
+            await client.close()
+
+    accepted = _api_run(go())
+    typer.echo(
+        f"{accepted['object_id']} change set {accepted['change_set_id']} job {accepted['job_id']}"
+    )
+
+
+@api_app.command("delete")
+def api_delete(
+    collection: str,
+    object_id: str,
+    tenant: Tenant,
+    wait: Annotated[bool, typer.Option(help="Wait for the change to be rolled out.")] = True,
+) -> None:
+    """Delete an object by id and roll the change out."""
+
+    async def go() -> Any:
+        client = _api()
+        try:
+            page = await client.request("GET", f"/tenants/{tenant}/{collection}")
+            current = next((o for o in page["items"] if o["id"] == object_id), None)
+            if current is None:
+                raise typer.BadParameter(f"no {collection} with id {object_id}")
+            accepted = await client.request(
+                "DELETE",
+                f"/tenants/{tenant}/{collection}/{object_id}",
+                params={"apply": "true"},
+                headers={"If-Match": f'"{current["version"]}"'},
+            )
+            if wait:
+                await client.wait_job(accepted["job_id"])
+            return accepted
+        finally:
+            await client.close()
+
+    accepted = _api_run(go())
+    typer.echo(f"deleted; change set {accepted['change_set_id']} job {accepted['job_id']}")
+
+
+@api_app.command("status")
+def api_status(tenant: Tenant) -> None:
+    """Show each engine: reachable or not, and whether it has drifted from the desired state."""
+
+    async def go() -> Any:
+        client = _api()
+        try:
+            return await client.request("GET", f"/tenants/{tenant}/status/engines")
+        finally:
+            await client.close()
+
+    for e in _api_run(go()):
+        state = "up" if e["reachable"] else f"UNREACHABLE ({e['error']})"
+        drift = f", DRIFT: {', '.join(d['kind'] for d in e['drift'])}" if e["drift"] else ""
+        typer.echo(f"{e['engine']}\t{state}{drift}")
+
+
+@api_app.command("job")
+def api_job(job_id: str, wait: bool = False) -> None:
+    """Show a job; with --wait, block until it finishes."""
+    import json
+
+    async def go() -> Any:
+        client = _api()
+        try:
+            if wait:
+                return await client.wait_job(job_id)
+            return await client.request("GET", f"/jobs/{job_id}")
+        finally:
+            await client.close()
+
+    typer.echo(json.dumps(_api_run(go()), indent=2, sort_keys=True))

@@ -4743,6 +4743,79 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/engines/{engine}/retire": {
+      "post": {
+        "description": "Disable an engine, destroy its VM and remove it (refused for the last serving engine).",
+        "operationId": "retire_engine_api_v1_tenants__t__engines__engine__retire_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "engine",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engine",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Retire Engine Api V1 Tenants  T  Engines  Engine  Retire Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retire Engine",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/engines/{engine}/state": {
       "put": {
         "operationId": "engine_state_api_v1_tenants__t__engines__engine__state_put",

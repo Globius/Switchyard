@@ -43,6 +43,7 @@ from switchyard.services.certificates import (
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
 from switchyard.services.enrollment import EnrollmentService
+from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import InfraService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
@@ -183,8 +184,10 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     pipeline = ApplyPipeline(db, engines, sandbox=sandbox, secrets=secrets)
     status = StatusService(db, engines, secrets)
     certs = certificates(db, secrets)
-    handlers = build_handlers(db, pipeline, git_mirror(), status, infra_service(db, secrets), certs)
-    schedule = {POLL_STATUS_JOB: timedelta(seconds=10)}
+    handlers = build_handlers(
+        db, pipeline, git_mirror(), status, infra_service(db, secrets), certs, GarbageCollector(db)
+    )
+    schedule = {POLL_STATUS_JOB: timedelta(seconds=10), GC_JOB: timedelta(hours=1)}
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

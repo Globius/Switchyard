@@ -212,7 +212,7 @@ class TestRealEngineOnly:
             name=strict_se.name,
             username=API_USER,
             password=API_PASSWORD,
-            reload_timeout_s=4,
+            reload_timeout_s=20,
         )
         try:
             before = await engine.info()

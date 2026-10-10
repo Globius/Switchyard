@@ -25,9 +25,11 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import APPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
     DEPLOY_SE_GROUP_JOB,
+    RETIRE_ENGINE_JOB,
     DeployRequest,
     InfraService,
 )
@@ -47,12 +49,14 @@ def build_handlers(
     status: StatusService | None = None,
     infra: InfraService | None = None,
     certs: CertificateService | None = None,
+    gc: GarbageCollector | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
@@ -67,6 +71,12 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set}
+    if gc is not None:
+
+        async def collect_garbage(job: Job) -> dict[str, Any]:
+            return dict(await gc.run())
+
+        handlers[GC_JOB] = collect_garbage
     if certs is not None:
 
         async def issue_cert(job: Job) -> dict[str, Any]:
@@ -96,7 +106,13 @@ def build_handlers(
         async def deploy_se_group(job: Job) -> dict[str, Any]:
             return await infra.deploy_se_group(DeployRequest.from_payload(job.payload))
 
+        async def retire_engine(job: Job) -> dict[str, Any]:
+            return await infra.retire_engine(
+                UUID(job.payload["tenant_id"]), UUID(job.payload["engine_id"])
+            )
+
         handlers[APPLY_SDN_JOB] = apply_sdn
+        handlers[RETIRE_ENGINE_JOB] = retire_engine
         handlers[DEPLOY_SE_GROUP_JOB] = deploy_se_group
     if status is not None:
 

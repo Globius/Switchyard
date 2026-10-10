@@ -1057,6 +1057,14 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         job = await svc.infra.request_sdn_apply(who, tenant.id, request_id=_rid())
         return {"job_id": str(job)}
 
+    @router.post("/tenants/{t}/engines/{engine}/retire", status_code=202, tags=["infrastructure"])
+    async def retire_engine(
+        engine: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Disable an engine, destroy its VM and remove it (refused for the last serving engine)."""
+        job = await svc.infra.request_retire(who, tenant.id, engine, request_id=_rid())
+        return {"job_id": str(job)}
+
     @router.post("/tenants/{t}/se-groups/{group}/deploy", status_code=202, tags=["infrastructure"])
     async def deploy_group(
         group: UUID, body: DeployIn, tenant: Tenant, who: Who, svc: Services

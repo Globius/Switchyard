@@ -36,6 +36,7 @@ from switchyard.services.errors import PermissionDeniedError
 log = logging.getLogger("switchyard.infra")
 
 APPLY_SDN_JOB = "apply_sdn"
+RETIRE_ENGINE_JOB = "retire_engine"
 DEPLOY_SE_GROUP_JOB = "deploy_se_group"
 
 #: Stand-in "group id" for the cluster-wide SDN lock.
@@ -150,6 +151,26 @@ class InfraJobs:
                 session,
                 DEPLOY_SE_GROUP_JOB,
                 request.as_payload(),
+                tenant_id=tenant_id,
+                max_attempts=1,
+                request_id=request_id,
+            )
+
+    async def request_retire(
+        self,
+        principal: Principal,
+        tenant_id: UUID,
+        engine_id: UUID,
+        *,
+        request_id: str | None = None,
+    ) -> UUID:
+        """Queue the removal of an engine and its VM and return the job id."""
+        self._check(principal, tenant_id)
+        async with admin_session(self._db.admin) as session:
+            return await queue.enqueue(
+                session,
+                RETIRE_ENGINE_JOB,
+                {"tenant_id": str(tenant_id), "engine_id": str(engine_id)},
                 tenant_id=tenant_id,
                 max_attempts=1,
                 request_id=request_id,
@@ -281,6 +302,66 @@ class InfraService:
             await self._cleanup(request.tenant_id, created)
             raise DeployError(f"deploy of {group.name} failed and was cleaned up: {exc}") from exc
         return {"created": names, "existing": existing}
+
+    async def retire_engine(self, tenant_id: UUID, engine_id: UUID) -> dict[str, Any]:
+        """Take an engine out of service and destroy its VM.
+
+        The engine is disabled first (so no rollout includes it), then the VM is destroyed and the
+        row removed. The last enabled engine of a group that serves enabled virtual services cannot
+        be retired: that would stop the service.
+
+        Raises:
+            DeployError: If the engine does not exist or is the last one serving traffic.
+        """
+        snapshot = await self._snapshot(tenant_id)
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            row = (
+                await session.execute(
+                    select(ServiceEngineRow)
+                    .where(ServiceEngineRow.id == engine_id)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                raise DeployError(f"engine {engine_id} does not exist")
+            siblings = (
+                (
+                    await session.execute(
+                        select(ServiceEngineRow).where(
+                            ServiceEngineRow.se_group_id == row.se_group_id,
+                            ServiceEngineRow.id != row.id,
+                            ServiceEngineRow.state == "enabled",
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            serving = any(
+                s.se_group_id == row.se_group_id and s.enabled for s in snapshot.virtual_services
+            )
+            if serving and not siblings and row.state == "enabled":
+                raise DeployError(
+                    f"{row.name} is the only enabled engine of a group that serves traffic"
+                )
+            row.state = "disabled"
+            node, vmid, name = row.pve_node, row.vmid, row.name
+        if node and vmid:
+            try:
+                await self._pve.destroy_vm(node, vmid)
+            except ProxmoxError as exc:
+                raise DeployError(f"could not destroy the VM of {name}: {exc}") from exc
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            await session.execute(delete(ServiceEngineRow).where(ServiceEngineRow.id == engine_id))
+            await audit_log.record(
+                session,
+                tenant_id=tenant_id,
+                actor="system:deploy",
+                action="engine.retired",
+                object_ref=f"engine:{engine_id}",
+                diff={"name": name, "vmid": vmid},
+            )
+        return {"retired": name, "vm_destroyed": bool(node and vmid)}
 
     async def _register(
         self, request: DeployRequest, name: str, address: str, node: str, vmid: int

@@ -3,6 +3,7 @@
 import copy
 import uuid
 from typing import Any
+from uuid import UUID
 
 import pytest
 from sqlalchemy import text
@@ -176,3 +177,74 @@ async def test_jobs_run_through_the_worker_and_need_tenant_admin(pg_url: str) ->
             )
             == 1
         )
+
+
+async def engine_ids(w: World) -> dict[str, UUID]:
+    async with admin_session(w.db.admin) as s:
+        rows = (await s.execute(text("SELECT name, id FROM service_engine"))).all()
+    return dict(rows)
+
+
+async def test_retire_destroys_the_vm_and_removes_the_row(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        await infra.deploy_se_group(request(2))
+        ids = await engine_ids(w)
+        result = await infra.retire_engine(TENANT, ids["edge-2"])
+        assert result == {"retired": "edge-2", "vm_destroyed": True}
+        assert [s.name for s, _ in pve.vms.values()] == ["edge-1"]
+        assert set(await engine_ids(w)) == {"edge-1"}
+        assert await count(w, "SELECT count(*) FROM audit_event WHERE action='engine.retired'") == 1
+
+
+async def test_the_last_serving_engine_cannot_be_retired(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        await infra.deploy_se_group(request(1))
+        only = (await engine_ids(w))["edge-1"]
+        with pytest.raises(DeployError, match="only enabled engine"):
+            await infra.retire_engine(TENANT, only)
+        assert len(pve.vms) == 1
+        with pytest.raises(DeployError, match="does not exist"):
+            await infra.retire_engine(TENANT, UUID(int=9))
+
+
+async def test_a_vm_that_cannot_be_destroyed_keeps_the_engine_registered(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        await infra.deploy_se_group(request(2))
+        victim = (await engine_ids(w))["edge-2"]
+        pve.fail_on.add("destroy_vm")
+        with pytest.raises(DeployError, match="could not destroy"):
+            await infra.retire_engine(TENANT, victim)
+        assert await count(w, "SELECT count(*) FROM service_engine") == 2
+        assert (
+            await count(
+                w, f"SELECT count(*) FROM service_engine WHERE id='{victim}' AND state='disabled'"
+            )
+            == 1
+        ), "it stays out of rollouts until the retire is retried"
+        await infra.retire_engine(TENANT, victim)
+        assert await count(w, "SELECT count(*) FROM service_engine") == 1
+
+
+async def test_retire_job_is_queued_by_tenant_admins(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        await infra.deploy_se_group(request(2))
+        victim = (await engine_ids(w))["edge-2"]
+        from switchyard.domain.workflow import Role
+        from switchyard.services.errors import PermissionDeniedError
+
+        with pytest.raises(PermissionDeniedError):
+            await InfraJobs(w.db).request_retire(principal(Role.OPERATOR), TENANT, victim)
+        await InfraJobs(w.db).request_retire(principal(), TENANT, victim)
+        handlers = build_handlers(w.db, w.pipeline, None, infra=infra)
+        worker = Worker(w.db.admin, handlers, worker_id="t")
+        while await worker.run_once():
+            pass
+        assert len(pve.vms) == 1
