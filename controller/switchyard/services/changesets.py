@@ -66,11 +66,21 @@ class ValidationFailedError(ValueError):
 
 @dataclass(frozen=True)
 class FileDiff:
-    """Difference of one rendered file."""
+    """Difference of one rendered file.
+
+    Attributes:
+        path: File path relative to ``/etc/switchyard/``.
+        status: ``added``, ``removed`` or ``modified``.
+        diff: Unified diff (``a/<path>`` to ``b/<path>``).
+        before: Full previous content; ``None`` when the file is added.
+        after: Full new content; ``None`` when the file is removed.
+    """
 
     path: str
     status: str  # added | removed | modified
     diff: str
+    before: str | None = None
+    after: str | None = None
 
 
 @dataclass(frozen=True)
@@ -160,7 +170,7 @@ def _line_diff(path: str, before: str | None, after: str | None) -> FileDiff | N
             tofile=f"b/{path}",
         )
     )
-    return FileDiff(path, status, diff)
+    return FileDiff(path, status, diff, before, after)
 
 
 def render_diffs(before: Snapshot, after: Snapshot) -> tuple[GroupDiff, ...]:

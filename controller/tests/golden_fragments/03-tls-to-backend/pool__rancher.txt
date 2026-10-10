@@ -1,0 +1,5 @@
+==> haproxy/haproxy.cfg (haproxy, lines 42-45)
+backend pool_rancher
+    mode http
+    balance roundrobin
+    server 10-20-2-5-443 10.20.2.5:443 ssl verify required ca-file /etc/ssl/certs/ca-certificates.crt sni req.hdr(host),field(1,:),lower weight 100

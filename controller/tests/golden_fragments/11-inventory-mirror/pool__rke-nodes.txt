@@ -1,0 +1,12 @@
+==> haproxy/haproxy.cfg (haproxy, lines 178-188)
+backend pool_rke-nodes
+    mode tcp
+    balance roundrobin
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-60-6-27 10.60.6.27 check port 6443 weight 100
+    server 10-60-6-28 10.60.6.28 check port 6443 weight 100
+    server 10-60-6-29 10.60.6.29 check port 6443 weight 100
+    server 10-60-6-30 10.60.6.30 check port 6443 weight 100
+    server 10-60-6-31 10.60.6.31 check port 6443 weight 100
+    server 10-60-6-32 10.60.6.32 check port 6443 weight 100

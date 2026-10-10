@@ -1,0 +1,2 @@
+==> certs/external-sni.crtlist (plaintext, lines 5-5)
+/etc/switchyard/certs/home-wild.pem *.home.example.com home.example.com

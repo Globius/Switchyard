@@ -1,0 +1,5 @@
+==> haproxy/haproxy.cfg (haproxy, lines 53-56)
+backend pool_nextcloud
+    mode http
+    balance roundrobin
+    server 10-20-3-7-11000 10.20.3.7:11000 weight 100

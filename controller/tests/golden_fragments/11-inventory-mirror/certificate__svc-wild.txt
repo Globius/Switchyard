@@ -1,0 +1,2 @@
+==> certs/external-sni.crtlist (plaintext, lines 3-3)
+/etc/switchyard/certs/svc-wild.pem *.svc.example.net svc.example.net

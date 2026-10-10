@@ -1,0 +1,2 @@
+==> certs/external-sni.crtlist (plaintext, lines 2-2)
+/etc/switchyard/certs/prod-wild.pem *.prod.corp.example.test

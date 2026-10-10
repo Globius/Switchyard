@@ -1570,8 +1570,32 @@
         "additionalProperties": false,
         "description": "One rendered file that changes.",
         "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New content; null when the file is removed.",
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Previous content; null when the file is added.",
+            "title": "Before"
+          },
           "diff": {
-            "description": "Unified diff.",
+            "description": "Unified diff, a/<path> to b/<path>.",
             "title": "Diff",
             "type": "string"
           },
@@ -1592,7 +1616,9 @@
         "required": [
           "path",
           "status",
-          "diff"
+          "diff",
+          "before",
+          "after"
         ],
         "title": "DiffFile",
         "type": "object"
@@ -4354,6 +4380,91 @@
           "redirect"
         ],
         "title": "RedirectRule",
+        "type": "object"
+      },
+      "RenderedConfig": {
+        "description": "Rendered fragments of one object, live or with a change set applied.",
+        "properties": {
+          "items": {
+            "description": "Empty when the object renders nothing (unused pool, disabled or UDP service).",
+            "items": {
+              "$ref": "#/components/schemas/RenderedFragment"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RenderedConfig",
+        "type": "object"
+      },
+      "RenderedFragment": {
+        "description": "Part of one rendered file that an object produced.",
+        "properties": {
+          "content": {
+            "description": "The whole file; highlight `range` inside it.",
+            "title": "Content",
+            "type": "string"
+          },
+          "file": {
+            "description": "Path relative to /etc/switchyard/ on the SE.",
+            "title": "File",
+            "type": "string"
+          },
+          "fingerprint": {
+            "description": "Render fingerprint of the SE group (what an SE reports it is running).",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "language": {
+            "description": "Editor language id.",
+            "enum": [
+              "haproxy",
+              "plaintext"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "range": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First and last line (1-based, inclusive) of the fragment inside `content`; null when the fragment is the whole file.",
+            "title": "Range"
+          },
+          "se_group_id": {
+            "description": "The SE group whose files contain this text.",
+            "format": "uuid",
+            "title": "Se Group Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "se_group_id",
+          "file",
+          "language",
+          "content",
+          "fingerprint"
+        ],
+        "title": "RenderedFragment",
         "type": "object"
       },
       "RenewPolicy": {
@@ -8784,6 +8895,136 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/certificates/{object_id}/rendered": {
+      "get": {
+        "operationId": "rendered_certificates_api_v1_tenants__t__certificates__object_id__rendered_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Object Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "content": "backend pool_web\n    mode http\n    balance leastconn\n",
+                      "file": "haproxy/haproxy.cfg",
+                      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "language": "haproxy",
+                      "range": [
+                        1,
+                        3
+                      ],
+                      "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RenderedConfig"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rendered config of a certificate",
+        "tags": [
+          "certificates"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/change-sets": {
       "get": {
         "description": "List change sets, newest first, with their age, base revision and operation count.",
@@ -9443,6 +9684,8 @@
                     {
                       "files": [
                         {
+                          "after": "backend pool_web\n    balance leastconn\n",
+                          "before": "backend pool_web\n    balance roundrobin\n",
                           "diff": "--- a/haproxy/haproxy.cfg\n+++ b/haproxy/haproxy.cfg\n@@ -10 +10 @@\n-    balance roundrobin\n+    balance leastconn\n",
                           "path": "haproxy/haproxy.cfg",
                           "status": "modified"
@@ -11259,6 +11502,136 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/health-monitors/{object_id}/rendered": {
+      "get": {
+        "operationId": "rendered_health_monitors_api_v1_tenants__t__health_monitors__object_id__rendered_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Object Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "content": "backend pool_web\n    mode http\n    balance leastconn\n",
+                      "file": "haproxy/haproxy.cfg",
+                      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "language": "haproxy",
+                      "range": [
+                        1,
+                        3
+                      ],
+                      "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RenderedConfig"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rendered config of a health monitor",
+        "tags": [
+          "health-monitors"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/networks": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.",
@@ -12988,6 +13361,136 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/policy-sets/{object_id}/rendered": {
+      "get": {
+        "operationId": "rendered_policy_sets_api_v1_tenants__t__policy_sets__object_id__rendered_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Object Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "content": "backend pool_web\n    mode http\n    balance leastconn\n",
+                      "file": "haproxy/haproxy.cfg",
+                      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "language": "haproxy",
+                      "range": [
+                        1,
+                        3
+                      ],
+                      "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RenderedConfig"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rendered config of a policy set",
+        "tags": [
+          "policy-sets"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/pools": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.",
@@ -13791,6 +14294,136 @@
           }
         },
         "summary": "Change one of the pools",
+        "tags": [
+          "pools"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/pools/{object_id}/rendered": {
+      "get": {
+        "operationId": "rendered_pools_api_v1_tenants__t__pools__object_id__rendered_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Object Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "content": "backend pool_web\n    mode http\n    balance leastconn\n",
+                      "file": "haproxy/haproxy.cfg",
+                      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "language": "haproxy",
+                      "range": [
+                        1,
+                        3
+                      ],
+                      "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RenderedConfig"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rendered config of a pool",
         "tags": [
           "pools"
         ]
@@ -16267,6 +16900,136 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/se-groups/{object_id}/rendered": {
+      "get": {
+        "operationId": "rendered_se_groups_api_v1_tenants__t__se_groups__object_id__rendered_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Object Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "content": "backend pool_web\n    mode http\n    balance leastconn\n",
+                      "file": "haproxy/haproxy.cfg",
+                      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "language": "haproxy",
+                      "range": [
+                        1,
+                        3
+                      ],
+                      "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RenderedConfig"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rendered config of a se group",
+        "tags": [
+          "se-groups"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/status/engines": {
       "get": {
         "operationId": "engine_status_api_v1_tenants__t__status_engines_get",
@@ -18346,6 +19109,136 @@
           }
         },
         "summary": "Change one of the virtual services",
+        "tags": [
+          "virtual-services"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/virtual-services/{object_id}/rendered": {
+      "get": {
+        "operationId": "rendered_virtual_services_api_v1_tenants__t__virtual_services__object_id__rendered_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "object_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Object Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "content": "backend pool_web\n    mode http\n    balance leastconn\n",
+                      "file": "haproxy/haproxy.cfg",
+                      "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "language": "haproxy",
+                      "range": [
+                        1,
+                        3
+                      ],
+                      "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RenderedConfig"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rendered config of a virtual service",
         "tags": [
           "virtual-services"
         ]
