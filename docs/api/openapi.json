@@ -3717,6 +3717,21 @@
         "title": "NetworkRole",
         "type": "string"
       },
+      "NextFree": {
+        "additionalProperties": false,
+        "description": "A suggested free address; nothing is reserved.",
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address"
+        ],
+        "title": "NextFree",
+        "type": "object"
+      },
       "ObjectType": {
         "description": "Kinds of object a change set can create, update or delete.",
         "enum": [
@@ -3897,6 +3912,35 @@
           "items"
         ],
         "title": "Page[Annotated[Union[VrrpProfileRead, BgpProfileRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "type": "object"
+      },
+      "Page_AuditEventRead_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEventRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque cursor of the next page, or null on the last page.",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[AuditEventRead]",
         "type": "object"
       },
       "Page_CertificateRead_": {
@@ -6007,6 +6051,42 @@
         "title": "UdpCheck",
         "type": "object"
       },
+      "VipAllocation": {
+        "additionalProperties": false,
+        "description": "One address of a VIP pool that a virtual service holds.",
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "`unchanged` for live reads; with `?change_set=` the draft's treatment."
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "virtual_service_id": {
+            "format": "uuid",
+            "title": "Virtual Service Id",
+            "type": "string"
+          },
+          "virtual_service_name": {
+            "title": "Virtual Service Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "virtual_service_id",
+          "virtual_service_name",
+          "enabled",
+          "draft_status"
+        ],
+        "title": "VipAllocation",
+        "type": "object"
+      },
       "VipPool": {
         "additionalProperties": false,
         "description": "Address ranges VIPs are allocated from, on one network.",
@@ -6188,6 +6268,59 @@
           "changed_fields"
         ],
         "title": "VipPoolRead",
+        "type": "object"
+      },
+      "VipPoolUsage": {
+        "additionalProperties": false,
+        "description": "How much of a VIP pool is in use. Addresses are held by the services that carry them.",
+        "properties": {
+          "allocations": {
+            "items": {
+              "$ref": "#/components/schemas/VipAllocation"
+            },
+            "title": "Allocations",
+            "type": "array"
+          },
+          "free": {
+            "title": "Free",
+            "type": "integer"
+          },
+          "next_free": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The address a new service would get (lowest free), or null when exhausted.",
+            "title": "Next Free"
+          },
+          "pool_id": {
+            "format": "uuid",
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "total": {
+            "description": "Usable addresses in the pool's ranges.",
+            "title": "Total",
+            "type": "integer"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pool_id",
+          "total",
+          "used",
+          "free",
+          "allocations",
+          "next_free"
+        ],
+        "title": "VipPoolUsage",
         "type": "object"
       },
       "VirtualService": {
@@ -8557,6 +8690,7 @@
     },
     "/api/v1/tenants/{t}/audit-events": {
       "get": {
+        "description": "Append-only record of who did what in the tenant. Filter by `actor` and `action` (exact, or a prefix when the value ends in `*`, for example `change_set.*`), by `object` (exact reference such as `change_set:<id>`), by time (`since` inclusive, `until` exclusive) and by free text `q` (substring of actor, action or object). Page with `limit` and `cursor`. Requires any role in the tenant.",
         "operationId": "audit_events_api_v1_tenants__t__audit_events_get",
         "parameters": [
           {
@@ -8566,6 +8700,121 @@
             "schema": {
               "title": "T",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "object",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Object"
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
             }
           },
           {
@@ -8601,21 +8850,19 @@
           "200": {
             "content": {
               "application/json": {
-                "example": [
-                  {
-                    "action": "change_set.apply",
-                    "actor": "user:alice",
-                    "at": "2026-10-10T08:30:00Z",
-                    "object": "change_set:0192f3a0-0000-7000-8000-000000000020",
-                    "request_id": "b7d4c2e0a1f34b6e"
-                  }
-                ],
+                "example": {
+                  "items": [
+                    {
+                      "action": "change_set.apply",
+                      "actor": "user:alice",
+                      "at": "2026-10-10T08:30:00Z",
+                      "object": "change_set:0192f3a0-0000-7000-8000-000000000020",
+                      "request_id": "b7d4c2e0a1f34b6e"
+                    }
+                  ]
+                },
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AuditEventRead"
-                  },
-                  "title": "Response Audit Events Api V1 Tenants  T  Audit Events Get",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_AuditEventRead_"
                 }
               }
             },
@@ -20067,6 +20314,257 @@
           }
         },
         "summary": "Change one of the vip pools",
+        "tags": [
+          "vip-pools"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/vip-pools/{pool_id}/allocations": {
+      "get": {
+        "description": "How many addresses the pool has, how many are held and by which virtual service. An address is held by the service that carries it as `vip`; there is no separate reservation, so *releasing* an address means changing the service's `vip` or deleting the service in a change set. With `change_set` the answer is the pool as that draft would leave it (`draft_status` per holder). `next_free` is the address a new service would get. Requires any role in the tenant.",
+        "operationId": "vip_pool_allocations_api_v1_tenants__t__vip_pools__pool_id__allocations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pool Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "allocations": [
+                    {
+                      "address": "192.0.2.100",
+                      "draft_status": "unchanged",
+                      "enabled": true,
+                      "virtual_service_id": "0192f3a0-0000-7000-8000-000000000013",
+                      "virtual_service_name": "shop"
+                    }
+                  ],
+                  "free": 98,
+                  "next_free": "192.0.2.101",
+                  "pool_id": "0192f3a0-0000-7000-8000-000000000011",
+                  "total": 99,
+                  "used": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/VipPoolUsage"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Usage and allocations of a VIP pool",
+        "tags": [
+          "vip-pools"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/vip-pools/{pool_id}/next-free": {
+      "post": {
+        "description": "Returns the lowest free usable address. Nothing is reserved: two callers can get the same address and the validator rejects the second service that uses it. `409` when the pool is exhausted. Requires any role in the tenant.",
+        "operationId": "vip_pool_next_free_api_v1_tenants__t__vip_pools__pool_id__next_free_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pool_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pool Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "address": "192.0.2.101"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/NextFree"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggest the next free address of a VIP pool",
         "tags": [
           "vip-pools"
         ]

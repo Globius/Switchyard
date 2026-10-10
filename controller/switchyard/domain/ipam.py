@@ -63,3 +63,19 @@ def allocate(pool: VipPool, network: Network, used: Iterable[IPAddress]) -> IPAd
         if address not in taken:
             return address
     raise PoolExhaustedError(f"VIP pool {pool.name} has no free address")
+
+
+def pool_addresses(pool: VipPool, network: Network) -> list[IPAddress]:
+    """Every usable address of ``pool``, ascending.
+
+    Example:
+        >>> import uuid
+        >>> from switchyard.domain.models import IpRange
+        >>> net = Network(id=uuid.uuid4(), tenant_id=uuid.uuid4(), name="n",
+        ...               cidr="192.0.2.0/29", gateway="192.0.2.1")
+        >>> pool = VipPool(id=uuid.uuid4(), tenant_id=net.tenant_id, name="p", network_id=net.id,
+        ...                ranges=(IpRange(start="192.0.2.0", end="192.0.2.4"),))
+        >>> len(pool_addresses(pool, net))
+        3
+    """
+    return list(candidates(pool, network))

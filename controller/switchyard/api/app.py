@@ -11,7 +11,7 @@ import uuid
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from urllib.parse import parse_qs
 from uuid import UUID
@@ -55,6 +55,7 @@ from switchyard.api.schemas import (
     Me,
     MemberStateIn,
     MemberStateResult,
+    NextFree,
     OpenIn,
     OpsIn,
     Page,
@@ -69,6 +70,8 @@ from switchyard.api.schemas import (
     TokenCreated,
     TokenIn,
     TokenRead,
+    VipAllocation,
+    VipPoolUsage,
     VirtualServiceStatusRead,
 )
 from switchyard.db.tenancy import admin_session, tenant_session
@@ -311,6 +314,63 @@ async def _view(
             old = next(o for o in getattr(base, attr) if o.id == info.object_id)
             out.append(_object_json(old, DraftStatus.DELETED, ()))
     return out
+
+
+async def _pool_usage(
+    services: ApiServices,
+    who: Principal,
+    tenant: TenantRecord,
+    pool_id: UUID,
+    change_set: UUID | None,
+) -> VipPoolUsage:
+    """Usage of one VIP pool, live or as a draft would leave it."""
+    from switchyard.db.repository import load_snapshot
+    from switchyard.domain import ipam
+
+    statuses: dict[UUID, DraftStatus] = {}
+    if change_set is None:
+        async with tenant_session(services.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+    else:
+        _, draft = await services.change_sets.draft_view(who, tenant.id, change_set)
+        snapshot = draft.snapshot
+        statuses = {
+            o.object_id: o.status
+            for o in draft.objects
+            if o.object_type is ObjectType.VIRTUAL_SERVICE
+        }
+    pool = next((p for p in snapshot.vip_pools if p.id == pool_id), None)
+    network = next((n for n in snapshot.networks if pool and n.id == pool.network_id), None)
+    if pool is None or network is None:
+        raise ApiError(404, f"vip-pools {pool_id} not found")
+    addresses = ipam.pool_addresses(pool, network)
+    inside = set(addresses)
+    held = sorted(
+        (v for v in snapshot.virtual_services if v.vip in inside),
+        key=lambda v: (int(v.vip), v.name),
+    )
+    taken = {v.vip for v in held}
+    try:
+        next_free: str | None = str(ipam.allocate(pool, network, taken))
+    except ipam.PoolExhaustedError:
+        next_free = None
+    return VipPoolUsage(
+        pool_id=pool.id,
+        total=len(addresses),
+        used=len(taken),
+        free=len(addresses) - len(taken),
+        allocations=[
+            VipAllocation(
+                address=str(v.vip),
+                virtual_service_id=v.id,
+                virtual_service_name=v.name,
+                enabled=v.enabled,
+                draft_status=statuses.get(v.id, DraftStatus.UNCHANGED),
+            )
+            for v in held
+        ],
+        next_free=next_free,
+    )
 
 
 def _page(items: list[dict[str, Any]], cursor: str | None, limit: int) -> Page[Any]:
@@ -577,6 +637,13 @@ def _problem_json_openapi(app: FastAPI) -> dict[str, Any]:
         schema["components"]["schemas"].pop(unused, None)
     app.openapi_schema = schema
     return schema
+
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+
+def _like_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _uuid_cursor(cursor: str | None) -> UUID | None:
@@ -959,6 +1026,55 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         _object_routes(router, slug, object_type)
         if object_type in RENDERED_TYPES:
             _rendered_route(router, slug, object_type)
+
+    # IPAM
+    @router.get(
+        "/tenants/{t}/vip-pools/{pool_id}/allocations",
+        tags=["vip-pools"],
+        summary="Usage and allocations of a VIP pool",
+        description=(
+            "How many addresses the pool has, how many are held and by which virtual service. An "
+            "address is held by the service that carries it as `vip`; there is no separate "
+            "reservation, so *releasing* an address means changing the service's `vip` or "
+            "deleting the service in a change set. With `change_set` the answer is the pool as "
+            "that draft would leave it (`draft_status` per holder). `next_free` is the address a "
+            "new service would get. Requires any role in the tenant."
+        ),
+        response_model=VipPoolUsage,
+        responses=_ok(ex.VIP_POOL_USAGE),
+    )
+    async def vip_pool_allocations(
+        pool_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+    ) -> VipPoolUsage:
+        return await _pool_usage(svc, who, tenant, pool_id, change_set)
+
+    @router.post(
+        "/tenants/{t}/vip-pools/{pool_id}/next-free",
+        tags=["vip-pools"],
+        summary="Suggest the next free address of a VIP pool",
+        description=(
+            "Returns the lowest free usable address. Nothing is reserved: two callers can get "
+            "the same address and the validator rejects the second service that uses it. `409` "
+            "when the pool is exhausted. Requires any role in the tenant."
+        ),
+        response_model=NextFree,
+        responses=_ok(ex.NEXT_FREE),
+    )
+    async def vip_pool_next_free(
+        pool_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+    ) -> NextFree:
+        usage = await _pool_usage(svc, who, tenant, pool_id, change_set)
+        if usage.next_free is None:
+            raise ApiError(409, "the VIP pool has no free address")
+        return NextFree(address=usage.next_free)
 
     # change sets
     @router.get(
@@ -1709,33 +1825,86 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         "/tenants/{t}/audit-events",
         tags=["audit"],
         summary="List audit events, newest first",
-        response_model=list[AuditEventRead],
-        responses=_ok([ex.AUDIT_EVENT]),
+        description=(
+            "Append-only record of who did what in the tenant. Filter by `actor` and `action` "
+            "(exact, or a prefix when the value ends in `*`, for example `change_set.*`), by "
+            "`object` (exact reference such as `change_set:<id>`), by time (`since` inclusive, "
+            "`until` exclusive) and by free text `q` (substring of actor, action or object). "
+            "Page with `limit` and `cursor`. Requires any role in the tenant."
+        ),
+        response_model=Page[AuditEventRead],
+        responses=_ok({"items": [ex.AUDIT_EVENT], "next_cursor": None}),
     )
     async def audit_events(
-        tenant: Tenant, who: Who, svc: Services, limit: Annotated[int, Query(ge=1, le=500)] = 100
-    ) -> list[dict[str, Any]]:
-        from sqlalchemy import select
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        actor: str | None = None,
+        action: str | None = None,
+        object: str | None = None,  # noqa: A002 - the query parameter is part of the API
+        since: datetime | None = None,
+        until: datetime | None = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> Page[Any]:
+        from sqlalchemy import and_, or_, select
 
-        from switchyard.db.ops_models import AuditEventRow
+        from switchyard.db.ops_models import AuditEventRow as A
 
-        async with tenant_session(svc.db.app, [tenant.id]) as session:
-            rows = (
-                await session.execute(
-                    select(AuditEventRow).order_by(AuditEventRow.at.desc()).limit(limit)
+        def matches(column: Any, value: str) -> Any:
+            if value.endswith("*"):
+                return column.like(_like_escape(value[:-1]) + "%", escape="\\")
+            return column == value
+
+        stmt = select(A).order_by(A.at.desc(), A.id.desc()).limit(limit + 1)
+        if actor:
+            stmt = stmt.where(matches(A.actor, actor))
+        if action:
+            stmt = stmt.where(matches(A.action, action))
+        if object:
+            stmt = stmt.where(matches(A.object_ref, object))
+        if since:
+            stmt = stmt.where(A.at >= since)
+        if until:
+            stmt = stmt.where(A.at < until)
+        if q:
+            like = "%" + _like_escape(q) + "%"
+            stmt = stmt.where(
+                or_(
+                    A.actor.ilike(like, escape="\\"),
+                    A.action.ilike(like, escape="\\"),
+                    A.object_ref.ilike(like, escape="\\"),
                 )
-            ).scalars()
-            return [
-                {
-                    "at": r.at,
-                    "actor": r.actor,
-                    "action": r.action,
-                    "object": r.object_ref,
-                    "diff": r.diff,
-                    "request_id": r.request_id,
-                }
-                for r in rows
-            ]
+            )
+        if cursor:
+            try:
+                at_text, id_text = cursor.split("|", 1)
+                after = (_EPOCH + timedelta(microseconds=int(at_text)), UUID(id_text))
+            except ValueError:
+                raise ApiError(400, "cursor is not valid") from None
+            stmt = stmt.where(or_(A.at < after[0], and_(A.at == after[0], A.id < after[1])))
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            rows = list((await session.execute(stmt)).scalars())
+        window = rows[:limit]
+        return Page(
+            items=[
+                AuditEventRead(
+                    at=r.at,
+                    actor=r.actor,
+                    action=r.action,
+                    object=r.object_ref,
+                    diff=r.diff,
+                    request_id=r.request_id,
+                )
+                for r in window
+            ],
+            next_cursor=(
+                f"{(window[-1].at - _EPOCH) // timedelta(microseconds=1)}|{window[-1].id}"
+                if len(rows) > limit
+                else None
+            ),
+        )
 
     app.include_router(router)
     app.openapi = lambda: _problem_json_openapi(app)  # type: ignore[method-assign]

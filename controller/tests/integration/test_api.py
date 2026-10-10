@@ -221,7 +221,24 @@ async def test_draft_flow_over_http(api: Api) -> None:
     revs = (await api.client.get(f"{V1}/tenants/acme/revisions", headers=h)).json()
     assert [r["number"] for r in revs["items"]] == [1]
     audit = (await api.client.get(f"{V1}/tenants/acme/audit-events", headers=h)).json()
-    assert "change_set.applied" in {e["action"] for e in audit}
+    assert "change_set.applied" in {e["action"] for e in audit["items"]}
+    only = (
+        await api.client.get(f"{V1}/tenants/acme/audit-events?action=change_set.*", headers=h)
+    ).json()
+    assert only["items"] and all(e["action"].startswith("change_set.") for e in only["items"])
+    first = (await api.client.get(f"{V1}/tenants/acme/audit-events?limit=1", headers=h)).json()
+    assert first["next_cursor"]
+    nxt = (
+        await api.client.get(
+            f"{V1}/tenants/acme/audit-events?limit=1&cursor={first['next_cursor']}", headers=h
+        )
+    ).json()
+    assert "items" in nxt, (nxt, first)
+    assert nxt["items"] and nxt["items"][0] != first["items"][0]
+    none = (await api.client.get(f"{V1}/tenants/acme/audit-events?q=zzz-no-such", headers=h)).json()
+    assert none == {"items": [], "next_cursor": None}
+    bad = await api.client.get(f"{V1}/tenants/acme/audit-events?cursor=x", headers=h)
+    assert bad.status_code == 400
 
 
 async def test_apply_true_creates_deletes_and_rolls_back(api: Api) -> None:
@@ -625,3 +642,23 @@ async def test_rendered_config_per_object_live_and_draft(api: Api) -> None:
         f"{V1}/tenants/acme/networks/{uuid.uuid4()}/rendered", headers=h
     )
     assert unsupported.status_code in (404, 405)
+
+
+async def test_vip_pool_allocations_and_next_free(api: Api) -> None:
+    from switchyard.domain.loader import symbolic_uuid
+
+    h = await api.token(Role.VIEWER)
+    pool = symbolic_uuid("vp-main")
+    usage = (
+        await api.client.get(f"{V1}/tenants/acme/vip-pools/{pool}/allocations", headers=h)
+    ).json()
+    assert usage["total"] == 41 and usage["used"] == 1 and usage["free"] == 40
+    assert usage["allocations"][0]["address"] == "192.0.2.20"
+    assert usage["allocations"][0]["virtual_service_id"] == str(VS)
+    assert usage["next_free"] == "192.0.2.10"
+    nxt = await api.client.post(f"{V1}/tenants/acme/vip-pools/{pool}/next-free", headers=h)
+    assert nxt.json() == {"address": "192.0.2.10"}
+    missing = await api.client.get(
+        f"{V1}/tenants/acme/vip-pools/{uuid.uuid4()}/allocations", headers=h
+    )
+    assert missing.status_code == 404

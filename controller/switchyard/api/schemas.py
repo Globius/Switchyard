@@ -557,6 +557,40 @@ class EngineStatusRead(ApiModel):
     observed_at: datetime
 
 
+# -- IPAM ------------------------------------------------------------------------------------------
+
+
+class VipAllocation(ApiModel):
+    """One address of a VIP pool that a virtual service holds."""
+
+    address: str
+    virtual_service_id: UUID
+    virtual_service_name: str
+    enabled: bool
+    draft_status: DraftStatus = Field(
+        description="`unchanged` for live reads; with `?change_set=` the draft's treatment."
+    )
+
+
+class VipPoolUsage(ApiModel):
+    """How much of a VIP pool is in use. Addresses are held by the services that carry them."""
+
+    pool_id: UUID
+    total: int = Field(description="Usable addresses in the pool's ranges.")
+    used: int
+    free: int
+    allocations: list[VipAllocation]
+    next_free: str | None = Field(
+        description="The address a new service would get (lowest free), or null when exhausted."
+    )
+
+
+class NextFree(ApiModel):
+    """A suggested free address; nothing is reserved."""
+
+    address: str
+
+
 # -- jobs and audit --------------------------------------------------------------------------------
 
 

@@ -402,3 +402,21 @@ PROTOCOL_RULES = {
     "monitor_types": ["udp"],
     "member_port_required": True,
 }
+
+VIP_POOL_USAGE = {
+    "pool_id": VIP_POOL,
+    "total": 99,
+    "used": 1,
+    "free": 98,
+    "allocations": [
+        {
+            "address": "192.0.2.100",
+            "virtual_service_id": VIRTUAL_SERVICE,
+            "virtual_service_name": "shop",
+            "enabled": True,
+            "draft_status": "unchanged",
+        }
+    ],
+    "next_free": "192.0.2.101",
+}
+NEXT_FREE = {"address": "192.0.2.101"}
