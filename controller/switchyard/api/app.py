@@ -13,6 +13,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any
+from urllib.parse import parse_qs
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
@@ -753,6 +754,80 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         response = Response(status_code=302, headers={"Location": result.return_to})
         set_session_cookie(request, response, result.cookie, result.session)
         return response
+
+    @router.post(
+        "/auth/callback/{provider}",
+        tags=["auth"],
+        status_code=302,
+        summary="SAML assertion consumer service",
+        response_class=Response,
+        openapi_extra={
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/x-www-form-urlencoded": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["SAMLResponse", "RelayState"],
+                            "properties": {
+                                "SAMLResponse": {"type": "string", "description": "Base64."},
+                                "RelayState": {"type": "string", "description": "Login state."},
+                            },
+                        }
+                    }
+                },
+            }
+        },
+    )
+    async def auth_saml_callback(provider: str, request: Request, svc: Services) -> Response:
+        """Finish a SAML login. Only answers a login this controller started (SP-initiated).
+
+        The assertion must be signed, answer our request, and not have been used before. On any
+        failure the browser is sent to `/login?error=<code>`. No session exists yet, so the CSRF
+        header does not apply.
+        """
+        sessions = require_sessions(svc)
+        form = parse_qs((await request.body()).decode("utf-8", errors="replace"))
+        try:
+            result = await sessions.complete_saml_login(
+                provider=provider,
+                saml_response=(form.get("SAMLResponse") or [""])[0],
+                relay_state=(form.get("RelayState") or [""])[0],
+                acs_url=callback_url(request, provider),
+            )
+        except LoginError as exc:
+            return Response(status_code=302, headers={"Location": f"/login?error={exc.code}"})
+        response = Response(status_code=302, headers={"Location": result.return_to})
+        set_session_cookie(request, response, result.cookie, result.session)
+        return response
+
+    @router.get(
+        "/auth/saml/{provider}/metadata",
+        tags=["auth"],
+        summary="SAML service-provider metadata",
+        response_class=Response,
+        responses={
+            200: {
+                "description": "SP metadata for the identity provider administrator.",
+                "content": {"application/samlmetadata+xml": {"schema": {"type": "string"}}},
+            }
+        },
+    )
+    async def auth_saml_metadata(
+        provider: str, request: Request, svc: Services, download: bool = False
+    ) -> Response:
+        """Public, so an identity provider can fetch it by URL. `?download=1` sets a filename."""
+        sessions = require_sessions(svc)
+        try:
+            xml = await sessions.saml_metadata(provider, acs_url=callback_url(request, provider))
+        except LoginError as exc:
+            raise ApiError(404, str(exc)) from exc
+        headers = {"Content-Disposition": f'attachment; filename="{provider}-sp-metadata.xml"'}
+        return Response(
+            xml,
+            media_type="application/samlmetadata+xml",
+            headers=headers if download else None,
+        )
 
     @router.post(
         "/auth/break-glass",

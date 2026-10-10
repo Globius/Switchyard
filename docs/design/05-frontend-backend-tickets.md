@@ -135,7 +135,7 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 - Validation errors name the field (`errors[].path`); an OIDC provider is probed on create (discovery document reachable) and the result is reported as a warning, not a refusal.
 - **Acceptance.** Test sign-in against the fake OIDC provider returns claims and `would_grant`, creates no `user_session` row, and a second read is 404; no response contains a client secret or token.
 
-### G1-4. SAML sign-in and service-provider metadata
+### G1-4. SAML sign-in and service-provider metadata (built, ADR 0018; `sign_requests` and metadata import remain)
 
 - `protocol: saml` accepted. `GET /auth/login/{provider}` redirects with an `AuthnRequest`; `POST /auth/callback/{provider}` is the assertion consumer service; `GET /auth/saml/{provider}/metadata` returns SP metadata (`application/samlmetadata+xml`, public; the UI's download button uses it, with `Content-Disposition` when `?download=1`).
 - Rules in 02: signature required, `InResponseTo` bound to the stored state, assertion replay cache, 60 s skew, no IdP-initiated sign-in, groups from `attribute_groups`.

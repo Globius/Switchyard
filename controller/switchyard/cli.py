@@ -284,6 +284,47 @@ def idp_add(
     typer.echo(f"added identity provider {name}")
 
 
+@idp_app.command("add-saml")
+def idp_add_saml(
+    name: Annotated[str, typer.Argument(help="Short name shown on the login page.")],
+    idp_entity_id: Annotated[str, typer.Option(help="The IdP's entity id (assertion issuer).")],
+    sso_url: Annotated[str, typer.Option(help="The IdP's single sign-on URL (https://...).")],
+    cert_file: Annotated[
+        list[Path], typer.Option(help="PEM file with a certificate that signs assertions.")
+    ],
+    sp_entity_id: Annotated[
+        str | None, typer.Option(help="Our entity id (default derived).")
+    ] = None,
+    groups_attribute: Annotated[str, typer.Option(help="Attribute with the groups.")] = "groups",
+    username_attribute: Annotated[str, typer.Option(help="Attribute with the name.")] = "username",
+    email_attribute: Annotated[str, typer.Option(help="Attribute with the e-mail.")] = "email",
+    url: DatabaseUrl = DEFAULT_DATABASE_URL,
+) -> None:
+    """Add a SAML 2.0 identity provider (SP metadata: /api/v1/auth/saml/<name>/metadata)."""
+    from switchyard.services.idp import IdentityProviderAdmin
+
+    certificates = [path.read_text(encoding="utf-8") for path in cert_file]
+
+    async def go() -> None:
+        db = _databases(url)
+        try:
+            await IdentityProviderAdmin(db).add_saml_provider(
+                name,
+                idp_entity_id=idp_entity_id,
+                sso_url=sso_url,
+                signing_certificates=certificates,
+                sp_entity_id=sp_entity_id,
+                attribute_groups=groups_attribute,
+                attribute_username=username_attribute,
+                attribute_email=email_attribute,
+            )
+        finally:
+            await db.dispose()
+
+    run(go())
+    typer.echo(f"added SAML identity provider {name}")
+
+
 @idp_app.command("map")
 def idp_map(
     provider: Annotated[str, typer.Argument(help="Provider name.")],
@@ -320,7 +361,7 @@ def idp_list(url: DatabaseUrl = DEFAULT_DATABASE_URL) -> None:
             await db.dispose()
 
     for p in run(go()):
-        typer.echo(f"{p.name} {'enabled' if p.enabled else 'DISABLED'} {p.issuer_url}")
+        typer.echo(f"{p.name} {p.protocol} {'enabled' if p.enabled else 'DISABLED'} {p.issuer_url}")
         for group, tenant, role in p.mappings:
             typer.echo(f"  {group} -> {role.value}" + (f" in {tenant}" if tenant else ""))
 

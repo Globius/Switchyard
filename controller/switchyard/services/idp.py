@@ -7,6 +7,7 @@ configured from the command line. A provider holds only a *reference* to its cli
 from dataclasses import dataclass
 from uuid import UUID
 
+from cryptography import x509
 from sqlalchemy import delete, select
 
 from switchyard.db import audit_log
@@ -26,8 +27,9 @@ class ProviderRecord:
 
     id: UUID
     name: str
-    issuer_url: str
-    client_id: str
+    protocol: str
+    issuer_url: str  # OIDC issuer, or the SAML IdP entity id
+    client_id: str  # OIDC only (empty for SAML)
     enabled: bool
     mappings: tuple[tuple[str, str | None, Role], ...]  # (group, tenant name or None, role)
 
@@ -90,6 +92,82 @@ class IdentityProviderAdmin:
                 actor="system:cli",
                 action="idp.created",
                 object_ref=f"idp:{name}",
+            )
+            return provider_id
+
+    async def add_saml_provider(
+        self,
+        name: str,
+        *,
+        idp_entity_id: str,
+        sso_url: str,
+        signing_certificates: list[str],
+        sp_entity_id: str | None = None,
+        name_id_format: str | None = None,
+        attribute_username: str = "username",
+        attribute_email: str = "email",
+        attribute_groups: str = "groups",
+    ) -> UUID:
+        """Add a SAML 2.0 provider (SP-initiated web SSO, signed assertions required).
+
+        Args:
+            name: Short name shown on the login page.
+            idp_entity_id: The IdP's entity id; must equal the assertion issuer.
+            sso_url: The IdP's single sign-on URL (https).
+            signing_certificates: One or more public PEM certificates that may sign assertions.
+            sp_entity_id: Our entity id; defaults to ``<public_url>/api/v1/auth/saml/<id>``.
+            name_id_format: Requested NameID format; unspecified by default.
+            attribute_username: Attribute with the display name.
+            attribute_email: Attribute with the e-mail address.
+            attribute_groups: Multi-valued attribute with the group names.
+
+        Raises:
+            ValueError: For a malformed name, URL or certificate.
+            AlreadyExistsError: If the name is taken.
+        """
+        validate_name(name)
+        if not sso_url.startswith(("https://", "http://localhost")):
+            raise ValueError("sso_url must be an https:// URL")
+        if not idp_entity_id.strip():
+            raise ValueError("idp_entity_id is required")
+        if not signing_certificates:
+            raise ValueError("at least one signing certificate is required")
+        for pem in signing_certificates:
+            try:
+                x509.load_pem_x509_certificate(pem.encode())
+            except ValueError as exc:
+                raise ValueError("signing certificates must be PEM X.509 certificates") from exc
+        settings: dict[str, object] = {
+            "idp_entity_id": idp_entity_id.strip(),
+            "sso_url": sso_url,
+            "signing_certificates": [c.strip() for c in signing_certificates],
+            "attribute_username": attribute_username,
+            "attribute_email": attribute_email,
+            "attribute_groups": attribute_groups,
+        }
+        if sp_entity_id:
+            settings["sp_entity_id"] = sp_entity_id
+        if name_id_format:
+            settings["name_id_format"] = name_id_format
+        async with admin_session(self._db.admin) as session:
+            taken = (
+                await session.execute(
+                    select(IdentityProviderRow.id).where(IdentityProviderRow.name == name)
+                )
+            ).first()
+            if taken is not None:
+                raise AlreadyExistsError(f"identity provider {name!r} already exists")
+            provider_id = uuid7()
+            session.add(
+                IdentityProviderRow(id=provider_id, name=name, protocol="saml", saml=settings)
+            )
+            await audit_log.record(
+                session,
+                tenant_id=None,
+                actor="system:cli",
+                action="idp.created",
+                object_ref=f"idp:{name}",
+                diff={"protocol": "saml"},
             )
             return provider_id
 
@@ -177,8 +255,9 @@ class IdentityProviderAdmin:
                     ProviderRecord(
                         p.id,
                         p.name,
-                        p.issuer_url,
-                        p.client_id,
+                        p.protocol,
+                        p.issuer_url or str((p.saml or {}).get("idp_entity_id", "")),
+                        p.client_id or "",
                         p.enabled,
                         tuple(
                             (

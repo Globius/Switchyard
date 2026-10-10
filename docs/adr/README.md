@@ -38,3 +38,4 @@ Date: YYYY-MM-DD
 | [0017](0017-sdn-cleanup.md) | Proxmox SDN cleanup when a managed network is deleted | Accepted |
 | [0020](0020-udp-m6-implementation.md) | UDP (M6) implementation: monitor, field rules, bundle files, IPVS status, watchdog | Accepted |
 | [0030](0030-rbac-matrix-and-access-lifecycle.md) | Permission matrix, multi-group grants, role refresh, users and token scope | Proposed |
+| [0018](0018-saml-login.md) | SAML 2.0 login (signxml, signed assertions, replay cache, SP metadata) | Accepted |
