@@ -474,6 +474,23 @@ class AgentStatusRead(ApiModel):
     file_hashes: dict[str, str]
 
 
+class VirtualServiceState(StrEnum):
+    """Whether the data plane renders a virtual service."""
+
+    SERVING = "serving"
+    DISABLED = "disabled"
+    NOT_SERVED = "not_served"
+
+
+class VirtualServiceStatusRead(ApiModel):
+    """State of one virtual service; `not_served` is stored but not rendered yet (UDP, until M6)."""
+
+    id: UUID
+    name: str
+    protocol: str
+    state: VirtualServiceState
+
+
 class DriftKind(StrEnum):
     """What differs between desired and observed state."""
 

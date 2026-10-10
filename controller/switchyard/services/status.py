@@ -53,6 +53,45 @@ class EngineStatus:
     observed_at: datetime
 
 
+@dataclass(frozen=True)
+class VirtualServiceStatus:
+    """Whether the data plane renders one virtual service.
+
+    Attributes:
+        id: Virtual service id.
+        name: Virtual service name.
+        protocol: ``http``, ``tcp`` or ``udp``.
+        state: ``serving`` (rendered into the HAProxy configuration), ``disabled``, or
+            ``not_served`` (stored but no engine renders it yet; today every UDP service).
+    """
+
+    id: UUID
+    name: str
+    protocol: str
+    state: str
+
+
+def virtual_service_states(snapshot: Snapshot) -> list[VirtualServiceStatus]:
+    """Derive the state of every virtual service from the desired state.
+
+    ``not_served`` is distinct from a failing service: nothing is wrong, nothing renders it yet.
+
+    Example:
+        >>> virtual_service_states(snapshot)[0].state  # doctest: +SKIP
+        'not_served'
+    """
+    out = []
+    for s in snapshot.virtual_services:
+        if not s.enabled:
+            state = "disabled"
+        elif str(s.protocol) == "udp":
+            state = "not_served"
+        else:
+            state = "serving"
+        out.append(VirtualServiceStatus(s.id, s.name, str(s.protocol), state))
+    return sorted(out, key=lambda v: v.name)
+
+
 @dataclass
 class _Expected:
     fingerprint: str | None = None
@@ -254,6 +293,15 @@ class StatusService:
         async with tenant_session(self._db.app, [tenant_id]) as session:
             rows = (await session.execute(select(EngineStatusRow))).scalars().all()
             return [_status(r) for r in rows]
+
+    async def virtual_services(
+        self, principal: Principal, tenant_id: UUID
+    ) -> list[VirtualServiceStatus]:
+        """Return the state of every virtual service of a tenant."""
+        if not principal.can_access(tenant_id):
+            raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            return virtual_service_states(await load_snapshot(session))
 
     async def list_status(self, principal: Principal, tenant_id: UUID) -> list[EngineStatus]:
         """Return the stored status of a tenant's engines."""
