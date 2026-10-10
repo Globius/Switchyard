@@ -170,7 +170,7 @@ async def test_draft_flow_over_http(api: Api) -> None:
         "tls"
     ] is True
     revs = (await api.client.get(f"{V1}/tenants/acme/revisions", headers=h)).json()
-    assert [r["number"] for r in revs] == [1]
+    assert [r["number"] for r in revs["items"]] == [1]
     audit = (await api.client.get(f"{V1}/tenants/acme/audit-events", headers=h)).json()
     assert "change_set.applied" in {e["action"] for e in audit}
 
@@ -276,3 +276,224 @@ def test_openapi_is_the_contract() -> None:
         "delete",
     }
     assert VS
+
+
+async def test_every_read_route_answers_with_its_declared_model(api: Api) -> None:
+    """Each response is validated against its model by the framework; a mismatch is a 500."""
+    h = await api.token()
+    t = f"{V1}/tenants/acme"
+    for slug in (
+        "networks",
+        "vip-pools",
+        "se-groups",
+        "virtual-services",
+        "pools",
+        "health-monitors",
+        "certificates",
+        "policy-sets",
+        "routing-profiles",
+    ):
+        r = await api.client.get(f"{t}/{slug}", headers=h)
+        assert r.status_code == 200, (slug, r.text)
+        for item in r.json()["items"]:
+            one = await api.client.get(f"{t}/{slug}/{item['id']}", headers=h)
+            assert one.status_code == 200 and one.headers["etag"] == f'"{item["version"]}"', slug
+    group = (await api.client.get(f"{t}/se-groups", headers=h)).json()["items"][0]["id"]
+    urls = [
+        f"{V1}/healthz",
+        f"{V1}/tenants",
+        t,
+        f"{t}/change-sets",
+        f"{t}/revisions",
+        f"{t}/status/engines",
+        f"{t}/audit-events",
+        f"{t}/tokens",
+        f"{t}/se-groups/{group}/engines",
+    ]
+    for url in urls:
+        assert (await api.client.get(url, headers=h)).status_code == 200, url
+
+
+async def test_a_body_that_does_not_match_its_model_fails_loudly(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken(*_: Any, **__: Any) -> list[Any]:
+        return [
+            type(
+                "R",
+                (),
+                {
+                    "id": uuid.uuid4(),
+                    "name": 5,
+                    "role": Role.VIEWER,
+                    "revoked_at": None,
+                    "expires_at": None,
+                },
+            )()
+        ]
+
+    monkeypatch.setattr(api.services.tokens, "list_tokens", broken)
+    h = await api.token()
+    with pytest.raises(Exception, match="validation"):
+        await api.client.get(f"{V1}/tenants/acme/tokens", headers=h)
+
+
+async def _draft(api: Api, h: dict[str, str], summary: str) -> str:
+    opened = await api.client.post(
+        f"{V1}/tenants/acme/change-sets", json={"summary": summary}, headers=h
+    )
+    return str(opened.json()["id"])
+
+
+async def test_change_sets_and_revisions_page_with_cursors(api: Api) -> None:
+    h = await api.token()
+    t = f"{V1}/tenants/acme"
+    ids = [await _draft(api, h, f"draft {i}") for i in range(3)]
+    first = (await api.client.get(f"{t}/change-sets?limit=2", headers=h)).json()
+    assert [c["summary"] for c in first["items"]] == ["draft 2", "draft 1"]
+    assert first["items"][0]["op_count"] == 0 and first["items"][0]["base_revision"] == 0
+    assert first["items"][0]["created_at"]
+    rest = (
+        await api.client.get(f"{t}/change-sets?limit=2&cursor={first['next_cursor']}", headers=h)
+    ).json()
+    assert [c["id"] for c in rest["items"]] == [ids[0]] and rest["next_cursor"] is None
+    assert (await api.client.get(f"{t}/change-sets?cursor=zzz", headers=h)).status_code == 400
+
+    for i, cs in enumerate(ids[:2]):
+        added = await api.client.patch(
+            f"{t}/pools/{POOL}?change_set={cs}",
+            json={"tls": i == 0},
+            headers={**h, "If-Match": '"1"'},
+        )
+        assert added.status_code == 202, added.text
+    counted = (await api.client.get(f"{t}/change-sets?state=draft", headers=h)).json()["items"]
+    assert {c["summary"]: c["op_count"] for c in counted} == {
+        "draft 0": 1,
+        "draft 1": 1,
+        "draft 2": 0,
+    }
+
+    applied = await api.client.post(f"{t}/change-sets/{ids[0]}/apply", headers=h)
+    assert applied.status_code == 202
+    await api.run_jobs()
+    etag = (await api.client.get(f"{t}/pools/{POOL}", headers=h)).headers["etag"]
+    again = await api.client.patch(
+        f"{t}/pools/{POOL}?apply=true",
+        json={"algorithm": "leastconn"},
+        headers={**h, "If-Match": etag},
+    )
+    assert again.status_code == 202, again.text
+    await api.run_jobs()
+    revs = (await api.client.get(f"{t}/revisions?limit=1", headers=h)).json()
+    assert [r["number"] for r in revs["items"]] == [2] and revs["next_cursor"] == "2"
+    older = (await api.client.get(f"{t}/revisions?limit=1&cursor=2", headers=h)).json()
+    assert [r["number"] for r in older["items"]] == [1] and older["next_cursor"] is None
+    detail = (await api.client.get(f"{t}/revisions/1", headers=h)).json()
+    assert detail["created_at"] and {p["name"] for p in detail["snapshot"]["pools"]} == {"web"}
+
+
+async def test_the_diff_lists_warnings_for_udp_services(api: Api) -> None:
+    h = await api.token()
+    t = f"{V1}/tenants/acme"
+    web = (await api.client.get(f"{t}/virtual-services/{VS}", headers=h)).json()
+    cs = await _draft(api, h, "dns")
+    pool = {
+        "name": "dns-pool",
+        "members": [{"id": str(uuid.uuid4()), "address": "10.20.0.80", "port": 53}],
+    }
+    r = await api.client.post(f"{t}/pools?change_set={cs}", json=pool, headers=h)
+    assert r.status_code == 202, r.text
+    body = {
+        "name": "dns",
+        "se_group_id": web["se_group_id"],
+        "protocol": "udp",
+        "vip": web["vip"],
+        "ports": [{"port": 5353}],
+        "default_pool_id": r.json()["object_id"],
+    }
+    r = await api.client.post(f"{t}/virtual-services?change_set={cs}", json=body, headers=h)
+    assert r.status_code == 202, r.text
+    diff = (await api.client.get(f"{t}/change-sets/{cs}/diff", headers=h)).json()
+    assert diff["problems"] == []
+    assert diff["warnings"] == [
+        {
+            "code": "udp_not_served",
+            "path": "virtual_services.dns",
+            "message": "virtual service dns: udp is rendered by the keepalived renderer, "
+            "not haproxy.cfg",
+        }
+    ]
+
+
+async def test_policy_sets_and_routing_profiles_are_unions_on_kind(api: Api) -> None:
+    h = await api.token()
+    t = f"{V1}/tenants/acme"
+    made: dict[str, list[dict[str, Any]]] = {
+        "policy-sets": [
+            {
+                "kind": "redirect",
+                "name": "old-paths",
+                "rules": [
+                    {
+                        "match": {"path_prefix": "/old"},
+                        "redirect": {"location": "/new", "code": 308},
+                    }
+                ],
+            },
+            {"kind": "allow_list", "name": "office", "cidrs": ["203.0.113.0/24"]},
+        ],
+        "routing-profiles": [
+            {"kind": "vrrp", "name": "vrrp-b", "vrid": 61, "interface": "eth1"},
+            {
+                "kind": "bgp",
+                "name": "bgp-b",
+                "asn": 64512,
+                "peers": [{"peer_ip": "192.0.2.254", "remote_asn": 64500}],
+            },
+        ],
+    }
+    for slug, bodies in made.items():
+        for body in bodies:
+            r = await api.client.post(f"{t}/{slug}?apply=true", json=body, headers=h)
+            assert r.status_code == 202, (slug, r.text)
+            await api.run_jobs()
+        items = (await api.client.get(f"{t}/{slug}", headers=h)).json()["items"]
+        by_name = {i["name"]: i for i in items}
+        for body in bodies:
+            item = by_name[body["name"]]
+            assert item["kind"] == body["kind"] and item["draft_status"] == "unchanged"
+    listing = (await api.client.get(f"{t}/policy-sets", headers=h)).json()["items"]
+    office = next(i for i in listing if i["name"] == "office")
+    assert office["cidrs"] == ["203.0.113.0/24"] and office["managed_by"] is None
+    patched = await api.client.patch(
+        f"{t}/policy-sets/{office['id']}?apply=true",
+        json={"kind": "allow_list", "cidrs": ["203.0.113.0/25"]},
+        headers={**h, "If-Match": f'"{office["version"]}"'},
+    )
+    assert patched.status_code == 202, patched.text
+
+
+async def test_union_validation_errors_keep_field_paths_without_the_tag(api: Api) -> None:
+    h = await api.token()
+    t = f"{V1}/tenants/acme"
+    bad = {"kind": "vrrp", "name": "vrrp-x", "vrid": 999, "interface": "eth1"}
+    r = await api.client.post(f"{t}/routing-profiles?apply=true", json=bad, headers=h)
+    assert r.status_code == 422
+    assert {e["path"] for e in r.json()["errors"]} == {"vrid"}
+    nested = {
+        "kind": "redirect",
+        "name": "r",
+        "rules": [{"match": {"path_prefix": "/a"}, "redirect": {"location": "no-slash"}}],
+    }
+    r = await api.client.post(f"{t}/policy-sets?apply=true", json=nested, headers=h)
+    assert r.status_code == 422
+    paths = {e["path"] for e in r.json()["errors"]}
+    assert "rules.0.redirect.location" in paths and not any(p.startswith("redirect") for p in paths)
+    r = await api.client.post(
+        f"{t}/policy-sets?apply=true", json={"name": "no-kind", "cidrs": ["10.0.0.0/8"]}, headers=h
+    )
+    assert r.status_code == 422
+    r = await api.client.post(
+        f"{t}/policy-sets?apply=true", json={"kind": "bogus", "name": "x"}, headers=h
+    )
+    assert r.status_code == 422

@@ -42,7 +42,7 @@ from switchyard.domain.workflow import ChangeSetState, Role
 from switchyard.ids import uuid7
 from switchyard.jobs import queue
 from switchyard.render.escape import RenderError
-from switchyard.render.haproxy import RenderResult, render_haproxy
+from switchyard.render.haproxy import RenderResult, RenderWarning, render_haproxy
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import ConflictError, NotFoundError, PermissionDeniedError
 
@@ -82,12 +82,14 @@ class GroupDiff:
         name: Its name.
         files: Changed files with unified diffs (empty when nothing changes).
         error: Why rendering failed, if it did.
+        warnings: Things the renderer deliberately left out of the new state (never blocking).
     """
 
     se_group_id: UUID
     name: str
     files: tuple[FileDiff, ...] = ()
     error: str | None = None
+    warnings: tuple[RenderWarning, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -105,6 +107,12 @@ class Preview:
     detail: ChangeSetDetail
     draft: Draft
     groups: tuple[GroupDiff, ...] = field(default=())
+
+    @property
+    def warnings(self) -> tuple[RenderWarning, ...]:
+        """Renderer warnings of every group, without duplicates, in a stable order."""
+        seen = {w for g in self.groups for w in g.warnings}
+        return tuple(sorted(seen, key=lambda w: (w.path, w.code, w.message)))
 
 
 def require_role(principal: Principal, minimum: Role) -> None:
@@ -161,7 +169,8 @@ def render_diffs(before: Snapshot, after: Snapshot) -> tuple[GroupDiff, ...]:
     old_groups = {g.id for g in before.se_groups}
     for group in sorted(after.se_groups, key=lambda g: g.name):
         try:
-            new_files: Mapping[str, str] = render_haproxy(after, group.id).files
+            rendered = render_haproxy(after, group.id)
+            new_files: Mapping[str, str] = rendered.files
             old: RenderResult | None = (
                 render_haproxy(before, group.id) if group.id in old_groups else None
             )
@@ -174,7 +183,7 @@ def render_diffs(before: Snapshot, after: Snapshot) -> tuple[GroupDiff, ...]:
             for path in sorted(set(old_files) | set(new_files))
             if (d := _line_diff(path, old_files.get(path), new_files.get(path)))
         ]
-        out.append(GroupDiff(group.id, group.name, tuple(files)))
+        out.append(GroupDiff(group.id, group.name, tuple(files), warnings=rendered.notices))
     return tuple(out)
 
 
@@ -202,11 +211,20 @@ class ChangeSetService:
         *,
         states: set[ChangeSetState] | None = None,
         limit: int = 50,
+        before: UUID | None = None,
     ) -> list[store.ChangeSetRecord]:
-        """List change sets, newest first."""
+        """List change sets, newest first (``before`` is the id to continue after)."""
         _require_tenant(principal, tenant_id)
         async with tenant_session(self._db.app, [tenant_id]) as session:
-            return await store.list_change_sets(session, states=states, limit=limit)
+            return await store.list_change_sets(session, states=states, limit=limit, before=before)
+
+    async def op_counts(
+        self, principal: Principal, tenant_id: UUID, change_set_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        """Return the number of operations in each of the given change sets."""
+        _require_tenant(principal, tenant_id)
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            return await store.count_ops(session, change_set_ids)
 
     async def preview(self, principal: Principal, tenant_id: UUID, change_set_id: UUID) -> Preview:
         """Apply the change set in memory and render the result.
@@ -534,12 +552,12 @@ class ChangeSetService:
     # -- revisions ---------------------------------------------------------------------------------
 
     async def revisions(
-        self, principal: Principal, tenant_id: UUID, *, limit: int = 50
+        self, principal: Principal, tenant_id: UUID, *, limit: int = 50, before: int | None = None
     ) -> list[store.RevisionRecord]:
-        """List a tenant's revisions, newest first."""
+        """List a tenant's revisions, newest first (``before`` is the number to continue after)."""
         _require_tenant(principal, tenant_id)
         async with tenant_session(self._db.app, [tenant_id]) as session:
-            return await store.list_revisions(session, tenant_id, limit=limit)
+            return await store.list_revisions(session, tenant_id, limit=limit, before=before)
 
     async def revision(
         self, principal: Principal, tenant_id: UUID, number: int

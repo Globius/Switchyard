@@ -87,6 +87,28 @@ def _errors(problems: Any) -> list[dict[str, str]]:
 
 Handler = Callable[[Request, Any], Awaitable[JSONResponse]]
 
+#: ``kind`` values of the discriminated unions (policy sets, routing profiles). Pydantic puts the
+#: tag in the error location; it is not a field, so it is dropped from ``errors[].path``.
+UNION_TAGS = frozenset({"redirect", "allow_list", "vrrp", "bgp"})
+
+
+def strip_union_tag(loc: tuple[Any, ...]) -> str:
+    """Turn a Pydantic error location into the dotted ``errors[].path`` of the API.
+
+    The leading ``body``/``query``/``path`` part is dropped, and so is the discriminator tag that a
+    union adds right after ``body``.
+
+    Example:
+        >>> strip_union_tag(("body", "vrrp", "vrid"))
+        'vrid'
+        >>> strip_union_tag(("query", "limit"))
+        'limit'
+    """
+    parts = list(loc[1:])
+    if loc and loc[0] == "body" and len(parts) > 1 and parts[0] in UNION_TAGS:
+        parts = parts[1:]
+    return ".".join(str(p) for p in parts) or str(loc[0])
+
 
 def install_handlers(app: FastAPI) -> None:
     """Register exception handlers that produce problem+json."""
@@ -126,7 +148,7 @@ def install_handlers(app: FastAPI) -> None:
             raise exc
         errors = [
             {
-                "path": ".".join(str(p) for p in err["loc"][1:]) or str(err["loc"][0]),
+                "path": strip_union_tag(tuple(err["loc"])),
                 "code": str(err["type"]),
                 "message": str(err["msg"]),
             }
