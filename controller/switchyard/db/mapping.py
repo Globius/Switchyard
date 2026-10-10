@@ -30,7 +30,12 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
     for t in snapshot.tenants:
         rows.append(
             m.TenantRow(
-                id=t.id, version=t.version, name=t.name, oidc_group=t.oidc_group, quotas=t.quotas
+                id=t.id,
+                version=t.version,
+                name=t.name,
+                oidc_group=t.oidc_group,
+                quotas=t.quotas,
+                require_approval=t.require_approval,
             )
         )
     for n in snapshot.networks:
@@ -68,6 +73,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 name=g.name,
                 ha_mode=g.ha_mode.value,
                 maxconn=g.maxconn,
+                canary_seconds=g.canary_seconds,
             )
         )
     for hm in snapshot.health_monitors:
@@ -270,6 +276,7 @@ def rows_to_snapshot(
                 "name": t.name,
                 "oidc_group": t.oidc_group,
                 "quotas": t.quotas,
+                "require_approval": t.require_approval,
             }
             for t in tenants
         ],
@@ -307,6 +314,7 @@ def rows_to_snapshot(
                 "name": g.name,
                 "ha_mode": g.ha_mode,
                 "maxconn": g.maxconn,
+                "canary_seconds": g.canary_seconds,
                 "networks": [
                     {"network_id": gn.network_id, "role": gn.role}
                     for gn in group_networks.get(g.id, [])

@@ -130,6 +130,7 @@ class Tenant(Entity):
     name: Name
     oidc_group: str | None = Field(default=None, max_length=255)
     quotas: dict[str, int] = Field(default_factory=dict)
+    require_approval: bool = False
 
 
 class Network(TenantOwned):
@@ -197,11 +198,14 @@ class SeGroup(TenantOwned):
         ha_mode: How VIPs are placed (BGP or VRRP).
         networks: Attached networks; VIPs must live in a ``vip`` network.
         maxconn: HAProxy global ``maxconn``.
+        canary_seconds: How long the canary SE is watched after a push before the rest of the
+            group is updated (0 skips the wait).
     """
 
     ha_mode: HaMode
     networks: tuple[SeGroupNetwork, ...] = Field(min_length=1)
     maxconn: int = Field(default=20_000, ge=1, le=10_000_000)
+    canary_seconds: int = Field(default=30, ge=0, le=600)
 
 
 class RedirectAction(Model):

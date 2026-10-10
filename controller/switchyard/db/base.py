@@ -1,8 +1,17 @@
 """Declarative base, constraint naming convention and shared column helpers."""
 
+import enum
 import uuid
 
-from sqlalchemy import ForeignKeyConstraint, Integer, MetaData, Text, UniqueConstraint, text
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKeyConstraint,
+    Integer,
+    MetaData,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -39,6 +48,12 @@ class TenantOwnedMixin(EntityMixin):
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+def enum_check(column: str, values: type[enum.StrEnum]) -> CheckConstraint:
+    """``CHECK (column IN (...))`` for a string enumeration (ADR 0005: enums are text)."""
+    allowed = ", ".join(f"'{m.value}'" for m in values)
+    return CheckConstraint(f"{column} IN ({allowed})", name=column)
 
 
 def tenant_unique() -> tuple[UniqueConstraint, UniqueConstraint]:

@@ -86,7 +86,8 @@ async def test_every_tenant_scoped_table_has_forced_rls_and_a_policy(
                 )
             ).all()
         }
-    assert with_tenant_id == set(SCOPED_TABLES) == set(m.TENANT_SCOPED_TABLES)
+    assert with_tenant_id == set(m.TENANT_SCOPED_TABLES)
+    assert set(SCOPED_TABLES) <= with_tenant_id
     for name in [*with_tenant_id, "tenant"]:
         enabled, forced, policies = rls[name]
         assert enabled, f"{name}: RLS not enabled"

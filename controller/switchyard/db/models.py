@@ -13,7 +13,6 @@ The RLS policies themselves are created in the migration; see
 ``switchyard/db/migrations/versions/0001_initial.py``.
 """
 
-import enum
 import uuid
 from datetime import datetime
 from typing import Any
@@ -31,19 +30,16 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, CIDR, INET, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from switchyard.db import ops_models  # noqa: F401  (registers the M2 tables on the metadata)
 from switchyard.db.base import (
     Base,
     EntityMixin,
     TenantOwnedMixin,
+    enum_check,
     tenant_fk,
     tenant_unique,
 )
 from switchyard.domain import models as dm
-
-
-def _check(column: str, values: type[enum.StrEnum]) -> CheckConstraint:
-    allowed = ", ".join(f"'{m.value}'" for m in values)
-    return CheckConstraint(f"{column} IN ({allowed})", name=column)
 
 
 class TenantRow(EntityMixin, Base):
@@ -56,6 +52,9 @@ class TenantRow(EntityMixin, Base):
     oidc_group: Mapped[str | None] = mapped_column(Text)
     quotas: Mapped[dict[str, int]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    require_approval: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
     )
 
 
@@ -99,12 +98,13 @@ class SeGroupRow(TenantOwnedMixin, Base):
     __table_args__ = (
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
-        _check("ha_mode", dm.HaMode),
+        enum_check("ha_mode", dm.HaMode),
         CheckConstraint("version >= 1", name="version"),
     )
 
     ha_mode: Mapped[str] = mapped_column(Text, nullable=False)
     maxconn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20000"))
+    canary_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("30"))
 
 
 class SeGroupNetworkRow(Base):
@@ -116,7 +116,7 @@ class SeGroupNetworkRow(Base):
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         tenant_fk("se_group_id", "se_group", cascade=True),
         tenant_fk("network_id", "network"),
-        _check("role", dm.NetworkRole),
+        enum_check("role", dm.NetworkRole),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -133,7 +133,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
     __table_args__ = (
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
-        _check("type", dm.MonitorType),
+        enum_check("type", dm.MonitorType),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -153,8 +153,8 @@ class CertificateRow(TenantOwnedMixin, Base):
     __table_args__ = (
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
-        _check("source", dm.CertSource),
-        _check("renew_policy", dm.RenewPolicy),
+        enum_check("source", dm.CertSource),
+        enum_check("renew_policy", dm.RenewPolicy),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -196,7 +196,7 @@ class PoolRow(TenantOwnedMixin, Base):
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         tenant_fk("health_monitor_id", "health_monitor"),
-        _check("algorithm", dm.Algorithm),
+        enum_check("algorithm", dm.Algorithm),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -215,7 +215,7 @@ class PoolMemberRow(Base):
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         tenant_fk("pool_id", "pool", cascade=True),
         UniqueConstraint("pool_id", "position"),
-        _check("admin_state", dm.AdminState),
+        enum_check("admin_state", dm.AdminState),
         CheckConstraint("weight BETWEEN 0 AND 256", name="weight"),
     )
 
@@ -241,7 +241,7 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
         tenant_fk("vip_pool_id", "vip_pool"),
         tenant_fk("default_pool_id", "pool"),
         tenant_fk("allow_list_id", "policy_set"),
-        _check("protocol", dm.Protocol),
+        enum_check("protocol", dm.Protocol),
         CheckConstraint("version >= 1", name="version"),
     )
 

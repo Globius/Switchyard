@@ -7,7 +7,7 @@ Failures are injected with :meth:`FakeHaproxy.fail_next`.
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Literal
 
 from switchyard.adapters.haproxy import (
@@ -58,6 +58,8 @@ class FakeHaproxy:
         self._failures: list[Failure] = []
         self._status_overrides: dict[tuple[str, str], str] = {}
         self.closed = False
+        #: Called after every successful push; lets a test degrade the engine or touch other state.
+        self.on_push: Callable[[FakeHaproxy], Awaitable[None]] | None = None
 
     @property
     def name(self) -> str:
@@ -110,6 +112,8 @@ class FakeHaproxy:
         self._status_overrides.clear()
         fingerprint = fingerprint_of(self.files[CONFIG_PATH])
         self.pushes.append(fingerprint)
+        if self.on_push is not None:
+            await self.on_push(self)
         return PushResult(
             version=self.version, fingerprint=fingerprint, reload_id=f"r{self.version}"
         )

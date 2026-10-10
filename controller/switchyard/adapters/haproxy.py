@@ -79,9 +79,14 @@ class ServerStatus:
     status: str
 
     @property
-    def is_up(self) -> bool:
-        """True for ``UP`` and for states that still serve traffic (``UP 1/3``, ``NOLB`` is not)."""
-        return self.status.upper().startswith("UP")
+    def serving(self) -> bool:
+        """True if the server takes traffic: ``UP`` (also ``UP 1/3``) or ``no check``.
+
+        A server without a health check reports ``no check`` and is always in rotation. ``DOWN``,
+        ``MAINT``, ``DRAIN`` and ``NOLB`` are not serving new connections.
+        """
+        status = self.status.upper()
+        return status.startswith("UP") or status == "NO CHECK"
 
 
 class HaproxyEngine(Protocol):
