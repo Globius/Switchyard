@@ -9,7 +9,10 @@
 import type { components } from "@/api/schema";
 
 export type Role = components["schemas"]["Role"];
-type Caller = Pick<components["schemas"]["Me"], "is_system" | "tenants">;
+type Caller = {
+  is_system: boolean;
+  tenants: { id: string; role: Role }[];
+};
 
 /** Roles weakest to strongest. They nest: each does everything the weaker ones do. */
 export const ROLE_ORDER: readonly Role[] = ["viewer", "operator", "tenant-admin", "system-admin"];
