@@ -181,7 +181,7 @@ class TestPathAndLocation:
 
 
 class TestMisc:
-    @pytest.mark.parametrize("ok", ["a", "web-prod", "a.b_c", "x" * 63])
+    @pytest.mark.parametrize("ok", ["a", "web-prod", "a_b-c", "x" * 63])
     def test_names(self, ok: str) -> None:
         assert v.validate_name(ok) == ok
 

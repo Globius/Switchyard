@@ -14,20 +14,26 @@ cd controller
 uv run syctl db upgrade
 uv run syctl seed --example
 uv run syctl render --tenant demo --se-group edge            # print everything
-uv run syctl render --tenant demo --se-group edge --out out  # write the files
+uv run syctl render --tenant demo --se-group edge --out out  # write the files (out/haproxy/..., out/certs/...)
 ```
 
 ## Files
 
-Paths are relative to `/etc/switchyard/haproxy/` on the SE.
+Paths are relative to `/etc/switchyard/` on the SE, the only directory the agent and the Data Plane
+API write to. (`--out DIR` reproduces that layout under `DIR`.)
 
 | File | Contents | Written when |
 | --- | --- | --- |
-| `haproxy.cfg` | `global`, `defaults`, one `frontend` per enabled service, one `backend` per pool in use | always |
-| `crt-lists/<service>.crtlist` | one line per certificate: PEM path and its SNI filters; the first line is the default certificate | a service has a TLS port |
-| `maps/<service>.host.map` | `host backend` for exact-host routes | a service has an exact host-only route |
-| `maps/<service>.wild.map` | `regex backend` for wildcard-host routes | a service has a wildcard host-only route |
-| `lists/<policy>.cidr` | one network per line, IPv4 first | a service references an allow-list policy set |
+| `haproxy/haproxy.cfg` | `global`, `defaults`, one `frontend` per enabled service, one `backend` per pool in use | always |
+| `certs/<service>.crtlist` | one line per certificate: PEM path and its SNI filters; the first line is the default certificate | a service has a TLS port |
+| `haproxy/maps/<service>-host.map` | `host backend` for exact-host routes | a service has an exact host-only route |
+| `haproxy/maps/<service>-wild.map` | `regex backend` for wildcard-host routes | a service has a wildcard host-only route |
+| `haproxy/lists/<policy>.cidr` | one network per line, IPv4 first | a service references an allow-list policy set |
+
+`haproxy/haproxy.cfg` has a `# switchyard-render: sha256:<hex>` line, a hash of every file. The Data
+Plane API rewrites the config but keeps comments, so the fingerprint is how drift detection knows what
+an SE runs. The crt-list sits beside the certificates because the Data Plane API keeps both in one
+directory; object names have no dots because the API rewrites dots in file names.
 
 Certificates and keys are **not** rendered. A `crt-list` line points to
 `/etc/switchyard/certs/<certificate name>.pem`, which the agent writes from OpenBao.
@@ -42,13 +48,13 @@ with a warning, because they render to IPVS (a later milestone).
 | SE group `name`, `maxconn` | `# SE group:` comment, `global maxconn` |
 | Service `name` (http, tcp) | `frontend vs_<name>`, `mode http` or `mode tcp`, `option httplog` / `tcplog` |
 | Service `vip` + each port | one `bind <vip>:<port>` per port, sorted by port. IPv6 uses `bind ipv6@<addr>:<port>` |
-| Port `tls` | `ssl crt-list <dir>/crt-lists/<name>.crtlist` on that bind |
+| Port `tls` | `ssl crt-list /etc/switchyard/certs/<name>.crtlist` on that bind |
 | Port `http2` | `alpn h2,http/1.1` (otherwise `alpn http/1.1` on an HTTP TLS port) |
 | Port `proxy_protocol` | `accept-proxy` |
 | Port `https_redirect_port` | `http-request redirect prefix "https://%[var(txn.host)][:port]" code 301 if { dst_port <port> }` |
 | Service `default_pool_id` | `default_backend pool_<name>` |
-| Route `host` (exact) | line in `maps/<name>.host.map`; routed by `use_backend %[...map(...)]` |
-| Route `host` (`*.example.test`) | line in `maps/<name>.wild.map` with an anchored one-label regex; routed with `map_reg` |
+| Route `host` (exact) | line in `haproxy/maps/<name>-host.map`; routed by `use_backend %[...map(...)]` |
+| Route `host` (`*.example.test`) | line in `haproxy/maps/<name>-wild.map` with an anchored one-label regex; routed with `map_reg` |
 | Route with `path_prefix` / `path_exact` | `use_backend pool_<n> if { var(txn.host) -m str <host> } { path_beg <path> }` (host condition only when set) |
 | Route `redirect` and policy-set redirect rule | `http-request redirect location <target> code <n> if <conditions>` |
 | Service `allow_list_id` + `enforce_allow_list` | `tcp-request session reject if !{ src -f <dir>/lists/<name>.cidr }` |
@@ -103,7 +109,7 @@ The demo tenant (`controller/switchyard/examples/demo.yaml`) renders, for its HT
 frontend vs_web
     mode http
     bind 192.0.2.20:80
-    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/haproxy/crt-lists/web.crtlist alpn h2,http/1.1
+    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/certs/web.crtlist alpn h2,http/1.1
     option httplog
     option forwardfor
     http-request del-header X-Forwarded-For
@@ -113,7 +119,7 @@ frontend vs_web
     http-request redirect prefix "https://%[var(txn.host)]" code 301 if { dst_port 80 }
     http-request redirect location /remote.php/dav/ code 301 if { path_beg /.well-known/carddav }
     http-request redirect location /remote.php/dav/ code 301 if { path_beg /.well-known/caldav }
-    use_backend %[var(txn.host),map(/etc/switchyard/haproxy/maps/web.host.map)] if { var(txn.host),map(/etc/switchyard/haproxy/maps/web.host.map) -m found }
+    use_backend %[var(txn.host),map(/etc/switchyard/haproxy/maps/web-host.map)] if { var(txn.host),map(/etc/switchyard/haproxy/maps/web-host.map) -m found }
 
 backend pool_files
     mode http
@@ -128,7 +134,7 @@ backend pool_files
     server 10-20-0-21-11000 10.20.0.21:11000 check weight 100
 ```
 
-with `maps/web.host.map`:
+with `haproxy/maps/web-host.map`:
 
 ```text
 app.demo.example.test pool_app

@@ -17,7 +17,7 @@ from switchyard.render.haproxy import render_haproxy
 from tests.factories import base_data
 
 GROUP = uuid.UUID(symbolic_uuid("seg-1"))
-CRT = "/etc/switchyard/haproxy/crt-lists/web.crtlist"
+CRT = "/etc/switchyard/certs/web.crtlist"
 
 
 def render(data: dict[str, Any]) -> dict[str, str]:
@@ -25,7 +25,7 @@ def render(data: dict[str, Any]) -> dict[str, str]:
 
 
 def cfg(data: dict[str, Any]) -> str:
-    return render(data)["haproxy.cfg"]
+    return render(data)["haproxy/haproxy.cfg"]
 
 
 def lines(text: str) -> list[str]:
@@ -111,7 +111,7 @@ def test_each_route_host_appears_in_exactly_one_map(hosts: list[tuple[str, bool]
     data = with_routes(routes)
     data["certificates"][0]["sans"] = sorted({r["match"]["host"] for r in routes})
     files = render(data)
-    maps = {k: v for k, v in files.items() if k.startswith("maps/")}
+    maps = {k: v for k, v in files.items() if k.startswith("haproxy/maps/")}
     for label, wild in hosts:
         needle = f"^[^.]+[.]{label}[.]example[.]test$" if wild else f"{label}.example.test"
         found = [
@@ -135,8 +135,8 @@ class TestRouting:
             line for line in lines(cfg(data)) if line.startswith(("use_backend", "default_backend"))
         ]
         assert [r.split()[1] for r in rules] == [
-            "%[var(txn.host),map(/etc/switchyard/haproxy/maps/web.host.map)]",
-            "%[var(txn.host),map_reg(/etc/switchyard/haproxy/maps/web.wild.map)]",
+            "%[var(txn.host),map(/etc/switchyard/haproxy/maps/web-host.map)]",
+            "%[var(txn.host),map_reg(/etc/switchyard/haproxy/maps/web-wild.map)]",
             "pool_web",
         ]
 
@@ -175,8 +175,11 @@ class TestRouting:
             ]
         )
         files = render(data)
-        assert files["maps/web.host.map"] == "a.example.test pool_web\nb.example.test pool_web\n"
-        assert "maps/web.wild.map" not in files
+        assert (
+            files["haproxy/maps/web-host.map"]
+            == "a.example.test pool_web\nb.example.test pool_web\n"
+        )
+        assert "haproxy/maps/web-wild.map" not in files
 
 
 class TestRedirects:
@@ -281,7 +284,10 @@ class TestClientAddress:
     def test_allow_list_file_is_sorted_and_deduplicated_by_family(self) -> None:
         data = self.data()
         data["policy_sets"][0]["cidrs"] = ["2001:db8::/32", "203.0.113.0/24", "198.51.100.0/24"]
-        assert render(data)["lists/cf.cidr"] == "198.51.100.0/24\n203.0.113.0/24\n2001:db8::/32\n"
+        assert (
+            render(data)["haproxy/lists/cf.cidr"]
+            == "198.51.100.0/24\n203.0.113.0/24\n2001:db8::/32\n"
+        )
 
     def test_only_http_frontends_add_forwarded_for(self) -> None:
         assert "option forwardfor" in cfg(base_data())
@@ -409,8 +415,8 @@ class TestSelection:
         assert result.warnings == (
             "virtual service wg: udp is rendered by the keepalived renderer, not haproxy.cfg",
         )
-        assert "vs_wg" not in result.files["haproxy.cfg"]
-        assert "pool_wg" not in result.files["haproxy.cfg"]
+        assert "vs_wg" not in result.files["haproxy/haproxy.cfg"]
+        assert "pool_wg" not in result.files["haproxy/haproxy.cfg"]
 
     def test_other_se_groups_do_not_leak_in(self) -> None:
         data = base_data()
@@ -483,7 +489,7 @@ class TestTls:
             {"match": {"host": "b.other.test"}, "pool_id": "pool-web"},
             {"match": {"host": "app.example.test"}, "pool_id": "pool-web"},
         ]
-        assert render(data)["crt-lists/web.crtlist"] == (
+        assert render(data)["certs/web.crtlist"] == (
             "/etc/switchyard/certs/second.pem b.other.test z.other.test\n"
             "/etc/switchyard/certs/wild-example-test.pem *.example.test example.test\n"
         )
@@ -658,10 +664,42 @@ class TestInjection:
             "server",
         }
         for path, content in render(golden_like()).items():
-            if path != "haproxy.cfg":
+            if path != "haproxy/haproxy.cfg":
                 continue
             for line in content.splitlines():
                 word = line.strip().split(" ")[0]
                 if not word or word.startswith("#"):
                     continue
                 assert word in known, line
+
+
+class TestFingerprint:
+    def test_fingerprint_is_embedded_and_matches_files(self) -> None:
+        from switchyard.render.haproxy import FINGERPRINT_LINE, fingerprint_of
+
+        result = render_haproxy(snapshot_from_mapping(base_data()), GROUP)
+        cfg_text = result.files["haproxy/haproxy.cfg"]
+        assert fingerprint_of(cfg_text) == result.fingerprint
+        assert len(FINGERPRINT_LINE.findall(cfg_text)) == 1
+
+    def test_fingerprint_changes_when_any_file_changes(self) -> None:
+        first = render_haproxy(snapshot_from_mapping(base_data()), GROUP).fingerprint
+        data = base_data()
+        data["virtual_services"][0]["routes"][0]["match"]["host"] = "other.example.test"
+        assert render_haproxy(snapshot_from_mapping(data), GROUP).fingerprint != first
+
+    def test_fingerprint_survives_data_plane_api_rewrite(self) -> None:
+        from switchyard.render.haproxy import fingerprint_of
+
+        # the Data Plane API keeps comments but adds its own header and re-indents
+        rewritten = (
+            "# _md5hash=1\n# _version=2\n# switchyard-render: sha256:"
+            + "a" * 64
+            + "\n\nglobal\n  maxconn 1\n"
+        )
+        assert fingerprint_of(rewritten) == "a" * 64
+
+    def test_no_fingerprint_in_unmanaged_config(self) -> None:
+        from switchyard.render.haproxy import fingerprint_of
+
+        assert fingerprint_of("global\n  maxconn 1\n") is None

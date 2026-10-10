@@ -20,13 +20,13 @@ def test_example_is_valid_and_uses_uuid7() -> None:
 def test_example_renders_both_service_kinds() -> None:
     snap = example_snapshot()
     result = render_haproxy(snap, snap.se_groups[0].id)
-    cfg = result.files["haproxy.cfg"]
+    cfg = result.files["haproxy/haproxy.cfg"]
     assert "frontend vs_web" in cfg
     assert "frontend vs_k8s-api" in cfg
     assert sorted(result.files) == [
-        "crt-lists/web.crtlist",
-        "haproxy.cfg",
-        "maps/web.host.map",
+        "certs/web.crtlist",
+        "haproxy/haproxy.cfg",
+        "haproxy/maps/web-host.map",
     ]
 
 

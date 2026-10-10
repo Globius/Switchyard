@@ -21,7 +21,7 @@ class RenderError(ValueError):
     """Raised when a value cannot be rendered safely or the snapshot cannot be rendered."""
 
 
-_IDENT = re.compile(r"[a-z0-9]([a-z0-9._-]*[a-z0-9])?")
+_IDENT = re.compile(r"[a-z0-9]([a-z0-9_-]*[a-z0-9])?")
 _ARG = re.compile(r"[A-Za-z0-9._~/%:@+,;=*-]+")
 _LOCATION = re.compile(r"[A-Za-z0-9._~/%:@+,;=?&*-]+")
 _HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
@@ -32,8 +32,8 @@ def ident(value: str) -> str:
     """Return ``value`` if it is a safe section/file name, else raise.
 
     Example:
-        >>> ident("web-prod.1")
-        'web-prod.1'
+        >>> ident("web-prod_1")
+        'web-prod_1'
         >>> ident("a b")
         Traceback (most recent call last):
             ...

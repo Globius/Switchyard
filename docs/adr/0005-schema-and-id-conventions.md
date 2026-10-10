@@ -15,7 +15,10 @@ The first migration sets patterns that every later table copies. The backend des
   names; `syctl seed` replaces them with UUIDv7 (`domain/loader.py: reassign_ids`).
 - **Every object table has `id`, `version` (default 1, `CHECK >= 1`)**. The `tenant` table has the
   same columns.
-- **Names are unique per tenant** with `UNIQUE (tenant_id, name)` on each tenant-owned table.
+- **Names are unique per tenant** with `UNIQUE (tenant_id, name)` on each tenant-owned table. They
+  use `a-z`, `0-9`, `-` and `_` only (no dots), because names become section and file names, and the
+  HAProxy Data Plane API rewrites dots in uploaded file names (`web.host.map` is stored as
+  `web_host.map`).
 - **Cross-object references are composite**: `FOREIGN KEY (tenant_id, x_id) REFERENCES x (tenant_id,
   id)`, backed by `UNIQUE (tenant_id, id)`. A reference cannot cross tenants (ADR 0002). Child
   tables (`vs_port`, `vs_route`, `pool_member`, ...) copy `tenant_id`, cascade on delete from their

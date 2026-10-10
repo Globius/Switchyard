@@ -5,18 +5,24 @@ always yields byte-identical files. Everything is sorted (frontends by service n
 pool name, servers by server name, map and list lines by key) and nothing reads the clock, the
 environment or the network.
 
-Files produced (paths are relative to ``/etc/switchyard/haproxy/`` on the SE):
+Files produced (paths are relative to ``/etc/switchyard/`` on the SE, the only directory the agent
+and the Data Plane API write to):
 
-=========================== ===========================================================
-``haproxy.cfg``             global, defaults, one frontend per service, one backend per pool
-``crt-lists/<vs>.crtlist``  certificates and their SNI filters for a service's TLS ports
-``maps/<vs>.host.map``      exact host -> backend, for host-only routes
-``maps/<vs>.wild.map``      ``*.`` wildcard host regex -> backend, for host-only routes
-``lists/<policy>.cidr``     source networks of an allow-list policy set
-=========================== ===========================================================
+=============================== ===================================================================
+``haproxy/haproxy.cfg``         global, defaults, one frontend per service, one backend per pool
+``certs/<vs>.crtlist``          certificates and their SNI filters for a service's TLS ports
+``haproxy/maps/<vs>-host.map``  exact host -> backend, for host-only routes
+``haproxy/maps/<vs>-wild.map``  ``*.`` wildcard host regex -> backend, for host-only routes
+``haproxy/lists/<policy>.cidr`` source networks of an allow-list policy set
+=============================== ===================================================================
 
 Certificate and key material is *not* rendered: ``crt-list`` entries point at
 ``/etc/switchyard/certs/<certificate-name>.pem``, which the agent writes from OpenBao.
+
+``haproxy/haproxy.cfg`` carries ``# switchyard-render: sha256:<hex>``, a hash of every file. Drift
+detection compares it with what an SE reports. The crt-list lives beside the certificates because
+the Data Plane API stores both in one directory, and object names contain no dots because the API
+rewrites dots in file names.
 
 Request handling order inside an HTTP frontend, which the output makes explicit:
 
@@ -28,6 +34,7 @@ Request handling order inside an HTTP frontend, which the output makes explicit:
 """
 
 import hashlib
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -40,7 +47,9 @@ from switchyard.domain.snapshot import Snapshot, ensure_valid
 from switchyard.render import escape as esc
 from switchyard.render.escape import RenderError
 
+ROOT_DIR = "/etc/switchyard"
 BASE_DIR = "/etc/switchyard/haproxy"
+CONFIG_PATH = "haproxy/haproxy.cfg"
 CERT_DIR = "/etc/switchyard/certs"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 
@@ -72,13 +81,15 @@ class RenderResult:
     @property
     def content_hash(self) -> str:
         """SHA-256 over sorted ``(path, content)`` pairs; equal hashes mean equal bytes."""
-        digest = hashlib.sha256()
-        for path in sorted(self.files):
-            digest.update(path.encode())
-            digest.update(b"\0")
-            digest.update(self.files[path].encode())
-            digest.update(b"\0")
-        return digest.hexdigest()
+        return _digest(self.files)
+
+    @property
+    def fingerprint(self) -> str:
+        """The fingerprint embedded in ``haproxy.cfg`` (what an SE reports it is running)."""
+        value = fingerprint_of(self.files[CONFIG_PATH])
+        if value is None:  # pragma: no cover - render always embeds it
+            raise RenderError("rendered haproxy.cfg has no fingerprint")
+        return value
 
 
 def render_haproxy(snapshot: Snapshot, se_group_id: UUID) -> RenderResult:
@@ -114,8 +125,8 @@ def render_haproxy(snapshot: Snapshot, se_group_id: UUID) -> RenderResult:
         ... })
         >>> result = render_haproxy(snap, UUID(symbolic_uuid("g")))
         >>> list(result.files)
-        ['haproxy.cfg']
-        >>> "    bind 192.0.2.10:6443" in result.files["haproxy.cfg"]
+        ['haproxy/haproxy.cfg']
+        >>> "    bind 192.0.2.10:6443" in result.files["haproxy/haproxy.cfg"]
         True
     """
     try:
@@ -124,6 +135,37 @@ def render_haproxy(snapshot: Snapshot, se_group_id: UUID) -> RenderResult:
         raise RenderError(f"unknown SE group {se_group_id}") from None
     ensure_valid(view)
     return _Renderer(view).render()
+
+
+_PLACEHOLDER = "0" * 64
+FINGERPRINT_LINE = re.compile(r"^# switchyard-render: sha256:([0-9a-f]{64})$", re.MULTILINE)
+
+
+def _digest(files: Mapping[str, str]) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(files):
+        digest.update(path.encode())
+        digest.update(b"\0")
+        digest.update(files[path].encode())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def fingerprint_of(config: str) -> str | None:
+    r"""Return the render fingerprint embedded in a ``haproxy.cfg``, or ``None`` if absent.
+
+    The fingerprint survives a round trip through the Data Plane API (which rewrites the file but
+    keeps comments), so it identifies what an SE is running without comparing raw bytes.
+
+    Example:
+        >>> line = "# switchyard-render: sha256:" + "ab" * 32
+        >>> fingerprint_of("# header\n" + line + "\nglobal\n") == "ab" * 32
+        True
+        >>> fingerprint_of("global") is None
+        True
+    """
+    match = FINGERPRINT_LINE.search(config)
+    return match.group(1) if match else None
 
 
 def _need[T](value: T | None, what: str) -> T:
@@ -200,12 +242,21 @@ class _Renderer:
             frontends.append(self._frontend(svc, mode))
         backends = [self._backend(self.pools[pid], mode) for pid, mode in self.pool_modes.items()]
         backends.sort(key=lambda b: b["name"])
-        self.files["haproxy.cfg"] = _ENV.get_template("haproxy.cfg.j2").render(
-            group=esc.ident(self.group.name),
-            maxconn=self.group.maxconn,
-            frontends=frontends,
-            backends=backends,
-        )
+        template = _ENV.get_template("haproxy.cfg.j2")
+
+        def cfg(fingerprint: str) -> str:
+            return template.render(
+                group=esc.ident(self.group.name),
+                maxconn=self.group.maxconn,
+                frontends=frontends,
+                backends=backends,
+                fingerprint=fingerprint,
+            )
+
+        # The fingerprint covers every file; the config is hashed with a placeholder in its own
+        # fingerprint line, so the line can carry the result without a circular definition.
+        draft = {**self.files, CONFIG_PATH: cfg(_PLACEHOLDER)}
+        self.files[CONFIG_PATH] = cfg(_digest(draft))
         return RenderResult(files=dict(sorted(self.files.items())), warnings=tuple(self.warnings))
 
     # -- helpers ---------------------------------------------------------------------------------
@@ -234,7 +285,7 @@ class _Renderer:
         allow = _allow_list(self.policies[svc.allow_list_id]) if svc.allow_list_id else None
         connection_rules: list[str] = []
         if allow is not None:
-            self.files[f"lists/{esc.ident(allow.name)}.cidr"] = self._allow_list_text(allow)
+            self.files[f"haproxy/lists/{esc.ident(allow.name)}.cidr"] = self._allow_list_text(allow)
             if svc.enforce_allow_list:
                 lst = self._list_path(allow)
                 connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
@@ -259,7 +310,7 @@ class _Renderer:
     def _bind(svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> str:
         parts = [f"bind {esc.bind_address(svc.vip, port.port)}"]
         if port.tls:
-            parts.append(f"ssl crt-list {BASE_DIR}/crt-lists/{name}.crtlist")
+            parts.append(f"ssl crt-list {CERT_DIR}/{name}.crtlist")
             if mode == "http":
                 parts.append("alpn h2,http/1.1" if port.http2 else "alpn http/1.1")
         if port.proxy_protocol:
@@ -272,7 +323,7 @@ class _Renderer:
             cert = self.certs[cid]
             snis = " ".join(esc.arg(san) for san in sorted(cert.sans))
             lines.append(f"{CERT_DIR}/{esc.ident(cert.name)}.pem {snis}")
-        self.files[f"crt-lists/{name}.crtlist"] = "\n".join(lines) + "\n"
+        self.files[f"certs/{name}.crtlist"] = "\n".join(lines) + "\n"
 
     @staticmethod
     def _allow_list_text(policy: dm.AllowListPolicySet) -> str:
@@ -361,11 +412,11 @@ class _Renderer:
             else:
                 exact[esc.hostname(host)] = target
         if exact:
-            self.files[f"maps/{name}.host.map"] = _map_text(exact)
-            rules.append(_map_rule("map", f"{BASE_DIR}/maps/{name}.host.map"))
+            self.files[f"haproxy/maps/{name}-host.map"] = _map_text(exact)
+            rules.append(_map_rule("map", f"{BASE_DIR}/maps/{name}-host.map"))
         if wild:
-            self.files[f"maps/{name}.wild.map"] = _map_text(wild)
-            rules.append(_map_rule("map_reg", f"{BASE_DIR}/maps/{name}.wild.map"))
+            self.files[f"haproxy/maps/{name}-wild.map"] = _map_text(wild)
+            rules.append(_map_rule("map_reg", f"{BASE_DIR}/maps/{name}-wild.map"))
         return rules
 
     # -- backends --------------------------------------------------------------------------------

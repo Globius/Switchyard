@@ -25,9 +25,9 @@ def test_seed_then_render_prints_every_file(pg_url: str, owner_engine: object) -
 
     code, out, err = syctl(pg_url, "render", "--tenant", "demo", "--se-group", "edge")
     assert code == 0, err
-    assert "==> haproxy.cfg <==" in out
-    assert "==> crt-lists/web.crtlist <==" in out
-    assert "==> maps/web.host.map <==" in out
+    assert "==> haproxy/haproxy.cfg <==" in out
+    assert "==> certs/web.crtlist <==" in out
+    assert "==> haproxy/maps/web-host.map <==" in out
     assert "frontend vs_web" in out
     assert re.search(r"content hash [0-9a-f]{64}", err)
 

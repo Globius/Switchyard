@@ -204,7 +204,7 @@ def lab() -> Iterator[docker.DockerClient]:
             run(HAPROXY_IMAGE, ip, ["haproxy", "-f", "/be.cfg"], {"be.cfg": cfg})
         snapshot = snapshot_from_mapping(data())
         rendered = render_haproxy(snapshot, __import__("uuid").UUID(symbolic_uuid("g")))
-        files = {f"etc/switchyard/haproxy/{p}": c for p, c in rendered.files.items()}
+        files = {f"etc/switchyard/{p}": c for p, c in rendered.files.items()}
         run(HAPROXY_IMAGE, EDGE, ["sh", "-c", EDGE_START], files, user="root")
         yield client
     finally:

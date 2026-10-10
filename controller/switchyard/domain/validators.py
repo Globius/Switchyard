@@ -13,7 +13,7 @@ IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 _LABEL = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
-_NAME = re.compile(r"^[a-z0-9]([a-z0-9._-]{0,61}[a-z0-9])?$")
+_NAME = re.compile(r"^[a-z0-9]([a-z0-9_-]{0,61}[a-z0-9])?$")
 # Conservative: nothing HAProxy treats specially (whitespace, quotes, backslash, '#', '$', braces,
 # brackets, parentheses). '%' is allowed only for percent-encoding.
 _PATH = re.compile(r"^/[A-Za-z0-9._~/%:@+,;=-]{0,1023}$")
@@ -25,8 +25,8 @@ _SECRET_REF = re.compile(r"^[a-z0-9][a-z0-9/_.-]{0,254}$")
 def validate_name(value: str) -> str:
     """Validate an object name (unique per tenant, used in config section and file names).
 
-    Lowercase letters, digits, ``-``, ``_`` and ``.``; starts and ends alphanumeric; at most 63
-    characters.
+    Lowercase letters, digits, ``-`` and ``_``; starts and ends alphanumeric; at most 63 characters.
+    No dots: names become file names and the Data Plane API rewrites dots in those.
 
     Example:
         >>> validate_name("web-prod")
@@ -34,10 +34,10 @@ def validate_name(value: str) -> str:
         >>> validate_name("Web Prod")
         Traceback (most recent call last):
             ...
-        ValueError: name must be 1-63 characters: a-z, 0-9, '-', '_' or '.'
+        ValueError: name must be 1-63 characters: a-z, 0-9, '-' or '_'
     """
     if not _NAME.fullmatch(value) and not re.fullmatch(r"[a-z0-9]", value):
-        raise ValueError("name must be 1-63 characters: a-z, 0-9, '-', '_' or '.'")
+        raise ValueError("name must be 1-63 characters: a-z, 0-9, '-' or '_'")
     return value
 
 

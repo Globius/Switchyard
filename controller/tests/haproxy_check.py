@@ -23,7 +23,7 @@ mkdir -p /etc/switchyard/certs /run/haproxy
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
   -keyout /tmp/key.pem -out /tmp/crt.pem -subj /CN=validation -days 1 2>/dev/null
 cat /tmp/crt.pem /tmp/key.pem > /tmp/bundle.pem
-for list in /etc/switchyard/haproxy/crt-lists/*; do
+for list in /etc/switchyard/certs/*.crtlist; do
   [ -e "$list" ] || continue
   while read -r path _; do cp /tmp/bundle.pem "$path"; done < "$list"
 done
@@ -49,7 +49,7 @@ def _tar(files: Mapping[str, str]) -> bytes:
     with tarfile.open(fileobj=buffer, mode="w") as tar:
         for path, content in sorted(files.items()):
             data = content.encode()
-            info = tarfile.TarInfo(f"etc/switchyard/haproxy/{path}")
+            info = tarfile.TarInfo(f"etc/switchyard/{path}")
             info.size = len(data)
             info.mtime = 0
             info.mode = 0o644
