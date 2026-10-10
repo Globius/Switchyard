@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "switchyard/agent/gen/switchyard/agent/v1"
+	"switchyard/agent/internal/ipvs"
 	"switchyard/agent/internal/runner"
 )
 
@@ -30,6 +31,8 @@ type Collector struct {
 	// Health reports the local HAProxy health and whether BGP prefixes are withdrawn.
 	Health func() (healthy, withdrawn bool)
 	Now    func() time.Time
+	// KeepalivedConf is the rendered keepalived.conf; its UDP virtual servers decide whether IPVS is reported.
+	KeepalivedConf string
 }
 
 type bgpSummary struct {
@@ -90,6 +93,13 @@ func (c *Collector) Collect(ctx context.Context) *pb.Status {
 		}
 	}
 	st.Vrrp = VRRP(c.StateDir)
+	if c.Runner != nil && c.KeepalivedConf != "" {
+		if servers, err := ipvs.Collect(ctx, c.Runner, c.KeepalivedConf); err == nil && len(servers) > 0 {
+			st.Ipvs = servers
+			_, aerr := c.Runner.Run(ctx, "systemctl", "is-active", "--quiet", "keepalived")
+			st.KeepalivedRunning = aerr == nil
+		}
+	}
 	if c.Health != nil {
 		st.HaproxyHealthy, st.RoutesWithdrawn = c.Health()
 	}

@@ -164,6 +164,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
     rise: Mapped[int] = mapped_column(Integer, nullable=False)
     fall: Mapped[int] = mapped_column(Integer, nullable=False)
     http: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    udp: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class CertificateRow(TenantOwnedMixin, Base):

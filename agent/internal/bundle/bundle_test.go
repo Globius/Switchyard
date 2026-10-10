@@ -242,3 +242,53 @@ func TestCertsAreManagedOnlyAsFlatPemFilesAndCrtListsAreLeftAlone(t *testing.T) 
 }
 
 func runtimeIsUnix() bool { return filepath.Separator == '/' }
+
+func TestUDPFilesUseTheirOwnUnits(t *testing.T) {
+	a, priv, r := setup(t)
+	r.fail["systemctl is-active --quiet keepalived"] = true // not running yet
+	resp := a.Apply(context.Background(), request(t, priv, "b1", map[string]string{
+		"keepalived/keepalived.conf":  "virtual_server 192.0.2.1 53 {\n}\n",
+		"nftables/switchyard-udp.nft": "table ip sy_udp {}\n",
+		"sysctl/switchyard-udp.conf":  "net.ipv4.ip_forward = 1\n",
+		"frr/vips.json":               "{}\n",
+	}))
+	if !resp.Ok {
+		t.Fatal(resp.Error)
+	}
+	want := []string{
+		"systemctl is-active --quiet keepalived", "systemctl start keepalived",
+		"systemctl reload nftables", "systemctl restart systemd-sysctl",
+	}
+	for _, call := range want {
+		if !contains(r.calls, call) {
+			t.Fatalf("missing %q in %v", call, r.calls)
+		}
+	}
+	if contains(r.calls, "systemctl reload keepalived") {
+		t.Fatalf("a stopped keepalived must be started, not reloaded: %v", r.calls)
+	}
+}
+
+func TestRunningKeepalivedIsReloadedAndStoppedWhenItsFilesGo(t *testing.T) {
+	a, priv, r := setup(t)
+	a.Apply(context.Background(), request(t, priv, "b1", map[string]string{"keepalived/keepalived.conf": "a\n"}))
+	r.calls = nil
+	a.Apply(context.Background(), request(t, priv, "b2", map[string]string{"keepalived/keepalived.conf": "b\n"}))
+	if !contains(r.calls, "systemctl reload keepalived") {
+		t.Fatalf("an active keepalived is reloaded: %v", r.calls)
+	}
+	r.calls = nil
+	resp := a.Apply(context.Background(), request(t, priv, "b3", map[string]string{"frr/frr.conf": "x\n"}))
+	if !resp.Ok || !contains(r.calls, "systemctl stop keepalived") {
+		t.Fatalf("removing the last keepalived file stops it: %v %v", resp, r.calls)
+	}
+}
+
+func contains(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}

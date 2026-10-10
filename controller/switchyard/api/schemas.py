@@ -384,7 +384,7 @@ class DiffProblem(ApiModel):
 class DiffWarning(ApiModel):
     """Something worth knowing about the proposed state; never blocks apply."""
 
-    code: str = Field(description="Stable identifier, for example `udp_not_served`.")
+    code: str = Field(description="Stable identifier of the warning.")
     path: str
     message: str
 
@@ -436,6 +436,18 @@ class RevisionRead(RevisionSummary):
     snapshot: Snapshot
 
 
+class ProtocolRulesRead(ApiModel):
+    """The fields a protocol allows, so a form can disable the rest (ticket T7)."""
+
+    protocol: dm.Protocol
+    service_forbidden: list[str] = Field(description="Virtual service fields that are rejected.")
+    port_forbidden: list[str] = Field(description="Port fields that are rejected.")
+    pool_forbidden: list[str] = Field(description="Pool fields rejected on the service's pools.")
+    algorithms: list[dm.Algorithm]
+    monitor_types: list[dm.MonitorType]
+    member_port_required: bool
+
+
 # -- status ----------------------------------------------------------------------------------------
 
 
@@ -462,6 +474,24 @@ class VrrpInstanceStatus(ApiModel):
     state: str
 
 
+class IpvsRealServerStatus(ApiModel):
+    """One IPVS real server of a UDP virtual service, with its counters."""
+
+    service: str = Field(description="Virtual service name.")
+    vip: str
+    port: int
+    address: str
+    member_port: int
+    state: str = Field(description="`up`, `down` or `drain`.")
+    weight: int
+    active_conns: int
+    inactive_conns: int
+    in_packets: int
+    out_packets: int
+    in_bytes: int
+    out_bytes: int
+
+
 class AgentStatusRead(ApiModel):
     """What the engine's agent reports."""
 
@@ -471,6 +501,9 @@ class AgentStatusRead(ApiModel):
     routes_withdrawn: bool
     bgp: list[BgpSessionStatus]
     vrrp: list[VrrpInstanceStatus]
+    ipvs: list[IpvsRealServerStatus] = Field(
+        default_factory=list, description="UDP real servers; empty without UDP services."
+    )
     file_hashes: dict[str, str]
 
 
@@ -483,7 +516,7 @@ class VirtualServiceState(StrEnum):
 
 
 class VirtualServiceStatusRead(ApiModel):
-    """State of one virtual service; `not_served` is stored but not rendered yet (UDP, until M6)."""
+    """State of one virtual service; `not_served` is reserved for one no engine can render."""
 
     id: UUID
     name: str

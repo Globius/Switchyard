@@ -39,6 +39,21 @@ var Units = map[string]string{
 	"keepalived": "keepalived",
 	"coraza":     "coraza-spoa",
 	"certs":      "haproxy",
+	"nftables":   "nftables",
+	"sysctl":     "systemd-sysctl",
+}
+
+// verbs overrides the systemctl verb for units that cannot reload (default "reload"). The
+// sysctl directory is applied by restarting systemd-sysctl, which re-reads the settings.
+var verbs = map[string]string{
+	"systemd-sysctl": "restart",
+}
+
+func verb(unit string) string {
+	if v, ok := verbs[unit]; ok {
+		return v
+	}
+	return "reload"
 }
 
 // suffixOnly restricts a managed directory to files with one suffix. The Data Plane API keeps its
@@ -90,6 +105,34 @@ func ValidatePath(p string) error {
 		return fmt.Errorf("path %q is not a file the agent manages in %s/", p, prefix)
 	}
 	return nil
+}
+
+// hasFiles reports whether target holds any file of the unit's managed directory.
+func hasFiles(unit string, target map[string][]byte) bool {
+	for p := range target {
+		if Units[strings.SplitN(p, "/", 2)[0]] == unit {
+			return true
+		}
+	}
+	return false
+}
+
+// activate makes a unit pick up its files, which are now those of target: it reloads the unit (or
+// restarts it, for units that cannot reload). Keepalived is the exception because it only runs
+// when it has something to do: it is started when its files appear and stopped when they are gone.
+func (a *Applier) activate(ctx context.Context, unit string, target map[string][]byte) error {
+	if unit == "keepalived" {
+		if !hasFiles(unit, target) {
+			_, err := a.Runner.Run(ctx, "systemctl", "stop", unit)
+			return err
+		}
+		if _, err := a.Runner.Run(ctx, "systemctl", "is-active", "--quiet", unit); err != nil {
+			_, err = a.Runner.Run(ctx, "systemctl", "start", unit)
+			return err
+		}
+	}
+	_, err := a.Runner.Run(ctx, "systemctl", verb(unit), unit)
+	return err
 }
 
 func relTo(root, p string) string {
@@ -252,11 +295,11 @@ func (a *Applier) Apply(ctx context.Context, req *pb.ApplyBundleRequest) *pb.App
 
 	resp := &pb.ApplyBundleResponse{Ok: true, ChangedFiles: changed}
 	for _, unit := range unitList {
-		if _, err := a.Runner.Run(ctx, "systemctl", "reload", unit); err != nil {
+		if err := a.activate(ctx, unit, want); err != nil {
 			// Put the previous files back and reload again so running daemons match the disk.
 			_ = set(have, want)
 			for _, u := range unitList {
-				_, _ = a.Runner.Run(ctx, "systemctl", "reload", u)
+				_ = a.activate(ctx, u, have)
 			}
 			return &pb.ApplyBundleResponse{
 				Ok:               false,

@@ -124,9 +124,9 @@ class TestVirtualService:
             vs(restore_client_ip_header="CF-Connecting-IP")
         assert vs(allow_list_id=T, restore_client_ip_header="CF-Connecting-IP").allow_list_id == T
 
-    def test_udp_cannot_terminate_tls(self) -> None:
-        with pytest.raises(ValidationError, match="udp"):
-            vs(protocol="udp", ports=[{"port": 51820, "tls": True}], certificate_ids=[T])
+    def test_udp_needs_a_default_pool(self) -> None:
+        with pytest.raises(ValidationError, match="default_pool_id"):
+            vs(protocol="udp", ports=[{"port": 51820}], default_pool_id=None)
 
 
 class TestPort:

@@ -41,8 +41,15 @@ Policy sets and routing profiles are unions on `kind`:
 
 `GET /tenants/{t}/change-sets/{cs}/diff` returns `objects`, `problems` (rules the new state breaks; they
 block apply), `warnings` (`{code, path, message}`; they never block) and `se_groups` with the changed
-files. Warning codes: `udp_not_served` (a UDP virtual service is stored but no engine serves it yet).
+files. There are no warning codes in use today (`udp_not_served` ended with M6, when IPVS began serving UDP).
 
 `GET /tenants/{t}/status/virtual-services` returns `{id, name, protocol, state}` per service. `state` is
-`serving`, `disabled` or `not_served`; a UDP service is `not_served` (not `down`) until its engine
-renders it (M6, ADR 0013).
+`serving`, `disabled` or `not_served` (reserved for a service no engine can render). UDP services are
+`serving` since M6 (ADR 0013, ADR 0020); their real servers appear in the engine status `members`
+(`backend` `pool_<name>`, `status` `UP`, `DOWN` or `DRAIN`) and, with counters, in `agent.ipvs`.
+
+`GET /schema/virtual-service?protocol=http|tcp|udp` returns the fields the protocol rejects on the
+service (`service_forbidden`), on its ports (`port_forbidden`) and on its pools (`pool_forbidden`), the
+allowed pool algorithms and monitor types, and whether pool members need a port. A form can disable
+fields from it; the validator reads the same table and reports each rejected field on its own
+`errors[].path`.

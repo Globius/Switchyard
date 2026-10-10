@@ -57,6 +57,7 @@ from switchyard.api.schemas import (
     OpenIn,
     OpsIn,
     Page,
+    ProtocolRulesRead,
     ReasonIn,
     RevisionRead,
     RevisionSummary,
@@ -77,7 +78,8 @@ from switchyard.domain.changes import (
     DraftStatus,
     ObjectType,
 )
-from switchyard.domain.models import CertSource
+from switchyard.domain.field_rules import protocol_rules
+from switchyard.domain.models import CertSource, Protocol
 from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
@@ -640,6 +642,26 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     )
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @router.get(
+        "/schema/virtual-service",
+        tags=["meta"],
+        summary="Field rules of a virtual service protocol",
+        response_model=ProtocolRulesRead,
+        responses=_ok(ex.PROTOCOL_RULES),
+    )
+    async def protocol_field_rules(who: Who, protocol: Protocol) -> dict[str, Any]:
+        """Which service, port and pool fields `protocol` allows (same table as the validator)."""
+        rules = protocol_rules(protocol)
+        return {
+            "protocol": rules.protocol,
+            "service_forbidden": list(rules.service_forbidden),
+            "port_forbidden": list(rules.port_forbidden),
+            "pool_forbidden": list(rules.pool_forbidden),
+            "algorithms": list(rules.algorithms),
+            "monitor_types": list(rules.monitor_types),
+            "member_port_required": rules.member_port_required,
+        }
 
     # login
     def callback_url(request: Request, provider: str) -> str:
@@ -1450,7 +1472,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     async def virtual_service_status(
         tenant: Tenant, who: Who, svc: Services
     ) -> list[dict[str, Any]]:
-        """`not_served` marks a UDP service that is stored but not rendered by any engine yet."""
+        """UDP services are `serving` (IPVS); `not_served` is reserved for unrenderable ones."""
         return [
             {"id": v.id, "name": v.name, "protocol": v.protocol, "state": v.state}
             for v in await svc.status.virtual_services(who, tenant.id)

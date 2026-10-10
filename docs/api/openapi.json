@@ -98,6 +98,14 @@
             "title": "Haproxy Healthy",
             "type": "boolean"
           },
+          "ipvs": {
+            "description": "UDP real servers; empty without UDP services.",
+            "items": {
+              "$ref": "#/components/schemas/IpvsRealServerStatus"
+            },
+            "title": "Ipvs",
+            "type": "array"
+          },
           "routes_withdrawn": {
             "title": "Routes Withdrawn",
             "type": "boolean"
@@ -1782,7 +1790,7 @@
         "description": "Something worth knowing about the proposed state; never blocks apply.",
         "properties": {
           "code": {
-            "description": "Stable identifier, for example `udp_not_served`.",
+            "description": "Stable identifier of the warning.",
             "title": "Code",
             "type": "string"
           },
@@ -2241,7 +2249,7 @@
       },
       "HealthMonitor": {
         "additionalProperties": false,
-        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check or ``http`` request check.\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp``.",
+        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.\n    udp: Optional probe details; only valid for ``udp``.",
         "properties": {
           "fall": {
             "default": 3,
@@ -2308,6 +2316,16 @@
           },
           "type": {
             "$ref": "#/components/schemas/MonitorType"
+          },
+          "udp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UdpCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "version": {
             "default": 1,
@@ -2383,6 +2401,16 @@
           },
           "type": {
             "$ref": "#/components/schemas/MonitorType"
+          },
+          "udp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UdpCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2480,6 +2508,16 @@
                 "type": "null"
               }
             ]
+          },
+          "udp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UdpCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "HealthMonitorPatch",
@@ -2566,6 +2604,16 @@
           },
           "type": {
             "$ref": "#/components/schemas/MonitorType"
+          },
+          "udp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UdpCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "version": {
             "default": 1,
@@ -2663,6 +2711,83 @@
           "end"
         ],
         "title": "IpRange",
+        "type": "object"
+      },
+      "IpvsRealServerStatus": {
+        "additionalProperties": false,
+        "description": "One IPVS real server of a UDP virtual service, with its counters.",
+        "properties": {
+          "active_conns": {
+            "title": "Active Conns",
+            "type": "integer"
+          },
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "in_bytes": {
+            "title": "In Bytes",
+            "type": "integer"
+          },
+          "in_packets": {
+            "title": "In Packets",
+            "type": "integer"
+          },
+          "inactive_conns": {
+            "title": "Inactive Conns",
+            "type": "integer"
+          },
+          "member_port": {
+            "title": "Member Port",
+            "type": "integer"
+          },
+          "out_bytes": {
+            "title": "Out Bytes",
+            "type": "integer"
+          },
+          "out_packets": {
+            "title": "Out Packets",
+            "type": "integer"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "service": {
+            "description": "Virtual service name.",
+            "title": "Service",
+            "type": "string"
+          },
+          "state": {
+            "description": "`up`, `down` or `drain`.",
+            "title": "State",
+            "type": "string"
+          },
+          "vip": {
+            "title": "Vip",
+            "type": "string"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "service",
+          "vip",
+          "port",
+          "address",
+          "member_port",
+          "state",
+          "weight",
+          "active_conns",
+          "inactive_conns",
+          "in_packets",
+          "out_packets",
+          "in_bytes",
+          "out_bytes"
+        ],
+        "title": "IpvsRealServerStatus",
         "type": "object"
       },
       "Job": {
@@ -3178,7 +3303,8 @@
         "description": "Health monitor kind.",
         "enum": [
           "tcp",
-          "http"
+          "http",
+          "udp"
         ],
         "title": "MonitorType",
         "type": "string"
@@ -4537,7 +4663,7 @@
         "type": "object"
       },
       "Protocol": {
-        "description": "Virtual service protocol. ``udp`` renders to IPVS, not HAProxy (milestone M3+).",
+        "description": "Virtual service protocol. ``udp`` renders to IPVS via Keepalived, not HAProxy (M6).",
         "enum": [
           "http",
           "tcp",
@@ -4545,6 +4671,68 @@
         ],
         "title": "Protocol",
         "type": "string"
+      },
+      "ProtocolRulesRead": {
+        "additionalProperties": false,
+        "description": "The fields a protocol allows, so a form can disable the rest (ticket T7).",
+        "properties": {
+          "algorithms": {
+            "items": {
+              "$ref": "#/components/schemas/Algorithm"
+            },
+            "title": "Algorithms",
+            "type": "array"
+          },
+          "member_port_required": {
+            "title": "Member Port Required",
+            "type": "boolean"
+          },
+          "monitor_types": {
+            "items": {
+              "$ref": "#/components/schemas/MonitorType"
+            },
+            "title": "Monitor Types",
+            "type": "array"
+          },
+          "pool_forbidden": {
+            "description": "Pool fields rejected on the service's pools.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Pool Forbidden",
+            "type": "array"
+          },
+          "port_forbidden": {
+            "description": "Port fields that are rejected.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Port Forbidden",
+            "type": "array"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "service_forbidden": {
+            "description": "Virtual service fields that are rejected.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Service Forbidden",
+            "type": "array"
+          }
+        },
+        "required": [
+          "protocol",
+          "service_forbidden",
+          "port_forbidden",
+          "pool_forbidden",
+          "algorithms",
+          "monitor_types",
+          "member_port_required"
+        ],
+        "title": "ProtocolRulesRead",
+        "type": "object"
       },
       "ReasonIn": {
         "additionalProperties": false,
@@ -5794,6 +5982,31 @@
         "title": "TokenRead",
         "type": "object"
       },
+      "UdpCheck": {
+        "additionalProperties": false,
+        "description": "UDP health probe (Keepalived ``UDP_CHECK``), sent to the member's check port.\n\nA UDP check always marks the server down on an ICMP port-unreachable. Without ``payload_hex``\nit sends an empty datagram; with ``require_reply`` the server must also answer.\n\nAttributes:\n    payload_hex: Datagram to send, as lowercase hex (at most 256 bytes).\n    require_reply: Mark the server down unless it answers the probe.\n\nExample:\n    >>> UdpCheck(payload_hex=\"00ff\", require_reply=True).require_reply\n    True",
+        "properties": {
+          "payload_hex": {
+            "anyOf": [
+              {
+                "pattern": "^([0-9a-f]{2}){1,256}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload Hex"
+          },
+          "require_reply": {
+            "default": false,
+            "title": "Require Reply",
+            "type": "boolean"
+          }
+        },
+        "title": "UdpCheck",
+        "type": "object"
+      },
       "VipPool": {
         "additionalProperties": false,
         "description": "Address ranges VIPs are allocated from, on one network.",
@@ -6614,7 +6827,7 @@
       },
       "VirtualServiceStatusRead": {
         "additionalProperties": false,
-        "description": "State of one virtual service; `not_served` is stored but not rendered yet (UDP, until M6).",
+        "description": "State of one virtual service; `not_served` is reserved for one no engine can render.",
         "properties": {
           "id": {
             "format": "uuid",
@@ -7620,6 +7833,125 @@
         "summary": "Who am I",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/schema/virtual-service": {
+      "get": {
+        "description": "Which service, port and pool fields `protocol` allows (same table as the validator).",
+        "operationId": "protocol_field_rules_api_v1_schema_virtual_service_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "protocol",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Protocol"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "algorithms": [
+                    "roundrobin",
+                    "leastconn",
+                    "source"
+                  ],
+                  "member_port_required": true,
+                  "monitor_types": [
+                    "udp"
+                  ],
+                  "pool_forbidden": [
+                    "tls",
+                    "tls_verify",
+                    "persistence"
+                  ],
+                  "port_forbidden": [
+                    "tls",
+                    "proxy_protocol",
+                    "http2",
+                    "https_redirect_port"
+                  ],
+                  "protocol": "udp",
+                  "service_forbidden": [
+                    "certificate_ids",
+                    "policy_set_ids",
+                    "allow_list_id",
+                    "enforce_allow_list",
+                    "restore_client_ip_header",
+                    "routes"
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolRulesRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Field rules of a virtual service protocol",
+        "tags": [
+          "meta"
         ]
       }
     },
@@ -10154,13 +10486,7 @@
                       "name": "edge"
                     }
                   ],
-                  "warnings": [
-                    {
-                      "code": "udp_not_served",
-                      "message": "virtual service dns: udp is rendered by the keepalived renderer, not haproxy.cfg",
-                      "path": "virtual_services.dns"
-                    }
-                  ]
+                  "warnings": []
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ChangeSetDiff"
@@ -18306,6 +18632,7 @@
                         "haproxy/haproxy.cfg": "sha256:ab12"
                       },
                       "haproxy_healthy": true,
+                      "ipvs": [],
                       "routes_withdrawn": false,
                       "version": "1.0.0",
                       "vrrp": [
@@ -18478,7 +18805,7 @@
     },
     "/api/v1/tenants/{t}/status/virtual-services": {
       "get": {
-        "description": "`not_served` marks a UDP service that is stored but not rendered by any engine yet.",
+        "description": "UDP services are `serving` (IPVS); `not_served` is reserved for unrenderable ones.",
         "operationId": "virtual_service_status_api_v1_tenants__t__status_virtual_services_get",
         "parameters": [
           {
@@ -18516,7 +18843,7 @@
                     "id": "00000000-0000-0000-0000-0000000000d1",
                     "name": "dns",
                     "protocol": "udp",
-                    "state": "not_served"
+                    "state": "serving"
                   }
                 ],
                 "schema": {

@@ -30,7 +30,15 @@ def full_data() -> dict:  # type: ignore[type-arg]
             "type": "http",
             "interval_s": 10,
             "http": {"path": "/healthz", "host": "app.example.test", "expect_status": [200, 204]},
-        }
+        },
+        {
+            "id": "hm-udp",
+            "tenant_id": "t-acme",
+            "name": "udp-probe",
+            "type": "udp",
+            "port": 5353,
+            "udp": {"payload_hex": "00ff", "require_reply": True},
+        },
     ]
     data["policy_sets"] = [
         {
