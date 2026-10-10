@@ -66,7 +66,26 @@ class IdentityProviderRow(Base):
     email_claim: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'email'"))
     groups_claim: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'groups'"))
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
+class IdpTestRow(Base):
+    """``idp_test``: a test sign-in; its outcome is kept five minutes and read once."""
+
+    __tablename__ = "idp_test"
+    __table_args__ = (
+        ForeignKeyConstraint(["provider_id"], ["identity_provider.id"], ondelete="CASCADE"),
+        CheckConstraint("status IN ('pending', 'done')", name="status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    provider_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
+    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    expires_at: Mapped[datetime] = _timestamp(nullable=False)
 
 
 class IdpRoleMappingRow(Base):
@@ -138,6 +157,9 @@ class LoginStateRow(Base):
     #: SAML: the ``AuthnRequest`` id the response must answer (``InResponseTo``).
     request_id: Mapped[str | None] = mapped_column(Text)
     return_to: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'/'"))
+    #: ``login`` (creates a session) or ``test`` (an administrator's test sign-in: no session).
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'login'"))
+    test_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     expires_at: Mapped[datetime] = _timestamp(nullable=False)
 
 
@@ -200,3 +222,19 @@ class LocalAdminRow(Base):
     failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     locked_until: Mapped[datetime | None] = _timestamp()
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    #: Null until the TOTP enrollment was confirmed with a valid code; such an admin cannot log in.
+    totp_confirmed_at: Mapped[datetime | None] = _timestamp()
+    last_login_at: Mapped[datetime | None] = _timestamp()
+
+
+class BreakGlassSettingRow(Base):
+    """``break_glass_setting``: the single row that says whether break-glass was switched on."""
+
+    __tablename__ = "break_glass_setting"
+    __table_args__ = (CheckConstraint("id = 1", name="singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, server_default=text("1"))
+    enabled_until: Mapped[datetime | None] = _timestamp()
+    enabled_by: Mapped[str | None] = mapped_column(Text)
+    enabled_at: Mapped[datetime | None] = _timestamp()
+    reason: Mapped[str | None] = mapped_column(Text)

@@ -58,7 +58,9 @@ async def owner_engine(pg_url: str) -> AsyncIterator[AsyncEngine]:
     yield engine
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE tenant, identity_provider, user_session, local_admin CASCADE")
+            text(
+                "TRUNCATE tenant, identity_provider, user_session, local_admin, break_glass_setting CASCADE"
+            )
         )
     await engine.dispose()
 

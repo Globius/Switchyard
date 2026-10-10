@@ -134,12 +134,16 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 
 ### G1-3. Identity-provider API and test sign-in
 
+**Status.** Built (ADR 0032, [auth.md](../auth.md)).
+
 - System-admin: `GET/POST /identity-providers`, `GET/PATCH/DELETE /identity-providers/{id}` (`If-Match` on `version`); fields in 02. `protocol` selects the schema (OIDC or SAML) as in T4. Secrets are references or write-only; reads never return them.
 - `POST /identity-providers/{id}/test` → `{test_id, authorize_url}`; `GET /identity-providers/{id}/test/{test_id}` → `{status: pending|done, subject, username, email, groups, claims, would_grant[], warnings[]}`. The callback creates no session for a test; the result is readable once, within five minutes.
 - Validation errors name the field (`errors[].path`); an OIDC provider is probed on create (discovery document reachable) and the result is reported as a warning, not a refusal.
 - **Acceptance.** Test sign-in against the fake OIDC provider returns claims and `would_grant`, creates no `user_session` row, and a second read is 404; no response contains a client secret or token.
 
 ### G1-4. SAML sign-in and service-provider metadata (built, ADR 0018; `sign_requests` and metadata import remain)
+
+**Status.** Built (ADR 0032, [auth.md](../auth.md)).
 
 - `protocol: saml` accepted. `GET /auth/login/{provider}` redirects with an `AuthnRequest`; `POST /auth/callback/{provider}` is the assertion consumer service; `GET /auth/saml/{provider}/metadata` returns SP metadata (`application/samlmetadata+xml`, public; the UI's download button uses it, with `Content-Disposition` when `?download=1`).
 - Rules in 02: signature required, `InResponseTo` bound to the stored state, assertion replay cache, 60 s skew, no IdP-initiated sign-in, groups from `attribute_groups`.
@@ -163,6 +167,8 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 - **Acceptance.** Sign in twice: one row, `last_login_at` moves, `first_login_at` does not; no secret appears in any column; a tenant-admin sees only people with a grant in their tenant and only that tenant's grants.
 
 ### G1-7. Break-glass administration and system tokens
+
+**Status.** Built (ADR 0032, [auth.md](../auth.md)).
 
 - `GET /system/break-glass`, `PUT /system/break-glass`, `POST /system/break-glass/admin`, `POST /system/break-glass/admin/confirm`, `DELETE /system/break-glass/admin` (system-admin; behavior in 02). The password is generated and shown once; the TOTP secret goes to OpenBao and is shown once as `totp_secret` and `otpauth_uri`.
 - `/auth/providers` reports `break_glass: true` only when it is on (forced, or enabled and not expired).

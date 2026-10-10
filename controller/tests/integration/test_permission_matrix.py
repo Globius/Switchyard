@@ -7,14 +7,21 @@ ship without a permission decision (ADR 0030).
 
 import asyncio
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
+import httpx
 import pytest
+import pytest_asyncio
 
-from switchyard.api.app import create_app
+from switchyard.api.app import build_services, create_app
 from switchyard.domain import permissions
 from switchyard.domain.workflow import Role
-from tests.integration.test_api import Api, api  # noqa: F401  (the fixture)
+from switchyard.pipeline.engines import StaticEngineDirectory
+from switchyard.services.oidc import OidcClient
+from switchyard.services.sessions import SessionService
+from tests.integration.test_api import Api
+from tests.pipeline_env import GROUP, engine_record, world
 
 pytestmark = pytest.mark.usefixtures("owner_engine")
 
@@ -94,6 +101,21 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("PATCH", "/tenants/{t}/role-mappings/{mapping}"): ("manage", "role_mapping"),
     ("DELETE", "/tenants/{t}/role-mappings/{mapping}"): ("manage", "role_mapping"),
     ("GET", "/tenants/{t}/users"): ("list", "tenant_user"),
+    ("GET", "/identity-providers"): ("manage", "identity_provider"),
+    ("POST", "/identity-providers"): ("manage", "identity_provider"),
+    ("GET", "/identity-providers/{idp}"): ("manage", "identity_provider"),
+    ("PATCH", "/identity-providers/{idp}"): ("manage", "identity_provider"),
+    ("DELETE", "/identity-providers/{idp}"): ("manage", "identity_provider"),
+    ("POST", "/identity-providers/{idp}/test"): ("manage", "identity_provider"),
+    ("GET", "/identity-providers/{idp}/test/{test_id}"): ("manage", "identity_provider"),
+    ("GET", "/system/break-glass"): ("manage", "break_glass"),
+    ("PUT", "/system/break-glass"): ("manage", "break_glass"),
+    ("POST", "/system/break-glass/admin"): ("manage", "break_glass"),
+    ("POST", "/system/break-glass/admin/confirm"): ("manage", "break_glass"),
+    ("DELETE", "/system/break-glass/admin"): ("manage", "break_glass"),
+    ("GET", "/system/tokens"): ("manage", "system_token"),
+    ("POST", "/system/tokens"): ("manage", "system_token"),
+    ("DELETE", "/system/tokens/{token}"): ("manage", "system_token"),
     ("GET", "/role-mappings"): ("manage", "role_mapping_privileged"),
     ("POST", "/role-mappings"): ("manage", "role_mapping_privileged"),
     ("GET", "/role-mappings/{mapping}"): ("manage", "role_mapping_privileged"),
@@ -154,6 +176,16 @@ BODIES: dict[tuple[str, str], Any] = {
         "sans": ["a.example.test"],
     },
     ("POST", "/tenants/{t}/tokens"): {"name": "tk", "role": "viewer"},
+    ("POST", "/identity-providers"): {
+        "protocol": "oidc",
+        "name": "idp-x",
+        "issuer_url": "https://sso.example.test",
+        "client_id": "c",
+    },
+    ("PATCH", "/identity-providers/{idp}"): {"protocol": "oidc"},
+    ("PUT", "/system/break-glass"): {"enabled": False},
+    ("POST", "/system/break-glass/admin/confirm"): {"totp": "000000"},
+    ("POST", "/system/tokens"): {"name": "sys-x"},
     ("POST", "/tenants/{t}/role-mappings"): {
         "provider": "nobody",
         "group_name": "g",
@@ -216,7 +248,18 @@ SKIP_DENIED_BODY_CHECK: set[tuple[str, str]] = set()
 def fill(path: str) -> str:
     """Replace the template parameters with a tenant name and fresh ids."""
     out = path.replace("{t}", TENANT_NAME)
-    for key in ("cs", "engine", "object_id", "job_id", "mapping", "user", "token", "certificate"):
+    for key in (
+        "cs",
+        "engine",
+        "object_id",
+        "job_id",
+        "mapping",
+        "user",
+        "token",
+        "certificate",
+        "idp",
+        "test_id",
+    ):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
     for key in ("pool", "member", "group"):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
@@ -252,6 +295,24 @@ def body_for(key: tuple[str, str]) -> Any:
     return eval(text)  # noqa: S307 - our own literal
 
 
+@pytest_asyncio.fixture
+async def api(pg_url: str) -> AsyncIterator[Api]:
+    """The test world with login configured, so identity and break-glass routes are reachable."""
+    async with world(pg_url) as w:
+        directory = StaticEngineDirectory(
+            {GROUP: [(engine_record(n), e) for n, e in w.engines.items()]}
+        )
+        sessions = SessionService(
+            w.db, OidcClient(transport=httpx.MockTransport(lambda r: httpx.Response(404)))
+        )
+        services = build_services(w.db, directory, sessions=sessions)
+        app = create_app(services)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://api"
+        ) as client:
+            yield Api(w, services, client)
+
+
 def test_every_route_is_classified() -> None:
     spec = create_app(None).openapi()  # type: ignore[arg-type]
     seen = {
@@ -268,6 +329,8 @@ def test_every_route_is_classified() -> None:
             permissions.min_role(*entry)  # must exist in the matrix
 
 
+#: Routes that make tokens: a token cannot create tokens, whatever its role.
+TOKEN_MAKERS = {("POST", "/tenants/{t}/tokens"), ("POST", "/system/tokens")}
 #: Server-sent events never end, so the stream is classified but not requested here; it uses the
 #: same ``Who`` dependency and read check as the other status routes.
 NOT_REQUESTED = {("GET", "/tenants/{t}/status/stream")}
@@ -293,7 +356,7 @@ ROLES = [Role.VIEWER, Role.OPERATOR, Role.TENANT_ADMIN, Role.SYSTEM_ADMIN]
 
 
 @pytest.mark.parametrize("role", ROLES, ids=lambda r: r.value)
-async def test_status_codes_follow_the_matrix(api: Api, role: Role) -> None:  # noqa: F811
+async def test_status_codes_follow_the_matrix(api: Api, role: Role) -> None:
     headers = await api.token(role)
     failures: list[str] = []
     for (method, template), (verb, obj) in CASES:
@@ -309,9 +372,12 @@ async def test_status_codes_follow_the_matrix(api: Api, role: Role) -> None:  # 
         )
         denied = permissions.ROLE_RANK[role] < permissions.ROLE_RANK[required]
         where = f"{method} {template} as {role.value}"
-        if (method, template) == ("POST", "/tenants/{t}/tokens"):
+        if (method, template) in TOKEN_MAKERS:
             # a token cannot create tokens, whatever its role
-            if response.status_code != 403 or response.json().get("code") != "forbidden":
+            if response.status_code != 403 or response.json().get("code") not in {
+                "forbidden",
+                "role_required",
+            }:
                 failures.append(f"{where}: expected 403 forbidden, got {response.status_code}")
         elif response.status_code == 503 and (method, template) in NOT_CONFIGURED:
             continue

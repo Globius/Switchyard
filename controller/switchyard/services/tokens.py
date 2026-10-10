@@ -24,6 +24,10 @@ from switchyard.services.context import Clock, Databases, Principal, utcnow
 from switchyard.services.errors import NotFoundError, PermissionDeniedError
 
 PREFIX = "sy_"
+SYSTEM_DEFAULT_TTL = timedelta(days=30)
+SYSTEM_MAX_TTL = timedelta(days=90)
+#: A system token's use is audited at most this often (every call would flood the log).
+SYSTEM_USE_AUDIT_EVERY = timedelta(minutes=5)
 
 
 def hash_token(token: str) -> str:
@@ -94,7 +98,9 @@ class TokenService:
         if role is Role.SYSTEM_ADMIN:
             require(principal, "manage", "system_token")
             if tenant_id is not None:
-                raise ValueError("a system-admin token belongs to no tenant")
+                raise ValueError(
+                    "system-admin tokens belong to no tenant; create one with POST /system/tokens"
+                )
         else:
             if tenant_id is None:
                 raise ValueError("this role needs a tenant")
@@ -127,6 +133,66 @@ class TokenService:
                 request_id=request_id,
             )
             return plaintext, _record(row)
+
+    async def create_system(
+        self,
+        principal: Principal,
+        name: str,
+        *,
+        ttl: timedelta = SYSTEM_DEFAULT_TTL,
+        request_id: str | None = None,
+    ) -> tuple[str, TokenRecord]:
+        """Create a system-admin token (system administrators): 30 days by default, 90 at most.
+
+        Raises:
+            ValueError: If ``ttl`` is longer than 90 days or not positive.
+        """
+        require(principal, "manage", "system_token")
+        if not timedelta(0) < ttl <= SYSTEM_MAX_TTL:
+            raise ValueError("a system token lasts between 1 and 90 days")
+        return await self.create(
+            principal, None, name, Role.SYSTEM_ADMIN, ttl=ttl, request_id=request_id
+        )
+
+    async def list_system(self, principal: Principal) -> list[TokenRecord]:
+        """System tokens (those with no tenant), oldest first."""
+        require(principal, "manage", "system_token")
+        async with admin_session(self._db.admin) as session:
+            rows = (
+                await session.execute(
+                    select(ApiTokenRow)
+                    .where(ApiTokenRow.tenant_id.is_(None))
+                    .order_by(ApiTokenRow.created_at)
+                )
+            ).scalars()
+            return [_record(r) for r in rows]
+
+    async def revoke_system(
+        self, principal: Principal, token_id: UUID, *, request_id: str | None = None
+    ) -> None:
+        """Revoke a system token; it stops working at once."""
+        require(principal, "manage", "system_token")
+        async with admin_session(self._db.admin) as session:
+            result = await session.execute(
+                update(ApiTokenRow)
+                .where(
+                    ApiTokenRow.id == token_id,
+                    ApiTokenRow.tenant_id.is_(None),
+                    ApiTokenRow.revoked_at.is_(None),
+                )
+                .values(revoked_at=func.now())
+            )
+            if result.rowcount == 0:  # type: ignore[attr-defined]
+                raise NotFoundError("system token not found or already revoked")
+            await audit_log.record(
+                session,
+                tenant_id=None,
+                actor=principal.actor,
+                action="token.revoke",
+                object_ref=f"token:{token_id}",
+                diff={"system": True},
+                request_id=request_id,
+            )
 
     async def list_tokens(self, principal: Principal, tenant_id: UUID) -> list[TokenRecord]:
         """List a tenant's tokens (tenant administrators and up)."""
@@ -186,6 +252,17 @@ class TokenService:
                 return None
             if row.expires_at is not None and row.expires_at <= self._clock():
                 return None
+            now = self._clock()
+            if row.tenant_id is None and (
+                row.last_used_at is None or now - row.last_used_at > SYSTEM_USE_AUDIT_EVERY
+            ):
+                await audit_log.record(
+                    session,
+                    tenant_id=None,
+                    actor=f"token:{row.name}",
+                    action="token.system_used",
+                    object_ref=f"token:{row.id}",
+                )
             await session.execute(
                 update(ApiTokenRow).where(ApiTokenRow.id == row.id).values(last_used_at=func.now())
             )

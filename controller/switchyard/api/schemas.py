@@ -515,6 +515,271 @@ class SessionsRevoked(ApiModel):
     revoked: int
 
 
+class _ProviderRead(ApiModel):
+    """Fields every identity provider shows. Secrets are never returned."""
+
+    id: UUID
+    name: str
+    enabled: bool
+    version: int
+    created_at: datetime
+    warnings: list[str] = Field(
+        description="Set on create and change only: findings that did not block it, "
+        "for example an unreachable OIDC discovery document."
+    )
+
+
+class OidcProviderRead(_ProviderRead):
+    """An OpenID Connect provider."""
+
+    protocol: Literal["oidc"] = "oidc"
+    issuer_url: str
+    client_id: str
+    client_secret_ref: str | None = Field(description="Reference into the secrets backend.")
+    client_secret_set: bool = Field(description="Whether a client secret is stored (never shown).")
+    scopes: str
+    username_claim: str
+    email_claim: str
+    groups_claim: str
+
+
+class SamlProviderRead(_ProviderRead):
+    """A SAML 2.0 provider."""
+
+    protocol: Literal["saml"] = "saml"
+    idp_metadata_url: str | None
+    idp_entity_id: str
+    sso_url: str
+    signing_certificates: list[str] = Field(description="Public PEM certificates.")
+    sp_entity_id: str = Field(description="Our entity id (the stored one, or the default).")
+    name_id_format: str | None
+    sign_requests: bool
+    sp_signing_key_ref: str | None = Field(description="Reference to the request signing key.")
+    sp_signing_certificate: str | None = Field(
+        description="Public certificate that verifies signed requests (also in the SP metadata)."
+    )
+    attribute_username: str
+    attribute_email: str
+    attribute_groups: str
+    acs_url: str = Field(description="Assertion consumer service URL to give the IdP.")
+    sp_metadata_url: str = Field(description="Public SP metadata URL to give the IdP.")
+
+
+IdentityProviderRead = Annotated[
+    OidcProviderRead | SamlProviderRead, Field(discriminator="protocol")
+]
+
+
+class OidcProviderIn(ApiModel):
+    """Create an OpenID Connect provider. The client secret is write-only."""
+
+    protocol: Literal["oidc"]
+    name: str
+    enabled: bool = True
+    issuer_url: str
+    client_id: str
+    client_secret: str | None = Field(
+        default=None, description="Stored in the secrets backend; never returned."
+    )
+    client_secret_ref: str | None = Field(
+        default=None, description="Use an existing secret instead of sending one."
+    )
+    scopes: str | None = None
+    username_claim: str | None = None
+    email_claim: str | None = None
+    groups_claim: str | None = None
+
+
+class SamlProviderIn(ApiModel):
+    """Create a SAML provider. Send metadata (URL or XML) or the fields it would fill in."""
+
+    protocol: Literal["saml"]
+    name: str
+    enabled: bool = True
+    idp_metadata_url: str | None = Field(default=None, description="https URL of the IdP metadata.")
+    idp_metadata_xml: str | None = Field(default=None, description="The IdP metadata document.")
+    idp_entity_id: str | None = None
+    sso_url: str | None = None
+    signing_certificates: list[str] | None = Field(default=None, description="Public PEM only.")
+    sp_entity_id: str | None = None
+    name_id_format: str | None = None
+    sign_requests: bool | None = Field(
+        default=None,
+        description="Sign AuthnRequests. The controller generates the key (kept in the secrets "
+        "backend) unless `sp_signing_key_ref` is given.",
+    )
+    sp_signing_key_ref: str | None = None
+    attribute_username: str | None = None
+    attribute_email: str | None = None
+    attribute_groups: str | None = None
+
+
+IdentityProviderIn = Annotated[OidcProviderIn | SamlProviderIn, Field(discriminator="protocol")]
+
+
+class OidcProviderPatch(ApiModel):
+    """Change an OIDC provider; send `protocol` and only the fields to change."""
+
+    protocol: Literal["oidc"]
+    name: str | None = None
+    enabled: bool | None = None
+    issuer_url: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    client_secret_ref: str | None = None
+    scopes: str | None = None
+    username_claim: str | None = None
+    email_claim: str | None = None
+    groups_claim: str | None = None
+
+
+class SamlProviderPatch(ApiModel):
+    """Change a SAML provider; send `protocol` and only the fields to change."""
+
+    protocol: Literal["saml"]
+    name: str | None = None
+    enabled: bool | None = None
+    idp_metadata_url: str | None = None
+    idp_metadata_xml: str | None = None
+    idp_entity_id: str | None = None
+    sso_url: str | None = None
+    signing_certificates: list[str] | None = None
+    sp_entity_id: str | None = None
+    name_id_format: str | None = None
+    sign_requests: bool | None = None
+    sp_signing_key_ref: str | None = None
+    attribute_username: str | None = None
+    attribute_email: str | None = None
+    attribute_groups: str | None = None
+
+
+IdentityProviderPatch = Annotated[
+    OidcProviderPatch | SamlProviderPatch, Field(discriminator="protocol")
+]
+
+
+class IdpTestIn(ApiModel):
+    """Start a test sign-in."""
+
+    return_to: str | None = Field(
+        default=None, description="Same-site path the browser returns to afterwards."
+    )
+
+
+class IdpTestStarted(ApiModel):
+    """A test sign-in: open `authorize_url` in the browser, then poll `test_id`."""
+
+    test_id: UUID
+    authorize_url: str
+
+
+class WouldGrant(ApiModel):
+    """A grant the current mappings would give this person."""
+
+    tenant: str | None = Field(description="Null for `system-admin`.")
+    role: Role
+    via: GrantSourceRead
+
+
+class IdpTestResult(ApiModel):
+    """The state of a test sign-in. Read once, within five minutes; then 404."""
+
+    status: Literal["pending", "done"]
+    subject: str | None = None
+    username: str | None = None
+    email: str | None = None
+    groups: list[str] | None = None
+    claims: dict[str, Any] | None = Field(
+        default=None, description="Decoded claims without tokens, signatures or secrets."
+    )
+    would_grant: list[WouldGrant] | None = None
+    warnings: list[str] | None = None
+    error: str | None = Field(default=None, description="Why the provider refused, if it did.")
+
+
+class BreakGlassAdminRead(ApiModel):
+    """The enrolled break-glass administrator (never its password or TOTP secret)."""
+
+    username: str
+    totp_confirmed: bool
+    created_at: datetime
+    last_login_at: datetime | None
+    locked_until: datetime | None
+
+
+class BreakGlassRead(ApiModel):
+    """Whether break-glass login is on, and the administrator."""
+
+    forced_by_deployment: bool = Field(
+        description="`SWITCHYARD_BREAK_GLASS=1`: on regardless of this API; read-only."
+    )
+    enabled: bool
+    enabled_until: datetime | None
+    enabled_by: str | None
+    reason: str | None
+    admin: BreakGlassAdminRead | None
+
+
+class BreakGlassSwitchIn(ApiModel):
+    """Switch break-glass login on (with a reason) or off."""
+
+    enabled: bool
+    ttl_minutes: int | None = Field(
+        default=None, description="How long it stays on: 1 to 1440, default 240."
+    )
+    reason: str | None = Field(default=None, description="Required when enabling.")
+
+
+class BreakGlassEnrollIn(ApiModel):
+    """Enrol (or replace) the break-glass administrator."""
+
+    username: str = "breakglass"
+
+
+class BreakGlassEnrollment(ApiModel):
+    """Shown once: the generated password and TOTP secret."""
+
+    username: str
+    password: str
+    totp_secret: str
+    otpauth_uri: str = Field(description="Render as a QR code for the authenticator app.")
+
+
+class BreakGlassConfirmIn(ApiModel):
+    """A code from the authenticator, proving enrolment worked."""
+
+    totp: str
+
+
+class SystemTokenRead(ApiModel):
+    """A system API token (never the secret)."""
+
+    id: UUID
+    name: str
+    role: Role
+    revoked: bool
+    expires_at: datetime | None
+    created_by: str
+    created_at: datetime
+    last_used_at: datetime | None
+
+
+class SystemTokenIn(ApiModel):
+    """Create a system token."""
+
+    name: str
+    ttl_days: int = Field(default=30, ge=1, le=90, description="30 by default, 90 at most.")
+
+
+class SystemTokenCreated(ApiModel):
+    """A new system token; the plaintext is shown once."""
+
+    id: UUID
+    token: str
+    role: Role
+    expires_at: datetime | None
+
+
 # -- change sets -----------------------------------------------------------------------------------
 
 

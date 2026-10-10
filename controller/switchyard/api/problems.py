@@ -24,6 +24,7 @@ from switchyard.services.changesets import ValidationFailedError
 from switchyard.services.errors import (
     AlreadyExistsError,
     ConflictError,
+    FieldErrors,
     NotFoundError,
     PermissionDeniedError,
     PreconditionFailedError,
@@ -113,7 +114,7 @@ Handler = Callable[[Request, Any], Awaitable[JSONResponse]]
 
 #: ``kind`` values of the discriminated unions (policy sets, routing profiles). Pydantic puts the
 #: tag in the error location; it is not a field, so it is dropped from ``errors[].path``.
-UNION_TAGS = frozenset({"redirect", "allow_list", "vrrp", "bgp"})
+UNION_TAGS = frozenset({"redirect", "allow_list", "vrrp", "bgp", "oidc", "saml"})
 
 
 def strip_union_tag(loc: tuple[Any, ...]) -> str:
@@ -179,6 +180,7 @@ def install_handlers(app: FastAPI) -> None:
         DomainValidationError,
         lambda e: problem(422, "the state breaks domain rules", errors=_errors(e.problems)),
     )
+    add(FieldErrors, lambda e: problem(422, str(e), errors=e.errors))
     add(ValueError, lambda e: problem(422, str(e)))
 
     async def validation(request: Request, exc: Exception) -> JSONResponse:
