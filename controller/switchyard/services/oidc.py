@@ -78,6 +78,17 @@ class OidcClient:
         self._cache[url] = (time.monotonic(), data)
         return data
 
+    async def check_discovery(self, issuer: str) -> None:
+        """Fetch the provider's discovery document afresh and check it names this issuer.
+
+        Used when an administrator configures a provider; a failure is a warning, not a refusal.
+
+        Raises:
+            OidcError: If the document is unreachable or does not match the issuer.
+        """
+        self._cache.pop(issuer.rstrip("/") + "/.well-known/openid-configuration", None)
+        await self._discovery(issuer)
+
     async def _discovery(self, issuer: str) -> dict[str, Any]:
         url = issuer.rstrip("/") + "/.well-known/openid-configuration"
         doc = await self._get_json(url)

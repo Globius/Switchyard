@@ -14,9 +14,9 @@ from switchyard.adapters.agent import AgentError, ProbeRequest
 from switchyard.db.ops_models import ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import tenant_session
-from switchyard.domain.workflow import EngineState, Role
+from switchyard.domain.workflow import EngineState
 from switchyard.pipeline.engines import EngineDirectory
-from switchyard.services.changesets import require_role
+from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import _record
 from switchyard.services.errors import ConflictError, NotFoundError, PermissionDeniedError
@@ -70,7 +70,7 @@ class MonitorTestService:
         """
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-        require_role(principal, Role.OPERATOR)
+        require(principal, "write", "application")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             snapshot = await load_snapshot(session)
             rows = list((await session.execute(select(ServiceEngineRow))).scalars())

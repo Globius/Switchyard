@@ -109,7 +109,7 @@ def full_data() -> dict:  # type: ignore[type-arg]
         }
     )
     data["networks"][0].update(sdn_zone="zone1", vnet="vnetlb", vlan_or_vni=120, managed=True)
-    data["tenants"][0].update(oidc_group="acme-admins", quotas={"max_vs": 50})
+    data["tenants"][0].update(quotas={"max_vs": 50})
     return data
 
 

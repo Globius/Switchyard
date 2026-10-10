@@ -115,12 +115,16 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 
 ### G1-1. Permission matrix as code, `GET /permissions`, 403 detail
 
+**Status.** Built (ADR 0031, [auth.md](../auth.md)).
+
 - `domain/permissions.py`: the matrix of 02 as data (`(verb, object) → minimum role`); services replace their `require_role(...)` literals with it. Behavior changes against today: job retry/cancel needs the role of the originating action; tokens cannot create tokens; `required_role` in the 403.
 - `GET /api/v1/permissions` (any authenticated caller) → `[{verb, object, min_role}]`, plus the ordered `roles` list. The UI's `can(verb, object)` is `role_in(tenant) ≥ min_role`.
 - 403 and 401 problems gain a `code` member: `session_expired`, `csrf`, `role_required` (+ `required_role`), `user_disabled`.
 - **Acceptance.** A parametrized test calls every route with a token of each role and compares the status with the matrix; a test fails when the table in 02, the code and `/permissions` disagree; OpenAPI documents `code` and `required_role`.
 
 ### G1-2. Sessions: refresh, grants recomputation, `/me` additions
+
+**Status.** Built (ADR 0031, [auth.md](../auth.md)).
 
 - Lifetimes 4 h absolute / 30 min idle (break-glass 1 h / 15 min). Grants recomputed from stored groups and current mappings when older than 60 s; session revoked if no grant is left.
 - `POST /auth/refresh` (CSRF required) → the `Me` payload after recomputation; it does not extend the absolute lifetime.
@@ -130,6 +134,8 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 
 ### G1-3. Identity-provider API and test sign-in
 
+**Status.** Built (ADR 0032, [auth.md](../auth.md)).
+
 - System-admin: `GET/POST /identity-providers`, `GET/PATCH/DELETE /identity-providers/{id}` (`If-Match` on `version`); fields in 02. `protocol` selects the schema (OIDC or SAML) as in T4. Secrets are references or write-only; reads never return them.
 - `POST /identity-providers/{id}/test` → `{test_id, authorize_url}`; `GET /identity-providers/{id}/test/{test_id}` → `{status: pending|done, subject, username, email, groups, claims, would_grant[], warnings[]}`. The callback creates no session for a test; the result is readable once, within five minutes.
 - Validation errors name the field (`errors[].path`); an OIDC provider is probed on create (discovery document reachable) and the result is reported as a warning, not a refusal.
@@ -137,11 +143,15 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 
 ### G1-4. SAML sign-in and service-provider metadata (built, ADR 0018; `sign_requests` and metadata import remain)
 
+**Status.** Built (ADR 0032, [auth.md](../auth.md)).
+
 - `protocol: saml` accepted. `GET /auth/login/{provider}` redirects with an `AuthnRequest`; `POST /auth/callback/{provider}` is the assertion consumer service; `GET /auth/saml/{provider}/metadata` returns SP metadata (`application/samlmetadata+xml`, public; the UI's download button uses it, with `Content-Disposition` when `?download=1`).
 - Rules in 02: signature required, `InResponseTo` bound to the stored state, assertion replay cache, 60 s skew, no IdP-initiated sign-in, groups from `attribute_groups`.
 - **Acceptance.** Round trip against a test IdP (signed response accepted; unsigned, replayed, wrong `InResponseTo`, expired and wrong-audience refused, each audited as `auth.login_failed`); the metadata validates against the SAML schema and lists the ACS URL.
 
 ### G1-5. Role mappings
+
+**Status.** Built (ADR 0031, [auth.md](../auth.md)).
 
 - System-wide `GET/POST /role-mappings`, `GET/PATCH/DELETE /role-mappings/{id}`; per tenant `GET/POST /tenants/{t}/role-mappings`, `PATCH/DELETE …/{id}`. Fields and who may use which in 02 (tenant-admin: `viewer` and `operator`, own tenant only). `If-Match` on `version`. Duplicate (`provider`, `group`, `tenant`) → 409.
 - Remove `oidc_group` from tenant create, update and read, from `examples.py` and from the model; migration logs old values to the audit log (`tenant.oidc_group_dropped`) then drops the column. Update `syctl` accordingly; `syctl idp map` keeps working and writes the same rows.
@@ -149,12 +159,16 @@ T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login 
 
 ### G1-6. Users
 
+**Status.** Built (ADR 0031, [auth.md](../auth.md)).
+
 - `user_account` upserted at every sign-in. System-admin: `GET /users`, `GET /users/{id}` (with `effective_grants`), `POST /users/{id}/disable|enable|revoke-sessions`, `DELETE /users/{id}`. Tenant-admin: `GET /tenants/{t}/users`. Details and field list in 02.
 - `user_session.user_id` links sessions; `revoke-sessions` ends them at once; a disabled user is refused at sign-in (`/login?error=disabled`) and by `authenticate`.
 - Cursor pagination and `q` search as in ADR 0014. The break-glass administrator has no `user_account` row (its sessions are audited, not listed).
 - **Acceptance.** Sign in twice: one row, `last_login_at` moves, `first_login_at` does not; no secret appears in any column; a tenant-admin sees only people with a grant in their tenant and only that tenant's grants.
 
 ### G1-7. Break-glass administration and system tokens
+
+**Status.** Built (ADR 0032, [auth.md](../auth.md)).
 
 - `GET /system/break-glass`, `PUT /system/break-glass`, `POST /system/break-glass/admin`, `POST /system/break-glass/admin/confirm`, `DELETE /system/break-glass/admin` (system-admin; behavior in 02). The password is generated and shown once; the TOTP secret goes to OpenBao and is shown once as `totp_secret` and `otpauth_uri`.
 - `/auth/providers` reports `break_glass: true` only when it is on (forced, or enabled and not expired).

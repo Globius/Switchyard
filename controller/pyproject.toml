@@ -59,6 +59,7 @@ ignore = ["D203", "D213", "RUF012", "N818"]
 "tests/**" = ["D", "S101", "S105", "S106", "S608", "PT011", "E501", "S603", "S607", "PT018"]
 "tools_gen_proto.py" = ["E501", "S603", "E402", "D"]
 "switchyard/db/migrations/**" = ["D", "S608", "E501", "UP", "RUF", "I"]
+"switchyard/api/docs_meta.py" = ["E501"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

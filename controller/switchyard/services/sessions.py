@@ -2,8 +2,9 @@
 
 After a successful OIDC login (or break-glass login) the controller issues its own session and the
 rest of the backend never sees which provider was used. A session is a random cookie value stored
-only as SHA-256, with an absolute lifetime and an idle timeout. Its roles are decided once, at
-login, from the provider's group claim through ``idp_role_mapping``; the result is the same
+only as SHA-256, with an absolute lifetime and an idle timeout. Its roles are decided at
+login, from the provider's group claim through ``idp_role_mapping``, and recomputed from the stored
+groups and the *current* mappings when older than a minute (ADR 0030); the result is the same
 :class:`~switchyard.services.context.Principal` model that API tokens use.
 """
 
@@ -17,30 +18,42 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.db import audit_log
 from switchyard.db.auth_models import (
+    BreakGlassSettingRow,
     IdentityProviderRow,
     IdpRoleMappingRow,
+    IdpTestRow,
     LocalAdminRow,
     LoginStateRow,
     SamlAssertionSeenRow,
+    UserAccountRow,
     UserSessionRow,
 )
+from switchyard.db.models import TenantRow
 from switchyard.db.tenancy import admin_session
 from switchyard.domain.workflow import Role
 from switchyard.ids import uuid7
 from switchyard.services import saml
 from switchyard.services.changesets import ROLE_RANK
 from switchyard.services.context import Clock, Databases, Principal, utcnow
+from switchyard.services.identity_providers import clean_claims
 from switchyard.services.oidc import OidcClient, OidcError, ProviderConfig, new_pkce
 from switchyard.services.tokens import hash_token
 
-SESSION_TTL = timedelta(hours=8)
-IDLE_TTL = timedelta(hours=1)
+SESSION_TTL = timedelta(hours=4)
+IDLE_TTL = timedelta(minutes=30)
+BREAK_GLASS_TTL = timedelta(hours=1)
+BREAK_GLASS_IDLE = timedelta(minutes=15)
+#: Grants are recomputed from the stored groups when older than this (and on ``/auth/refresh``).
+GRANTS_MAX_AGE = timedelta(seconds=60)
+#: ``user_account.last_seen_at`` is written at most this often.
+USER_SEEN_EVERY = timedelta(minutes=1)
+MAX_STORED_GROUPS = 200
 LOGIN_TTL = timedelta(minutes=10)
 LOCKOUT_AFTER = 5
 LOCKOUT_FOR = timedelta(minutes=15)
@@ -49,19 +62,34 @@ SESSION_PREFIX = "sysess_"
 
 EXPIRED_MESSAGE = "this login attempt has expired; start again"
 NO_ACCESS_MESSAGE = "your account is not a member of any group with access"
+DISABLED_MESSAGE = "this account has been disabled by an administrator"
+
+
+def login_error_code(message: str) -> str:
+    """The ``/login?error=<code>`` for a refusal message (``provider_error`` when unknown)."""
+    return {
+        EXPIRED_MESSAGE: "expired",
+        NO_ACCESS_MESSAGE: "no_access",
+        DISABLED_MESSAGE: "disabled",
+    }.get(message, "provider_error")
+
+
+class UserDisabledError(Exception):
+    """The session belongs to a user an administrator disabled; the session was revoked."""
 
 
 class LoginError(Exception):
     """Login was refused. The message is safe to show to the user.
 
     ``code`` is the short reason a browser login redirects with (``/login?error=<code>``):
-    ``provider_error``, ``expired`` or ``no_access``.
+    ``provider_error``, ``expired``, ``no_access`` or ``disabled``. When not given it is derived
+    from the message.
     """
 
-    def __init__(self, message: str, code: str = "provider_error") -> None:
+    def __init__(self, message: str, code: str | None = None) -> None:
         """Create the error."""
         super().__init__(message)
-        self.code = code
+        self.code = code or login_error_code(message)
 
 
 @dataclass(frozen=True)
@@ -85,6 +113,11 @@ class SessionInfo:
     csrf_token: str
     break_glass: bool
     expires_at: datetime
+    idle_timeout: timedelta = IDLE_TTL
+    grants_computed_at: datetime | None = None
+    user_id: UUID | None = None
+    provider_id: UUID | None = None
+    groups: tuple[str, ...] = ()
 
     @property
     def is_system(self) -> bool:
@@ -109,6 +142,23 @@ class SessionInfo:
             frozenset(per_tenant),
             tuple(sorted(per_tenant.items(), key=lambda kv: str(kv[0]))),
         )
+
+
+@dataclass(frozen=True)
+class GrantVia:
+    """One grant and the mapping that produced it (``tenant_id`` is ``None`` for system-admin)."""
+
+    tenant_id: UUID | None
+    role: Role
+    provider: str
+    group: str
+
+
+@dataclass(frozen=True)
+class TestDone:
+    """A test sign-in finished: no session was created; send the browser to ``return_to``."""
+
+    return_to: str
 
 
 @dataclass(frozen=True)
@@ -220,9 +270,26 @@ class SessionService:
         self._clock = clock
 
     @property
+    def oidc(self) -> OidcClient:
+        """The OpenID Connect client (shared with identity-provider administration)."""
+        return self._oidc
+
+    @property
     def break_glass_enabled(self) -> bool:
-        """Whether the break-glass login is switched on."""
+        """Whether the deployment forces the break-glass login on (``SWITCHYARD_BREAK_GLASS=1``)."""
         return self._break_glass
+
+    async def break_glass_on(self) -> bool:
+        """True if break-glass login is on: forced, or switched on and not yet expired."""
+        if self._break_glass:
+            return True
+        async with admin_session(self._db.admin) as session:
+            setting = await session.get(BreakGlassSettingRow, 1)
+            return bool(
+                setting is not None
+                and setting.enabled_until is not None
+                and setting.enabled_until > self._clock()
+            )
 
     # -- providers --------------------------------------------------------------------------------
 
@@ -238,21 +305,23 @@ class SessionService:
             ).scalars()
             return [ProviderInfo(r.id, r.name, r.protocol) for r in rows]
 
-    async def _provider_row(self, session: Any, provider: str) -> IdentityProviderRow:
+    async def _provider_row(
+        self, session: Any, provider: str, *, allow_disabled: bool = False
+    ) -> IdentityProviderRow:
         try:
             wanted = UUID(provider)
             query = select(IdentityProviderRow).where(IdentityProviderRow.id == wanted)
         except ValueError:
             query = select(IdentityProviderRow).where(IdentityProviderRow.name == provider)
         row = (await session.execute(query)).scalar_one_or_none()
-        if row is None or not row.enabled:
+        if row is None or not (row.enabled or allow_disabled):
             raise LoginError("unknown identity provider")
         return row  # type: ignore[no-any-return]
 
     async def _provider(
-        self, session: Any, provider: str
+        self, session: Any, provider: str, *, allow_disabled: bool = False
     ) -> tuple[IdentityProviderRow, ProviderConfig]:
-        row = await self._provider_row(session, provider)
+        row = await self._provider_row(session, provider, allow_disabled=allow_disabled)
         if row.protocol != "oidc" or row.issuer_url is None or row.client_id is None:
             raise LoginError("this provider does not use OpenID Connect")
         client_secret: str | None = None
@@ -277,13 +346,25 @@ class SessionService:
 
     # -- OIDC login -------------------------------------------------------------------------------
 
-    async def begin_login(self, provider: str, *, redirect_uri: str, return_to: str | None) -> str:
-        """Start a login; returns the URL to redirect the browser to (OIDC or SAML)."""
+    async def begin_login(
+        self,
+        provider: str,
+        *,
+        redirect_uri: str,
+        return_to: str | None,
+        test_id: UUID | None = None,
+    ) -> str:
+        """Start a login; returns the URL to redirect the browser to (OIDC or SAML).
+
+        With ``test_id`` this is an administrator's test sign-in: the callback records the outcome
+        under that id and creates no session. The provider may be disabled for a test.
+        """
+        purpose = "test" if test_id else "login"
         async with admin_session(self._db.admin) as session:
-            row = await self._provider_row(session, provider)
+            row = await self._provider_row(session, provider, allow_disabled=test_id is not None)
             if row.protocol == "saml":
-                return await self._begin_saml(session, row, redirect_uri, return_to)
-            row, cfg = await self._provider(session, provider)
+                return await self._begin_saml(session, row, redirect_uri, return_to, test_id)
+            row, cfg = await self._provider(session, provider, allow_disabled=test_id is not None)
             verifier, challenge = new_pkce()
             state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
             await session.execute(
@@ -296,6 +377,8 @@ class SessionService:
                     nonce=nonce,
                     code_verifier=verifier,
                     return_to=safe_return_to(return_to),
+                    purpose=purpose,
+                    test_id=test_id,
                     expires_at=self._clock() + LOGIN_TTL,
                 )
             )
@@ -306,7 +389,9 @@ class SessionService:
         except OidcError as exc:
             raise LoginError(str(exc)) from exc
 
-    async def complete_login(self, *, state: str, code: str, redirect_uri: str) -> LoginResult:
+    async def complete_login(
+        self, *, state: str, code: str, redirect_uri: str
+    ) -> LoginResult | TestDone:
         """Finish a login from the provider's redirect.
 
         Raises:
@@ -319,7 +404,9 @@ class SessionService:
             raise LoginError(outcome)
         return outcome
 
-    async def _complete_login(self, state: str, code: str, redirect_uri: str) -> LoginResult | str:
+    async def _complete_login(
+        self, state: str, code: str, redirect_uri: str
+    ) -> LoginResult | TestDone | str:
         async with admin_session(self._db.admin) as session:
             pending = (
                 await session.execute(
@@ -330,7 +417,10 @@ class SessionService:
             ).scalar_one_or_none()
             if pending is None or pending.expires_at <= self._clock():
                 return EXPIRED_MESSAGE
-            row, cfg = await self._provider(session, str(pending.provider_id))
+            is_test = pending.purpose == "test"
+            row, cfg = await self._provider(
+                session, str(pending.provider_id), allow_disabled=is_test
+            )
             try:
                 claims = await self._oidc.exchange(
                     cfg,
@@ -340,6 +430,8 @@ class SessionService:
                     nonce=pending.nonce or "",
                 )
             except OidcError as exc:
+                if is_test:
+                    return await self._finish_test(session, pending, row, error=str(exc))
                 await audit_log.record(
                     session,
                     tenant_id=None,
@@ -348,8 +440,23 @@ class SessionService:
                     diff={"reason": str(exc)},
                 )
                 return str(exc)
-            groups = claims.get(cfg.groups_claim, [])
-            groups = [groups] if isinstance(groups, str) else [str(g) for g in groups]
+            raw_groups = claims.get(cfg.groups_claim)
+            groups = (
+                [raw_groups] if isinstance(raw_groups, str) else [str(g) for g in raw_groups or []]
+            )
+            if is_test:
+                return await self._finish_test(
+                    session,
+                    pending,
+                    row,
+                    subject=str(claims["sub"]),
+                    username=str(claims.get(cfg.username_claim) or ""),
+                    email=str(claims[cfg.email_claim]) if claims.get(cfg.email_claim) else None,
+                    groups=groups,
+                    claims=claims,
+                    groups_claim=cfg.groups_claim,
+                    username_claim=cfg.username_claim,
+                )
             return await self._grant_login(
                 session,
                 row=row,
@@ -374,16 +481,25 @@ class SessionService:
         return_to: str,
     ) -> LoginResult | str:
         """Map groups to grants and create the session (shared by OIDC and SAML)."""
-        mappings = (
-            await session.execute(
-                select(IdpRoleMappingRow).where(
-                    IdpRoleMappingRow.provider_id == row.id,
-                    IdpRoleMappingRow.group_name.in_(groups or [""]),
-                )
-            )
-        ).scalars()
-        grants = tuple((m.scope_tenant_id, Role(m.role)) for m in mappings)
+        grants = _distinct(await self.compute_grants(session, row.id, groups))
         subject = f"{provider_name}:{subject_id}"
+        user = await self._upsert_user(
+            session,
+            provider_id=row.id,
+            subject=subject_id,
+            username=name,
+            email=str(email) if email else None,
+            groups=groups,
+        )
+        if user.disabled_at is not None:
+            await audit_log.record(
+                session,
+                tenant_id=None,
+                actor=f"user:{subject}",
+                action="auth.login_denied",
+                diff={"reason": "user disabled"},
+            )
+            return DISABLED_MESSAGE
         if not grants:
             await audit_log.record(
                 session,
@@ -402,6 +518,8 @@ class SessionService:
             grants=grants,
             break_glass=False,
             return_to=return_to,
+            user_id=user.id,
+            groups=groups,
         )
         await audit_log.record(
             session,
@@ -412,10 +530,139 @@ class SessionService:
         )
         return result
 
+    async def compute_grants(
+        self, session: Any, provider_id: UUID | None, groups: list[str] | tuple[str, ...]
+    ) -> list[GrantVia]:
+        """Grants for ``groups`` of one provider under the *current* mappings, with their source."""
+        if provider_id is None or not groups:
+            return []
+        rows = (
+            await session.execute(
+                select(IdpRoleMappingRow, IdentityProviderRow.name)
+                .join(IdentityProviderRow, IdentityProviderRow.id == IdpRoleMappingRow.provider_id)
+                .where(
+                    IdpRoleMappingRow.provider_id == provider_id,
+                    IdpRoleMappingRow.group_name.in_(list(groups)),
+                )
+                .order_by(IdpRoleMappingRow.group_name, IdpRoleMappingRow.id)
+            )
+        ).all()
+        return [GrantVia(m.scope_tenant_id, Role(m.role), name, m.group_name) for m, name in rows]
+
+    async def _upsert_user(
+        self,
+        session: Any,
+        *,
+        provider_id: UUID,
+        subject: str,
+        username: str,
+        email: str | None,
+        groups: list[str],
+    ) -> UserAccountRow:
+        """Create or update the ``user_account`` of someone who just signed in."""
+        now = self._clock()
+        stored = list(dict.fromkeys(groups))[:MAX_STORED_GROUPS]
+        values = {
+            "username": username,
+            "email": email,
+            "groups": stored,
+            "last_login_at": now,
+            "last_seen_at": now,
+        }
+        stmt = (
+            pg_insert(UserAccountRow)
+            .values(
+                id=uuid7(),
+                provider_id=provider_id,
+                subject=subject,
+                first_login_at=now,
+                **values,
+            )
+            .on_conflict_do_update(constraint="uq_user_account_provider_subject", set_=values)
+            .returning(UserAccountRow)
+        )
+        return (await session.execute(stmt)).scalar_one()  # type: ignore[no-any-return]
+
+    async def _finish_test(
+        self,
+        session: Any,
+        pending: LoginStateRow,
+        row: IdentityProviderRow,
+        *,
+        error: str | None = None,
+        subject: str = "",
+        username: str = "",
+        email: str | None = None,
+        groups: list[str] | None = None,
+        claims: dict[str, Any] | None = None,
+        groups_claim: str = "groups",
+        username_claim: str = "username",
+    ) -> TestDone:
+        """Record what a test sign-in learned. No session and no user account are created."""
+        groups = groups or []
+        warnings: list[str] = []
+        would_grant: list[dict[str, Any]] = []
+        if error is None:
+            if not groups:
+                warnings.append(f"the groups claim {groups_claim!r} is missing or empty")
+            if not username:
+                warnings.append(f"the username claim {username_claim!r} is missing")
+            if email is None:
+                warnings.append("the e-mail claim is missing")
+            granted = await self.compute_grants(session, row.id, groups)
+            if groups and not granted:
+                warnings.append(
+                    "no role mapping matches these groups; this person would get no access"
+                )
+            names = {t.id: t.name for t in (await session.execute(select(TenantRow))).scalars()}
+            would_grant = [
+                {
+                    "tenant": names.get(g.tenant_id) if g.tenant_id else None,
+                    "role": g.role.value,
+                    "via": {"provider": g.provider, "group": g.group},
+                }
+                for g in granted
+            ]
+        result = {
+            "subject": subject,
+            "username": username,
+            "email": email,
+            "groups": groups,
+            "claims": clean_claims(claims or {}),
+            "would_grant": would_grant,
+            "warnings": warnings,
+            "error": error,
+        }
+        if pending.test_id is not None:
+            test = await session.get(IdpTestRow, pending.test_id)
+            if test is not None and test.status == "pending":
+                test.status, test.result = "done", result
+        await audit_log.record(
+            session,
+            tenant_id=None,
+            actor=f"login:{row.name}",
+            action="idp.test_done",
+            object_ref=f"idp:{row.name}",
+            diff={"ok": error is None},
+        )
+        return TestDone(pending.return_to)
+
     # -- SAML login -------------------------------------------------------------------------------
 
-    def _saml_config(self, row: IdentityProviderRow, public_url: str) -> saml.SamlConfig:
+    async def _saml_config(
+        self, row: IdentityProviderRow, public_url: str, *, with_key: bool = False
+    ) -> saml.SamlConfig:
         s = row.saml or {}
+        key_pem = ""
+        if with_key and s.get("sign_requests") and s.get("sp_signing_key_ref"):
+            if self._secrets is None:
+                raise LoginError(
+                    "the controller has no secrets backend for the request signing key"
+                )
+            try:
+                key_pem = await self._secrets.get(str(s["sp_signing_key_ref"]))
+            except LookupError as exc:
+                raise LoginError("the request signing key is not available") from exc
         return saml.SamlConfig(
             id=str(row.id),
             name=row.name,
@@ -429,6 +676,9 @@ class SessionService:
             attribute_username=str(s.get("attribute_username", "username")),
             attribute_email=str(s.get("attribute_email", "email")),
             attribute_groups=str(s.get("attribute_groups", "groups")),
+            sign_requests=bool(s.get("sign_requests", False)),
+            sp_signing_certificate=str(s.get("sp_signing_certificate", "")),
+            sp_signing_key_pem=key_pem,
         )
 
     async def saml_metadata(self, provider: str, *, acs_url: str) -> str:
@@ -442,13 +692,19 @@ class SessionService:
         if row.protocol != "saml":
             raise LoginError("this provider does not use SAML")
         acs_url = _canonical_acs(acs_url, row.id)
-        return saml.sp_metadata(self._saml_config(row, _base_of(acs_url)), acs_url=acs_url)
+        cfg = await self._saml_config(row, _base_of(acs_url))
+        return saml.sp_metadata(cfg, acs_url=acs_url)
 
     async def _begin_saml(
-        self, session: Any, row: IdentityProviderRow, acs_url: str, return_to: str | None
+        self,
+        session: Any,
+        row: IdentityProviderRow,
+        acs_url: str,
+        return_to: str | None,
+        test_id: UUID | None = None,
     ) -> str:
         acs_url = _canonical_acs(acs_url, row.id)
-        cfg = self._saml_config(row, _base_of(acs_url))
+        cfg = await self._saml_config(row, _base_of(acs_url), with_key=True)
         state, request_id = secrets.token_urlsafe(32), saml.new_request_id()
         await session.execute(delete(LoginStateRow).where(LoginStateRow.expires_at < self._clock()))
         session.add(
@@ -457,6 +713,8 @@ class SessionService:
                 provider_id=row.id,
                 request_id=request_id,
                 return_to=safe_return_to(return_to),
+                purpose="test" if test_id else "login",
+                test_id=test_id,
                 expires_at=self._clock() + LOGIN_TTL,
             )
         )
@@ -466,7 +724,7 @@ class SessionService:
 
     async def complete_saml_login(
         self, *, provider: str, saml_response: str, relay_state: str, acs_url: str
-    ) -> LoginResult:
+    ) -> LoginResult | TestDone:
         """Finish a SAML login from the assertion consumer service POST.
 
         The login state (found by ``relay_state``) is single use and names the request id the
@@ -478,17 +736,14 @@ class SessionService:
         """
         outcome = await self._complete_saml(provider, saml_response, relay_state, acs_url)
         if isinstance(outcome, str):
-            code = {EXPIRED_MESSAGE: "expired", NO_ACCESS_MESSAGE: "no_access"}.get(
-                outcome, "provider_error"
-            )
-            raise LoginError(outcome, code)
+            raise LoginError(outcome)
         return outcome
 
     async def _complete_saml(
         self, provider: str, saml_response: str, relay_state: str, acs_url: str
-    ) -> LoginResult | str:
+    ) -> LoginResult | TestDone | str:
         async with admin_session(self._db.admin) as session:
-            row = await self._provider_row(session, provider)
+            row = await self._provider_row(session, provider, allow_disabled=True)
             if row.protocol != "saml":
                 return "this provider does not use SAML"
             pending = (
@@ -501,14 +756,19 @@ class SessionService:
             if pending is None or pending.expires_at <= self._clock() or not pending.request_id:
                 await self._login_failed(session, row.name, "no login in progress (or expired)")
                 return EXPIRED_MESSAGE
+            is_test = pending.purpose == "test"
+            if not row.enabled and not is_test:
+                return "unknown identity provider"
             acs_url = _canonical_acs(acs_url, row.id)
-            cfg = self._saml_config(row, _base_of(acs_url))
+            cfg = await self._saml_config(row, _base_of(acs_url))
             now = self._clock()
             try:
                 assertion = saml.verify_response(
                     cfg, saml_response, acs_url=acs_url, request_id=pending.request_id, now=now
                 )
             except saml.SamlError as exc:
+                if is_test:
+                    return await self._finish_test(session, pending, row, error=str(exc))
                 await self._login_failed(session, row.name, str(exc))
                 return str(exc)
             await session.execute(
@@ -529,6 +789,19 @@ class SessionService:
             if inserted is None:
                 await self._login_failed(session, row.name, "assertion replayed")
                 return "this sign-in response was already used"
+            if is_test:
+                return await self._finish_test(
+                    session,
+                    pending,
+                    row,
+                    subject=assertion.subject,
+                    username=assertion.first(cfg.attribute_username) or "",
+                    email=assertion.first(cfg.attribute_email),
+                    groups=list(assertion.attributes.get(cfg.attribute_groups, [])),
+                    claims={k: v if len(v) != 1 else v[0] for k, v in assertion.attributes.items()},
+                    groups_claim=cfg.attribute_groups,
+                    username_claim=cfg.attribute_username,
+                )
             return await self._grant_login(
                 session,
                 row=row,
@@ -560,6 +833,8 @@ class SessionService:
         grants: tuple[tuple[UUID | None, Role], ...],
         break_glass: bool,
         return_to: str,
+        user_id: UUID | None = None,
+        groups: list[str] | None = None,
     ) -> LoginResult:
         cookie = SESSION_PREFIX + secrets.token_urlsafe(32)
         csrf = secrets.token_urlsafe(24)
@@ -570,12 +845,15 @@ class SessionService:
             csrf_token=csrf,
             subject=subject,
             provider_id=provider_id,
+            user_id=user_id,
             name=name,
             email=email,
+            groups=list(dict.fromkeys(groups or []))[:MAX_STORED_GROUPS],
             grants=_grants_json(grants),
+            grants_computed_at=now,
             break_glass=break_glass,
             created_at=now,
-            expires_at=now + SESSION_TTL,
+            expires_at=now + (BREAK_GLASS_TTL if break_glass else SESSION_TTL),
             last_seen_at=now,
         )
         session.add(row)
@@ -585,30 +863,86 @@ class SessionService:
     # -- sessions ---------------------------------------------------------------------------------
 
     async def authenticate(self, cookie: str) -> SessionInfo | None:
-        """Return the session for a cookie value, or ``None`` (unknown, expired, idle, revoked)."""
+        """Return the session for a cookie value, or ``None`` (unknown, expired, idle, revoked).
+
+        Grants are recomputed from the stored groups and the current mappings when they are more
+        than :data:`GRANTS_MAX_AGE` old; a person left with no grant has the session revoked.
+
+        Raises:
+            UserDisabledError: If an administrator disabled the person (the session is revoked).
+        """
+        return await self._load(cookie, force_recompute=False)
+
+    async def refresh(self, cookie: str) -> SessionInfo | None:
+        """Recompute the grants now (``POST /auth/refresh``); the absolute lifetime is unchanged.
+
+        Returns ``None`` if the session is gone, or lost its last grant and was revoked.
+
+        Raises:
+            UserDisabledError: If an administrator disabled the person.
+        """
+        return await self._load(cookie, force_recompute=True)
+
+    async def _load(self, cookie: str, *, force_recompute: bool) -> SessionInfo | None:
         if not cookie.startswith(SESSION_PREFIX):
             return None
         now = self._clock()
+        disabled = False
+        info: SessionInfo | None = None
         async with admin_session(self._db.admin) as session:
             row = (
                 await session.execute(
-                    select(UserSessionRow).where(UserSessionRow.token_hash == hash_token(cookie))
+                    select(UserSessionRow)
+                    .where(UserSessionRow.token_hash == hash_token(cookie))
+                    .with_for_update()
                 )
             ).scalar_one_or_none()
-            if (
-                row is None
-                or row.revoked_at is not None
-                or row.expires_at <= now
-                or now - row.last_seen_at > IDLE_TTL
-            ):
+            idle = BREAK_GLASS_IDLE if row is not None and row.break_glass else IDLE_TTL
+            if row is None or row.expires_at <= now or now - row.last_seen_at > idle:
                 return None
-            if now - row.last_seen_at > timedelta(seconds=30):
-                await session.execute(
-                    update(UserSessionRow)
-                    .where(UserSessionRow.id == row.id)
-                    .values(last_seen_at=now)
-                )
-            return _info(row)
+            user: UserAccountRow | None = None
+            if row.user_id is not None:
+                user = await session.get(UserAccountRow, row.user_id)
+            if user is not None and user.disabled_at is not None:
+                # disabling revokes sessions, but the person is told why, not just "expired"
+                row.revoked_at = row.revoked_at or now
+                disabled = True
+            elif row.revoked_at is not None:
+                return None
+            elif not row.break_glass and (
+                force_recompute or now - row.grants_computed_at > GRANTS_MAX_AGE
+            ):
+                grants = _distinct(await self.compute_grants(session, row.provider_id, row.groups))
+                if not grants:
+                    row.revoked_at = now
+                    await audit_log.record(
+                        session,
+                        tenant_id=None,
+                        actor=f"user:{row.subject}",
+                        action="auth.session_revoked",
+                        diff={"reason": "no group grants access any more"},
+                    )
+                else:
+                    row.grants = _grants_json(grants)
+                    row.grants_computed_at = now
+                    info = _info(row)
+            else:
+                info = _info(row)
+            if info is not None:
+                if now - row.last_seen_at > timedelta(seconds=30):
+                    row.last_seen_at = now
+                if user is not None and now - user.last_seen_at > USER_SEEN_EVERY:
+                    user.last_seen_at = now
+        if disabled:
+            raise UserDisabledError
+        return info
+
+    async def explain(self, info: SessionInfo) -> list[GrantVia]:
+        """Which provider group produced each grant of this session, under the current mappings."""
+        if info.break_glass:
+            return []
+        async with admin_session(self._db.admin) as session:
+            return await self.compute_grants(session, info.provider_id, info.groups)
 
     async def logout(self, cookie: str) -> None:
         """Revoke a session (idempotent) and audit it."""
@@ -641,6 +975,7 @@ class SessionService:
                     username=username,
                     password_hash=hash_password(password),
                     totp_secret_ref=totp_secret_ref,
+                    totp_confirmed_at=self._clock(),
                 )
             )
             await audit_log.record(
@@ -653,7 +988,7 @@ class SessionService:
 
     async def break_glass_login(self, username: str, password: str, code: str) -> LoginResult:
         """Log the local administrator in. Every attempt is audited; failures lock the account."""
-        if not self._break_glass:
+        if not await self.break_glass_on():
             raise LoginError("break-glass login is not enabled")
         outcome = await self._break_glass_login(username, password, code)
         if isinstance(outcome, str):
@@ -675,13 +1010,17 @@ class SessionService:
             if admin is not None and admin.locked_until and admin.locked_until > now:
                 return "too many failed attempts; try again later"
             ok = False
-            if admin is not None and verify_password(password, admin.password_hash):
+            if (
+                admin is not None
+                and admin.totp_confirmed_at is not None
+                and verify_password(password, admin.password_hash)
+            ):
                 try:
                     secret = await self._secrets.get(admin.totp_secret_ref) if self._secrets else ""
                 except LookupError:
                     secret = ""
                 ok = bool(secret) and verify_totp(secret, code, now.timestamp())
-            elif admin is None:
+            elif admin is None or admin.totp_confirmed_at is None:
                 verify_password(password, hash_password("x" * 16, n=2**10))  # keep timing similar
             if not ok:
                 if admin is not None:
@@ -698,6 +1037,7 @@ class SessionService:
                 return "invalid credentials"
             assert admin is not None  # noqa: S101
             admin.failed_attempts = 0
+            admin.last_login_at = now
             result = await self._create_session(
                 session,
                 subject=f"local:{username}",
@@ -724,6 +1064,11 @@ def _grants_json(grants: tuple[tuple[UUID | None, Role], ...]) -> list[dict[str,
     ]
 
 
+def _distinct(grants: list[GrantVia]) -> tuple[tuple[UUID | None, Role], ...]:
+    """The (tenant, role) pairs of ``grants`` without duplicates, keeping their order."""
+    return tuple(dict.fromkeys((g.tenant_id, g.role) for g in grants))
+
+
 def _info(row: UserSessionRow) -> SessionInfo:
     return SessionInfo(
         id=row.id,
@@ -736,15 +1081,23 @@ def _info(row: UserSessionRow) -> SessionInfo:
         csrf_token=row.csrf_token,
         break_glass=row.break_glass,
         expires_at=row.expires_at,
+        idle_timeout=BREAK_GLASS_IDLE if row.break_glass else IDLE_TTL,
+        grants_computed_at=row.grants_computed_at,
+        user_id=row.user_id,
+        provider_id=row.provider_id,
+        groups=tuple(row.groups),
     )
 
 
 __all__ = [
+    "GrantVia",
     "LoginError",
     "LoginResult",
     "ProviderInfo",
     "SessionInfo",
     "SessionService",
+    "TestDone",
+    "UserDisabledError",
     "hash_password",
     "safe_return_to",
     "totp_code",

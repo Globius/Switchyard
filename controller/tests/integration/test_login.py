@@ -219,17 +219,17 @@ async def test_system_admin_group_and_bearer_tokens_keep_working(rig: Rig) -> No
 async def test_expired_idle_and_logged_out_sessions_are_401_problems(rig: Rig) -> None:
     await rig.login(groups=["acme-admins"])
     csrf = (await rig.client.get(f"{V1}/me")).json()["csrf_token"]
-    rig.clock.now += timedelta(minutes=61)
+    rig.clock.now += timedelta(minutes=31)
     idle = await rig.client.get(f"{V1}/me")
-    assert idle.status_code == 401
+    assert idle.status_code == 401 and idle.json()["code"] == "session_expired"
     assert idle.headers["content-type"].startswith("application/problem+json")
 
     await rig.login(groups=["acme-admins"])
     csrf = (await rig.client.get(f"{V1}/me")).json()["csrf_token"]
-    for _ in range(9):  # stay active, but not forever
-        rig.clock.now += timedelta(minutes=55)
+    for _ in range(10):  # stay active, but not forever
+        rig.clock.now += timedelta(minutes=25)
         assert (await rig.client.get(f"{V1}/me")).status_code in {200, 401}
-    assert (await rig.client.get(f"{V1}/me")).status_code == 401, "absolute lifetime is 8 hours"
+    assert (await rig.client.get(f"{V1}/me")).status_code == 401, "absolute lifetime is 4 hours"
 
     await rig.login(groups=["acme-admins"])
     csrf = (await rig.client.get(f"{V1}/me")).json()["csrf_token"]
@@ -243,19 +243,19 @@ async def test_expired_idle_and_logged_out_sessions_are_401_problems(rig: Rig) -
 
 async def test_failed_logins_are_refused_and_audited(rig: Rig) -> None:
     denied = await rig.login(groups=["nobody"])
-    assert denied.status_code == 401 and "not a member" in denied.text
+    assert denied.status_code == 302 and denied.headers["location"] == "/login?error=no_access"
     assert (
         await count(rig, "SELECT count(*) FROM audit_event WHERE action='auth.login_denied'") == 1
     )
 
     rig.idp.wrong_nonce = True
     bad = await rig.login(groups=["acme-admins"])
-    assert bad.status_code == 401 and "not valid" in bad.text
+    assert bad.headers["location"] == "/login?error=provider_error"
     rig.idp.wrong_nonce = False
 
     rig.idp.refuse_code = True
     refused = await rig.login(groups=["acme-admins"])
-    assert refused.status_code == 401
+    assert refused.headers["location"] == "/login?error=provider_error"
     rig.idp.refuse_code = False
     assert (
         await count(rig, "SELECT count(*) FROM audit_event WHERE action='auth.login_failed'") == 2
@@ -264,7 +264,7 @@ async def test_failed_logins_are_refused_and_audited(rig: Rig) -> None:
     unknown_state = await rig.client.get(
         f"{V1}/auth/callback/authentik", params={"code": "x", "state": "never-issued"}
     )
-    assert unknown_state.status_code == 401 and "expired" in unknown_state.text
+    assert unknown_state.headers["location"] == "/login?error=expired"
     assert (await rig.client.get(f"{V1}/auth/login/nope")).status_code == 400
     assert "set-cookie" not in unknown_state.headers
 
@@ -276,7 +276,7 @@ async def test_a_login_state_works_once(rig: Rig) -> None:
     params = {"code": code, "state": state}
     assert (await rig.client.get(f"{V1}/auth/callback/authentik", params=params)).status_code == 302
     replay = await rig.client.get(f"{V1}/auth/callback/authentik", params=params)
-    assert replay.status_code == 401
+    assert replay.headers["location"] == "/login?error=expired"
 
 
 async def test_break_glass_is_off_by_default_then_works_with_totp_and_locks_out(

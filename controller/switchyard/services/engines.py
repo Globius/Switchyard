@@ -16,10 +16,10 @@ from switchyard.db.models import SeGroupRow
 from switchyard.db.ops_models import ServiceEngineRow
 from switchyard.db.tenancy import tenant_session
 from switchyard.domain.validators import validate_name, validate_secret_ref
-from switchyard.domain.workflow import EngineState, Role
+from switchyard.domain.workflow import EngineState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineRecord
-from switchyard.services.changesets import require_role
+from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import AlreadyExistsError, NotFoundError, PermissionDeniedError
 
@@ -90,7 +90,7 @@ class EngineService:
     def _check(self, principal: Principal, tenant_id: UUID) -> None:
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-        require_role(principal, Role.TENANT_ADMIN)
+        require(principal, "manage", "engine")
 
     async def register(
         self,

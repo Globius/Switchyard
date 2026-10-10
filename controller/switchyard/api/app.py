@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from urllib.parse import parse_qs
 from uuid import UUID
 
@@ -21,7 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from switchyard.adapters.agent import AgentError
 from switchyard.adapters.pki import PkiError
-from switchyard.adapters.secrets import SecretsReader
+from switchyard.adapters.secrets import SecretsReader, SecretsWriter
 from switchyard.adapters.telemetry import Telemetry, TelemetryError
 from switchyard.api import docs_meta, job_models, overview
 from switchyard.api import examples as ex
@@ -40,7 +40,12 @@ from switchyard.api.schemas import (
     AuditActionRead,
     AuditEventRead,
     AuthProviders,
+    BreakGlassConfirmIn,
+    BreakGlassEnrollIn,
+    BreakGlassEnrollment,
     BreakGlassIn,
+    BreakGlassRead,
+    BreakGlassSwitchIn,
     CertImportIn,
     CertIssueIn,
     ChangeSetDiff,
@@ -55,6 +60,12 @@ from switchyard.api.schemas import (
     EnrollmentToken,
     EnrollOut,
     Health,
+    IdentityProviderIn,
+    IdentityProviderPatch,
+    IdentityProviderRead,
+    IdpTestIn,
+    IdpTestResult,
+    IdpTestStarted,
     JobAccepted,
     JobRead,
     Me,
@@ -69,18 +80,29 @@ from switchyard.api.schemas import (
     OpenIn,
     OpsIn,
     Page,
+    PermissionMatrix,
     ProblemOut,
     ProtocolRulesRead,
     ReasonIn,
     RevisionRead,
     RevisionSummary,
+    RoleMappingIn,
+    RoleMappingPatch,
+    RoleMappingRead,
+    SessionsRevoked,
     StateOut,
+    SystemRoleMappingIn,
+    SystemTokenCreated,
+    SystemTokenIn,
+    SystemTokenRead,
     TenantIn,
     TenantPatch,
     TenantRead,
     TokenCreated,
     TokenIn,
     TokenRead,
+    UserDetail,
+    UserRead,
     VipAllocation,
     VipPoolUsage,
     VirtualServiceStatusRead,
@@ -88,6 +110,7 @@ from switchyard.api.schemas import (
 from switchyard.api.stream_models import EVENTS
 from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
+from switchyard.domain import permissions
 from switchyard.domain.changes import (
     COLLECTION,
     Action,
@@ -103,19 +126,37 @@ from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
 from switchyard.render.escape import RenderError
 from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
+from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
 from switchyard.services.certificates import CertificateJobs, CertificateService
-from switchyard.services.changesets import ChangeSetDetail, ChangeSetService
+from switchyard.services.changesets import (
+    ChangeSetDetail,
+    ChangeSetService,
+    check_ops_allowed,
+    require,
+)
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
+from switchyard.services.identity_providers import (
+    IdentityProviderRecord,
+    IdentityProviderService,
+)
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.jobs import JobService
 from switchyard.services.members import MemberService
 from switchyard.services.probes import MonitorTestService
-from switchyard.services.sessions import LoginError, SessionInfo, SessionService
+from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
+from switchyard.services.sessions import (
+    LoginError,
+    LoginResult,
+    SessionInfo,
+    SessionService,
+    UserDisabledError,
+)
 from switchyard.services.status import EngineStatus, StatusService, virtual_service_states
 from switchyard.services.tenants import TenantRecord, TenantService
 from switchyard.services.tokens import TokenService
+from switchyard.services.users import UserRecord, UserService
 
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
@@ -134,11 +175,15 @@ class ApiServices:
     infra: InfraJobs
     cert_jobs: CertificateJobs
     jobs: JobService
+    role_mappings: RoleMappingService
+    users: UserService
     certs: CertificateService | None = None
     telemetry: Telemetry | None = None
     monitor_tests: MonitorTestService = None  # type: ignore[assignment]
     enrollment: EnrollmentService | None = None
     sessions: SessionService | None = None
+    identity_providers: IdentityProviderService | None = None
+    break_glass: BreakGlassService | None = None
 
 
 def build_services(
@@ -149,8 +194,30 @@ def build_services(
     enrollment: EnrollmentService | None = None,
     sessions: SessionService | None = None,
     telemetry: Telemetry | None = None,
+    *,
+    identity_providers: IdentityProviderService | None = None,
+    break_glass: BreakGlassService | None = None,
 ) -> ApiServices:
-    """Wire the services over one set of database handles."""
+    """Wire the services over one set of database handles.
+
+    Identity-provider and break-glass administration are built from ``sessions`` (which owns the
+    OIDC client and the forced-break-glass flag) and ``secrets`` unless passed in.
+    """
+    writer = cast("SecretsWriter | None", secrets if hasattr(secrets, "put") else None)
+    if sessions is not None and identity_providers is None:
+        identity_providers = IdentityProviderService(
+            db,
+            sessions.oidc,
+            secrets,
+            writer,
+        )
+    if sessions is not None and break_glass is None:
+        break_glass = BreakGlassService(
+            db,
+            secrets,
+            writer,
+            forced=sessions.break_glass_enabled,
+        )
     return ApiServices(
         db=db,
         tenants=TenantService(db),
@@ -162,11 +229,15 @@ def build_services(
         infra=InfraJobs(db),
         cert_jobs=CertificateJobs(db),
         jobs=JobService(db),
+        role_mappings=RoleMappingService(db),
+        users=UserService(db),
         certs=certs,
         enrollment=enrollment,
         sessions=sessions,
         telemetry=telemetry,
         monitor_tests=MonitorTestService(db, directory),
+        identity_providers=identity_providers,
+        break_glass=break_glass,
     )
 
 
@@ -192,26 +263,43 @@ async def current_identity(
 
     Bearer tokens are for machines and are not subject to CSRF. A cookie session must send
     ``X-CSRF-Token`` (the value from ``GET /me``) on every request that changes something.
+    Failures carry a stable ``code``: ``invalid_token``, ``session_expired``, ``csrf``,
+    ``user_disabled`` or ``unauthenticated``.
     """
     headers = {"WWW-Authenticate": "Bearer"}
     if authorization and authorization.lower().startswith("bearer "):
         principal = await services.tokens.authenticate(authorization[7:].strip())
         if principal is None:
-            raise ApiError(401, "invalid, expired or revoked token", headers=headers)
+            raise ApiError(
+                401, "invalid, expired or revoked token", headers=headers, code="invalid_token"
+            )
         return principal
     cookie = request.cookies.get(SESSION_COOKIE)
     if cookie and services.sessions is not None:
-        info = await services.sessions.authenticate(cookie)
+        try:
+            info = await services.sessions.authenticate(cookie)
+        except UserDisabledError:
+            raise ApiError(
+                403, "your account has been disabled by an administrator", code="user_disabled"
+            ) from None
         if info is None:
-            raise ApiError(401, "your session has expired; log in again", headers=headers)
+            raise ApiError(
+                401,
+                "your session has expired; log in again",
+                headers=headers,
+                code="session_expired",
+            )
         if request.method not in SAFE_METHODS and not hmac.compare_digest(
             request.headers.get("x-csrf-token", ""), info.csrf_token
         ):
-            raise ApiError(403, "missing or wrong X-CSRF-Token header")
+            raise ApiError(403, "missing or wrong X-CSRF-Token header", code="csrf")
         request.state.session = info
         return info.principal()
     raise ApiError(
-        401, "send an API token as 'Authorization: Bearer <token>' or log in", headers=headers
+        401,
+        "send an API token as 'Authorization: Bearer <token>' or log in",
+        headers=headers,
+        code="unauthenticated",
     )
 
 
@@ -248,6 +336,49 @@ def _rid() -> str | None:
 
 def _etag(version: int) -> str:
     return f'"{version}"'
+
+
+def _mapping_json(r: RoleMappingRecord) -> dict[str, Any]:
+    return {
+        "id": str(r.id),
+        "provider_id": str(r.provider_id),
+        "provider": r.provider,
+        "group_name": r.group_name,
+        "label": r.label,
+        "tenant_id": str(r.tenant_id) if r.tenant_id else None,
+        "tenant": r.tenant,
+        "role": r.role.value,
+        "version": r.version,
+        "created_by": r.created_by,
+        "created_at": r.created_at,
+    }
+
+
+def _user_json(r: UserRecord, *, detail: bool = False) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "id": str(r.id),
+        "provider_id": str(r.provider_id),
+        "provider": r.provider,
+        "username": r.username,
+        "email": r.email,
+        "groups": list(r.groups),
+        "first_login_at": r.first_login_at,
+        "last_login_at": r.last_login_at,
+        "last_seen_at": r.last_seen_at,
+        "disabled_at": r.disabled_at,
+        "grants": [
+            {
+                "tenant_id": str(g.tenant_id) if g.tenant_id else None,
+                "tenant": g.tenant,
+                "role": g.role.value,
+                "via": [{"provider": v.provider, "group": v.group} for v in g.via],
+            }
+            for g in r.grants
+        ],
+    }
+    if detail:
+        out |= {"subject": r.subject, "active_sessions": r.active_sessions}
+    return out
 
 
 def _if_match(value: str | None) -> int:
@@ -632,6 +763,7 @@ async def _write(
     apply: bool,
     summary: str,
 ) -> Accepted:
+    check_ops_allowed(who, [op])  # the role decides before the shape of the request
     if change_set is None and not apply:
         raise ApiError(400, "pass ?change_set=<id> to add to a draft, or ?apply=true to apply now")
     if change_set is not None:
@@ -992,6 +1124,10 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             path="/",
         )
 
+    def login_failed(code: str) -> Response:
+        """Send a browser whose sign-in failed to the login page, which explains ``code``."""
+        return Response(status_code=302, headers={"Location": f"/login?error={code}"})
+
     def require_sessions(svc: ApiServices) -> SessionService:
         if svc.sessions is None:
             raise ApiError(503, "login is not configured on this controller")
@@ -1012,7 +1148,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
                 {"id": str(p.id), "name": p.name, "protocol": p.protocol}
                 for p in await sessions.providers()
             ],
-            "break_glass": sessions.break_glass_enabled,
+            "break_glass": await sessions.break_glass_on(),
         }
 
     @router.get(
@@ -1053,15 +1189,16 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         """Finish the login, set the session cookie and send the browser back to the app."""
         sessions = require_sessions(svc)
         if error or not code or not state:
-            raise ApiError(400, "the identity provider reported an error: " + (error or "no code"))
+            return login_failed("provider_error")
         try:
             result = await sessions.complete_login(
                 state=state, code=code, redirect_uri=callback_url(request, provider)
             )
         except LoginError as exc:
-            raise ApiError(401, str(exc)) from exc
+            return login_failed(exc.code)
         response = Response(status_code=302, headers={"Location": result.return_to})
-        set_session_cookie(request, response, result.cookie, result.session)
+        if isinstance(result, LoginResult):  # a test sign-in sets no cookie
+            set_session_cookie(request, response, result.cookie, result.session)
         return response
 
     @router.post(
@@ -1105,9 +1242,10 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
                 acs_url=callback_url(request, provider),
             )
         except LoginError as exc:
-            return Response(status_code=302, headers={"Location": f"/login?error={exc.code}"})
+            return login_failed(exc.code)
         response = Response(status_code=302, headers={"Location": result.return_to})
-        set_session_cookie(request, response, result.cookie, result.session)
+        if isinstance(result, LoginResult):  # a test sign-in sets no cookie
+            set_session_cookie(request, response, result.cookie, result.session)
         return response
 
     @router.get(
@@ -1171,6 +1309,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         svc: ApiServices, who: Principal, session: SessionInfo | None
     ) -> dict[str, Any]:
         tenants = await svc.tenants.list_tenants(who)
+        via = await svc.sessions.explain(session) if session and svc.sessions else []
         return {
             "id": str(session.id) if session else None,
             "name": session.name if session else who.actor,
@@ -1179,8 +1318,74 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "break_glass": bool(session and session.break_glass),
             "auth": "session" if session else "token",
             "csrf_token": session.csrf_token if session else None,
+            "session": {
+                "expires_at": session.expires_at,
+                "idle_timeout_seconds": int(session.idle_timeout.total_seconds()),
+                "grants_computed_at": session.grants_computed_at or session.expires_at,
+            }
+            if session
+            else None,
             "tenants": [
-                {"id": str(t.id), "name": t.name, "role": who.role_in(t.id).value} for t in tenants
+                {
+                    "id": str(t.id),
+                    "name": t.name,
+                    "role": who.role_in(t.id).value,
+                    "via": [
+                        {"provider": g.provider, "group": g.group}
+                        for g in via
+                        if g.tenant_id in (None, t.id)
+                    ],
+                }
+                for t in tenants
+            ],
+        }
+
+    @router.post(
+        "/auth/refresh",
+        tags=["auth"],
+        summary="Recompute my roles now",
+        response_model=Me,
+        responses=_ok(ex.ME),
+    )
+    async def auth_refresh(request: Request, who: FullWho, svc: Services) -> dict[str, Any]:
+        """Recompute grants from the stored provider groups and the current mappings.
+
+        Role changes otherwise apply within a minute; this applies them at once. The session's
+        absolute lifetime is not extended. A person left with no grant is signed out (401
+        `session_expired`). Needs the CSRF header; API tokens just get their `Me` back.
+        """
+        cookie = request.cookies.get(SESSION_COOKIE)
+        if request.headers.get("authorization") or not cookie or svc.sessions is None:
+            return await me_payload(svc, who, None)
+        try:
+            info = await svc.sessions.refresh(cookie)
+        except UserDisabledError:
+            raise ApiError(
+                403, "your account has been disabled by an administrator", code="user_disabled"
+            ) from None
+        if info is None:
+            raise ApiError(401, "your session has expired; log in again", code="session_expired")
+        return await me_payload(svc, info.principal(), info)
+
+    @router.get(
+        "/permissions",
+        tags=["auth"],
+        summary="The permission matrix",
+        response_model=PermissionMatrix,
+        responses=_ok(ex.PERMISSIONS),
+    )
+    async def get_permissions(who: FullWho) -> dict[str, Any]:
+        """Which role may do what. `can(verb, object)` is `role_in(tenant) >= min_role`."""
+        return {
+            "roles": [r.value for r in permissions.ROLES],
+            "permissions": [
+                {
+                    "verb": p.verb,
+                    "object": p.object,
+                    "min_role": p.min_role.value,
+                    "description": p.description,
+                }
+                for p in permissions.MATRIX
             ],
         }
 
@@ -1218,7 +1423,6 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         t = await svc.tenants.create(
             who,
             body.name,
-            oidc_group=body.oidc_group,
             quotas=body.quotas,
             require_approval=body.require_approval,
             request_id=_rid(),
@@ -2040,6 +2244,635 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         await svc.tokens.revoke(who, tenant.id, token, request_id=_rid())
         return Response(status_code=204)
 
+    # identity providers
+    def idp_json(request: Request, r: IdentityProviderRecord) -> dict[str, Any]:
+        base = (request.app.state.public_url or str(request.base_url)).rstrip("/")
+        out: dict[str, Any] = {
+            "protocol": r.protocol,
+            "id": str(r.id),
+            "name": r.name,
+            "enabled": r.enabled,
+            "version": r.version,
+            "created_at": r.created_at,
+            "warnings": list(r.warnings),
+        } | r.settings
+        if r.protocol == "saml":
+            out["sp_entity_id"] = (
+                r.settings.get("sp_entity_id") or f"{base}/api/v1/auth/saml/{r.id}"
+            )
+            out["acs_url"] = f"{base}/api/v1/auth/callback/{r.id}"
+            out["sp_metadata_url"] = f"{base}/api/v1/auth/saml/{r.id}/metadata"
+        else:
+            out.pop("client_secret_set", None)
+            out["client_secret_set"] = bool(r.settings.get("client_secret_ref"))
+        return out
+
+    def require_idp(svc: ApiServices) -> IdentityProviderService:
+        if svc.identity_providers is None:
+            raise ApiError(503, "login is not configured on this controller")
+        return svc.identity_providers
+
+    @router.get(
+        "/identity-providers",
+        tags=["identity providers"],
+        summary="List identity providers",
+        response_model=list[IdentityProviderRead],
+        responses=_ok([ex.IDP_OIDC, ex.IDP_SAML]),
+    )
+    async def list_identity_providers(
+        request: Request, who: Who, svc: Services
+    ) -> list[dict[str, Any]]:
+        """OIDC and SAML providers, by name. Secrets are never returned."""
+        return [idp_json(request, r) for r in await require_idp(svc).list_providers(who)]
+
+    @router.post(
+        "/identity-providers",
+        status_code=201,
+        tags=["identity providers"],
+        summary="Create an identity provider",
+        response_model=IdentityProviderRead,
+        responses=_ok(ex.IDP_OIDC, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_identity_provider(
+        body: IdentityProviderIn, request: Request, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Create a provider. `protocol` selects the schema.
+
+        An OIDC `client_secret` is stored in the secrets backend and never returned. An OIDC
+        provider whose discovery document cannot be fetched is still created; `warnings` says so.
+        A SAML provider can be filled in from its metadata (`idp_metadata_url` or
+        `idp_metadata_xml`).
+        """
+        data = body.model_dump(exclude_unset=True)
+        record = await require_idp(svc).create(
+            who,
+            protocol=data.pop("protocol"),
+            name=data.pop("name"),
+            enabled=data.pop("enabled", True),
+            settings=data,
+            request_id=_rid(),
+        )
+        return idp_json(request, record)
+
+    @router.get(
+        "/identity-providers/{idp}",
+        tags=["identity providers"],
+        summary="Get an identity provider",
+        response_model=IdentityProviderRead,
+        responses=_ok(ex.IDP_OIDC, headers=ETAG_HEADER),
+    )
+    async def get_identity_provider(
+        idp: UUID, request: Request, response: Response, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        record = await require_idp(svc).get(who, idp)
+        response.headers["ETag"] = _etag(record.version)
+        return idp_json(request, record)
+
+    @router.patch(
+        "/identity-providers/{idp}",
+        tags=["identity providers"],
+        summary="Change an identity provider",
+        response_model=IdentityProviderRead,
+        responses=_ok(ex.IDP_OIDC) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def patch_identity_provider(
+        idp: UUID,
+        body: IdentityProviderPatch,
+        request: Request,
+        response: Response,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Change a provider. Send `protocol` (it cannot change) and only the fields to change."""
+        data = body.model_dump(exclude_unset=True)
+        current = await require_idp(svc).get(who, idp)
+        if data.pop("protocol") != current.protocol:
+            raise ApiError(
+                422,
+                "the protocol of a provider cannot change",
+                errors=[{"path": "protocol", "code": "immutable", "message": "cannot change"}],
+            )
+        record = await require_idp(svc).update(
+            who, idp, expected_version=_if_match(if_match), changes=data, request_id=_rid()
+        )
+        response.headers["ETag"] = _etag(record.version)
+        return idp_json(request, record)
+
+    @router.delete(
+        "/identity-providers/{idp}",
+        status_code=204,
+        tags=["identity providers"],
+        summary="Delete an identity provider",
+        responses=IF_MATCH_RESPONSES,
+    )
+    async def delete_identity_provider(
+        idp: UUID,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Delete a provider with its role mappings, its users and their sessions."""
+        await require_idp(svc).delete(
+            who, idp, expected_version=_if_match(if_match), request_id=_rid()
+        )
+        return Response(status_code=204)
+
+    @router.post(
+        "/identity-providers/{idp}/test",
+        status_code=201,
+        tags=["identity providers"],
+        summary="Start a test sign-in",
+        response_model=IdpTestStarted,
+        responses=_ok(ex.IDP_TEST_STARTED, 201),
+    )
+    async def start_idp_test(
+        idp: UUID,
+        request: Request,
+        who: Who,
+        svc: Services,
+        body: IdpTestIn | None = None,
+    ) -> dict[str, Any]:
+        """Open `authorize_url` in the browser; poll the result with `test_id`.
+
+        The callback creates no session and no user. A disabled provider can be tested.
+        """
+        providers = require_idp(svc)
+        sessions = require_sessions(svc)
+        test_id = await providers.new_test(who, idp)
+        try:
+            url = await sessions.begin_login(
+                str(idp),
+                redirect_uri=callback_url(request, str(idp)),
+                return_to=body.return_to if body else None,
+                test_id=test_id,
+            )
+        except LoginError as exc:
+            raise ApiError(422, str(exc)) from exc
+        return {"test_id": str(test_id), "authorize_url": url}
+
+    @router.get(
+        "/identity-providers/{idp}/test/{test_id}",
+        tags=["identity providers"],
+        summary="Read the result of a test sign-in",
+        response_model=IdpTestResult,
+        responses=_ok(ex.IDP_TEST_RESULT),
+    )
+    async def read_idp_test(idp: UUID, test_id: UUID, who: Who, svc: Services) -> dict[str, Any]:
+        """`pending` until the provider answered; then the result, once. Later reads are 404."""
+        result = await require_idp(svc).read_test(who, idp, test_id)
+        return {"status": result.status} | (result.result or {})
+
+    # break-glass administration
+    def break_glass_json(status: BreakGlassStatus) -> dict[str, Any]:
+        admin = status.admin
+        return {
+            "forced_by_deployment": status.forced_by_deployment,
+            "enabled": status.enabled,
+            "enabled_until": status.enabled_until,
+            "enabled_by": status.enabled_by,
+            "reason": status.reason,
+            "admin": None
+            if admin is None
+            else {
+                "username": admin.username,
+                "totp_confirmed": admin.totp_confirmed,
+                "created_at": admin.created_at,
+                "last_login_at": admin.last_login_at,
+                "locked_until": admin.locked_until,
+            },
+        }
+
+    def require_break_glass(svc: ApiServices) -> BreakGlassService:
+        if svc.break_glass is None:
+            raise ApiError(503, "login is not configured on this controller")
+        return svc.break_glass
+
+    @router.get(
+        "/system/break-glass",
+        tags=["break-glass"],
+        summary="Break-glass login status",
+        response_model=BreakGlassRead,
+        responses=_ok(ex.BREAK_GLASS),
+    )
+    async def get_break_glass(who: Who, svc: Services) -> dict[str, Any]:
+        return break_glass_json(await require_break_glass(svc).status(who))
+
+    @router.put(
+        "/system/break-glass",
+        tags=["break-glass"],
+        summary="Switch break-glass login on or off",
+        response_model=BreakGlassRead,
+        responses=_ok(ex.BREAK_GLASS) | VALIDATION_RESPONSE,
+    )
+    async def put_break_glass(body: BreakGlassSwitchIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Switch break-glass login on for a limited time, or off.
+
+        Enabling needs a confirmed administrator and a `reason`; it lasts `ttl_minutes` (default
+        240, at most 1440). Disabling has no effect while the deployment forces it on
+        (`forced_by_deployment`).
+        """
+        status = await require_break_glass(svc).set_enabled(
+            who,
+            enabled=body.enabled,
+            reason=body.reason,
+            ttl_minutes=body.ttl_minutes,
+            request_id=_rid(),
+        )
+        return break_glass_json(status)
+
+    @router.post(
+        "/system/break-glass/admin",
+        status_code=201,
+        tags=["break-glass"],
+        summary="Enrol the break-glass administrator",
+        response_model=BreakGlassEnrollment,
+        responses=_ok(ex.BREAK_GLASS_ENROLLMENT, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_break_glass_admin(
+        who: Who, svc: Services, body: BreakGlassEnrollIn | None = None
+    ) -> dict[str, Any]:
+        """Generate the password and TOTP secret; they are shown once.
+
+        Replaces any previous administrator and switches break-glass login off. The administrator
+        cannot sign in until `…/admin/confirm` receives a valid code.
+        """
+        enrollment = await require_break_glass(svc).create_admin(
+            who, username=body.username if body else "breakglass", request_id=_rid()
+        )
+        return {
+            "username": enrollment.username,
+            "password": enrollment.password,
+            "totp_secret": enrollment.totp_secret,
+            "otpauth_uri": enrollment.otpauth_uri,
+        }
+
+    @router.post(
+        "/system/break-glass/admin/confirm",
+        tags=["break-glass"],
+        summary="Confirm the authenticator",
+        response_model=BreakGlassRead,
+        responses=_ok(ex.BREAK_GLASS) | VALIDATION_RESPONSE,
+    )
+    async def confirm_break_glass_admin(
+        body: BreakGlassConfirmIn, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        status = await require_break_glass(svc).confirm_admin(who, body.totp, request_id=_rid())
+        return break_glass_json(status)
+
+    @router.delete(
+        "/system/break-glass/admin",
+        status_code=204,
+        tags=["break-glass"],
+        summary="Remove the break-glass administrator",
+    )
+    async def delete_break_glass_admin(who: Who, svc: Services) -> Response:
+        await require_break_glass(svc).delete_admin(who, request_id=_rid())
+        return Response(status_code=204)
+
+    # system tokens
+    def system_token_json(r: Any) -> dict[str, Any]:
+        return {
+            "id": str(r.id),
+            "name": r.name,
+            "role": r.role.value,
+            "revoked": r.revoked_at is not None,
+            "expires_at": r.expires_at,
+            "created_by": r.created_by,
+            "created_at": r.created_at,
+            "last_used_at": r.last_used_at,
+        }
+
+    @router.get(
+        "/system/tokens",
+        tags=["tokens"],
+        summary="List system API tokens",
+        response_model=list[SystemTokenRead],
+        responses=_ok([ex.SYSTEM_TOKEN_READ]),
+    )
+    async def list_system_tokens(who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [system_token_json(r) for r in await svc.tokens.list_system(who)]
+
+    @router.post(
+        "/system/tokens",
+        status_code=201,
+        tags=["tokens"],
+        summary="Create a system API token (shown once)",
+        response_model=SystemTokenCreated,
+        responses=_ok(ex.SYSTEM_TOKEN_CREATED, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_system_token(body: SystemTokenIn, who: Who, svc: Services) -> dict[str, Any]:
+        """A `system-admin` token for bootstrap and controller-level automation.
+
+        30 days by default, 90 at most. A token cannot create tokens, so this needs a signed-in
+        person.
+        """
+        from datetime import timedelta
+
+        plaintext, record = await svc.tokens.create_system(
+            who, body.name, ttl=timedelta(days=body.ttl_days), request_id=_rid()
+        )
+        return {
+            "id": str(record.id),
+            "token": plaintext,
+            "role": record.role.value,
+            "expires_at": record.expires_at,
+        }
+
+    @router.delete(
+        "/system/tokens/{token}",
+        status_code=204,
+        tags=["tokens"],
+        summary="Revoke a system API token",
+    )
+    async def revoke_system_token(token: UUID, who: Who, svc: Services) -> Response:
+        await svc.tokens.revoke_system(who, token, request_id=_rid())
+        return Response(status_code=204)
+
+    # role mappings
+    @router.get(
+        "/role-mappings",
+        tags=["access"],
+        summary="List role mappings (system-wide)",
+        response_model=list[RoleMappingRead],
+        responses=_ok([ex.ROLE_MAPPING]),
+    )
+    async def list_role_mappings(
+        who: Who,
+        svc: Services,
+        provider: str | None = None,
+        tenant: str | None = None,
+        group: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Every mapping, optionally filtered by provider (id or name), tenant or group."""
+        tenant_id = (await svc.tenants.resolve(who, tenant)).id if tenant else None
+        rows = await svc.role_mappings.list(
+            who, provider=provider, group=group, tenant_filter=tenant_id
+        )
+        return [_mapping_json(r) for r in rows]
+
+    @router.post(
+        "/role-mappings",
+        status_code=201,
+        tags=["access"],
+        summary="Create a role mapping (system-wide)",
+        response_model=RoleMappingRead,
+        responses=_ok(ex.ROLE_MAPPING, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_role_mapping(
+        body: SystemRoleMappingIn, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        record = await svc.role_mappings.create(
+            who,
+            provider=body.provider,
+            group_name=body.group_name,
+            role=body.role,
+            tenant_id=body.tenant_id,
+            label=body.label,
+            request_id=_rid(),
+        )
+        return _mapping_json(record)
+
+    @router.get(
+        "/role-mappings/{mapping}",
+        tags=["access"],
+        summary="Get a role mapping",
+        response_model=RoleMappingRead,
+        responses=_ok(ex.ROLE_MAPPING, headers=ETAG_HEADER),
+    )
+    async def get_role_mapping(
+        mapping: UUID, who: Who, svc: Services, response: Response
+    ) -> dict[str, Any]:
+        record = await svc.role_mappings.get(who, mapping)
+        response.headers["ETag"] = _etag(record.version)
+        return _mapping_json(record)
+
+    @router.patch(
+        "/role-mappings/{mapping}",
+        tags=["access"],
+        summary="Change a role mapping",
+        response_model=RoleMappingRead,
+        responses=_ok(ex.ROLE_MAPPING) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def patch_role_mapping(
+        mapping: UUID,
+        body: RoleMappingPatch,
+        who: Who,
+        svc: Services,
+        response: Response,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        record = await svc.role_mappings.update(
+            who,
+            mapping,
+            expected_version=_if_match(if_match),
+            changes=body.model_dump(exclude_unset=True, mode="json"),
+            request_id=_rid(),
+        )
+        response.headers["ETag"] = _etag(record.version)
+        return _mapping_json(record)
+
+    @router.delete(
+        "/role-mappings/{mapping}",
+        status_code=204,
+        tags=["access"],
+        summary="Delete a role mapping",
+    )
+    async def delete_role_mapping(mapping: UUID, who: Who, svc: Services) -> Response:
+        await svc.role_mappings.delete(who, mapping, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.get(
+        "/tenants/{t}/role-mappings",
+        tags=["access"],
+        summary="List a tenant's role mappings",
+        response_model=list[RoleMappingRead],
+        responses=_ok([ex.ROLE_MAPPING]),
+    )
+    async def list_tenant_role_mappings(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        provider: str | None = None,
+        group: str | None = None,
+    ) -> list[dict[str, Any]]:
+        rows = await svc.role_mappings.list(
+            who, tenant_id=tenant.id, provider=provider, group=group
+        )
+        return [_mapping_json(r) for r in rows]
+
+    @router.post(
+        "/tenants/{t}/role-mappings",
+        status_code=201,
+        tags=["access"],
+        summary="Create a role mapping in a tenant",
+        response_model=RoleMappingRead,
+        responses=_ok(ex.ROLE_MAPPING, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_tenant_role_mapping(
+        body: RoleMappingIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """A tenant administrator may map `viewer` and `operator` here, nothing stronger."""
+        record = await svc.role_mappings.create(
+            who,
+            provider=body.provider,
+            group_name=body.group_name,
+            role=body.role,
+            tenant_id=tenant.id,
+            label=body.label,
+            request_id=_rid(),
+        )
+        return _mapping_json(record)
+
+    @router.patch(
+        "/tenants/{t}/role-mappings/{mapping}",
+        tags=["access"],
+        summary="Change a role mapping in a tenant",
+        response_model=RoleMappingRead,
+        responses=_ok(ex.ROLE_MAPPING) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def patch_tenant_role_mapping(
+        mapping: UUID,
+        body: RoleMappingPatch,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        response: Response,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        record = await svc.role_mappings.update(
+            who,
+            mapping,
+            expected_version=_if_match(if_match),
+            changes=body.model_dump(exclude_unset=True, mode="json"),
+            tenant_id=tenant.id,
+            request_id=_rid(),
+        )
+        response.headers["ETag"] = _etag(record.version)
+        return _mapping_json(record)
+
+    @router.delete(
+        "/tenants/{t}/role-mappings/{mapping}",
+        status_code=204,
+        tags=["access"],
+        summary="Delete a role mapping in a tenant",
+    )
+    async def delete_tenant_role_mapping(
+        mapping: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> Response:
+        await svc.role_mappings.delete(who, mapping, tenant_id=tenant.id, request_id=_rid())
+        return Response(status_code=204)
+
+    # users
+    @router.get(
+        "/users",
+        tags=["access"],
+        summary="List users",
+        response_model=Page[UserRead],
+        responses=_ok({"items": [ex.USER_READ], "next_cursor": None}),
+    )
+    async def list_users(
+        who: Who,
+        svc: Services,
+        q: str | None = None,
+        provider: str | None = None,
+        tenant: str | None = None,
+        disabled: bool | None = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> dict[str, Any]:
+        """People who have signed in, newest sign-in first. `q` searches name and e-mail."""
+        tenant_id = (await svc.tenants.resolve(who, tenant)).id if tenant else None
+        page = await svc.users.list_users(
+            who,
+            q=q,
+            provider=provider,
+            tenant_filter=tenant_id,
+            disabled=disabled,
+            cursor=cursor,
+            limit=limit,
+        )
+        return {"items": [_user_json(u) for u in page.items], "next_cursor": page.next_cursor}
+
+    @router.get(
+        "/users/{user}",
+        tags=["access"],
+        summary="Get a user",
+        response_model=UserDetail,
+        responses=_ok(ex.USER_DETAIL),
+    )
+    async def get_user(user: UUID, who: Who, svc: Services) -> dict[str, Any]:
+        """A user with what they can do now (`grants`, with the groups that gave it)."""
+        return _user_json(await svc.users.get(who, user), detail=True)
+
+    @router.post(
+        "/users/{user}/disable",
+        tags=["access"],
+        summary="Disable a user",
+        response_model=UserDetail,
+        responses=_ok(ex.USER_DETAIL),
+    )
+    async def disable_user(user: UUID, who: Who, svc: Services) -> dict[str, Any]:
+        """Refuse the person at sign-in and end every session of theirs at once."""
+        record = await svc.users.set_disabled(who, user, True, request_id=_rid())
+        return _user_json(record, detail=True)
+
+    @router.post(
+        "/users/{user}/enable",
+        tags=["access"],
+        summary="Enable a user",
+        response_model=UserDetail,
+        responses=_ok(ex.USER_DETAIL),
+    )
+    async def enable_user(user: UUID, who: Who, svc: Services) -> dict[str, Any]:
+        record = await svc.users.set_disabled(who, user, False, request_id=_rid())
+        return _user_json(record, detail=True)
+
+    @router.post(
+        "/users/{user}/revoke-sessions",
+        tags=["access"],
+        summary="End a user's sessions",
+        response_model=SessionsRevoked,
+        responses=_ok(ex.SESSIONS_REVOKED),
+    )
+    async def revoke_user_sessions(user: UUID, who: Who, svc: Services) -> dict[str, Any]:
+        return {"revoked": await svc.users.revoke_sessions(who, user, request_id=_rid())}
+
+    @router.delete("/users/{user}", status_code=204, tags=["access"], summary="Delete a user")
+    async def delete_user(user: UUID, who: Who, svc: Services) -> Response:
+        """Remove the record and its sessions; the person reappears at their next sign-in."""
+        await svc.users.delete(who, user, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.get(
+        "/tenants/{t}/users",
+        tags=["access"],
+        summary="List people with access to a tenant",
+        response_model=Page[UserRead],
+        responses=_ok({"items": [ex.USER_READ], "next_cursor": None}),
+    )
+    async def list_tenant_users(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        q: str | None = None,
+        provider: str | None = None,
+        disabled: bool | None = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> dict[str, Any]:
+        """People with a grant in this tenant, showing only this tenant's grants."""
+        page = await svc.users.list_users(
+            who,
+            tenant_id=tenant.id,
+            q=q,
+            provider=provider,
+            disabled=disabled,
+            cursor=cursor,
+            limit=limit,
+        )
+        return {"items": [_user_json(u) for u in page.items], "next_cursor": page.next_cursor}
+
     # agent enrollment
     @router.post(
         "/tenants/{t}/engines/{engine}/enrollment-token",
@@ -2504,8 +3337,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         filters: Annotated[AuditFilters, Depends()],
         tenant: Annotated[str | None, Query(description="Tenant id or name.")] = None,
     ) -> Page[Any]:
-        if not who.is_system:
-            raise ApiError(403, "the system-wide audit log needs the system-admin role")
+        require(who, "manage", "tenant")
         if tenant:
             filters.tenant_id = (await svc.tenants.resolve(who, tenant)).id
         async with admin_session(svc.db.admin) as session:

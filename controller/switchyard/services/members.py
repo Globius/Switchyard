@@ -16,9 +16,8 @@ from switchyard.db.models import PoolMemberRow, PoolRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import tenant_session
 from switchyard.domain.models import AdminState
-from switchyard.domain.workflow import Role
 from switchyard.pipeline.engines import EngineDirectory
-from switchyard.services.changesets import require_role
+from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import NotFoundError, PermissionDeniedError
 
@@ -71,7 +70,7 @@ class MemberService:
         """
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
-        require_role(principal, Role.OPERATOR)
+        require(principal, "set_state", "member")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             snapshot = await load_snapshot(session)
             pool = next((p for p in snapshot.pools if p.id == pool_id), None)

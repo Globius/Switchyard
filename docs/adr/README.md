@@ -37,7 +37,9 @@ Date: YYYY-MM-DD
 | [0016](0016-job-model-stages-and-actions.md) | Job model: stages, log, retry and cancel | Accepted |
 | [0017](0017-sdn-cleanup.md) | Proxmox SDN cleanup when a managed network is deleted | Accepted |
 | [0020](0020-udp-m6-implementation.md) | UDP (M6) implementation: monitor, field rules, bundle files, IPVS status, watchdog | Accepted |
-| [0030](0030-rbac-matrix-and-access-lifecycle.md) | Permission matrix, multi-group grants, role refresh, users and token scope | Proposed |
+| [0030](0030-rbac-matrix-and-access-lifecycle.md) | Permission matrix, multi-group grants, role refresh, users and token scope | Accepted |
+| [0031](0031-access-refresh-users-and-codes.md) | How access refresh, users and error codes are implemented | Accepted |
+| [0032](0032-idp-admin-test-signin-break-glass.md) | Identity-provider administration, test sign-in, break-glass enrolment, system tokens | Accepted |
 | [0040](0040-api-completeness-for-the-ui.md) | API completeness for the UI: audit, IPAM, health, telemetry, events, documentation rules | Accepted |
 | [0041](0041-agent-member-probe-and-withdrawn-prefixes.md) | Agent member probe (health monitor test) and the withdrawn prefix list | Accepted |
 | [0018](0018-saml-login.md) | SAML 2.0 login (signxml, signed assertions, replay cache, SP metadata) | Accepted |

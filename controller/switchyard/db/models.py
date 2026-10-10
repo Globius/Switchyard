@@ -52,7 +52,6 @@ class TenantRow(EntityMixin, Base):
     __table_args__ = (UniqueConstraint("name"),)
 
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    oidc_group: Mapped[str | None] = mapped_column(Text)
     quotas: Mapped[dict[str, int]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )

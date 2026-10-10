@@ -21,6 +21,10 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 from xml.sax.saxutils import quoteattr
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.x509.oid import NameOID
 from lxml import etree
 from signxml import XMLVerifier  # type: ignore[attr-defined]
 from signxml.exceptions import InvalidSignature, SignXMLException
@@ -68,6 +72,9 @@ class SamlConfig:
     attribute_username: str = "username"
     attribute_email: str = "email"
     attribute_groups: str = "groups"
+    sign_requests: bool = False
+    sp_signing_certificate: str = ""
+    sp_signing_key_pem: str = field(default="", repr=False)
 
 
 @dataclass(frozen=True)
@@ -101,10 +108,18 @@ def _iso(moment: datetime) -> str:
     return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+REDIRECT_SIG_ALG = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+
+
 def authn_request_url(
     cfg: SamlConfig, *, acs_url: str, request_id: str, relay_state: str, now: datetime
 ) -> str:
-    """The IdP URL to redirect the browser to (HTTP-Redirect binding, unsigned request)."""
+    """The IdP URL to redirect the browser to (HTTP-Redirect binding).
+
+    With ``cfg.sign_requests`` and a key the request is signed as the binding prescribes: the query
+    string ``SAMLRequest=..&RelayState=..&SigAlg=..`` is signed with RSA-SHA256 and the signature is
+    appended as ``Signature``.
+    """
     xml = (
         '<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" '
         'xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" '
@@ -118,9 +133,17 @@ def authn_request_url(
     )
     compressor = zlib.compressobj(wbits=-15)
     deflated = compressor.compress(xml.encode()) + compressor.flush()
-    query = urlencode(
-        {"SAMLRequest": base64.b64encode(deflated).decode(), "RelayState": relay_state}
-    )
+    params = {"SAMLRequest": base64.b64encode(deflated).decode(), "RelayState": relay_state}
+    if cfg.sign_requests and cfg.sp_signing_key_pem:
+        params["SigAlg"] = REDIRECT_SIG_ALG
+        signed = urlencode(params)
+        key = serialization.load_pem_private_key(cfg.sp_signing_key_pem.encode(), password=None)
+        if not isinstance(key, rsa.RSAPrivateKey):
+            raise SamlError("the request signing key must be an RSA key")
+        signature = key.sign(signed.encode(), padding.PKCS1v15(), hashes.SHA256())
+        query = signed + "&" + urlencode({"Signature": base64.b64encode(signature).decode()})
+    else:
+        query = urlencode(params)
     return f"{cfg.sso_url}{'&' if '?' in cfg.sso_url else '?'}{query}"
 
 
@@ -132,18 +155,33 @@ def sp_metadata(cfg: SamlConfig, *, acs_url: str) -> str:
     """The service-provider metadata an IdP administrator imports.
 
     Lists the entity id, the assertion consumer service URL and that assertions must be signed.
+    With request signing on it also says so and carries the public certificate that verifies them.
 
     Example:
         >>> cfg = SamlConfig("1", "idp", "https://idp", "https://idp/sso", (), "https://sp")
         >>> "AssertionConsumerService" in sp_metadata(cfg, acs_url="https://sp/acs")
         True
     """
+    signing = cfg.sign_requests and bool(cfg.sp_signing_certificate)
+    key_descriptor = ""
+    if signing:
+        body = "".join(
+            line for line in cfg.sp_signing_certificate.splitlines() if "-----" not in line
+        )
+        key_descriptor = (
+            '<md:KeyDescriptor use="signing">'
+            '<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">'
+            f"<ds:X509Data><ds:X509Certificate>{body}</ds:X509Certificate></ds:X509Data>"
+            "</ds:KeyInfo></md:KeyDescriptor>"
+        )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" '
         f"entityID={quoteattr(cfg.sp_entity_id)}>"
-        '<md:SPSSODescriptor AuthnRequestsSigned="false" WantAssertionsSigned="true" '
+        f'<md:SPSSODescriptor AuthnRequestsSigned="{"true" if signing else "false"}" '
+        'WantAssertionsSigned="true" '
         'protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">'
+        f"{key_descriptor}"
         f"<md:NameIDFormat>{_text(cfg.name_id_format)}</md:NameIDFormat>"
         '<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" '
         f'Location={quoteattr(acs_url)} index="0" isDefault="true"/>'
@@ -273,3 +311,115 @@ def _check_confirmation(
             raise SamlError("the assertion has expired")
         return
     raise SamlError("the assertion has no usable bearer confirmation")
+
+
+@dataclass(frozen=True)
+class IdpMetadata:
+    """What an identity provider's metadata document tells us.
+
+    Attributes:
+        entity_id: The IdP's ``entityID``.
+        sso_url: Its single sign-on URL for the HTTP-Redirect binding.
+        signing_certificates: PEM certificates it signs assertions with.
+    """
+
+    entity_id: str
+    sso_url: str
+    signing_certificates: tuple[str, ...]
+
+
+def parse_idp_metadata(xml: str | bytes) -> IdpMetadata:
+    """Read the entity id, the Redirect-binding SSO URL and the signing certificates.
+
+    The document is parsed with entity resolution and network access off. Certificates are checked
+    to be X.509 and returned as PEM.
+
+    Raises:
+        SamlError: If the document is not IdP metadata or lacks a required part.
+
+    Example:
+        >>> parse_idp_metadata("<nope/>")
+        Traceback (most recent call last):
+            ...
+        switchyard.services.saml.SamlError: the metadata has no IDPSSODescriptor
+    """
+    data = xml.encode() if isinstance(xml, str) else xml
+    if len(data) > MAX_RESPONSE_BYTES * 2:
+        raise SamlError("the metadata document is too large")
+    parser = etree.XMLParser(
+        resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False
+    )
+    try:
+        root = etree.fromstring(data, parser)
+    except etree.XMLSyntaxError as exc:
+        raise SamlError("the metadata is not valid XML") from exc
+    md = "urn:oasis:names:tc:SAML:2.0:metadata"
+    descriptors = (
+        [root]
+        if root.tag == f"{{{md}}}EntityDescriptor"
+        else list(root.iter(f"{{{md}}}EntityDescriptor"))
+    )
+    idp = None
+    entity_id = ""
+    for entity in descriptors:
+        found = entity.find(f"{{{md}}}IDPSSODescriptor")
+        if found is not None:
+            idp, entity_id = found, entity.get("entityID", "")
+            break
+    if idp is None:
+        raise SamlError("the metadata has no IDPSSODescriptor")
+    if not entity_id:
+        raise SamlError("the metadata has no entityID")
+    sso = next(
+        (
+            e.get("Location", "")
+            for e in idp.findall(f"{{{md}}}SingleSignOnService")
+            if e.get("Binding", "").endswith("HTTP-Redirect")
+        ),
+        "",
+    )
+    if not sso:
+        raise SamlError("the metadata has no HTTP-Redirect single sign-on URL")
+    certificates: list[str] = []
+    for key in idp.findall(f"{{{md}}}KeyDescriptor"):
+        if key.get("use", "signing") != "signing":
+            continue
+        for cert in key.iter(f"{{{NS['ds']}}}X509Certificate"):
+            try:
+                der = base64.b64decode("".join((cert.text or "").split()))
+                parsed = x509.load_der_x509_certificate(der)
+            except ValueError as exc:
+                raise SamlError("the metadata carries a certificate that is not X.509") from exc
+            pem = parsed.public_bytes(serialization.Encoding.PEM).decode().strip()
+            if pem not in certificates:
+                certificates.append(pem)
+    if not certificates:
+        raise SamlError("the metadata has no signing certificate")
+    return IdpMetadata(entity_id, sso, tuple(certificates))
+
+
+def generate_sp_keypair(common_name: str, *, now: datetime | None = None) -> tuple[str, str]:
+    """A fresh RSA-2048 key and self-signed certificate for signing AuthnRequests.
+
+    Returns ``(private_key_pem, certificate_pem)``. The key must go to the secrets backend; only the
+    certificate is stored with the provider and published in the SP metadata.
+    """
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name[:64] or "switchyard")])
+    start = now or datetime.now(UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(start - timedelta(minutes=5))
+        .not_valid_after(start + timedelta(days=3650))
+        .sign(key, hashes.SHA256())
+    )
+    key_pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    return key_pem, cert.public_bytes(serialization.Encoding.PEM).decode()

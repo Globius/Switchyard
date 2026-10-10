@@ -24,8 +24,10 @@ from switchyard.services.changesets import ValidationFailedError
 from switchyard.services.errors import (
     AlreadyExistsError,
     ConflictError,
+    FieldErrors,
     NotFoundError,
     PermissionDeniedError,
+    PreconditionFailedError,
 )
 
 PROBLEM = "application/problem+json"
@@ -53,13 +55,26 @@ class ApiError(Exception):
         *,
         errors: list[dict[str, str]] | None = None,
         headers: dict[str, str] | None = None,
+        code: str | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
-        """Create the error."""
+        """Create the error.
+
+        Args:
+            status: HTTP status.
+            detail: Human-readable explanation.
+            errors: Field-level findings for validation failures.
+            headers: Extra response headers.
+            code: Stable machine-readable ``code`` member (``session_expired``, ``csrf`` ...).
+            extra: More problem members, for example ``required_role``.
+        """
         super().__init__(detail)
         self.status = status
         self.detail = detail
         self.errors = errors
         self.headers = headers or {}
+        self.code = code
+        self.extra = extra or {}
 
 
 def problem(
@@ -68,15 +83,24 @@ def problem(
     *,
     errors: list[dict[str, str]] | None = None,
     headers: dict[str, str] | None = None,
+    code: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> JSONResponse:
-    """Build a problem+json response; ``extra`` adds RFC 9457 extension members."""
+    """Build a problem+json response.
+
+    ``code`` is a stable identifier clients can switch on; 401 and 403 problems always carry one
+    (``session_expired``, ``csrf``, ``role_required`` with ``required_role``, ...).
+    """
     body: dict[str, Any] = {
         "type": "about:blank",
         "title": _TITLES.get(status, "Error"),
         "status": status,
         "detail": detail,
     }
+    if code:
+        body["code"] = code
+    if extra:
+        body.update(extra)
     if errors:
         body["errors"] = errors
     if extra:
@@ -92,7 +116,7 @@ Handler = Callable[[Request, Any], Awaitable[JSONResponse]]
 
 #: ``kind`` values of the discriminated unions (policy sets, routing profiles). Pydantic puts the
 #: tag in the error location; it is not a field, so it is dropped from ``errors[].path``.
-UNION_TAGS = frozenset({"redirect", "allow_list", "vrrp", "bgp"})
+UNION_TAGS = frozenset({"redirect", "allow_list", "vrrp", "bgp", "oidc", "saml"})
 
 
 def strip_union_tag(loc: tuple[Any, ...]) -> str:
@@ -122,10 +146,23 @@ def install_handlers(app: FastAPI) -> None:
 
         app.add_exception_handler(exc_type, handle)
 
-    add(ApiError, lambda e: problem(e.status, e.detail, errors=e.errors, headers=e.headers))
+    add(
+        ApiError,
+        lambda e: problem(
+            e.status, e.detail, errors=e.errors, headers=e.headers, code=e.code, extra=e.extra
+        ),
+    )
     add(NotFoundError, lambda e: problem(404, str(e)))
     add(UnknownObjectError, lambda e: problem(404, str(e)))
-    add(PermissionDeniedError, lambda e: problem(403, str(e)))
+    add(
+        PermissionDeniedError,
+        lambda e: problem(
+            403,
+            str(e),
+            code="role_required" if e.required_role else "forbidden",
+            extra={"required_role": e.required_role} if e.required_role else None,
+        ),
+    )
     add(AlreadyExistsError, lambda e: problem(409, str(e)))
     add(ConflictError, lambda e: problem(409, str(e)))
     add(ConcurrentModificationError, lambda e: problem(409, str(e)))
@@ -144,6 +181,7 @@ def install_handlers(app: FastAPI) -> None:
             },
         ),
     )
+    add(PreconditionFailedError, lambda e: problem(412, str(e)))
     add(
         OperationInvalidError,
         lambda e: problem(422, "an operation is invalid", errors=_errors(e.problems)),
@@ -158,6 +196,7 @@ def install_handlers(app: FastAPI) -> None:
         DomainValidationError,
         lambda e: problem(422, "the state breaks domain rules", errors=_errors(e.problems)),
     )
+    add(FieldErrors, lambda e: problem(422, str(e), errors=e.errors))
     add(ValueError, lambda e: problem(422, str(e)))
 
     async def validation(request: Request, exc: Exception) -> JSONResponse:
