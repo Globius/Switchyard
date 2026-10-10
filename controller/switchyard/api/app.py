@@ -68,6 +68,7 @@ from switchyard.api.schemas import (
     TokenCreated,
     TokenIn,
     TokenRead,
+    VirtualServiceStatusRead,
 )
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain.changes import (
@@ -1460,6 +1461,22 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     )
     async def engine_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
         return [status_json(s) for s in await svc.status.list_status(who, tenant.id)]
+
+    @router.get(
+        "/tenants/{t}/status/virtual-services",
+        tags=["status"],
+        summary="State of every virtual service",
+        response_model=list[VirtualServiceStatusRead],
+        responses=_ok([ex.VIRTUAL_SERVICE_STATUS]),
+    )
+    async def virtual_service_status(
+        tenant: Tenant, who: Who, svc: Services
+    ) -> list[dict[str, Any]]:
+        """UDP services are `serving` (IPVS); `not_served` is reserved for unrenderable ones."""
+        return [
+            {"id": v.id, "name": v.name, "protocol": v.protocol, "state": v.state}
+            for v in await svc.status.virtual_services(who, tenant.id)
+        ]
 
     @router.get(
         "/tenants/{t}/status/stream",

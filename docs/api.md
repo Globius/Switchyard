@@ -42,3 +42,7 @@ Policy sets and routing profiles are unions on `kind`:
 `GET /tenants/{t}/change-sets/{cs}/diff` returns `objects`, `problems` (rules the new state breaks; they
 block apply), `warnings` (`{code, path, message}`; they never block) and `se_groups` with the changed
 files. Warning codes: `udp_not_served` (a UDP virtual service is stored but no engine serves it yet).
+
+`GET /tenants/{t}/status/virtual-services` returns `{id, name, protocol, state}` per service. `state` is
+`serving`, `disabled` or `not_served`; a UDP service is `not_served` (not `down`) until its engine
+renders it (M6, ADR 0013).

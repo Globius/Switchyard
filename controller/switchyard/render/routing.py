@@ -12,7 +12,8 @@ Files (relative to ``/etc/switchyard/``, delivered to the agent as a signed bund
                                         IPVS only, and only when the group has UDP services)
 ``frr/frr.conf``                        BGP neighbours, BFD, VIP announcements, static routes
 ``frr/vips.json``                       ASN and VIP prefixes for the agent's route-health watchdog
-                                        (``udp_prefixes``: the ones served by IPVS; ``udp_only_prefixes``: those no HAProxy service uses)
+                                        (``udp_prefixes``: the ones served by IPVS;
+                                        ``udp_only_prefixes``: those no HAProxy service uses)
 ``nftables/switchyard-udp.nft``         Masquerade for traffic IPVS sends to real servers (UDP only)
 ``sysctl/switchyard-udp.conf``          ``ip_forward`` and ``vs.conntrack`` for IPVS NAT (UDP only)
 ======================================= ===========================================================

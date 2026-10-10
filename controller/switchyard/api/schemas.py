@@ -384,7 +384,7 @@ class DiffProblem(ApiModel):
 class DiffWarning(ApiModel):
     """Something worth knowing about the proposed state; never blocks apply."""
 
-    code: str = Field(description="Stable identifier, for example `udp_not_served`.")
+    code: str = Field(description="Stable identifier of the warning.")
     path: str
     message: str
 
@@ -505,6 +505,23 @@ class AgentStatusRead(ApiModel):
         default_factory=list, description="UDP real servers; empty without UDP services."
     )
     file_hashes: dict[str, str]
+
+
+class VirtualServiceState(StrEnum):
+    """Whether the data plane renders a virtual service."""
+
+    SERVING = "serving"
+    DISABLED = "disabled"
+    NOT_SERVED = "not_served"
+
+
+class VirtualServiceStatusRead(ApiModel):
+    """State of one virtual service; `not_served` is reserved for one no engine can render."""
+
+    id: UUID
+    name: str
+    protocol: str
+    state: VirtualServiceState
 
 
 class DriftKind(StrEnum):

@@ -355,6 +355,7 @@ async def test_every_read_route_answers_with_its_declared_model(api: Api) -> Non
         f"{t}/change-sets",
         f"{t}/revisions",
         f"{t}/status/engines",
+        f"{t}/status/virtual-services",
         f"{t}/audit-events",
         f"{t}/tokens",
         f"{t}/se-groups/{group}/engines",
@@ -441,7 +442,7 @@ async def test_change_sets_and_revisions_page_with_cursors(api: Api) -> None:
     assert detail["created_at"] and {p["name"] for p in detail["snapshot"]["pools"]} == {"web"}
 
 
-async def test_the_diff_lists_warnings_for_udp_services(api: Api) -> None:
+async def test_the_diff_has_no_warning_for_udp_services_since_m6(api: Api) -> None:
     h = await api.token()
     t = f"{V1}/tenants/acme"
     web = (await api.client.get(f"{t}/virtual-services/{VS}", headers=h)).json()
@@ -464,14 +465,7 @@ async def test_the_diff_lists_warnings_for_udp_services(api: Api) -> None:
     assert r.status_code == 202, r.text
     diff = (await api.client.get(f"{t}/change-sets/{cs}/diff", headers=h)).json()
     assert diff["problems"] == []
-    assert diff["warnings"] == [
-        {
-            "code": "udp_not_served",
-            "path": "virtual_services.dns",
-            "message": "virtual service dns: udp is rendered by the keepalived renderer, "
-            "not haproxy.cfg",
-        }
-    ]
+    assert diff["warnings"] == []
 
 
 async def test_policy_sets_and_routing_profiles_are_unions_on_kind(api: Api) -> None:

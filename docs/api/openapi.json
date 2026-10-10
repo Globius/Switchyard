@@ -1790,7 +1790,7 @@
         "description": "Something worth knowing about the proposed state; never blocks apply.",
         "properties": {
           "code": {
-            "description": "Stable identifier, for example `udp_not_served`.",
+            "description": "Stable identifier of the warning.",
             "title": "Code",
             "type": "string"
           },
@@ -6815,6 +6815,46 @@
         "title": "VirtualServiceRead",
         "type": "object"
       },
+      "VirtualServiceState": {
+        "description": "Whether the data plane renders a virtual service.",
+        "enum": [
+          "serving",
+          "disabled",
+          "not_served"
+        ],
+        "title": "VirtualServiceState",
+        "type": "string"
+      },
+      "VirtualServiceStatusRead": {
+        "additionalProperties": false,
+        "description": "State of one virtual service; `not_served` is reserved for one no engine can render.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "protocol": {
+            "title": "Protocol",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/VirtualServiceState"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "protocol",
+          "state"
+        ],
+        "title": "VirtualServiceStatusRead",
+        "type": "object"
+      },
       "VrrpInstanceStatus": {
         "additionalProperties": false,
         "description": "One VRRP instance.",
@@ -10446,13 +10486,7 @@
                       "name": "edge"
                     }
                   ],
-                  "warnings": [
-                    {
-                      "code": "udp_not_served",
-                      "message": "virtual service dns: udp is rendered by the keepalived renderer, not haproxy.cfg",
-                      "path": "virtual_services.dns"
-                    }
-                  ]
+                  "warnings": []
                 },
                 "schema": {
                   "$ref": "#/components/schemas/ChangeSetDiff"
@@ -18764,6 +18798,107 @@
           }
         },
         "summary": "Stream engine status (server-sent events)",
+        "tags": [
+          "status"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/status/virtual-services": {
+      "get": {
+        "description": "UDP services are `serving` (IPVS); `not_served` is reserved for unrenderable ones.",
+        "operationId": "virtual_service_status_api_v1_tenants__t__status_virtual_services_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "id": "00000000-0000-0000-0000-0000000000d1",
+                    "name": "dns",
+                    "protocol": "udp",
+                    "state": "serving"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/VirtualServiceStatusRead"
+                  },
+                  "title": "Response Virtual Service Status Api V1 Tenants  T  Status Virtual Services Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "State of every virtual service",
         "tags": [
           "status"
         ]

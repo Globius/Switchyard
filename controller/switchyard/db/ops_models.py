@@ -308,3 +308,19 @@ class EngineStatusRow(Base):
         JSONB, nullable=False, server_default=text("'[]'::jsonb")
     )
     observed_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
+class SdnObjectRow(Base):
+    """``sdn_object``: a Proxmox SDN zone or VNet the controller itself created.
+
+    Only these may be deleted once no managed network uses them; objects that already existed in
+    Proxmox are never recorded and so never touched.
+    """
+
+    __tablename__ = "sdn_object"
+    __table_args__ = (ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),)
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)  # "zone" | "vnet"
+    name: Mapped[str] = mapped_column(Text, primary_key=True)
+    created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
