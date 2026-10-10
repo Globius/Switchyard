@@ -1,0 +1,10 @@
+==> haproxy/haproxy.cfg (haproxy, lines 118-126)
+backend pool_matrix
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /
+    http-check expect status 200,204,301,302,401
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-61-0-3-443 10.61.0.3:443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100

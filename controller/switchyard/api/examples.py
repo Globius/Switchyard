@@ -230,10 +230,24 @@ DIFF = {
                     "status": "modified",
                     "diff": "--- a/haproxy/haproxy.cfg\n+++ b/haproxy/haproxy.cfg\n"
                     "@@ -10 +10 @@\n-    balance roundrobin\n+    balance leastconn\n",
+                    "before": "backend pool_web\n    balance roundrobin\n",
+                    "after": "backend pool_web\n    balance leastconn\n",
                 }
             ],
         }
     ],
+}
+RENDERED = {
+    "items": [
+        {
+            "se_group_id": SE_GROUP,
+            "file": "haproxy/haproxy.cfg",
+            "language": "haproxy",
+            "content": "backend pool_web\n    mode http\n    balance leastconn\n",
+            "fingerprint": "0" * 64,
+            "range": [1, 3],
+        }
+    ]
 }
 REVISION_SUMMARY = {
     "number": 12,

@@ -148,6 +148,27 @@ files.demo.example.test pool_files
 - A `/run/haproxy/` directory for the admin socket the config declares.
 - The CA bundle at `/etc/ssl/certs/ca-certificates.crt` (only used when a pool sets `tls_verify`).
 
+## Reading the rendered text of one object
+
+`GET /api/v1/tenants/{t}/{collection}/{id}/rendered` returns the part of the SE group's files that one
+object produced, for virtual services, pools, health monitors, certificates, policy sets and SE groups
+(`?change_set=<id>` reads the draft). Each item has the file path, an editor `language`, the whole file
+as `content`, the group's `fingerprint` and, when the object owns only part of the file, the `range`
+(1-based, inclusive lines) to highlight. Networks, VIP pools and routing profiles have no such route.
+
+| Object | Fragment |
+| --- | --- |
+| Virtual service | its `frontend` block, crt-list, host maps and allow-list file |
+| Pool | its `backend` block |
+| Health monitor | the `backend` block of each pool that uses it |
+| Certificate | its line in the crt-list of each service that serves it |
+| Allow-list policy set | the `.cidr` file |
+| Redirect policy set | the `frontend` block of each service that applies it |
+| SE group | every file |
+
+`GET …/change-sets/{cs}/diff` lists each changed file as `{path, status, diff, before, after}`, so a
+diff viewer has both sides. See ADR 0015.
+
 ## Validation and tests
 
 | Check | Where |

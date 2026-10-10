@@ -1,0 +1,2 @@
+==> certs/files.crtlist (plaintext, lines 1-1)
+/etc/switchyard/certs/files-example-test.pem files.example.test

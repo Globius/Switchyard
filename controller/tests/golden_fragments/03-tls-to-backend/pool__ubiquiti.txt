@@ -1,0 +1,10 @@
+==> haproxy/haproxy.cfg (haproxy, lines 47-55)
+backend pool_ubiquiti
+    mode http
+    balance roundrobin
+    option httpchk
+    http-check send meth GET uri /health
+    http-check expect status 200
+    timeout check 3s
+    default-server inter 5s fall 3 rise 2
+    server 10-20-2-4-8443 10.20.2.4:8443 check check-ssl ssl verify none sni req.hdr(host),field(1,:),lower weight 100

@@ -1,0 +1,9 @@
+==> haproxy/haproxy.cfg (haproxy, lines 56-63)
+frontend vs_rke-prd-clus-01
+    mode tcp
+    bind 192.0.2.27:80
+    bind 192.0.2.27:443
+    bind 192.0.2.27:6443
+    bind 192.0.2.27:9345
+    option tcplog
+    default_backend pool_rke-nodes

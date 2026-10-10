@@ -1,0 +1,5 @@
+==> haproxy/haproxy.cfg (haproxy, lines 48-51)
+backend pool_docs
+    mode http
+    balance roundrobin
+    server 10-20-3-8-8080 10.20.3.8:8080 weight 100

@@ -12,7 +12,7 @@ Replace Avi with multi-tenant HAProxy service-engine (SE) groups on Proxmox and 
 Key decisions:
 
 - **Start small, build multi-tenant:** phase 1 is one tenant and one 2-VM SE group covering what Avi does today (see What the Avi backup shows). Tenancy, RBAC, per-tenant networks and multiple SE groups are in the data model and UI from the start; GSLB, autoscale and the Kubernetes connector come in later phases.
-- **Data plane: HAProxy Community** on Debian VMs, with Coraza (OWASP CRS) for WAF via SPOE as a later phase, since Avi's WAF runs detection-only today and Cloudflare's WAF already sits in front. One engine covers L4, L7, TLS, persistence, rate limiting and Lua scripting (DataScript equivalent).
+- **Data plane: HAProxy Community** on Debian VMs, with Coraza (OWASP CRS) for WAF via SPOE as a later phase, since Avi's WAF runs detection-only today and Cloudflare's WAF already sits in front. It covers TCP and HTTP (HTTP/1.1, 2 and 3 over QUIC), TLS, persistence, rate limiting and Lua scripting (DataScript equivalent). It does not proxy generic UDP; IPVS does (next bullet).
 - **VIP placement: BGP route health injection** from FRR on each LB VM, peering eBGP to the upstream routers configured for that SE group in the UI (for example a tenant's FortiGate VDOM), ECMP for active/active. Keepalived VRRP is the other mode; the HA mode is chosen per SE group in the UI, and phase 1 can start on either. FRR runs on the LB VMs, never on PVE hosts, so it cannot collide with Proxmox SDN's FRR.
 - **GSLB: PowerDNS, later phase** Authoritative with LUA health-checked records and dnsdist in front. Not in phase 1, since Avi has no GSLB today.
 - **Observability: Prometheus (or VictoriaMetrics) + Loki + Grafana**, fed by HAProxy's built-in exporter and Vector for request logs.
@@ -56,7 +56,7 @@ Avi is used here as a Cloudflare-fronted SNI reverse proxy plus a few L4 service
 | K8S PRD CLUS 01 ×4 | L4, .27: 80, 443, 6443, 9345 | 10.60.6.27–.32 | HAProxy TCP, or kube-vip in-cluster |
 | k8s-a Envoy Gateway (AKO) | L4 LoadBalancer, .23: 80 | NodePorts on 10.60.6.27–.32 | Cilium LB-IPAM or MetalLB in-cluster |
 | k8s-a cattle-system EVH (AKO) | L7, .21: 80, 443 | Rancher ingress | In-cluster ingress; renew the expired cert |
-| 51820-WGVPN | L4 TCP proxy, .22: 51820 | 10.60.0.5:51820 | L4 UDP service (IPVS) on the SE group |
+| 51820-WGVPN | L4 TCP proxy, .22: 51820 | 10.60.0.5:51820 | L4 UDP service (IPVS) on the SE group, phase 2 (M6) |
 | NSX Management | L7, .28: 443 | NSX managers | Retire with NSX |
 | Unused EVH VIPs (wazuh, checkmate, default) and legacy-production objects | — | — | Do not migrate |
 
@@ -66,7 +66,7 @@ Every Avi feature in common use has a mature open-source equivalent; the gaps ar
 
 | Avi function | Replacement | Notes |
 | --- | --- | --- |
-| Service Engine (L4/L7 virtual services) | HAProxy Community | TCP/UDP/HTTP/1.1/2/3 (QUIC), content switching, redirects, header rewrites |
+| Service Engine (L4/L7 virtual services) | HAProxy Community for TCP and HTTP (QUIC included); Keepalived/IPVS for UDP | HTTP/1.1/2/3, content switching, redirects, header rewrites; UDP is phase 2 (open-source HAProxy cannot proxy general UDP, only HAProxy Enterprise can) |
 | Pools, server weights, LB algorithms | HAProxy backends | roundrobin, leastconn, source, uri, hdr, random; slow-start |
 | Health monitors (HTTP, TCP, ping, external) | HAProxy checks + `external-check` | Passive checks via `observe layer7` |
 | Persistence (cookie, source IP, header, TLS) | HAProxy stick tables, `cookie` | Peers section syncs tables across the SE pair |
@@ -116,11 +116,11 @@ Build a desired-state controller with Avi's object model, not a config-file edit
    - Tenants and RBAC with OIDC; every object below is owned by a tenant.
    - Networks: create Proxmox SDN VNets and subnets through the Proxmox API, or attach existing ones. VIP IP pools with built-in IPAM.
    - SE groups: deploy SE VMs from a template through the Proxmox API; choose HA mode (BGP: ASN, peers, BFD; VRRP: VRID, priorities); static routes per group.
-   - Virtual services: L7 HTTP/HTTPS with SNI host routing, L4 TCP, and L4 UDP via IPVS. Pools, health monitors, persistence, and HTTP redirect/rewrite rules.
+   - Virtual services: L7 HTTP/HTTPS with SNI host routing and L4 TCP. Pools, health monitors, persistence, and HTTP redirect/rewrite rules. UDP is phase 2: the data model already accepts `udp` services, but nothing serves them before M6 (see the UDP section in [02-backend-design.md](02-backend-design.md)).
    - Certificates: import, Cloudflare Origin CA, and ACME DNS-01 via Cloudflare, wildcard or per-host, with expiry alerts.
    - Cloudflare-only source allow list and real client IP per virtual service.
    - Render → `haproxy -c` validate → push → Git commit, one-click rollback, live status, enable/disable/drain servers.
-2. **Phase 2:** WAF policies with Coraza, rate limits and IP groups, Cloudflare DNS records created from a virtual service, Kubernetes connector per tenant, pool discovery by Proxmox tags, an Avi config importer, health scores, SE scale-out.
+2. **Phase 2:** L4 UDP virtual services via Keepalived/IPVS (including the WireGuard rebuild), WAF policies with Coraza, rate limits and IP groups, Cloudflare DNS records created from a virtual service, Kubernetes connector per tenant, pool discovery by Proxmox tags, an Avi config importer, health scores, SE scale-out.
 3. **Phase 3:** GSLB on PowerDNS across sites, per-tenant quotas, tenant self-service portal, packet capture jobs.
 
 ### Stack
@@ -144,7 +144,7 @@ Build a desired-state controller with Avi's object model, not a config-file edit
 | Routing profile | BGP ASN, peers, BFD, prefix limits; or VRRP VRID and priorities; static routes | FRR or Keepalived config per VM |
 | Virtual service | VIP (from a pool), ports, protocol (HTTP, TCP, UDP), TLS profile, cert refs, policies, WAF policy, source allow list | HAProxy `frontend` or IPVS service + VIP advertisement |
 | Pool | members (static or tag selector), algorithm, persistence, health monitors | HAProxy `backend` or IPVS real servers |
-| Health monitor | type, interval, rise/fall, HTTP request/expect | `option httpchk` / `http-check` lines |
+| Health monitor | type (`tcp`, `http`; `udp` from M6), interval, rise/fall, HTTP request/expect | `option httpchk` / `http-check` lines |
 | Certificate | source (upload, ACME via Cloudflare DNS-01, Cloudflare Origin CA, step-ca), scope (wildcard or per-host), SANs, expiry | `crt-list` entry, hot-loaded |
 | WAF policy | mode, CRS paranoia level, exclusions | Coraza SPOA directives |
 | GSLB service | FQDN, site members, algorithm, health URL | PowerDNS LUA record |
@@ -167,8 +167,9 @@ Build the platform net-new, recreate each service through the UI on new networks
 4. **First tenant from the UI.** Create the tenant, its networks and VIP pool, one 2-VM SE group with its HA mode and upstream peers, and import the 7 Cloudflare Origin certs.
 5. **Pilot.** Recreate mealie.home.example and IPAM, test them on the new VIP, then move each hostname's Cloudflare origin or DNS record to it. Rollback = point the record back.
 6. **SNI services.** Recreate the other SNI services with an HTTP health check each (Avi had none), the Nextcloud redirects, WHMCS persistence, and the UniFi ports.
-7. **L4, UDP and Kubernetes.** Recreate the K8S PRD CLUS 01 ports (or move them to kube-vip) and WireGuard as an L4 UDP service. Move k8s-prod-a off AKO to in-cluster LoadBalancer tools, renew the expired ranch.k8s-a cert, then uninstall AKO.
-8. **Decommission.** Remove Avi SEs and controllers after 30 days with no rollbacks; add further tenants and SE groups from the UI as needed.
+7. **L4 and Kubernetes.** Recreate the K8S PRD CLUS 01 ports (or move them to kube-vip). Move k8s-prod-a off AKO to in-cluster LoadBalancer tools, renew the expired ranch.k8s-a cert, then uninstall AKO.
+8. **UDP (phase 2, after M6).** Recreate WireGuard (51820-WGVPN) as an L4 UDP service on IPVS. Avi's current service sends UDP through a TCP proxy and cannot have carried WireGuard traffic, so waiting loses nothing, but Avi cannot be decommissioned before this step.
+9. **Decommission.** Remove Avi SEs and controllers after 30 days with no rollbacks (and after step 8); add further tenants and SE groups from the UI as needed.
 
 ## Testing, documentation and risks
 

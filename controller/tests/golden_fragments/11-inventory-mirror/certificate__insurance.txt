@@ -1,0 +1,2 @@
+==> certs/external-sni.crtlist (plaintext, lines 6-6)
+/etc/switchyard/certs/insurance.pem example-insurance.example.org

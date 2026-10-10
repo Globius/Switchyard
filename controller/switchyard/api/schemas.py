@@ -394,7 +394,9 @@ class DiffFile(ApiModel):
 
     path: str
     status: Literal["added", "removed", "modified"]
-    diff: str = Field(description="Unified diff.")
+    diff: str = Field(description="Unified diff, a/<path> to b/<path>.")
+    before: str | None = Field(description="Previous content; null when the file is added.")
+    after: str | None = Field(description="New content; null when the file is removed.")
 
 
 class DiffGroup(ApiModel):

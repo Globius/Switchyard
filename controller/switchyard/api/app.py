@@ -23,6 +23,7 @@ from switchyard.adapters.secrets import SecretsReader
 from switchyard.api import examples as ex
 from switchyard.api import job_models
 from switchyard.api.problems import ApiError, install_handlers
+from switchyard.api.rendered_models import RenderedConfig, RenderedFragment
 from switchyard.api.schemas import (
     ETAG_HEADER,
     IF_MATCH_RESPONSES,
@@ -79,6 +80,8 @@ from switchyard.domain.models import CertSource
 from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
+from switchyard.render.escape import RenderError
+from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
 from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import ChangeSetDetail, ChangeSetService
 from switchyard.services.context import Databases, Principal
@@ -494,6 +497,41 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
         )
 
 
+def _rendered_route(router: APIRouter, slug: str, object_type: ObjectType) -> None:
+    """``GET /tenants/{t}/<slug>/{id}/rendered``: the config text one object produced."""
+
+    @router.get(
+        f"/tenants/{{t}}/{slug}/{{object_id}}/rendered",
+        tags=[slug],
+        name=f"rendered_{slug}",
+        summary=f"Rendered config of a {slug.rstrip('s').replace('-', ' ')}",
+        response_model=RenderedConfig,
+        responses=_ok(ex.RENDERED),
+    )
+    async def rendered(
+        object_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        services: Services,
+        change_set: UUID | None = None,
+    ) -> RenderedConfig:
+        from switchyard.db.repository import load_snapshot
+
+        if change_set is None:
+            async with tenant_session(services.db.app, [tenant.id]) as session:
+                snapshot = await load_snapshot(session)
+        else:
+            _, draft = await services.change_sets.draft_view(who, tenant.id, change_set)
+            snapshot = draft.snapshot
+        if not any(o.id == object_id for o in getattr(snapshot, COLLECTION[object_type])):
+            raise ApiError(404, f"{slug} {object_id} not found")
+        try:
+            fragments = rendered_fragments(snapshot, object_type, object_id)
+        except RenderError as exc:
+            raise ApiError(422, f"cannot render: {exc}") from exc
+        return RenderedConfig(items=[RenderedFragment(**f.__dict__) for f in fragments])
+
+
 # -- application ----------------------------------------------------------------------------------
 
 
@@ -821,6 +859,8 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
 
     for slug, object_type in COLLECTIONS.items():
         _object_routes(router, slug, object_type)
+        if object_type in RENDERED_TYPES:
+            _rendered_route(router, slug, object_type)
 
     # change sets
     @router.get(

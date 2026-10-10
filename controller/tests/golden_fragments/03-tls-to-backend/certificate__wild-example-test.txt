@@ -1,0 +1,2 @@
+==> certs/tls-backends.crtlist (plaintext, lines 1-1)
+/etc/switchyard/certs/wild-example-test.pem *.example.test

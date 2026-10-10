@@ -45,7 +45,7 @@ Desired state is stored as normal relational tables with foreign keys, so refere
 | `vs_vip` / `vs_port` | vs\_id, vip\_allocation\_id / port, tls, http2, proxy\_protocol | A VS can listen on several ports |
 | `vs_route` | vs\_id, match (host, path), action (pool, redirect), order | SNI/host routing and redirects |
 | `pool` / `pool_member` | tenant\_id, algorithm, persistence / pool\_id, address, port, weight, admin\_state | `admin_state` = enabled, disabled or drain |
-| `health_monitor` | tenant\_id, type, interval, rise, fall, http (jsonb) | Shared across pools |
+| `health_monitor` | tenant\_id, type, interval, rise, fall, http (jsonb) | Shared across pools. Type = `tcp`, `http`, or `udp` (M6) |
 | `certificate` | tenant\_id, source, sans, not\_after, secret\_ref, renew\_policy | Key material only in OpenBao |
 | `policy_set` | tenant\_id, kind, rules (jsonb, schema-validated) | HTTP rules, allow lists, rate limits |
 | `waf_policy` | tenant\_id, mode, paranoia, exclusions (jsonb) | Phase 2 |
@@ -138,6 +138,22 @@ Each external system sits behind one Python adapter with a typed interface and a
 - **What it reports:** HAProxy process state and config hash, BGP sessions (from `vtysh -c 'show bgp summary json'`), VRRP state per instance, IPVS tables, disk and memory.
 - **Route health injection:** a local watchdog in the agent withdraws BGP prefixes, or lowers VRRP priority, when HAProxy's local health endpoint fails. Failover never waits on the controller.
 - **Scope limits:** the agent only writes files under `/etc/switchyard/` and can only reload a fixed list of units. There is no remote shell or arbitrary command endpoint.
+
+## UDP virtual services (IPVS, M6)
+
+UDP is a phase 2 feature (M6+). The data model, validators and the port-collision check already know `protocol: udp`; what is missing is the Keepalived/IPVS renderer, the agent's IPVS status and the monitor type below. Decisions are recorded in [ADR 0013](../adr/0013-udp-keepalived-ipvs.md).
+
+- **Forwarding mode:** IPVS NAT (`lb_kind NAT`) plus source NAT (masquerade) on the SE, so backends need no change: no VIP on the backend, no route back through the SE. The agent bundle also sets `net.ipv4.ip_forward=1` and `net.ipv4.vs.conntrack=1` and ships a small nftables masquerade rule for traffic IPVS sends to real servers. Cost: backends see the SE's address, not the client's, and all traffic crosses the SE in both directions. Direct routing (DR) is rejected because it needs the VIP on every backend's loopback with ARP suppression and L2 adjacency to the SE. In a multi-tenant setup the platform does not control tenant backends, and one tenant's VIP would have to be configured on machines it cannot see.
+- **Health checks:** a pool monitor of the new type `udp` renders `UDP_CHECK` (a probe that marks the server down on ICMP port-unreachable, optionally with a payload and an expected reply). `MISC_CHECK` (protocol-aware probes such as DNS or RADIUS) is not exposed in M6, because it runs a script on the SE; later it can ship as fixed, agent-provided probes under their own types (`dns`, `radius`), never as free-form scripts. **The `MonitorType` enum gains `udp`.** Allowed pairs: `udp` monitors only on pools used by UDP services, and `tcp`/`http` monitors only on pools used by `tcp`/`http` services. The `http` block stays forbidden for `udp`. A monitor `port` is optional; otherwise the member's port is probed. Member `admin_state`: `drain` renders `weight 0`, `disabled` omits the real server.
+- **Scheduler mapping:** `roundrobin`→`rr`, `leastconn`→`lc`, `source`→`sh`. When members have unequal weights the renderer uses `wrr` / `wlc` instead, so weights are honoured. **`random` is not allowed on UDP services**: IPVS has no random scheduler, and a silent substitute would change behavior. The snapshot validator rejects it on any pool used by a UDP service. `sh` is the choice for flows that must stay on one backend (WireGuard), because it needs no connection-table state to pick the same server.
+- **HA:**
+  - *VRRP mode:* as today. `keepalived.conf` holds the `vrrp_instance` and the `virtual_server` blocks together, so the master serves the VIP and the backup holds the same IPVS table, ready to take over.
+  - *BGP mode:* Keepalived runs for IPVS only (no `vrrp_instance`) and FRR still advertises the VIP /32. The agent watchdog withdraws the route when `keepalived` is down or a UDP service has no healthy real server, as it already does for HAProxy. The upstream routers spread flows over the SEs by hash (ECMP).
+  - *Connection sync:* **`lvs_sync_daemon` is not used in M6.** It needs a `vrrp_instance`, so it does not fit BGP mode, and a single master-to-backup stream does not fit active/active. Without it a failover or an ECMP rehash (SE added or removed) can send an in-flight UDP flow to an SE with no table entry. With `sh` that SE still picks the same backend; with `rr`/`lc` it may pick another, which is harmless for DNS or syslog. Revisit with VRRP-only sync if a real workload needs it.
+- **Fields on a UDP virtual service:** `vip`, `ports` (number only) and `default_pool_id`, plus the common `name`, `enabled`, `se_group_id`. No TLS, `proxy_protocol`, `http2`, `https_redirect_port`, routes, policy sets, allow list, `restore_client_ip_header` or certificates. On a UDP service's pool: no `tls`, no `persistence`, no `random`. The validator today (`domain/models.py`, `domain/snapshot.py`) already rejects `tls`, `proxy_protocol`, routes, policy sets, `http2`, `https_redirect_port` and `restore_client_ip_header`, and requires `default_pool_id`. **Still to add:** reject `certificate_ids`, `allow_list_id` and `enforce_allow_list`; reject pools with `tls` or `persistence` or `random`, or with a `tcp`/`http` monitor, when a UDP service uses them; reject a pool shared by a `tcp` and a `udp` service (`pool_protocol_mismatch` only separates `http` from `tcp`/`udp` today); require a port on every member of a pool used by UDP. Also, today's checks raise one model-level message with no field path; each rule should report its field (`ports[0].tls`, `certificate_ids`) in `errors[].path`.
+- **Validation:** the `keepalived.conf` output must pass `keepalived -t` in a testcontainer with the SE image's Keepalived version, in the same golden-file tests that run `haproxy -c` (`tests/integration/test_golden_haproxy.py`), with no warnings allowed. `-t` checks syntax only; a real IPVS test needs the host's `ip_vs` module and a privileged container, so it runs as a separate, optional integration lane for the agent.
+- **Status:** `sy-agent` reads the IPVS table over netlink (the IPVS generic-netlink family), falling back to `ipvsadm -Ln --stats --rate` where netlink is unavailable. It reports each real server in the same member shape as HAProxy (state up/down/drain, weight, active and inactive connections, packet and byte counters), keyed by virtual service and member, so `poll_status`, SSE and the UI need no UDP-specific branch.
+- **Until M6:** a UDP virtual service is **accepted and stored** like any other and takes part in validation and the port-collision check, but nothing serves it. The HAProxy renderer skips it with a warning (`docs/render.md`). That warning now also reaches the API: the change-set diff gets a `warnings[]` list next to `problems[]` with `{code: "udp_not_served", path, message: "UDP not served until M6"}`. It is a separate list because a `problem` blocks the apply; a warning does not. The engine status for such a service reports `state: "not_served"`, so the UI can say so instead of showing it as down. Tickets: T6 (now) and T7 (M6) in [05-frontend-backend-tickets.md](05-frontend-backend-tickets.md).
 
 ## Background jobs, status and telemetry
 
@@ -237,7 +253,7 @@ Build order runs from the core outward. Each milestone produces something usable
 3. **M3 — Agent and routing:** `sy-agent`, enrollment, routing profiles (VRRP first, then BGP), the route-health watchdog, status polling and SSE.
 4. **M4 — Infrastructure from the UI:** Proxmox adapter, networks and SDN, VIP pools/IPAM, SE group deploy from the template.
 5. **M5 — Certificates and Cloudflare:** ACME DNS-01, Origin CA, renewal jobs, the Cloudflare-only allow list. This completes phase 1.
-6. **M6+ — Phase 2:** UDP via IPVS if not pulled earlier, Coraza WAF, rate limits, Kubernetes connector, health scores, scale-out.
+6. **M6+ — Phase 2:** UDP via IPVS (see UDP virtual services above), Coraza WAF, rate limits, Kubernetes connector, health scores, scale-out.
 
 ### Open questions
 
@@ -256,6 +272,7 @@ Build order runs from the core outward. Each milestone produces something usable
   - [x] Done; the bootstrap and break-glass plan is in the HA section.
 - [x] Is WireGuard on IPVS needed in phase 1 (pull UDP into M3), or can it wait for phase 2?
   - [x] It can wait.
+  - [x] Done: UDP and the WireGuard rebuild are phase 2 (M6) in both docs; the UDP design is in its own section and ADR 0013.
 - [x] Which OIDC provider: the existing Keycloak, Authentik or Entra ID?
   - [x] Support any OIDC/SAML provider. We'll tie it to Authentik (and Entra ID if it allows for more than one IDP)
   - [ ] Done: multiple identity providers (OIDC and SAML) at once, each with its own group-to-role mapping. Auth section and data model updated.
