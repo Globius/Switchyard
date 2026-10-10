@@ -22,6 +22,8 @@ Rules for all tickets (CLAUDE.md): tests, docstrings, user-visible behavior in `
 
 **Can slip to** U4 for SAML and identity-provider admin CRUD; OIDC + `/me` must land before U1 ships.
 
+**Status.** Built (ADR 0012) except SAML, identity-provider and mapping APIs, users and the refresh rules; those are specified in **G1** below.
+
 ---
 
 ## T2. Typed response models (G2) — blocks the generated client
@@ -105,6 +107,80 @@ Rules for all tickets (CLAUDE.md): tests, docstrings, user-visible behavior in `
 
 ---
 
+## G1. Auth, RBAC and identity administration (spec: 02 "Auth and RBAC", ADR 0030)
+
+T1 shipped OIDC login, sessions, `GET /me`, per-tenant roles, break-glass login and tenant tokens (ADR 0012). G1 is the rest the screens need. Order: G1-1 first (everything else reads the matrix), G1-2 and G1-3 next (SAML depends on both), then G1-4 to G1-7 in any order.
+
+**Exists today (do not rebuild):** `GET /auth/providers`, `GET /auth/login/{provider}`, `GET /auth/callback/{provider}` (OIDC), `POST /auth/break-glass`, `POST /auth/logout`, `GET /me`, `GET/POST /tenants/{t}/tokens`, `DELETE /tenants/{t}/tokens/{id}`, CSRF header on cookie writes, `syctl idp add|map|list|enable`, `syctl local-admin`.
+
+### G1-1. Permission matrix as code, `GET /permissions`, 403 detail
+
+- `domain/permissions.py`: the matrix of 02 as data (`(verb, object) → minimum role`); services replace their `require_role(...)` literals with it. Behavior changes against today: job retry/cancel needs the role of the originating action; tokens cannot create tokens; `required_role` in the 403.
+- `GET /api/v1/permissions` (any authenticated caller) → `[{verb, object, min_role}]`, plus the ordered `roles` list. The UI's `can(verb, object)` is `role_in(tenant) ≥ min_role`.
+- 403 and 401 problems gain a `code` member: `session_expired`, `csrf`, `role_required` (+ `required_role`), `user_disabled`.
+- **Acceptance.** A parametrized test calls every route with a token of each role and compares the status with the matrix; a test fails when the table in 02, the code and `/permissions` disagree; OpenAPI documents `code` and `required_role`.
+
+### G1-2. Sessions: refresh, grants recomputation, `/me` additions
+
+- Lifetimes 4 h absolute / 30 min idle (break-glass 1 h / 15 min). Grants recomputed from stored groups and current mappings when older than 60 s; session revoked if no grant is left.
+- `POST /auth/refresh` (CSRF required) → the `Me` payload after recomputation; it does not extend the absolute lifetime.
+- `GET /me` adds: `session: {expires_at, idle_timeout_seconds, grants_computed_at}` and per tenant `via: [{provider, group}]` (empty for break-glass and tokens). Existing fields unchanged: `id`, `name`, `email`, `is_system`, `break_glass`, `auth`, `csrf_token`, `tenants[{id, name, role}]`.
+- Failed browser logins redirect to `/login?error=<code>` (`provider_error`, `expired`, `no_access`, `disabled`).
+- **Acceptance.** Changing a mapping changes `/me` within 60 s without a new login, and immediately after `/auth/refresh`; removing the last mapping revokes the session (next call 401 `session_expired`); the callback failure paths redirect instead of returning JSON.
+
+### G1-3. Identity-provider API and test sign-in
+
+- System-admin: `GET/POST /identity-providers`, `GET/PATCH/DELETE /identity-providers/{id}` (`If-Match` on `version`); fields in 02. `protocol` selects the schema (OIDC or SAML) as in T4. Secrets are references or write-only; reads never return them.
+- `POST /identity-providers/{id}/test` → `{test_id, authorize_url}`; `GET /identity-providers/{id}/test/{test_id}` → `{status: pending|done, subject, username, email, groups, claims, would_grant[], warnings[]}`. The callback creates no session for a test; the result is readable once, within five minutes.
+- Validation errors name the field (`errors[].path`); an OIDC provider is probed on create (discovery document reachable) and the result is reported as a warning, not a refusal.
+- **Acceptance.** Test sign-in against the fake OIDC provider returns claims and `would_grant`, creates no `user_session` row, and a second read is 404; no response contains a client secret or token.
+
+### G1-4. SAML sign-in and service-provider metadata
+
+- `protocol: saml` accepted. `GET /auth/login/{provider}` redirects with an `AuthnRequest`; `POST /auth/callback/{provider}` is the assertion consumer service; `GET /auth/saml/{provider}/metadata` returns SP metadata (`application/samlmetadata+xml`, public; the UI's download button uses it, with `Content-Disposition` when `?download=1`).
+- Rules in 02: signature required, `InResponseTo` bound to the stored state, assertion replay cache, 60 s skew, no IdP-initiated sign-in, groups from `attribute_groups`.
+- **Acceptance.** Round trip against a test IdP (signed response accepted; unsigned, replayed, wrong `InResponseTo`, expired and wrong-audience refused, each audited as `auth.login_failed`); the metadata validates against the SAML schema and lists the ACS URL.
+
+### G1-5. Role mappings
+
+- System-wide `GET/POST /role-mappings`, `GET/PATCH/DELETE /role-mappings/{id}`; per tenant `GET/POST /tenants/{t}/role-mappings`, `PATCH/DELETE …/{id}`. Fields and who may use which in 02 (tenant-admin: `viewer` and `operator`, own tenant only). `If-Match` on `version`. Duplicate (`provider`, `group`, `tenant`) → 409.
+- Remove `oidc_group` from tenant create, update and read, from `examples.py` and from the model; migration logs old values to the audit log (`tenant.oidc_group_dropped`) then drops the column. Update `syctl` accordingly; `syctl idp map` keeps working and writes the same rows.
+- **Acceptance.** A tenant-admin gets 403 `role_required` creating a `tenant-admin` mapping and 404 touching another tenant's mapping; the OpenAPI breaking-change check is allowed for `oidc_group` in this MR only; audit events for each change.
+
+### G1-6. Users
+
+- `user_account` upserted at every sign-in. System-admin: `GET /users`, `GET /users/{id}` (with `effective_grants`), `POST /users/{id}/disable|enable|revoke-sessions`, `DELETE /users/{id}`. Tenant-admin: `GET /tenants/{t}/users`. Details and field list in 02.
+- `user_session.user_id` links sessions; `revoke-sessions` ends them at once; a disabled user is refused at sign-in (`/login?error=disabled`) and by `authenticate`.
+- Cursor pagination and `q` search as in ADR 0014. The break-glass administrator has no `user_account` row (its sessions are audited, not listed).
+- **Acceptance.** Sign in twice: one row, `last_login_at` moves, `first_login_at` does not; no secret appears in any column; a tenant-admin sees only people with a grant in their tenant and only that tenant's grants.
+
+### G1-7. Break-glass administration and system tokens
+
+- `GET /system/break-glass`, `PUT /system/break-glass`, `POST /system/break-glass/admin`, `POST /system/break-glass/admin/confirm`, `DELETE /system/break-glass/admin` (system-admin; behavior in 02). The password is generated and shown once; the TOTP secret goes to OpenBao and is shown once as `totp_secret` and `otpauth_uri`.
+- `/auth/providers` reports `break_glass: true` only when it is on (forced, or enabled and not expired).
+- `GET/POST /system/tokens`, `DELETE /system/tokens/{id}` (30-day default, 90-day maximum); the tenant routes keep refusing `system-admin` tokens with a clear 422.
+- **Acceptance.** Enrolling and confirming makes a login possible; an unconfirmed admin cannot log in; enabling needs a reason and expires on time (test with the injected clock); `SWITCHYARD_BREAK_GLASS=1` shows `forced_by_deployment: true` and cannot be turned off through the API; all of it is audited.
+
+### What the Claude Design mockups assume, and what changes
+
+Only the first two rows come from Claude Design's stated assumptions (highest role wins, next refresh). The others are places where the spec differs from the likely screens; check each against the mockups.
+
+| Mockup says | Spec says | Change in the mockups |
+| --- | --- | --- |
+| Highest role wins when several groups match | True (roles nest, so the union is the highest role) | None to the rule. Add the "granted by" list (`via`) to the user and "my access" views so the result can be explained. |
+| Role changes apply at next refresh | Within 60 s without signing out (or at once via refresh); changes of group membership at the provider need a new sign-in (at most 4 h) | Reword to "within a minute"; add a Refresh access action; admin screens need *Revoke sessions* and *Disable user*. |
+| Sessions last 8 h | 4 h absolute, 30 min idle (break-glass 1 h / 15 min) | Session-expiry banner and silent re-login path; show expiry from `/me.session`. |
+| Tenant form has an OIDC group field | Removed | Delete the field; point to the role-mappings tab. |
+| Approver is a separate permission (design 02 said so) | Tenant-admin only, never the author or requester | Disable Approve for operators with the tooltip "needs tenant-admin"; show "you wrote this" when the viewer is the author. |
+| Operators may do everything except admin | Operators cannot touch networks, VIP pools, SE groups, routing profiles, engines, deployments, tokens or mappings; job retry/cancel only for their own action | Disabled controls per the matrix; take them from `GET /permissions`, not from hard-coded rules. |
+| Tokens in one place | Tenant tokens under the tenant; system tokens (system-admin) on a separate admin page; a token cannot create tokens | Split the tokens screen; tenant roles list stops at tenant-admin. |
+| Login errors shown on the login page as text | Redirect to `/login?error=<code>` | Four error states: provider error, expired, no access, disabled. |
+| Provider form (OIDC) | OIDC and SAML forms by `protocol`, secret write-only, test sign-in with claims and "would grant" | SAML form, SP-metadata download, test result panel with `warnings`. |
+| Users screen (if any) | `user_account` list with last sign-in, groups, disable, effective grants | New list and detail screens (system-admin); a members list in tenant settings. |
+| Break-glass is a toggle | Timed enablement with reason, TOTP enrollment (QR from `otpauth_uri`, password shown once, confirm step); forced-by-deployment is read-only | Enrollment wizard and a countdown when enabled. |
+
+---
+
 ## Follow-ups (not blocking U1; ticket when the milestone starts)
 
 | Gap | Ticket | Milestone |
@@ -112,5 +188,5 @@ Rules for all tickets (CLAUDE.md): tests, docstrings, user-visible behavior in `
 | G4 | Metrics and logs endpoints (Prometheus/Loki adapter, tenant-label enforced) + Grafana proxy | U2 |
 | G5 | Finer SSE events (`member_status`, `vs_health`, `bgp_session`, `revision_applied`) and a typed catalog | U2 |
 | G8 | Conflict (three-way) response on stale `expected_version`; diff "impact" section | U1/U2 |
-| G9 | VIP allocations/usage/release; health-monitor test; cert issue/renew; SE deploy; identity providers + role mappings | U3–U4 |
+| G9 | VIP allocations/usage/release; health-monitor test; cert issue/renew; SE deploy | U3–U4 |
 | G10 | `?label=`, `?se_group=` filters, sorting, audit filters/cursor | U1 |
