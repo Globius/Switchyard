@@ -18,6 +18,7 @@ import { Route as TTenantNewRouteImport } from './routes/t.$tenant.new'
 import { Route as TTenantShellIndexRouteImport } from './routes/t.$tenant._shell.index'
 import { Route as TTenantShellSplatRouteImport } from './routes/t.$tenant._shell.$'
 import { Route as TTenantReviewCsRouteImport } from './routes/t.$tenant.review.$cs'
+import { Route as TTenantShellVirtualServicesIndexRouteImport } from './routes/t.$tenant._shell.virtual-services.index'
 import { Route as TTenantShellVirtualServicesIdRouteImport } from './routes/t.$tenant._shell.virtual-services.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -64,6 +65,12 @@ const TTenantReviewCsRoute = TTenantReviewCsRouteImport.update({
   path: '/review/$cs',
   getParentRoute: () => TTenantRoute,
 } as any)
+const TTenantShellVirtualServicesIndexRoute =
+  TTenantShellVirtualServicesIndexRouteImport.update({
+    id: '/virtual-services/',
+    path: '/virtual-services/',
+    getParentRoute: () => TTenantShellRoute,
+  } as any)
 const TTenantShellVirtualServicesIdRoute =
   TTenantShellVirtualServicesIdRouteImport.update({
     id: '/virtual-services/$id',
@@ -81,6 +88,7 @@ export interface FileRoutesByFullPath {
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/': typeof TTenantShellIndexRoute
   '/t/$tenant/virtual-services/$id': typeof TTenantShellVirtualServicesIdRoute
+  '/t/$tenant/virtual-services/': typeof TTenantShellVirtualServicesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -91,6 +99,7 @@ export interface FileRoutesByTo {
   '/t/$tenant/$': typeof TTenantShellSplatRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/virtual-services/$id': typeof TTenantShellVirtualServicesIdRoute
+  '/t/$tenant/virtual-services': typeof TTenantShellVirtualServicesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -104,6 +113,7 @@ export interface FileRoutesById {
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/_shell/': typeof TTenantShellIndexRoute
   '/t/$tenant/_shell/virtual-services/$id': typeof TTenantShellVirtualServicesIdRoute
+  '/t/$tenant/_shell/virtual-services/': typeof TTenantShellVirtualServicesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/'
     | '/t/$tenant/virtual-services/$id'
+    | '/t/$tenant/virtual-services/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/$'
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/virtual-services/$id'
+    | '/t/$tenant/virtual-services'
   id:
     | '__root__'
     | '/'
@@ -139,6 +151,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/_shell/'
     | '/t/$tenant/_shell/virtual-services/$id'
+    | '/t/$tenant/_shell/virtual-services/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -213,6 +226,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTenantReviewCsRouteImport
       parentRoute: typeof TTenantRoute
     }
+    '/t/$tenant/_shell/virtual-services/': {
+      id: '/t/$tenant/_shell/virtual-services/'
+      path: '/virtual-services'
+      fullPath: '/t/$tenant/virtual-services/'
+      preLoaderRoute: typeof TTenantShellVirtualServicesIndexRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
     '/t/$tenant/_shell/virtual-services/$id': {
       id: '/t/$tenant/_shell/virtual-services/$id'
       path: '/virtual-services/$id'
@@ -227,12 +247,14 @@ interface TTenantShellRouteChildren {
   TTenantShellSplatRoute: typeof TTenantShellSplatRoute
   TTenantShellIndexRoute: typeof TTenantShellIndexRoute
   TTenantShellVirtualServicesIdRoute: typeof TTenantShellVirtualServicesIdRoute
+  TTenantShellVirtualServicesIndexRoute: typeof TTenantShellVirtualServicesIndexRoute
 }
 
 const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellSplatRoute: TTenantShellSplatRoute,
   TTenantShellIndexRoute: TTenantShellIndexRoute,
   TTenantShellVirtualServicesIdRoute: TTenantShellVirtualServicesIdRoute,
+  TTenantShellVirtualServicesIndexRoute: TTenantShellVirtualServicesIndexRoute,
 }
 
 const TTenantShellRouteWithChildren = TTenantShellRoute._addFileChildren(

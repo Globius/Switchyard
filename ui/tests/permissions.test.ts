@@ -35,6 +35,9 @@ describe("permissions", () => {
   it("grants are per tenant; system admins hold system-admin everywhere", () => {
     expect(roleIn(me("operator"), T1)).toBe("operator");
     expect(roleIn(me("operator"), T2)).toBeNull();
+    expect(
+      roleIn({ is_system: false, tenants: [{ id: T1, name: "acme", role: "viewer" }] }, "acme"),
+    ).toBe("viewer");
     expect(roleIn({ is_system: true, tenants: [] }, T2)).toBe("system-admin");
     expect(roleIn(undefined, T1)).toBeNull();
   });

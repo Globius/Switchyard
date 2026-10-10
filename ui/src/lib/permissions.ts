@@ -15,7 +15,7 @@ export type PermObject = Permission["object"];
 
 interface Caller {
   is_system: boolean;
-  tenants: { id: string; role: Role }[];
+  tenants: { id: string; name?: string; role: Role }[];
 }
 
 /** True when `held` is at least `required` in the matrix's role order. */
@@ -28,11 +28,11 @@ export function roleAtLeast(
   return roles.indexOf(held) >= roles.indexOf(required);
 }
 
-/** Role the caller holds in `tenant` (id); system admins hold `system-admin` everywhere. */
+/** Role the caller holds in `tenant` (id or name, as in the URL); system admins hold `system-admin` everywhere. */
 export function roleIn(me: Caller | undefined, tenant: string | undefined): Role | null {
   if (!me) return null;
   if (me.is_system) return "system-admin";
-  return me.tenants.find((x) => x.id === tenant)?.role ?? null;
+  return me.tenants.find((x) => x.id === tenant || x.name === tenant)?.role ?? null;
 }
 
 /** Result of a check; `reason` is a ready-made tooltip when denied. */
