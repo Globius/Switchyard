@@ -68,8 +68,9 @@ def problem(
     *,
     errors: list[dict[str, str]] | None = None,
     headers: dict[str, str] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> JSONResponse:
-    """Build a problem+json response."""
+    """Build a problem+json response; ``extra`` adds RFC 9457 extension members."""
     body: dict[str, Any] = {
         "type": "about:blank",
         "title": _TITLES.get(status, "Error"),
@@ -78,6 +79,8 @@ def problem(
     }
     if errors:
         body["errors"] = errors
+    if extra:
+        body |= extra
     return JSONResponse(body, status_code=status, media_type=PROBLEM, headers=headers)
 
 
@@ -126,7 +129,21 @@ def install_handlers(app: FastAPI) -> None:
     add(AlreadyExistsError, lambda e: problem(409, str(e)))
     add(ConflictError, lambda e: problem(409, str(e)))
     add(ConcurrentModificationError, lambda e: problem(409, str(e)))
-    add(StaleVersionError, lambda e: problem(412, str(e)))
+    add(
+        StaleVersionError,
+        lambda e: problem(
+            412,
+            str(e),
+            extra={
+                "conflict": {
+                    "object_type": e.object_type.value,
+                    "object_id": str(e.object_id),
+                    "expected_version": e.expected,
+                    "current_version": e.actual,
+                }
+            },
+        ),
+    )
     add(
         OperationInvalidError,
         lambda e: problem(422, "an operation is invalid", errors=_errors(e.problems)),

@@ -212,6 +212,14 @@ DIFF = {
     ],
     "problems": [],
     "warnings": [],
+    "impact": {
+        "services": [
+            {"id": VIRTUAL_SERVICE, "name": "shop", "vip": "192.0.2.100", "se_group_id": SE_GROUP}
+        ],
+        "vips": ["192.0.2.100"],
+        "se_groups": [{"id": SE_GROUP, "name": "edge"}],
+        "hostnames": ["shop.example.test"],
+    },
     "se_groups": [
         {
             "id": SE_GROUP,

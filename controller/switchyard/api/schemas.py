@@ -56,6 +56,20 @@ class ProblemDetail(ApiModel):
     message: str
 
 
+class StaleConflict(ApiModel):
+    """Extension member of a `412` caused by an operation's `expected_version`.
+
+    To resolve: `GET` the object (its current state is "theirs", the `ETag` is
+    `current_version`), compare with what the client had read (the base) and the operation's
+    `body` ("yours"), then resend the operation with `expected_version: current_version`.
+    """
+
+    object_type: ObjectType
+    object_id: UUID
+    expected_version: int
+    current_version: int
+
+
 class ProblemOut(ApiModel):
     """An RFC 9457 ``application/problem+json`` error body."""
 
@@ -64,6 +78,9 @@ class ProblemOut(ApiModel):
     status: int
     detail: str
     errors: list[ProblemDetail] | None = None
+    conflict: StaleConflict | None = Field(
+        default=None, description="Present on a stale-version `412` from a change-set operation."
+    )
 
 
 PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -426,12 +443,42 @@ class DiffGroup(ApiModel):
     files: list[DiffFile]
 
 
+class ImpactService(ApiModel):
+    """A virtual service a change reaches."""
+
+    id: UUID
+    name: str
+    vip: str
+    se_group_id: UUID
+
+
+class ImpactGroup(ApiModel):
+    """An SE group whose engines would receive new configuration."""
+
+    id: UUID
+    name: str
+
+
+class DiffImpact(ApiModel):
+    """What a change set reaches, for the review's Impact tab.
+
+    A service is listed when it is created, changed or deleted, or uses a changed pool, health
+    monitor, certificate, policy set, SE group, network, VIP pool or routing profile.
+    """
+
+    services: list[ImpactService]
+    vips: list[str] = Field(description="VIP addresses of those services, ascending.")
+    se_groups: list[ImpactGroup]
+    hostnames: list[str] = Field(description="Route hosts of those services, sorted.")
+
+
 class ChangeSetDiff(ApiModel):
     """What applying a change set would change."""
 
     objects: list[DiffObject]
     problems: list[DiffProblem]
     warnings: list[DiffWarning]
+    impact: DiffImpact
     se_groups: list[DiffGroup]
 
 

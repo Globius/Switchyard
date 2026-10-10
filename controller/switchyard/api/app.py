@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import parse_qs
 from uuid import UUID
 
@@ -86,6 +86,7 @@ from switchyard.domain.changes import (
     ObjectType,
 )
 from switchyard.domain.field_rules import protocol_rules
+from switchyard.domain.impact import impact as impact_of
 from switchyard.domain.models import CertSource, Protocol
 from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
@@ -479,10 +480,128 @@ async def _pool_usage(
     )
 
 
-def _page(items: list[dict[str, Any]], cursor: str | None, limit: int) -> Page[Any]:
-    items = sorted(items, key=lambda o: (o["name"], o["id"]))
+@dataclass
+class ListFilters:
+    """Filters every object list accepts."""
+
+    name: Annotated[str | None, Query(description="Exactly this name.")] = None
+    q: Annotated[
+        str | None, Query(description="Substring of the name, case-insensitive.", max_length=200)
+    ] = None
+    sort: Annotated[
+        Literal["name", "-name"], Query(description="Order by name, ascending or descending.")
+    ] = "name"
+
+
+@dataclass
+class VirtualServiceFilters(ListFilters):
+    """Extra filters of virtual services."""
+
+    se_group: Annotated[UUID | None, Query(description="Served by this SE group.")] = None
+    protocol: Annotated[Protocol | None, Query(description="`http`, `tcp` or `udp`.")] = None
+    enabled: Annotated[bool | None, Query(description="Only enabled or only disabled.")] = None
+    pool: Annotated[UUID | None, Query(description="Uses this pool (default or in a route).")] = (
+        None
+    )
+    certificate: Annotated[UUID | None, Query(description="Uses this certificate.")] = None
+
+
+@dataclass
+class PoolFilters(ListFilters):
+    """Extra filters of pools."""
+
+    health_monitor: Annotated[UUID | None, Query(description="Checked by this monitor.")] = None
+
+
+@dataclass
+class KindFilters(ListFilters):
+    """Extra filter of the collections that are unions on ``kind``."""
+
+    kind: Annotated[str | None, Query(description="Only this `kind`.")] = None
+
+
+@dataclass
+class SeGroupFilters(ListFilters):
+    """Extra filter of SE groups."""
+
+    ha_mode: Annotated[str | None, Query(description="`bgp` or `vrrp`.")] = None
+
+
+@dataclass
+class CertificateFilters(ListFilters):
+    """Extra filters of certificates."""
+
+    source: Annotated[CertSource | None, Query(description="How it was obtained.")] = None
+    expires_within_days: Annotated[
+        int | None, Query(ge=0, le=3650, description="Expires within this many days (or already).")
+    ] = None
+
+
+FILTERS: dict[str, type[ListFilters]] = {
+    "virtual-services": VirtualServiceFilters,
+    "pools": PoolFilters,
+    "policy-sets": KindFilters,
+    "routing-profiles": KindFilters,
+    "se-groups": SeGroupFilters,
+    "certificates": CertificateFilters,
+}
+
+
+def _filtered(items: list[dict[str, Any]], f: ListFilters) -> list[dict[str, Any]]:
+    """Apply the list filters to object dicts (JSON form)."""
+    out = items
+    if f.name:
+        out = [o for o in out if o["name"] == f.name]
+    if f.q:
+        needle = f.q.lower()
+        out = [o for o in out if needle in o["name"].lower()]
+    if isinstance(f, VirtualServiceFilters):
+        if f.se_group:
+            out = [o for o in out if o["se_group_id"] == str(f.se_group)]
+        if f.protocol:
+            out = [o for o in out if o["protocol"] == f.protocol.value]
+        if f.enabled is not None:
+            out = [o for o in out if o["enabled"] is f.enabled]
+        if f.pool:
+            want = str(f.pool)
+            out = [
+                o
+                for o in out
+                if o.get("default_pool_id") == want
+                or any(r.get("pool_id") == want for r in o.get("routes", []))
+            ]
+        if f.certificate:
+            out = [o for o in out if str(f.certificate) in o.get("certificate_ids", [])]
+    if isinstance(f, PoolFilters) and f.health_monitor:
+        out = [o for o in out if o.get("health_monitor_id") == str(f.health_monitor)]
+    if isinstance(f, KindFilters) and f.kind:
+        out = [o for o in out if o.get("kind") == f.kind]
+    if isinstance(f, SeGroupFilters) and f.ha_mode:
+        out = [o for o in out if o.get("ha_mode") == f.ha_mode]
+    if isinstance(f, CertificateFilters):
+        if f.source:
+            out = [o for o in out if o.get("source") == f.source.value]
+        if f.expires_within_days is not None:
+            limit_at = datetime.now(UTC) + timedelta(days=f.expires_within_days)
+            out = [
+                o
+                for o in out
+                if datetime.fromisoformat(str(o["not_after"]).replace("Z", "+00:00")) <= limit_at
+            ]
+    return out
+
+
+def _page(
+    items: list[dict[str, Any]], cursor: str | None, limit: int, descending: bool = False
+) -> Page[Any]:
+    items = sorted(items, key=lambda o: (o["name"], o["id"]), reverse=descending)
     if cursor:
-        items = [o for o in items if (o["name"], o["id"]) > tuple(cursor.split("|", 1))]
+        after = tuple(cursor.split("|", 1))
+        items = [
+            o
+            for o in items
+            if ((o["name"], o["id"]) < after if descending else (o["name"], o["id"]) > after)
+        ]
     window = items[:limit]
     nxt = f"{window[-1]['name']}|{window[-1]['id']}" if len(items) > limit else None
     return Page(items=window, next_cursor=nxt)
@@ -524,6 +643,7 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
     tag = slug
     noun = slug.replace("-", " ")
     sample = ex.OBJECTS[slug]
+    filter_type = FILTERS.get(slug, ListFilters)
     create_in: Any = api.create
     patch_in: Any = api.patch
     read_out: Any = api.read
@@ -540,16 +660,14 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
         tenant: Tenant,
         who: Who,
         services: Services,
-        name: str | None = None,
+        filters: Annotated[Any, Depends(filter_type)],
         change_set: UUID | None = None,
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> Page[Any]:
         """List the tenant's objects of this type, by name; with ``change_set`` the draft view."""
-        items = await _view(services, who, tenant, object_type, change_set)
-        if name:
-            items = [o for o in items if o["name"] == name]
-        return _page(items, cursor, limit)
+        items = _filtered(await _view(services, who, tenant, object_type, change_set), filters)
+        return _page(items, cursor, limit, descending=filters.sort == "-name")
 
     @router.get(
         base + "/{object_id}",
@@ -1378,7 +1496,19 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     async def diff(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
         """Objects touched, rule `problems` (block apply), `warnings` (never block) and files."""
         preview = await svc.change_sets.preview(who, tenant.id, cs)
+        base, _ = await svc.change_sets.draft_view(who, tenant.id, cs)
+        found = impact_of(base, preview.draft)
+        names = {g.id: g.name for snap in (base, preview.draft.snapshot) for g in snap.se_groups}
         return {
+            "impact": {
+                "services": [
+                    {"id": str(i), "name": n, "vip": v, "se_group_id": str(g)}
+                    for i, n, v, g in found.services
+                ],
+                "vips": list(found.vips),
+                "se_groups": [{"id": str(g), "name": names[g]} for g in found.se_group_ids],
+                "hostnames": list(found.hostnames),
+            },
             "objects": [
                 {
                     "type": o.object_type.value,

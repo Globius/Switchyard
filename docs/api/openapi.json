@@ -1410,6 +1410,9 @@
         "additionalProperties": false,
         "description": "What applying a change set would change.",
         "properties": {
+          "impact": {
+            "$ref": "#/components/schemas/DiffImpact"
+          },
           "objects": {
             "items": {
               "$ref": "#/components/schemas/DiffObject"
@@ -1443,6 +1446,7 @@
           "objects",
           "problems",
           "warnings",
+          "impact",
           "se_groups"
         ],
         "title": "ChangeSetDiff",
@@ -1761,6 +1765,50 @@
           "files"
         ],
         "title": "DiffGroup",
+        "type": "object"
+      },
+      "DiffImpact": {
+        "additionalProperties": false,
+        "description": "What a change set reaches, for the review's Impact tab.\n\nA service is listed when it is created, changed or deleted, or uses a changed pool, health\nmonitor, certificate, policy set, SE group, network, VIP pool or routing profile.",
+        "properties": {
+          "hostnames": {
+            "description": "Route hosts of those services, sorted.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Hostnames",
+            "type": "array"
+          },
+          "se_groups": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactGroup"
+            },
+            "title": "Se Groups",
+            "type": "array"
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/ImpactService"
+            },
+            "title": "Services",
+            "type": "array"
+          },
+          "vips": {
+            "description": "VIP addresses of those services, ascending.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Vips",
+            "type": "array"
+          }
+        },
+        "required": [
+          "services",
+          "vips",
+          "se_groups",
+          "hostnames"
+        ],
+        "title": "DiffImpact",
         "type": "object"
       },
       "DiffObject": {
@@ -2889,6 +2937,59 @@
           }
         },
         "title": "HttpCheck",
+        "type": "object"
+      },
+      "ImpactGroup": {
+        "additionalProperties": false,
+        "description": "An SE group whose engines would receive new configuration.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ImpactGroup",
+        "type": "object"
+      },
+      "ImpactService": {
+        "additionalProperties": false,
+        "description": "A virtual service a change reaches.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "se_group_id": {
+            "format": "uuid",
+            "title": "Se Group Id",
+            "type": "string"
+          },
+          "vip": {
+            "title": "Vip",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "vip",
+          "se_group_id"
+        ],
+        "title": "ImpactService",
         "type": "object"
       },
       "IpRange": {
@@ -4953,6 +5054,17 @@
         "additionalProperties": false,
         "description": "An RFC 9457 ``application/problem+json`` error body.",
         "properties": {
+          "conflict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaleConflict"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present on a stale-version `412` from a change-set operation."
+          },
           "detail": {
             "title": "Detail",
             "type": "string"
@@ -6088,6 +6200,36 @@
         ],
         "title": "StageState",
         "type": "string"
+      },
+      "StaleConflict": {
+        "additionalProperties": false,
+        "description": "Extension member of a `412` caused by an operation's `expected_version`.\n\nTo resolve: `GET` the object (its current state is \"theirs\", the `ETag` is\n`current_version`), compare with what the client had read (the base) and the operation's\n`body` (\"yours\"), then resend the operation with `expected_version: current_version`.",
+        "properties": {
+          "current_version": {
+            "title": "Current Version",
+            "type": "integer"
+          },
+          "expected_version": {
+            "title": "Expected Version",
+            "type": "integer"
+          },
+          "object_id": {
+            "format": "uuid",
+            "title": "Object Id",
+            "type": "string"
+          },
+          "object_type": {
+            "$ref": "#/components/schemas/ObjectType"
+          }
+        },
+        "required": [
+          "object_type",
+          "object_id",
+          "expected_version",
+          "current_version"
+        ],
+        "title": "StaleConflict",
+        "type": "object"
       },
       "StateOut": {
         "additionalProperties": false,
@@ -10050,23 +10192,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -10112,6 +10237,97 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How it was obtained.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CertSource"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How it was obtained.",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "Expires within this many days (or already).",
+            "in": "query",
+            "name": "expires_within_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3650,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Expires within this many days (or already).",
+              "title": "Expires Within Days"
             }
           },
           {
@@ -12154,6 +12370,28 @@
             "content": {
               "application/json": {
                 "example": {
+                  "impact": {
+                    "hostnames": [
+                      "shop.example.test"
+                    ],
+                    "se_groups": [
+                      {
+                        "id": "0192f3a0-0000-7000-8000-000000000012",
+                        "name": "edge"
+                      }
+                    ],
+                    "services": [
+                      {
+                        "id": "0192f3a0-0000-7000-8000-000000000013",
+                        "name": "shop",
+                        "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
+                        "vip": "192.0.2.100"
+                      }
+                    ],
+                    "vips": [
+                      "192.0.2.100"
+                    ]
+                  },
                   "objects": [
                     {
                       "changed_fields": [
@@ -13636,23 +13874,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -13698,6 +13919,59 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
             }
           },
           {
@@ -15500,23 +15774,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -15562,6 +15819,59 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
             }
           },
           {
@@ -16477,23 +16787,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -16539,6 +16832,77 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only this `kind`.",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this `kind`.",
+              "title": "Kind"
             }
           },
           {
@@ -17557,23 +17921,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -17619,6 +17966,78 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Checked by this monitor.",
+            "in": "query",
+            "name": "health_monitor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Checked by this monitor.",
+              "title": "Health Monitor"
             }
           },
           {
@@ -19164,23 +19583,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -19226,6 +19628,77 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only this `kind`.",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this `kind`.",
+              "title": "Kind"
             }
           },
           {
@@ -20089,23 +20562,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -20151,6 +20607,77 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`bgp` or `vrrp`.",
+            "in": "query",
+            "name": "ha_mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`bgp` or `vrrp`.",
+              "title": "Ha Mode"
             }
           },
           {
@@ -22498,23 +23025,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -22560,6 +23070,59 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
             }
           },
           {
@@ -23653,23 +24216,6 @@
             }
           },
           {
-            "description": "Return only the object with exactly this name.",
-            "in": "query",
-            "name": "name",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Name"
-            }
-          },
-          {
             "description": "Read the state as this open change set would leave it (draft view).",
             "in": "query",
             "name": "change_set",
@@ -23715,6 +24261,152 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Exactly this name.",
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exactly this name.",
+              "title": "Name"
+            }
+          },
+          {
+            "description": "Substring of the name, case-insensitive.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of the name, case-insensitive.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Order by name, ascending or descending.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "name",
+              "description": "Order by name, ascending or descending.",
+              "enum": [
+                "name",
+                "-name"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Served by this SE group.",
+            "in": "query",
+            "name": "se_group",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Served by this SE group.",
+              "title": "Se Group"
+            }
+          },
+          {
+            "description": "`http`, `tcp` or `udp`.",
+            "in": "query",
+            "name": "protocol",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Protocol"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`http`, `tcp` or `udp`.",
+              "title": "Protocol"
+            }
+          },
+          {
+            "description": "Only enabled or only disabled.",
+            "in": "query",
+            "name": "enabled",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only enabled or only disabled.",
+              "title": "Enabled"
+            }
+          },
+          {
+            "description": "Uses this pool (default or in a route).",
+            "in": "query",
+            "name": "pool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Uses this pool (default or in a route).",
+              "title": "Pool"
+            }
+          },
+          {
+            "description": "Uses this certificate.",
+            "in": "query",
+            "name": "certificate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Uses this certificate.",
+              "title": "Certificate"
             }
           },
           {

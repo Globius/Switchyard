@@ -735,3 +735,70 @@ async def test_search_and_summary(api: Api) -> None:
     summary = (await api.client.get(f"{V1}/tenants/acme/summary", headers=h)).json()
     assert summary["services"]["total"] >= 1
     assert {"jobs", "open_drafts", "latest_revision", "expiring_certificates"} <= summary.keys()
+
+
+async def test_list_filters_and_sort(api: Api) -> None:
+    h = await api.token(Role.VIEWER)
+    base = f"{V1}/tenants/acme/virtual-services"
+    everything = (await api.client.get(base, headers=h)).json()["items"]
+    assert everything
+    names = [o["name"] for o in everything]
+    desc = (await api.client.get(f"{base}?sort=-name", headers=h)).json()["items"]
+    assert [o["name"] for o in desc] == sorted(names, reverse=True)
+    found = (await api.client.get(f"{base}?q={names[0][:2].upper()}", headers=h)).json()["items"]
+    assert names[0] in {o["name"] for o in found}
+    none = (await api.client.get(f"{base}?protocol=udp&enabled=false", headers=h)).json()
+    assert none["items"] == []
+    by_group = (await api.client.get(f"{base}?se_group={GROUP}", headers=h)).json()["items"]
+    assert len(by_group) == len(everything)
+    assert (await api.client.get(f"{base}?sort=color", headers=h)).status_code == 422
+    certs = f"{V1}/tenants/acme/certificates"
+    soon = (await api.client.get(f"{certs}?expires_within_days=0", headers=h)).json()
+    assert isinstance(soon["items"], list)
+    pools = (await api.client.get(f"{V1}/tenants/acme/pools?q=zzz", headers=h)).json()
+    assert pools["items"] == []
+
+
+async def test_stale_operation_reports_the_conflict_and_the_diff_has_impact(api: Api) -> None:
+    h = await api.token()
+    cs = (
+        await api.client.post(f"{V1}/tenants/acme/change-sets", json={"summary": "x"}, headers=h)
+    ).json()["id"]
+    stale = await api.client.post(
+        f"{V1}/tenants/acme/change-sets/{cs}/ops",
+        json={
+            "ops": [
+                {
+                    "object_type": "pool",
+                    "object_id": str(POOL),
+                    "action": "update",
+                    "body": {"algorithm": "leastconn"},
+                    "expected_version": 99,
+                }
+            ]
+        },
+        headers=h,
+    )
+    assert stale.status_code == 412
+    conflict = stale.json()["conflict"]
+    assert conflict["object_type"] == "pool" and conflict["expected_version"] == 99
+    assert conflict["current_version"] == 1
+    ok = await api.client.post(
+        f"{V1}/tenants/acme/change-sets/{cs}/ops",
+        json={
+            "ops": [
+                {
+                    "object_type": "pool",
+                    "object_id": str(POOL),
+                    "action": "update",
+                    "body": {"algorithm": "leastconn"},
+                    "expected_version": conflict["current_version"],
+                }
+            ]
+        },
+        headers=h,
+    )
+    assert ok.status_code == 200
+    diff = (await api.client.get(f"{V1}/tenants/acme/change-sets/{cs}/diff", headers=h)).json()
+    assert [s["id"] for s in diff["impact"]["services"]] == [str(VS)]
+    assert diff["impact"]["vips"] and diff["impact"]["se_groups"][0]["name"]
