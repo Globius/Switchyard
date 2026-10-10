@@ -1,6 +1,6 @@
 # 0012. User login, sessions and per-tenant roles
 
-Status: Accepted
+Status: Accepted; sessions and role refresh superseded in part by [0030](0030-rbac-matrix-and-access-lifecycle.md)
 
 ## Context
 
