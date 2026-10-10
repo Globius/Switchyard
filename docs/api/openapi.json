@@ -969,6 +969,117 @@
         "title": "BgpSessionStatus",
         "type": "object"
       },
+      "BreakGlassAdminRead": {
+        "additionalProperties": false,
+        "description": "The enrolled break-glass administrator (never its password or TOTP secret).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "locked_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Until"
+          },
+          "totp_confirmed": {
+            "title": "Totp Confirmed",
+            "type": "boolean"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "totp_confirmed",
+          "created_at",
+          "last_login_at",
+          "locked_until"
+        ],
+        "title": "BreakGlassAdminRead",
+        "type": "object"
+      },
+      "BreakGlassConfirmIn": {
+        "additionalProperties": false,
+        "description": "A code from the authenticator, proving enrolment worked.",
+        "properties": {
+          "totp": {
+            "title": "Totp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "totp"
+        ],
+        "title": "BreakGlassConfirmIn",
+        "type": "object"
+      },
+      "BreakGlassEnrollIn": {
+        "additionalProperties": false,
+        "description": "Enrol (or replace) the break-glass administrator.",
+        "properties": {
+          "username": {
+            "default": "breakglass",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "title": "BreakGlassEnrollIn",
+        "type": "object"
+      },
+      "BreakGlassEnrollment": {
+        "additionalProperties": false,
+        "description": "Shown once: the generated password and TOTP secret.",
+        "properties": {
+          "otpauth_uri": {
+            "description": "Render as a QR code for the authenticator app.",
+            "title": "Otpauth Uri",
+            "type": "string"
+          },
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "totp_secret": {
+            "title": "Totp Secret",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password",
+          "totp_secret",
+          "otpauth_uri"
+        ],
+        "title": "BreakGlassEnrollment",
+        "type": "object"
+      },
       "BreakGlassIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /auth/break-glass``.",
@@ -996,6 +1107,114 @@
           "totp"
         ],
         "title": "BreakGlassIn",
+        "type": "object"
+      },
+      "BreakGlassRead": {
+        "additionalProperties": false,
+        "description": "Whether break-glass login is on, and the administrator.",
+        "properties": {
+          "admin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BreakGlassAdminRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "enabled_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled By"
+          },
+          "enabled_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled Until"
+          },
+          "forced_by_deployment": {
+            "description": "`SWITCHYARD_BREAK_GLASS=1`: on regardless of this API; read-only.",
+            "title": "Forced By Deployment",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "forced_by_deployment",
+          "enabled",
+          "enabled_until",
+          "enabled_by",
+          "reason",
+          "admin"
+        ],
+        "title": "BreakGlassRead",
+        "type": "object"
+      },
+      "BreakGlassSwitchIn": {
+        "additionalProperties": false,
+        "description": "Switch break-glass login on (with a reason) or off.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required when enabling.",
+            "title": "Reason"
+          },
+          "ttl_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How long it stays on: 1 to 1440, default 240.",
+            "title": "Ttl Minutes"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "BreakGlassSwitchIn",
         "type": "object"
       },
       "CertImportIn": {
@@ -2743,6 +2962,166 @@
         "title": "HttpCheck",
         "type": "object"
       },
+      "IdpTestIn": {
+        "additionalProperties": false,
+        "description": "Start a test sign-in.",
+        "properties": {
+          "return_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Same-site path the browser returns to afterwards.",
+            "title": "Return To"
+          }
+        },
+        "title": "IdpTestIn",
+        "type": "object"
+      },
+      "IdpTestResult": {
+        "additionalProperties": false,
+        "description": "The state of a test sign-in. Read once, within five minutes; then 404.",
+        "properties": {
+          "claims": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Decoded claims without tokens, signatures or secrets.",
+            "title": "Claims"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the provider refused, if it did.",
+            "title": "Error"
+          },
+          "groups": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Groups"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "done"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "warnings": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warnings"
+          },
+          "would_grant": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WouldGrant"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Would Grant"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "IdpTestResult",
+        "type": "object"
+      },
+      "IdpTestStarted": {
+        "additionalProperties": false,
+        "description": "A test sign-in: open `authorize_url` in the browser, then poll `test_id`.",
+        "properties": {
+          "authorize_url": {
+            "title": "Authorize Url",
+            "type": "string"
+          },
+          "test_id": {
+            "format": "uuid",
+            "title": "Test Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "test_id",
+          "authorize_url"
+        ],
+        "title": "IdpTestStarted",
+        "type": "object"
+      },
       "IpRange": {
         "additionalProperties": false,
         "description": "An inclusive address range inside a VIP pool.",
@@ -3851,6 +4230,337 @@
         ],
         "title": "ObjectType",
         "type": "string"
+      },
+      "OidcProviderIn": {
+        "additionalProperties": false,
+        "description": "Create an OpenID Connect provider. The client secret is write-only.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stored in the secrets backend; never returned.",
+            "title": "Client Secret"
+          },
+          "client_secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Use an existing secret instead of sending one.",
+            "title": "Client Secret Ref"
+          },
+          "email_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Claim"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "groups_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Groups Claim"
+          },
+          "issuer_url": {
+            "title": "Issuer Url",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "protocol": {
+            "const": "oidc",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          },
+          "username_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username Claim"
+          }
+        },
+        "required": [
+          "protocol",
+          "name",
+          "issuer_url",
+          "client_id"
+        ],
+        "title": "OidcProviderIn",
+        "type": "object"
+      },
+      "OidcProviderPatch": {
+        "additionalProperties": false,
+        "description": "Change an OIDC provider; send `protocol` and only the fields to change.",
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          },
+          "client_secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret Ref"
+          },
+          "email_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Claim"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "groups_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Groups Claim"
+          },
+          "issuer_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer Url"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "protocol": {
+            "const": "oidc",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scopes"
+          },
+          "username_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username Claim"
+          }
+        },
+        "required": [
+          "protocol"
+        ],
+        "title": "OidcProviderPatch",
+        "type": "object"
+      },
+      "OidcProviderRead": {
+        "additionalProperties": false,
+        "description": "An OpenID Connect provider.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reference into the secrets backend.",
+            "title": "Client Secret Ref"
+          },
+          "client_secret_set": {
+            "description": "Whether a client secret is stored (never shown).",
+            "title": "Client Secret Set",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email_claim": {
+            "title": "Email Claim",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "groups_claim": {
+            "title": "Groups Claim",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issuer_url": {
+            "title": "Issuer Url",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "protocol": {
+            "const": "oidc",
+            "default": "oidc",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "scopes": {
+            "title": "Scopes",
+            "type": "string"
+          },
+          "username_claim": {
+            "title": "Username Claim",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "warnings": {
+            "description": "Set on create and change only: findings that did not block it, for example an unreachable OIDC discovery document.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "version",
+          "created_at",
+          "warnings",
+          "issuer_url",
+          "client_id",
+          "client_secret_ref",
+          "client_secret_set",
+          "scopes",
+          "username_claim",
+          "email_claim",
+          "groups_claim"
+        ],
+        "title": "OidcProviderRead",
+        "type": "object"
       },
       "OpIn": {
         "additionalProperties": false,
@@ -5664,6 +6374,503 @@
         "title": "RouteMatch",
         "type": "object"
       },
+      "SamlProviderIn": {
+        "additionalProperties": false,
+        "description": "Create a SAML provider. Send metadata (URL or XML) or the fields it would fill in.",
+        "properties": {
+          "attribute_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute Email"
+          },
+          "attribute_groups": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute Groups"
+          },
+          "attribute_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute Username"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "idp_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idp Entity Id"
+          },
+          "idp_metadata_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "https URL of the IdP metadata.",
+            "title": "Idp Metadata Url"
+          },
+          "idp_metadata_xml": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The IdP metadata document.",
+            "title": "Idp Metadata Xml"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_id_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Id Format"
+          },
+          "protocol": {
+            "const": "saml",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "sign_requests": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sign AuthnRequests. The controller generates the key (kept in the secrets backend) unless `sp_signing_key_ref` is given.",
+            "title": "Sign Requests"
+          },
+          "signing_certificates": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public PEM only.",
+            "title": "Signing Certificates"
+          },
+          "sp_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sp Entity Id"
+          },
+          "sp_signing_key_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sp Signing Key Ref"
+          },
+          "sso_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sso Url"
+          }
+        },
+        "required": [
+          "protocol",
+          "name"
+        ],
+        "title": "SamlProviderIn",
+        "type": "object"
+      },
+      "SamlProviderPatch": {
+        "additionalProperties": false,
+        "description": "Change a SAML provider; send `protocol` and only the fields to change.",
+        "properties": {
+          "attribute_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute Email"
+          },
+          "attribute_groups": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute Groups"
+          },
+          "attribute_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attribute Username"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "idp_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idp Entity Id"
+          },
+          "idp_metadata_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idp Metadata Url"
+          },
+          "idp_metadata_xml": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idp Metadata Xml"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "name_id_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Id Format"
+          },
+          "protocol": {
+            "const": "saml",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "sign_requests": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sign Requests"
+          },
+          "signing_certificates": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signing Certificates"
+          },
+          "sp_entity_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sp Entity Id"
+          },
+          "sp_signing_key_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sp Signing Key Ref"
+          },
+          "sso_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sso Url"
+          }
+        },
+        "required": [
+          "protocol"
+        ],
+        "title": "SamlProviderPatch",
+        "type": "object"
+      },
+      "SamlProviderRead": {
+        "additionalProperties": false,
+        "description": "A SAML 2.0 provider.",
+        "properties": {
+          "acs_url": {
+            "description": "Assertion consumer service URL to give the IdP.",
+            "title": "Acs Url",
+            "type": "string"
+          },
+          "attribute_email": {
+            "title": "Attribute Email",
+            "type": "string"
+          },
+          "attribute_groups": {
+            "title": "Attribute Groups",
+            "type": "string"
+          },
+          "attribute_username": {
+            "title": "Attribute Username",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "idp_entity_id": {
+            "title": "Idp Entity Id",
+            "type": "string"
+          },
+          "idp_metadata_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idp Metadata Url"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "name_id_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Id Format"
+          },
+          "protocol": {
+            "const": "saml",
+            "default": "saml",
+            "title": "Protocol",
+            "type": "string"
+          },
+          "sign_requests": {
+            "title": "Sign Requests",
+            "type": "boolean"
+          },
+          "signing_certificates": {
+            "description": "Public PEM certificates.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Signing Certificates",
+            "type": "array"
+          },
+          "sp_entity_id": {
+            "description": "Our entity id (the stored one, or the default).",
+            "title": "Sp Entity Id",
+            "type": "string"
+          },
+          "sp_metadata_url": {
+            "description": "Public SP metadata URL to give the IdP.",
+            "title": "Sp Metadata Url",
+            "type": "string"
+          },
+          "sp_signing_certificate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public certificate that verifies signed requests (also in the SP metadata).",
+            "title": "Sp Signing Certificate"
+          },
+          "sp_signing_key_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reference to the request signing key.",
+            "title": "Sp Signing Key Ref"
+          },
+          "sso_url": {
+            "title": "Sso Url",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "warnings": {
+            "description": "Set on create and change only: findings that did not block it, for example an unreachable OIDC discovery document.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "version",
+          "created_at",
+          "warnings",
+          "idp_metadata_url",
+          "idp_entity_id",
+          "sso_url",
+          "signing_certificates",
+          "sp_entity_id",
+          "name_id_format",
+          "sign_requests",
+          "sp_signing_key_ref",
+          "sp_signing_certificate",
+          "attribute_username",
+          "attribute_email",
+          "attribute_groups",
+          "acs_url",
+          "sp_metadata_url"
+        ],
+        "title": "SamlProviderRead",
+        "type": "object"
+      },
       "SeGroup": {
         "additionalProperties": false,
         "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).",
@@ -6213,6 +7420,134 @@
           "role"
         ],
         "title": "SystemRoleMappingIn",
+        "type": "object"
+      },
+      "SystemTokenCreated": {
+        "additionalProperties": false,
+        "description": "A new system token; the plaintext is shown once.",
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "token",
+          "role",
+          "expires_at"
+        ],
+        "title": "SystemTokenCreated",
+        "type": "object"
+      },
+      "SystemTokenIn": {
+        "additionalProperties": false,
+        "description": "Create a system token.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ttl_days": {
+            "default": 30,
+            "description": "30 by default, 90 at most.",
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Ttl Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SystemTokenIn",
+        "type": "object"
+      },
+      "SystemTokenRead": {
+        "additionalProperties": false,
+        "description": "A system API token (never the secret).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked": {
+            "title": "Revoked",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "role",
+          "revoked",
+          "expires_at",
+          "created_by",
+          "created_at",
+          "last_used_at"
+        ],
+        "title": "SystemTokenRead",
         "type": "object"
       },
       "Tenant": {
@@ -7957,6 +9292,37 @@
         ],
         "title": "VsRoute",
         "type": "object"
+      },
+      "WouldGrant": {
+        "additionalProperties": false,
+        "description": "A grant the current mappings would give this person.",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "tenant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null for `system-admin`.",
+            "title": "Tenant"
+          },
+          "via": {
+            "$ref": "#/components/schemas/GrantSourceRead"
+          }
+        },
+        "required": [
+          "tenant",
+          "role",
+          "via"
+        ],
+        "title": "WouldGrant",
+        "type": "object"
       }
     }
   },
@@ -8536,6 +9902,915 @@
         "summary": "Liveness check",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/v1/identity-providers": {
+      "get": {
+        "description": "OIDC and SAML providers, by name. Secrets are never returned.",
+        "operationId": "list_identity_providers_api_v1_identity_providers_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "client_id": "switchyard",
+                    "client_secret_ref": "kv/idp/authentik",
+                    "client_secret_set": true,
+                    "created_at": "2026-10-01T08:00:00Z",
+                    "email_claim": "email",
+                    "enabled": true,
+                    "groups_claim": "groups",
+                    "id": "0192f3a0-0000-7000-8000-000000000042",
+                    "issuer_url": "https://sso.example.test/application/o/switchyard",
+                    "name": "authentik",
+                    "protocol": "oidc",
+                    "scopes": "openid profile email",
+                    "username_claim": "preferred_username",
+                    "version": 1,
+                    "warnings": []
+                  },
+                  {
+                    "acs_url": "https://switchyard.example.test/api/v1/auth/callback/0192f3a0-0000-7000-8000-000000000043",
+                    "attribute_email": "email",
+                    "attribute_groups": "groups",
+                    "attribute_username": "username",
+                    "created_at": "2026-10-01T08:00:00Z",
+                    "enabled": true,
+                    "id": "0192f3a0-0000-7000-8000-000000000043",
+                    "idp_entity_id": "https://idp.example.test/entity",
+                    "idp_metadata_url": "https://idp.example.test/metadata",
+                    "name": "corp",
+                    "protocol": "saml",
+                    "sign_requests": false,
+                    "signing_certificates": [
+                      "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+                    ],
+                    "sp_entity_id": "https://switchyard.example.test/api/v1/auth/saml/0192f3a0-0000-7000-8000-000000000043",
+                    "sp_metadata_url": "https://switchyard.example.test/api/v1/auth/saml/0192f3a0-0000-7000-8000-000000000043/metadata",
+                    "sso_url": "https://idp.example.test/sso",
+                    "version": 1,
+                    "warnings": []
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "discriminator": {
+                      "mapping": {
+                        "oidc": "#/components/schemas/OidcProviderRead",
+                        "saml": "#/components/schemas/SamlProviderRead"
+                      },
+                      "propertyName": "protocol"
+                    },
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/OidcProviderRead"
+                      },
+                      {
+                        "$ref": "#/components/schemas/SamlProviderRead"
+                      }
+                    ]
+                  },
+                  "title": "Response List Identity Providers Api V1 Identity Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List identity providers",
+        "tags": [
+          "identity providers"
+        ]
+      },
+      "post": {
+        "description": "Create a provider. `protocol` selects the schema.\n\nAn OIDC `client_secret` is stored in the secrets backend and never returned. An OIDC\nprovider whose discovery document cannot be fetched is still created; `warnings` says so.\nA SAML provider can be filled in from its metadata (`idp_metadata_url` or\n`idp_metadata_xml`).",
+        "operationId": "create_identity_provider_api_v1_identity_providers_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "discriminator": {
+                  "mapping": {
+                    "oidc": "#/components/schemas/OidcProviderIn",
+                    "saml": "#/components/schemas/SamlProviderIn"
+                  },
+                  "propertyName": "protocol"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/OidcProviderIn"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SamlProviderIn"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "client_id": "switchyard",
+                  "client_secret_ref": "kv/idp/authentik",
+                  "client_secret_set": true,
+                  "created_at": "2026-10-01T08:00:00Z",
+                  "email_claim": "email",
+                  "enabled": true,
+                  "groups_claim": "groups",
+                  "id": "0192f3a0-0000-7000-8000-000000000042",
+                  "issuer_url": "https://sso.example.test/application/o/switchyard",
+                  "name": "authentik",
+                  "protocol": "oidc",
+                  "scopes": "openid profile email",
+                  "username_claim": "preferred_username",
+                  "version": 1,
+                  "warnings": []
+                },
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "oidc": "#/components/schemas/OidcProviderRead",
+                      "saml": "#/components/schemas/SamlProviderRead"
+                    },
+                    "propertyName": "protocol"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/OidcProviderRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SamlProviderRead"
+                    }
+                  ],
+                  "title": "Response Create Identity Provider Api V1 Identity Providers Post"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Create an identity provider",
+        "tags": [
+          "identity providers"
+        ]
+      }
+    },
+    "/api/v1/identity-providers/{idp}": {
+      "delete": {
+        "description": "Delete a provider with its role mappings, its users and their sessions.",
+        "operationId": "delete_identity_provider_api_v1_identity_providers__idp__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "idp",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Idp",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Delete an identity provider",
+        "tags": [
+          "identity providers"
+        ]
+      },
+      "get": {
+        "operationId": "get_identity_provider_api_v1_identity_providers__idp__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "idp",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Idp",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "client_id": "switchyard",
+                  "client_secret_ref": "kv/idp/authentik",
+                  "client_secret_set": true,
+                  "created_at": "2026-10-01T08:00:00Z",
+                  "email_claim": "email",
+                  "enabled": true,
+                  "groups_claim": "groups",
+                  "id": "0192f3a0-0000-7000-8000-000000000042",
+                  "issuer_url": "https://sso.example.test/application/o/switchyard",
+                  "name": "authentik",
+                  "protocol": "oidc",
+                  "scopes": "openid profile email",
+                  "username_claim": "preferred_username",
+                  "version": 1,
+                  "warnings": []
+                },
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "oidc": "#/components/schemas/OidcProviderRead",
+                      "saml": "#/components/schemas/SamlProviderRead"
+                    },
+                    "propertyName": "protocol"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/OidcProviderRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SamlProviderRead"
+                    }
+                  ],
+                  "title": "Response Get Identity Provider Api V1 Identity Providers  Idp  Get"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "ETag": {
+                "description": "The object's version as a quoted integer, for example `\"3\"`. Send it back as `If-Match` on PATCH and DELETE.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get an identity provider",
+        "tags": [
+          "identity providers"
+        ]
+      },
+      "patch": {
+        "description": "Change a provider. Send `protocol` (it cannot change) and only the fields to change.",
+        "operationId": "patch_identity_provider_api_v1_identity_providers__idp__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "idp",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Idp",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "discriminator": {
+                  "mapping": {
+                    "oidc": "#/components/schemas/OidcProviderPatch",
+                    "saml": "#/components/schemas/SamlProviderPatch"
+                  },
+                  "propertyName": "protocol"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/OidcProviderPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SamlProviderPatch"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "client_id": "switchyard",
+                  "client_secret_ref": "kv/idp/authentik",
+                  "client_secret_set": true,
+                  "created_at": "2026-10-01T08:00:00Z",
+                  "email_claim": "email",
+                  "enabled": true,
+                  "groups_claim": "groups",
+                  "id": "0192f3a0-0000-7000-8000-000000000042",
+                  "issuer_url": "https://sso.example.test/application/o/switchyard",
+                  "name": "authentik",
+                  "protocol": "oidc",
+                  "scopes": "openid profile email",
+                  "username_claim": "preferred_username",
+                  "version": 1,
+                  "warnings": []
+                },
+                "schema": {
+                  "discriminator": {
+                    "mapping": {
+                      "oidc": "#/components/schemas/OidcProviderRead",
+                      "saml": "#/components/schemas/SamlProviderRead"
+                    },
+                    "propertyName": "protocol"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/OidcProviderRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SamlProviderRead"
+                    }
+                  ],
+                  "title": "Response Patch Identity Provider Api V1 Identity Providers  Idp  Patch"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Change an identity provider",
+        "tags": [
+          "identity providers"
+        ]
+      }
+    },
+    "/api/v1/identity-providers/{idp}/test": {
+      "post": {
+        "description": "Open `authorize_url` in the browser; poll the result with `test_id`.\n\nThe callback creates no session and no user. A disabled provider can be tested.",
+        "operationId": "start_idp_test_api_v1_identity_providers__idp__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "idp",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Idp",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/IdpTestIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "authorize_url": "https://sso.example.test/authorize?client_id=switchyard&state=...",
+                  "test_id": "0192f3a0-0000-7000-8000-000000000044"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/IdpTestStarted"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start a test sign-in",
+        "tags": [
+          "identity providers"
+        ]
+      }
+    },
+    "/api/v1/identity-providers/{idp}/test/{test_id}": {
+      "get": {
+        "description": "`pending` until the provider answered; then the result, once. Later reads are 404.",
+        "operationId": "read_idp_test_api_v1_identity_providers__idp__test__test_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "idp",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Idp",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "test_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Test Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "claims": {
+                    "groups": [
+                      "acme-ops"
+                    ],
+                    "preferred_username": "alice",
+                    "sub": "u-1"
+                  },
+                  "email": "alice@example.test",
+                  "groups": [
+                    "acme-ops"
+                  ],
+                  "status": "done",
+                  "subject": "u-1",
+                  "username": "alice",
+                  "warnings": [],
+                  "would_grant": [
+                    {
+                      "role": "operator",
+                      "tenant": "acme",
+                      "via": {
+                        "group": "acme-ops",
+                        "provider": "authentik"
+                      }
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/IdpTestResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read the result of a test sign-in",
+        "tags": [
+          "identity providers"
         ]
       }
     },
@@ -9521,6 +11796,681 @@
         "summary": "Field rules of a virtual service protocol",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/v1/system/break-glass": {
+      "get": {
+        "operationId": "get_break_glass_api_v1_system_break_glass_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "admin": {
+                    "created_at": "2026-10-01T08:00:00Z",
+                    "totp_confirmed": true,
+                    "username": "breakglass"
+                  },
+                  "enabled": true,
+                  "enabled_by": "user:authentik:alice",
+                  "enabled_until": "2026-10-10T16:00:00Z",
+                  "forced_by_deployment": false,
+                  "reason": "SSO outage, incident 4711"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BreakGlassRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Break-glass login status",
+        "tags": [
+          "break-glass"
+        ]
+      },
+      "put": {
+        "description": "Switch break-glass login on for a limited time, or off.\n\nEnabling needs a confirmed administrator and a `reason`; it lasts `ttl_minutes` (default\n240, at most 1440). Disabling has no effect while the deployment forces it on\n(`forced_by_deployment`).",
+        "operationId": "put_break_glass_api_v1_system_break_glass_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakGlassSwitchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "admin": {
+                    "created_at": "2026-10-01T08:00:00Z",
+                    "totp_confirmed": true,
+                    "username": "breakglass"
+                  },
+                  "enabled": true,
+                  "enabled_by": "user:authentik:alice",
+                  "enabled_until": "2026-10-10T16:00:00Z",
+                  "forced_by_deployment": false,
+                  "reason": "SSO outage, incident 4711"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BreakGlassRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Switch break-glass login on or off",
+        "tags": [
+          "break-glass"
+        ]
+      }
+    },
+    "/api/v1/system/break-glass/admin": {
+      "delete": {
+        "operationId": "delete_break_glass_admin_api_v1_system_break_glass_admin_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove the break-glass administrator",
+        "tags": [
+          "break-glass"
+        ]
+      },
+      "post": {
+        "description": "Generate the password and TOTP secret; they are shown once.\n\nReplaces any previous administrator and switches break-glass login off. The administrator\ncannot sign in until `\u2026/admin/confirm` receives a valid code.",
+        "operationId": "create_break_glass_admin_api_v1_system_break_glass_admin_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BreakGlassEnrollIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "otpauth_uri": "otpauth://totp/Switchyard:breakglass?secret=JBSWY3DPEHPK3PXP&issuer=Switchyard",
+                  "password": "shown-once-aaaaaaaaaaaaaaaa",
+                  "totp_secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+                  "username": "breakglass"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BreakGlassEnrollment"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Enrol the break-glass administrator",
+        "tags": [
+          "break-glass"
+        ]
+      }
+    },
+    "/api/v1/system/break-glass/admin/confirm": {
+      "post": {
+        "operationId": "confirm_break_glass_admin_api_v1_system_break_glass_admin_confirm_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakGlassConfirmIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "admin": {
+                    "created_at": "2026-10-01T08:00:00Z",
+                    "totp_confirmed": true,
+                    "username": "breakglass"
+                  },
+                  "enabled": true,
+                  "enabled_by": "user:authentik:alice",
+                  "enabled_until": "2026-10-10T16:00:00Z",
+                  "forced_by_deployment": false,
+                  "reason": "SSO outage, incident 4711"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BreakGlassRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Confirm the authenticator",
+        "tags": [
+          "break-glass"
+        ]
+      }
+    },
+    "/api/v1/system/tokens": {
+      "get": {
+        "operationId": "list_system_tokens_api_v1_system_tokens_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-10T12:00:00Z",
+                    "created_by": "user:authentik:alice",
+                    "expires_at": "2026-11-09T12:00:00Z",
+                    "id": "0192f3a0-0000-7000-8000-000000000045",
+                    "name": "bootstrap",
+                    "revoked": false,
+                    "role": "system-admin"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SystemTokenRead"
+                  },
+                  "title": "Response List System Tokens Api V1 System Tokens Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List system API tokens",
+        "tags": [
+          "tokens"
+        ]
+      },
+      "post": {
+        "description": "A `system-admin` token for bootstrap and controller-level automation.\n\n30 days by default, 90 at most. A token cannot create tokens, so this needs a signed-in\nperson.",
+        "operationId": "create_system_token_api_v1_system_tokens_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "expires_at": "2026-11-09T12:00:00Z",
+                  "id": "0192f3a0-0000-7000-8000-000000000045",
+                  "role": "system-admin",
+                  "token": "sy_shown-once"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/SystemTokenCreated"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Create a system API token (shown once)",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/api/v1/system/tokens/{token}": {
+      "delete": {
+        "operationId": "revoke_system_token_api_v1_system_tokens__token__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke a system API token",
+        "tags": [
+          "tokens"
         ]
       }
     },

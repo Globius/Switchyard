@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from urllib.parse import parse_qs
 from uuid import UUID
 
@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Respons
 from fastapi.responses import StreamingResponse
 
 from switchyard.adapters.pki import PkiError
-from switchyard.adapters.secrets import SecretsReader
+from switchyard.adapters.secrets import SecretsReader, SecretsWriter
 from switchyard.api import examples as ex
 from switchyard.api import job_models
 from switchyard.api.problems import ApiError, install_handlers
@@ -35,7 +35,12 @@ from switchyard.api.schemas import (
     ApplyIn,
     AuditEventRead,
     AuthProviders,
+    BreakGlassConfirmIn,
+    BreakGlassEnrollIn,
+    BreakGlassEnrollment,
     BreakGlassIn,
+    BreakGlassRead,
+    BreakGlassSwitchIn,
     CertImportIn,
     CertIssueIn,
     ChangeSetDiff,
@@ -50,6 +55,12 @@ from switchyard.api.schemas import (
     EnrollmentToken,
     EnrollOut,
     Health,
+    IdentityProviderIn,
+    IdentityProviderPatch,
+    IdentityProviderRead,
+    IdpTestIn,
+    IdpTestResult,
+    IdpTestStarted,
     JobAccepted,
     JobRead,
     Me,
@@ -69,6 +80,9 @@ from switchyard.api.schemas import (
     SessionsRevoked,
     StateOut,
     SystemRoleMappingIn,
+    SystemTokenCreated,
+    SystemTokenIn,
+    SystemTokenRead,
     TenantIn,
     TenantPatch,
     TenantRead,
@@ -95,6 +109,7 @@ from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
 from switchyard.render.escape import RenderError
 from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
+from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
 from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import (
     ChangeSetDetail,
@@ -104,12 +119,17 @@ from switchyard.services.changesets import (
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
+from switchyard.services.identity_providers import (
+    IdentityProviderRecord,
+    IdentityProviderService,
+)
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.jobs import JobService
 from switchyard.services.members import MemberService
 from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
 from switchyard.services.sessions import (
     LoginError,
+    LoginResult,
     SessionInfo,
     SessionService,
     UserDisabledError,
@@ -141,6 +161,8 @@ class ApiServices:
     certs: CertificateService | None = None
     enrollment: EnrollmentService | None = None
     sessions: SessionService | None = None
+    identity_providers: IdentityProviderService | None = None
+    break_glass: BreakGlassService | None = None
 
 
 def build_services(
@@ -150,8 +172,30 @@ def build_services(
     certs: CertificateService | None = None,
     enrollment: EnrollmentService | None = None,
     sessions: SessionService | None = None,
+    *,
+    identity_providers: IdentityProviderService | None = None,
+    break_glass: BreakGlassService | None = None,
 ) -> ApiServices:
-    """Wire the services over one set of database handles."""
+    """Wire the services over one set of database handles.
+
+    Identity-provider and break-glass administration are built from ``sessions`` (which owns the
+    OIDC client and the forced-break-glass flag) and ``secrets`` unless passed in.
+    """
+    writer = cast("SecretsWriter | None", secrets if hasattr(secrets, "put") else None)
+    if sessions is not None and identity_providers is None:
+        identity_providers = IdentityProviderService(
+            db,
+            sessions.oidc,
+            secrets,
+            writer,
+        )
+    if sessions is not None and break_glass is None:
+        break_glass = BreakGlassService(
+            db,
+            secrets,
+            writer,
+            forced=sessions.break_glass_enabled,
+        )
     return ApiServices(
         db=db,
         tenants=TenantService(db),
@@ -168,6 +212,8 @@ def build_services(
         certs=certs,
         enrollment=enrollment,
         sessions=sessions,
+        identity_providers=identity_providers,
+        break_glass=break_glass,
     )
 
 
@@ -792,7 +838,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
                 {"id": str(p.id), "name": p.name, "protocol": p.protocol}
                 for p in await sessions.providers()
             ],
-            "break_glass": sessions.break_glass_enabled,
+            "break_glass": await sessions.break_glass_on(),
         }
 
     @router.get(
@@ -841,7 +887,8 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         except LoginError as exc:
             return login_failed(exc.code)
         response = Response(status_code=302, headers={"Location": result.return_to})
-        set_session_cookie(request, response, result.cookie, result.session)
+        if isinstance(result, LoginResult):  # a test sign-in sets no cookie
+            set_session_cookie(request, response, result.cookie, result.session)
         return response
 
     @router.post(
@@ -887,7 +934,8 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         except LoginError as exc:
             return login_failed(exc.code)
         response = Response(status_code=302, headers={"Location": result.return_to})
-        set_session_cookie(request, response, result.cookie, result.session)
+        if isinstance(result, LoginResult):  # a test sign-in sets no cookie
+            set_session_cookie(request, response, result.cookie, result.session)
         return response
 
     @router.get(
@@ -1499,6 +1547,351 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     )
     async def revoke_token(token: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
         await svc.tokens.revoke(who, tenant.id, token, request_id=_rid())
+        return Response(status_code=204)
+
+    # identity providers
+    def idp_json(request: Request, r: IdentityProviderRecord) -> dict[str, Any]:
+        base = (request.app.state.public_url or str(request.base_url)).rstrip("/")
+        out: dict[str, Any] = {
+            "protocol": r.protocol,
+            "id": str(r.id),
+            "name": r.name,
+            "enabled": r.enabled,
+            "version": r.version,
+            "created_at": r.created_at,
+            "warnings": list(r.warnings),
+        } | r.settings
+        if r.protocol == "saml":
+            out["sp_entity_id"] = (
+                r.settings.get("sp_entity_id") or f"{base}/api/v1/auth/saml/{r.id}"
+            )
+            out["acs_url"] = f"{base}/api/v1/auth/callback/{r.id}"
+            out["sp_metadata_url"] = f"{base}/api/v1/auth/saml/{r.id}/metadata"
+        else:
+            out.pop("client_secret_set", None)
+            out["client_secret_set"] = bool(r.settings.get("client_secret_ref"))
+        return out
+
+    def require_idp(svc: ApiServices) -> IdentityProviderService:
+        if svc.identity_providers is None:
+            raise ApiError(503, "login is not configured on this controller")
+        return svc.identity_providers
+
+    @router.get(
+        "/identity-providers",
+        tags=["identity providers"],
+        summary="List identity providers",
+        response_model=list[IdentityProviderRead],
+        responses=_ok([ex.IDP_OIDC, ex.IDP_SAML]),
+    )
+    async def list_identity_providers(
+        request: Request, who: Who, svc: Services
+    ) -> list[dict[str, Any]]:
+        """OIDC and SAML providers, by name. Secrets are never returned."""
+        return [idp_json(request, r) for r in await require_idp(svc).list_providers(who)]
+
+    @router.post(
+        "/identity-providers",
+        status_code=201,
+        tags=["identity providers"],
+        summary="Create an identity provider",
+        response_model=IdentityProviderRead,
+        responses=_ok(ex.IDP_OIDC, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_identity_provider(
+        body: IdentityProviderIn, request: Request, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Create a provider. `protocol` selects the schema.
+
+        An OIDC `client_secret` is stored in the secrets backend and never returned. An OIDC
+        provider whose discovery document cannot be fetched is still created; `warnings` says so.
+        A SAML provider can be filled in from its metadata (`idp_metadata_url` or
+        `idp_metadata_xml`).
+        """
+        data = body.model_dump(exclude_unset=True)
+        record = await require_idp(svc).create(
+            who,
+            protocol=data.pop("protocol"),
+            name=data.pop("name"),
+            enabled=data.pop("enabled", True),
+            settings=data,
+            request_id=_rid(),
+        )
+        return idp_json(request, record)
+
+    @router.get(
+        "/identity-providers/{idp}",
+        tags=["identity providers"],
+        summary="Get an identity provider",
+        response_model=IdentityProviderRead,
+        responses=_ok(ex.IDP_OIDC, headers=ETAG_HEADER),
+    )
+    async def get_identity_provider(
+        idp: UUID, request: Request, response: Response, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        record = await require_idp(svc).get(who, idp)
+        response.headers["ETag"] = _etag(record.version)
+        return idp_json(request, record)
+
+    @router.patch(
+        "/identity-providers/{idp}",
+        tags=["identity providers"],
+        summary="Change an identity provider",
+        response_model=IdentityProviderRead,
+        responses=_ok(ex.IDP_OIDC) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def patch_identity_provider(
+        idp: UUID,
+        body: IdentityProviderPatch,
+        request: Request,
+        response: Response,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Change a provider. Send `protocol` (it cannot change) and only the fields to change."""
+        data = body.model_dump(exclude_unset=True)
+        current = await require_idp(svc).get(who, idp)
+        if data.pop("protocol") != current.protocol:
+            raise ApiError(
+                422,
+                "the protocol of a provider cannot change",
+                errors=[{"path": "protocol", "code": "immutable", "message": "cannot change"}],
+            )
+        record = await require_idp(svc).update(
+            who, idp, expected_version=_if_match(if_match), changes=data, request_id=_rid()
+        )
+        response.headers["ETag"] = _etag(record.version)
+        return idp_json(request, record)
+
+    @router.delete(
+        "/identity-providers/{idp}",
+        status_code=204,
+        tags=["identity providers"],
+        summary="Delete an identity provider",
+        responses=IF_MATCH_RESPONSES,
+    )
+    async def delete_identity_provider(
+        idp: UUID,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Delete a provider with its role mappings, its users and their sessions."""
+        await require_idp(svc).delete(
+            who, idp, expected_version=_if_match(if_match), request_id=_rid()
+        )
+        return Response(status_code=204)
+
+    @router.post(
+        "/identity-providers/{idp}/test",
+        status_code=201,
+        tags=["identity providers"],
+        summary="Start a test sign-in",
+        response_model=IdpTestStarted,
+        responses=_ok(ex.IDP_TEST_STARTED, 201),
+    )
+    async def start_idp_test(
+        idp: UUID,
+        request: Request,
+        who: Who,
+        svc: Services,
+        body: IdpTestIn | None = None,
+    ) -> dict[str, Any]:
+        """Open `authorize_url` in the browser; poll the result with `test_id`.
+
+        The callback creates no session and no user. A disabled provider can be tested.
+        """
+        providers = require_idp(svc)
+        sessions = require_sessions(svc)
+        test_id = await providers.new_test(who, idp)
+        try:
+            url = await sessions.begin_login(
+                str(idp),
+                redirect_uri=callback_url(request, str(idp)),
+                return_to=body.return_to if body else None,
+                test_id=test_id,
+            )
+        except LoginError as exc:
+            raise ApiError(422, str(exc)) from exc
+        return {"test_id": str(test_id), "authorize_url": url}
+
+    @router.get(
+        "/identity-providers/{idp}/test/{test_id}",
+        tags=["identity providers"],
+        summary="Read the result of a test sign-in",
+        response_model=IdpTestResult,
+        responses=_ok(ex.IDP_TEST_RESULT),
+    )
+    async def read_idp_test(idp: UUID, test_id: UUID, who: Who, svc: Services) -> dict[str, Any]:
+        """`pending` until the provider answered; then the result, once. Later reads are 404."""
+        result = await require_idp(svc).read_test(who, idp, test_id)
+        return {"status": result.status} | (result.result or {})
+
+    # break-glass administration
+    def break_glass_json(status: BreakGlassStatus) -> dict[str, Any]:
+        admin = status.admin
+        return {
+            "forced_by_deployment": status.forced_by_deployment,
+            "enabled": status.enabled,
+            "enabled_until": status.enabled_until,
+            "enabled_by": status.enabled_by,
+            "reason": status.reason,
+            "admin": None
+            if admin is None
+            else {
+                "username": admin.username,
+                "totp_confirmed": admin.totp_confirmed,
+                "created_at": admin.created_at,
+                "last_login_at": admin.last_login_at,
+                "locked_until": admin.locked_until,
+            },
+        }
+
+    def require_break_glass(svc: ApiServices) -> BreakGlassService:
+        if svc.break_glass is None:
+            raise ApiError(503, "login is not configured on this controller")
+        return svc.break_glass
+
+    @router.get(
+        "/system/break-glass",
+        tags=["break-glass"],
+        summary="Break-glass login status",
+        response_model=BreakGlassRead,
+        responses=_ok(ex.BREAK_GLASS),
+    )
+    async def get_break_glass(who: Who, svc: Services) -> dict[str, Any]:
+        return break_glass_json(await require_break_glass(svc).status(who))
+
+    @router.put(
+        "/system/break-glass",
+        tags=["break-glass"],
+        summary="Switch break-glass login on or off",
+        response_model=BreakGlassRead,
+        responses=_ok(ex.BREAK_GLASS) | VALIDATION_RESPONSE,
+    )
+    async def put_break_glass(body: BreakGlassSwitchIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Switch break-glass login on for a limited time, or off.
+
+        Enabling needs a confirmed administrator and a `reason`; it lasts `ttl_minutes` (default
+        240, at most 1440). Disabling has no effect while the deployment forces it on
+        (`forced_by_deployment`).
+        """
+        status = await require_break_glass(svc).set_enabled(
+            who,
+            enabled=body.enabled,
+            reason=body.reason,
+            ttl_minutes=body.ttl_minutes,
+            request_id=_rid(),
+        )
+        return break_glass_json(status)
+
+    @router.post(
+        "/system/break-glass/admin",
+        status_code=201,
+        tags=["break-glass"],
+        summary="Enrol the break-glass administrator",
+        response_model=BreakGlassEnrollment,
+        responses=_ok(ex.BREAK_GLASS_ENROLLMENT, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_break_glass_admin(
+        who: Who, svc: Services, body: BreakGlassEnrollIn | None = None
+    ) -> dict[str, Any]:
+        """Generate the password and TOTP secret; they are shown once.
+
+        Replaces any previous administrator and switches break-glass login off. The administrator
+        cannot sign in until `…/admin/confirm` receives a valid code.
+        """
+        enrollment = await require_break_glass(svc).create_admin(
+            who, username=body.username if body else "breakglass", request_id=_rid()
+        )
+        return {
+            "username": enrollment.username,
+            "password": enrollment.password,
+            "totp_secret": enrollment.totp_secret,
+            "otpauth_uri": enrollment.otpauth_uri,
+        }
+
+    @router.post(
+        "/system/break-glass/admin/confirm",
+        tags=["break-glass"],
+        summary="Confirm the authenticator",
+        response_model=BreakGlassRead,
+        responses=_ok(ex.BREAK_GLASS) | VALIDATION_RESPONSE,
+    )
+    async def confirm_break_glass_admin(
+        body: BreakGlassConfirmIn, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        status = await require_break_glass(svc).confirm_admin(who, body.totp, request_id=_rid())
+        return break_glass_json(status)
+
+    @router.delete(
+        "/system/break-glass/admin",
+        status_code=204,
+        tags=["break-glass"],
+        summary="Remove the break-glass administrator",
+    )
+    async def delete_break_glass_admin(who: Who, svc: Services) -> Response:
+        await require_break_glass(svc).delete_admin(who, request_id=_rid())
+        return Response(status_code=204)
+
+    # system tokens
+    def system_token_json(r: Any) -> dict[str, Any]:
+        return {
+            "id": str(r.id),
+            "name": r.name,
+            "role": r.role.value,
+            "revoked": r.revoked_at is not None,
+            "expires_at": r.expires_at,
+            "created_by": r.created_by,
+            "created_at": r.created_at,
+            "last_used_at": r.last_used_at,
+        }
+
+    @router.get(
+        "/system/tokens",
+        tags=["tokens"],
+        summary="List system API tokens",
+        response_model=list[SystemTokenRead],
+        responses=_ok([ex.SYSTEM_TOKEN_READ]),
+    )
+    async def list_system_tokens(who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [system_token_json(r) for r in await svc.tokens.list_system(who)]
+
+    @router.post(
+        "/system/tokens",
+        status_code=201,
+        tags=["tokens"],
+        summary="Create a system API token (shown once)",
+        response_model=SystemTokenCreated,
+        responses=_ok(ex.SYSTEM_TOKEN_CREATED, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_system_token(body: SystemTokenIn, who: Who, svc: Services) -> dict[str, Any]:
+        """A `system-admin` token for bootstrap and controller-level automation.
+
+        30 days by default, 90 at most. A token cannot create tokens, so this needs a signed-in
+        person.
+        """
+        from datetime import timedelta
+
+        plaintext, record = await svc.tokens.create_system(
+            who, body.name, ttl=timedelta(days=body.ttl_days), request_id=_rid()
+        )
+        return {
+            "id": str(record.id),
+            "token": plaintext,
+            "role": record.role.value,
+            "expires_at": record.expires_at,
+        }
+
+    @router.delete(
+        "/system/tokens/{token}",
+        status_code=204,
+        tags=["tokens"],
+        summary="Revoke a system API token",
+    )
+    async def revoke_system_token(token: UUID, who: Who, svc: Services) -> Response:
+        await svc.tokens.revoke_system(who, token, request_id=_rid())
         return Response(status_code=204)
 
     # role mappings

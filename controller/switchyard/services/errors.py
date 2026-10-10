@@ -28,3 +28,39 @@ class PermissionDeniedError(PermissionError):
 
 class PreconditionFailedError(RuntimeError):
     """``If-Match`` does not match the object's current version (HTTP 412)."""
+
+
+class FieldErrors(ValueError):
+    """Invalid input, with the dotted path of every offending field (HTTP 422 ``errors[]``).
+
+    Collect findings with :meth:`add` and call :meth:`raise_if_any` once, so a client sees all
+    problems of a request at once.
+
+    Example:
+        >>> errors = FieldErrors()
+        >>> errors.add("issuer_url", "invalid", "must be https")
+        >>> bool(errors), errors.errors[0]["path"]
+        (True, 'issuer_url')
+    """
+
+    def __init__(self) -> None:
+        """Create an empty collection."""
+        super().__init__("the request is invalid")
+        self.errors: list[dict[str, str]] = []
+
+    def add(self, path: str, code: str, message: str) -> None:
+        """Record one finding."""
+        self.errors.append({"path": path, "code": code, "message": message})
+
+    def has(self, path: str) -> bool:
+        """True if a finding exists for ``path``."""
+        return any(e["path"] == path for e in self.errors)
+
+    def __bool__(self) -> bool:
+        """True once at least one finding was added."""
+        return bool(self.errors)
+
+    def raise_if_any(self) -> None:
+        """Raise this error if there are findings."""
+        if self.errors:
+            raise self

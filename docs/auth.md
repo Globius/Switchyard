@@ -3,7 +3,8 @@
 How people and machines get access to Switchyard, and how the API tells a client what they may do.
 The decisions are in [ADR 0012](adr/0012-user-login-and-sessions.md),
 [ADR 0030](adr/0030-rbac-matrix-and-access-lifecycle.md) and
-[ADR 0031](adr/0031-access-refresh-users-and-codes.md); the full specification is "Auth and RBAC" in
+[ADR 0031](adr/0031-access-refresh-users-and-codes.md) and
+[ADR 0032](adr/0032-idp-admin-test-signin-break-glass.md); the full specification is "Auth and RBAC" in
 [02-backend-design.md](design/02-backend-design.md).
 
 ## Two ways in
@@ -122,9 +123,43 @@ last sign-in; no secrets). The break-glass administrator has no row. `tenant.oid
 exists: use role mappings (the old values were copied to the audit log as
 `tenant.oidc_group_dropped`).
 
+## Identity providers (system-admin)
+
+`GET/POST /identity-providers`, `GET/PATCH/DELETE /identity-providers/{id}` (`If-Match`). The body is
+discriminated by `protocol`.
+
+- **OIDC:** `issuer_url`, `client_id`, `client_secret` (write-only; stored in the secrets backend) or
+  `client_secret_ref`, `scopes`, `username_claim`, `email_claim`, `groups_claim`. A discovery document
+  that cannot be fetched is a warning on the response, not a refusal.
+- **SAML:** `idp_metadata_url` (https) or `idp_metadata_xml` fill `idp_entity_id`, `sso_url` and
+  `signing_certificates`; or send them directly. `sign_requests: true` makes the controller generate a
+  signing key (kept in the secrets backend) and publish its certificate in the SP metadata
+  (`GET /auth/saml/{id}/metadata`). The read shows `acs_url` and `sp_metadata_url` to give the IdP.
+- **Test sign-in:** `POST /identity-providers/{id}/test` returns `{test_id, authorize_url}`; open the
+  URL in the browser; poll `GET .../test/{test_id}` (`pending`, then the claims, `groups`,
+  `would_grant` and `warnings` once, then 404; five minutes at most). It creates no session and no
+  user.
+
+## Break-glass (system-admin)
+
+`GET/PUT /system/break-glass`, `POST /system/break-glass/admin` (generated password and TOTP secret
+shown once, with an `otpauth_uri` for a QR code), `POST .../admin/confirm` (`{totp}`),
+`DELETE .../admin`. The administrator cannot sign in until confirmed. Enabling needs a reason and
+lasts 1 to 1440 minutes (default 240). `forced_by_deployment: true` (`SWITCHYARD_BREAK_GLASS=1`) is
+read-only. `GET /auth/providers` says `break_glass: true` only while it is on.
+
+## System tokens (system-admin)
+
+`GET/POST /system/tokens`, `DELETE /system/tokens/{id}`: role `system-admin`, 30 days by default, 90
+at most, shown once. Tenant routes cannot create them. A token cannot create tokens, so a signed-in
+person does it.
+
 ## Audit actions written by this area
 
 `auth.login`, `auth.login_failed`, `auth.login_denied`, `auth.logout`, `auth.session_revoked`,
 `auth.break_glass_login`, `auth.break_glass_failed`, `role_mapping.create`, `role_mapping.update`,
 `role_mapping.delete`, `user.disable`, `user.enable`, `user.revoke_sessions`, `user.delete`,
-`tenant.oidc_group_dropped`.
+`tenant.oidc_group_dropped`, `idp.created`, `idp.updated`, `idp.deleted`, `idp.test_started`,
+`idp.test_done`, `break_glass.admin_created`, `break_glass.admin_confirmed`,
+`break_glass.confirm_failed`, `break_glass.enabled`, `break_glass.disabled`,
+`break_glass.admin_deleted`, `token.system_used`.
