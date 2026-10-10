@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Go
+agent/bin/
+
+# Node / UI
+node_modules/
+ui/dist/
+ui/storybook-static/
+.pnpm-store/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.crt
+!**/testdata/**/*.crt
+
+# Avi exports and other real config never go in the repo
+backup_*.json
+*avi*backup*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
