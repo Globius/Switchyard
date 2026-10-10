@@ -21,8 +21,9 @@ from fastapi.responses import StreamingResponse
 
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.secrets import SecretsReader
+from switchyard.api import docs_meta, job_models, overview
 from switchyard.api import examples as ex
-from switchyard.api import job_models
+from switchyard.api.overview import SearchResults, TenantSummary
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.api.rendered_models import RenderedConfig, RenderedFragment
 from switchyard.api.schemas import (
@@ -100,7 +101,7 @@ from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.jobs import JobService
 from switchyard.services.members import MemberService
 from switchyard.services.sessions import LoginError, SessionInfo, SessionService
-from switchyard.services.status import EngineStatus, StatusService
+from switchyard.services.status import EngineStatus, StatusService, virtual_service_states
 from switchyard.services.tenants import TenantRecord, TenantService
 from switchyard.services.tokens import TokenService
 
@@ -740,6 +741,7 @@ def _problem_json_openapi(app: FastAPI) -> dict[str, Any]:
                 content["application/problem+json"] = {"schema": problem_ref}
     for unused in ("HTTPValidationError", "ValidationError"):
         schema["components"]["schemas"].pop(unused, None)
+    docs_meta.enrich(schema)
     app.openapi_schema = schema
     return schema
 
@@ -787,6 +789,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         ),
         separate_input_output_schemas=False,
         docs_url="/api/v1/docs",
+        redoc_url="/api/v1/redoc",
         openapi_url="/api/v1/openapi.json",
     )
     app.state.services = services
@@ -1131,6 +1134,94 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         _object_routes(router, slug, object_type)
         if object_type in RENDERED_TYPES:
             _rendered_route(router, slug, object_type)
+
+    # search and summary
+    @router.get(
+        "/tenants/{t}/search",
+        tags=["search"],
+        summary="Find objects by name",
+        description=(
+            "Backs the command palette. Case-insensitive substring match on object names; "
+            "virtual services also match their VIP, certificates their SANs and pools their "
+            "member addresses. Best match first (exact, prefix, substring). Restrict with "
+            "`types` (repeat the parameter). Requires any role in the tenant."
+        ),
+        response_model=SearchResults,
+        responses=_ok(ex.SEARCH),
+    )
+    async def search_objects(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        q: Annotated[str, Query(min_length=1, max_length=200)],
+        types: Annotated[list[ObjectType] | None, Query()] = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    ) -> SearchResults:
+        from switchyard.db.repository import load_snapshot
+
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+        return overview.search(snapshot, q, types or list(ObjectType), limit)
+
+    @router.get(
+        "/tenants/{t}/summary",
+        tags=["status"],
+        summary="Tenant home summary",
+        description=(
+            "One call for the tenant home: virtual services by health, pool members that are "
+            "not `UP`, drifted and unreachable engines, certificates expiring within 30 days, "
+            "job counts, open drafts and the latest revision. Lists are capped at 50. Health "
+            "rules are those of `GET /status/virtual-services`. Requires any role in the tenant."
+        ),
+        response_model=TenantSummary,
+        responses=_ok(ex.SUMMARY),
+    )
+    async def tenant_summary(tenant: Tenant, who: Who, svc: Services) -> TenantSummary:
+        from sqlalchemy import func, select
+
+        from switchyard.db.ops_models import ChangeSetRow, JobRow
+        from switchyard.db.repository import load_snapshot
+
+        statuses = await svc.status.list_status(who, tenant.id)
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+            jobs = {
+                r[0]: r[1]
+                for r in await session.execute(
+                    select(JobRow.state, func.count()).group_by(JobRow.state)
+                )
+            }
+            drafts = {
+                r[0]: r[1]
+                for r in await session.execute(
+                    select(ChangeSetRow.state, func.count()).group_by(ChangeSetRow.state)
+                )
+            }
+        revisions = await svc.change_sets.revisions(who, tenant.id, limit=1)
+        latest = (
+            overview.LatestRevision(
+                number=revisions[0].number,
+                author=revisions[0].author,
+                summary=revisions[0].summary,
+                created_at=revisions[0].created_at,
+            )
+            if revisions
+            else None
+        )
+        return overview.summarize(
+            snapshot=snapshot,
+            statuses=statuses,
+            services=virtual_service_states(snapshot, statuses),
+            jobs=overview.JobCounts(
+                queued=jobs.get(JobState.QUEUED.value, 0),
+                running=jobs.get(JobState.RUNNING.value, 0),
+                failed=jobs.get(JobState.FAILED.value, 0) + jobs.get(JobState.DEAD.value, 0),
+            ),
+            open_drafts=drafts.get(ChangeSetState.DRAFT.value, 0),
+            pending_approval=drafts.get(ChangeSetState.PENDING_APPROVAL.value, 0),
+            latest_revision=latest,
+            now=datetime.now(UTC),
+        )
 
     # IPAM
     @router.get(

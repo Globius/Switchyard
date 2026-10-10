@@ -719,3 +719,19 @@ async def test_system_audit_engines_and_revision_history(api: Api) -> None:
     assert all(
         s["health"] in {"healthy", "degraded", "down", "unknown", "disabled"} for s in states
     )
+
+
+async def test_search_and_summary(api: Api) -> None:
+    h = await api.token(Role.VIEWER)
+    found = (await api.client.get(f"{V1}/tenants/acme/search?q=WEB", headers=h)).json()
+    assert found["hits"] and found["hits"][0]["name"].lower().startswith("web")
+    by_vip = (await api.client.get(f"{V1}/tenants/acme/search?q=192.0.2.20", headers=h)).json()
+    assert [x["matched"] for x in by_vip["hits"]][:1] == ["vip"]
+    only = (
+        await api.client.get(f"{V1}/tenants/acme/search?q=web&types=pool&limit=1", headers=h)
+    ).json()
+    assert {x["type"] for x in only["hits"]} <= {"pool"}
+    assert (await api.client.get(f"{V1}/tenants/acme/search?q=", headers=h)).status_code == 422
+    summary = (await api.client.get(f"{V1}/tenants/acme/summary", headers=h)).json()
+    assert summary["services"]["total"] >= 1
+    assert {"jobs", "open_drafts", "latest_revision", "expiring_certificates"} <= summary.keys()

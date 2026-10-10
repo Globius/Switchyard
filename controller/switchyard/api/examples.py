@@ -436,3 +436,50 @@ VIP_POOL_USAGE = {
     "next_free": "192.0.2.101",
 }
 NEXT_FREE = {"address": "192.0.2.101"}
+
+SEARCH = {
+    "query": "shop",
+    "hits": [
+        {
+            "type": "virtual_service",
+            "id": VIRTUAL_SERVICE,
+            "name": "shop",
+            "matched": "name",
+            "detail": "192.0.2.100",
+        }
+    ],
+    "truncated": False,
+}
+SUMMARY = {
+    "services": {"total": 4, "healthy": 2, "degraded": 1, "down": 0, "unknown": 0, "disabled": 1},
+    "failing_members": [
+        {
+            "engine": "edge-1",
+            "engine_id": ENGINE,
+            "backend": "pool_web",
+            "server": "web-2",
+            "status": "DOWN",
+        }
+    ],
+    "drifted_engines": [
+        {
+            "engine": "edge-2",
+            "engine_id": ENGINE,
+            "se_group_id": SE_GROUP,
+            "kinds": ["haproxy_config"],
+        }
+    ],
+    "unreachable_engines": [],
+    "expiring_certificates": [
+        {"id": CERTIFICATE, "name": "shop", "not_after": "2026-10-25T00:00:00Z", "days_left": 14}
+    ],
+    "jobs": {"queued": 0, "running": 1, "failed": 0},
+    "open_drafts": 2,
+    "pending_approval": 0,
+    "latest_revision": {
+        "number": 42,
+        "author": "user:alice",
+        "summary": "Add shop",
+        "created_at": WHEN,
+    },
+}

@@ -1,7 +1,14 @@
 """virtual_service_states: UDP is served by IPVS since M6."""
 
+from datetime import UTC, datetime
+from uuid import UUID
+
 from switchyard.services.seed import example_snapshot
-from switchyard.services.status import virtual_service_states
+from switchyard.services.status import (
+    EngineStatus,
+    VirtualServiceStatus,
+    virtual_service_states,
+)
 
 
 def test_udp_and_http_are_serving_and_disabled_is_reported() -> None:
@@ -16,11 +23,8 @@ def test_udp_and_http_are_serving_and_disabled_is_reported() -> None:
     assert states[vs.name] == "serving"
 
 
-def _engine(group, members, reachable=True):  # type: ignore[no-untyped-def]
+def _engine(group: UUID, members: list[dict[str, str]], reachable: bool = True) -> EngineStatus:
     import uuid
-    from datetime import UTC, datetime
-
-    from switchyard.services.status import EngineStatus
 
     return EngineStatus(
         engine_id=uuid.uuid4(),
@@ -50,7 +54,7 @@ def test_health_follows_member_check_results() -> None:
             {"backend": backend, "server": f"s{i}", "status": s} for i, s in enumerate(statuses)
         ]
 
-    def health(*engines):  # type: ignore[no-untyped-def]
+    def health(*engines: EngineStatus) -> VirtualServiceStatus:
         return {v.name: v for v in virtual_service_states(snap, engines)}[vs.name]
 
     g = vs.se_group_id

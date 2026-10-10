@@ -130,7 +130,7 @@ class VirtualServiceStatus:
     members_total: int = 0
 
 
-def _is_up(status: str) -> bool:
+def is_up(status: str) -> bool:
     """HAProxy reports `UP`, `UP 1/2`, `DOWN`, `DRAIN`, `MAINT`, `NOLB` and the like."""
     return status.upper().startswith("UP")
 
@@ -175,7 +175,7 @@ def virtual_service_health(
     flat = [m for r in reported for m in r]
     if not flat:
         return "unknown", 0, 0
-    up = sum(1 for m in flat if _is_up(m["status"]))
+    up = sum(1 for m in flat if is_up(m["status"]))
     if up == 0:
         health = "down"
     elif up == len(flat) and len(reported) == len(engines):
