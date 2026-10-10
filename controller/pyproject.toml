@@ -19,6 +19,7 @@ dependencies = [
   "cryptography>=50.0.2",
   "acme>=5.8.0",
   "joserfc>=1.7.5",
+  "signxml>=5.1.0",
 ]
 
 [project.scripts]
@@ -70,7 +71,7 @@ files = ["switchyard", "tests"]
 exclude = ["switchyard/adapters/agentpb/"]
 
 [[tool.mypy.overrides]]
-module = ["testcontainers.*", "docker.*", "grpc.*", "grpc_tools.*"]
+module = ["testcontainers.*", "docker.*", "grpc.*", "grpc_tools.*", "lxml.*", "signxml.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -41,13 +41,20 @@ class IdentityProviderRow(Base):
     __table_args__ = (
         UniqueConstraint("name"),
         CheckConstraint("protocol IN ('oidc', 'saml')", name="protocol"),
+        CheckConstraint(
+            "(protocol = 'oidc' AND issuer_url IS NOT NULL AND client_id IS NOT NULL) "
+            "OR (protocol = 'saml' AND saml IS NOT NULL)",
+            name="settings_match_protocol",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     protocol: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'oidc'"))
-    issuer_url: Mapped[str] = mapped_column(Text, nullable=False)
-    client_id: Mapped[str] = mapped_column(Text, nullable=False)
+    issuer_url: Mapped[str | None] = mapped_column(Text)
+    client_id: Mapped[str | None] = mapped_column(Text)
+    #: SAML settings (``idp_entity_id``, ``sso_url``, ``signing_certificates``, ...); no secrets.
+    saml: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     client_secret_ref: Mapped[str | None] = mapped_column(Text)
     scopes: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'openid profile email'")
@@ -94,9 +101,24 @@ class LoginStateRow(Base):
 
     state: Mapped[str] = mapped_column(Text, primary_key=True)
     provider_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    nonce: Mapped[str] = mapped_column(Text, nullable=False)
-    code_verifier: Mapped[str] = mapped_column(Text, nullable=False)
+    nonce: Mapped[str | None] = mapped_column(Text)
+    code_verifier: Mapped[str | None] = mapped_column(Text)
+    #: SAML: the ``AuthnRequest`` id the response must answer (``InResponseTo``).
+    request_id: Mapped[str | None] = mapped_column(Text)
     return_to: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'/'"))
+    expires_at: Mapped[datetime] = _timestamp(nullable=False)
+
+
+class SamlAssertionSeenRow(Base):
+    """``saml_assertion_seen``: assertion ids already accepted, kept until they expire (replay)."""
+
+    __tablename__ = "saml_assertion_seen"
+    __table_args__ = (
+        ForeignKeyConstraint(["provider_id"], ["identity_provider.id"], ondelete="CASCADE"),
+    )
+
+    provider_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    assertion_id: Mapped[str] = mapped_column(Text, primary_key=True)
     expires_at: Mapped[datetime] = _timestamp(nullable=False)
 
 

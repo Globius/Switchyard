@@ -18,6 +18,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.db import audit_log
@@ -26,11 +27,13 @@ from switchyard.db.auth_models import (
     IdpRoleMappingRow,
     LocalAdminRow,
     LoginStateRow,
+    SamlAssertionSeenRow,
     UserSessionRow,
 )
 from switchyard.db.tenancy import admin_session
 from switchyard.domain.workflow import Role
 from switchyard.ids import uuid7
+from switchyard.services import saml
 from switchyard.services.changesets import ROLE_RANK
 from switchyard.services.context import Clock, Databases, Principal, utcnow
 from switchyard.services.oidc import OidcClient, OidcError, ProviderConfig, new_pkce
@@ -44,8 +47,21 @@ LOCKOUT_FOR = timedelta(minutes=15)
 SESSION_PREFIX = "sysess_"
 
 
+EXPIRED_MESSAGE = "this login attempt has expired; start again"
+NO_ACCESS_MESSAGE = "your account is not a member of any group with access"
+
+
 class LoginError(Exception):
-    """Login was refused. The message is safe to show to the user."""
+    """Login was refused. The message is safe to show to the user.
+
+    ``code`` is the short reason a browser login redirects with (``/login?error=<code>``):
+    ``provider_error``, ``expired`` or ``no_access``.
+    """
+
+    def __init__(self, message: str, code: str = "provider_error") -> None:
+        """Create the error."""
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -222,9 +238,7 @@ class SessionService:
             ).scalars()
             return [ProviderInfo(r.id, r.name, r.protocol) for r in rows]
 
-    async def _provider(
-        self, session: Any, provider: str
-    ) -> tuple[IdentityProviderRow, ProviderConfig]:
+    async def _provider_row(self, session: Any, provider: str) -> IdentityProviderRow:
         try:
             wanted = UUID(provider)
             query = select(IdentityProviderRow).where(IdentityProviderRow.id == wanted)
@@ -233,8 +247,14 @@ class SessionService:
         row = (await session.execute(query)).scalar_one_or_none()
         if row is None or not row.enabled:
             raise LoginError("unknown identity provider")
-        if row.protocol != "oidc":
-            raise LoginError("this provider's protocol is not supported yet")
+        return row  # type: ignore[no-any-return]
+
+    async def _provider(
+        self, session: Any, provider: str
+    ) -> tuple[IdentityProviderRow, ProviderConfig]:
+        row = await self._provider_row(session, provider)
+        if row.protocol != "oidc" or row.issuer_url is None or row.client_id is None:
+            raise LoginError("this provider does not use OpenID Connect")
         client_secret: str | None = None
         if row.client_secret_ref:
             if self._secrets is None:
@@ -258,8 +278,11 @@ class SessionService:
     # -- OIDC login -------------------------------------------------------------------------------
 
     async def begin_login(self, provider: str, *, redirect_uri: str, return_to: str | None) -> str:
-        """Start a login; returns the URL to redirect the browser to."""
+        """Start a login; returns the URL to redirect the browser to (OIDC or SAML)."""
         async with admin_session(self._db.admin) as session:
+            row = await self._provider_row(session, provider)
+            if row.protocol == "saml":
+                return await self._begin_saml(session, row, redirect_uri, return_to)
             row, cfg = await self._provider(session, provider)
             verifier, challenge = new_pkce()
             state, nonce = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
@@ -306,15 +329,15 @@ class SessionService:
                 )
             ).scalar_one_or_none()
             if pending is None or pending.expires_at <= self._clock():
-                return "this login attempt has expired; start again"
+                return EXPIRED_MESSAGE
             row, cfg = await self._provider(session, str(pending.provider_id))
             try:
                 claims = await self._oidc.exchange(
                     cfg,
                     code=code,
                     redirect_uri=redirect_uri,
-                    code_verifier=pending.code_verifier,
-                    nonce=pending.nonce,
+                    code_verifier=pending.code_verifier or "",
+                    nonce=pending.nonce or "",
                 )
             except OidcError as exc:
                 await audit_log.record(
@@ -327,45 +350,204 @@ class SessionService:
                 return str(exc)
             groups = claims.get(cfg.groups_claim, [])
             groups = [groups] if isinstance(groups, str) else [str(g) for g in groups]
-            mappings = (
-                await session.execute(
-                    select(IdpRoleMappingRow).where(
-                        IdpRoleMappingRow.provider_id == row.id,
-                        IdpRoleMappingRow.group_name.in_(groups or [""]),
-                    )
-                )
-            ).scalars()
-            grants = tuple((m.scope_tenant_id, Role(m.role)) for m in mappings)
-            subject = f"{cfg.name}:{claims['sub']}"
-            name = str(claims.get(cfg.username_claim) or claims["sub"])
-            email = claims.get(cfg.email_claim)
-            if not grants:
-                await audit_log.record(
-                    session,
-                    tenant_id=None,
-                    actor=f"user:{subject}",
-                    action="auth.login_denied",
-                    diff={"reason": "no group grants access"},
-                )
-                return "your account is not a member of any group with access"
-            result = await self._create_session(
+            return await self._grant_login(
                 session,
-                subject=subject,
-                provider_id=row.id,
-                name=name,
-                email=str(email) if email else None,
-                grants=grants,
-                break_glass=False,
+                row=row,
+                provider_name=cfg.name,
+                subject_id=str(claims["sub"]),
+                name=str(claims.get(cfg.username_claim) or claims["sub"]),
+                email=claims.get(cfg.email_claim),
+                groups=groups,
                 return_to=pending.return_to,
             )
+
+    async def _grant_login(
+        self,
+        session: Any,
+        *,
+        row: IdentityProviderRow,
+        provider_name: str,
+        subject_id: str,
+        name: str,
+        email: Any,
+        groups: list[str],
+        return_to: str,
+    ) -> LoginResult | str:
+        """Map groups to grants and create the session (shared by OIDC and SAML)."""
+        mappings = (
+            await session.execute(
+                select(IdpRoleMappingRow).where(
+                    IdpRoleMappingRow.provider_id == row.id,
+                    IdpRoleMappingRow.group_name.in_(groups or [""]),
+                )
+            )
+        ).scalars()
+        grants = tuple((m.scope_tenant_id, Role(m.role)) for m in mappings)
+        subject = f"{provider_name}:{subject_id}"
+        if not grants:
             await audit_log.record(
                 session,
                 tenant_id=None,
                 actor=f"user:{subject}",
-                action="auth.login",
-                diff={"provider": cfg.name, "grants": _grants_json(grants)},
+                action="auth.login_denied",
+                diff={"reason": "no group grants access"},
             )
-            return result
+            return NO_ACCESS_MESSAGE
+        result = await self._create_session(
+            session,
+            subject=subject,
+            provider_id=row.id,
+            name=name,
+            email=str(email) if email else None,
+            grants=grants,
+            break_glass=False,
+            return_to=return_to,
+        )
+        await audit_log.record(
+            session,
+            tenant_id=None,
+            actor=f"user:{subject}",
+            action="auth.login",
+            diff={"provider": provider_name, "grants": _grants_json(grants)},
+        )
+        return result
+
+    # -- SAML login -------------------------------------------------------------------------------
+
+    def _saml_config(self, row: IdentityProviderRow, public_url: str) -> saml.SamlConfig:
+        s = row.saml or {}
+        return saml.SamlConfig(
+            id=str(row.id),
+            name=row.name,
+            idp_entity_id=str(s.get("idp_entity_id", "")),
+            sso_url=str(s.get("sso_url", "")),
+            signing_certificates=tuple(str(c) for c in s.get("signing_certificates", [])),
+            sp_entity_id=str(
+                s.get("sp_entity_id") or f"{public_url.rstrip('/')}/api/v1/auth/saml/{row.id}"
+            ),
+            name_id_format=str(s.get("name_id_format") or saml.DEFAULT_NAME_ID_FORMAT),
+            attribute_username=str(s.get("attribute_username", "username")),
+            attribute_email=str(s.get("attribute_email", "email")),
+            attribute_groups=str(s.get("attribute_groups", "groups")),
+        )
+
+    async def saml_metadata(self, provider: str, *, acs_url: str) -> str:
+        """The SP metadata XML of a SAML provider (public; an IdP may fetch it by URL).
+
+        Raises:
+            LoginError: If the provider is unknown, disabled or not a SAML provider.
+        """
+        async with admin_session(self._db.admin) as session:
+            row = await self._provider_row(session, provider)
+        if row.protocol != "saml":
+            raise LoginError("this provider does not use SAML")
+        acs_url = _canonical_acs(acs_url, row.id)
+        return saml.sp_metadata(self._saml_config(row, _base_of(acs_url)), acs_url=acs_url)
+
+    async def _begin_saml(
+        self, session: Any, row: IdentityProviderRow, acs_url: str, return_to: str | None
+    ) -> str:
+        acs_url = _canonical_acs(acs_url, row.id)
+        cfg = self._saml_config(row, _base_of(acs_url))
+        state, request_id = secrets.token_urlsafe(32), saml.new_request_id()
+        await session.execute(delete(LoginStateRow).where(LoginStateRow.expires_at < self._clock()))
+        session.add(
+            LoginStateRow(
+                state=state,
+                provider_id=row.id,
+                request_id=request_id,
+                return_to=safe_return_to(return_to),
+                expires_at=self._clock() + LOGIN_TTL,
+            )
+        )
+        return saml.authn_request_url(
+            cfg, acs_url=acs_url, request_id=request_id, relay_state=state, now=self._clock()
+        )
+
+    async def complete_saml_login(
+        self, *, provider: str, saml_response: str, relay_state: str, acs_url: str
+    ) -> LoginResult:
+        """Finish a SAML login from the assertion consumer service POST.
+
+        The login state (found by ``relay_state``) is single use and names the request id the
+        response must answer; IdP-initiated responses have no state and are refused. Every refusal
+        is audited as ``auth.login_failed``.
+
+        Raises:
+            LoginError: For any refusal; the message is safe to show.
+        """
+        outcome = await self._complete_saml(provider, saml_response, relay_state, acs_url)
+        if isinstance(outcome, str):
+            code = {EXPIRED_MESSAGE: "expired", NO_ACCESS_MESSAGE: "no_access"}.get(
+                outcome, "provider_error"
+            )
+            raise LoginError(outcome, code)
+        return outcome
+
+    async def _complete_saml(
+        self, provider: str, saml_response: str, relay_state: str, acs_url: str
+    ) -> LoginResult | str:
+        async with admin_session(self._db.admin) as session:
+            row = await self._provider_row(session, provider)
+            if row.protocol != "saml":
+                return "this provider does not use SAML"
+            pending = (
+                await session.execute(
+                    delete(LoginStateRow)
+                    .where(LoginStateRow.state == relay_state, LoginStateRow.provider_id == row.id)
+                    .returning(LoginStateRow)
+                )
+            ).scalar_one_or_none()
+            if pending is None or pending.expires_at <= self._clock() or not pending.request_id:
+                await self._login_failed(session, row.name, "no login in progress (or expired)")
+                return EXPIRED_MESSAGE
+            acs_url = _canonical_acs(acs_url, row.id)
+            cfg = self._saml_config(row, _base_of(acs_url))
+            now = self._clock()
+            try:
+                assertion = saml.verify_response(
+                    cfg, saml_response, acs_url=acs_url, request_id=pending.request_id, now=now
+                )
+            except saml.SamlError as exc:
+                await self._login_failed(session, row.name, str(exc))
+                return str(exc)
+            await session.execute(
+                delete(SamlAssertionSeenRow).where(SamlAssertionSeenRow.expires_at < now)
+            )
+            inserted = (
+                await session.execute(
+                    pg_insert(SamlAssertionSeenRow)
+                    .values(
+                        provider_id=row.id,
+                        assertion_id=assertion.assertion_id,
+                        expires_at=assertion.not_on_or_after,
+                    )
+                    .on_conflict_do_nothing()
+                    .returning(SamlAssertionSeenRow.assertion_id)
+                )
+            ).first()
+            if inserted is None:
+                await self._login_failed(session, row.name, "assertion replayed")
+                return "this sign-in response was already used"
+            return await self._grant_login(
+                session,
+                row=row,
+                provider_name=row.name,
+                subject_id=assertion.subject,
+                name=assertion.first(cfg.attribute_username) or assertion.subject,
+                email=assertion.first(cfg.attribute_email),
+                groups=assertion.attributes.get(cfg.attribute_groups, []),
+                return_to=pending.return_to,
+            )
+
+    async def _login_failed(self, session: Any, provider_name: str, reason: str) -> None:
+        await audit_log.record(
+            session,
+            tenant_id=None,
+            actor=f"login:{provider_name}",
+            action="auth.login_failed",
+            diff={"reason": reason},
+        )
 
     async def _create_session(
         self,
@@ -569,3 +751,14 @@ __all__ = [
     "verify_password",
     "verify_totp",
 ]
+
+
+def _base_of(url: str) -> str:
+    """``https://host`` from an absolute URL (used to derive default SAML entity ids)."""
+    scheme, _, rest = url.partition("://")
+    return f"{scheme}://{rest.split('/', 1)[0]}"
+
+
+def _canonical_acs(acs_url: str, provider_id: UUID) -> str:
+    """The ACS URL with the provider id (never the name) as last segment, so it never varies."""
+    return f"{acs_url.rsplit('/', 1)[0]}/{provider_id}"
