@@ -233,6 +233,7 @@
             "type": "array"
           },
           "routes_withdrawn": {
+            "description": "True while any BGP prefix is withdrawn.",
             "title": "Routes Withdrawn",
             "type": "boolean"
           },
@@ -245,6 +246,14 @@
               "$ref": "#/components/schemas/VrrpInstanceStatus"
             },
             "title": "Vrrp",
+            "type": "array"
+          },
+          "withdrawn_prefixes": {
+            "description": "The BGP prefixes the watchdog has withdrawn, sorted.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Withdrawn Prefixes",
             "type": "array"
           }
         },
@@ -1123,6 +1132,7 @@
             "type": "integer"
           },
           "state": {
+            "description": "FRR session state: `Idle`, `Connect`, `Active`, `OpenSent`, `OpenConfirm` or `Established` (only `Established` is healthy).",
             "title": "State",
             "type": "string"
           }
@@ -3990,6 +4000,139 @@
           "available"
         ],
         "title": "MetricsRead",
+        "type": "object"
+      },
+      "MonitorTestIn": {
+        "additionalProperties": false,
+        "description": "Body of `POST /health-monitors/{id}/test`: which member to probe, and optional overrides.",
+        "properties": {
+          "engine_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run from this engine; default the first enabled one with an agent.",
+            "title": "Engine Id"
+          },
+          "expect_status": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Override accepted codes.",
+            "title": "Expect Status"
+          },
+          "http_path": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Override the path.",
+            "title": "Http Path"
+          },
+          "member_id": {
+            "format": "uuid",
+            "title": "Member Id",
+            "type": "string"
+          },
+          "pool_id": {
+            "format": "uuid",
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Override the check port.",
+            "title": "Port"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 10.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
+          }
+        },
+        "required": [
+          "pool_id",
+          "member_id"
+        ],
+        "title": "MonitorTestIn",
+        "type": "object"
+      },
+      "MonitorTestOut": {
+        "additionalProperties": false,
+        "description": "Result of one monitor test. Nothing is saved.",
+        "properties": {
+          "detail": {
+            "description": "What came back (for example `HTTP 200`) or why it failed.",
+            "title": "Detail",
+            "type": "string"
+          },
+          "engine": {
+            "description": "The engine that ran the probe.",
+            "title": "Engine",
+            "type": "string"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "protocol": {
+            "title": "Protocol",
+            "type": "string"
+          },
+          "target": {
+            "description": "`address:port` that was probed.",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "latency_ms",
+          "detail",
+          "engine",
+          "target",
+          "protocol"
+        ],
+        "title": "MonitorTestOut",
         "type": "object"
       },
       "MonitorType": {
@@ -8043,6 +8186,7 @@
             "type": "string"
           },
           "state": {
+            "description": "`MASTER`, `BACKUP` or `FAULT`.",
             "title": "State",
             "type": "string"
           }
@@ -14719,6 +14863,151 @@
           }
         },
         "summary": "Create one of the health monitors",
+        "tags": [
+          "health-monitors"
+        ],
+        "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/health-monitors/{monitor_id}/test": {
+      "post": {
+        "description": "Runs the monitor once from an engine (through its agent) against one member and returns pass or fail, the latency and what came back. Nothing is saved. Overrides (`port`, `http_path`, `expect_status`, `timeout_s`) replace the monitor's values for this run. The agent only probes members that are in its applied configuration, so a member added in a draft cannot be tested until it is applied (`409`). A UDP test needs the member to reply. `502` when the engine's agent cannot be reached.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "test_monitor_api_v1_tenants__t__health_monitors__monitor_id__test_post",
+        "parameters": [
+          {
+            "description": "Health monitor id.",
+            "in": "path",
+            "name": "monitor_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Monitor Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "member_id": "0192f3a0-0000-7000-8000-000000000019",
+                "pool_id": "0192f3a0-0000-7000-8000-000000000014"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MonitorTestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "HTTP 200",
+                  "engine": "edge-1",
+                  "latency_ms": 12,
+                  "ok": true,
+                  "protocol": "http",
+                  "target": "10.20.0.11:8080"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/MonitorTestOut"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The engine's agent cannot be reached."
+          }
+        },
+        "summary": "Test a health monitor against one pool member",
         "tags": [
           "health-monitors"
         ],
@@ -22812,7 +23101,8 @@
                           "name": "VI_edge",
                           "state": "MASTER"
                         }
-                      ]
+                      ],
+                      "withdrawn_prefixes": []
                     },
                     "drift": [
                       {

@@ -847,3 +847,52 @@ async def test_metrics_and_logs_are_tenant_scoped_and_degrade_when_unconfigured(
     missing = await api.client.get(f"{base}/virtual-services/{uuid.uuid4()}/metrics", headers=h)
     assert missing.status_code == 404
     assert set(fake.asked) == {TENANT}
+
+
+async def test_monitor_test_runs_from_an_engine_through_the_agent(api: Api) -> None:
+    from switchyard.adapters.agent import FakeAgent, ProbeResult
+
+    h = await api.token()
+    base = f"{V1}/tenants/acme"
+    engine = (
+        await api.client.post(
+            f"{base}/se-groups/{GROUP}/engines",
+            json={
+                "name": "e9",
+                "dataplane_url": "https://192.0.2.9:5555",
+                "mgmt_ip": "192.0.2.9",
+                "agent_url": "192.0.2.9:7443",
+            },
+            headers=h,
+        )
+    ).json()
+    made = await api.client.post(
+        f"{base}/health-monitors?apply=true",
+        json={"name": "tcp9", "type": "tcp"},
+        headers=h,
+    )
+    assert made.status_code == 202, made.text
+    await api.run_jobs()
+    monitors = (await api.client.get(f"{base}/health-monitors", headers=h)).json()["items"]
+    monitor = next(m["id"] for m in monitors if m["name"] == "tcp9")
+    pool = (await api.client.get(f"{base}/pools/{POOL}", headers=h)).json()
+    member = pool["members"][0]["id"]
+    body = {"pool_id": str(POOL), "member_id": member}
+    url = f"{base}/health-monitors/{monitor}/test"
+    # No agent connected yet: the engine cannot be reached.
+    first = await api.client.post(url, json=body, headers=h)
+    assert first.status_code == 409, first.text
+    agent = FakeAgent("e9")
+    from switchyard.pipeline.engines import StaticEngineDirectory
+
+    api.services.monitor_tests._directory = StaticEngineDirectory(
+        {}, {uuid.UUID(engine["id"]): agent}
+    )
+    ok = await api.client.post(url, json=body, headers=h)
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["ok"] is True and ok.json()["engine"] == "e9"
+    assert (agent.probes[0].address, agent.probes[0].port) == ("10.20.0.11", 8080)
+    agent.probe_result = ProbeResult(ok=False, latency_ms=0, detail="x", refused=True)
+    assert (await api.client.post(url, json=body, headers=h)).status_code == 409
+    viewer = await api.token(Role.VIEWER)
+    assert (await api.client.post(url, json=body, headers=viewer)).status_code == 403

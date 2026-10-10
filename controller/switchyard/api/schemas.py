@@ -529,7 +529,10 @@ class BgpSessionStatus(ApiModel):
     """One BGP neighbour."""
 
     peer: str
-    state: str
+    state: str = Field(
+        description="FRR session state: `Idle`, `Connect`, `Active`, `OpenSent`, `OpenConfirm` "
+        "or `Established` (only `Established` is healthy)."
+    )
     remote_asn: int
 
 
@@ -537,7 +540,7 @@ class VrrpInstanceStatus(ApiModel):
     """One VRRP instance."""
 
     name: str
-    state: str
+    state: str = Field(description="`MASTER`, `BACKUP` or `FAULT`.")
 
 
 class IpvsRealServerStatus(ApiModel):
@@ -564,7 +567,10 @@ class AgentStatusRead(ApiModel):
     version: str
     bundle_id: str
     haproxy_healthy: bool
-    routes_withdrawn: bool
+    routes_withdrawn: bool = Field(description="True while any BGP prefix is withdrawn.")
+    withdrawn_prefixes: list[str] = Field(
+        default_factory=list, description="The BGP prefixes the watchdog has withdrawn, sorted."
+    )
     bgp: list[BgpSessionStatus]
     vrrp: list[VrrpInstanceStatus]
     ipvs: list[IpvsRealServerStatus] = Field(
@@ -643,6 +649,32 @@ class EngineStatusRead(ApiModel):
     agent: AgentStatusRead | None = None
     drift: list[DriftItem]
     observed_at: datetime
+
+
+class MonitorTestIn(ApiModel):
+    """Body of `POST /health-monitors/{id}/test`: which member to probe, and optional overrides."""
+
+    pool_id: UUID
+    member_id: UUID
+    engine_id: UUID | None = Field(
+        default=None,
+        description="Run from this engine; default the first enabled one with an agent.",
+    )
+    port: int | None = Field(default=None, ge=1, le=65535, description="Override the check port.")
+    http_path: str | None = Field(default=None, max_length=1024, description="Override the path.")
+    expect_status: list[int] | None = Field(default=None, description="Override accepted codes.")
+    timeout_s: int | None = Field(default=None, ge=1, le=10)
+
+
+class MonitorTestOut(ApiModel):
+    """Result of one monitor test. Nothing is saved."""
+
+    ok: bool
+    latency_ms: int
+    detail: str = Field(description="What came back (for example `HTTP 200`) or why it failed.")
+    engine: str = Field(description="The engine that ran the probe.")
+    target: str = Field(description="`address:port` that was probed.")
+    protocol: str
 
 
 # -- IPAM ------------------------------------------------------------------------------------------

@@ -155,7 +155,9 @@ async def test_tenant_scoping(pg_url: str) -> None:
 async def test_retry_a_dead_job(pg_url: str) -> None:
     async with world(pg_url) as w:
         async with admin_session(w.db.admin) as s:
-            job_id = await queue.enqueue(s, "sync_cloudflare_ips", {}, tenant_id=TENANT, max_attempts=1)
+            job_id = await queue.enqueue(
+                s, "sync_cloudflare_ips", {}, tenant_id=TENANT, max_attempts=1
+            )
         await Worker(w.db.admin, {"sync_cloudflare_ips": boom}, worker_id="t").run_once()
         svc = JobService(w.db)
         dead = await svc.get(principal(), TENANT, job_id)

@@ -304,6 +304,7 @@ ENGINE_STATUS = {
         "bundle_id": "b-7f31",
         "haproxy_healthy": True,
         "routes_withdrawn": False,
+        "withdrawn_prefixes": [],
         "bgp": [],
         "vrrp": [{"name": "VI_edge", "state": "MASTER"}],
         "ipvs": [],
@@ -548,3 +549,13 @@ ACCESS_LOGS = {
     ],
     "next_cursor": None,
 }
+
+MONITOR_TEST = {
+    "ok": True,
+    "latency_ms": 12,
+    "detail": "HTTP 200",
+    "engine": "edge-1",
+    "target": "10.20.0.11:8080",
+    "protocol": "http",
+}
+MONITOR_TEST_BODY = {"pool_id": POOL, "member_id": MEMBER}

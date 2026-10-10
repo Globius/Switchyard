@@ -87,7 +87,7 @@ tenant administrator and not the author or requester.
 ## Status, health and live events
 
 - `GET /tenants/{t}/status/engines`: per engine `reachable`, `members` (`backend`, `server`, `status`), `agent`
-  (`bgp[]`, `vrrp[]`, `ipvs[]`, `routes_withdrawn`) and `drift[]`. Drift is reported, never corrected.
+  (`bgp[]`, `vrrp[]`, `ipvs[]`, `routes_withdrawn`, `withdrawn_prefixes[]`) and `drift[]`. Drift is reported, never corrected.
 - `GET /tenants/{t}/status/virtual-services`: `state` (`serving`, `disabled`, `not_served`) and `health`
   (`healthy`, `degraded`, `down`, `unknown`, `disabled`) with `members_up` / `members_total`. Rule: look at the
   reported member rows of the service's pools on the reachable engines of its SE group; `healthy` if every row is `UP`
@@ -105,6 +105,12 @@ tenant administrator and not the author or requester.
 and `GET /tenants/{t}/virtual-services/{id}/logs?since&until&q&status_class&cursor&limit` read Prometheus and Loki
 (see [operating](operating.md)). With no backend configured, or when it fails, they answer `200` with
 `available: false` and a `reason`; a metric with no data is `null`, not 0.
+
+## Health monitor test
+
+`POST /tenants/{t}/health-monitors/{id}/test` runs the monitor once from an engine (through its agent) against one pool
+member and returns `ok`, `latency_ms`, `detail`, `engine`, `target`; nothing is saved. The agent only probes members in its
+applied configuration (`409` otherwise; `502` if the agent is unreachable). ADR 0041.
 
 ## VIP pools
 

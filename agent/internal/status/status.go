@@ -30,7 +30,9 @@ type Collector struct {
 	BundleID func() string
 	// Health reports the local HAProxy health and whether BGP prefixes are withdrawn.
 	Health func() (healthy, withdrawn bool)
-	Now    func() time.Time
+	// Withdrawn lists the BGP prefixes the watchdog has withdrawn.
+	Withdrawn func() []string
+	Now       func() time.Time
 	// KeepalivedConf is the rendered keepalived.conf; its UDP virtual servers decide whether IPVS is reported.
 	KeepalivedConf string
 }
@@ -102,6 +104,9 @@ func (c *Collector) Collect(ctx context.Context) *pb.Status {
 	}
 	if c.Health != nil {
 		st.HaproxyHealthy, st.RoutesWithdrawn = c.Health()
+	}
+	if c.Withdrawn != nil {
+		st.WithdrawnPrefixes = c.Withdrawn()
 	}
 	return st
 }
