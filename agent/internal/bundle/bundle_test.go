@@ -198,3 +198,47 @@ func TestWritesAreAtomicAndLeaveNoTemporaryFiles(t *testing.T) {
 		t.Fatalf("hashes: %v %v", h, err)
 	}
 }
+
+func TestCertsAreManagedOnlyAsFlatPemFilesAndCrtListsAreLeftAlone(t *testing.T) {
+	a, priv, r := setup(t)
+	if err := os.MkdirAll(filepath.Join(a.Root, "certs"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	crtlist := filepath.Join(a.Root, "certs", "web.crtlist")
+	if err := os.WriteFile(crtlist, []byte("list"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	resp := a.Apply(context.Background(), request(t, priv, "c1", map[string]string{"certs/site.pem": "KEY"}))
+	if !resp.Ok {
+		t.Fatalf("apply failed: %s", resp.Error)
+	}
+	if got := read(t, a, "certs/site.pem"); got != "KEY" {
+		t.Errorf("pem not written: %q", got)
+	}
+	if !reflect.DeepEqual(resp.ReloadedUnits, []string{"haproxy"}) {
+		t.Errorf("reloaded %v, want haproxy", resp.ReloadedUnits)
+	}
+	if info, _ := os.Stat(filepath.Join(a.Root, "certs", "site.pem")); runtimeIsUnix() && info.Mode().Perm() != 0o600 {
+		t.Errorf("pem mode %v, want 0600", info.Mode().Perm())
+	}
+	// A later bundle without the pem removes it, but the crt-list stays.
+	resp = a.Apply(context.Background(), request(t, priv, "c2", map[string]string{"frr/frr.conf": "x"}))
+	if !resp.Ok {
+		t.Fatalf("apply failed: %s", resp.Error)
+	}
+	if _, err := os.Stat(filepath.Join(a.Root, "certs", "site.pem")); err == nil {
+		t.Error("pem should have been removed")
+	}
+	if _, err := os.Stat(crtlist); err != nil {
+		t.Errorf("the crt-list must be untouched: %v", err)
+	}
+	for _, bad := range []string{"certs/web.crtlist", "certs/sub/x.pem", "certs/x.key"} {
+		resp := a.Apply(context.Background(), request(t, priv, "c3", map[string]string{bad: "x"}))
+		if resp.Ok {
+			t.Errorf("path %q was accepted", bad)
+		}
+	}
+	_ = r
+}
+
+func runtimeIsUnix() bool { return filepath.Separator == '/' }

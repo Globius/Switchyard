@@ -173,7 +173,9 @@ def serve(
     from switchyard.api.app import build_services, create_app
 
     db = runtime.databases()
-    uvicorn.run(create_app(build_services(db, runtime.directory(db))), host=host, port=port)
+    secrets = runtime.secrets_backend()
+    services = build_services(db, runtime.directory(db), secrets, runtime.certificates(db, secrets))
+    uvicorn.run(create_app(services), host=host, port=port)
 
 
 @app.command("worker")

@@ -101,6 +101,62 @@
         "title": "ApplyIn",
         "type": "object"
       },
+      "CertImportIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /certificates/import``.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pem": {
+            "description": "Certificate chain followed by the private key.",
+            "maxLength": 65536,
+            "title": "Pem",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "pem"
+        ],
+        "title": "CertImportIn",
+        "type": "object"
+      },
+      "CertIssueIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /certificates/issue``.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sans": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Sans",
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "acme",
+              "cloudflare_origin"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source",
+          "sans"
+        ],
+        "title": "CertIssueIn",
+        "type": "object"
+      },
       "CertSource": {
         "description": "Where a certificate came from.",
         "enum": [
@@ -2751,6 +2807,248 @@
           }
         },
         "summary": "Create Certificates",
+        "tags": [
+          "certificates"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/certificates/import": {
+      "post": {
+        "description": "Store an uploaded certificate and key, and add the certificate object to a change set.",
+        "operationId": "import_certificate_api_v1_tenants__t__certificates_import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "in": "query",
+            "name": "apply",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Apply",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Certificate",
+        "tags": [
+          "certificates"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/certificates/issue": {
+      "post": {
+        "description": "Queue issuance through ACME DNS-01 or Cloudflare Origin CA.",
+        "operationId": "issue_certificate_api_v1_tenants__t__certificates_issue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertIssueIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Issue Certificate Api V1 Tenants  T  Certificates Issue Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Issue Certificate",
+        "tags": [
+          "certificates"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/certificates/{certificate}/renew": {
+      "post": {
+        "description": "Queue a renewal of one certificate.",
+        "operationId": "renew_certificate_api_v1_tenants__t__certificates__certificate__renew_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "certificate",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Renew Certificate Api V1 Tenants  T  Certificates  Certificate  Renew Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Renew Certificate",
         "tags": [
           "certificates"
         ]

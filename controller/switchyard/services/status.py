@@ -23,13 +23,13 @@ from switchyard.db.models import TenantRow
 from switchyard.db.ops_models import EngineStatusRow, ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
-from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
 from switchyard.pipeline.apply import bundle_id, file_hashes
+from switchyard.pipeline.bundles import BundleError, engine_files
 from switchyard.pipeline.engines import EngineDirectory, EngineRecord
 from switchyard.render.escape import RenderError
 from switchyard.render.haproxy import render_haproxy
-from switchyard.render.routing import EngineSlot, render_agent_bundle
+from switchyard.render.routing import EngineSlot
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import PermissionDeniedError
 
@@ -101,28 +101,16 @@ class StatusService:
         if "frontend vs_" in rendered.files["haproxy/haproxy.cfg"]:
             out.fingerprint = rendered.fingerprint
         group = next((g for g in snapshot.se_groups if g.id == group_id), None)
-        if group is None or group.routing_profile_id is None or out.fingerprint is None:
+        if group is None or out.fingerprint is None:
             return out
-        secrets: dict[str, str] = {}
-        for profile in snapshot.routing_profiles:
-            if profile.id == group.routing_profile_id and isinstance(profile, dm.BgpProfile):
-                for peer in profile.peers:
-                    if peer.md5_ref and self._secrets is not None:
-                        try:
-                            secrets[peer.md5_ref] = await self._secrets.get(peer.md5_ref)
-                        except LookupError:
-                            return out
         for index, record in enumerate(records):
+            slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
             try:
-                files = render_agent_bundle(
-                    snapshot,
-                    group_id,
-                    EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0"),  # noqa: S104
-                    secrets,
-                )
-            except RenderError:
+                files = await engine_files(snapshot, group, slot, self._secrets)
+            except BundleError:
                 continue
-            out.bundles[record.name] = file_hashes(files) | {"__bundle_id__": bundle_id(files)}
+            if files:
+                out.bundles[record.name] = file_hashes(files) | {"__bundle_id__": bundle_id(files)}
         return out
 
     async def _poll_engine(

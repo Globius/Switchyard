@@ -51,6 +51,7 @@ from switchyard.domain.models import SeGroup
 from switchyard.domain.snapshot import Snapshot
 from switchyard.domain.workflow import ChangeSetState, DeploymentState
 from switchyard.jobs import queue
+from switchyard.pipeline.bundles import BundleError, engine_files
 from switchyard.pipeline.canary import (
     AgentRoutingProbe,
     NoRoutingProbe,
@@ -62,7 +63,7 @@ from switchyard.pipeline.engines import EngineDirectory, EngineRecord
 from switchyard.pipeline.locks import PgGroupLocks
 from switchyard.render.escape import RenderError
 from switchyard.render.haproxy import RenderResult, render_haproxy
-from switchyard.render.routing import EngineSlot, render_agent_bundle
+from switchyard.render.routing import EngineSlot
 from switchyard.services.context import Clock, Databases, utcnow
 
 log = logging.getLogger("switchyard.pipeline")
@@ -293,50 +294,33 @@ class ApplyPipeline:
             plans.append(plan)
         return plans
 
-    async def _secrets_for(self, snapshot: Snapshot, group: SeGroup) -> dict[str, str]:
-        """Resolve the BGP session passwords the group's profile refers to."""
-        refs = {
-            peer.md5_ref
-            for profile in snapshot.routing_profiles
-            if profile.id == group.routing_profile_id and isinstance(profile, dm.BgpProfile)
-            for peer in profile.peers
-            if peer.md5_ref
-        }
-        found: dict[str, str] = {}
-        for ref in sorted(refs):
-            if self._secrets is None:
-                raise _PlanError("BGP passwords are configured but no secrets backend is available")
-            try:
-                found[ref] = await self._secrets.get(ref)
-            except LookupError as exc:
-                raise _PlanError(f"secret {ref} for BGP peer authentication not found") from exc
-        return found
-
     async def _plan_bundles(
         self, plan: _Plan, base: Snapshot, after: Snapshot, records: list[EngineRecord]
     ) -> None:
-        """Render each agent-managed engine's routing files, before and after the change."""
+        """Build each agent-managed engine's files (routing and certificates), before and after."""
         group = plan.group
-        if not plan.agents or group.routing_profile_id is None:
-            return
         if not _renders_anything(plan.target):
             return
-        secrets_after = await self._secrets_for(after, group)
         existed = plan.previous is not None
-        secrets_before = await self._secrets_for(base, group) if existed else {}
         for index, record in enumerate(records):
-            if record.name not in plan.agents:
-                continue
-            if group.ha_mode is dm.HaMode.BGP and not record.mgmt_ip:
+            if group.ha_mode is dm.HaMode.BGP and group.routing_profile_id and not record.mgmt_ip:
                 raise _PlanError(
                     f"engine {record.name} needs mgmt_ip: it is used as the BGP router id"
                 )
+            if record.name not in plan.agents:
+                continue  # no agent: routing and certificates are provisioned out of band
             slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
-            plan.bundles[record.name] = render_agent_bundle(after, group.id, slot, secrets_after)
+            try:
+                files = await engine_files(after, group, slot, self._secrets)
+            except BundleError as exc:
+                raise _PlanError(str(exc)) from exc
+            if not files:
+                continue
+            plan.bundles[record.name] = files
             if existed:
-                with contextlib.suppress(RenderError):
-                    plan.previous_bundles[record.name] = render_agent_bundle(
-                        base, group.id, slot, secrets_before
+                with contextlib.suppress(BundleError):
+                    plan.previous_bundles[record.name] = await engine_files(
+                        base, group, slot, self._secrets
                     )
 
     # -- execution -------------------------------------------------------------------------------
@@ -394,18 +378,36 @@ class ApplyPipeline:
             return await self._fail(tenant_id, change_set_id, message, failed, request_id, started)
 
     async def _push_one(self, plan: _Plan, record: EngineRecord, engine: HaproxyEngine) -> None:
-        """Push HAProxy files, then the routing bundle, to one engine."""
+        """Push HAProxy files and the agent bundle to one engine.
+
+        When certificates changed they go first, so HAProxy never loads a config that names a
+        certificate file that is not there yet; otherwise HAProxy goes first.
+        """
         previous_files = plan.previous.files if plan.previous else None
-        await engine.push(plan.target.files, previous=previous_files)
         agent = plan.agents.get(record.name)
         bundle = plan.bundles.get(record.name)
-        if agent is not None and bundle is not None:
-            result = await agent.apply_bundle(bundle_id(bundle), bundle)
-            if not result.ok:
-                note = " (previous files restored)" if result.restored_previous else ""
-                raise HaproxyError(
-                    f"{record.name}: agent rejected the routing bundle: {result.error}{note}"
-                )
+        before = plan.previous_bundles.get(record.name, {})
+        certs_changed = bundle is not None and any(
+            path.startswith("certs/") and before.get(path) != text for path, text in bundle.items()
+        )
+        if certs_changed:
+            await self._send_bundle(record, agent, bundle)
+        await engine.push(plan.target.files, previous=previous_files)
+        if not certs_changed:
+            await self._send_bundle(record, agent, bundle)
+
+    @staticmethod
+    async def _send_bundle(
+        record: EngineRecord, agent: AgentEngine | None, bundle: dict[str, str] | None
+    ) -> None:
+        if agent is None or bundle is None:
+            return
+        result = await agent.apply_bundle(bundle_id(bundle), bundle)
+        if not result.ok:
+            note = " (previous files restored)" if result.restored_previous else ""
+            raise HaproxyError(
+                f"{record.name}: agent rejected the routing bundle: {result.error}{note}"
+            )
 
     async def _rollout(self, plan: _Plan, pushed: list[tuple[HaproxyEngine, _Plan]]) -> None:
         """Validate, push to the canary, watch it, then push to the rest."""

@@ -38,6 +38,24 @@ var Units = map[string]string{
 	"frr":        "frr",
 	"keepalived": "keepalived",
 	"coraza":     "coraza-spoa",
+	"certs":      "haproxy",
+}
+
+// suffixOnly restricts a managed directory to files with one suffix. The Data Plane API keeps its
+// crt-lists in the same directory as the certificates, so only "*.pem" files there are the
+// agent's; everything else is left alone and never removed.
+var suffixOnly = map[string]string{"certs": ".pem"}
+
+// secretDirs hold private keys and are written with owner-only permissions.
+var secretDirs = map[string]bool{"certs": true}
+
+func managedFile(rel string) bool {
+	prefix, rest, ok := strings.Cut(rel, "/")
+	if !ok {
+		return false
+	}
+	suffix, restricted := suffixOnly[prefix]
+	return !restricted || (strings.HasSuffix(rest, suffix) && !strings.Contains(rest, "/"))
 }
 
 // Applier applies bundles under Root.
@@ -68,7 +86,15 @@ func ValidatePath(p string) error {
 	if _, managed := Units[prefix]; !managed {
 		return fmt.Errorf("path %q is outside the managed directories", p)
 	}
+	if !managedFile(p) {
+		return fmt.Errorf("path %q is not a file the agent manages in %s/", p, prefix)
+	}
 	return nil
+}
+
+func relTo(root, p string) string {
+	rel, _ := filepath.Rel(root, p)
+	return rel
 }
 
 func (a *Applier) read(rel string) ([]byte, bool) {
@@ -91,7 +117,7 @@ func (a *Applier) managed() (map[string][]byte, error) {
 				}
 				return err
 			}
-			if d.Type().IsRegular() {
+			if d.Type().IsRegular() && managedFile(filepath.ToSlash(relTo(a.Root, p))) {
 				rel, _ := filepath.Rel(a.Root, p)
 				data, rerr := os.ReadFile(p)
 				if rerr != nil {
@@ -130,7 +156,11 @@ func (a *Applier) write(rel string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(name, 0o640); err != nil {
+	mode := os.FileMode(0o640)
+	if secretDirs[strings.SplitN(rel, "/", 2)[0]] {
+		mode = 0o600
+	}
+	if err := os.Chmod(name, mode); err != nil {
 		return err
 	}
 	return os.Rename(name, target)

@@ -31,6 +31,14 @@ POOL = uuid.UUID(symbolic_uuid("pool-web"))
 VS = uuid.UUID(symbolic_uuid("vs-web"))
 
 
+#: Placeholder PEM bundles for the certificates in the base data (not real key material).
+FAKE_PEM = (
+    "-----BEGIN CERTIFICATE-----\nMIIBplaceholder\n-----END CERTIFICATE-----\n"
+    "-----BEGIN PRIVATE KEY-----\nMIIBplaceholder\n-----END PRIVATE KEY-----\n"
+)
+CERT_SECRETS = {"kv/tenants/acme/certs/wild-example-test": FAKE_PEM}
+
+
 def principal(
     role: Role = Role.TENANT_ADMIN, name: str = "alice", tenant: uuid.UUID = TENANT
 ) -> Principal:
@@ -103,7 +111,7 @@ class World:
             directory,
             sleep=no_sleep,
             lock_timeout_s=5,
-            secrets=MemorySecrets(secrets or {}),
+            secrets=MemorySecrets({**CERT_SECRETS, **(secrets or {})}),
         )
 
     async def prime(self) -> None:

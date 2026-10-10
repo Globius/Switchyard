@@ -200,7 +200,7 @@ class PolicySetRow(TenantOwnedMixin, Base):
     )
 
     kind: Mapped[str] = mapped_column(Text, nullable=False)
-    rules: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    rules: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
     cidrs: Mapped[list[str] | None] = mapped_column(ARRAY(CIDR))
     managed_by: Mapped[str | None] = mapped_column(Text)
 

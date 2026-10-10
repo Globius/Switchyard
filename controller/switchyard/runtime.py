@@ -4,17 +4,24 @@ Variables: ``SWITCHYARD_DATABASE_URL`` (required in production), ``SWITCHYARD_DA
 ``SWITCHYARD_DATAPLANE_CERT`` and ``SWITCHYARD_DATAPLANE_KEY`` (mTLS to the engines),
 ``SWITCHYARD_GITLAB_URL``, ``SWITCHYARD_GITLAB_PROJECT`` and ``SWITCHYARD_GITLAB_TOKEN`` (Git
 mirror, optional), ``SWITCHYARD_SANDBOX=docker`` (validate with ``haproxy -c`` in a container).
-Engine credentials come from ``SWITCHYARD_SECRET_*`` variables (see ``EnvSecrets``).
+Secrets: with ``SWITCHYARD_OPENBAO_ADDR``, ``SWITCHYARD_OPENBAO_ROLE_ID`` and
+``SWITCHYARD_OPENBAO_SECRET_ID`` (optionally ``SWITCHYARD_OPENBAO_CA``) references are read from
+OpenBao KV v2; otherwise from ``SWITCHYARD_SECRET_*`` variables (see ``EnvSecrets``), which cannot
+store new certificates. Proxmox: ``SWITCHYARD_PVE_URL``, ``SWITCHYARD_PVE_TOKEN_ID`` and the token
+secret. Certificates: ``SWITCHYARD_CLOUDFLARE_TOKEN`` (DNS-01, Origin CA, IP ranges) and, for ACME,
+``SWITCHYARD_ACME_DIRECTORY``, ``SWITCHYARD_ACME_EMAIL`` and ``SWITCHYARD_ACME_ACCOUNT_KEY_FILE``.
 """
 
 import os
 from datetime import timedelta
 from pathlib import Path
 
+from switchyard.adapters.acme import AcmeIssuer, new_account_key
+from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
 from switchyard.adapters.git import GitLabMirror, GitMirror
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
-from switchyard.adapters.secrets import EnvSecrets
+from switchyard.adapters.secrets import EnvSecrets, OpenBaoSecrets, SecretsReader
 from switchyard.config import database_url
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
 from switchyard.jobs.handlers import POLL_STATUS_JOB, build_handlers
@@ -22,6 +29,12 @@ from switchyard.jobs.scheduler import Scheduler
 from switchyard.jobs.worker import Worker
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
+from switchyard.services.certificates import (
+    RENEW_CERTS_JOB,
+    SYNC_CLOUDFLARE_IPS_JOB,
+    CertificateService,
+)
+from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
 from switchyard.services.infra import InfraService
 from switchyard.services.status import StatusService
@@ -42,7 +55,52 @@ def directory(db: Databases) -> DbEngineDirectory:
         ca_file=Path(ca) if ca else None,
         client_cert=(Path(cert), Path(key)) if cert and key else None,
     )
-    return DbEngineDirectory(db, EnvSecrets(), tls)
+    return DbEngineDirectory(db, secrets_backend(), tls)
+
+
+def secrets_backend() -> SecretsReader:
+    """OpenBao when configured, environment variables otherwise."""
+    addr = os.environ.get("SWITCHYARD_OPENBAO_ADDR")
+    role = os.environ.get("SWITCHYARD_OPENBAO_ROLE_ID")
+    secret = os.environ.get("SWITCHYARD_OPENBAO_SECRET_ID")
+    if addr and role and secret:
+        return OpenBaoSecrets(
+            addr, role, secret, verify=os.environ.get("SWITCHYARD_OPENBAO_CA") or True
+        )
+    return EnvSecrets()
+
+
+def cloudflare() -> Cloudflare | None:
+    """The Cloudflare client, if ``SWITCHYARD_CLOUDFLARE_TOKEN`` is set."""
+    token = os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN")
+    return HttpCloudflare(token) if token else None
+
+
+def acme(dns: Cloudflare | None) -> AcmeIssuer | None:
+    """The ACME issuer, if a directory, an account key file and DNS are configured.
+
+    A missing account key file is created (mode 0600) on first use.
+    """
+    directory_url = os.environ.get("SWITCHYARD_ACME_DIRECTORY")
+    key_file = os.environ.get("SWITCHYARD_ACME_ACCOUNT_KEY_FILE")
+    if not directory_url or not key_file or dns is None:
+        return None
+    path = Path(key_file)
+    if not path.exists():
+        path.write_text(new_account_key())
+        path.chmod(0o600)
+    return AcmeIssuer(
+        directory_url, path.read_text(), dns, email=os.environ.get("SWITCHYARD_ACME_EMAIL")
+    )
+
+
+def certificates(db: Databases, secrets: SecretsReader | None = None) -> CertificateService | None:
+    """Certificate service, if the secrets backend can store key material (OpenBao)."""
+    store = secrets or secrets_backend()
+    if not isinstance(store, OpenBaoSecrets):
+        return None
+    dns = cloudflare()
+    return CertificateService(db, store, ChangeSetService(db), cloudflare=dns, acme=acme(dns))
 
 
 def git_mirror() -> GitMirror | None:
@@ -53,7 +111,7 @@ def git_mirror() -> GitMirror | None:
     return GitLabMirror(url, project, token) if url and project and token else None
 
 
-def infra_service(db: Databases, secrets: EnvSecrets) -> InfraService | None:
+def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     """The Proxmox-backed infrastructure jobs, if ``SWITCHYARD_PVE_URL`` is configured.
 
     Also needs ``SWITCHYARD_PVE_TOKEN_ID`` and the token secret under the secret reference
@@ -75,9 +133,15 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     """A worker (apply, Git mirror, status polling) and the scheduler that feeds it."""
     sandbox = DockerSandbox() if os.environ.get("SWITCHYARD_SANDBOX") == "docker" else None
     engines = directory(db)
-    secrets = EnvSecrets()
+    secrets = secrets_backend()
     pipeline = ApplyPipeline(db, engines, sandbox=sandbox, secrets=secrets)
     status = StatusService(db, engines, secrets)
-    handlers = build_handlers(db, pipeline, git_mirror(), status, infra_service(db, secrets))
-    scheduler = Scheduler(db.admin, {POLL_STATUS_JOB: timedelta(seconds=10)})
+    certs = certificates(db, secrets)
+    handlers = build_handlers(db, pipeline, git_mirror(), status, infra_service(db, secrets), certs)
+    schedule = {POLL_STATUS_JOB: timedelta(seconds=10)}
+    if certs is not None:
+        schedule[RENEW_CERTS_JOB] = timedelta(days=1)
+        if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):
+            schedule[SYNC_CLOUDFLARE_IPS_JOB] = timedelta(days=1)
+    scheduler = Scheduler(db.admin, schedule)
     return Worker(db.admin, handlers, worker_id=worker_id), scheduler

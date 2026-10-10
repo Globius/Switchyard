@@ -10,7 +10,7 @@ import uuid
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
@@ -28,9 +28,11 @@ from switchyard.domain.changes import (
     DraftStatus,
     ObjectType,
 )
+from switchyard.domain.models import CertSource
 from switchyard.domain.workflow import ChangeSetState, EngineState, Role
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
+from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import ChangeSetDetail, ChangeSetService
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineService
@@ -55,10 +57,15 @@ class ApiServices:
     members: MemberService
     status: StatusService
     infra: InfraJobs
+    cert_jobs: CertificateJobs
+    certs: CertificateService | None = None
 
 
 def build_services(
-    db: Databases, directory: EngineDirectory, secrets: SecretsReader | None = None
+    db: Databases,
+    directory: EngineDirectory,
+    secrets: SecretsReader | None = None,
+    certs: CertificateService | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles."""
     return ApiServices(
@@ -70,6 +77,8 @@ def build_services(
         members=MemberService(db, directory),
         status=StatusService(db, directory, secrets),
         infra=InfraJobs(db),
+        cert_jobs=CertificateJobs(db),
+        certs=certs,
     )
 
 
@@ -90,6 +99,23 @@ class Accepted(BaseModel):
     object_id: UUID | None = None
     job_id: UUID | None = None
     op_index: int | None = None
+
+
+class CertImportIn(BaseModel):
+    """Body of ``POST /certificates/import``."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    pem: str = Field(max_length=65536, description="Certificate chain followed by the private key.")
+
+
+class CertIssueIn(BaseModel):
+    """Body of ``POST /certificates/issue``."""
+
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    source: Literal["acme", "cloudflare_origin"]
+    sans: list[str] = Field(min_length=1, max_length=50)
 
 
 class DeployIn(BaseModel):
@@ -752,6 +778,52 @@ def create_app(services: ApiServices) -> FastAPI:
     async def revoke_token(token: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
         await svc.tokens.revoke(who, tenant.id, token, request_id=_rid())
         return Response(status_code=204)
+
+    # certificates
+    @router.post("/tenants/{t}/certificates/import", status_code=202, tags=["certificates"])
+    async def import_certificate(
+        body: CertImportIn,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+        apply: bool = False,
+    ) -> Accepted:
+        """Store an uploaded certificate and key, and add the certificate object to a change set."""
+        if svc.certs is None:
+            raise ApiError(503, "no secrets backend is configured for certificates")
+        data = await svc.certs.import_pem(who, tenant.id, body.name, body.pem)
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE, object_id=uuid7(), action=Action.CREATE, body=data
+        )
+        return await _write(
+            svc, who, tenant, op, change_set, apply, f"import certificate {body.name}"
+        )
+
+    @router.post("/tenants/{t}/certificates/issue", status_code=202, tags=["certificates"])
+    async def issue_certificate(
+        body: CertIssueIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Queue issuance through ACME DNS-01 or Cloudflare Origin CA."""
+        job = await svc.cert_jobs.request_issue(
+            who,
+            tenant.id,
+            name=body.name,
+            source=CertSource(body.source),
+            sans=tuple(body.sans),
+            request_id=_rid(),
+        )
+        return {"job_id": str(job)}
+
+    @router.post(
+        "/tenants/{t}/certificates/{certificate}/renew", status_code=202, tags=["certificates"]
+    )
+    async def renew_certificate(
+        certificate: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Queue a renewal of one certificate."""
+        job = await svc.cert_jobs.request_renew(who, tenant.id, certificate, request_id=_rid())
+        return {"job_id": str(job)}
 
     # infrastructure jobs
     @router.post("/tenants/{t}/networks/apply-sdn", status_code=202, tags=["infrastructure"])

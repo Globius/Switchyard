@@ -7,19 +7,20 @@ from datetime import timedelta
 import pytest
 from sqlalchemy import text
 
+from switchyard.adapters.secrets import MemorySecrets
 from switchyard.db.tenancy import admin_session
 from switchyard.jobs.handlers import POLL_STATUS_JOB, build_handlers
 from switchyard.jobs.scheduler import Scheduler
 from switchyard.jobs.worker import Worker
 from switchyard.services.status import StatusService
 from tests.integration.test_pipeline_routing import healthy_vrrp, prime_bundles, vrrp_data
-from tests.pipeline_env import TENANT, World, principal, world
+from tests.pipeline_env import CERT_SECRETS, TENANT, World, principal, world
 
 pytestmark = pytest.mark.usefixtures("owner_engine")
 
 
 def service(w: World) -> StatusService:
-    return StatusService(w.db, w.pipeline._directory)
+    return StatusService(w.db, w.pipeline._directory, MemorySecrets(CERT_SECRETS))
 
 
 async def scalar(w: World, sql: str) -> object:

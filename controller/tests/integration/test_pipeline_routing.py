@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import text
 
 from switchyard.adapters.agent import BgpSession, FakeAgent, VrrpInstance
+from switchyard.adapters.secrets import MemorySecrets
 from switchyard.db.tenancy import admin_session
 from switchyard.domain.changes import Action, ChangeOp, ObjectType
 from switchyard.pipeline.apply import bundle_id
@@ -67,13 +68,15 @@ async def scalar(w: World, sql: str) -> Any:
 
 async def prime_bundles(w: World) -> None:
     """Put each agent on the current state, as a deployed group would be."""
-    from switchyard.render.routing import EngineSlot, render_agent_bundle
-    from tests.pipeline_env import GROUP
+    from switchyard.pipeline.bundles import engine_files
+    from switchyard.render.routing import EngineSlot
+    from tests.pipeline_env import CERT_SECRETS, GROUP
 
     snap = await w.snapshot()
-    secrets = {"kv/bgp/pw": "example-password-1"}
+    secrets = MemorySecrets({**CERT_SECRETS, "kv/bgp/pw": "example-password-1"})
+    group = next(g for g in snap.se_groups if g.id == GROUP)
     for i, (name, agent) in enumerate(w.agents.items()):
-        files = render_agent_bundle(snap, GROUP, EngineSlot(name, i, f"10.30.0.{11 + i}"), secrets)
+        files = await engine_files(snap, group, EngineSlot(name, i, f"10.30.0.{11 + i}"), secrets)
         await agent.apply_bundle(bundle_id(files), files)
 
 
@@ -207,3 +210,62 @@ async def test_engines_without_an_agent_are_left_to_their_own_routing(pg_url: st
         report = await w.run_change([add_host_route("new.example.test")])
         assert report.ok, report.error
         assert "bundles" not in report.groups[0].details
+
+
+CERT_PATH = "certs/wild-example-test.pem"
+
+
+async def test_certificates_reach_the_agents_before_haproxy_uses_them(pg_url: str) -> None:
+    from tests.pipeline_env import CERT_SECRETS, FAKE_PEM
+
+    async with world(pg_url, vrrp_data()) as w:
+        new_ref = "kv/tenants/acme/certs/wild-example-test/v2"
+        rotated = FAKE_PEM.replace("placeholder", "rotated")
+        w.use_engines("se-a", "se-b", agents=True, secrets={**CERT_SECRETS, new_ref: rotated})
+        await w.prime()
+        await prime_bundles(w)
+        healthy_vrrp(w)
+        assert w.agents["se-a"].files[CERT_PATH] == CERT_SECRETS[next(iter(CERT_SECRETS))]
+        seen: list[bool] = []
+
+        async def on_push(engine: Any) -> None:
+            seen.append(rotated in w.agents["se-a"].files[CERT_PATH])
+
+        w.engines["se-a"].on_push = on_push
+        cert_id = (await w.snapshot()).certificates[0].id
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE,
+            object_id=cert_id,
+            action=Action.UPDATE,
+            body={"secret_ref": new_ref},
+            expected_version=1,
+        )
+        report = await w.run_change([op], principal())
+        assert report.ok, report.error
+        assert (
+            w.agents["se-a"].files[CERT_PATH] == rotated
+            and w.agents["se-b"].files[CERT_PATH] == rotated
+        )
+        assert seen == [True], "the new certificate was on the engine before HAProxy was pushed"
+
+
+async def test_missing_certificate_secret_fails_the_plan_before_anything_is_pushed(
+    pg_url: str,
+) -> None:
+    async with world(pg_url, vrrp_data()) as w:
+        w.use_engines("se-a", "se-b", agents=True)
+        await w.prime()
+        await prime_bundles(w)
+        healthy_vrrp(w)
+        cert_id = (await w.snapshot()).certificates[0].id
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE,
+            object_id=cert_id,
+            action=Action.UPDATE,
+            body={"secret_ref": "kv/tenants/acme/certs/missing"},
+            expected_version=1,
+        )
+        report = await w.run_change([op], principal())
+        assert not report.ok
+        assert "certificate wild-example-test not found" in (report.error or "")
+        assert w.engines["se-a"].pushes == []

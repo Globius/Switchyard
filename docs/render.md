@@ -36,7 +36,7 @@ an SE runs. The crt-list sits beside the certificates because the Data Plane API
 directory; object names have no dots because the API rewrites dots in file names.
 
 Certificates and keys are **not** rendered. A `crt-list` line points to
-`/etc/switchyard/certs/<certificate name>.pem`, which the agent writes from OpenBao.
+`/etc/switchyard/certs/<certificate name>.pem`, which the controller sends to the agent in the signed bundle (key material comes from OpenBao; see ADR 0010).
 
 Disabled services and pools that no enabled service uses are not rendered. UDP services are skipped
 with a warning, because they render to IPVS (a later milestone).

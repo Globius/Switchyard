@@ -12,10 +12,17 @@ from switchyard.db import changesets as store
 from switchyard.db.models import TenantRow
 from switchyard.db.ops_models import RevisionRow
 from switchyard.db.tenancy import admin_session, tenant_session
+from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
 from switchyard.jobs.queue import Job
 from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
+from switchyard.services.certificates import (
+    ISSUE_CERT_JOB,
+    RENEW_CERTS_JOB,
+    SYNC_CLOUDFLARE_IPS_JOB,
+    CertificateService,
+)
 from switchyard.services.changesets import APPLY_JOB
 from switchyard.services.context import Databases
 from switchyard.services.infra import (
@@ -39,12 +46,14 @@ def build_handlers(
     mirror: GitMirror | None,
     status: StatusService | None = None,
     infra: InfraService | None = None,
+    certs: CertificateService | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
         mirror: Git mirror; when ``None`` the ``git_mirror`` kind is not handled (jobs wait in the
@@ -58,6 +67,27 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set}
+    if certs is not None:
+
+        async def issue_cert(job: Job) -> dict[str, Any]:
+            p = job.payload
+            change_set = await certs.issue(
+                UUID(p["tenant_id"]),
+                p["name"],
+                dm.CertSource(p["source"]),
+                tuple(p["sans"]),
+            )
+            return {"change_set_id": str(change_set)}
+
+        async def renew_certs(job: Job) -> dict[str, Any]:
+            return {"renewed": await certs.renew_due()}
+
+        async def sync_cloudflare_ips(job: Job) -> dict[str, Any]:
+            return {"changed": await certs.sync_cloudflare_ips()}
+
+        handlers[ISSUE_CERT_JOB] = issue_cert
+        handlers[RENEW_CERTS_JOB] = renew_certs
+        handlers[SYNC_CLOUDFLARE_IPS_JOB] = sync_cloudflare_ips
     if infra is not None:
 
         async def apply_sdn(job: Job) -> dict[str, Any]:
