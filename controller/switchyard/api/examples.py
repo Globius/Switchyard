@@ -1,0 +1,334 @@
+"""Example response bodies, one per route, published in the OpenAPI document.
+
+Mock servers (MSW) are generated from these, so they are realistic and every one is validated
+against its response model by ``tests/unit/test_api_schemas.py``.
+"""
+
+from typing import Any
+
+TENANT = "0192f3a0-0000-7000-8000-000000000001"
+NETWORK = "0192f3a0-0000-7000-8000-000000000010"
+VIP_POOL = "0192f3a0-0000-7000-8000-000000000011"
+SE_GROUP = "0192f3a0-0000-7000-8000-000000000012"
+VIRTUAL_SERVICE = "0192f3a0-0000-7000-8000-000000000013"
+POOL = "0192f3a0-0000-7000-8000-000000000014"
+MONITOR = "0192f3a0-0000-7000-8000-000000000015"
+CERTIFICATE = "0192f3a0-0000-7000-8000-000000000016"
+POLICY_SET = "0192f3a0-0000-7000-8000-000000000017"
+ROUTING_PROFILE = "0192f3a0-0000-7000-8000-000000000018"
+MEMBER = "0192f3a0-0000-7000-8000-000000000019"
+CHANGE_SET = "0192f3a0-0000-7000-8000-000000000020"
+JOB = "0192f3a0-0000-7000-8000-000000000021"
+ENGINE = "0192f3a0-0000-7000-8000-000000000022"
+API_TOKEN_ID = "0192f3a0-0000-7000-8000-000000000023"  # noqa: S105
+WHEN = "2026-10-10T08:30:00Z"
+
+_DRAFT = {"draft_status": "unchanged", "changed_fields": []}
+_OWNED = {"tenant_id": TENANT, "version": 3}
+
+#: One item per object type, as returned by the ``GET`` routes.
+OBJECTS: dict[str, dict[str, Any]] = {
+    "networks": {
+        "id": NETWORK,
+        "name": "lb-dmz",
+        "cidr": "192.0.2.0/24",
+        "gateway": "192.0.2.1",
+        "sdn_zone": None,
+        "vnet": None,
+        "vlan_or_vni": 120,
+        "managed": False,
+        **_OWNED,
+        **_DRAFT,
+    },
+    "vip-pools": {
+        "id": VIP_POOL,
+        "name": "dmz-vips",
+        "network_id": NETWORK,
+        "ranges": [{"start": "192.0.2.100", "end": "192.0.2.200"}],
+        **_OWNED,
+        **_DRAFT,
+    },
+    "se-groups": {
+        "id": SE_GROUP,
+        "name": "edge",
+        "ha_mode": "vrrp",
+        "networks": [{"network_id": NETWORK, "role": "vip"}],
+        "maxconn": 20000,
+        "canary_seconds": 30,
+        "routing_profile_id": ROUTING_PROFILE,
+        **_OWNED,
+        **_DRAFT,
+    },
+    "virtual-services": {
+        "id": VIRTUAL_SERVICE,
+        "name": "web",
+        "se_group_id": SE_GROUP,
+        "protocol": "http",
+        "enabled": True,
+        "vip": "192.0.2.100",
+        "vip_pool_id": VIP_POOL,
+        "ports": [{"port": 80, "tls": False, "proxy_protocol": False, "https_redirect_port": None}],
+        "routes": [],
+        "default_pool_id": POOL,
+        "certificate_ids": [],
+        "policy_set_ids": [],
+        "allow_list_id": None,
+        "enforce_allow_list": False,
+        "restore_client_ip_header": None,
+        **_OWNED,
+        **_DRAFT,
+    },
+    "pools": {
+        "id": POOL,
+        "name": "web-pool",
+        "algorithm": "roundrobin",
+        "persistence": None,
+        "health_monitor_id": MONITOR,
+        "tls": False,
+        "tls_verify": False,
+        "members": [
+            {
+                "id": MEMBER,
+                "address": "198.51.100.10",
+                "port": 8080,
+                "weight": 100,
+                "admin_state": "enabled",
+                "name": "web-1",
+            }
+        ],
+        **_OWNED,
+        **_DRAFT,
+    },
+    "health-monitors": {
+        "id": MONITOR,
+        "name": "http-ok",
+        "type": "http",
+        "port": None,
+        "interval_s": 5,
+        "timeout_s": 3,
+        "rise": 2,
+        "fall": 3,
+        "http": {"method": "GET", "path": "/healthz", "host": None, "expect_status": [200]},
+        **_OWNED,
+        **_DRAFT,
+    },
+    "certificates": {
+        "id": CERTIFICATE,
+        "name": "web-example",
+        "source": "acme",
+        "sans": ["www.example.test"],
+        "not_after": "2027-01-08T00:00:00Z",
+        "secret_ref": "kv/tenants/acme/certs/web-example",
+        "renew_policy": "auto",
+        **_OWNED,
+        **_DRAFT,
+    },
+    "policy-sets": {
+        "id": POLICY_SET,
+        "kind": "redirect",
+        "name": "legacy-paths",
+        "rules": [
+            {
+                "match": {"host": None, "path_prefix": "/old", "path_exact": None},
+                "redirect": {"location": "/new", "code": 301},
+            }
+        ],
+        **_OWNED,
+        **_DRAFT,
+    },
+    "routing-profiles": {
+        "id": ROUTING_PROFILE,
+        "kind": "vrrp",
+        "name": "edge-vrrp",
+        "vrid": 51,
+        "interface": "eth1",
+        "advert_interval_s": 1,
+        "base_priority": 150,
+        "priority_step": 10,
+        "static_routes": [],
+        **_OWNED,
+        **_DRAFT,
+    },
+}
+
+#: Create bodies (what a client posts), per collection.
+CREATE_BODIES: dict[str, dict[str, Any]] = {
+    slug: {
+        k: v
+        for k, v in obj.items()
+        if k not in {"id", "tenant_id", "version"} and k not in {"draft_status", "changed_fields"}
+    }
+    for slug, obj in OBJECTS.items()
+}
+
+ACCEPTED = {"change_set_id": CHANGE_SET, "object_id": POOL, "job_id": None, "op_index": 0}
+JOB_ACCEPTED = {"job_id": JOB}
+
+TENANT_READ = {
+    "id": TENANT,
+    "name": "acme",
+    "version": 2,
+    "oidc_group": "acme-admins",
+    "quotas": {"virtual_services": 50},
+    "require_approval": True,
+}
+OP = {
+    "object_type": "pool",
+    "object_id": POOL,
+    "action": "update",
+    "body": {"algorithm": "leastconn"},
+    "expected_version": 3,
+}
+CHANGE_SET_READ = {
+    "id": CHANGE_SET,
+    "state": "draft",
+    "author": "user:alice",
+    "summary": "Switch web-pool to leastconn",
+    "base_revision": 12,
+    "approver": None,
+    "reject_comment": None,
+    "error": None,
+    "created_at": WHEN,
+    "ops": [OP],
+}
+CHANGE_SET_SUMMARY = {
+    "id": CHANGE_SET,
+    "state": "draft",
+    "author": "user:alice",
+    "summary": "Switch web-pool to leastconn",
+    "base_revision": 12,
+    "created_at": WHEN,
+    "op_count": 1,
+}
+DIFF = {
+    "objects": [
+        {
+            "type": "pool",
+            "id": POOL,
+            "name": "web-pool",
+            "status": "modified",
+            "changed_fields": ["algorithm"],
+        }
+    ],
+    "problems": [],
+    "warnings": [
+        {
+            "code": "udp_not_served",
+            "path": "virtual_services.dns",
+            "message": "virtual service dns: udp is rendered by the keepalived renderer, "
+            "not haproxy.cfg",
+        }
+    ],
+    "se_groups": [
+        {
+            "id": SE_GROUP,
+            "name": "edge",
+            "error": None,
+            "files": [
+                {
+                    "path": "haproxy/haproxy.cfg",
+                    "status": "modified",
+                    "diff": "--- a/haproxy/haproxy.cfg\n+++ b/haproxy/haproxy.cfg\n"
+                    "@@ -10 +10 @@\n-    balance roundrobin\n+    balance leastconn\n",
+                }
+            ],
+        }
+    ],
+}
+REVISION_SUMMARY = {
+    "number": 12,
+    "author": "user:alice",
+    "summary": "Switch web-pool to leastconn",
+    "git_sha": "3f9c2ab",
+    "created_at": WHEN,
+}
+REVISION_READ = REVISION_SUMMARY | {
+    "snapshot": {
+        "pools": [
+            {
+                k: v
+                for k, v in OBJECTS["pools"].items()
+                if k not in {"draft_status", "changed_fields"}
+            }
+        ]
+    }
+}
+ENGINE_READ = {
+    "id": ENGINE,
+    "name": "edge-1",
+    "url": "https://198.51.100.21:5555",
+    "state": "enabled",
+}
+ENGINE_STATUS = {
+    "engine": "edge-1",
+    "engine_id": ENGINE,
+    "se_group_id": SE_GROUP,
+    "reachable": True,
+    "error": None,
+    "haproxy_fingerprint": "9d2e7c41",
+    "members": [{"backend": "be_web-pool", "server": "web-1", "status": "UP"}],
+    "agent": {
+        "version": "1.0.0",
+        "bundle_id": "b-7f31",
+        "haproxy_healthy": True,
+        "routes_withdrawn": False,
+        "bgp": [],
+        "vrrp": [{"name": "VI_edge", "state": "MASTER"}],
+        "file_hashes": {"haproxy/haproxy.cfg": "sha256:ab12"},
+    },
+    "drift": [{"kind": "haproxy_config", "expected": "9d2e7c41", "actual": "00000000"}],
+    "observed_at": WHEN,
+}
+JOB_READ = {
+    "id": JOB,
+    "kind": "apply_change_set",
+    "state": "succeeded",
+    "attempts": 1,
+    "error": None,
+    "result": {"revision": 13},
+}
+AUDIT_EVENT = {
+    "at": WHEN,
+    "actor": "user:alice",
+    "action": "change_set.apply",
+    "object": f"change_set:{CHANGE_SET}",
+    "diff": None,
+    "request_id": "b7d4c2e0a1f34b6e",
+}
+TOKEN_READ = {
+    "id": API_TOKEN_ID,
+    "name": "ci",
+    "role": "operator",
+    "revoked": False,
+    "expires_at": "2027-01-08T00:00:00Z",
+}
+TOKEN_CREATED = {"id": API_TOKEN_ID, "token": "sy_0123456789abcdef", "role": "operator"}
+MEMBER_STATE = {"state": "drain", "applied": ["edge-1", "edge-2"], "failed": {}}
+STATE_OUT = {"state": "discarded"}
+ENGINE_STATE_OUT = {"state": "disabled"}
+ENROLLMENT_TOKEN = {"token": "sy_enroll_0123456789", "expires_at": "2026-10-10T09:30:00Z"}
+ENROLL_OUT = {
+    "engine": "edge-1",
+    "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+    "ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+    "bundle_public_key": "MCowBQYDK2VwAyEA...",
+    "renewal_token": "sy_renew_0123456789",
+    "not_after": "2026-11-10T00:00:00Z",
+}
+AUTH_PROVIDERS = {
+    "providers": [
+        {"id": "0192f3a0-0000-7000-8000-000000000030", "name": "Authentik", "protocol": "oidc"}
+    ],
+    "break_glass": False,
+}
+ME = {
+    "id": "0192f3a0-0000-7000-8000-000000000031",
+    "name": "Alice Example",
+    "email": "alice@example.test",
+    "is_system": False,
+    "break_glass": False,
+    "auth": "session",
+    "csrf_token": "c3JmLXRva2Vu",
+    "tenants": [{"id": TENANT, "name": "acme", "role": "tenant-admin"}],
+}
+HEALTH = {"status": "ok"}

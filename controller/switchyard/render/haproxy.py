@@ -67,16 +67,33 @@ _ENV = Environment(
 
 
 @dataclass(frozen=True)
+class RenderWarning:
+    """A structured renderer warning, as shown in a change set's diff.
+
+    Attributes:
+        code: Stable identifier (``udp_not_served``).
+        path: Dotted path of the object concerned (``virtual_services.dns``).
+        message: Human-readable text (the same text ``RenderResult.warnings`` carries).
+    """
+
+    code: str
+    path: str
+    message: str
+
+
+@dataclass(frozen=True)
 class RenderResult:
     """Files produced for one SE group.
 
     Attributes:
         files: Relative path to file content, sorted by path.
         warnings: Things the renderer deliberately did not render (for example UDP services).
+        notices: The same warnings with a code and a path, for API consumers.
     """
 
     files: Mapping[str, str]
     warnings: tuple[str, ...] = ()
+    notices: tuple[RenderWarning, ...] = ()
 
     @property
     def content_hash(self) -> str:
@@ -222,6 +239,7 @@ class _Renderer:
         self.policies = {p.id: p for p in snapshot.policy_sets}
         self.files: dict[str, str] = {}
         self.warnings: list[str] = []
+        self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
 
     def render(self) -> RenderResult:
@@ -231,9 +249,13 @@ class _Renderer:
         frontends: list[dict[str, Any]] = []
         for svc in services:
             if svc.protocol is dm.Protocol.UDP:
-                self.warnings.append(
+                message = (
                     f"virtual service {svc.name}: udp is rendered by the keepalived renderer, "
                     "not haproxy.cfg"
+                )
+                self.warnings.append(message)
+                self.notices.append(
+                    RenderWarning("udp_not_served", f"virtual_services.{svc.name}", message)
                 )
                 continue
             mode = "http" if svc.protocol is dm.Protocol.HTTP else "tcp"
@@ -257,7 +279,11 @@ class _Renderer:
         # fingerprint line, so the line can carry the result without a circular definition.
         draft = {**self.files, CONFIG_PATH: cfg(_PLACEHOLDER)}
         self.files[CONFIG_PATH] = cfg(_digest(draft))
-        return RenderResult(files=dict(sorted(self.files.items())), warnings=tuple(self.warnings))
+        return RenderResult(
+            files=dict(sorted(self.files.items())),
+            warnings=tuple(self.warnings),
+            notices=tuple(self.notices),
+        )
 
     # -- helpers ---------------------------------------------------------------------------------
 

@@ -15,6 +15,7 @@ deterministic `haproxy.cfg` from PostgreSQL. M2 (change sets, API, jobs) and M3 
 | [Frontend design](docs/design/03-frontend-design.md) | Screens, change-set UX, frontend stack, Claude Design handoff |
 | [Render guide](docs/render.md) | How each object maps to HAProxy configuration |
 | [Operating guide](docs/operating.md) | Processes, configuration, login, `syctl api`, agents, housekeeping |
+| [API conventions](docs/api.md) | Response models, ETags, unions, pagination, diff warnings |
 | [ADRs](docs/adr/README.md) | Decisions locked in so far |
 
 These are snapshots of the living docs; each file links to its online version.

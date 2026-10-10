@@ -12,18 +12,61 @@ from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.secrets import SecretsReader
+from switchyard.api import examples as ex
 from switchyard.api.problems import ApiError, install_handlers
+from switchyard.api.schemas import (
+    ETAG_HEADER,
+    IF_MATCH_RESPONSES,
+    OBJECT_APIS,
+    PROBLEM_RESPONSES,
+    VALIDATION_RESPONSE,
+    Accepted,
+    ApplyIn,
+    AuditEventRead,
+    AuthProviders,
+    BreakGlassIn,
+    CertImportIn,
+    CertIssueIn,
+    ChangeSetDiff,
+    ChangeSetRead,
+    ChangeSetSummary,
+    DeployIn,
+    EngineIn,
+    EngineRead,
+    EngineStateOut,
+    EngineStatusRead,
+    EnrollIn,
+    EnrollmentToken,
+    EnrollOut,
+    Health,
+    JobAccepted,
+    JobRead,
+    Me,
+    MemberStateIn,
+    MemberStateResult,
+    OpenIn,
+    OpsIn,
+    Page,
+    ReasonIn,
+    RevisionRead,
+    RevisionSummary,
+    StateOut,
+    TenantIn,
+    TenantPatch,
+    TenantRead,
+    TokenCreated,
+    TokenIn,
+    TokenRead,
+)
 from switchyard.db.tenancy import admin_session, tenant_session
-from switchyard.domain import models as dm
 from switchyard.domain.changes import (
     COLLECTION,
     Action,
@@ -32,7 +75,7 @@ from switchyard.domain.changes import (
     ObjectType,
 )
 from switchyard.domain.models import CertSource
-from switchyard.domain.workflow import ChangeSetState, EngineState, Role
+from switchyard.domain.workflow import ChangeSetState, EngineState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
 from switchyard.services.certificates import CertificateJobs, CertificateService
@@ -91,140 +134,6 @@ def build_services(
         enrollment=enrollment,
         sessions=sessions,
     )
-
-
-# -- response models ------------------------------------------------------------------------------
-
-
-class Page(BaseModel):
-    """A page of results."""
-
-    items: list[dict[str, Any]]
-    next_cursor: str | None = None
-
-
-class Accepted(BaseModel):
-    """Returned when a write was queued or recorded in a change set."""
-
-    change_set_id: UUID
-    object_id: UUID | None = None
-    job_id: UUID | None = None
-    op_index: int | None = None
-
-
-class BreakGlassIn(BaseModel):
-    """Body of ``POST /auth/break-glass``."""
-
-    model_config = ConfigDict(extra="forbid")
-    username: str = Field(max_length=100)
-    password: str = Field(max_length=200)
-    totp: str = Field(min_length=6, max_length=8)
-
-
-class EnrollIn(BaseModel):
-    """Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential)."""
-
-    model_config = ConfigDict(extra="forbid")
-    token: str = Field(max_length=200)
-    csr: str = Field(max_length=16384, description="PEM certificate request made by the agent.")
-
-
-class CertImportIn(BaseModel):
-    """Body of ``POST /certificates/import``."""
-
-    model_config = ConfigDict(extra="forbid")
-    name: str
-    pem: str = Field(max_length=65536, description="Certificate chain followed by the private key.")
-
-
-class CertIssueIn(BaseModel):
-    """Body of ``POST /certificates/issue``."""
-
-    model_config = ConfigDict(extra="forbid")
-    name: str
-    source: Literal["acme", "cloudflare_origin"]
-    sans: list[str] = Field(min_length=1, max_length=50)
-
-
-class DeployIn(BaseModel):
-    """Body of ``POST /se-groups/{id}/deploy``."""
-
-    model_config = ConfigDict(extra="forbid")
-    count: int = Field(ge=1, le=16, description="Total engines the group should have afterwards.")
-    nodes: list[str] = Field(min_length=1, description="Proxmox nodes to spread new VMs over.")
-    template_vmid: int = Field(ge=100)
-    mgmt_pool_id: UUID
-    pool: str | None = Field(default=None, max_length=64)
-    credentials_ref: str | None = None
-    ssh_public_keys: str | None = Field(default=None, max_length=8192)
-
-
-class OpIn(BaseModel):
-    """One operation in a change set."""
-
-    model_config = ConfigDict(extra="forbid")
-    object_type: ObjectType
-    object_id: UUID
-    action: Action
-    body: dict[str, Any] | None = None
-    expected_version: int | None = None
-
-
-class OpsIn(BaseModel):
-    """Operations to append to a change set."""
-
-    ops: list[OpIn] = Field(min_length=1)
-
-
-class OpenIn(BaseModel):
-    """Open a draft."""
-
-    summary: str = Field(default="", max_length=500)
-
-
-class ReasonIn(BaseModel):
-    """A free-text reason or comment."""
-
-    comment: str = Field(min_length=1, max_length=1000)
-
-
-class ApplyIn(BaseModel):
-    """Options for apply."""
-
-    break_glass_reason: str | None = Field(default=None, max_length=1000)
-
-
-class MemberStateIn(BaseModel):
-    """New runtime state for a pool member."""
-
-    state: dm.AdminState
-
-
-class TenantIn(BaseModel):
-    """Create a tenant."""
-
-    name: str
-    oidc_group: str | None = None
-    quotas: dict[str, int] = Field(default_factory=dict)
-    require_approval: bool = False
-
-
-class TokenIn(BaseModel):
-    """Create an API token."""
-
-    name: str
-    role: Role
-    ttl_days: int | None = Field(default=90, ge=1, le=3650)
-
-
-class EngineIn(BaseModel):
-    """Register a service engine."""
-
-    name: str
-    dataplane_url: str
-    credentials_ref: str | None = None
-    mgmt_ip: str | None = None
-    agent_url: str | None = None
 
 
 # -- dependencies ---------------------------------------------------------------------------------
@@ -329,34 +238,28 @@ COLLECTIONS: dict[str, ObjectType] = {
     "policy-sets": ObjectType.POLICY_SET,
     "routing-profiles": ObjectType.ROUTING_PROFILE,
 }
-_MODELS: dict[ObjectType, type[BaseModel] | None] = {
-    ObjectType.NETWORK: dm.Network,
-    ObjectType.VIP_POOL: dm.VipPool,
-    ObjectType.SE_GROUP: dm.SeGroup,
-    ObjectType.VIRTUAL_SERVICE: dm.VirtualService,
-    ObjectType.POOL: dm.Pool,
-    ObjectType.HEALTH_MONITOR: dm.HealthMonitor,
-    ObjectType.CERTIFICATE: dm.Certificate,
-    ObjectType.POLICY_SET: None,
-    ObjectType.ROUTING_PROFILE: None,
-}
-_RESERVED = {"id", "tenant_id", "version"}
 
 
-def _body_models(name: str, model: type[BaseModel]) -> tuple[type[BaseModel], type[BaseModel]]:
-    """Create/patch request models: the domain fields without id, tenant and version."""
-    create: dict[str, Any] = {}
-    patch: dict[str, Any] = {}
-    for key, field in model.model_fields.items():
-        if key in _RESERVED:
-            continue
-        create[key] = (field.annotation, field)
-        patch[key] = (field.annotation | None, None)  # type: ignore[operator]
-    config = ConfigDict(extra="forbid")
-    return (
-        create_model(f"{name}Create", __config__=config, **create),
-        create_model(f"{name}Patch", __config__=config, **patch),
-    )
+def _ok(
+    example: Any,
+    code: int = 200,
+    description: str = "Success",
+    *,
+    headers: dict[str, Any] | None = None,
+    extra: dict[int | str, dict[str, Any]] | None = None,
+    problems: bool = True,
+) -> dict[int | str, dict[str, Any]]:
+    """The ``responses=`` entry of a route: a documented example plus the shared error shapes."""
+    entry: dict[str, Any] = {
+        "description": description,
+        "content": {"application/json": {"example": example}},
+    }
+    if headers:
+        entry["headers"] = headers
+    out: dict[int | str, dict[str, Any]] = {code: entry}
+    if problems:
+        out |= PROBLEM_RESPONSES
+    return out | (extra or {})
 
 
 def _object_json(obj: Any, status: DraftStatus, changed: tuple[str, ...]) -> dict[str, Any]:
@@ -399,7 +302,7 @@ async def _view(
     return out
 
 
-def _page(items: list[dict[str, Any]], cursor: str | None, limit: int) -> Page:
+def _page(items: list[dict[str, Any]], cursor: str | None, limit: int) -> Page[Any]:
     items = sorted(items, key=lambda o: (o["name"], o["id"]))
     if cursor:
         items = [o for o in items if (o["name"], o["id"]) > tuple(cursor.split("|", 1))]
@@ -439,16 +342,23 @@ async def _write(
 
 
 def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> None:
-    model = _MODELS[object_type]
+    api = OBJECT_APIS[object_type]
     base = f"/tenants/{{t}}/{slug}"
     tag = slug
-    if model is None:  # policy sets: a union, so bodies stay free-form dicts validated on apply
-        create_in: Any = dict[str, Any]
-        patch_in: Any = dict[str, Any]
-    else:
-        create_in, patch_in = _body_models(model.__name__, model)
+    noun = slug.replace("-", " ")
+    sample = ex.OBJECTS[slug]
+    create_in: Any = api.create
+    patch_in: Any = api.patch
+    read_out: Any = api.read
 
-    @router.get(base, tags=[tag], name=f"list_{slug}")
+    @router.get(
+        base,
+        tags=[tag],
+        name=f"list_{slug}",
+        summary=f"List {noun}",
+        response_model=Page[read_out],
+        responses=_ok({"items": [sample], "next_cursor": None}),
+    )
     async def list_objects(
         tenant: Tenant,
         who: Who,
@@ -457,13 +367,21 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
         change_set: UUID | None = None,
         cursor: str | None = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
-    ) -> Page:
+    ) -> Page[Any]:
+        """List the tenant's objects of this type, by name; with ``change_set`` the draft view."""
         items = await _view(services, who, tenant, object_type, change_set)
         if name:
             items = [o for o in items if o["name"] == name]
         return _page(items, cursor, limit)
 
-    @router.get(base + "/{object_id}", tags=[tag], name=f"get_{slug}")
+    @router.get(
+        base + "/{object_id}",
+        tags=[tag],
+        name=f"get_{slug}",
+        summary=f"Get one of the {noun}",
+        response_model=read_out,
+        responses=_ok(sample, headers=ETAG_HEADER),
+    )
     async def get_object(
         object_id: UUID,
         tenant: Tenant,
@@ -472,13 +390,23 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
         response: Response,
         change_set: UUID | None = None,
     ) -> dict[str, Any]:
+        """Return one object. The ``ETag`` header carries its version for ``If-Match``."""
         for item in await _view(services, who, tenant, object_type, change_set):
             if item["id"] == str(object_id):
                 response.headers["ETag"] = _etag(item["version"])
                 return item
         raise ApiError(404, f"{slug} {object_id} not found")
 
-    @router.post(base, tags=[tag], status_code=202, name=f"create_{slug}")
+    @router.post(
+        base,
+        tags=[tag],
+        status_code=202,
+        name=f"create_{slug}",
+        summary=f"Create one of the {noun}",
+        response_model=Accepted,
+        responses=_ok(ex.ACCEPTED, 202, "Recorded in the change set or queued.")
+        | VALIDATION_RESPONSE,
+    )
     async def create_object(
         body: create_in,
         tenant: Tenant,
@@ -488,7 +416,8 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
         apply: bool = False,
         object_id: UUID | None = None,
     ) -> Accepted:
-        data = body if isinstance(body, dict) else body.model_dump(mode="json", exclude_unset=True)
+        """Add a create operation to ``change_set``, or apply it at once with ``apply=true``."""
+        data = body.model_dump(mode="json", exclude_unset=True)
         op = ChangeOp(
             object_type=object_type, object_id=object_id or uuid7(), action=Action.CREATE, body=data
         )
@@ -496,7 +425,17 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
             services, who, tenant, op, change_set, apply, f"create {slug}/{data.get('name')}"
         )
 
-    @router.patch(base + "/{object_id}", tags=[tag], status_code=202, name=f"update_{slug}")
+    @router.patch(
+        base + "/{object_id}",
+        tags=[tag],
+        status_code=202,
+        name=f"update_{slug}",
+        summary=f"Change one of the {noun}",
+        response_model=Accepted,
+        responses=_ok(ex.ACCEPTED, 202, "Recorded in the change set or queued.")
+        | IF_MATCH_RESPONSES
+        | VALIDATION_RESPONSE,
+    )
     async def update_object(
         object_id: UUID,
         body: patch_in,
@@ -507,7 +446,8 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
         apply: bool = False,
         if_match: Annotated[str | None, Header()] = None,
     ) -> Accepted:
-        data = body if isinstance(body, dict) else body.model_dump(mode="json", exclude_unset=True)
+        """Add an update operation (only the fields sent change). Requires ``If-Match``."""
+        data = body.model_dump(mode="json", exclude_unset=True)
         op = ChangeOp(
             object_type=object_type,
             object_id=object_id,
@@ -519,7 +459,16 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
             services, who, tenant, op, change_set, apply, f"update {slug}/{object_id}"
         )
 
-    @router.delete(base + "/{object_id}", tags=[tag], status_code=202, name=f"delete_{slug}")
+    @router.delete(
+        base + "/{object_id}",
+        tags=[tag],
+        status_code=202,
+        name=f"delete_{slug}",
+        summary=f"Delete one of the {noun}",
+        response_model=Accepted,
+        responses=_ok(ex.ACCEPTED, 202, "Recorded in the change set or queued.")
+        | IF_MATCH_RESPONSES,
+    )
     async def delete_object(
         object_id: UUID,
         tenant: Tenant,
@@ -529,6 +478,7 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
         apply: bool = False,
         if_match: Annotated[str | None, Header()] = None,
     ) -> Accepted:
+        """Add a delete operation. Requires ``If-Match``."""
         op = ChangeOp(
             object_type=object_type,
             object_id=object_id,
@@ -554,9 +504,51 @@ def _detail_json(detail: ChangeSetDetail) -> dict[str, Any]:
         "approver": r.approver,
         "reject_comment": r.reject_comment,
         "error": r.error,
-        "created_at": r.created_at.isoformat(),
+        "created_at": r.created_at,
         "ops": [o.model_dump(mode="json") for o in detail.ops],
     }
+
+
+def _problem_json_openapi(app: FastAPI) -> dict[str, Any]:
+    """OpenAPI document where every error response is ``application/problem+json``.
+
+    FastAPI documents errors as ``application/json`` and its own 422 shape; this API answers with
+    RFC 9457 problems (see :mod:`switchyard.api.problems`), so the document says so.
+    """
+    if app.openapi_schema is not None:
+        return app.openapi_schema
+    schema = FastAPI.openapi(app)
+    problem_ref = {"$ref": "#/components/schemas/ProblemOut"}
+    for item in schema["paths"].values():
+        for op in item.values():
+            for code, response in op.get("responses", {}).items():
+                if not code.startswith(("4", "5")):
+                    continue
+                content = response.setdefault("content", {})
+                content.pop("application/json", None)
+                content["application/problem+json"] = {"schema": problem_ref}
+    for unused in ("HTTPValidationError", "ValidationError"):
+        schema["components"]["schemas"].pop(unused, None)
+    app.openapi_schema = schema
+    return schema
+
+
+def _uuid_cursor(cursor: str | None) -> UUID | None:
+    if cursor is None:
+        return None
+    try:
+        return UUID(cursor)
+    except ValueError:
+        raise ApiError(400, "cursor is not one issued by this API") from None
+
+
+def _int_cursor(cursor: str | None) -> int | None:
+    if cursor is None:
+        return None
+    try:
+        return int(cursor)
+    except ValueError:
+        raise ApiError(400, "cursor is not one issued by this API") from None
 
 
 def create_app(services: ApiServices, *, public_url: str | None = None) -> FastAPI:
@@ -570,7 +562,12 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     app = FastAPI(
         title="Switchyard API",
         version="1.0.0",
-        description="Multi-tenant load balancer controller.",
+        description=(
+            "Multi-tenant load balancer controller. Every write goes through a change set; "
+            "errors are `application/problem+json`; objects carry an `ETag` that writes send back "
+            "as `If-Match`."
+        ),
+        separate_input_output_schemas=False,
         docs_url="/api/v1/docs",
         openapi_url="/api/v1/openapi.json",
     )
@@ -591,7 +588,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
 
     router = APIRouter(prefix="/api/v1")
 
-    @router.get("/healthz", tags=["meta"])
+    @router.get(
+        "/healthz",
+        tags=["meta"],
+        summary="Liveness check",
+        response_model=Health,
+        responses=_ok(ex.HEALTH, problems=False),
+    )
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
@@ -619,7 +622,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             raise ApiError(503, "login is not configured on this controller")
         return svc.sessions
 
-    @router.get("/auth/providers", tags=["auth"])
+    @router.get(
+        "/auth/providers",
+        tags=["auth"],
+        summary="List login providers",
+        response_model=AuthProviders,
+        responses=_ok(ex.AUTH_PROVIDERS, problems=False),
+    )
     async def auth_providers(svc: Services) -> dict[str, Any]:
         """Identity providers users can log in with, and whether break-glass login is on."""
         sessions = require_sessions(svc)
@@ -631,7 +640,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "break_glass": sessions.break_glass_enabled,
         }
 
-    @router.get("/auth/login/{provider}", tags=["auth"], status_code=302)
+    @router.get(
+        "/auth/login/{provider}",
+        tags=["auth"],
+        status_code=302,
+        summary="Start a login",
+        response_class=Response,
+    )
     async def auth_login(
         provider: str, request: Request, svc: Services, return_to: str | None = None
     ) -> Response:
@@ -645,7 +660,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             raise ApiError(400, str(exc)) from exc
         return Response(status_code=302, headers={"Location": url})
 
-    @router.get("/auth/callback/{provider}", tags=["auth"], status_code=302)
+    @router.get(
+        "/auth/callback/{provider}",
+        tags=["auth"],
+        status_code=302,
+        summary="Finish a login",
+        response_class=Response,
+    )
     async def auth_callback(
         provider: str,
         request: Request,
@@ -668,7 +689,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         set_session_cookie(request, response, result.cookie, result.session)
         return response
 
-    @router.post("/auth/break-glass", tags=["auth"])
+    @router.post(
+        "/auth/break-glass",
+        tags=["auth"],
+        summary="Log in the break-glass administrator",
+        response_model=Me,
+        responses=_ok(ex.ME, problems=False),
+    )
     async def auth_break_glass(
         body: BreakGlassIn, request: Request, response: Response, svc: Services
     ) -> dict[str, Any]:
@@ -681,7 +708,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         set_session_cookie(request, response, result.cookie, result.session)
         return await me_payload(svc, result.session.principal(), result.session)
 
-    @router.post("/auth/logout", status_code=204, tags=["auth"])
+    @router.post("/auth/logout", status_code=204, tags=["auth"], summary="Log out")
     async def auth_logout(request: Request, who: FullWho, svc: Services) -> Response:
         """End the session (requires the CSRF header)."""
         cookie = request.cookies.get(SESSION_COOKIE)
@@ -708,17 +735,36 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             ],
         }
 
-    @router.get("/me", tags=["auth"])
+    @router.get(
+        "/me",
+        tags=["auth"],
+        summary="Who am I",
+        response_model=Me,
+        responses=_ok(ex.ME),
+    )
     async def me(request: Request, who: FullWho, svc: Services) -> dict[str, Any]:
         """Who am I, in which tenants, and with which role in each."""
         return await me_payload(svc, who, getattr(request.state, "session", None))
 
     # tenants
-    @router.get("/tenants", tags=["tenants"])
+    @router.get(
+        "/tenants",
+        tags=["tenants"],
+        summary="List tenants",
+        response_model=list[TenantRead],
+        responses=_ok([ex.TENANT_READ]),
+    )
     async def list_tenants(who: Who, svc: Services) -> list[dict[str, Any]]:
         return [t.__dict__ | {"id": str(t.id)} for t in await svc.tenants.list_tenants(who)]
 
-    @router.post("/tenants", status_code=201, tags=["tenants"])
+    @router.post(
+        "/tenants",
+        status_code=201,
+        tags=["tenants"],
+        summary="Create a tenant",
+        response_model=TenantRead,
+        responses=_ok(ex.TENANT_READ, 201) | VALIDATION_RESPONSE,
+    )
     async def create_tenant(body: TenantIn, who: Who, svc: Services) -> dict[str, Any]:
         t = await svc.tenants.create(
             who,
@@ -730,25 +776,41 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         )
         return t.__dict__ | {"id": str(t.id)}
 
-    @router.get("/tenants/{t}", tags=["tenants"])
+    @router.get(
+        "/tenants/{t}",
+        tags=["tenants"],
+        summary="Get a tenant",
+        response_model=TenantRead,
+        responses=_ok(ex.TENANT_READ, headers=ETAG_HEADER),
+    )
     async def get_tenant(tenant: Tenant, response: Response) -> dict[str, Any]:
         response.headers["ETag"] = _etag(tenant.version)
         return tenant.__dict__ | {"id": str(tenant.id)}
 
-    @router.patch("/tenants/{t}", tags=["tenants"])
+    @router.patch(
+        "/tenants/{t}",
+        tags=["tenants"],
+        summary="Change a tenant",
+        response_model=TenantRead,
+        responses=_ok(ex.TENANT_READ) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
     async def patch_tenant(
-        body: dict[str, Any],
+        body: TenantPatch,
         tenant: Tenant,
         who: Who,
         svc: Services,
         if_match: Annotated[str | None, Header()] = None,
     ) -> dict[str, Any]:
         t = await svc.tenants.update(
-            who, tenant.id, expected_version=_if_match(if_match), changes=body, request_id=_rid()
+            who,
+            tenant.id,
+            expected_version=_if_match(if_match),
+            changes=body.model_dump(exclude_unset=True),
+            request_id=_rid(),
         )
         return t.__dict__ | {"id": str(t.id)}
 
-    @router.delete("/tenants/{t}", status_code=204, tags=["tenants"])
+    @router.delete("/tenants/{t}", status_code=204, tags=["tenants"], summary="Delete a tenant")
     async def delete_tenant(tenant: Tenant, who: Who, svc: Services) -> Response:
         await svc.tenants.delete(who, tenant.id, request_id=_rid())
         return Response(status_code=204)
@@ -757,19 +819,55 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         _object_routes(router, slug, object_type)
 
     # change sets
-    @router.get("/tenants/{t}/change-sets", tags=["change-sets"])
+    @router.get(
+        "/tenants/{t}/change-sets",
+        tags=["change-sets"],
+        summary="List change sets",
+        response_model=Page[ChangeSetSummary],
+        responses=_ok({"items": [ex.CHANGE_SET_SUMMARY], "next_cursor": None}),
+    )
     async def list_change_sets(
-        tenant: Tenant, who: Who, svc: Services, state: ChangeSetState | None = None
-    ) -> list[dict[str, Any]]:
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        state: ChangeSetState | None = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> Page[Any]:
+        """List change sets, newest first, with their age, base revision and operation count."""
         records = await svc.change_sets.list_change_sets(
-            who, tenant.id, states={state} if state else None
+            who,
+            tenant.id,
+            states={state} if state else None,
+            limit=limit + 1,
+            before=_uuid_cursor(cursor),
         )
-        return [
-            {"id": str(r.id), "state": r.state.value, "author": r.author, "summary": r.summary}
-            for r in records
-        ]
+        window = records[:limit]
+        counts = await svc.change_sets.op_counts(who, tenant.id, [r.id for r in window])
+        return Page(
+            items=[
+                ChangeSetSummary(
+                    id=r.id,
+                    state=r.state,
+                    author=r.author,
+                    summary=r.summary,
+                    base_revision=r.base_revision,
+                    created_at=r.created_at,
+                    op_count=counts.get(r.id, 0),
+                )
+                for r in window
+            ],
+            next_cursor=str(window[-1].id) if len(records) > limit else None,
+        )
 
-    @router.post("/tenants/{t}/change-sets", status_code=201, tags=["change-sets"])
+    @router.post(
+        "/tenants/{t}/change-sets",
+        status_code=201,
+        tags=["change-sets"],
+        summary="Open a draft change set",
+        response_model=ChangeSetRead,
+        responses=_ok(ex.CHANGE_SET_READ, 201),
+    )
     async def open_change_set(
         body: OpenIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, Any]:
@@ -777,11 +875,23 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             await svc.change_sets.open(who, tenant.id, body.summary, request_id=_rid())
         )
 
-    @router.get("/tenants/{t}/change-sets/{cs}", tags=["change-sets"])
+    @router.get(
+        "/tenants/{t}/change-sets/{cs}",
+        tags=["change-sets"],
+        summary="Get a change set with its operations",
+        response_model=ChangeSetRead,
+        responses=_ok(ex.CHANGE_SET_READ),
+    )
     async def get_change_set(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
         return _detail_json(await svc.change_sets.get(who, tenant.id, cs))
 
-    @router.post("/tenants/{t}/change-sets/{cs}/ops", tags=["change-sets"])
+    @router.post(
+        "/tenants/{t}/change-sets/{cs}/ops",
+        tags=["change-sets"],
+        summary="Add operations to a draft",
+        response_model=ChangeSetRead,
+        responses=_ok(ex.CHANGE_SET_READ) | VALIDATION_RESPONSE,
+    )
     async def add_ops(
         cs: UUID, body: OpsIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, Any]:
@@ -790,7 +900,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             await svc.change_sets.add_ops(who, tenant.id, cs, ops, request_id=_rid())
         )
 
-    @router.delete("/tenants/{t}/change-sets/{cs}/ops/{index}", tags=["change-sets"])
+    @router.delete(
+        "/tenants/{t}/change-sets/{cs}/ops/{index}",
+        tags=["change-sets"],
+        summary="Remove an operation from a draft",
+        response_model=ChangeSetRead,
+        responses=_ok(ex.CHANGE_SET_READ),
+    )
     async def remove_op(
         cs: UUID, index: int, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, Any]:
@@ -798,8 +914,15 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             await svc.change_sets.remove_op(who, tenant.id, cs, index, request_id=_rid())
         )
 
-    @router.get("/tenants/{t}/change-sets/{cs}/diff", tags=["change-sets"])
+    @router.get(
+        "/tenants/{t}/change-sets/{cs}/diff",
+        tags=["change-sets"],
+        summary="Preview what a change set would change",
+        response_model=ChangeSetDiff,
+        responses=_ok(ex.DIFF),
+    )
     async def diff(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        """Objects touched, rule `problems` (block apply), `warnings` (never block) and files."""
         preview = await svc.change_sets.preview(who, tenant.id, cs)
         return {
             "objects": [
@@ -813,6 +936,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
                 for o in preview.draft.objects
             ],
             "problems": [p.__dict__ for p in preview.draft.problems],
+            "warnings": [w.__dict__ for w in preview.warnings],
             "se_groups": [
                 {
                     "id": str(g.se_group_id),
@@ -824,7 +948,14 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             ],
         }
 
-    @router.post("/tenants/{t}/change-sets/{cs}/apply", status_code=202, tags=["change-sets"])
+    @router.post(
+        "/tenants/{t}/change-sets/{cs}/apply",
+        status_code=202,
+        tags=["change-sets"],
+        summary="Apply a change set",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202) | VALIDATION_RESPONSE,
+    )
     async def apply(
         cs: UUID, tenant: Tenant, who: Who, svc: Services, body: ApplyIn | None = None
     ) -> dict[str, str]:
@@ -837,21 +968,46 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         )
         return {"job_id": str(job)}
 
-    @router.post("/tenants/{t}/change-sets/{cs}/discard", tags=["change-sets"])
+    @router.post(
+        "/tenants/{t}/change-sets/{cs}/discard",
+        tags=["change-sets"],
+        summary="Discard a draft",
+        response_model=StateOut,
+        responses=_ok(ex.STATE_OUT),
+    )
     async def discard(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
         r = await svc.change_sets.discard(who, tenant.id, cs, request_id=_rid())
         return {"state": r.state.value}
 
-    @router.post("/tenants/{t}/change-sets/{cs}/request-approval", tags=["change-sets"])
+    @router.post(
+        "/tenants/{t}/change-sets/{cs}/request-approval",
+        tags=["change-sets"],
+        summary="Ask for approval",
+        response_model=StateOut,
+        responses=_ok({"state": "pending_approval"}),
+    )
     async def request_approval(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
         r = await svc.change_sets.request_approval(who, tenant.id, cs, request_id=_rid())
         return {"state": r.state.value}
 
-    @router.post("/tenants/{t}/change-sets/{cs}/approve", status_code=202, tags=["change-sets"])
+    @router.post(
+        "/tenants/{t}/change-sets/{cs}/approve",
+        status_code=202,
+        tags=["change-sets"],
+        summary="Approve and apply a change set",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202),
+    )
     async def approve(cs: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
         return {"job_id": str(await svc.change_sets.approve(who, tenant.id, cs, request_id=_rid()))}
 
-    @router.post("/tenants/{t}/change-sets/{cs}/reject", tags=["change-sets"])
+    @router.post(
+        "/tenants/{t}/change-sets/{cs}/reject",
+        tags=["change-sets"],
+        summary="Reject a change set",
+        response_model=StateOut,
+        responses=_ok({"state": "draft"}),
+    )
     async def reject(
         cs: UUID, body: ReasonIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, str]:
@@ -859,20 +1015,46 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         return {"state": r.state.value}
 
     # revisions
-    @router.get("/tenants/{t}/revisions", tags=["revisions"])
-    async def revisions(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
-        return [
-            {
-                "number": r.number,
-                "author": r.author,
-                "summary": r.summary,
-                "git_sha": r.git_sha,
-                "created_at": r.created_at.isoformat(),
-            }
-            for r in await svc.change_sets.revisions(who, tenant.id)
-        ]
+    @router.get(
+        "/tenants/{t}/revisions",
+        tags=["revisions"],
+        summary="List revisions",
+        response_model=Page[RevisionSummary],
+        responses=_ok({"items": [ex.REVISION_SUMMARY], "next_cursor": None}),
+    )
+    async def revisions(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> Page[Any]:
+        """List applied revisions, newest first."""
+        records = await svc.change_sets.revisions(
+            who, tenant.id, limit=limit + 1, before=_int_cursor(cursor)
+        )
+        window = records[:limit]
+        return Page(
+            items=[
+                RevisionSummary(
+                    number=r.number,
+                    author=r.author,
+                    summary=r.summary,
+                    git_sha=r.git_sha,
+                    created_at=r.created_at,
+                )
+                for r in window
+            ],
+            next_cursor=str(window[-1].number) if len(records) > limit else None,
+        )
 
-    @router.get("/tenants/{t}/revisions/{n}", tags=["revisions"])
+    @router.get(
+        "/tenants/{t}/revisions/{n}",
+        tags=["revisions"],
+        summary="Get a revision with its full desired state",
+        response_model=RevisionRead,
+        responses=_ok(ex.REVISION_READ),
+    )
     async def revision(n: int, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
         r = await svc.change_sets.revision(who, tenant.id, n)
         return {
@@ -880,15 +1062,29 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "author": r.author,
             "summary": r.summary,
             "git_sha": r.git_sha,
+            "created_at": r.created_at,
             "snapshot": r.snapshot,
         }
 
-    @router.post("/tenants/{t}/revisions/{n}/rollback", status_code=201, tags=["revisions"])
+    @router.post(
+        "/tenants/{t}/revisions/{n}/rollback",
+        status_code=201,
+        tags=["revisions"],
+        summary="Open a change set that restores a revision",
+        response_model=ChangeSetRead,
+        responses=_ok(ex.CHANGE_SET_READ, 201),
+    )
     async def rollback(n: int, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
         return _detail_json(await svc.change_sets.rollback(who, tenant.id, n, request_id=_rid()))
 
     # runtime
-    @router.put("/tenants/{t}/pools/{pool}/members/{member}/state", tags=["pools"])
+    @router.put(
+        "/tenants/{t}/pools/{pool}/members/{member}/state",
+        tags=["pools"],
+        summary="Set a pool member's runtime state",
+        response_model=MemberStateResult,
+        responses=_ok(ex.MEMBER_STATE),
+    )
     async def member_state(
         pool: UUID, member: UUID, body: MemberStateIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, Any]:
@@ -896,7 +1092,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         return {"state": r.state.value, "applied": r.applied, "failed": r.failed}
 
     # engines
-    @router.get("/tenants/{t}/se-groups/{group}/engines", tags=["engines"])
+    @router.get(
+        "/tenants/{t}/se-groups/{group}/engines",
+        tags=["engines"],
+        summary="List an SE group's engines",
+        response_model=list[EngineRead],
+        responses=_ok([ex.ENGINE_READ]),
+    )
     async def list_engines(
         group: UUID, tenant: Tenant, who: Who, svc: Services
     ) -> list[dict[str, Any]]:
@@ -905,7 +1107,14 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             for e in await svc.engines.list_engines(who, tenant.id, group)
         ]
 
-    @router.post("/tenants/{t}/se-groups/{group}/engines", status_code=201, tags=["engines"])
+    @router.post(
+        "/tenants/{t}/se-groups/{group}/engines",
+        status_code=201,
+        tags=["engines"],
+        summary="Register an engine",
+        response_model=EngineRead,
+        responses=_ok(ex.ENGINE_READ, 201) | VALIDATION_RESPONSE,
+    )
     async def add_engine(
         group: UUID, body: EngineIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, Any]:
@@ -922,20 +1131,37 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         )
         return {"id": str(e.id), "name": e.name, "url": e.dataplane_url, "state": e.state.value}
 
-    @router.put("/tenants/{t}/engines/{engine}/state", tags=["engines"])
+    @router.put(
+        "/tenants/{t}/engines/{engine}/state",
+        tags=["engines"],
+        summary="Enable or disable an engine",
+        response_model=EngineStateOut,
+        responses=_ok(ex.ENGINE_STATE_OUT),
+    )
     async def engine_state(
         engine: UUID, state: EngineState, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, str]:
         e = await svc.engines.set_state(who, tenant.id, engine, state, request_id=_rid())
         return {"state": e.state.value}
 
-    @router.delete("/tenants/{t}/engines/{engine}", status_code=204, tags=["engines"])
+    @router.delete(
+        "/tenants/{t}/engines/{engine}",
+        status_code=204,
+        tags=["engines"],
+        summary="Remove an engine record",
+    )
     async def remove_engine(engine: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
         await svc.engines.remove(who, tenant.id, engine, request_id=_rid())
         return Response(status_code=204)
 
     # tokens
-    @router.get("/tenants/{t}/tokens", tags=["tokens"])
+    @router.get(
+        "/tenants/{t}/tokens",
+        tags=["tokens"],
+        summary="List API tokens",
+        response_model=list[TokenRead],
+        responses=_ok([ex.TOKEN_READ]),
+    )
     async def list_tokens(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
         return [
             {
@@ -943,12 +1169,19 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
                 "name": r.name,
                 "role": r.role.value,
                 "revoked": r.revoked_at is not None,
-                "expires_at": r.expires_at.isoformat() if r.expires_at else None,
+                "expires_at": r.expires_at,
             }
             for r in await svc.tokens.list_tokens(who, tenant.id)
         ]
 
-    @router.post("/tenants/{t}/tokens", status_code=201, tags=["tokens"])
+    @router.post(
+        "/tenants/{t}/tokens",
+        status_code=201,
+        tags=["tokens"],
+        summary="Create an API token (shown once)",
+        response_model=TokenCreated,
+        responses=_ok(ex.TOKEN_CREATED, 201) | VALIDATION_RESPONSE,
+    )
     async def create_token(
         body: TokenIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, Any]:
@@ -964,28 +1197,41 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         )
         return {"id": str(record.id), "token": plaintext, "role": record.role.value}
 
-    @router.delete("/tenants/{t}/tokens/{token}", status_code=204, tags=["tokens"])
+    @router.delete(
+        "/tenants/{t}/tokens/{token}", status_code=204, tags=["tokens"], summary="Revoke a token"
+    )
     async def revoke_token(token: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
         await svc.tokens.revoke(who, tenant.id, token, request_id=_rid())
         return Response(status_code=204)
 
     # agent enrollment
     @router.post(
-        "/tenants/{t}/engines/{engine}/enrollment-token", status_code=201, tags=["engines"]
+        "/tenants/{t}/engines/{engine}/enrollment-token",
+        status_code=201,
+        tags=["engines"],
+        summary="Create an agent enrollment token",
+        response_model=EnrollmentToken,
+        responses=_ok(ex.ENROLLMENT_TOKEN, 201),
     )
     async def enrollment_token(
         engine: UUID, tenant: Tenant, who: Who, svc: Services
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """Create a one-time token (shown once) for ``sy-agent enroll``."""
         if svc.enrollment is None:
             raise ApiError(503, "enrollment is not configured on this controller")
         token, expires = await svc.enrollment.create_token(
             who, tenant.id, engine, request_id=_rid()
         )
-        return {"token": token, "expires_at": expires.isoformat()}
+        return {"token": token, "expires_at": expires}
 
-    @router.post("/enroll", tags=["engines"])
-    async def enroll(body: EnrollIn, svc: Services) -> dict[str, str]:
+    @router.post(
+        "/enroll",
+        tags=["engines"],
+        summary="Trade an enrollment token and CSR for a certificate",
+        response_model=EnrollOut,
+        responses=_ok(ex.ENROLL_OUT, problems=False),
+    )
+    async def enroll(body: EnrollIn, svc: Services) -> dict[str, Any]:
         """Trade an enrollment or renewal token and a CSR for the agent's certificate."""
         if svc.enrollment is None:
             raise ApiError(503, "enrollment is not configured on this controller")
@@ -1001,11 +1247,18 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "ca": result.ca_pem,
             "bundle_public_key": result.bundle_public_key,
             "renewal_token": result.renewal_token,
-            "not_after": result.not_after.isoformat(),
+            "not_after": result.not_after,
         }
 
     # certificates
-    @router.post("/tenants/{t}/certificates/import", status_code=202, tags=["certificates"])
+    @router.post(
+        "/tenants/{t}/certificates/import",
+        status_code=202,
+        tags=["certificates"],
+        summary="Import a certificate and key",
+        response_model=Accepted,
+        responses=_ok(ex.ACCEPTED, 202) | VALIDATION_RESPONSE,
+    )
     async def import_certificate(
         body: CertImportIn,
         tenant: Tenant,
@@ -1025,7 +1278,14 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             svc, who, tenant, op, change_set, apply, f"import certificate {body.name}"
         )
 
-    @router.post("/tenants/{t}/certificates/issue", status_code=202, tags=["certificates"])
+    @router.post(
+        "/tenants/{t}/certificates/issue",
+        status_code=202,
+        tags=["certificates"],
+        summary="Issue a certificate (ACME or Cloudflare Origin CA)",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202) | VALIDATION_RESPONSE,
+    )
     async def issue_certificate(
         body: CertIssueIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, str]:
@@ -1041,7 +1301,12 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         return {"job_id": str(job)}
 
     @router.post(
-        "/tenants/{t}/certificates/{certificate}/renew", status_code=202, tags=["certificates"]
+        "/tenants/{t}/certificates/{certificate}/renew",
+        status_code=202,
+        tags=["certificates"],
+        summary="Renew a certificate",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202),
     )
     async def renew_certificate(
         certificate: UUID, tenant: Tenant, who: Who, svc: Services
@@ -1051,13 +1316,27 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         return {"job_id": str(job)}
 
     # infrastructure jobs
-    @router.post("/tenants/{t}/networks/apply-sdn", status_code=202, tags=["infrastructure"])
+    @router.post(
+        "/tenants/{t}/networks/apply-sdn",
+        status_code=202,
+        tags=["infrastructure"],
+        summary="Apply the Proxmox SDN objects of managed networks",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202),
+    )
     async def apply_sdn(tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
         """Create or update the Proxmox SDN objects of the tenant's managed networks."""
         job = await svc.infra.request_sdn_apply(who, tenant.id, request_id=_rid())
         return {"job_id": str(job)}
 
-    @router.post("/tenants/{t}/engines/{engine}/retire", status_code=202, tags=["infrastructure"])
+    @router.post(
+        "/tenants/{t}/engines/{engine}/retire",
+        status_code=202,
+        tags=["infrastructure"],
+        summary="Retire an engine and destroy its VM",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202),
+    )
     async def retire_engine(
         engine: UUID, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, str]:
@@ -1065,7 +1344,14 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         job = await svc.infra.request_retire(who, tenant.id, engine, request_id=_rid())
         return {"job_id": str(job)}
 
-    @router.post("/tenants/{t}/se-groups/{group}/deploy", status_code=202, tags=["infrastructure"])
+    @router.post(
+        "/tenants/{t}/se-groups/{group}/deploy",
+        status_code=202,
+        tags=["infrastructure"],
+        summary="Deploy engines for an SE group on Proxmox",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202) | VALIDATION_RESPONSE,
+    )
     async def deploy_group(
         group: UUID, body: DeployIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, str]:
@@ -1096,14 +1382,32 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "members": s.members,
             "agent": s.agent,
             "drift": s.drift,
-            "observed_at": s.observed_at.isoformat(),
+            "observed_at": s.observed_at,
         }
 
-    @router.get("/tenants/{t}/status/engines", tags=["status"])
+    @router.get(
+        "/tenants/{t}/status/engines",
+        tags=["status"],
+        summary="Last observed state of every engine",
+        response_model=list[EngineStatusRead],
+        responses=_ok([ex.ENGINE_STATUS]),
+    )
     async def engine_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
         return [status_json(s) for s in await svc.status.list_status(who, tenant.id)]
 
-    @router.get("/tenants/{t}/status/stream", tags=["status"])
+    @router.get(
+        "/tenants/{t}/status/stream",
+        tags=["status"],
+        summary="Stream engine status (server-sent events)",
+        response_class=StreamingResponse,
+        responses={
+            200: {
+                "description": "`text/event-stream`; each `status` event carries the JSON array "
+                "of `GET /status/engines`.",
+                "content": {"text/event-stream": {"schema": {"type": "string"}}},
+            }
+        },
+    )
     async def status_stream(
         request: Request,
         tenant: Tenant,
@@ -1120,7 +1424,10 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             last = ""
             while True:
                 payload = json.dumps(
-                    [status_json(s) for s in await svc.status.list_status(who, tenant.id)],
+                    [
+                        EngineStatusRead.model_validate(status_json(s)).model_dump(mode="json")
+                        for s in await svc.status.list_status(who, tenant.id)
+                    ],
                     sort_keys=True,
                 )
                 if payload != last:
@@ -1135,7 +1442,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         return StreamingResponse(events(), media_type="text/event-stream")
 
     # jobs and audit
-    @router.get("/jobs/{job_id}", tags=["jobs"])
+    @router.get(
+        "/jobs/{job_id}",
+        tags=["jobs"],
+        summary="Get a background job",
+        response_model=JobRead,
+        responses=_ok(ex.JOB_READ),
+    )
     async def get_job(job_id: UUID, who: Who, svc: Services) -> dict[str, Any]:
         from sqlalchemy import select
 
@@ -1161,7 +1474,13 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "result": row.result,
         }
 
-    @router.get("/tenants/{t}/audit-events", tags=["audit"])
+    @router.get(
+        "/tenants/{t}/audit-events",
+        tags=["audit"],
+        summary="List audit events, newest first",
+        response_model=list[AuditEventRead],
+        responses=_ok([ex.AUDIT_EVENT]),
+    )
     async def audit_events(
         tenant: Tenant, who: Who, svc: Services, limit: Annotated[int, Query(ge=1, le=500)] = 100
     ) -> list[dict[str, Any]]:
@@ -1177,7 +1496,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             ).scalars()
             return [
                 {
-                    "at": r.at.isoformat(),
+                    "at": r.at,
                     "actor": r.actor,
                     "action": r.action,
                     "object": r.object_ref,
@@ -1188,4 +1507,5 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             ]
 
     app.include_router(router)
+    app.openapi = lambda: _problem_json_openapi(app)  # type: ignore[method-assign]
     return app

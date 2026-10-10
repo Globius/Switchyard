@@ -124,13 +124,34 @@ async def get_change_set(
 
 
 async def list_change_sets(
-    session: AsyncSession, *, states: set[ChangeSetState] | None = None, limit: int = 50
+    session: AsyncSession,
+    *,
+    states: set[ChangeSetState] | None = None,
+    limit: int = 50,
+    before: UUID | None = None,
 ) -> list[ChangeSetRecord]:
-    """Return change sets, newest first."""
+    """Return change sets, newest first; ``before`` keeps only ids lower than it (the cursor).
+
+    Ids are UUIDv7, so id order is creation order.
+    """
     query = select(ChangeSetRow).order_by(ChangeSetRow.id.desc()).limit(limit)
     if states:
         query = query.where(ChangeSetRow.state.in_(sorted(s.value for s in states)))
+    if before is not None:
+        query = query.where(ChangeSetRow.id < before)
     return [_record(r) for r in (await session.execute(query)).scalars()]
+
+
+async def count_ops(session: AsyncSession, change_set_ids: list[UUID]) -> dict[UUID, int]:
+    """Return how many operations each change set holds (missing ids hold none)."""
+    if not change_set_ids:
+        return {}
+    rows = await session.execute(
+        select(ChangeOpRow.change_set_id, func.count())
+        .where(ChangeOpRow.change_set_id.in_(change_set_ids))
+        .group_by(ChangeOpRow.change_set_id)
+    )
+    return dict(rows.all())
 
 
 async def set_state(
@@ -264,17 +285,18 @@ async def get_revision(
 
 
 async def list_revisions(
-    session: AsyncSession, tenant_id: UUID, *, limit: int = 50
+    session: AsyncSession, tenant_id: UUID, *, limit: int = 50, before: int | None = None
 ) -> list[RevisionRecord]:
-    """Return a tenant's revisions, newest first."""
-    rows = (
-        await session.execute(
-            select(RevisionRow)
-            .where(RevisionRow.tenant_id == tenant_id)
-            .order_by(RevisionRow.number.desc())
-            .limit(limit)
-        )
-    ).scalars()
+    """Return a tenant's revisions, newest first; ``before`` keeps only numbers below it."""
+    query = (
+        select(RevisionRow)
+        .where(RevisionRow.tenant_id == tenant_id)
+        .order_by(RevisionRow.number.desc())
+        .limit(limit)
+    )
+    if before is not None:
+        query = query.where(RevisionRow.number < before)
+    rows = (await session.execute(query)).scalars()
     return [_revision(r) for r in rows]
 
 

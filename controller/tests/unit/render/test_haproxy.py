@@ -415,6 +415,13 @@ class TestSelection:
         assert result.warnings == (
             "virtual service wg: udp is rendered by the keepalived renderer, not haproxy.cfg",
         )
+        assert [(n.code, n.path, n.message) for n in result.notices] == [
+            (
+                "udp_not_served",
+                "virtual_services.wg",
+                "virtual service wg: udp is rendered by the keepalived renderer, not haproxy.cfg",
+            )
+        ]
         assert "vs_wg" not in result.files["haproxy/haproxy.cfg"]
         assert "pool_wg" not in result.files["haproxy/haproxy.cfg"]
 
