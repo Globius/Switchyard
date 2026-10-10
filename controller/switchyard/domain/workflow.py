@@ -31,6 +31,7 @@ class JobState(enum.StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     DEAD = "dead"
+    CANCELLED = "cancelled"
 
 
 class EngineState(enum.StrEnum):

@@ -422,6 +422,56 @@
         "title": "ApplyIn",
         "type": "object"
       },
+      "ApplyJobResult": {
+        "additionalProperties": false,
+        "description": "Result of an ``apply_change_set`` job.\n\n``ok: false`` means the change set was rejected or reverted: the job *finished* and will not be\nretried. Compare ``Job.retrying``.",
+        "properties": {
+          "change_set_id": {
+            "format": "uuid",
+            "title": "Change Set Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/GroupResult"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "revision_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Number"
+          }
+        },
+        "required": [
+          "ok",
+          "change_set_id"
+        ],
+        "title": "ApplyJobResult",
+        "type": "object"
+      },
       "AuditEventRead": {
         "additionalProperties": false,
         "description": "One audit-log entry.",
@@ -2100,6 +2150,72 @@
         "title": "EnrollmentToken",
         "type": "object"
       },
+      "GroupResult": {
+        "additionalProperties": false,
+        "description": "What an apply did to one SE group.",
+        "properties": {
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "rendered_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rendered Hash"
+          },
+          "se_group": {
+            "title": "Se Group",
+            "type": "string"
+          },
+          "se_group_id": {
+            "format": "uuid",
+            "title": "Se Group Id",
+            "type": "string"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "succeeded",
+                  "failed",
+                  "reverted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "required": [
+          "se_group_id",
+          "se_group",
+          "state"
+        ],
+        "title": "GroupResult",
+        "type": "object"
+      },
       "HaMode": {
         "description": "How an SE group places its VIPs.",
         "enum": [
@@ -2549,6 +2665,147 @@
         "title": "IpRange",
         "type": "object"
       },
+      "Job": {
+        "additionalProperties": false,
+        "description": "A background job.",
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "change_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Set Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Error of the latest failed attempt.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For finished jobs that report one (apply): whether the work succeeded.",
+            "title": "Ok"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApplyJobResult"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          },
+          "retrying": {
+            "description": "True while a failed attempt waits for its next try (state `queued`, attempts > 0). A reverted or rejected apply is not retrying: it is `succeeded` with `ok: false`.",
+            "title": "Retrying",
+            "type": "boolean"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/JobStage"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/JobState"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "created_at",
+          "attempts",
+          "max_attempts",
+          "retrying"
+        ],
+        "title": "Job",
+        "type": "object"
+      },
       "JobAccepted": {
         "additionalProperties": false,
         "description": "A job was queued; poll ``GET /jobs/{job_id}``.",
@@ -2563,6 +2820,30 @@
           "job_id"
         ],
         "title": "JobAccepted",
+        "type": "object"
+      },
+      "JobLog": {
+        "additionalProperties": false,
+        "description": "The log of a job (the latest 500 lines).",
+        "properties": {
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/LogLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "job_id",
+          "lines"
+        ],
+        "title": "JobLog",
         "type": "object"
       },
       "JobRead": {
@@ -2618,6 +2899,103 @@
           "attempts"
         ],
         "title": "JobRead",
+        "type": "object"
+      },
+      "JobStage": {
+        "additionalProperties": false,
+        "description": "One step of a job, with timing.\n\nThe apply pipeline has lock, render, validate, canary, rollout and commit.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "$ref": "#/components/schemas/StageState"
+          }
+        },
+        "required": [
+          "name",
+          "state"
+        ],
+        "title": "JobStage",
+        "type": "object"
+      },
+      "JobState": {
+        "description": "Lifecycle of a background job.",
+        "enum": [
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "dead",
+          "cancelled"
+        ],
+        "title": "JobState",
+        "type": "string"
+      },
+      "LogLine": {
+        "additionalProperties": false,
+        "description": "One line of a job's log.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "info",
+              "error"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "level",
+          "message"
+        ],
+        "title": "LogLine",
         "type": "object"
       },
       "Me": {
@@ -3480,6 +3858,35 @@
           "items"
         ],
         "title": "Page[HealthMonitorRead]",
+        "type": "object"
+      },
+      "Page_Job_": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque cursor of the next page, or null on the last page.",
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[Job]",
         "type": "object"
       },
       "Page_NetworkRead_": {
@@ -5038,6 +5445,18 @@
         },
         "title": "Snapshot",
         "type": "object"
+      },
+      "StageState": {
+        "description": "State of one job stage.",
+        "enum": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed",
+          "skipped"
+        ],
+        "title": "StageState",
+        "type": "string"
       },
       "StateOut": {
         "additionalProperties": false,
@@ -11629,6 +12048,780 @@
         "summary": "Rendered config of a health monitor",
         "tags": [
           "health-monitors"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs": {
+      "get": {
+        "operationId": "list_jobs_api_v1_tenants__t__jobs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "items": [
+                    {
+                      "attempts": 1,
+                      "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                      "created_at": "2026-10-10T08:30:00Z",
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "id": "0192f3a0-0000-7000-8000-000000000021",
+                      "kind": "apply_change_set",
+                      "max_attempts": 3,
+                      "ok": false,
+                      "result": {
+                        "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                        "error": "SE group edge: canary failed: pool web went from up to down",
+                        "groups": [],
+                        "ok": false
+                      },
+                      "retrying": false,
+                      "stages": [
+                        {
+                          "finished_at": "2026-10-10T08:30:00Z",
+                          "name": "lock",
+                          "started_at": "2026-10-10T08:30:00Z",
+                          "state": "succeeded"
+                        },
+                        {
+                          "finished_at": "2026-10-10T08:30:00Z",
+                          "name": "render",
+                          "started_at": "2026-10-10T08:30:00Z",
+                          "state": "succeeded"
+                        },
+                        {
+                          "finished_at": "2026-10-10T08:30:00Z",
+                          "name": "validate",
+                          "started_at": "2026-10-10T08:30:00Z",
+                          "state": "succeeded"
+                        },
+                        {
+                          "error": "SE group edge: canary failed: pool web went from up to down",
+                          "finished_at": "2026-10-10T08:30:00Z",
+                          "name": "canary",
+                          "started_at": "2026-10-10T08:30:00Z",
+                          "state": "failed"
+                        },
+                        {
+                          "name": "rollout",
+                          "state": "skipped"
+                        },
+                        {
+                          "name": "commit",
+                          "state": "skipped"
+                        }
+                      ],
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded",
+                      "tenant_id": "0192f3a0-0000-7000-8000-000000000001"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Page_Job_"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List a tenant's jobs, newest first",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_tenant_job_api_v1_tenants__t__jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "attempts": 1,
+                  "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "finished_at": "2026-10-10T08:30:00Z",
+                  "id": "0192f3a0-0000-7000-8000-000000000021",
+                  "kind": "apply_change_set",
+                  "max_attempts": 3,
+                  "ok": false,
+                  "result": {
+                    "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                    "error": "SE group edge: canary failed: pool web went from up to down",
+                    "groups": [],
+                    "ok": false
+                  },
+                  "retrying": false,
+                  "stages": [
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "lock",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "render",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "validate",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "error": "SE group edge: canary failed: pool web went from up to down",
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "canary",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "failed"
+                    },
+                    {
+                      "name": "rollout",
+                      "state": "skipped"
+                    },
+                    {
+                      "name": "commit",
+                      "state": "skipped"
+                    }
+                  ],
+                  "started_at": "2026-10-10T08:30:00Z",
+                  "state": "succeeded",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a job with its stages",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs/{job_id}/cancel": {
+      "post": {
+        "operationId": "cancel_job_api_v1_tenants__t__jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "attempts": 1,
+                  "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "finished_at": "2026-10-10T08:30:00Z",
+                  "id": "0192f3a0-0000-7000-8000-000000000021",
+                  "kind": "apply_change_set",
+                  "max_attempts": 3,
+                  "ok": false,
+                  "result": {
+                    "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                    "error": "SE group edge: canary failed: pool web went from up to down",
+                    "groups": [],
+                    "ok": false
+                  },
+                  "retrying": false,
+                  "stages": [
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "lock",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "render",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "validate",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "error": "SE group edge: canary failed: pool web went from up to down",
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "canary",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "failed"
+                    },
+                    {
+                      "name": "rollout",
+                      "state": "skipped"
+                    },
+                    {
+                      "name": "commit",
+                      "state": "skipped"
+                    }
+                  ],
+                  "started_at": "2026-10-10T08:30:00Z",
+                  "state": "succeeded",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel a job that has not started",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs/{job_id}/log": {
+      "get": {
+        "operationId": "get_job_log_api_v1_tenants__t__jobs__job_id__log_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "job_id": "0192f3a0-0000-7000-8000-000000000021",
+                  "lines": [
+                    {
+                      "at": "2026-10-10T08:30:00Z",
+                      "level": "info",
+                      "message": "attempt 1 claimed by worker-1"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/JobLog"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a job's log",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/jobs/{job_id}/retry": {
+      "post": {
+        "operationId": "retry_job_api_v1_tenants__t__jobs__job_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "attempts": 1,
+                  "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "finished_at": "2026-10-10T08:30:00Z",
+                  "id": "0192f3a0-0000-7000-8000-000000000021",
+                  "kind": "apply_change_set",
+                  "max_attempts": 3,
+                  "ok": false,
+                  "result": {
+                    "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                    "error": "SE group edge: canary failed: pool web went from up to down",
+                    "groups": [],
+                    "ok": false
+                  },
+                  "retrying": false,
+                  "stages": [
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "lock",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "render",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "validate",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "succeeded"
+                    },
+                    {
+                      "error": "SE group edge: canary failed: pool web went from up to down",
+                      "finished_at": "2026-10-10T08:30:00Z",
+                      "name": "canary",
+                      "started_at": "2026-10-10T08:30:00Z",
+                      "state": "failed"
+                    },
+                    {
+                      "name": "rollout",
+                      "state": "skipped"
+                    },
+                    {
+                      "name": "commit",
+                      "state": "skipped"
+                    }
+                  ],
+                  "started_at": "2026-10-10T08:30:00Z",
+                  "state": "succeeded",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Queue a dead job again",
+        "tags": [
+          "jobs"
         ]
       }
     },

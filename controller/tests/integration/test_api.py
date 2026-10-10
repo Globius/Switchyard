@@ -499,6 +499,51 @@ async def test_union_validation_errors_keep_field_paths_without_the_tag(api: Api
     assert r.status_code == 422
 
 
+async def test_job_endpoints(api: Api) -> None:
+    h = await api.token()
+    opened = await api.client.post(
+        f"{V1}/tenants/acme/change-sets", json={"summary": "x"}, headers=h
+    )
+    cs = opened.json()["id"]
+    await api.client.patch(
+        f"{V1}/tenants/acme/pools/{POOL}?change_set={cs}",
+        json={"tls": True},
+        headers={**h, "If-Match": '"1"'},
+    )
+    applied = await api.client.post(f"{V1}/tenants/acme/change-sets/{cs}/apply", headers=h)
+    job_id = applied.json()["job_id"]
+
+    queued = (await api.client.get(f"{V1}/tenants/acme/jobs/{job_id}", headers=h)).json()
+    assert (queued["state"], queued["retrying"], queued["ok"], queued["stages"]) == (
+        "queued",
+        False,
+        None,
+        [],
+    )
+    await api.run_jobs()
+
+    job = (await api.client.get(f"{V1}/tenants/acme/jobs/{job_id}", headers=h)).json()
+    assert (job["state"], job["ok"], job["change_set_id"]) == ("succeeded", True, cs)
+    names = [s["name"] for s in job["stages"]]
+    assert names == ["lock", "render", "validate", "canary", "rollout", "commit"]
+    assert job["result"]["groups"][0]["state"] == "succeeded"
+
+    url = f"{V1}/tenants/acme/jobs?state=succeeded&kind=apply_change_set"
+    listed = (await api.client.get(url, headers=h)).json()
+    assert [j["id"] for j in listed["items"]] == [job_id]
+    bad = await api.client.get(f"{V1}/tenants/acme/jobs?cursor=junk", headers=h)
+    assert bad.status_code == 400
+
+    log = (await api.client.get(f"{V1}/tenants/acme/jobs/{job_id}/log", headers=h)).json()
+    assert log["lines"][0]["message"].startswith("attempt 1")
+
+    assert (
+        await api.client.post(f"{V1}/tenants/acme/jobs/{job_id}/cancel", headers=h)
+    ).status_code == 409
+    old = (await api.client.get(f"{V1}/jobs/{job_id}", headers=h)).json()
+    assert old["state"] == "succeeded", "the old endpoint keeps working"
+
+
 async def test_rendered_config_per_object_live_and_draft(api: Api) -> None:
     h = await api.token()
     rendered = f"{V1}/tenants/acme/pools/{POOL}/rendered"

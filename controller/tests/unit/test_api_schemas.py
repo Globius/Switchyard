@@ -20,6 +20,7 @@ FREE_FORM = {
     "ChangeOpRead.body",
     "OpIn.body",
     "JobRead.result",
+    "Job.result",
     "AuditEventRead.diff",
 }
 

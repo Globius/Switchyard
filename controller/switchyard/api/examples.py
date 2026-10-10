@@ -301,6 +301,45 @@ JOB_READ = {
     "error": None,
     "result": {"revision": 13},
 }
+JOB_FULL = {
+    "id": JOB,
+    "kind": "apply_change_set",
+    "state": "succeeded",
+    "tenant_id": TENANT,
+    "change_set_id": CHANGE_SET,
+    "created_at": WHEN,
+    "started_at": WHEN,
+    "finished_at": WHEN,
+    "attempts": 1,
+    "max_attempts": 3,
+    "error": None,
+    "retrying": False,
+    "ok": False,
+    "result": {
+        "ok": False,
+        "change_set_id": CHANGE_SET,
+        "revision_number": None,
+        "error": "SE group edge: canary failed: pool web went from up to down",
+        "groups": [],
+    },
+    "stages": [
+        {"name": n, "state": st, "started_at": WHEN, "finished_at": WHEN, "error": err}
+        for n, st, err in [
+            ("lock", "succeeded", None),
+            ("render", "succeeded", None),
+            ("validate", "succeeded", None),
+            ("canary", "failed", "SE group edge: canary failed: pool web went from up to down"),
+        ]
+    ]
+    + [
+        {"name": n, "state": "skipped", "started_at": None, "finished_at": None, "error": None}
+        for n in ("rollout", "commit")
+    ],
+}
+JOB_LOG = {
+    "job_id": JOB,
+    "lines": [{"at": WHEN, "level": "info", "message": "attempt 1 claimed by worker-1"}],
+}
 AUDIT_EVENT = {
     "at": WHEN,
     "actor": "user:alice",
