@@ -359,6 +359,13 @@ def request_example(method: str, path: str) -> Any | None:
     return None
 
 
+#: Operations that answer 503 when an optional backend is not configured.
+UNAVAILABLE: dict[str, str] = {
+    "POST /tenants/{t}/certificates/import": "No secrets backend (OpenBao) is configured.",
+    "POST /enroll": "Agent enrollment is not configured.",
+    "POST /tenants/{t}/engines/{engine}/enrollment-token": "Agent enrollment is not configured.",
+}
+
 _CONFLICT = "The resource is in a state that does not allow this, or the name is already taken."
 _BAD_CURSOR = "`cursor` is not a value this endpoint returned."
 
@@ -445,6 +452,16 @@ def enrich(schema: dict[str, Any]) -> None:
                     "description": _CONFLICT,
                     "content": {"application/problem+json": {"schema": _problem(schema)}},
                 }
+            if key in UNAVAILABLE or path.startswith("/auth/"):
+                responses.setdefault(
+                    "503",
+                    {
+                        "description": UNAVAILABLE.get(
+                            key, "Login is not configured on this controller."
+                        ),
+                        "content": problem_body,
+                    },
+                )
             if any(p["name"] == "cursor" for p in op.get("parameters", [])):
                 responses.setdefault(
                     "400",

@@ -1,35 +1,50 @@
 # Switchyard — Frontend Scope and Claude Design Handoff
 
-Date: 2026-10-10. Companion to [03-frontend-design.md](03-frontend-design.md) (stack, UX principles, design system) and [02-backend-design.md](02-backend-design.md).
+Date: 2026-10-10 (re-audited against `main` after M6, SAML login and ADR 0040). Companion to
+[03-frontend-design.md](03-frontend-design.md) (stack, UX principles, design system) and
+[02-backend-design.md](02-backend-design.md). **Design source:** the Claude Design canvas is the source of truth for
+visuals; this document is the source of truth for data, states and endpoints.
 
-This doc does two things: (1) audits the implemented controller API against what the UI needs, and (2) gives Claude Design everything per screen: entities and fields, states, interactions and endpoints.
+This doc does two things: (1) says what the implemented controller API covers for each screen, and (2) gives Claude
+Design everything per screen: entities and fields, states, interactions and endpoints.
 
-**Sources read.** The implemented API is M1–M3 in the worktree `.claude/worktrees/compassionate-boyd-621fa7` (`controller/switchyard/api/app.py`, `docs/api/openapi.json`, ADRs 0006–0008, `domain/models.py`). The main checkout has docs only. M4 is being built in parallel, so U3 screens (networks, SE deploy) are scoped against the design, not against code.
+**Sources.** `docs/api/openapi.json` (also served at `/api/v1/openapi.json`, Swagger UI `/api/v1/docs`, ReDoc
+`/api/v1/redoc`), `docs/api.md`, ADRs 0006–0020, 0040, `domain/models.py`.
 
-Legend: ✅ implemented and in OpenAPI · ⚠️ implemented but under-documented or partial · ❌ not implemented.
+Legend: ✅ implemented and in OpenAPI · ⚠️ implemented with a stated limit · ❌ not backed by an API (design it, mark it
+"blocked on API") · 🔜 owned by the G1 auth tickets (see 05), not in OpenAPI yet.
 
 ---
 
 ## 1. Verdict
 
-**The API is not yet ready to hand the whole UI to Claude Design as "build against this."** Design can start now (screens, states, flows are all defined below), but code generation would hit these blockers, in priority order:
+**The API is ready to design and build every screen against, except the items in the table below.** Every operation in
+OpenAPI has a typed request and response, an example, its error responses and its required role; reads are typed
+(no `unknown`), lists are paginated, writes go through change sets.
 
-| # | Gap | Impact | Needed before |
-| --- | --- | --- | --- |
-| G1 | **No user login.** Only `Authorization: Bearer <api token>`. No OIDC/SAML, no session cookie, no CSRF, no `GET /me`, no identity-provider list. ADR 0007 defers it "to a later step"; the plan has it in U4/M5. | Login screen, `can(verb, type)` permission hook, "who am I" in the top bar and per-tenant roles cannot be built against a real API. | U1 |
-| G2 | **Response bodies are untyped.** OpenAPI has request models (`*Create`, `*Patch`) but every response is `object` or `Page{items: object[]}`. `openapi-typescript` would emit `unknown`. | Typed client and `orval` Zod schemas give nothing for reads. Fix: add read models (`VirtualServiceRead` = create fields + `id`, `version`, `tenant_id`, `draft_status`, `changed_fields`) and typed responses for change sets, diff, revisions, jobs, status, audit, tokens, engines. | U1 |
-| G3 | **No "Rendered config" per object.** The only rendered output is `GET /change-sets/{cs}/diff` → `se_groups[].files`, and its file shape is undocumented. Design has a Rendered config tab on every object page. | Needs `GET …/{object}/{id}/rendered` (live and `?change_set=`), or an agreed rule that the tab shows the SE-group file filtered to that object. | U1 |
-| G4 | **No metrics or logs.** RPS, p95, 5xx, latency breakdown, log tail, sparklines have no endpoint (the `metrics` adapter and Grafana proxy are not built). | VS list columns and VS detail charts have no data source. | U2 |
-| G5 | **Live stream is one coarse event.** `GET /status/stream` emits a single `event: status` carrying the full engine list (polled from DB every 2 s, only when changed). The design's event catalog (`member_status`, `vs_health`, `bgp_session`, `job_progress`, `revision_applied`) does not exist. `members`, `agent`, `drift` are untyped dicts. | Cache patching needs either typed `status` payloads (workable for U2) plus job polling, or the finer events. | U2 |
-| G6 | **Jobs are fetch-by-id only.** No list, logs, stage progress, retry or cancel. Apply progress (lock → render → validate → canary → rollout → commit) is not exposed; `result` is free-form. | Jobs page and apply progress screen need a typed job model with stages, plus `GET /jobs`, `POST /jobs/{id}/retry|cancel`. Jobs also aren't tenant-scoped in the path. | U2 |
-| G7 | **Policy sets and routing profiles have free-form bodies** (`additionalProperties: true`) because they are discriminated unions. No schema reaches the generated client. | Rule builder and BGP/VRRP forms can't be generated. Fix: publish `oneOf` with `kind` discriminator (`redirect`, `allow_list` / `vrrp`, `bgp`). Shapes are in §5 so design isn't blocked. | U1 |
-| G8 | **Change-set conflicts and impact.** No three-way conflict endpoint or documented 409/412 body; `ops[].expected_version` exists but the response shape on stale version is not specified. The diff has `problems` but no "Impact" section (VIPs, SEs, hostnames touched). | ConflictResolver and the Impact tab need server data (or client derivation from `objects` + snapshot). | U1 |
-| G9 | **Missing endpoints for later screens:** cert renew/issue (M5), SE group deploy and VM placement (M4), VIP allocations and release, health-monitor test, identity providers and role mappings, audit filters/cursor, tenant "require approval" history. Details in §4. | Blocks U3/U4 only. Not blocking design. | U3–U4 |
-| G10 | **Minor:** `?label=` and `?se_group=` filters from the design are not implemented (only `name`, `change_set`, `cursor`, `limit`); list sort is fixed to name; `GET /revisions` and `GET /change-sets` are not paginated; `GET /change-sets` omits `base_revision`, `created_at`, op count; no OpenAPI descriptions or examples (summaries are auto-generated, e.g. "Create Pools"); no ETag documented on reads. | Tables, saved filters and MSW mocks (which the plan builds "from OpenAPI examples") are weaker. | U1 |
+| Area | Status |
+| --- | --- |
+| Login (OIDC, SAML, break-glass), session cookie + CSRF, `GET /me` | ✅ |
+| Identity providers, role mappings, users, system tokens, `GET /permissions`, `POST /auth/refresh`, break-glass administration | 🔜 G1 (05). Admin and access screens are designed now and tagged "blocked on API" |
+| Typed reads, `ETag`, `If-Match`, problem+json with field paths, `conflict` on stale versions | ✅ |
+| Rendered config per object, typed diff with files, `warnings`, `impact` | ✅ |
+| Jobs: list, stages, log, retry, cancel, kind enum | ✅ |
+| Virtual service health (`healthy/degraded/down/unknown/disabled`) and tenant summary | ✅ |
+| Metrics (RPS, p95, 5xx, sessions) and access-log tail | ⚠️ API ✅; returns `available: false` until Prometheus/Loki and the SE telemetry pipeline exist (ADR 0040) |
+| Live events (`status`, `vs_state`, `job_progress`, `revision_applied`) | ✅ (server polls the database; reconnect restarts from a snapshot) |
+| VIP pool usage, allocations, next free address | ✅ (no reservation; *release* = edit or delete the service) |
+| Audit filters, cursor, cross-tenant log, action catalog, object history | ✅ |
+| Search for the command palette | ✅ |
+| Engines: tenant list, placement (`pve_node`, `vmid`), enrollment state | ✅ (host online state ❌) |
+| Certificates: import (PEM), issue (ACME, Origin CA), renew | ✅ (jobs; result carries the `system:certs` change set) |
+| SE group deploy, engine retire, network SDN apply | ✅ |
+| Health monitor "test against one member" | ❌ (planned, see 05 A3) |
+| Per-prefix BGP withdrawal list | ❌ (`routes_withdrawn` is a single flag; planned, see 05 A13) |
+| `?label=` filters | ❌ dropped: objects have no labels |
 
-**What works today and is enough for design:** CRUD for all nine object types via change sets, draft reads (`?change_set=` with `draft_status` and `changed_fields`), change-set lifecycle including four-eyes approval, diff (objects, validator problems, rendered files per SE group), revisions with snapshot and rollback, runtime member drain/enable/disable, engine register/enable/remove, tokens, audit events, engine status snapshot and SSE, RFC 9457 errors with field paths, cursor pagination, ETag/If-Match.
-
-**Recommended backend asks** (one ticket each): G1 session auth + `/me`; G2 read models; G3 rendered endpoint; G7 union schemas; G6 job model. G4/G5 can wait for U2. These should be raised with the M4 owner so they don't collide with controller work in flight.
+**Rules that came out of the audit** (details in ADR 0040): a VIP is held by the service that carries it; apply on a
+tenant that requires approval is `403` for everyone but a system administrator with a reason; *Retire* destroys the
+VM and the record, *Remove* only the record; deploy does not create enrollment tokens.
 
 ---
 
@@ -54,7 +69,7 @@ Legend: ✅ implemented and in OpenAPI · ⚠️ implemented but under-documente
 
 **Writes.** Edits never go live on save: they add an op to the open draft (open one implicitly on first edit). Runtime actions (member state, engine state, token create/revoke, cert renew) skip the change set, show a confirm dialog and a `Live` badge.
 
-**Async.** Anything that returns `202` carries a `job_id`; show `JobProgress` and poll `/jobs/{id}` (until G6 is closed).
+**Async.** Anything that returns `202` carries a `job_id`; show `JobProgress` from `GET /tenants/{t}/jobs/{id}` (stages) and the `job_progress` event of the stream.
 
 **Optimistic locking.** Object PATCH sends `If-Match: "<version>"`; change-set ops carry `expected_version`. Stale → conflict flow (§3.13).
 
@@ -62,126 +77,241 @@ Legend: ✅ implemented and in OpenAPI · ⚠️ implemented but under-documente
 
 ## 3. Screens
 
-Each screen lists entities and fields (names are API field names), states beyond the standard ones, key interactions, and endpoints. All paths are under `/api/v1`. `{t}` = tenant.
+Each screen lists entities and fields (names are API field names), states beyond the standard ones, key interactions, and endpoints. All paths are under `/api/v1`. `{t}` = tenant. Roles are the minimum role from `x-required-role`; take enable/disable of controls from `GET /permissions` once G1 lands (🔜), from the role table in `docs/api.md` until then.
 
 ### 3.1 App shell
 - **Regions:** top bar (tenant switcher, command palette trigger, user menu, theme toggle, SSE connection indicator), left section nav, bottom change-set bar (only with an open draft), toast area.
 - **Change-set bar fields:** `summary` (editable name), `author`, `state`, op count, per-type counts, buttons Review & apply / Discard. States: draft, pending_approval ("Awaiting approver"), applying (progress), failed (error + "Open review").
-- **Command palette:** jump to any object by name. Needs a name search over all collections (today `?name=` per collection; fan out client-side).
-- **Endpoints:** `GET /tenants` ✅, `GET /tenants/{t}/change-sets?state=draft` ✅ (list is thin ⚠️ G10), `POST /tenants/{t}/change-sets` ✅, `GET /me` ❌ G1.
+- **Command palette:** `GET /tenants/{t}/search?q=&types=` returns best matches first (objects by name; services by VIP, certificates by SAN, pools by member address).
+- **Endpoints:** `GET /tenants` ✅, `GET /tenants/{t}/change-sets?state=draft` ✅ (`base_revision`, `created_at`, `op_count`), `POST /tenants/{t}/change-sets` ✅, `GET /me` ✅, `GET /tenants/{t}/search` ✅, `GET /tenants/{t}/status/stream` ✅ (connection indicator = this stream).
 
 ### 3.2 Login
 - **Shows:** enabled identity providers (name, protocol oidc|saml), optional break-glass link (password + TOTP).
-- **States:** loading, no providers configured, provider error, session expired (returns to prior URL).
-- **Endpoints:** provider list ❌, OIDC/SAML redirect and callback ❌, break-glass ❌ (all G1). Temporary stand-in: "paste an API token" form (works today with bearer auth).
+- **States:** loading, no providers configured, provider error, session expired (returns to prior URL). Failed browser logins land on `/login?error=<code>` (`provider_error`, `expired`, `no_access`, `disabled`).
+- **Endpoints:** `GET /auth/providers` ✅, `GET /auth/login/{provider}` ✅ (redirect), OIDC `GET` and SAML `POST /auth/callback/{provider}` ✅, `POST /auth/break-glass` ✅, `POST /auth/logout` ✅. Stand-in without a provider: "paste an API token" form (bearer auth).
 
 ### 3.3 Tenant home
-- **Cards:** health summary (VSs by status), failing members (from status `members`), drifted engines (`drift`), expiring certs (`certificates[].not_after`, warn at 30 days), recent revisions, running jobs, open drafts.
-- **Interactions:** each card item links to the object; "Jump to problems".
-- **Endpoints:** `GET status/engines` ✅⚠️ (untyped dicts), `GET certificates` ✅, `GET revisions` ✅, `GET change-sets` ✅, jobs list ❌ (G6), VS health rollup ❌ (derive from status; VS-level health not exposed).
+- **Cards:** services by health (`services`), failing members, drifted engines, unreachable engines, certificates expiring within 30 days (with `days_left`), running/queued/failed jobs, open drafts and drafts awaiting approval, latest revision.
+- **Interactions:** each item links to the object; "Jump to problems".
+- **Endpoint:** `GET /tenants/{t}/summary` ✅ (one call, lists capped at 50). Detail behind each card: `status/engines`, `status/virtual-services`, `certificates?expires_within_days=30`, `jobs?state=`, `change-sets?state=`, `revisions`.
 
 ### 3.4 Virtual services list
-- **Columns (API):** `name`, `vip`, `ports[].port`, `protocol`, `se_group_id` (resolve to name), `enabled`, `draft_status`. **Columns without data today:** health, RPS, p95, 5xx (G4), cert expiry (derive from `certificate_ids` → `not_after`).
-- **Interactions:** filter by name (✅ `?name=`), by SE group/label (❌ G10), sort (fixed by name today), enable/disable (PATCH `enabled` → draft op), create (wizard), delete.
+- **Columns:** `name`, `vip`, `ports[].port`, `protocol`, `se_group_id` (resolve to name), `enabled`, `draft_status`, **health** (`status/virtual-services`: `health`, `members_up/members_total`), **RPS, 5xx** (`metrics/virtual-services`; ⚠️ `available: false` until telemetry exists, show "no data source"), cert expiry (derive from `certificate_ids` → `not_after`). p95 is on the detail page only.
+- **Interactions:** filter by `q`, `se_group`, `protocol`, `enabled`, `pool`, `certificate`; sort `name|-name`; enable/disable (PATCH `enabled` → draft op); create (wizard); delete. No label filter (dropped).
 - **States:** standard; plus "N unsaved changes" in draft mode and deleted-in-draft rows.
-- **Endpoints:** `GET virtual-services?name&change_set&cursor&limit` ✅, `PATCH virtual-services/{id}` ✅ (needs `If-Match`), `DELETE` ✅.
+- **Endpoints:** `GET virtual-services?q&se_group&protocol&enabled&sort&change_set&cursor&limit` ✅, `PATCH virtual-services/{id}` ✅ (`If-Match`), `DELETE` ✅.
 
 ### 3.5 Virtual service detail (tabs: Overview, Settings, Rendered config, History)
-- **Settings fields:** `name`, `enabled`, `protocol` (http|tcp|udp), `se_group_id`, `vip` or `vip_pool_id` (allocate), `ports[]` (`port`, `tls`, `http2`, `proxy_protocol`, `https_redirect_port`), `certificate_ids[]`, `default_pool_id`, `routes[]` (`order`, `match{host, path_prefix, path_exact}`, `pool_id` | `redirect{location, code}`), `policy_set_ids[]`, `allow_list_id`, `enforce_allow_list`, `restore_client_ip_header`.
-- **Overview:** route table (host/path → pool), live member status per pool (from status `members`), latency breakdown and log tail (❌ G4), rendered `frontend` snippet.
+- **Settings fields:** `name`, `enabled`, `protocol` (http|tcp|udp), `se_group_id`, `vip` or `vip_pool_id` (suggest with `POST vip-pools/{id}/next-free`), `ports[]` (`port`, `tls`, `http2`, `proxy_protocol`, `https_redirect_port`), `certificate_ids[]`, `default_pool_id`, `routes[]` (`match{host, path_prefix, path_exact}`, `pool_id` | `redirect{location, code}`), `policy_set_ids[]`, `allow_list_id`, `enforce_allow_list`, `restore_client_ip_header`. For UDP, take the disabled fields from `GET /schema/virtual-service?protocol=udp`.
+- **Overview:** health chip and member counts, route table (host/path → pool), live member status per pool (from `status/engines` `members`), metrics charts (`GET virtual-services/{id}/metrics`: RPS, p95, 5xx ratio, sessions; ⚠️ `available: false` → "no data source") and access-log tail (`GET virtual-services/{id}/logs`; ⚠️ same), rendered frontend.
+- **Rendered config tab:** `GET virtual-services/{id}/rendered[?change_set=]` ✅ (`file`, `language`, `content`, `fingerprint`, per SE group). With a draft it shows the draft's output; pair with the diff for before/after.
+- **History tab:** `GET revisions?object={id}` ✅ (revisions that touched it); runtime events (member drains) are audit events of the pool: `GET audit-events?object=…` ⚠️ only for objects that audit with their own reference (engines, jobs, tokens, change sets).
 - **Interactions:** edit fields (adds ops), add/reorder routes, drain a member (runtime, `Live`), enable/disable.
 - **Validation messages to design:** VIP outside the SE group's networks, port collision on a VIP, cert SANs not covering a route host, route with both pool and redirect, route with neither (field paths come back in `errors[].path`).
-- **Endpoints:** `GET/PATCH virtual-services/{id}?change_set=` ✅, `PUT pools/{pool}/members/{member}/state` ✅, rendered ❌ G3, History tab: audit events filtered by object ❌ (audit has only `limit`).
+- **Endpoints:** as above plus `GET/PATCH virtual-services/{id}?change_set=` ✅, `PUT pools/{pool}/members/{member}/state` ✅.
 
 ### 3.6 Create virtual service wizard
-Steps: basics (`name`, `protocol`, `se_group_id`) → VIP (`vip_pool_id` pick or fixed `vip`) → ports and TLS (`ports[]`, `certificate_ids[]`) → routes and pools (`routes[]`, `default_pool_id`, create pool inline) → health check (pick/create monitor) → review (field summary + validator problems) → "Add to change set".
-- **States:** per-step validation, back/next retains input, no VIP pools available (empty with link to Networks and VIP pools), no certs for TLS (link to import).
-- **Endpoints:** `POST virtual-services?change_set=` ✅ (returns `Accepted{change_set_id, object_id, op_index}`); inline pool/monitor creation uses additional ops via `POST change-sets/{cs}/ops` ✅ (atomic multi-object). Pre-flight validation without saving: use the diff `problems` ✅.
+Steps: basics (`name`, `protocol`, `se_group_id`) → VIP (`vip_pool_id` pick or fixed `vip`; show pool usage from `vip-pools/{id}/allocations`) → ports and TLS (`ports[]`, `certificate_ids[]`) → routes and pools (`routes[]`, `default_pool_id`, create pool inline) → health check (pick/create monitor) → review (field summary + validator problems) → "Add to change set".
+- **States:** per-step validation, back/next retains input, no VIP pools available (empty with link to Networks and VIP pools), no certs for TLS (link to import), pool exhausted (`409` from `next-free`).
+- **Endpoints:** `POST virtual-services?change_set=` ✅ (returns `Accepted{change_set_id, object_id, op_index}`); inline pool/monitor creation uses additional ops via `POST change-sets/{cs}/ops` ✅ (atomic multi-object). Pre-flight validation without saving: the diff `problems` ✅.
 
 ### 3.7 Pools
-- **Fields:** `name`, `algorithm` (roundrobin|leastconn|source|random), `health_monitor_id`, `tls`, `tls_verify`, `persistence` (`type`, `table_size`, `timeout_s`; source-IP only today), `members[]` (`id`, `name`, `address`, `port`, `weight`, `admin_state` enabled|disabled|drain).
-- **Live per member:** state, last check result (from status `members`, shape undocumented ⚠️).
-- **Interactions:** add/remove/edit members (draft), enable/disable/drain at runtime (`Live`, confirm dialog, response `{state, applied, failed}` lists per-engine results → show partial failure), edit pool.
+- **Fields:** `name`, `algorithm` (roundrobin|leastconn|source|random), `health_monitor_id`, `tls`, `tls_verify`, `persistence` (`type`, `table_size`, `timeout_s`), `members[]` (`id`, `address`, `port`, `weight`, `admin_state` enabled|disabled|drain).
+- **Live per member:** `members[]` of `status/engines`: `backend` (`pool_<name>`), `server`, `status` (`UP`, `DOWN`, `DRAIN`, `MAINT`, `NOLB`; may carry a suffix such as `UP 1/2`; treat anything starting with `UP` as up). Chip map: `UP` healthy, `DRAIN` draining, `MAINT`/`NOLB` disabled, `DOWN` down.
+- **Interactions:** add/remove/edit members (draft), enable/disable/drain at runtime (`Live`, confirm dialog, response `{state, applied, failed}` lists per-engine results → show partial failure), edit pool. Filter pools by `health_monitor`.
 - **Endpoints:** CRUD ✅; `PUT pools/{pool}/members/{member}/state` ✅.
 
 ### 3.8 Health monitors
-- **Fields:** `name`, `type` (tcp|http), `interval_s`, `timeout_s`, `rise`, `fall`, `port`, `http{method GET|HEAD|OPTIONS, path, host, expect_status[]}`; "pools using it" (derive client-side from pools).
-- **Interactions:** edit; "test against one member" ❌ (G9).
+- **Fields:** `name`, `type` (tcp|http|udp), `interval_s`, `timeout_s`, `rise`, `fall`, `port`, `http{method GET|HEAD|OPTIONS, path, host, expect_status[]}` (http only); "pools using it" (`GET pools?health_monitor={id}`).
+- **Interactions:** edit; "test against one member" ❌ (planned, 05 A3: design it, mark "blocked on API").
 - **Endpoints:** CRUD ✅.
 
 ### 3.9 Certificates
-- **Fields:** `name`, `source` (upload|cloudflare_origin|acme|step_ca), `sans[]`, `not_after`, `renew_policy` (manual|auto), `secret_ref` (an OpenBao reference; never show or accept key material in the form), "VSes using it" (derive).
-- **Expiry presentation:** ≤30 days warning, ≤7 danger, expired down; icon and text with each.
-- **Interactions:** import (name, SANs, secret_ref picker, not_after), edit renew policy, delete (blocked when in use; show which VSes). Issue (ACME / Origin CA) and "Renew now" are ❌ until M5 — design them as disabled with a "coming in U4" note.
-- **Note:** today certificates are metadata only; engines must already hold the PEMs (ADR 0007). The import dialog should say so until M5.
-- **Endpoints:** CRUD ✅; renew/issue ❌ (G9, M5).
+- **Fields:** `name`, `source` (upload|cloudflare_origin|acme|step_ca), `sans[]`, `not_after`, `renew_policy` (manual|auto), `secret_ref` (an OpenBao reference; reads never return key material), "VSes using it" (`GET virtual-services?certificate={id}`).
+- **Expiry presentation:** ≤30 days warning, ≤7 danger, expired down; icon and text with each. Filter `expires_within_days`.
+- **Interactions:** **import** (name + PEM chain and key; the PEM is sent once to the controller, which stores the key in OpenBao and keeps only the reference — say so in the dialog; never echo it back), **issue** (ACME or Cloudflare Origin CA, `sans[]`), **renew now**, edit renew policy, delete (blocked when in use; show which services). Issue and renew return `202 {job_id}`; the job's result carries `change_set_id` of the `system:certs` change set that records the certificate, so link "Review the change set". Import needs OpenBao: without a secrets backend it answers `503` (show the reason). Issue and renew queue a job; when ACME, Cloudflare or OpenBao is missing the job ends `failed`/`dead` with the reason in `error`.
+- **Endpoints:** CRUD ✅; `POST certificates/import`, `POST certificates/issue`, `POST certificates/{id}/renew` ✅ (operator).
 
 ### 3.10 Policies
 - **Kinds** (shapes in §5): `redirect` (rules: match + redirect), `allow_list` (CIDRs, optional `managed_by: cloudflare`).
-- **UI:** list with kind filter; rule builder for redirects; CIDR list editor with validation for allow lists; Cloudflare-managed lists are read-only with a "Managed by Cloudflare sync" badge.
-- **Endpoints:** CRUD ✅⚠️ (free-form body, G7).
+- **UI:** list with `kind` filter; rule builder for redirects; CIDR list editor with validation for allow lists; Cloudflare-managed lists are read-only with a "Managed by Cloudflare sync" badge.
+- **Endpoints:** CRUD ✅ (typed `oneOf` on `kind`).
 
 ### 3.11 Networks and VIP pools
 - **Network fields:** `name`, `cidr`, `gateway`, `sdn_zone`, `vnet`, `vlan_or_vni`, `managed` (created by controller vs attached).
-- **VIP pool fields:** `name`, `network_id`, `ranges[]` (`start`, `end`).
-- **Needed for design but not in API:** IP usage bar (used/total per pool), allocations list (IP → VS), release IP (❌ G9). Design with these.
-- **States:** pending SDN apply (job), network in use (delete blocked).
-- **Endpoints:** CRUD ✅ (both); allocations/usage ❌ (domain has `ipam.py`; no route). M4 owns Proxmox/SDN.
+- **VIP pool fields:** `name`, `network_id`, `ranges[]` (`start`, `end`). **Usage:** `GET vip-pools/{id}/allocations` ✅ → `total`, `used`, `free`, `allocations[]` (address, service, `enabled`, `draft_status`), `next_free`. **Release** is not a call: an address is held by the service that carries it, so release = change or delete that service in a change set. `POST vip-pools/{id}/next-free` suggests an address (nothing reserved).
+- **States:** pending SDN apply (job), network in use (delete blocked), pool exhausted.
+- **Endpoints:** CRUD ✅ (both; tenant-admin); `POST networks/apply-sdn` ✅ (202 job; managed networks only).
 
 ### 3.12 SE groups, engines, routing profiles
-- **SE group fields:** `name`, `ha_mode` (bgp|vrrp), `networks[]` (`network_id`, `role` vip|backend|mgmt), `maxconn`, `canary_seconds`, `routing_profile_id`.
-- **Engines (SEs) per group:** `id`, `name`, `url` (data plane), `state` (enabled|disabled); register via `EngineIn` (`name`, `dataplane_url`, `credentials_ref`, `mgmt_ip`, `agent_url`). Live per engine: `reachable`, `error`, `haproxy_fingerprint` (config hash), `agent` (VRRP/BGP state, untyped), `drift`, `observed_at`.
-- **Interactions:** register, enable/disable, remove engine (runtime, `Live`); deploy VM, add/remove VM, redeploy one SE (❌ M4, show as the U3 target).
-- **Routing profiles** (shapes in §5): VRRP profile or BGP profile with peers; BGP peer session state and advertised prefixes (❌ not in API; the `agent` status blob may carry it, undocumented).
-- **Endpoints:** SE groups CRUD ✅; engines `GET/POST se-groups/{group}/engines`, `PUT engines/{engine}/state?state=`, `DELETE engines/{engine}` ✅; `GET status/engines` ✅⚠️; routing profiles CRUD ✅⚠️.
+- **SE group fields:** `name`, `ha_mode` (bgp|vrrp), `networks[]` (`network_id`, `role` vip|backend|mgmt), `maxconn`, `canary_seconds`, `routing_profile_id`. Filter `ha_mode`.
+- **Engines (SEs):** `GET engines` (all) / `GET se-groups/{g}/engines`; fields `id`, `name`, `url`, `state`, `se_group_id`, `mgmt_ip`, `agent_url`, `pve_node`, `vmid`, `agent_enrolled`, `agent_cert_serial`. Live per engine from `status/engines`: `reachable`, `error`, `haproxy_fingerprint`, `drift[]`, `observed_at`, `agent{version, bundle_id, haproxy_healthy, routes_withdrawn, bgp[], vrrp[], ipvs[]}`.
+- **State values for chips:** BGP session `state` (FRR): `Idle`, `Connect`, `Active`, `OpenSent`, `OpenConfirm`, `Established` (only `Established` is healthy); VRRP `state`: `MASTER`, `BACKUP`, `FAULT`; IPVS real server `state`: `up`, `down`, `drain`. `routes_withdrawn` is one boolean (some prefix is withdrawn); the list of withdrawn prefixes is ❌ (planned, 05 A13).
+- **Interactions:** register (hand-built), enable/disable (runtime, `Live`), **Remove** (record only, VM keeps running), **Retire** (destroys the VM and removes the record; refused for the last serving engine; job), **Deploy** (`count`, `nodes`, `template_vmid`, `mgmt_pool_id`, optional `ssh_public_keys` for people to log in to the VM — the controller never uses SSH; job), **Create enrollment token** per engine (deploy does not create them; show the `sy-agent enroll` command). Host online state ❌.
+- **Routing profiles** (shapes in §5): VRRP profile or BGP profile with peers. Filter `kind`.
+- **Endpoints:** SE groups CRUD ✅; engines `GET/POST se-groups/{g}/engines`, `GET engines`, `GET engines/{id}`, `PUT engines/{id}/state?state=`, `DELETE engines/{id}`, `POST engines/{id}/retire`, `POST engines/{id}/enrollment-token`, `POST se-groups/{g}/deploy` ✅ (tenant-admin); `GET status/engines` ✅; routing profiles CRUD ✅.
 
 ### 3.13 Change sets: review, apply, conflicts, approval
 Screens: list (open drafts, history), full-screen review (tabs Objects / Config / Impact), apply progress, conflict resolver, approval banner.
-- **List fields:** `id`, `summary`, `author`, `state` (draft|pending_approval|applying|applied|failed|discarded). Detail adds `base_revision`, `approver`, `reject_comment`, `error`, `created_at`, `ops[]` (`action` create|update|delete, `object_type`, `object_id`, `body`, `expected_version`).
-- **Review / Objects:** from `diff.objects[]` (`type`, `id`, `name`, `status`, `changed_fields`) with before/after per field (client computes from live vs draft reads, or needs the diff to include values ⚠️). **Config:** `diff.se_groups[]` (`id`, `name`, `error`, `files[]`). **Impact:** `diff.problems[]` (`path`, `code`, `message`) shown as warnings/blocks; the VIPs/SEs/hostnames list needs G8.
-- **Apply:** `POST …/apply` → `202 {job_id}`; optional body `{break_glass_reason}` for system-admin bypass (mandatory reason field in the dialog, flagged in audit). Progress stages per the design; failure shows the failed stage and `error`; draft stays open.
-- **Approval (when tenant `require_approval`):** button becomes "Request approval" → state `pending_approval`; approver (different person) sees the same review with Approve (applies) / Reject (required `comment`, reopens draft). Show approver/reject_comment in the banner. Edits after request void it.
-- **Conflicts:** stale `expected_version` → three-way view (base, theirs, yours) per field (needs G8).
-- **Endpoints:** all ✅ except conflict and progress detail: `GET/POST change-sets`, `GET change-sets/{cs}`, `POST …/ops`, `DELETE …/ops/{index}`, `GET …/diff`, `POST …/apply|discard|request-approval|approve|reject`.
+- **List fields:** `id`, `summary`, `author`, `state` (draft|pending_approval|applying|applied|failed|discarded), `base_revision`, `created_at`, `op_count`. Detail adds `approver`, `reject_comment`, `error`, `ops[]` (`action` create|update|delete, `object_type`, `object_id`, `body`, `expected_version`).
+- **Review / Objects:** `diff.objects[]` (`type`, `id`, `name`, `status`, `changed_fields`); before/after values come from the live and draft reads. **Config:** `diff.se_groups[]` (`id`, `name`, `error`, `files[]` with `before`, `after`, unified `diff`). **Impact:** `diff.problems[]` (block), `diff.warnings[]` (never block), `diff.impact` (`services[]`, `vips[]`, `se_groups[]`, `hostnames[]`).
+- **Apply:** `POST …/apply` → `202 {job_id}`; optional body `{break_glass_reason}` for a system administrator on a tenant that requires approval. **When the tenant has `require_approval` and the caller is not a system administrator, the call answers `403`** — hide Apply (from `tenant.require_approval` and the caller's role) and offer "Request approval". Progress: `GET jobs/{id}` stages lock, render, validate, canary, rollout, commit, or the `job_progress` event; failure shows the failed stage and `error`; the draft stays open.
+- **Approval:** "Request approval" → `pending_approval`; a tenant administrator other than the author or requester sees Approve (applies) / Reject (required `comment`, reopens the draft). Show approver and `reject_comment` in the banner. Edits after the request void it.
+- **Conflicts:** a stale `expected_version` answers `412` with `conflict{object_type, object_id, expected_version, current_version}`. Three-way view: *base* = what the client had read, *theirs* = `GET` of the object, *yours* = the operation `body`; resolve and resend with `expected_version: current_version`.
+- **Endpoints:** all ✅: `GET/POST change-sets`, `GET change-sets/{cs}`, `POST …/ops`, `DELETE …/ops/{index}`, `GET …/diff`, `POST …/apply|discard|request-approval|approve|reject`.
 
 ### 3.14 Revisions
 - **Fields:** `number`, `author`, `summary`, `git_sha`, `created_at`; detail adds `snapshot` (full desired state).
-- **Interactions:** diff any two (client-side from two snapshots ✅ possible; confirm a diff view over object JSON), "Roll back to #N" → `POST revisions/{n}/rollback` returns a pre-filled change set (`201`, same shape as change-set detail) and opens the standard review.
-- **Endpoints:** `GET revisions` ✅, `GET revisions/{n}` ✅, `POST revisions/{n}/rollback` ✅.
+- **Interactions:** diff any two (client-side from two snapshots), history of one object (`?object={id}`), "Roll back to #N" → `POST revisions/{n}/rollback` returns a pre-filled change set (`201`) and opens the standard review (tenant-admin).
+- **Endpoints:** `GET revisions[?object=]` ✅ (paged), `GET revisions/{n}` ✅, `POST revisions/{n}/rollback` ✅.
 
 ### 3.15 Jobs
-- **Fields available:** `id`, `kind`, `state`, `attempts`, `error`, `result`. **Needed:** list, started/finished times, stages, log lines, linked change set, retry, cancel (❌ G6).
-- **Note:** a reverted or rejected apply is a *finished* job with `result.ok: false`, not a failed one (ADR 0007). Design must show "Reverted" distinct from "Retrying after infrastructure error".
-- **Endpoints:** `GET /jobs/{id}` ✅ (no tenant in path).
+- **List fields:** `id`, `kind` (enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert`, `renew_certs`, `sync_cloudflare_ips`, `poll_status`, `git_mirror`, `gc`), `state` (queued|running|succeeded|failed|dead|cancelled), `change_set_id`, `created_at`, `started_at`, `finished_at`, `attempts/max_attempts`, `retrying`, `ok`, `error`.
+- **Detail:** `stages[]` (name, state, timing, error), typed `result` (apply: `ok`, `revision_number`, per-group results; `issue_cert`: `change_set_id`), log (`GET jobs/{id}/log`, latest 500 lines). A reverted or rejected apply is a *finished* job with `ok: false`, not a failed one (ADR 0007): show "Reverted" distinct from "Retrying after infrastructure error".
+- **Actions:** retry a `dead` job, cancel a `queued` job (operator; `409` otherwise). Live updates: `job_progress` event.
+- **Endpoints:** `GET jobs?state&kind&cursor&limit`, `GET jobs/{id}`, `GET jobs/{id}/log`, `POST jobs/{id}/retry|cancel` ✅.
 
-### 3.16 Admin (system-admin only)
-- **Tenants:** `name`, `oidc_group`, `quotas` (map of name → int), `require_approval` toggle (audited; settings page shows who/when from audit). `GET/POST /tenants`, `GET/PATCH/DELETE /tenants/{t}` ✅.
-- **API tokens:** list `id`, `name`, `role` (viewer|operator|tenant-admin|system-admin), `revoked`, `expires_at`; create (`name`, `role`, `ttl_days`) returns the plaintext `token` **once** — design a copy-once dialog. Revoke is runtime + confirm. ✅.
-- **Audit log:** `at`, `actor`, `action`, `object`, `diff`, `request_id`. Only `limit` (≤500) supported; filter by actor/action/object/date and cursor ❌ G10.
-- **Identity providers, role mappings:** ❌ G1/G9 (fields in backend design: name, protocol, issuer/metadata URL, client_secret_ref, claim mapping, enabled; group → role per tenant).
+### 3.16 Admin and access
+- **Tenants (system-admin):** `name`, `quotas`, `require_approval` toggle (audited). `GET/POST /tenants`, `GET/PATCH/DELETE /tenants/{t}` ✅. `oidc_group` is a legacy field that G1-5 removes (replaced by role mappings) 🔜.
+- **Tenant access and settings (tenant-admin):** members and role mappings 🔜 (G1-5, G1-6); tokens ✅.
+- **Tenant API tokens:** list `id`, `name`, `role`, `revoked`, `expires_at`; create (`name`, `role`, `ttl_days`) returns the plaintext `token` **once** — copy-once dialog. Revoke is runtime + confirm. ✅. **System tokens** (separate admin page) 🔜 G1-7.
+- **Audit log:** tenant view `GET tenants/{t}/audit-events` and system view `GET /audit-events?tenant=` (system-admin): filters `actor`, `action` (`change_set.*` prefix), `object`, `since`, `until`, `q`; cursor; each event has `at`, `tenant_id`, `actor`, `action`, `object`, `diff`, `request_id`. Labels and filter options from `GET /audit-actions` (action, category, description). ✅
+- **Users, identity providers, role mappings, break-glass administration, system tokens:** 🔜 G1-3 to G1-7 (see 05). Design from the spec in 02 and the ticket text; mark "blocked on API".
 
 ---
 
 ## 4. Endpoint inventory (implemented)
 
-Base `/api/v1`. All except `healthz` need `Authorization: Bearer <token>`. Errors are `application/problem+json` (`type`, `title`, `status`, `detail`, `errors[{path, code, message}]`).
+Base `/api/v1`. Generated from `docs/api/openapi.json`; the *Role* column is the minimum role (`public` needs none).
+Errors are `application/problem+json` (`type`, `title`, `status`, `detail`, `errors[{path, code, message}]`, and
+`conflict` on a stale version).
 
-| Area | Endpoints |
-| --- | --- |
-| Meta | `GET /healthz` |
-| Tenants | `GET/POST /tenants`; `GET/PATCH/DELETE /tenants/{t}` |
-| Objects (×9: `networks`, `vip-pools`, `se-groups`, `routing-profiles`, `virtual-services`, `pools`, `health-monitors`, `certificates`, `policy-sets`) | `GET /tenants/{t}/{type}?name&change_set&cursor&limit`; `GET …/{id}?change_set`; `POST …?change_set=|apply=true` (202 `Accepted`); `PATCH …/{id}` (needs `If-Match`); `DELETE …/{id}` |
-| Change sets | `GET/POST /change-sets`; `GET /{cs}`; `POST /{cs}/ops`; `DELETE /{cs}/ops/{index}`; `GET /{cs}/diff`; `POST /{cs}/apply`, `/discard`, `/request-approval`, `/approve`, `/reject` |
-| Revisions | `GET /revisions`; `GET /revisions/{n}`; `POST /revisions/{n}/rollback` |
-| Runtime | `PUT /pools/{pool}/members/{member}/state`; `PUT /engines/{engine}/state?state=`; `DELETE /engines/{engine}`; `GET/POST /se-groups/{group}/engines` |
-| Status | `GET /status/engines`; `GET /status/stream?follow&interval` (SSE, `event: status`) |
-| Tokens / audit / jobs | `GET/POST /tokens`, `DELETE /tokens/{token}`; `GET /audit-events?limit`; `GET /jobs/{job_id}` |
+| Area | Method and path | Role | What it does |
+| --- | --- | --- | --- |
+| meta | `GET /healthz` | public | Liveness check |
+| meta | `GET /schema/virtual-service` | authenticated | Field rules of a virtual service protocol |
+| auth | `POST /auth/break-glass` | public | Log in the break-glass administrator |
+| auth | `GET /auth/callback/{provider}` | public | Finish a login |
+| auth | `POST /auth/callback/{provider}` | public | SAML assertion consumer service |
+| auth | `GET /auth/login/{provider}` | public | Start a login |
+| auth | `POST /auth/logout` | authenticated | Log out |
+| auth | `GET /auth/providers` | public | List login providers |
+| auth | `GET /auth/saml/{provider}/metadata` | public | SAML service-provider metadata |
+| auth | `GET /me` | authenticated | Who am I |
+| tenants | `GET /tenants` | authenticated | List tenants |
+| tenants | `POST /tenants` | system-admin | Create a tenant |
+| tenants | `DELETE /tenants/{t}` | system-admin | Delete a tenant |
+| tenants | `GET /tenants/{t}` | viewer | Get a tenant |
+| tenants | `PATCH /tenants/{t}` | tenant-admin | Change a tenant |
+| networks | `GET /tenants/{t}/networks` | viewer | List networks |
+| networks | `POST /tenants/{t}/networks` | tenant-admin | Create one of the networks |
+| networks | `DELETE /tenants/{t}/networks/{object_id}` | tenant-admin | Delete one of the networks |
+| networks | `GET /tenants/{t}/networks/{object_id}` | viewer | Get one of the networks |
+| networks | `PATCH /tenants/{t}/networks/{object_id}` | tenant-admin | Change one of the networks |
+| vip-pools | `GET /tenants/{t}/vip-pools` | viewer | List vip pools |
+| vip-pools | `POST /tenants/{t}/vip-pools` | tenant-admin | Create one of the vip pools |
+| vip-pools | `DELETE /tenants/{t}/vip-pools/{object_id}` | tenant-admin | Delete one of the vip pools |
+| vip-pools | `GET /tenants/{t}/vip-pools/{object_id}` | viewer | Get one of the vip pools |
+| vip-pools | `PATCH /tenants/{t}/vip-pools/{object_id}` | tenant-admin | Change one of the vip pools |
+| vip-pools | `GET /tenants/{t}/vip-pools/{pool_id}/allocations` | viewer | Usage and allocations of a VIP pool |
+| vip-pools | `POST /tenants/{t}/vip-pools/{pool_id}/next-free` | viewer | Suggest the next free address of a VIP pool |
+| se-groups | `GET /tenants/{t}/se-groups` | viewer | List se groups |
+| se-groups | `POST /tenants/{t}/se-groups` | tenant-admin | Create one of the se groups |
+| se-groups | `DELETE /tenants/{t}/se-groups/{object_id}` | tenant-admin | Delete one of the se groups |
+| se-groups | `GET /tenants/{t}/se-groups/{object_id}` | viewer | Get one of the se groups |
+| se-groups | `PATCH /tenants/{t}/se-groups/{object_id}` | tenant-admin | Change one of the se groups |
+| se-groups | `GET /tenants/{t}/se-groups/{object_id}/rendered` | viewer | Rendered config of a se group |
+| routing-profiles | `GET /tenants/{t}/routing-profiles` | viewer | List routing profiles |
+| routing-profiles | `POST /tenants/{t}/routing-profiles` | tenant-admin | Create one of the routing profiles |
+| routing-profiles | `DELETE /tenants/{t}/routing-profiles/{object_id}` | tenant-admin | Delete one of the routing profiles |
+| routing-profiles | `GET /tenants/{t}/routing-profiles/{object_id}` | viewer | Get one of the routing profiles |
+| routing-profiles | `PATCH /tenants/{t}/routing-profiles/{object_id}` | tenant-admin | Change one of the routing profiles |
+| virtual-services | `GET /tenants/{t}/metrics/virtual-services` | viewer | Headline metrics of every virtual service |
+| virtual-services | `GET /tenants/{t}/virtual-services` | viewer | List virtual services |
+| virtual-services | `POST /tenants/{t}/virtual-services` | operator | Create one of the virtual services |
+| virtual-services | `DELETE /tenants/{t}/virtual-services/{object_id}` | operator | Delete one of the virtual services |
+| virtual-services | `GET /tenants/{t}/virtual-services/{object_id}` | viewer | Get one of the virtual services |
+| virtual-services | `PATCH /tenants/{t}/virtual-services/{object_id}` | operator | Change one of the virtual services |
+| virtual-services | `GET /tenants/{t}/virtual-services/{object_id}/logs` | viewer | Access log of a virtual service |
+| virtual-services | `GET /tenants/{t}/virtual-services/{object_id}/metrics` | viewer | Metrics of a virtual service |
+| virtual-services | `GET /tenants/{t}/virtual-services/{object_id}/rendered` | viewer | Rendered config of a virtual service |
+| pools | `GET /tenants/{t}/pools` | viewer | List pools |
+| pools | `POST /tenants/{t}/pools` | operator | Create one of the pools |
+| pools | `DELETE /tenants/{t}/pools/{object_id}` | operator | Delete one of the pools |
+| pools | `GET /tenants/{t}/pools/{object_id}` | viewer | Get one of the pools |
+| pools | `PATCH /tenants/{t}/pools/{object_id}` | operator | Change one of the pools |
+| pools | `GET /tenants/{t}/pools/{object_id}/rendered` | viewer | Rendered config of a pool |
+| pools | `PUT /tenants/{t}/pools/{pool}/members/{member}/state` | operator | Set a pool member's runtime state |
+| health-monitors | `GET /tenants/{t}/health-monitors` | viewer | List health monitors |
+| health-monitors | `POST /tenants/{t}/health-monitors` | operator | Create one of the health monitors |
+| health-monitors | `DELETE /tenants/{t}/health-monitors/{object_id}` | operator | Delete one of the health monitors |
+| health-monitors | `GET /tenants/{t}/health-monitors/{object_id}` | viewer | Get one of the health monitors |
+| health-monitors | `PATCH /tenants/{t}/health-monitors/{object_id}` | operator | Change one of the health monitors |
+| health-monitors | `GET /tenants/{t}/health-monitors/{object_id}/rendered` | viewer | Rendered config of a health monitor |
+| certificates | `GET /tenants/{t}/certificates` | viewer | List certificates |
+| certificates | `POST /tenants/{t}/certificates` | operator | Create one of the certificates |
+| certificates | `POST /tenants/{t}/certificates/import` | operator | Import a certificate and key |
+| certificates | `POST /tenants/{t}/certificates/issue` | operator | Issue a certificate (ACME or Cloudflare Origin CA) |
+| certificates | `POST /tenants/{t}/certificates/{certificate}/renew` | operator | Renew a certificate |
+| certificates | `DELETE /tenants/{t}/certificates/{object_id}` | operator | Delete one of the certificates |
+| certificates | `GET /tenants/{t}/certificates/{object_id}` | viewer | Get one of the certificates |
+| certificates | `PATCH /tenants/{t}/certificates/{object_id}` | operator | Change one of the certificates |
+| certificates | `GET /tenants/{t}/certificates/{object_id}/rendered` | viewer | Rendered config of a certificate |
+| policy-sets | `GET /tenants/{t}/policy-sets` | viewer | List policy sets |
+| policy-sets | `POST /tenants/{t}/policy-sets` | operator | Create one of the policy sets |
+| policy-sets | `DELETE /tenants/{t}/policy-sets/{object_id}` | operator | Delete one of the policy sets |
+| policy-sets | `GET /tenants/{t}/policy-sets/{object_id}` | viewer | Get one of the policy sets |
+| policy-sets | `PATCH /tenants/{t}/policy-sets/{object_id}` | operator | Change one of the policy sets |
+| policy-sets | `GET /tenants/{t}/policy-sets/{object_id}/rendered` | viewer | Rendered config of a policy set |
+| change-sets | `GET /tenants/{t}/change-sets` | viewer | List change sets |
+| change-sets | `POST /tenants/{t}/change-sets` | operator | Open a draft change set |
+| change-sets | `GET /tenants/{t}/change-sets/{cs}` | viewer | Get a change set with its operations |
+| change-sets | `POST /tenants/{t}/change-sets/{cs}/apply` | operator | Apply a change set |
+| change-sets | `POST /tenants/{t}/change-sets/{cs}/approve` | tenant-admin | Approve and apply a change set |
+| change-sets | `GET /tenants/{t}/change-sets/{cs}/diff` | viewer | Preview what a change set would change |
+| change-sets | `POST /tenants/{t}/change-sets/{cs}/discard` | operator | Discard a draft |
+| change-sets | `POST /tenants/{t}/change-sets/{cs}/ops` | operator | Add operations to a draft |
+| change-sets | `DELETE /tenants/{t}/change-sets/{cs}/ops/{index}` | operator | Remove an operation from a draft |
+| change-sets | `POST /tenants/{t}/change-sets/{cs}/reject` | tenant-admin | Reject a change set |
+| change-sets | `POST /tenants/{t}/change-sets/{cs}/request-approval` | operator | Ask for approval |
+| revisions | `GET /tenants/{t}/revisions` | viewer | List revisions |
+| revisions | `GET /tenants/{t}/revisions/{n}` | viewer | Get a revision with its full desired state |
+| revisions | `POST /tenants/{t}/revisions/{n}/rollback` | tenant-admin | Open a change set that restores a revision |
+| engines | `POST /enroll` | public | Trade an enrollment token and CSR for a certificate |
+| engines | `GET /tenants/{t}/engines` | viewer | List every engine of the tenant |
+| engines | `DELETE /tenants/{t}/engines/{engine}` | tenant-admin | Remove an engine record |
+| engines | `GET /tenants/{t}/engines/{engine}` | viewer | Get one engine |
+| engines | `POST /tenants/{t}/engines/{engine}/enrollment-token` | tenant-admin | Create an agent enrollment token |
+| engines | `PUT /tenants/{t}/engines/{engine}/state` | tenant-admin | Enable or disable an engine |
+| engines | `GET /tenants/{t}/se-groups/{group}/engines` | viewer | List an SE group's engines |
+| engines | `POST /tenants/{t}/se-groups/{group}/engines` | tenant-admin | Register an engine |
+| infrastructure | `POST /tenants/{t}/engines/{engine}/retire` | tenant-admin | Retire an engine and destroy its VM |
+| infrastructure | `POST /tenants/{t}/networks/apply-sdn` | tenant-admin | Apply the Proxmox SDN objects of managed networks |
+| infrastructure | `POST /tenants/{t}/se-groups/{group}/deploy` | tenant-admin | Deploy engines for an SE group on Proxmox |
+| status | `GET /tenants/{t}/status/engines` | viewer | Last observed state of every engine |
+| status | `GET /tenants/{t}/status/stream` | viewer | Live events (server-sent events) |
+| status | `GET /tenants/{t}/status/virtual-services` | viewer | State of every virtual service |
+| status | `GET /tenants/{t}/summary` | viewer | Tenant home summary |
+| search | `GET /tenants/{t}/search` | viewer | Find objects by name |
+| jobs | `GET /jobs/{job_id}` | authenticated | Get a background job |
+| jobs | `GET /tenants/{t}/jobs` | viewer | List a tenant's jobs, newest first |
+| jobs | `GET /tenants/{t}/jobs/{job_id}` | viewer | Get a job with its stages |
+| jobs | `POST /tenants/{t}/jobs/{job_id}/cancel` | operator | Cancel a job that has not started |
+| jobs | `GET /tenants/{t}/jobs/{job_id}/log` | viewer | Get a job's log |
+| jobs | `POST /tenants/{t}/jobs/{job_id}/retry` | operator | Queue a dead job again |
+| audit | `GET /audit-actions` | authenticated | Catalog of audit event actions |
+| audit | `GET /audit-events` | system-admin | List audit events across tenants (system-admin) |
+| audit | `GET /tenants/{t}/audit-events` | viewer | List audit events, newest first |
+| tokens | `GET /tenants/{t}/tokens` | tenant-admin | List API tokens |
+| tokens | `POST /tenants/{t}/tokens` | tenant-admin | Create an API token (shown once) |
+| tokens | `DELETE /tenants/{t}/tokens/{token}` | tenant-admin | Revoke a token |
 
-**Still missing vs design (ordered by milestone):** `/me` and login (G1); rendered config (G3); metrics and logs (G4); finer SSE events and jobs list/stages (G5, G6); VIP allocations and release, health-monitor test (U2/U3); SE group deploy and Proxmox placement (M4); cert issue/renew (M5); identity providers and role mappings (M5/U4); audit filters; tenant-level `GET /search`.
+**Not backed by an API yet:** G1 endpoints (🔜), health-monitor test, per-prefix route withdrawal, host online state of
+Proxmox nodes, a telemetry pipeline behind metrics and logs, label filters (dropped).
 
 ---
 
-## 5. Object shapes Claude Design needs (not in OpenAPI yet)
+## 5. Object shapes (all in OpenAPI; summarised here)
 
 **Read envelope (all objects):** every object returns its create fields plus `id` (uuid), `version` (int; also the ETag), `tenant_id`, `draft_status` (`unchanged|modified|created|deleted`), `changed_fields` (string[]).
 
@@ -193,16 +323,20 @@ Base `/api/v1`. All except `healthz` need `Authorization: Bearer <token>`. Error
 - `vrrp`: `name`, `vrid` 1–255, `interface`, `advert_interval_s` 1–10, `base_priority` 2–254, `priority_step` 1–50, `static_routes[]` `{prefix, next_hop}`.
 - `bgp`: `name`, `asn`, `bfd` (bool), `peers[]` `{peer_ip, remote_asn, …}` (≥1; MD5 is a `secret_ref`, never a value), `max_paths` 1–64, `static_routes[]`.
 
-**Engine status (`status/engines`, SSE `status`):** `engine`, `engine_id`, `se_group_id`, `reachable`, `error`, `haproxy_fingerprint`, `members` (dict, undocumented), `agent` (dict, undocumented: VRRP/BGP/HAProxy health), `drift` (undocumented), `observed_at` (ISO). Poll interval ≈10 s; stream compares and emits on change.
+**Engine status (`status/engines`, event `status`):** `engine`, `engine_id`, `se_group_id`, `reachable`, `error`, `haproxy_fingerprint`, `members[{backend, server, status}]`, `agent{version, bundle_id, haproxy_healthy, routes_withdrawn, bgp[{peer, state, remote_asn}], vrrp[{name, state}], ipvs[…], file_hashes}`, `drift[{kind: haproxy_config|agent_bundle|agent_file|agent_unexpected_file, expected, actual, path}]`, `observed_at`. Polled about every 10 s.
 
-**Change-set diff:** `{objects[{type,id,name,status,changed_fields}], problems[{path,code,message}], se_groups[{id,name,error,files[…]}]}`.
+**Virtual service status (`status/virtual-services`, event `vs_state`):** `id`, `name`, `protocol`, `state` (`serving|disabled|not_served`), `health` (`healthy|degraded|down|unknown|disabled`), `members_up`, `members_total`.
+
+**Change-set diff:** `{objects[{type,id,name,status,changed_fields}], problems[{path,code,message}], warnings[{code,path,message}], impact{services[{id,name,vip,se_group_id}], vips[], se_groups[{id,name}], hostnames[]}, se_groups[{id,name,error,files[{path,status,diff,before,after}]}]}`.
+
+**Stream events (`status/stream`):** `status` (array of engine status), `vs_state` (array), `job_progress` (one job), `revision_applied` (one revision summary); every event has an `id`.
 
 ---
 
 ## 6. Handoff checklist for Claude Design
 
-1. **Design system first** (per 03 §"Design handoff"): shadcn tokens + Switchyard status tokens + custom components. This doc assumes it exists; nothing here redefines it.
-2. **Order of screens (U1 first):** app shell + change-set bar → tenant switcher → VS list/detail/wizard → pools, monitors, certificates, policies → review (Objects/Config/Impact), apply progress, approval, conflicts → revisions and rollback. U2: live status, SE groups, routing profiles, jobs, tenant home. U3: networks/IPAM, SE deploy. U4: certificate issuance, admin.
-3. **For every screen deliver:** empty, loading, error, open draft, pending approval, read-only and (where status exists) drift/stale states; 1280 px and 1920 px; light and dark.
-4. **Design with data that doesn't exist yet** (G4 metrics, IP usage, job stages, three-way diff) but mark those regions "blocked on API" in the mockups so the build isn't surprised.
-5. **Open the backend tickets for G1, G2, G3, G7, G6** now; U1 code generation depends on G1–G3 and G7.
+1. **Design system first** (per 03 §"Design handoff"): shadcn tokens + Switchyard status tokens + custom components. This doc assumes it exists; nothing here redefines it. The Claude Design canvas is the visual source.
+2. **Give Claude Design:** this file, `docs/api.md`, `docs/api/openapi.json` (or the live `/api/v1/docs` and `/api/v1/redoc`), `docs/design/05-frontend-backend-tickets.md` (G1 spec for the access screens), and ADRs 0007, 0012, 0016, 0030, 0040.
+3. **Order of screens (U1 first):** app shell + change-set bar → tenant switcher → VS list/detail/wizard → pools, monitors, certificates, policies → review (Objects/Config/Impact), apply progress, approval, conflicts → revisions and rollback. U2: live status, SE groups, routing profiles, jobs, tenant home, metrics. U3: networks/IPAM, SE deploy. U4: certificate issuance, admin and access.
+4. **For every screen deliver:** empty, loading, error, open draft, pending approval, read-only and (where status exists) drift/stale states; 1280 px and 1920 px; light and dark.
+5. **Mark "blocked on API"** only for the ❌ and 🔜 items: monitor test, per-prefix withdrawal, host online state, the G1 access screens; and show the "no data source" state for metrics and logs.

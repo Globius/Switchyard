@@ -8902,6 +8902,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Login is not configured on this controller."
           }
         },
         "security": [],
@@ -9002,6 +9012,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Login is not configured on this controller."
           }
         },
         "security": [],
@@ -9073,6 +9093,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Login is not configured on this controller."
           }
         },
         "security": [],
@@ -9139,6 +9169,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Login is not configured on this controller."
           }
         },
         "security": [],
@@ -9205,6 +9245,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Login is not configured on this controller."
           }
         },
         "summary": "Log out",
@@ -9238,6 +9288,16 @@
               }
             },
             "description": "Success"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Login is not configured on this controller."
           }
         },
         "security": [],
@@ -9305,6 +9365,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Login is not configured on this controller."
           }
         },
         "security": [],
@@ -9361,6 +9431,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Agent enrollment is not configured."
           }
         },
         "security": [],
@@ -11110,6 +11190,16 @@
               }
             },
             "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No secrets backend (OpenBao) is configured."
           }
         },
         "summary": "Import a certificate and key",
@@ -13969,6 +14059,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Agent enrollment is not configured."
           }
         },
         "summary": "Create an agent enrollment token",
