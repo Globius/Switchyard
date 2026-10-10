@@ -16,6 +16,7 @@ from testcontainers.community.postgres import PostgresContainer
 
 from switchyard.db import migrate
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
+from tests.lab import Lab
 
 if sys.platform == "win32":  # psycopg cannot use the default ProactorEventLoop
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -26,6 +27,19 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         if "tests/integration" in item.nodeid.replace("\\", "/"):
             item.add_marker(pytest.mark.docker)
+
+
+@pytest.fixture(scope="session")
+def lab_network() -> Iterator[Lab]:
+    """The Docker lab network (RFC 5737 range), shared by every test that needs real engines.
+
+    Tests start their containers inside ``lab_network.scope()`` so they are removed per module.
+    """
+    instance = Lab()
+    try:
+        yield instance
+    finally:
+        instance.close()
 
 
 @pytest.fixture(scope="session")

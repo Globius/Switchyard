@@ -11,6 +11,8 @@ dependencies = [
   "jinja2>=3.1.4",
   "typer>=0.15",
   "pyyaml>=6.0",
+  "httpx>=0.28.1",
+  "docker>=7.2.0",
 ]
 
 [project.scripts]
@@ -43,7 +45,7 @@ extend-exclude = ["tests/golden"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "D", "S", "PT", "T20"]
-ignore = ["D203", "D213", "RUF012"]
+ignore = ["D203", "D213", "RUF012", "N818"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D", "S101", "S105", "S106", "S608", "PT011", "E501"]
