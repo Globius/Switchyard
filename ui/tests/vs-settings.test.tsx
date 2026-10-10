@@ -300,4 +300,28 @@ describe("virtual service settings", () => {
     await waitFor(() => expect(screen.queryByText("Routes")).not.toBeInTheDocument());
     expect(screen.queryByText("Certificates and policies")).not.toBeInTheDocument();
   });
+
+  it("adds and removes ports, toggles flags, and discards edits", async () => {
+    renderAt("/t/acme/virtual-services/v1/settings");
+    await enabled("Port 1");
+    await userEvent.click(screen.getByRole("button", { name: "Add port" }));
+    expect(screen.getByLabelText("Port 2")).toHaveValue(80);
+    const boxes = screen.getAllByRole("checkbox", { name: "PROXY" });
+    await userEvent.click(boxes[1]!);
+    expect(boxes[1]).toBeChecked();
+    expect(screen.getByText("2 unsaved fields".replace("2", "1"))).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]!);
+    expect(screen.queryByLabelText("Port 2")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Discard edits" }));
+    expect(screen.getByRole("button", { name: "Add to change set" })).toBeDisabled();
+  });
+
+  it("changes SE group, VIP, enabled and default pool", async () => {
+    renderAt("/t/acme/virtual-services/v1/settings");
+    await userEvent.selectOptions(await enabled("SE group"), "g1");
+    await userEvent.type(screen.getByLabelText("VIP"), "1");
+    await userEvent.click(screen.getByRole("checkbox", { name: "Enabled" }));
+    await userEvent.selectOptions(screen.getByLabelText("Default pool"), "p1");
+    expect(screen.getByText("3 unsaved fields")).toBeInTheDocument();
+  });
 });
