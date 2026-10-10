@@ -4,6 +4,52 @@
  */
 
 export interface paths {
+    "/api/v1/audit-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Catalog of audit event actions
+         * @description Every `action` an audit event can carry, with its category (the part before the dot) and a one-sentence description, for labels and filters. Any authenticated caller.
+         *
+         *     **Access:** Any authenticated caller.
+         */
+        get: operations["audit_actions_api_v1_audit_actions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List audit events across tenants (system-admin)
+         * @description Append-only record of who did what. Filter by `actor` and `action` (exact, or a prefix when the value ends in `*`, for example `change_set.*`; the names are in `GET /audit-actions`), by `object` (exact reference such as `change_set:<id>` or `job:<id>`), by time (`since` inclusive, `until` exclusive) and by free text `q` (substring of actor, action or object). Newest first; page with `limit` (1-500) and `cursor`. This route spans every tenant and the system-level events that belong to none (sign-ins, tenant creation); narrow it with `tenant` (id or name). Requires `system-admin`.
+         *
+         *     **Access:** `system-admin` only.
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
+         */
+        get: operations["system_audit_events_api_v1_audit_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/break-glass": {
         parameters: {
             query?: never;
@@ -16,6 +62,8 @@ export interface paths {
         /**
          * Log in the break-glass administrator
          * @description Log in the local administrator (password + TOTP). Off unless enabled.
+         *
+         *     **Access:** Public: no credentials needed.
          */
         post: operations["auth_break_glass_api_v1_auth_break_glass_post"];
         delete?: never;
@@ -34,6 +82,8 @@ export interface paths {
         /**
          * Finish a login
          * @description Finish the login, set the session cookie and send the browser back to the app.
+         *
+         *     **Access:** Public: no credentials needed.
          */
         get: operations["auth_callback_api_v1_auth_callback__provider__get"];
         put?: never;
@@ -44,6 +94,8 @@ export interface paths {
          *     The assertion must be signed, answer our request, and not have been used before. On any
          *     failure the browser is sent to `/login?error=<code>`. No session exists yet, so the CSRF
          *     header does not apply.
+         *
+         *     **Access:** Public: no credentials needed.
          */
         post: operations["auth_saml_callback_api_v1_auth_callback__provider__post"];
         delete?: never;
@@ -62,6 +114,8 @@ export interface paths {
         /**
          * Start a login
          * @description Redirect the browser to the identity provider.
+         *
+         *     **Access:** Public: no credentials needed.
          */
         get: operations["auth_login_api_v1_auth_login__provider__get"];
         put?: never;
@@ -84,6 +138,8 @@ export interface paths {
         /**
          * Log out
          * @description End the session (requires the CSRF header).
+         *
+         *     **Access:** Any authenticated caller.
          */
         post: operations["auth_logout_api_v1_auth_logout_post"];
         delete?: never;
@@ -102,10 +158,38 @@ export interface paths {
         /**
          * List login providers
          * @description Identity providers users can log in with, and whether break-glass login is on.
+         *
+         *     **Access:** Public: no credentials needed.
          */
         get: operations["auth_providers_api_v1_auth_providers_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recompute my roles now
+         * @description Recompute grants from the stored provider groups and the current mappings.
+         *
+         *     Role changes otherwise apply within a minute; this applies them at once. The session's
+         *     absolute lifetime is not extended. A person left with no grant is signed out (401
+         *     `session_expired`). Needs the CSRF header; API tokens just get their `Me` back.
+         *
+         *     **Access:** Any authenticated caller.
+         */
+        post: operations["auth_refresh_api_v1_auth_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -122,6 +206,8 @@ export interface paths {
         /**
          * SAML service-provider metadata
          * @description Public, so an identity provider can fetch it by URL. `?download=1` sets a filename.
+         *
+         *     **Access:** Public: no credentials needed.
          */
         get: operations["auth_saml_metadata_api_v1_auth_saml__provider__metadata_get"];
         put?: never;
@@ -144,6 +230,8 @@ export interface paths {
         /**
          * Trade an enrollment token and CSR for a certificate
          * @description Trade an enrollment or renewal token and a CSR for the agent's certificate.
+         *
+         *     **Access:** Public: no credentials needed.
          */
         post: operations["enroll_api_v1_enroll_post"];
         delete?: never;
@@ -159,8 +247,126 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Liveness check */
+        /**
+         * Liveness check
+         * @description Returns `{status: ok}` when the process is up. It does not check the database. Public.
+         *
+         *     **Access:** Public: no credentials needed.
+         */
         get: operations["healthz_api_v1_healthz_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List identity providers
+         * @description OIDC and SAML providers, by name. Secrets are never returned.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_identity_providers_api_v1_identity_providers_get"];
+        put?: never;
+        /**
+         * Create an identity provider
+         * @description Create a provider. `protocol` selects the schema.
+         *
+         *     An OIDC `client_secret` is stored in the secrets backend and never returned. An OIDC
+         *     provider whose discovery document cannot be fetched is still created; `warnings` says so.
+         *     A SAML provider can be filled in from its metadata (`idp_metadata_url` or
+         *     `idp_metadata_xml`).
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_identity_provider_api_v1_identity_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity-providers/{idp}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an identity provider
+         * @description One identity provider. Secrets are never returned: `client_secret_set` says whether one exists.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_identity_provider_api_v1_identity_providers__idp__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an identity provider
+         * @description Delete a provider with its role mappings, its users and their sessions.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_identity_provider_api_v1_identity_providers__idp__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an identity provider
+         * @description Change a provider. Send `protocol` (it cannot change) and only the fields to change.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        patch: operations["patch_identity_provider_api_v1_identity_providers__idp__patch"];
+        trace?: never;
+    };
+    "/api/v1/identity-providers/{idp}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a test sign-in
+         * @description Open `authorize_url` in the browser; poll the result with `test_id`.
+         *
+         *     The callback creates no session and no user. A disabled provider can be tested.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["start_idp_test_api_v1_identity_providers__idp__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity-providers/{idp}/test/{test_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the result of a test sign-in
+         * @description `pending` until the provider answered; then the result, once. Later reads are 404.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["read_idp_test_api_v1_identity_providers__idp__test__test_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -176,7 +382,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a background job */
+        /**
+         * Get a background job
+         * @description A job by id without naming the tenant (the id from an `Accepted` response). Prefer `GET /tenants/{t}/jobs/{job_id}`, which also returns stages and timing. The caller must have access to the job's tenant; `404` otherwise.
+         *
+         *     **Access:** Any authenticated caller.
+         */
         get: operations["get_job_api_v1_jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -196,6 +407,8 @@ export interface paths {
         /**
          * Who am I
          * @description Who am I, in which tenants, and with which role in each.
+         *
+         *     **Access:** Any authenticated caller.
          */
         get: operations["me_api_v1_me_get"];
         put?: never;
@@ -204,6 +417,90 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The permission matrix
+         * @description Which role may do what. `can(verb, object)` is `role_in(tenant) >= min_role`.
+         *
+         *     **Access:** Any authenticated caller.
+         */
+        get: operations["get_permissions_api_v1_permissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/role-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List role mappings (system-wide)
+         * @description Every mapping, optionally filtered by provider (id or name), tenant or group.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_role_mappings_api_v1_role_mappings_get"];
+        put?: never;
+        /**
+         * Create a role mapping (system-wide)
+         * @description Maps a provider group to a role, either system-wide (`system-admin`) or for a tenant. `409` if the provider, group and tenant already map.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_role_mapping_api_v1_role_mappings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/role-mappings/{mapping}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a role mapping
+         * @description One role mapping with its provider, group, role and version.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_role_mapping_api_v1_role_mappings__mapping__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a role mapping
+         * @description Deletes a mapping. Users lose the grant at their next refresh (within a minute).
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_role_mapping_api_v1_role_mappings__mapping__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a role mapping
+         * @description Changes the role or label of a mapping; `If-Match` on its version.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        patch: operations["patch_role_mapping_api_v1_role_mappings__mapping__patch"];
         trace?: never;
     };
     "/api/v1/schema/virtual-service": {
@@ -216,11 +513,151 @@ export interface paths {
         /**
          * Field rules of a virtual service protocol
          * @description Which service, port and pool fields `protocol` allows (same table as the validator).
+         *
+         *     **Access:** Any authenticated caller.
          */
         get: operations["protocol_field_rules_api_v1_schema_virtual_service_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/break-glass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Break-glass login status
+         * @description Whether the break-glass login is on, why, until when, and whether an administrator is enrolled.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_break_glass_api_v1_system_break_glass_get"];
+        /**
+         * Switch break-glass login on or off
+         * @description Switch break-glass login on for a limited time, or off.
+         *
+         *     Enabling needs a confirmed administrator and a `reason`; it lasts `ttl_minutes` (default
+         *     240, at most 1440). Disabling has no effect while the deployment forces it on
+         *     (`forced_by_deployment`).
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["put_break_glass_api_v1_system_break_glass_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/break-glass/admin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enrol the break-glass administrator
+         * @description Generate the password and TOTP secret; they are shown once.
+         *
+         *     Replaces any previous administrator and switches break-glass login off. The administrator
+         *     cannot sign in until `…/admin/confirm` receives a valid code.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_break_glass_admin_api_v1_system_break_glass_admin_post"];
+        /**
+         * Remove the break-glass administrator
+         * @description Removes the break-glass administrator and its secret.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_break_glass_admin_api_v1_system_break_glass_admin_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/break-glass/admin/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm the authenticator
+         * @description Finishes enrolment with a code from the authenticator; an unconfirmed administrator cannot sign in.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["confirm_break_glass_admin_api_v1_system_break_glass_admin_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List system API tokens
+         * @description System API tokens (never the secret).
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_system_tokens_api_v1_system_tokens_get"];
+        put?: never;
+        /**
+         * Create a system API token (shown once)
+         * @description A `system-admin` token for bootstrap and controller-level automation.
+         *
+         *     30 days by default, 90 at most. A token cannot create tokens, so this needs a signed-in
+         *     person.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_system_token_api_v1_system_tokens_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/tokens/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a system API token
+         * @description Revokes a system token; it stops working at once.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["revoke_system_token_api_v1_system_tokens__token__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -233,10 +670,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List tenants */
+        /**
+         * List tenants
+         * @description Tenants the caller can access: all for a system administrator, otherwise those named by the caller's grants.
+         *
+         *     **Access:** Any authenticated caller.
+         */
         get: operations["list_tenants_api_v1_tenants_get"];
         put?: never;
-        /** Create a tenant */
+        /**
+         * Create a tenant
+         * @description Creates a tenant with its quotas and the approval requirement. System administrators only. `409` if the name exists.
+         *
+         *     **Access:** `system-admin` only.
+         */
         post: operations["create_tenant_api_v1_tenants_post"];
         delete?: never;
         options?: never;
@@ -251,15 +698,30 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a tenant */
+        /**
+         * Get a tenant
+         * @description One tenant with quotas and `require_approval`.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["get_tenant_api_v1_tenants__t__get"];
         put?: never;
         post?: never;
-        /** Delete a tenant */
+        /**
+         * Delete a tenant
+         * @description Deletes the tenant and everything in it (cascading, irreversible). System administrators only. Audited as `tenant.delete`.
+         *
+         *     **Access:** `system-admin` only.
+         */
         delete: operations["delete_tenant_api_v1_tenants__t__delete"];
         options?: never;
         head?: never;
-        /** Change a tenant */
+        /**
+         * Change a tenant
+         * @description Changes quotas or `require_approval`. A tenant administrator may turn `require_approval` on; everything else, and turning it off, needs a system administrator (`403`). Audited as `tenant.update`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         patch: operations["patch_tenant_api_v1_tenants__t__patch"];
         trace?: never;
     };
@@ -270,7 +732,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List audit events, newest first */
+        /**
+         * List audit events, newest first
+         * @description Append-only record of who did what. Filter by `actor` and `action` (exact, or a prefix when the value ends in `*`, for example `change_set.*`; the names are in `GET /audit-actions`), by `object` (exact reference such as `change_set:<id>` or `job:<id>`), by time (`since` inclusive, `until` exclusive) and by free text `q` (substring of actor, action or object). Newest first; page with `limit` (1-500) and `cursor`. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
+         */
         get: operations["audit_events_api_v1_tenants__t__audit_events_get"];
         put?: never;
         post?: never;
@@ -290,12 +759,18 @@ export interface paths {
         /**
          * List certificates
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_certificates_api_v1_tenants__t__certificates_get"];
         put?: never;
         /**
          * Create one of the certificates
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["create_certificates_api_v1_tenants__t__certificates_post"];
         delete?: never;
@@ -316,6 +791,8 @@ export interface paths {
         /**
          * Import a certificate and key
          * @description Store an uploaded certificate and key, and add the certificate object to a change set.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["import_certificate_api_v1_tenants__t__certificates_import_post"];
         delete?: never;
@@ -336,6 +813,8 @@ export interface paths {
         /**
          * Issue a certificate (ACME or Cloudflare Origin CA)
          * @description Queue issuance through ACME DNS-01 or Cloudflare Origin CA.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["issue_certificate_api_v1_tenants__t__certificates_issue_post"];
         delete?: never;
@@ -356,6 +835,8 @@ export interface paths {
         /**
          * Renew a certificate
          * @description Queue a renewal of one certificate.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["renew_certificate_api_v1_tenants__t__certificates__certificate__renew_post"];
         delete?: never;
@@ -374,6 +855,8 @@ export interface paths {
         /**
          * Get one of the certificates
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_certificates_api_v1_tenants__t__certificates__object_id__get"];
         put?: never;
@@ -381,6 +864,8 @@ export interface paths {
         /**
          * Delete one of the certificates
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         delete: operations["delete_certificates_api_v1_tenants__t__certificates__object_id__delete"];
         options?: never;
@@ -388,6 +873,8 @@ export interface paths {
         /**
          * Change one of the certificates
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         patch: operations["update_certificates_api_v1_tenants__t__certificates__object_id__patch"];
         trace?: never;
@@ -399,7 +886,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Rendered config of a certificate */
+        /**
+         * Rendered config of a certificate
+         * @description The configuration fragment(s) this object produces for each SE group that uses it, with the fingerprint of the whole file. With `change_set` the draft's output. Pure rendering: nothing is sent to an engine.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["rendered_certificates_api_v1_tenants__t__certificates__object_id__rendered_get"];
         put?: never;
         post?: never;
@@ -419,10 +911,19 @@ export interface paths {
         /**
          * List change sets
          * @description List change sets, newest first, with their age, base revision and operation count.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_change_sets_api_v1_tenants__t__change_sets_get"];
         put?: never;
-        /** Open a draft change set */
+        /**
+         * Open a draft change set
+         * @description Opens an empty draft. The draft is based on the current revision (`base_revision`). Several drafts can be open at once.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         post: operations["open_change_set_api_v1_tenants__t__change_sets_post"];
         delete?: never;
         options?: never;
@@ -437,7 +938,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a change set with its operations */
+        /**
+         * Get a change set with its operations
+         * @description A change set with its operations (`ops`), state, author, approver and the reject comment or error when there is one.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["get_change_set_api_v1_tenants__t__change_sets__cs__get"];
         put?: never;
         post?: never;
@@ -456,7 +962,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Apply a change set */
+        /**
+         * Apply a change set
+         * @description Queues the apply job: lock, render, validate, canary, rollout, commit. Returns `202` with the `job_id`; follow it with `GET /tenants/{t}/jobs/{job_id}`. Allowed from `draft` and `failed`. When the tenant has `require_approval`, a normal caller gets `403` and must use `request-approval`; only a system administrator who sends `break_glass_reason` may apply directly (audited as `change_set.break_glass_apply`). The UI should hide Apply when `tenant.require_approval` is true and the caller is not a system administrator. `409` if the state does not allow it, `422` with `errors[]` if the draft breaks a rule.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         post: operations["apply_api_v1_tenants__t__change_sets__cs__apply_post"];
         delete?: never;
         options?: never;
@@ -473,7 +984,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve and apply a change set */
+        /**
+         * Approve and apply a change set
+         * @description Approves a `pending_approval` change set and queues its apply. The approver must be a tenant administrator and must not be the author or the requester (`403`). `409` if it is not pending.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         post: operations["approve_api_v1_tenants__t__change_sets__cs__approve_post"];
         delete?: never;
         options?: never;
@@ -491,6 +1007,8 @@ export interface paths {
         /**
          * Preview what a change set would change
          * @description Objects touched, rule `problems` (block apply), `warnings` (never block) and files.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["diff_api_v1_tenants__t__change_sets__cs__diff_get"];
         put?: never;
@@ -510,7 +1028,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Discard a draft */
+        /**
+         * Discard a draft
+         * @description Throws a draft away (state `discarded`). Applied and applying change sets cannot be discarded (`409`).
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         post: operations["discard_api_v1_tenants__t__change_sets__cs__discard_post"];
         delete?: never;
         options?: never;
@@ -527,7 +1050,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add operations to a draft */
+        /**
+         * Add operations to a draft
+         * @description Appends operations (create, update, delete of any object type) to a draft atomically; all are checked and none is kept if one is invalid (`422`). An operation may carry `expected_version`; a stale one answers `412`. Editing a `pending_approval` change set voids the request.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         post: operations["add_ops_api_v1_tenants__t__change_sets__cs__ops_post"];
         delete?: never;
         options?: never;
@@ -545,7 +1073,12 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove an operation from a draft */
+        /**
+         * Remove an operation from a draft
+         * @description Removes one operation from a draft.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         delete: operations["remove_op_api_v1_tenants__t__change_sets__cs__ops__index__delete"];
         options?: never;
         head?: never;
@@ -561,7 +1094,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reject a change set */
+        /**
+         * Reject a change set
+         * @description Sends a `pending_approval` change set back to `draft` with a required `comment`. Tenant administrators other than the author or requester.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         post: operations["reject_api_v1_tenants__t__change_sets__cs__reject_post"];
         delete?: never;
         options?: never;
@@ -578,8 +1116,35 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ask for approval */
+        /**
+         * Ask for approval
+         * @description Freezes a draft for review and sets `pending_approval`. Any later edit voids the request.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         post: operations["request_approval_api_v1_tenants__t__change_sets__cs__request_approval_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/engines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List every engine of the tenant
+         * @description All service engines across SE groups, by group then name, with Proxmox placement (`pve_node`, `vmid`) and agent enrollment. Filter with `se_group` and `state`. Live health is in `GET /status/engines`. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_tenant_engines_api_v1_tenants__t__engines_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -593,10 +1158,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get one engine
+         * @description One engine with placement and enrollment. `404` if it is not in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["get_engine_api_v1_tenants__t__engines__engine__get"];
         put?: never;
         post?: never;
-        /** Remove an engine record */
+        /**
+         * Remove an engine record
+         * @description Removes the engine *record* only: the VM is not touched and keeps running. Use it for hand-built engines or to forget a VM that is gone. To destroy a Proxmox VM as well, use `POST …/retire`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         delete: operations["remove_engine_api_v1_tenants__t__engines__engine__delete"];
         options?: never;
         head?: never;
@@ -615,6 +1191,8 @@ export interface paths {
         /**
          * Create an agent enrollment token
          * @description Create a one-time token (shown once) for ``sy-agent enroll``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["enrollment_token_api_v1_tenants__t__engines__engine__enrollment_token_post"];
         delete?: never;
@@ -635,6 +1213,8 @@ export interface paths {
         /**
          * Retire an engine and destroy its VM
          * @description Disable an engine, destroy its VM and remove it (refused for the last serving engine).
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["retire_engine_api_v1_tenants__t__engines__engine__retire_post"];
         delete?: never;
@@ -651,7 +1231,12 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Enable or disable an engine */
+        /**
+         * Enable or disable an engine
+         * @description Enables or disables an engine for rollouts (`state=enabled|disabled`). A disabled engine is skipped by applies and polling. Runtime action: it does not use a change set. Audited.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         put: operations["engine_state_api_v1_tenants__t__engines__engine__state_put"];
         post?: never;
         delete?: never;
@@ -670,14 +1255,42 @@ export interface paths {
         /**
          * List health monitors
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_health_monitors_api_v1_tenants__t__health_monitors_get"];
         put?: never;
         /**
          * Create one of the health monitors
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["create_health_monitors_api_v1_tenants__t__health_monitors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/health-monitors/{monitor_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a health monitor against one pool member
+         * @description Runs the monitor once from an engine (through its agent) against one member and returns pass or fail, the latency and what came back. Nothing is saved. Overrides (`port`, `http_path`, `expect_status`, `timeout_s`) replace the monitor's values for this run. The agent only probes members that are in its applied configuration, so a member added in a draft cannot be tested until it is applied (`409`). A UDP test needs the member to reply. `502` when the engine's agent cannot be reached.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["test_monitor_api_v1_tenants__t__health_monitors__monitor_id__test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -694,6 +1307,8 @@ export interface paths {
         /**
          * Get one of the health monitors
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_health_monitors_api_v1_tenants__t__health_monitors__object_id__get"];
         put?: never;
@@ -701,6 +1316,8 @@ export interface paths {
         /**
          * Delete one of the health monitors
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         delete: operations["delete_health_monitors_api_v1_tenants__t__health_monitors__object_id__delete"];
         options?: never;
@@ -708,6 +1325,8 @@ export interface paths {
         /**
          * Change one of the health monitors
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         patch: operations["update_health_monitors_api_v1_tenants__t__health_monitors__object_id__patch"];
         trace?: never;
@@ -719,7 +1338,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Rendered config of a health monitor */
+        /**
+         * Rendered config of a health monitor
+         * @description The configuration fragment(s) this object produces for each SE group that uses it, with the fingerprint of the whole file. With `change_set` the draft's output. Pure rendering: nothing is sent to an engine.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["rendered_health_monitors_api_v1_tenants__t__health_monitors__object_id__rendered_get"];
         put?: never;
         post?: never;
@@ -736,7 +1360,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List a tenant's jobs, newest first */
+        /**
+         * List a tenant's jobs, newest first
+         * @description The tenant's jobs, newest first, filtered by `state` and `kind`. Page with `cursor`.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["list_jobs_api_v1_tenants__t__jobs_get"];
         put?: never;
         post?: never;
@@ -753,7 +1382,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a job with its stages */
+        /**
+         * Get a job with its stages
+         * @description A job with its stages (name, state, timing, error), attempts, `retrying` and typed `result`. A reverted or rejected apply is a *finished* job with `ok: false`, not a failed one.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["get_tenant_job_api_v1_tenants__t__jobs__job_id__get"];
         put?: never;
         post?: never;
@@ -772,7 +1406,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancel a job that has not started */
+        /**
+         * Cancel a job that has not started
+         * @description Cancels a job that has not started. A cancelled apply marks its change set `failed`. `409` once the job is running or finished.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         post: operations["cancel_job_api_v1_tenants__t__jobs__job_id__cancel_post"];
         delete?: never;
         options?: never;
@@ -787,7 +1426,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a job's log */
+        /**
+         * Get a job's log
+         * @description The latest 500 log lines of the job.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["get_job_log_api_v1_tenants__t__jobs__job_id__log_get"];
         put?: never;
         post?: never;
@@ -806,8 +1450,35 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Queue a dead job again */
+        /**
+         * Queue a dead job again
+         * @description Queues a `dead` job again. `409` if the job is not dead.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         post: operations["retry_job_api_v1_tenants__t__jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/metrics/virtual-services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Headline metrics of every virtual service
+         * @description Requests per second, 5xx ratio and current sessions per service over the last `window_s` seconds, for the list columns. `p95_ms` is only in the per-service route. `available: false` when no backend is configured. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["metrics_overview_api_v1_tenants__t__metrics_virtual_services_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -824,12 +1495,18 @@ export interface paths {
         /**
          * List networks
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_networks_api_v1_tenants__t__networks_get"];
         put?: never;
         /**
          * Create one of the networks
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["create_networks_api_v1_tenants__t__networks_post"];
         delete?: never;
@@ -850,6 +1527,8 @@ export interface paths {
         /**
          * Apply the Proxmox SDN objects of managed networks
          * @description Create or update the Proxmox SDN objects of the tenant's managed networks.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["apply_sdn_api_v1_tenants__t__networks_apply_sdn_post"];
         delete?: never;
@@ -868,6 +1547,8 @@ export interface paths {
         /**
          * Get one of the networks
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_networks_api_v1_tenants__t__networks__object_id__get"];
         put?: never;
@@ -875,6 +1556,8 @@ export interface paths {
         /**
          * Delete one of the networks
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         delete: operations["delete_networks_api_v1_tenants__t__networks__object_id__delete"];
         options?: never;
@@ -882,6 +1565,8 @@ export interface paths {
         /**
          * Change one of the networks
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         patch: operations["update_networks_api_v1_tenants__t__networks__object_id__patch"];
         trace?: never;
@@ -896,12 +1581,18 @@ export interface paths {
         /**
          * List policy sets
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_policy_sets_api_v1_tenants__t__policy_sets_get"];
         put?: never;
         /**
          * Create one of the policy sets
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["create_policy_sets_api_v1_tenants__t__policy_sets_post"];
         delete?: never;
@@ -920,6 +1611,8 @@ export interface paths {
         /**
          * Get one of the policy sets
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_policy_sets_api_v1_tenants__t__policy_sets__object_id__get"];
         put?: never;
@@ -927,6 +1620,8 @@ export interface paths {
         /**
          * Delete one of the policy sets
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         delete: operations["delete_policy_sets_api_v1_tenants__t__policy_sets__object_id__delete"];
         options?: never;
@@ -934,6 +1629,8 @@ export interface paths {
         /**
          * Change one of the policy sets
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         patch: operations["update_policy_sets_api_v1_tenants__t__policy_sets__object_id__patch"];
         trace?: never;
@@ -945,7 +1642,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Rendered config of a policy set */
+        /**
+         * Rendered config of a policy set
+         * @description The configuration fragment(s) this object produces for each SE group that uses it, with the fingerprint of the whole file. With `change_set` the draft's output. Pure rendering: nothing is sent to an engine.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["rendered_policy_sets_api_v1_tenants__t__policy_sets__object_id__rendered_get"];
         put?: never;
         post?: never;
@@ -965,12 +1667,18 @@ export interface paths {
         /**
          * List pools
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_pools_api_v1_tenants__t__pools_get"];
         put?: never;
         /**
          * Create one of the pools
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["create_pools_api_v1_tenants__t__pools_post"];
         delete?: never;
@@ -989,6 +1697,8 @@ export interface paths {
         /**
          * Get one of the pools
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_pools_api_v1_tenants__t__pools__object_id__get"];
         put?: never;
@@ -996,6 +1706,8 @@ export interface paths {
         /**
          * Delete one of the pools
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         delete: operations["delete_pools_api_v1_tenants__t__pools__object_id__delete"];
         options?: never;
@@ -1003,6 +1715,8 @@ export interface paths {
         /**
          * Change one of the pools
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         patch: operations["update_pools_api_v1_tenants__t__pools__object_id__patch"];
         trace?: never;
@@ -1014,7 +1728,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Rendered config of a pool */
+        /**
+         * Rendered config of a pool
+         * @description The configuration fragment(s) this object produces for each SE group that uses it, with the fingerprint of the whole file. With `change_set` the draft's output. Pure rendering: nothing is sent to an engine.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["rendered_pools_api_v1_tenants__t__pools__object_id__rendered_get"];
         put?: never;
         post?: never;
@@ -1032,7 +1751,12 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set a pool member's runtime state */
+        /**
+         * Set a pool member's runtime state
+         * @description Sets a member to `enabled`, `disabled` or `drain` on every enabled engine of the SE groups that use the pool, through the HAProxy runtime API. This is a *runtime* action: no change set, takes effect at once, and desired state is unchanged (the next apply restores the configured state). The response lists the engines it reached (`applied`) and those it did not (`failed`, with the error), so partial failure can be shown. Audited as `pool_member.state`.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
         put: operations["member_state_api_v1_tenants__t__pools__pool__members__member__state_put"];
         post?: never;
         delete?: never;
@@ -1050,7 +1774,9 @@ export interface paths {
         };
         /**
          * List revisions
-         * @description List applied revisions, newest first.
+         * @description Applied revisions, newest first. `object` (an object id of any type) keeps the revisions whose change set had an operation on that object: the History tab of an object page. Page with `limit` and `cursor`. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["revisions_api_v1_tenants__t__revisions_get"];
         put?: never;
@@ -1068,7 +1794,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a revision with its full desired state */
+        /**
+         * Get a revision with its full desired state
+         * @description A revision with its full desired-state snapshot. Diff two snapshots client-side to compare revisions.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["revision_api_v1_tenants__t__revisions__n__get"];
         put?: never;
         post?: never;
@@ -1087,12 +1818,73 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Open a change set that restores a revision */
+        /**
+         * Open a change set that restores a revision
+         * @description Opens a draft that restores revision `n`. It is an ordinary change set: review, approval and canary apply as usual. Returns `201` with the change set. Tenant administrators.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         post: operations["rollback_api_v1_tenants__t__revisions__n__rollback_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/role-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a tenant's role mappings
+         * @description Role mappings of this tenant. Tenant administrators see and manage `viewer` and `operator` mappings of their own tenant only.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        get: operations["list_tenant_role_mappings_api_v1_tenants__t__role_mappings_get"];
+        put?: never;
+        /**
+         * Create a role mapping in a tenant
+         * @description A tenant administrator may map `viewer` and `operator` here, nothing stronger.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_tenant_role_mapping_api_v1_tenants__t__role_mappings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/role-mappings/{mapping}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a role mapping in a tenant
+         * @description Deletes a mapping of this tenant.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_tenant_role_mapping_api_v1_tenants__t__role_mappings__mapping__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a role mapping in a tenant
+         * @description Changes a mapping of this tenant.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_tenant_role_mapping_api_v1_tenants__t__role_mappings__mapping__patch"];
         trace?: never;
     };
     "/api/v1/tenants/{t}/routing-profiles": {
@@ -1105,12 +1897,18 @@ export interface paths {
         /**
          * List routing profiles
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_routing_profiles_api_v1_tenants__t__routing_profiles_get"];
         put?: never;
         /**
          * Create one of the routing profiles
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["create_routing_profiles_api_v1_tenants__t__routing_profiles_post"];
         delete?: never;
@@ -1129,6 +1927,8 @@ export interface paths {
         /**
          * Get one of the routing profiles
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_routing_profiles_api_v1_tenants__t__routing_profiles__object_id__get"];
         put?: never;
@@ -1136,6 +1936,8 @@ export interface paths {
         /**
          * Delete one of the routing profiles
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         delete: operations["delete_routing_profiles_api_v1_tenants__t__routing_profiles__object_id__delete"];
         options?: never;
@@ -1143,6 +1945,8 @@ export interface paths {
         /**
          * Change one of the routing profiles
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         patch: operations["update_routing_profiles_api_v1_tenants__t__routing_profiles__object_id__patch"];
         trace?: never;
@@ -1157,12 +1961,18 @@ export interface paths {
         /**
          * List se groups
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_se_groups_api_v1_tenants__t__se_groups_get"];
         put?: never;
         /**
          * Create one of the se groups
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["create_se_groups_api_v1_tenants__t__se_groups_post"];
         delete?: never;
@@ -1183,6 +1993,8 @@ export interface paths {
         /**
          * Deploy engines for an SE group on Proxmox
          * @description Grow an SE group to ``count`` engines by cloning the SE template on Proxmox.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["deploy_group_api_v1_tenants__t__se_groups__group__deploy_post"];
         delete?: never;
@@ -1198,10 +2010,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List an SE group's engines */
+        /**
+         * List an SE group's engines
+         * @description Engines of one SE group (see also `GET /tenants/{t}/engines` for all).
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["list_engines_api_v1_tenants__t__se_groups__group__engines_get"];
         put?: never;
-        /** Register an engine */
+        /**
+         * Register an engine
+         * @description Registers a hand-built engine (Data Plane API URL, credentials reference, optional agent address). `409` if the name exists in the group. Engines created by `deploy` are registered automatically.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         post: operations["add_engine_api_v1_tenants__t__se_groups__group__engines_post"];
         delete?: never;
         options?: never;
@@ -1219,6 +2041,8 @@ export interface paths {
         /**
          * Get one of the se groups
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_se_groups_api_v1_tenants__t__se_groups__object_id__get"];
         put?: never;
@@ -1226,6 +2050,8 @@ export interface paths {
         /**
          * Delete one of the se groups
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         delete: operations["delete_se_groups_api_v1_tenants__t__se_groups__object_id__delete"];
         options?: never;
@@ -1233,6 +2059,8 @@ export interface paths {
         /**
          * Change one of the se groups
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         patch: operations["update_se_groups_api_v1_tenants__t__se_groups__object_id__patch"];
         trace?: never;
@@ -1244,8 +2072,35 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Rendered config of a se group */
+        /**
+         * Rendered config of a se group
+         * @description The configuration fragment(s) this object produces for each SE group that uses it, with the fingerprint of the whole file. With `change_set` the draft's output. Pure rendering: nothing is sent to an engine.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["rendered_se_groups_api_v1_tenants__t__se_groups__object_id__rendered_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find objects by name
+         * @description Backs the command palette. Case-insensitive substring match on object names; virtual services also match their VIP, certificates their SANs and pools their member addresses. Best match first (exact, prefix, substring). Restrict with `types` (repeat the parameter). Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["search_objects_api_v1_tenants__t__search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1261,7 +2116,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Last observed state of every engine */
+        /**
+         * Last observed state of every engine
+         * @description The last stored poll of every engine: reachability, HAProxy fingerprint, member check results, agent status (BGP, VRRP, IPVS) and drift. Polled about every 10 seconds; `observed_at` says how old it is.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["engine_status_api_v1_tenants__t__status_engines_get"];
         put?: never;
         post?: never;
@@ -1279,8 +2139,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Stream engine status (server-sent events)
-         * @description Server-sent events: the engine status whenever it changes (and once at the start).
+         * Live events (server-sent events)
+         * @description A `text/event-stream` of what changes in the tenant. Events: `status`: The status of every engine, at the start and whenever any of it changes.; `vs_state`: State and health of every virtual service, at the start and whenever any changes.; `job_progress`: One job whenever its state or a stage changes (unfinished jobs are sent at the start).; `revision_applied`: A new revision became the desired state (not sent for the revision at the start). Every `data:` line is JSON (the payload models are under `x-sse-events`; `status` and `vs_state` carry an array). The first events are a full snapshot, so a client that reconnects simply starts over (`Last-Event-ID` is not used). Comment lines `: keep-alive` fill the quiet intervals. The database is polled every `interval` seconds; `follow=false` sends one snapshot and closes.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["status_stream_api_v1_tenants__t__status_stream_get"];
         put?: never;
@@ -1301,8 +2163,32 @@ export interface paths {
         /**
          * State of every virtual service
          * @description UDP services are `serving` (IPVS); `not_served` is reserved for unrenderable ones.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["virtual_service_status_api_v1_tenants__t__status_virtual_services_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tenant home summary
+         * @description One call for the tenant home: virtual services by health, pool members that are not `UP`, drifted and unreachable engines, certificates expiring within 30 days, job counts, open drafts and the latest revision. Lists are capped at 50. Health rules are those of `GET /status/virtual-services`. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["tenant_summary_api_v1_tenants__t__summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1318,10 +2204,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List API tokens */
+        /**
+         * List API tokens
+         * @description The tenant's API tokens (never the secret). Tenant administrators.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         get: operations["list_tokens_api_v1_tenants__t__tokens_get"];
         put?: never;
-        /** Create an API token (shown once) */
+        /**
+         * Create an API token (shown once)
+         * @description Creates a token. The plaintext `token` is in this response only. A tenant administrator can issue up to their own role; a `system-admin` token needs a system administrator and has no tenant.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         post: operations["create_token_api_v1_tenants__t__tokens_post"];
         delete?: never;
         options?: never;
@@ -1339,8 +2235,37 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke a token */
+        /**
+         * Revoke a token
+         * @description Revokes a token; it stops working at once.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
         delete: operations["revoke_token_api_v1_tenants__t__tokens__token__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List people with access to a tenant
+         * @description People with a grant in this tenant, showing only this tenant's grants.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
+         */
+        get: operations["list_tenant_users_api_v1_tenants__t__users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1356,12 +2281,18 @@ export interface paths {
         /**
          * List vip pools
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_vip_pools_api_v1_tenants__t__vip_pools_get"];
         put?: never;
         /**
          * Create one of the vip pools
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["create_vip_pools_api_v1_tenants__t__vip_pools_post"];
         delete?: never;
@@ -1380,6 +2311,8 @@ export interface paths {
         /**
          * Get one of the vip pools
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_vip_pools_api_v1_tenants__t__vip_pools__object_id__get"];
         put?: never;
@@ -1387,6 +2320,8 @@ export interface paths {
         /**
          * Delete one of the vip pools
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         delete: operations["delete_vip_pools_api_v1_tenants__t__vip_pools__object_id__delete"];
         options?: never;
@@ -1394,8 +2329,54 @@ export interface paths {
         /**
          * Change one of the vip pools
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
          */
         patch: operations["update_vip_pools_api_v1_tenants__t__vip_pools__object_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/vip-pools/{pool_id}/allocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage and allocations of a VIP pool
+         * @description How many addresses the pool has, how many are held and by which virtual service. An address is held by the service that carries it as `vip`; there is no separate reservation, so *releasing* an address means changing the service's `vip` or deleting the service in a change set. With `change_set` the answer is the pool as that draft would leave it (`draft_status` per holder). `next_free` is the address a new service would get. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["vip_pool_allocations_api_v1_tenants__t__vip_pools__pool_id__allocations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/vip-pools/{pool_id}/next-free": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest the next free address of a VIP pool
+         * @description Returns the lowest free usable address. Nothing is reserved: two callers can get the same address and the validator rejects the second service that uses it. `409` when the pool is exhausted. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        post: operations["vip_pool_next_free_api_v1_tenants__t__vip_pools__pool_id__next_free_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/tenants/{t}/virtual-services": {
@@ -1408,12 +2389,18 @@ export interface paths {
         /**
          * List virtual services
          * @description List the tenant's objects of this type, by name; with ``change_set`` the draft view.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["list_virtual_services_api_v1_tenants__t__virtual_services_get"];
         put?: never;
         /**
          * Create one of the virtual services
          * @description Add a create operation to ``change_set``, or apply it at once with ``apply=true``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["create_virtual_services_api_v1_tenants__t__virtual_services_post"];
         delete?: never;
@@ -1432,6 +2419,8 @@ export interface paths {
         /**
          * Get one of the virtual services
          * @description Return one object. The ``ETag`` header carries its version for ``If-Match``.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["get_virtual_services_api_v1_tenants__t__virtual_services__object_id__get"];
         put?: never;
@@ -1439,6 +2428,8 @@ export interface paths {
         /**
          * Delete one of the virtual services
          * @description Add a delete operation. Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         delete: operations["delete_virtual_services_api_v1_tenants__t__virtual_services__object_id__delete"];
         options?: never;
@@ -1446,8 +2437,54 @@ export interface paths {
         /**
          * Change one of the virtual services
          * @description Add an update operation (only the fields sent change). Requires ``If-Match``.
+         *
+         *     **Access:** `operator` or higher in the tenant.
          */
         patch: operations["update_virtual_services_api_v1_tenants__t__virtual_services__object_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/virtual-services/{object_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Access log of a virtual service
+         * @description HAProxy HTTP log lines of the service, newest first, parsed into fields. Filter with `since`/`until` (default: the last hour), `q` (substring of the raw line) and `status_class` (2, 3, 4 or 5). Page with `limit` and `cursor`. Read from Loki with the tenant label enforced; `available: false` when no log backend is configured. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["service_logs_api_v1_tenants__t__virtual_services__object_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/virtual-services/{object_id}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Metrics of a virtual service
+         * @description Requests per second, 95th percentile response time, 5xx ratio and current sessions over the last `window_s` seconds, one point per `step_s`, plus the latest value of each as `summary`. Read from Prometheus and Loki with the tenant label enforced. `available: false` (with a `reason`) when no backend is configured or it fails; a single value is `null` when the backend has no data for it, which is not zero. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["service_metrics_api_v1_tenants__t__virtual_services__object_id__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/tenants/{t}/virtual-services/{object_id}/rendered": {
@@ -1457,10 +2494,131 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Rendered config of a virtual service */
+        /**
+         * Rendered config of a virtual service
+         * @description The configuration fragment(s) this object produces for each SE group that uses it, with the fingerprint of the whole file. With `change_set` the draft's output. Pure rendering: nothing is sent to an engine.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
         get: operations["rendered_virtual_services_api_v1_tenants__t__virtual_services__object_id__rendered_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List users
+         * @description People who have signed in, newest sign-in first. `q` searches name and e-mail.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_users_api_v1_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a user
+         * @description A user with what they can do now (`grants`, with the groups that gave it).
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_user_api_v1_users__user__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a user
+         * @description Remove the record and its sessions; the person reappears at their next sign-in.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_user_api_v1_users__user__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a user
+         * @description Refuse the person at sign-in and end every session of theirs at once.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["disable_user_api_v1_users__user__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable a user
+         * @description Lets a disabled user sign in again.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["enable_user_api_v1_users__user__enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{user}/revoke-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a user's sessions
+         * @description Ends all of the user's sessions at once.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["revoke_user_sessions_api_v1_users__user__revoke_sessions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1487,6 +2645,60 @@ export interface components {
             object_id?: string | null;
             /** Op Index */
             op_index?: number | null;
+        };
+        /**
+         * AccessLogEntry
+         * @description One parsed HAProxy HTTP log line.
+         */
+        AccessLogEntry: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Backend */
+            backend: string;
+            /** Bytes */
+            bytes: number;
+            /** Client Ip */
+            client_ip: string;
+            /**
+             * Duration Ms
+             * @description Total time of the request (HAProxy `Tt`).
+             */
+            duration_ms: number;
+            /** Frontend */
+            frontend: string;
+            /** Method */
+            method?: string | null;
+            /** Path */
+            path?: string | null;
+            /**
+             * Raw
+             * @description The log line as stored.
+             */
+            raw: string;
+            /** Server */
+            server: string;
+            /** Status */
+            status: number;
+        };
+        /**
+         * AccessLogs
+         * @description A page of access log lines, newest first.
+         */
+        AccessLogs: {
+            /** Available */
+            available: boolean;
+            /** Entries */
+            entries: components["schemas"]["AccessLogEntry"][];
+            /**
+             * Next Cursor
+             * @description Pass back as `cursor` for older lines; null at the end.
+             */
+            next_cursor?: string | null;
+            /** Reason */
+            reason?: string | null;
         };
         /**
          * Action
@@ -1520,12 +2732,20 @@ export interface components {
              * @description UDP real servers; empty without UDP services.
              */
             ipvs?: components["schemas"]["IpvsRealServerStatus"][];
-            /** Routes Withdrawn */
+            /**
+             * Routes Withdrawn
+             * @description True while any BGP prefix is withdrawn.
+             */
             routes_withdrawn: boolean;
             /** Version */
             version: string;
             /** Vrrp */
             vrrp: components["schemas"]["VrrpInstanceStatus"][];
+            /**
+             * Withdrawn Prefixes
+             * @description The BGP prefixes the watchdog has withdrawn, sorted.
+             */
+            withdrawn_prefixes?: string[];
         };
         /**
          * Algorithm
@@ -1667,6 +2887,24 @@ export interface components {
             revision_number?: number | null;
         };
         /**
+         * AuditActionRead
+         * @description One kind of audit event.
+         */
+        AuditActionRead: {
+            /**
+             * Action
+             * @description The dotted name found in `AuditEventRead.action`.
+             */
+            action: string;
+            /**
+             * Category
+             * @description The part of `action` before the first dot.
+             */
+            category: string;
+            /** Description */
+            description: string;
+        };
+        /**
          * AuditEventRead
          * @description One audit-log entry.
          */
@@ -1688,6 +2926,11 @@ export interface components {
             object?: string | null;
             /** Request Id */
             request_id?: string | null;
+            /**
+             * Tenant Id
+             * @description The tenant concerned; null for system-level events.
+             */
+            tenant_id?: string | null;
         };
         /**
          * AuthProvider
@@ -1900,8 +3143,66 @@ export interface components {
             peer: string;
             /** Remote Asn */
             remote_asn: number;
-            /** State */
+            /**
+             * State
+             * @description FRR session state: `Idle`, `Connect`, `Active`, `OpenSent`, `OpenConfirm` or `Established` (only `Established` is healthy).
+             */
             state: string;
+        };
+        /**
+         * BreakGlassAdminRead
+         * @description The enrolled break-glass administrator (never its password or TOTP secret).
+         */
+        BreakGlassAdminRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Login At */
+            last_login_at: string | null;
+            /** Locked Until */
+            locked_until: string | null;
+            /** Totp Confirmed */
+            totp_confirmed: boolean;
+            /** Username */
+            username: string;
+        };
+        /**
+         * BreakGlassConfirmIn
+         * @description A code from the authenticator, proving enrolment worked.
+         */
+        BreakGlassConfirmIn: {
+            /** Totp */
+            totp: string;
+        };
+        /**
+         * BreakGlassEnrollIn
+         * @description Enrol (or replace) the break-glass administrator.
+         */
+        BreakGlassEnrollIn: {
+            /**
+             * Username
+             * @default breakglass
+             */
+            username: string;
+        };
+        /**
+         * BreakGlassEnrollment
+         * @description Shown once: the generated password and TOTP secret.
+         */
+        BreakGlassEnrollment: {
+            /**
+             * Otpauth Uri
+             * @description Render as a QR code for the authenticator app.
+             */
+            otpauth_uri: string;
+            /** Password */
+            password: string;
+            /** Totp Secret */
+            totp_secret: string;
+            /** Username */
+            username: string;
         };
         /**
          * BreakGlassIn
@@ -1914,6 +3215,44 @@ export interface components {
             totp: string;
             /** Username */
             username: string;
+        };
+        /**
+         * BreakGlassRead
+         * @description Whether break-glass login is on, and the administrator.
+         */
+        BreakGlassRead: {
+            admin: components["schemas"]["BreakGlassAdminRead"] | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Enabled By */
+            enabled_by: string | null;
+            /** Enabled Until */
+            enabled_until: string | null;
+            /**
+             * Forced By Deployment
+             * @description `SWITCHYARD_BREAK_GLASS=1`: on regardless of this API; read-only.
+             */
+            forced_by_deployment: boolean;
+            /** Reason */
+            reason: string | null;
+        };
+        /**
+         * BreakGlassSwitchIn
+         * @description Switch break-glass login on (with a reason) or off.
+         */
+        BreakGlassSwitchIn: {
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Reason
+             * @description Required when enabling.
+             */
+            reason?: string | null;
+            /**
+             * Ttl Minutes
+             * @description How long it stays on: 1 to 1440, default 240.
+             */
+            ttl_minutes?: number | null;
         };
         /**
          * CertImportIn
@@ -2090,6 +3429,7 @@ export interface components {
          * @description What applying a change set would change.
          */
         ChangeSetDiff: {
+            impact: components["schemas"]["DiffImpact"];
             /** Objects */
             objects: components["schemas"]["DiffObject"][];
             /** Problems */
@@ -2239,6 +3579,29 @@ export interface components {
             name: string;
         };
         /**
+         * DiffImpact
+         * @description What a change set reaches, for the review's Impact tab.
+         *
+         *     A service is listed when it is created, changed or deleted, or uses a changed pool, health
+         *     monitor, certificate, policy set, SE group, network, VIP pool or routing profile.
+         */
+        DiffImpact: {
+            /**
+             * Hostnames
+             * @description Route hosts of those services, sorted.
+             */
+            hostnames: string[];
+            /** Se Groups */
+            se_groups: components["schemas"]["ImpactGroup"][];
+            /** Services */
+            services: components["schemas"]["ImpactService"][];
+            /**
+             * Vips
+             * @description VIP addresses of those services, ascending.
+             */
+            vips: string[];
+        };
+        /**
          * DiffObject
          * @description An object a change set creates, changes or deletes.
          */
@@ -2308,6 +3671,42 @@ export interface components {
          */
         DriftKind: "haproxy_config" | "agent_bundle" | "agent_file" | "agent_unexpected_file";
         /**
+         * DriftedEngine
+         * @description An engine whose running configuration differs from the desired state.
+         */
+        DriftedEngine: {
+            /** Engine */
+            engine: string;
+            /**
+             * Engine Id
+             * Format: uuid
+             */
+            engine_id: string;
+            /** Kinds */
+            kinds: string[];
+            /**
+             * Se Group Id
+             * Format: uuid
+             */
+            se_group_id: string;
+        };
+        /**
+         * EffectiveGrantRead
+         * @description What a person can do in one tenant now.
+         */
+        EffectiveGrantRead: {
+            role: components["schemas"]["Role"];
+            /** Tenant */
+            tenant: string | null;
+            /**
+             * Tenant Id
+             * @description Null for `system-admin`.
+             */
+            tenant_id: string | null;
+            /** Via */
+            via: components["schemas"]["GrantSourceRead"][];
+        };
+        /**
          * EngineIn
          * @description Register a service engine.
          */
@@ -2325,22 +3724,59 @@ export interface components {
         };
         /**
          * EngineRead
-         * @description A service engine.
+         * @description A service engine (SE VM) with where it runs and whether its agent has enrolled.
+         *
+         *     Live health (reachable, drift, BGP/VRRP) is in `GET /status/engines`, not here.
          */
         EngineRead: {
+            /**
+             * Agent Cert Serial
+             * @description Serial of the agent's client certificate.
+             */
+            agent_cert_serial?: string | null;
+            /**
+             * Agent Enrolled
+             * @description True once `sy-agent enroll` has traded a token for a client certificate.
+             */
+            agent_enrolled: boolean;
+            /**
+             * Agent Url
+             * @description `host:port` of `sy-agent`, if any.
+             */
+            agent_url?: string | null;
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Mgmt Ip
+             * @description Management address (BGP router id).
+             */
+            mgmt_ip?: string | null;
             /** Name */
             name: string;
+            /**
+             * Pve Node
+             * @description Proxmox node of the VM; null for a hand-built engine.
+             */
+            pve_node?: string | null;
+            /**
+             * Se Group Id
+             * Format: uuid
+             */
+            se_group_id: string;
             state: components["schemas"]["EngineState"];
             /**
              * Url
              * @description Data Plane API URL.
              */
             url: string;
+            /**
+             * Vmid
+             * @description Proxmox VM id; null for a hand-built engine.
+             */
+            vmid?: number | null;
         };
         /**
          * EngineState
@@ -2435,6 +3871,58 @@ export interface components {
             expires_at: string;
             /** Token */
             token: string;
+        };
+        /**
+         * ExpiringCertificate
+         * @description A certificate that expires within 30 days (or already has).
+         */
+        ExpiringCertificate: {
+            /**
+             * Days Left
+             * @description Whole days until expiry; negative once expired.
+             */
+            days_left: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Not After
+             * Format: date-time
+             */
+            not_after: string;
+        };
+        /**
+         * FailingMember
+         * @description A pool member that a reachable engine reports as not `UP`.
+         */
+        FailingMember: {
+            /** Backend */
+            backend: string;
+            /** Engine */
+            engine: string;
+            /**
+             * Engine Id
+             * Format: uuid
+             */
+            engine_id: string;
+            /** Server */
+            server: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * GrantSourceRead
+         * @description The provider group that granted a role.
+         */
+        GrantSourceRead: {
+            /** Group */
+            group: string;
+            /** Provider */
+            provider: string;
         };
         /**
          * GroupResult
@@ -2664,6 +4152,98 @@ export interface components {
             path: string;
         };
         /**
+         * IdpTestIn
+         * @description Start a test sign-in.
+         */
+        IdpTestIn: {
+            /**
+             * Return To
+             * @description Same-site path the browser returns to afterwards.
+             */
+            return_to?: string | null;
+        };
+        /**
+         * IdpTestResult
+         * @description The state of a test sign-in. Read once, within five minutes; then 404.
+         */
+        IdpTestResult: {
+            /**
+             * Claims
+             * @description Decoded claims without tokens, signatures or secrets.
+             */
+            claims?: {
+                [key: string]: unknown;
+            } | null;
+            /** Email */
+            email?: string | null;
+            /**
+             * Error
+             * @description Why the provider refused, if it did.
+             */
+            error?: string | null;
+            /** Groups */
+            groups?: string[] | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "done";
+            /** Subject */
+            subject?: string | null;
+            /** Username */
+            username?: string | null;
+            /** Warnings */
+            warnings?: string[] | null;
+            /** Would Grant */
+            would_grant?: components["schemas"]["WouldGrant"][] | null;
+        };
+        /**
+         * IdpTestStarted
+         * @description A test sign-in: open `authorize_url` in the browser, then poll `test_id`.
+         */
+        IdpTestStarted: {
+            /** Authorize Url */
+            authorize_url: string;
+            /**
+             * Test Id
+             * Format: uuid
+             */
+            test_id: string;
+        };
+        /**
+         * ImpactGroup
+         * @description An SE group whose engines would receive new configuration.
+         */
+        ImpactGroup: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ImpactService
+         * @description A virtual service a change reaches.
+         */
+        ImpactService: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Se Group Id
+             * Format: uuid
+             */
+            se_group_id: string;
+            /** Vip */
+            vip: string;
+        };
+        /**
          * IpRange
          * @description An inclusive address range inside a VIP pool.
          */
@@ -2737,8 +4317,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Kind */
-            kind: string;
+            kind: components["schemas"]["JobKind"];
             /** Max Attempts */
             max_attempts: number;
             /**
@@ -2774,6 +4353,48 @@ export interface components {
              */
             job_id: string;
         };
+        /**
+         * JobCounts
+         * @description The tenant's jobs by state (all time, from the queue table).
+         */
+        JobCounts: {
+            /**
+             * Failed
+             * @description Failed or dead jobs.
+             * @default 0
+             */
+            failed: number;
+            /**
+             * Queued
+             * @default 0
+             */
+            queued: number;
+            /**
+             * Running
+             * @default 0
+             */
+            running: number;
+        };
+        /**
+         * JobKind
+         * @description Every kind of background job, for filters and labels.
+         *
+         *     Attributes:
+         *         APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,
+         *             commit). Result: `ApplyJobResult`.
+         *         DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.
+         *         RETIRE_ENGINE: Destroys an engine's VM and removes its record.
+         *         APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.
+         *         ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the
+         *             `system:certs` change set that records it.
+         *         RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.
+         *         SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.
+         *         POLL_STATUS: Scheduled engine status poll and drift detection.
+         *         GIT_MIRROR: Pushes a revision to the Git mirror.
+         *         GC: Scheduled housekeeping.
+         * @enum {string}
+         */
+        JobKind: "apply_change_set" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -2837,6 +4458,23 @@ export interface components {
          */
         JobState: "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
         /**
+         * LatestRevision
+         * @description The newest revision.
+         */
+        LatestRevision: {
+            /** Author */
+            author: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Number */
+            number: number;
+            /** Summary */
+            summary: string;
+        };
+        /**
          * LogLine
          * @description One line of a job's log.
          */
@@ -2882,8 +4520,33 @@ export interface components {
             is_system: boolean;
             /** Name */
             name: string;
+            /** @description Null for API tokens. */
+            session: components["schemas"]["MeSession"] | null;
             /** Tenants */
             tenants: components["schemas"]["MeTenant"][];
+        };
+        /**
+         * MeSession
+         * @description The lifetime of the caller's cookie session.
+         */
+        MeSession: {
+            /**
+             * Expires At
+             * Format: date-time
+             * @description Absolute end of the session; refresh does not move it.
+             */
+            expires_at: string;
+            /**
+             * Grants Computed At
+             * Format: date-time
+             * @description When roles were last recomputed from the provider groups and the mappings.
+             */
+            grants_computed_at: string;
+            /**
+             * Idle Timeout Seconds
+             * @description The session ends after this long without a call.
+             */
+            idle_timeout_seconds: number;
         };
         /**
          * MeTenant
@@ -2898,6 +4561,11 @@ export interface components {
             /** Name */
             name: string;
             role: components["schemas"]["Role"];
+            /**
+             * Via
+             * @description The provider groups that granted this role; empty for break-glass and tokens.
+             */
+            via: components["schemas"]["GrantSourceRead"][];
         };
         /**
          * MemberStateIn
@@ -2939,6 +4607,155 @@ export interface components {
              * @description HAProxy status, for example `UP`, `DOWN`, `MAINT`.
              */
             status: string;
+        };
+        /**
+         * MetricPoint
+         * @description One sample of a series.
+         */
+        MetricPoint: {
+            /**
+             * T
+             * Format: date-time
+             */
+            t: string;
+            /** V */
+            v: number;
+        };
+        /**
+         * MetricSummary
+         * @description The latest value of each headline metric over the window.
+         */
+        MetricSummary: {
+            /**
+             * Active Connections
+             * @description Current sessions.
+             */
+            active_connections?: number | null;
+            /**
+             * Error 5Xx Ratio
+             * @description Share of responses that are 5xx, 0 to 1.
+             */
+            error_5xx_ratio?: number | null;
+            /**
+             * P95 Ms
+             * @description 95th percentile response time.
+             */
+            p95_ms?: number | null;
+            /**
+             * Rps
+             * @description HTTP/TCP requests per second.
+             */
+            rps?: number | null;
+        };
+        /**
+         * MetricsOverview
+         * @description Headline numbers of every virtual service, for list columns.
+         */
+        MetricsOverview: {
+            /** Available */
+            available: boolean;
+            /** Items */
+            items: components["schemas"]["MetricsOverviewItem"][];
+            /** Reason */
+            reason?: string | null;
+            /** Window S */
+            window_s: number;
+        };
+        /**
+         * MetricsOverviewItem
+         * @description Headline numbers of one virtual service.
+         */
+        MetricsOverviewItem: {
+            /** Name */
+            name: string;
+            summary: components["schemas"]["MetricSummary"];
+            /**
+             * Virtual Service Id
+             * Format: uuid
+             */
+            virtual_service_id: string;
+        };
+        /**
+         * MetricsRead
+         * @description Metrics of one virtual service, or why there are none.
+         */
+        MetricsRead: {
+            /**
+             * Available
+             * @description False when no metrics backend is configured or it cannot be reached.
+             */
+            available: boolean;
+            metrics?: components["schemas"]["ServiceMetrics"] | null;
+            /**
+             * Reason
+             * @description Why `available` is false.
+             */
+            reason?: string | null;
+        };
+        /**
+         * MonitorTestIn
+         * @description Body of `POST /health-monitors/{id}/test`: which member to probe, and optional overrides.
+         */
+        MonitorTestIn: {
+            /**
+             * Engine Id
+             * @description Run from this engine; default the first enabled one with an agent.
+             */
+            engine_id?: string | null;
+            /**
+             * Expect Status
+             * @description Override accepted codes.
+             */
+            expect_status?: number[] | null;
+            /**
+             * Http Path
+             * @description Override the path.
+             */
+            http_path?: string | null;
+            /**
+             * Member Id
+             * Format: uuid
+             */
+            member_id: string;
+            /**
+             * Pool Id
+             * Format: uuid
+             */
+            pool_id: string;
+            /**
+             * Port
+             * @description Override the check port.
+             */
+            port?: number | null;
+            /** Timeout S */
+            timeout_s?: number | null;
+        };
+        /**
+         * MonitorTestOut
+         * @description Result of one monitor test. Nothing is saved.
+         */
+        MonitorTestOut: {
+            /**
+             * Detail
+             * @description What came back (for example `HTTP 200`) or why it failed.
+             */
+            detail: string;
+            /**
+             * Engine
+             * @description The engine that ran the probe.
+             */
+            engine: string;
+            /** Latency Ms */
+            latency_ms: number;
+            /** Ok */
+            ok: boolean;
+            /** Protocol */
+            protocol: string;
+            /**
+             * Target
+             * @description `address:port` that was probed.
+             */
+            target: string;
         };
         /**
          * MonitorType
@@ -3078,11 +4895,144 @@ export interface components {
          */
         NetworkRole: "vip" | "backend" | "mgmt";
         /**
+         * NextFree
+         * @description A suggested free address; nothing is reserved.
+         */
+        NextFree: {
+            /** Address */
+            address: string;
+        };
+        /**
          * ObjectType
          * @description Kinds of object a change set can create, update or delete.
          * @enum {string}
          */
         ObjectType: "network" | "vip_pool" | "se_group" | "virtual_service" | "pool" | "health_monitor" | "certificate" | "policy_set" | "routing_profile";
+        /**
+         * OidcProviderIn
+         * @description Create an OpenID Connect provider. The client secret is write-only.
+         */
+        OidcProviderIn: {
+            /** Client Id */
+            client_id: string;
+            /**
+             * Client Secret
+             * @description Stored in the secrets backend; never returned.
+             */
+            client_secret?: string | null;
+            /**
+             * Client Secret Ref
+             * @description Use an existing secret instead of sending one.
+             */
+            client_secret_ref?: string | null;
+            /** Email Claim */
+            email_claim?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Groups Claim */
+            groups_claim?: string | null;
+            /** Issuer Url */
+            issuer_url: string;
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            protocol: "oidc";
+            /** Scopes */
+            scopes?: string | null;
+            /** Username Claim */
+            username_claim?: string | null;
+        };
+        /**
+         * OidcProviderPatch
+         * @description Change an OIDC provider; send `protocol` and only the fields to change.
+         */
+        OidcProviderPatch: {
+            /** Client Id */
+            client_id?: string | null;
+            /** Client Secret */
+            client_secret?: string | null;
+            /** Client Secret Ref */
+            client_secret_ref?: string | null;
+            /** Email Claim */
+            email_claim?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Groups Claim */
+            groups_claim?: string | null;
+            /** Issuer Url */
+            issuer_url?: string | null;
+            /** Name */
+            name?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            protocol: "oidc";
+            /** Scopes */
+            scopes?: string | null;
+            /** Username Claim */
+            username_claim?: string | null;
+        };
+        /**
+         * OidcProviderRead
+         * @description An OpenID Connect provider.
+         */
+        OidcProviderRead: {
+            /** Client Id */
+            client_id: string;
+            /**
+             * Client Secret Ref
+             * @description Reference into the secrets backend.
+             */
+            client_secret_ref: string | null;
+            /**
+             * Client Secret Set
+             * @description Whether a client secret is stored (never shown).
+             */
+            client_secret_set: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Email Claim */
+            email_claim: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Groups Claim */
+            groups_claim: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Issuer Url */
+            issuer_url: string;
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            protocol: "oidc";
+            /** Scopes */
+            scopes: string;
+            /** Username Claim */
+            username_claim: string;
+            /** Version */
+            version: number;
+            /**
+             * Warnings
+             * @description Set on create and change only: findings that did not block it, for example an unreachable OIDC discovery document.
+             */
+            warnings: string[];
+        };
         /**
          * OpIn
          * @description One operation in a change set.
@@ -3135,6 +5085,16 @@ export interface components {
         Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
             items: (components["schemas"]["VrrpProfileRead"] | components["schemas"]["BgpProfileRead"])[];
+            /**
+             * Next Cursor
+             * @description Opaque cursor of the next page, or null on the last page.
+             */
+            next_cursor?: string | null;
+        };
+        /** Page[AuditEventRead] */
+        Page_AuditEventRead_: {
+            /** Items */
+            items: components["schemas"]["AuditEventRead"][];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -3221,6 +5181,16 @@ export interface components {
              */
             next_cursor?: string | null;
         };
+        /** Page[UserRead] */
+        Page_UserRead_: {
+            /** Items */
+            items: components["schemas"]["UserRead"][];
+            /**
+             * Next Cursor
+             * @description Opaque cursor of the next page, or null on the last page.
+             */
+            next_cursor?: string | null;
+        };
         /** Page[VipPoolRead] */
         Page_VipPoolRead_: {
             /** Items */
@@ -3240,6 +5210,42 @@ export interface components {
              * @description Opaque cursor of the next page, or null on the last page.
              */
             next_cursor?: string | null;
+        };
+        /**
+         * PermissionMatrix
+         * @description The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.
+         */
+        PermissionMatrix: {
+            /** Permissions */
+            permissions: components["schemas"]["PermissionRead"][];
+            /**
+             * Roles
+             * @description Roles from weakest to strongest.
+             */
+            roles: components["schemas"]["Role"][];
+        };
+        /**
+         * PermissionRead
+         * @description One cell of the permission matrix. `verb` and `object` are published as enums.
+         */
+        PermissionRead: {
+            /**
+             * Description
+             * @description One sentence for tooltips.
+             */
+            description: string;
+            /** @description The weakest role that may do this. */
+            min_role: components["schemas"]["Role"];
+            /**
+             * Object
+             * @enum {string}
+             */
+            object: "application" | "break_glass" | "certificate" | "change_set" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
+            /**
+             * Verb
+             * @enum {string}
+             */
+            verb: "apply" | "apply_bypass" | "approve" | "cancel" | "change" | "create" | "deploy" | "disable" | "edit" | "enable" | "list" | "manage" | "read" | "reject" | "request_approval" | "retry" | "rollback" | "set_state" | "write";
         };
         /**
          * PersistenceSourceIp
@@ -3457,10 +5463,19 @@ export interface components {
          * @description An RFC 9457 ``application/problem+json`` error body.
          */
         ProblemOut: {
+            /**
+             * Code
+             * @description Stable identifier clients can switch on; always set on 401 and 403.
+             */
+            code?: ("unauthenticated" | "invalid_token" | "session_expired" | "csrf" | "forbidden" | "role_required" | "user_disabled") | null;
+            /** @description Present on a stale-version `412` from a change-set operation. */
+            conflict?: components["schemas"]["StaleConflict"] | null;
             /** Detail */
             detail: string;
             /** Errors */
             errors?: components["schemas"]["ProblemDetail"][] | null;
+            /** @description With `code: role_required`: the weakest role that may do this. */
+            required_role?: components["schemas"]["Role"] | null;
             /** Status */
             status: number;
             /** Title */
@@ -3730,6 +5745,75 @@ export interface components {
          */
         Role: "viewer" | "operator" | "tenant-admin" | "system-admin";
         /**
+         * RoleMappingIn
+         * @description Create a mapping on a tenant route (`/tenants/{t}/role-mappings`).
+         */
+        RoleMappingIn: {
+            /** Group Name */
+            group_name: string;
+            /** Label */
+            label?: string | null;
+            /**
+             * Provider
+             * @description Provider id or name.
+             */
+            provider: string;
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * RoleMappingPatch
+         * @description Change a mapping; send only the fields to change. The tenant of a mapping is fixed.
+         */
+        RoleMappingPatch: {
+            /** Group Name */
+            group_name?: string | null;
+            /** Label */
+            label?: string | null;
+            role?: components["schemas"]["Role"] | null;
+        };
+        /**
+         * RoleMappingRead
+         * @description A provider group that grants a role.
+         */
+        RoleMappingRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Group Name */
+            group_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Label
+             * @description Free text for opaque group ids.
+             */
+            label: string | null;
+            /** Provider */
+            provider: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            role: components["schemas"]["Role"];
+            /** Tenant */
+            tenant: string | null;
+            /**
+             * Tenant Id
+             * @description Null only for `system-admin`.
+             */
+            tenant_id: string | null;
+            /** Version */
+            version: number;
+        };
+        /**
          * RouteMatch
          * @description Request match: an optional host (exact or ``*.`` wildcard) and an optional path.
          */
@@ -3740,6 +5824,177 @@ export interface components {
             path_exact?: string | null;
             /** Path Prefix */
             path_prefix?: string | null;
+        };
+        /**
+         * SamlProviderIn
+         * @description Create a SAML provider. Send metadata (URL or XML) or the fields it would fill in.
+         */
+        SamlProviderIn: {
+            /** Attribute Email */
+            attribute_email?: string | null;
+            /** Attribute Groups */
+            attribute_groups?: string | null;
+            /** Attribute Username */
+            attribute_username?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Idp Entity Id */
+            idp_entity_id?: string | null;
+            /**
+             * Idp Metadata Url
+             * @description https URL of the IdP metadata.
+             */
+            idp_metadata_url?: string | null;
+            /**
+             * Idp Metadata Xml
+             * @description The IdP metadata document.
+             */
+            idp_metadata_xml?: string | null;
+            /** Name */
+            name: string;
+            /** Name Id Format */
+            name_id_format?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            protocol: "saml";
+            /**
+             * Sign Requests
+             * @description Sign AuthnRequests. The controller generates the key (kept in the secrets backend) unless `sp_signing_key_ref` is given.
+             */
+            sign_requests?: boolean | null;
+            /**
+             * Signing Certificates
+             * @description Public PEM only.
+             */
+            signing_certificates?: string[] | null;
+            /** Sp Entity Id */
+            sp_entity_id?: string | null;
+            /** Sp Signing Key Ref */
+            sp_signing_key_ref?: string | null;
+            /** Sso Url */
+            sso_url?: string | null;
+        };
+        /**
+         * SamlProviderPatch
+         * @description Change a SAML provider; send `protocol` and only the fields to change.
+         */
+        SamlProviderPatch: {
+            /** Attribute Email */
+            attribute_email?: string | null;
+            /** Attribute Groups */
+            attribute_groups?: string | null;
+            /** Attribute Username */
+            attribute_username?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Idp Entity Id */
+            idp_entity_id?: string | null;
+            /** Idp Metadata Url */
+            idp_metadata_url?: string | null;
+            /** Idp Metadata Xml */
+            idp_metadata_xml?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Name Id Format */
+            name_id_format?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            protocol: "saml";
+            /** Sign Requests */
+            sign_requests?: boolean | null;
+            /** Signing Certificates */
+            signing_certificates?: string[] | null;
+            /** Sp Entity Id */
+            sp_entity_id?: string | null;
+            /** Sp Signing Key Ref */
+            sp_signing_key_ref?: string | null;
+            /** Sso Url */
+            sso_url?: string | null;
+        };
+        /**
+         * SamlProviderRead
+         * @description A SAML 2.0 provider.
+         */
+        SamlProviderRead: {
+            /**
+             * Acs Url
+             * @description Assertion consumer service URL to give the IdP.
+             */
+            acs_url: string;
+            /** Attribute Email */
+            attribute_email: string;
+            /** Attribute Groups */
+            attribute_groups: string;
+            /** Attribute Username */
+            attribute_username: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Idp Entity Id */
+            idp_entity_id: string;
+            /** Idp Metadata Url */
+            idp_metadata_url: string | null;
+            /** Name */
+            name: string;
+            /** Name Id Format */
+            name_id_format: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            protocol: "saml";
+            /** Sign Requests */
+            sign_requests: boolean;
+            /**
+             * Signing Certificates
+             * @description Public PEM certificates.
+             */
+            signing_certificates: string[];
+            /**
+             * Sp Entity Id
+             * @description Our entity id (the stored one, or the default).
+             */
+            sp_entity_id: string;
+            /**
+             * Sp Metadata Url
+             * @description Public SP metadata URL to give the IdP.
+             */
+            sp_metadata_url: string;
+            /**
+             * Sp Signing Certificate
+             * @description Public certificate that verifies signed requests (also in the SP metadata).
+             */
+            sp_signing_certificate: string | null;
+            /**
+             * Sp Signing Key Ref
+             * @description Reference to the request signing key.
+             */
+            sp_signing_key_ref: string | null;
+            /** Sso Url */
+            sso_url: string;
+            /** Version */
+            version: number;
+            /**
+             * Warnings
+             * @description Set on create and change only: findings that did not block it, for example an unreachable OIDC discovery document.
+             */
+            warnings: string[];
         };
         /**
          * SeGroup
@@ -3880,6 +6135,105 @@ export interface components {
             version: number;
         };
         /**
+         * SearchHit
+         * @description One match of `GET /search`.
+         */
+        SearchHit: {
+            /**
+             * Detail
+             * @description Context to show next to the name, for example the VIP.
+             */
+            detail?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Matched
+             * @description What matched: `name`, `vip`, `san` or `address`.
+             */
+            matched: string;
+            /** Name */
+            name: string;
+            type: components["schemas"]["ObjectType"];
+        };
+        /**
+         * SearchResults
+         * @description Matches of a search, best first (exact name, prefix, then substring; then by name).
+         */
+        SearchResults: {
+            /** Hits */
+            hits: components["schemas"]["SearchHit"][];
+            /** Query */
+            query: string;
+            /**
+             * Truncated
+             * @description True when more matches exist than `limit`.
+             */
+            truncated: boolean;
+        };
+        /**
+         * ServiceHealthCounts
+         * @description Virtual services by health.
+         */
+        ServiceHealthCounts: {
+            /**
+             * Degraded
+             * @default 0
+             */
+            degraded: number;
+            /**
+             * Disabled
+             * @default 0
+             */
+            disabled: number;
+            /**
+             * Down
+             * @default 0
+             */
+            down: number;
+            /**
+             * Healthy
+             * @default 0
+             */
+            healthy: number;
+            /** Total */
+            total: number;
+            /**
+             * Unknown
+             * @default 0
+             */
+            unknown: number;
+        };
+        /**
+         * ServiceMetrics
+         * @description Time series and headline numbers of one virtual service.
+         */
+        ServiceMetrics: {
+            /** Active Connections */
+            active_connections: components["schemas"]["MetricPoint"][];
+            /** Error 5Xx Ratio */
+            error_5xx_ratio: components["schemas"]["MetricPoint"][];
+            /** P95 Ms */
+            p95_ms: components["schemas"]["MetricPoint"][];
+            /** Rps */
+            rps: components["schemas"]["MetricPoint"][];
+            /** Step S */
+            step_s: number;
+            summary: components["schemas"]["MetricSummary"];
+            /** Window S */
+            window_s: number;
+        };
+        /**
+         * SessionsRevoked
+         * @description How many sessions `revoke-sessions` ended.
+         */
+        SessionsRevoked: {
+            /** Revoked */
+            revoked: number;
+        };
+        /**
          * Snapshot
          * @description All desired-state objects visible to a render or a validation run.
          *
@@ -3954,6 +6308,26 @@ export interface components {
          */
         StageState: "pending" | "running" | "succeeded" | "failed" | "skipped";
         /**
+         * StaleConflict
+         * @description Extension member of a `412` caused by an operation's `expected_version`.
+         *
+         *     To resolve: `GET` the object (its current state is "theirs", the `ETag` is
+         *     `current_version`), compare with what the client had read (the base) and the operation's
+         *     `body` ("yours"), then resend the operation with `expected_version: current_version`.
+         */
+        StaleConflict: {
+            /** Current Version */
+            current_version: number;
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Object Id
+             * Format: uuid
+             */
+            object_id: string;
+            object_type: components["schemas"]["ObjectType"];
+        };
+        /**
          * StateOut
          * @description The new state of a change set.
          */
@@ -3971,6 +6345,84 @@ export interface components {
             prefix: string;
         };
         /**
+         * SystemRoleMappingIn
+         * @description Create a mapping on the system-wide route.
+         */
+        SystemRoleMappingIn: {
+            /** Group Name */
+            group_name: string;
+            /** Label */
+            label?: string | null;
+            /**
+             * Provider
+             * @description Provider id or name.
+             */
+            provider: string;
+            role: components["schemas"]["Role"];
+            /**
+             * Tenant Id
+             * @description The tenant; omit for `system-admin`, required otherwise.
+             */
+            tenant_id?: string | null;
+        };
+        /**
+         * SystemTokenCreated
+         * @description A new system token; the plaintext is shown once.
+         */
+        SystemTokenCreated: {
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            role: components["schemas"]["Role"];
+            /** Token */
+            token: string;
+        };
+        /**
+         * SystemTokenIn
+         * @description Create a system token.
+         */
+        SystemTokenIn: {
+            /** Name */
+            name: string;
+            /**
+             * Ttl Days
+             * @description 30 by default, 90 at most.
+             * @default 30
+             */
+            ttl_days: number;
+        };
+        /**
+         * SystemTokenRead
+         * @description A system API token (never the secret).
+         */
+        SystemTokenRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Expires At */
+            expires_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Used At */
+            last_used_at: string | null;
+            /** Name */
+            name: string;
+            /** Revoked */
+            revoked: boolean;
+            role: components["schemas"]["Role"];
+        };
+        /**
          * Tenant
          * @description Root of ownership. The ``system`` tenant holds shared objects.
          */
@@ -3982,8 +6434,6 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Oidc Group */
-            oidc_group?: string | null;
             /** Quotas */
             quotas?: {
                 [key: string]: number;
@@ -4006,8 +6456,6 @@ export interface components {
         TenantIn: {
             /** Name */
             name: string;
-            /** Oidc Group */
-            oidc_group?: string | null;
             /** Quotas */
             quotas?: {
                 [key: string]: number;
@@ -4023,8 +6471,6 @@ export interface components {
          * @description Change a tenant; send only the fields to change.
          */
         TenantPatch: {
-            /** Oidc Group */
-            oidc_group?: string | null;
             /** Quotas */
             quotas?: {
                 [key: string]: number;
@@ -4044,8 +6490,6 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            /** Oidc Group */
-            oidc_group?: string | null;
             /**
              * Quotas
              * @description Object-count limits by object type.
@@ -4057,6 +6501,33 @@ export interface components {
             require_approval: boolean;
             /** Version */
             version: number;
+        };
+        /**
+         * TenantSummary
+         * @description Everything the tenant home shows, in one call.
+         */
+        TenantSummary: {
+            /** Drifted Engines */
+            drifted_engines: components["schemas"]["DriftedEngine"][];
+            /** Expiring Certificates */
+            expiring_certificates: components["schemas"]["ExpiringCertificate"][];
+            /** Failing Members */
+            failing_members: components["schemas"]["FailingMember"][];
+            jobs: components["schemas"]["JobCounts"];
+            latest_revision?: components["schemas"]["LatestRevision"] | null;
+            /**
+             * Open Drafts
+             * @description Change sets in state `draft`.
+             */
+            open_drafts: number;
+            /**
+             * Pending Approval
+             * @description Change sets in state `pending_approval`.
+             */
+            pending_approval: number;
+            services: components["schemas"]["ServiceHealthCounts"];
+            /** Unreachable Engines */
+            unreachable_engines: components["schemas"]["UnreachableEngine"][];
         };
         /**
          * TokenCreated
@@ -4127,6 +6598,152 @@ export interface components {
              * @default false
              */
             require_reply: boolean;
+        };
+        /**
+         * UnreachableEngine
+         * @description An enabled engine the controller could not poll.
+         */
+        UnreachableEngine: {
+            /** Engine */
+            engine: string;
+            /**
+             * Engine Id
+             * Format: uuid
+             */
+            engine_id: string;
+            /** Error */
+            error?: string | null;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /**
+             * Se Group Id
+             * Format: uuid
+             */
+            se_group_id: string;
+        };
+        /**
+         * UserDetail
+         * @description A user with the number of live sessions.
+         */
+        UserDetail: {
+            /** Active Sessions */
+            active_sessions: number;
+            /** Disabled At */
+            disabled_at: string | null;
+            /** Email */
+            email: string | null;
+            /**
+             * First Login At
+             * Format: date-time
+             */
+            first_login_at: string;
+            /**
+             * Grants
+             * @description Effective grants now; on the tenant route only that tenant's.
+             */
+            grants: components["schemas"]["EffectiveGrantRead"][];
+            /**
+             * Groups
+             * @description Groups from the last sign-in; empty on the tenant route.
+             */
+            groups: string[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Last Login At
+             * Format: date-time
+             */
+            last_login_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Provider */
+            provider: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            /** Subject */
+            subject: string;
+            /** Username */
+            username: string;
+        };
+        /**
+         * UserRead
+         * @description A person who has signed in.
+         */
+        UserRead: {
+            /** Disabled At */
+            disabled_at: string | null;
+            /** Email */
+            email: string | null;
+            /**
+             * First Login At
+             * Format: date-time
+             */
+            first_login_at: string;
+            /**
+             * Grants
+             * @description Effective grants now; on the tenant route only that tenant's.
+             */
+            grants: components["schemas"]["EffectiveGrantRead"][];
+            /**
+             * Groups
+             * @description Groups from the last sign-in; empty on the tenant route.
+             */
+            groups: string[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Last Login At
+             * Format: date-time
+             */
+            last_login_at: string;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Provider */
+            provider: string;
+            /**
+             * Provider Id
+             * Format: uuid
+             */
+            provider_id: string;
+            /** Username */
+            username: string;
+        };
+        /**
+         * VipAllocation
+         * @description One address of a VIP pool that a virtual service holds.
+         */
+        VipAllocation: {
+            /** Address */
+            address: string;
+            /** @description `unchanged` for live reads; with `?change_set=` the draft's treatment. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Virtual Service Id
+             * Format: uuid
+             */
+            virtual_service_id: string;
+            /** Virtual Service Name */
+            virtual_service_name: string;
         };
         /**
          * VipPool
@@ -4215,6 +6832,33 @@ export interface components {
              * @default 1
              */
             version: number;
+        };
+        /**
+         * VipPoolUsage
+         * @description How much of a VIP pool is in use. Addresses are held by the services that carry them.
+         */
+        VipPoolUsage: {
+            /** Allocations */
+            allocations: components["schemas"]["VipAllocation"][];
+            /** Free */
+            free: number;
+            /**
+             * Next Free
+             * @description The address a new service would get (lowest free), or null when exhausted.
+             */
+            next_free: string | null;
+            /**
+             * Pool Id
+             * Format: uuid
+             */
+            pool_id: string;
+            /**
+             * Total
+             * @description Usable addresses in the pool's ranges.
+             */
+            total: number;
+            /** Used */
+            used: number;
         };
         /**
          * VirtualService
@@ -4345,6 +6989,12 @@ export interface components {
             /** Vip Pool Id */
             vip_pool_id?: string | null;
         };
+        /**
+         * VirtualServiceHealth
+         * @description Health of a virtual service worked out from its pool members' check results.
+         * @enum {string}
+         */
+        VirtualServiceHealth: "healthy" | "degraded" | "down" | "unknown" | "disabled";
         /** VirtualServicePatch */
         VirtualServicePatch: {
             /** Allow List Id */
@@ -4456,14 +7106,33 @@ export interface components {
         VirtualServiceState: "serving" | "disabled" | "not_served";
         /**
          * VirtualServiceStatusRead
-         * @description State of one virtual service; `not_served` is reserved for one no engine can render.
+         * @description State and health of one virtual service.
+         *
+         *     `state` says whether the data plane renders it (`not_served` is reserved for one no engine
+         *     can render). `health` says whether it can serve: look at the reported member rows of its
+         *     pools (default and route pools) on the reachable engines of its SE group. `disabled`: the
+         *     service is disabled. `unknown`: no engine of the group is reachable or none has reported
+         *     yet. `healthy`: every row is `UP` and every reachable engine reported. `down`: no row is
+         *     `UP`, or a pool has no members. `degraded`: some rows are `UP`, or a reachable engine did not
+         *     report. Draining members are not `UP`.
          */
         VirtualServiceStatusRead: {
+            health: components["schemas"]["VirtualServiceHealth"];
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Members Total
+             * @description Reported member rows of the service's pools.
+             */
+            members_total: number;
+            /**
+             * Members Up
+             * @description Reported member rows that are `UP`, across engines.
+             */
+            members_up: number;
             /** Name */
             name: string;
             /** Protocol */
@@ -4477,7 +7146,10 @@ export interface components {
         VrrpInstanceStatus: {
             /** Name */
             name: string;
-            /** State */
+            /**
+             * State
+             * @description `MASTER`, `BACKUP` or `FAULT`.
+             */
             state: string;
         };
         /**
@@ -4710,6 +7382,19 @@ export interface components {
             pool_id?: string | null;
             redirect?: components["schemas"]["RedirectAction"] | null;
         };
+        /**
+         * WouldGrant
+         * @description A grant the current mappings would give this person.
+         */
+        WouldGrant: {
+            role: components["schemas"]["Role"];
+            /**
+             * Tenant
+             * @description Null for `system-admin`.
+             */
+            tenant: string | null;
+            via: components["schemas"]["GrantSourceRead"];
+        };
     };
     responses: never;
     parameters: never;
@@ -4719,6 +7404,175 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    audit_actions_api_v1_audit_actions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "action": "change_set.applied",
+                     *         "category": "change_set",
+                     *         "description": "A change set finished applying and became a revision."
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["AuditActionRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    system_audit_events_api_v1_audit_events_get: {
+        parameters: {
+            query?: {
+                /** @description Tenant id or name. */
+                tenant?: string | null;
+                /** @description Who acted, for example `user:alice`; end with `*` for a prefix. */
+                actor?: string | null;
+                /** @description Audit action (see `GET /audit-actions`); end with `*` for a prefix. */
+                action?: string | null;
+                /** @description Exact object reference, for example `change_set:<id>`; on revisions, an object id. */
+                object?: string | null;
+                /** @description Only events at or after this time (ISO 8601). */
+                since?: string | null;
+                /** @description Only events before this time (ISO 8601). */
+                until?: string | null;
+                /** @description Free text. */
+                q?: string | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "action": "change_set.apply",
+                     *           "actor": "user:alice",
+                     *           "at": "2026-10-10T08:30:00Z",
+                     *           "object": "change_set:0192f3a0-0000-7000-8000-000000000020",
+                     *           "request_id": "b7d4c2e0a1f34b6e",
+                     *           "tenant_id": "0192f3a0-0000-7000-8000-000000000001"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Page_AuditEventRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     auth_break_glass_api_v1_auth_break_glass_post: {
         parameters: {
             query?: never;
@@ -4728,6 +7582,13 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "password": "example-password",
+                 *       "totp": "123456",
+                 *       "username": "breakglass"
+                 *     }
+                 */
                 "application/json": components["schemas"]["BreakGlassIn"];
             };
         };
@@ -4747,11 +7608,22 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "name": "Alice Example",
+                     *       "session": {
+                     *         "expires_at": "2026-10-10T16:00:00Z",
+                     *         "grants_computed_at": "2026-10-10T12:00:30Z",
+                     *         "idle_timeout_seconds": 1800
+                     *       },
                      *       "tenants": [
                      *         {
                      *           "id": "0192f3a0-0000-7000-8000-000000000001",
                      *           "name": "acme",
-                     *           "role": "tenant-admin"
+                     *           "role": "tenant-admin",
+                     *           "via": [
+                     *             {
+                     *               "group": "acme-admins",
+                     *               "provider": "authentik"
+                     *             }
+                     *           ]
                      *         }
                      *       ]
                      *     }
@@ -4768,17 +7640,30 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description Login is not configured on this controller. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
         };
     };
     auth_callback_api_v1_auth_callback__provider__get: {
         parameters: {
             query?: {
+                /** @description Authorization code from the provider. */
                 code?: string | null;
+                /** @description Filter by state. */
                 state?: string | null;
+                /** @description Error code from the provider. */
                 error?: string | null;
             };
             header?: never;
             path: {
+                /** @description Identity provider id. */
                 provider: string;
             };
             cookie?: never;
@@ -4792,8 +7677,26 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Login is not configured on this controller. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4808,6 +7711,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description Identity provider id. */
                 provider: string;
             };
             cookie?: never;
@@ -4830,8 +7734,26 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Login is not configured on this controller. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4844,10 +7766,12 @@ export interface operations {
     auth_login_api_v1_auth_login__provider__get: {
         parameters: {
             query?: {
+                /** @description Local path to return to after sign-in. */
                 return_to?: string | null;
             };
             header?: never;
             path: {
+                /** @description Identity provider id. */
                 provider: string;
             };
             cookie?: never;
@@ -4861,8 +7785,26 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Login is not configured on this controller. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4876,6 +7818,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path?: never;
@@ -4890,8 +7833,35 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Login is not configured on this controller. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4931,15 +7901,123 @@ export interface operations {
                     "application/json": components["schemas"]["AuthProviders"];
                 };
             };
+            /** @description Login is not configured on this controller. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    auth_refresh_api_v1_auth_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "auth": "session",
+                     *       "break_glass": false,
+                     *       "csrf_token": "c3JmLXRva2Vu",
+                     *       "email": "alice@example.test",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000031",
+                     *       "is_system": false,
+                     *       "name": "Alice Example",
+                     *       "session": {
+                     *         "expires_at": "2026-10-10T16:00:00Z",
+                     *         "grants_computed_at": "2026-10-10T12:00:30Z",
+                     *         "idle_timeout_seconds": 1800
+                     *       },
+                     *       "tenants": [
+                     *         {
+                     *           "id": "0192f3a0-0000-7000-8000-000000000001",
+                     *           "name": "acme",
+                     *           "role": "tenant-admin",
+                     *           "via": [
+                     *             {
+                     *               "group": "acme-admins",
+                     *               "provider": "authentik"
+                     *             }
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Login is not configured on this controller. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
         };
     };
     auth_saml_metadata_api_v1_auth_saml__provider__metadata_get: {
         parameters: {
             query?: {
+                /** @description `1` to send the document as a file download. */
                 download?: boolean;
             };
             header?: never;
             path: {
+                /** @description Identity provider id. */
                 provider: string;
             };
             cookie?: never;
@@ -4955,8 +8033,26 @@ export interface operations {
                     "application/samlmetadata+xml": string;
                 };
             };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Login is not configured on this controller. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4975,6 +8071,12 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIB...\n-----END CERTIFICATE REQUEST-----\n",
+                 *       "token": "sy_enroll_0123456789"
+                 *     }
+                 */
                 "application/json": components["schemas"]["EnrollIn"];
             };
         };
@@ -5000,6 +8102,15 @@ export interface operations {
             };
             /** @description Validation Error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Agent enrollment is not configured. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5034,13 +8145,653 @@ export interface operations {
             };
         };
     };
+    list_identity_providers_api_v1_identity_providers_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "client_id": "switchyard",
+                     *         "client_secret_ref": "kv/idp/authentik",
+                     *         "client_secret_set": true,
+                     *         "created_at": "2026-10-01T08:00:00Z",
+                     *         "email_claim": "email",
+                     *         "enabled": true,
+                     *         "groups_claim": "groups",
+                     *         "id": "0192f3a0-0000-7000-8000-000000000042",
+                     *         "issuer_url": "https://sso.example.test/application/o/switchyard",
+                     *         "name": "authentik",
+                     *         "protocol": "oidc",
+                     *         "scopes": "openid profile email",
+                     *         "username_claim": "preferred_username",
+                     *         "version": 1,
+                     *         "warnings": []
+                     *       },
+                     *       {
+                     *         "acs_url": "https://switchyard.example.test/api/v1/auth/callback/0192f3a0-0000-7000-8000-000000000043",
+                     *         "attribute_email": "email",
+                     *         "attribute_groups": "groups",
+                     *         "attribute_username": "username",
+                     *         "created_at": "2026-10-01T08:00:00Z",
+                     *         "enabled": true,
+                     *         "id": "0192f3a0-0000-7000-8000-000000000043",
+                     *         "idp_entity_id": "https://idp.example.test/entity",
+                     *         "idp_metadata_url": "https://idp.example.test/metadata",
+                     *         "name": "corp",
+                     *         "protocol": "saml",
+                     *         "sign_requests": false,
+                     *         "signing_certificates": [
+                     *           "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+                     *         ],
+                     *         "sp_entity_id": "https://switchyard.example.test/api/v1/auth/saml/0192f3a0-0000-7000-8000-000000000043",
+                     *         "sp_metadata_url": "https://switchyard.example.test/api/v1/auth/saml/0192f3a0-0000-7000-8000-000000000043/metadata",
+                     *         "sso_url": "https://idp.example.test/sso",
+                     *         "version": 1,
+                     *         "warnings": []
+                     *       }
+                     *     ]
+                     */
+                    "application/json": (components["schemas"]["OidcProviderRead"] | components["schemas"]["SamlProviderRead"])[];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_identity_provider_api_v1_identity_providers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "client_id": "switchyard",
+                 *       "client_secret_ref": "kv/idp/authentik",
+                 *       "groups_claim": "groups",
+                 *       "issuer_url": "https://sso.example.test/application/o/switchyard",
+                 *       "name": "authentik",
+                 *       "protocol": "oidc"
+                 *     }
+                 */
+                "application/json": components["schemas"]["OidcProviderIn"] | components["schemas"]["SamlProviderIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "client_id": "switchyard",
+                     *       "client_secret_ref": "kv/idp/authentik",
+                     *       "client_secret_set": true,
+                     *       "created_at": "2026-10-01T08:00:00Z",
+                     *       "email_claim": "email",
+                     *       "enabled": true,
+                     *       "groups_claim": "groups",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "issuer_url": "https://sso.example.test/application/o/switchyard",
+                     *       "name": "authentik",
+                     *       "protocol": "oidc",
+                     *       "scopes": "openid profile email",
+                     *       "username_claim": "preferred_username",
+                     *       "version": 1,
+                     *       "warnings": []
+                     *     }
+                     */
+                    "application/json": components["schemas"]["OidcProviderRead"] | components["schemas"]["SamlProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_identity_provider_api_v1_identity_providers__idp__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                idp: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "client_id": "switchyard",
+                     *       "client_secret_ref": "kv/idp/authentik",
+                     *       "client_secret_set": true,
+                     *       "created_at": "2026-10-01T08:00:00Z",
+                     *       "email_claim": "email",
+                     *       "enabled": true,
+                     *       "groups_claim": "groups",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "issuer_url": "https://sso.example.test/application/o/switchyard",
+                     *       "name": "authentik",
+                     *       "protocol": "oidc",
+                     *       "scopes": "openid profile email",
+                     *       "username_claim": "preferred_username",
+                     *       "version": 1,
+                     *       "warnings": []
+                     *     }
+                     */
+                    "application/json": components["schemas"]["OidcProviderRead"] | components["schemas"]["SamlProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_identity_provider_api_v1_identity_providers__idp__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                idp: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_identity_provider_api_v1_identity_providers__idp__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                idp: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "enabled": false,
+                 *       "protocol": "oidc"
+                 *     }
+                 */
+                "application/json": components["schemas"]["OidcProviderPatch"] | components["schemas"]["SamlProviderPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "client_id": "switchyard",
+                     *       "client_secret_ref": "kv/idp/authentik",
+                     *       "client_secret_set": true,
+                     *       "created_at": "2026-10-01T08:00:00Z",
+                     *       "email_claim": "email",
+                     *       "enabled": true,
+                     *       "groups_claim": "groups",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "issuer_url": "https://sso.example.test/application/o/switchyard",
+                     *       "name": "authentik",
+                     *       "protocol": "oidc",
+                     *       "scopes": "openid profile email",
+                     *       "username_claim": "preferred_username",
+                     *       "version": 1,
+                     *       "warnings": []
+                     *     }
+                     */
+                    "application/json": components["schemas"]["OidcProviderRead"] | components["schemas"]["SamlProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    start_idp_test_api_v1_identity_providers__idp__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                idp: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "return_to": "/admin/identity-providers"
+                 *     }
+                 */
+                "application/json": components["schemas"]["IdpTestIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "authorize_url": "https://sso.example.test/authorize?client_id=switchyard&state=...",
+                     *       "test_id": "0192f3a0-0000-7000-8000-000000000044"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["IdpTestStarted"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    read_idp_test_api_v1_identity_providers__idp__test__test_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                idp: string;
+                /** @description Id returned by the test sign-in start. */
+                test_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "claims": {
+                     *         "groups": [
+                     *           "acme-ops"
+                     *         ],
+                     *         "preferred_username": "alice",
+                     *         "sub": "u-1"
+                     *       },
+                     *       "email": "alice@example.test",
+                     *       "groups": [
+                     *         "acme-ops"
+                     *       ],
+                     *       "status": "done",
+                     *       "subject": "u-1",
+                     *       "username": "alice",
+                     *       "warnings": [],
+                     *       "would_grant": [
+                     *         {
+                     *           "role": "operator",
+                     *           "tenant": "acme",
+                     *           "via": {
+                     *             "group": "acme-ops",
+                     *             "provider": "authentik"
+                     *           }
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["IdpTestResult"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_job_api_v1_jobs__job_id__get: {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Job id. */
                 job_id: string;
             };
             cookie?: never;
@@ -5109,6 +8860,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path?: never;
@@ -5131,11 +8883,22 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "name": "Alice Example",
+                     *       "session": {
+                     *         "expires_at": "2026-10-10T16:00:00Z",
+                     *         "grants_computed_at": "2026-10-10T12:00:30Z",
+                     *         "idle_timeout_seconds": 1800
+                     *       },
                      *       "tenants": [
                      *         {
                      *           "id": "0192f3a0-0000-7000-8000-000000000001",
                      *           "name": "acme",
-                     *           "role": "tenant-admin"
+                     *           "role": "tenant-admin",
+                     *           "via": [
+                     *             {
+                     *               "group": "acme-admins",
+                     *               "provider": "authentik"
+                     *             }
+                     *           ]
                      *         }
                      *       ]
                      *     }
@@ -5181,12 +8944,516 @@ export interface operations {
             };
         };
     };
+    get_permissions_api_v1_permissions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "permissions": [
+                     *         {
+                     *           "description": "Read everything in the tenant.",
+                     *           "min_role": "viewer",
+                     *           "object": "tenant_data",
+                     *           "verb": "read"
+                     *         },
+                     *         {
+                     *           "description": "Apply a change set when the tenant does not require approval.",
+                     *           "min_role": "operator",
+                     *           "object": "change_set",
+                     *           "verb": "apply"
+                     *         },
+                     *         {
+                     *           "description": "Register, enable, disable, retire or remove service engines.",
+                     *           "min_role": "tenant-admin",
+                     *           "object": "engine",
+                     *           "verb": "manage"
+                     *         }
+                     *       ],
+                     *       "roles": [
+                     *         "viewer",
+                     *         "operator",
+                     *         "tenant-admin",
+                     *         "system-admin"
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PermissionMatrix"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_role_mappings_api_v1_role_mappings_get: {
+        parameters: {
+            query?: {
+                /** @description Identity provider id. */
+                provider?: string | null;
+                /** @description Only this tenant (id or name). */
+                tenant?: string | null;
+                /** @description SE group id. */
+                group?: string | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-10-10T12:00:00Z",
+                     *         "created_by": "user:authentik:alice",
+                     *         "group_name": "acme-ops",
+                     *         "id": "0192f3a0-0000-7000-8000-000000000041",
+                     *         "label": "Acme operators",
+                     *         "provider": "authentik",
+                     *         "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *         "role": "operator",
+                     *         "tenant": "acme",
+                     *         "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *         "version": 1
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["RoleMappingRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_role_mapping_api_v1_role_mappings_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "group_name": "switchyard-admins",
+                 *       "provider": "authentik",
+                 *       "role": "system-admin"
+                 *     }
+                 */
+                "application/json": components["schemas"]["SystemRoleMappingIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T12:00:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "group_name": "acme-ops",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000041",
+                     *       "label": "Acme operators",
+                     *       "provider": "authentik",
+                     *       "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "role": "operator",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RoleMappingRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_role_mapping_api_v1_role_mappings__mapping__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Role mapping id. */
+                mapping: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T12:00:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "group_name": "acme-ops",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000041",
+                     *       "label": "Acme operators",
+                     *       "provider": "authentik",
+                     *       "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "role": "operator",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RoleMappingRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_role_mapping_api_v1_role_mappings__mapping__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Role mapping id. */
+                mapping: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_role_mapping_api_v1_role_mappings__mapping__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Role mapping id. */
+                mapping: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "role": "tenant-admin"
+                 *     }
+                 */
+                "application/json": components["schemas"]["RoleMappingPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T12:00:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "group_name": "acme-ops",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000041",
+                     *       "label": "Acme operators",
+                     *       "provider": "authentik",
+                     *       "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "role": "operator",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RoleMappingRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     protocol_field_rules_api_v1_schema_virtual_service_get: {
         parameters: {
             query: {
+                /** @description `http`, `tcp` or `udp`. */
                 protocol: components["schemas"]["Protocol"];
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path?: never;
@@ -5274,10 +9541,583 @@ export interface operations {
             };
         };
     };
+    get_break_glass_api_v1_system_break_glass_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "admin": {
+                     *         "created_at": "2026-10-01T08:00:00Z",
+                     *         "totp_confirmed": true,
+                     *         "username": "breakglass"
+                     *       },
+                     *       "enabled": true,
+                     *       "enabled_by": "user:authentik:alice",
+                     *       "enabled_until": "2026-10-10T16:00:00Z",
+                     *       "forced_by_deployment": false,
+                     *       "reason": "SSO outage, incident 4711"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BreakGlassRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    put_break_glass_api_v1_system_break_glass_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "enabled": true,
+                 *       "reason": "SSO outage",
+                 *       "ttl_minutes": 30
+                 *     }
+                 */
+                "application/json": components["schemas"]["BreakGlassSwitchIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "admin": {
+                     *         "created_at": "2026-10-01T08:00:00Z",
+                     *         "totp_confirmed": true,
+                     *         "username": "breakglass"
+                     *       },
+                     *       "enabled": true,
+                     *       "enabled_by": "user:authentik:alice",
+                     *       "enabled_until": "2026-10-10T16:00:00Z",
+                     *       "forced_by_deployment": false,
+                     *       "reason": "SSO outage, incident 4711"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BreakGlassRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_break_glass_admin_api_v1_system_break_glass_admin_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "username": "breakglass"
+                 *     }
+                 */
+                "application/json": components["schemas"]["BreakGlassEnrollIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "otpauth_uri": "otpauth://totp/Switchyard:breakglass?secret=JBSWY3DPEHPK3PXP&issuer=Switchyard",
+                     *       "password": "shown-once-aaaaaaaaaaaaaaaa",
+                     *       "totp_secret": "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP",
+                     *       "username": "breakglass"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BreakGlassEnrollment"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_break_glass_admin_api_v1_system_break_glass_admin_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    confirm_break_glass_admin_api_v1_system_break_glass_admin_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "totp": "123456"
+                 *     }
+                 */
+                "application/json": components["schemas"]["BreakGlassConfirmIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "admin": {
+                     *         "created_at": "2026-10-01T08:00:00Z",
+                     *         "totp_confirmed": true,
+                     *         "username": "breakglass"
+                     *       },
+                     *       "enabled": true,
+                     *       "enabled_by": "user:authentik:alice",
+                     *       "enabled_until": "2026-10-10T16:00:00Z",
+                     *       "forced_by_deployment": false,
+                     *       "reason": "SSO outage, incident 4711"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BreakGlassRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_system_tokens_api_v1_system_tokens_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-10-10T12:00:00Z",
+                     *         "created_by": "user:authentik:alice",
+                     *         "expires_at": "2026-11-09T12:00:00Z",
+                     *         "id": "0192f3a0-0000-7000-8000-000000000045",
+                     *         "name": "bootstrap",
+                     *         "revoked": false,
+                     *         "role": "system-admin"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["SystemTokenRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_system_token_api_v1_system_tokens_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "bootstrap",
+                 *       "ttl_days": 30
+                 *     }
+                 */
+                "application/json": components["schemas"]["SystemTokenIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "expires_at": "2026-11-09T12:00:00Z",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000045",
+                     *       "role": "system-admin",
+                     *       "token": "sy_shown-once"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SystemTokenCreated"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    revoke_system_token_api_v1_system_tokens__token__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description API token id. */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_tenants_api_v1_tenants_get: {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path?: never;
@@ -5296,7 +10136,6 @@ export interface operations {
                      *       {
                      *         "id": "0192f3a0-0000-7000-8000-000000000001",
                      *         "name": "acme",
-                     *         "oidc_group": "acme-admins",
                      *         "quotas": {
                      *           "virtual_services": 50
                      *         },
@@ -5350,6 +10189,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path?: never;
@@ -5357,6 +10197,15 @@ export interface operations {
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "name": "acme",
+                 *       "quotas": {
+                 *         "virtual_service": 100
+                 *       },
+                 *       "require_approval": true
+                 *     }
+                 */
                 "application/json": components["schemas"]["TenantIn"];
             };
         };
@@ -5371,7 +10220,6 @@ export interface operations {
                      * @example {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
-                     *       "oidc_group": "acme-admins",
                      *       "quotas": {
                      *         "virtual_services": 50
                      *       },
@@ -5424,9 +10272,11 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -5445,7 +10295,6 @@ export interface operations {
                      * @example {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
-                     *       "oidc_group": "acme-admins",
                      *       "quotas": {
                      *         "virtual_services": 50
                      *       },
@@ -5498,9 +10347,11 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -5513,6 +10364,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -5529,16 +10416,24 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "require_approval": true
+                 *     }
+                 */
                 "application/json": components["schemas"]["TenantPatch"];
             };
         };
@@ -5553,7 +10448,6 @@ export interface operations {
                      * @example {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
-                     *       "oidc_group": "acme-admins",
                      *       "quotas": {
                      *         "virtual_services": 50
                      *       },
@@ -5584,6 +10478,15 @@ export interface operations {
             };
             /** @description The tenant or object does not exist. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5623,12 +10526,29 @@ export interface operations {
     audit_events_api_v1_tenants__t__audit_events_get: {
         parameters: {
             query?: {
+                /** @description Who acted, for example `user:alice`; end with `*` for a prefix. */
+                actor?: string | null;
+                /** @description Audit action (see `GET /audit-actions`); end with `*` for a prefix. */
+                action?: string | null;
+                /** @description Exact object reference, for example `change_set:<id>`; on revisions, an object id. */
+                object?: string | null;
+                /** @description Only events at or after this time (ISO 8601). */
+                since?: string | null;
+                /** @description Only events before this time (ISO 8601). */
+                until?: string | null;
+                /** @description Free text. */
+                q?: string | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -5642,17 +10562,29 @@ export interface operations {
                 };
                 content: {
                     /**
-                     * @example [
-                     *       {
-                     *         "action": "change_set.apply",
-                     *         "actor": "user:alice",
-                     *         "at": "2026-10-10T08:30:00Z",
-                     *         "object": "change_set:0192f3a0-0000-7000-8000-000000000020",
-                     *         "request_id": "b7d4c2e0a1f34b6e"
-                     *       }
-                     *     ]
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "action": "change_set.apply",
+                     *           "actor": "user:alice",
+                     *           "at": "2026-10-10T08:30:00Z",
+                     *           "object": "change_set:0192f3a0-0000-7000-8000-000000000020",
+                     *           "request_id": "b7d4c2e0a1f34b6e",
+                     *           "tenant_id": "0192f3a0-0000-7000-8000-000000000001"
+                     *         }
+                     *       ]
+                     *     }
                      */
-                    "application/json": components["schemas"]["AuditEventRead"][];
+                    "application/json": components["schemas"]["Page_AuditEventRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -5696,15 +10628,29 @@ export interface operations {
     list_certificates_api_v1_tenants__t__certificates_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
+                /** @description How it was obtained. */
+                source?: components["schemas"]["CertSource"] | null;
+                /** @description Expires within this many days (or already). */
+                expires_within_days?: number | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -5739,6 +10685,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_CertificateRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -5782,20 +10737,37 @@ export interface operations {
     create_certificates_api_v1_tenants__t__certificates_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "name": "web-example",
+                 *       "not_after": "2027-01-08T00:00:00Z",
+                 *       "renew_policy": "auto",
+                 *       "sans": [
+                 *         "www.example.test"
+                 *       ],
+                 *       "secret_ref": "kv/tenants/acme/certs/web-example",
+                 *       "source": "acme"
+                 *     }
+                 */
                 "application/json": components["schemas"]["CertificateCreate"];
             };
         };
@@ -5843,6 +10815,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -5857,19 +10838,29 @@ export interface operations {
     import_certificate_api_v1_tenants__t__certificates_import_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "name": "web-example",
+                 *       "pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
+                 *     }
+                 */
                 "application/json": components["schemas"]["CertImportIn"];
             };
         };
@@ -5917,8 +10908,26 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No secrets backend (OpenBao) is configured. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5932,15 +10941,26 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "name": "web-example",
+                 *       "sans": [
+                 *         "www.example.test"
+                 *       ],
+                 *       "source": "acme"
+                 *     }
+                 */
                 "application/json": components["schemas"]["CertIssueIn"];
             };
         };
@@ -5986,6 +11006,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -6001,10 +11030,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Certificate id. */
                 certificate: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6052,6 +11084,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -6066,13 +11107,17 @@ export interface operations {
     get_certificates_api_v1_tenants__t__certificates__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6148,15 +11193,21 @@ export interface operations {
     delete_certificates_api_v1_tenants__t__certificates__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6206,6 +11257,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -6238,21 +11298,32 @@ export interface operations {
     update_certificates_api_v1_tenants__t__certificates__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "renew_policy": "manual"
+                 *     }
+                 */
                 "application/json": components["schemas"]["CertificatePatch"];
             };
         };
@@ -6300,6 +11371,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -6332,13 +11412,17 @@ export interface operations {
     rendered_certificates_api_v1_tenants__t__certificates__object_id__rendered_get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6412,14 +11496,19 @@ export interface operations {
     list_change_sets_api_v1_tenants__t__change_sets_get: {
         parameters: {
             query?: {
+                /** @description Filter by state. */
                 state?: components["schemas"]["ChangeSetState"] | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6448,6 +11537,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_ChangeSetSummary_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -6492,15 +11590,22 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "summary": "Add the shop service"
+                 *     }
+                 */
                 "application/json": components["schemas"]["OpenIn"];
             };
         };
@@ -6562,6 +11667,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -6577,10 +11691,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6659,16 +11776,24 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody?: {
             content: {
+                /**
+                 * @example {
+                 *       "break_glass_reason": null
+                 *     }
+                 */
                 "application/json": components["schemas"]["ApplyIn"] | null;
             };
         };
@@ -6714,6 +11839,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -6729,10 +11863,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6780,6 +11917,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -6795,10 +11941,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6813,6 +11962,28 @@ export interface operations {
                 content: {
                     /**
                      * @example {
+                     *       "impact": {
+                     *         "hostnames": [
+                     *           "shop.example.test"
+                     *         ],
+                     *         "se_groups": [
+                     *           {
+                     *             "id": "0192f3a0-0000-7000-8000-000000000012",
+                     *             "name": "edge"
+                     *           }
+                     *         ],
+                     *         "services": [
+                     *           {
+                     *             "id": "0192f3a0-0000-7000-8000-000000000013",
+                     *             "name": "shop",
+                     *             "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
+                     *             "vip": "192.0.2.100"
+                     *           }
+                     *         ],
+                     *         "vips": [
+                     *           "192.0.2.100"
+                     *         ]
+                     *       },
                      *       "objects": [
                      *         {
                      *           "changed_fields": [
@@ -6888,10 +12059,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -6939,6 +12113,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -6954,16 +12137,34 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "ops": [
+                 *         {
+                 *           "action": "update",
+                 *           "body": {
+                 *             "algorithm": "leastconn"
+                 *           },
+                 *           "expected_version": 3,
+                 *           "object_id": "0192f3a0-0000-7000-8000-000000000014",
+                 *           "object_type": "pool"
+                 *         }
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["OpsIn"];
             };
         };
@@ -7025,6 +12226,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -7040,11 +12250,15 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Position of the operation in the change set, starting at 0. */
                 index: number;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7108,6 +12322,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -7123,16 +12346,24 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "comment": "Please also cover www2."
+                 *     }
+                 */
                 "application/json": components["schemas"]["ReasonIn"];
             };
         };
@@ -7178,6 +12409,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -7193,10 +12433,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Change set id. */
                 cs: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7244,6 +12487,178 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_tenant_engines_api_v1_tenants__t__engines_get: {
+        parameters: {
+            query?: {
+                /** @description Filter by SE group id. */
+                se_group?: string | null;
+                /** @description Filter by state. */
+                state?: components["schemas"]["EngineState"] | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "agent_cert_serial": "3f2a9c",
+                     *         "agent_enrolled": true,
+                     *         "agent_url": "192.0.2.21:7443",
+                     *         "id": "0192f3a0-0000-7000-8000-000000000022",
+                     *         "mgmt_ip": "192.0.2.21",
+                     *         "name": "edge-1",
+                     *         "pve_node": "pve1",
+                     *         "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
+                     *         "state": "enabled",
+                     *         "url": "https://198.51.100.21:5555",
+                     *         "vmid": 9101
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["EngineRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_engine_api_v1_tenants__t__engines__engine__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Engine id. */
+                engine: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "agent_cert_serial": "3f2a9c",
+                     *       "agent_enrolled": true,
+                     *       "agent_url": "192.0.2.21:7443",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000022",
+                     *       "mgmt_ip": "192.0.2.21",
+                     *       "name": "edge-1",
+                     *       "pve_node": "pve1",
+                     *       "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
+                     *       "state": "enabled",
+                     *       "url": "https://198.51.100.21:5555",
+                     *       "vmid": 9101
+                     *     }
+                     */
+                    "application/json": components["schemas"]["EngineRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -7259,10 +12674,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Engine id. */
                 engine: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7275,6 +12693,42 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -7291,10 +12745,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Engine id. */
                 engine: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7343,8 +12800,26 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Agent enrollment is not configured. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7358,10 +12833,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Engine id. */
                 engine: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7409,6 +12887,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -7423,13 +12910,17 @@ export interface operations {
     engine_state_api_v1_tenants__t__engines__engine__state_put: {
         parameters: {
             query: {
+                /** @description Filter by state. */
                 state: components["schemas"]["EngineState"];
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Engine id. */
                 engine: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7477,6 +12968,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -7491,15 +12991,25 @@ export interface operations {
     list_health_monitors_api_v1_tenants__t__health_monitors_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7539,6 +13049,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_HealthMonitorRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -7582,20 +13101,44 @@ export interface operations {
     create_health_monitors_api_v1_tenants__t__health_monitors_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "fall": 3,
+                 *       "http": {
+                 *         "expect_status": [
+                 *           200
+                 *         ],
+                 *         "host": null,
+                 *         "method": "GET",
+                 *         "path": "/healthz"
+                 *       },
+                 *       "interval_s": 5,
+                 *       "name": "http-ok",
+                 *       "port": null,
+                 *       "rise": 2,
+                 *       "timeout_s": 3,
+                 *       "type": "http"
+                 *     }
+                 */
                 "application/json": components["schemas"]["HealthMonitorCreate"];
             };
         };
@@ -7643,8 +13186,119 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_monitor_api_v1_tenants__t__health_monitors__monitor_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Health monitor id. */
+                monitor_id: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "member_id": "0192f3a0-0000-7000-8000-000000000019",
+                 *       "pool_id": "0192f3a0-0000-7000-8000-000000000014"
+                 *     }
+                 */
+                "application/json": components["schemas"]["MonitorTestIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "detail": "HTTP 200",
+                     *       "engine": "edge-1",
+                     *       "latency_ms": 12,
+                     *       "ok": true,
+                     *       "protocol": "http",
+                     *       "target": "10.20.0.11:8080"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["MonitorTestOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The engine's agent cannot be reached. */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7657,13 +13311,17 @@ export interface operations {
     get_health_monitors_api_v1_tenants__t__health_monitors__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7744,15 +13402,21 @@ export interface operations {
     delete_health_monitors_api_v1_tenants__t__health_monitors__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -7802,6 +13466,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -7834,21 +13507,32 @@ export interface operations {
     update_health_monitors_api_v1_tenants__t__health_monitors__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "interval_s": 10
+                 *     }
+                 */
                 "application/json": components["schemas"]["HealthMonitorPatch"];
             };
         };
@@ -7896,6 +13580,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -7928,13 +13621,17 @@ export interface operations {
     rendered_health_monitors_api_v1_tenants__t__health_monitors__object_id__rendered_get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8008,15 +13705,21 @@ export interface operations {
     list_jobs_api_v1_tenants__t__jobs_get: {
         parameters: {
             query?: {
+                /** @description Filter by state. */
                 state?: components["schemas"]["JobState"] | null;
-                kind?: string | null;
+                /** @description Filter by job kind. */
+                kind?: components["schemas"]["JobKind"] | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8093,6 +13796,15 @@ export interface operations {
                     "application/json": components["schemas"]["Page_Job_"];
                 };
             };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Missing, invalid or expired credentials. */
             401: {
                 headers: {
@@ -8135,10 +13847,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Job id. */
                 job_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8253,10 +13968,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Job id. */
                 job_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8356,6 +14074,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -8371,10 +14098,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Job id. */
                 job_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8444,10 +14174,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Job id. */
                 job_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8547,6 +14280,98 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    metrics_overview_api_v1_tenants__t__metrics_virtual_services_get: {
+        parameters: {
+            query?: {
+                /** @description Seconds back from now. */
+                window_s?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "available": true,
+                     *       "items": [
+                     *         {
+                     *           "name": "shop",
+                     *           "summary": {
+                     *             "active_connections": 42,
+                     *             "error_5xx_ratio": 0.002,
+                     *             "p95_ms": 18,
+                     *             "rps": 120.5
+                     *           },
+                     *           "virtual_service_id": "0192f3a0-0000-7000-8000-000000000013"
+                     *         }
+                     *       ],
+                     *       "window_s": 900
+                     *     }
+                     */
+                    "application/json": components["schemas"]["MetricsOverview"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -8561,15 +14386,25 @@ export interface operations {
     list_networks_api_v1_tenants__t__networks_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8601,6 +14436,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_NetworkRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -8644,20 +14488,36 @@ export interface operations {
     create_networks_api_v1_tenants__t__networks_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "cidr": "192.0.2.0/24",
+                 *       "gateway": "192.0.2.1",
+                 *       "managed": false,
+                 *       "name": "lb-dmz",
+                 *       "sdn_zone": null,
+                 *       "vlan_or_vni": 120,
+                 *       "vnet": null
+                 *     }
+                 */
                 "application/json": components["schemas"]["NetworkCreate"];
             };
         };
@@ -8705,6 +14565,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -8720,9 +14589,11 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8770,6 +14641,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -8784,13 +14664,17 @@ export interface operations {
     get_networks_api_v1_tenants__t__networks__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8863,15 +14747,21 @@ export interface operations {
     delete_networks_api_v1_tenants__t__networks__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -8921,6 +14811,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -8953,21 +14852,32 @@ export interface operations {
     update_networks_api_v1_tenants__t__networks__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "gateway": "192.0.2.254"
+                 *     }
+                 */
                 "application/json": components["schemas"]["NetworkPatch"];
             };
         };
@@ -9015,6 +14925,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -9047,15 +14966,27 @@ export interface operations {
     list_policy_sets_api_v1_tenants__t__policy_sets_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
+                /** @description Only this `kind`. */
+                kind?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -9095,6 +15026,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -9138,20 +15078,44 @@ export interface operations {
     create_policy_sets_api_v1_tenants__t__policy_sets_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "kind": "redirect",
+                 *       "name": "legacy-paths",
+                 *       "rules": [
+                 *         {
+                 *           "match": {
+                 *             "host": null,
+                 *             "path_exact": null,
+                 *             "path_prefix": "/old"
+                 *           },
+                 *           "redirect": {
+                 *             "code": 301,
+                 *             "location": "/new"
+                 *           }
+                 *         }
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"];
             };
         };
@@ -9199,6 +15163,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -9213,13 +15186,17 @@ export interface operations {
     get_policy_sets_api_v1_tenants__t__policy_sets__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -9300,15 +15277,21 @@ export interface operations {
     delete_policy_sets_api_v1_tenants__t__policy_sets__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -9358,6 +15341,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -9390,21 +15382,35 @@ export interface operations {
     update_policy_sets_api_v1_tenants__t__policy_sets__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "cidrs": [
+                 *         "198.51.100.0/24"
+                 *       ],
+                 *       "kind": "allow_list"
+                 *     }
+                 */
                 "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"];
             };
         };
@@ -9452,6 +15458,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -9484,13 +15499,17 @@ export interface operations {
     rendered_policy_sets_api_v1_tenants__t__policy_sets__object_id__rendered_get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -9564,15 +15583,27 @@ export interface operations {
     list_pools_api_v1_tenants__t__pools_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
+                /** @description Checked by this monitor. */
+                health_monitor?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -9616,6 +15647,15 @@ export interface operations {
                     "application/json": components["schemas"]["Page_PoolRead_"];
                 };
             };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Missing, invalid or expired credentials. */
             401: {
                 headers: {
@@ -9657,20 +15697,45 @@ export interface operations {
     create_pools_api_v1_tenants__t__pools_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "algorithm": "roundrobin",
+                 *       "health_monitor_id": "0192f3a0-0000-7000-8000-000000000015",
+                 *       "members": [
+                 *         {
+                 *           "address": "198.51.100.10",
+                 *           "admin_state": "enabled",
+                 *           "id": "0192f3a0-0000-7000-8000-000000000019",
+                 *           "name": "web-1",
+                 *           "port": 8080,
+                 *           "weight": 100
+                 *         }
+                 *       ],
+                 *       "name": "web-pool",
+                 *       "persistence": null,
+                 *       "tls": false,
+                 *       "tls_verify": false
+                 *     }
+                 */
                 "application/json": components["schemas"]["PoolCreate"];
             };
         };
@@ -9718,6 +15783,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -9732,13 +15806,17 @@ export interface operations {
     get_pools_api_v1_tenants__t__pools__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -9821,15 +15899,21 @@ export interface operations {
     delete_pools_api_v1_tenants__t__pools__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -9879,6 +15963,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -9911,21 +16004,32 @@ export interface operations {
     update_pools_api_v1_tenants__t__pools__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "algorithm": "leastconn"
+                 *     }
+                 */
                 "application/json": components["schemas"]["PoolPatch"];
             };
         };
@@ -9973,6 +16077,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -10005,13 +16118,17 @@ export interface operations {
     rendered_pools_api_v1_tenants__t__pools__object_id__rendered_get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -10086,17 +16203,26 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Pool id. */
                 pool: string;
+                /** @description Pool member id. */
                 member: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "state": "drain"
+                 *     }
+                 */
                 "application/json": components["schemas"]["MemberStateIn"];
             };
         };
@@ -10147,6 +16273,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -10161,13 +16296,19 @@ export interface operations {
     revisions_api_v1_tenants__t__revisions_get: {
         parameters: {
             query?: {
+                /** @description Exact object reference, for example `change_set:<id>`; on revisions, an object id. */
+                object?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -10194,6 +16335,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_RevisionSummary_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -10238,10 +16388,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Revision number. */
                 n: number;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -10332,10 +16485,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Revision number. */
                 n: number;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -10399,8 +16555,386 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Validation Error */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_tenant_role_mappings_api_v1_tenants__t__role_mappings_get: {
+        parameters: {
+            query?: {
+                /** @description Identity provider id. */
+                provider?: string | null;
+                /** @description SE group id. */
+                group?: string | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-10-10T12:00:00Z",
+                     *         "created_by": "user:authentik:alice",
+                     *         "group_name": "acme-ops",
+                     *         "id": "0192f3a0-0000-7000-8000-000000000041",
+                     *         "label": "Acme operators",
+                     *         "provider": "authentik",
+                     *         "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *         "role": "operator",
+                     *         "tenant": "acme",
+                     *         "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *         "version": 1
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["RoleMappingRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_tenant_role_mapping_api_v1_tenants__t__role_mappings_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "group_name": "acme-operators",
+                 *       "provider": "authentik",
+                 *       "role": "operator"
+                 *     }
+                 */
+                "application/json": components["schemas"]["RoleMappingIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T12:00:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "group_name": "acme-ops",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000041",
+                     *       "label": "Acme operators",
+                     *       "provider": "authentik",
+                     *       "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "role": "operator",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RoleMappingRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_tenant_role_mapping_api_v1_tenants__t__role_mappings__mapping__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Role mapping id. */
+                mapping: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_tenant_role_mapping_api_v1_tenants__t__role_mappings__mapping__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Role mapping id. */
+                mapping: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "role": "viewer"
+                 *     }
+                 */
+                "application/json": components["schemas"]["RoleMappingPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T12:00:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "group_name": "acme-ops",
+                     *       "id": "0192f3a0-0000-7000-8000-000000000041",
+                     *       "label": "Acme operators",
+                     *       "provider": "authentik",
+                     *       "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "role": "operator",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RoleMappingRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10413,15 +16947,27 @@ export interface operations {
     list_routing_profiles_api_v1_tenants__t__routing_profiles_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
+                /** @description Only this `kind`. */
+                kind?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -10456,6 +17002,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -10499,20 +17054,37 @@ export interface operations {
     create_routing_profiles_api_v1_tenants__t__routing_profiles_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "advert_interval_s": 1,
+                 *       "base_priority": 150,
+                 *       "interface": "eth1",
+                 *       "kind": "vrrp",
+                 *       "name": "edge-vrrp",
+                 *       "priority_step": 10,
+                 *       "static_routes": [],
+                 *       "vrid": 51
+                 *     }
+                 */
                 "application/json": components["schemas"]["VrrpProfileCreate"] | components["schemas"]["BgpProfileCreate"];
             };
         };
@@ -10560,6 +17132,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -10574,13 +17155,17 @@ export interface operations {
     get_routing_profiles_api_v1_tenants__t__routing_profiles__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -10656,15 +17241,21 @@ export interface operations {
     delete_routing_profiles_api_v1_tenants__t__routing_profiles__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -10714,6 +17305,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -10746,21 +17346,33 @@ export interface operations {
     update_routing_profiles_api_v1_tenants__t__routing_profiles__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "advert_interval_s": 2,
+                 *       "kind": "vrrp"
+                 *     }
+                 */
                 "application/json": components["schemas"]["VrrpProfilePatch"] | components["schemas"]["BgpProfilePatch"];
             };
         };
@@ -10808,6 +17420,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -10840,15 +17461,27 @@ export interface operations {
     list_se_groups_api_v1_tenants__t__se_groups_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
+                /** @description `bgp` or `vrrp`. */
+                ha_mode?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -10886,6 +17519,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_SeGroupRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -10929,20 +17571,40 @@ export interface operations {
     create_se_groups_api_v1_tenants__t__se_groups_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "canary_seconds": 30,
+                 *       "ha_mode": "vrrp",
+                 *       "maxconn": 20000,
+                 *       "name": "edge",
+                 *       "networks": [
+                 *         {
+                 *           "network_id": "0192f3a0-0000-7000-8000-000000000010",
+                 *           "role": "vip"
+                 *         }
+                 *       ],
+                 *       "routing_profile_id": "0192f3a0-0000-7000-8000-000000000018"
+                 *     }
+                 */
                 "application/json": components["schemas"]["SeGroupCreate"];
             };
         };
@@ -10990,6 +17652,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -11005,16 +17676,33 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description SE group id. */
                 group: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "count": 2,
+                 *       "credentials_ref": "kv/tenants/acme/engines/dataplane",
+                 *       "mgmt_pool_id": "0192f3a0-0000-7000-8000-000000000011",
+                 *       "nodes": [
+                 *         "pve1",
+                 *         "pve2"
+                 *       ],
+                 *       "pool": "edge",
+                 *       "ssh_public_keys": "ssh-ed25519 AAAA... ops@example.test",
+                 *       "template_vmid": 9000
+                 *     }
+                 */
                 "application/json": components["schemas"]["DeployIn"];
             };
         };
@@ -11060,6 +17748,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -11075,10 +17772,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description SE group id. */
                 group: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11094,10 +17794,17 @@ export interface operations {
                     /**
                      * @example [
                      *       {
+                     *         "agent_cert_serial": "3f2a9c",
+                     *         "agent_enrolled": true,
+                     *         "agent_url": "192.0.2.21:7443",
                      *         "id": "0192f3a0-0000-7000-8000-000000000022",
+                     *         "mgmt_ip": "192.0.2.21",
                      *         "name": "edge-1",
+                     *         "pve_node": "pve1",
+                     *         "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
                      *         "state": "enabled",
-                     *         "url": "https://198.51.100.21:5555"
+                     *         "url": "https://198.51.100.21:5555",
+                     *         "vmid": 9101
                      *       }
                      *     ]
                      */
@@ -11146,16 +17853,28 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description SE group id. */
                 group: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "agent_url": "198.51.100.21:7443",
+                 *       "credentials_ref": "kv/tenants/acme/engines/dataplane",
+                 *       "dataplane_url": "https://198.51.100.21:5555",
+                 *       "mgmt_ip": "198.51.100.21",
+                 *       "name": "edge-1"
+                 *     }
+                 */
                 "application/json": components["schemas"]["EngineIn"];
             };
         };
@@ -11168,10 +17887,17 @@ export interface operations {
                 content: {
                     /**
                      * @example {
+                     *       "agent_cert_serial": "3f2a9c",
+                     *       "agent_enrolled": true,
+                     *       "agent_url": "192.0.2.21:7443",
                      *       "id": "0192f3a0-0000-7000-8000-000000000022",
+                     *       "mgmt_ip": "192.0.2.21",
                      *       "name": "edge-1",
+                     *       "pve_node": "pve1",
+                     *       "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
                      *       "state": "enabled",
-                     *       "url": "https://198.51.100.21:5555"
+                     *       "url": "https://198.51.100.21:5555",
+                     *       "vmid": 9101
                      *     }
                      */
                     "application/json": components["schemas"]["EngineRead"];
@@ -11204,6 +17930,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -11218,13 +17953,17 @@ export interface operations {
     get_se_groups_api_v1_tenants__t__se_groups__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11303,15 +18042,21 @@ export interface operations {
     delete_se_groups_api_v1_tenants__t__se_groups__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11361,6 +18106,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -11393,21 +18147,32 @@ export interface operations {
     update_se_groups_api_v1_tenants__t__se_groups__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "maxconn": 40000
+                 *     }
+                 */
                 "application/json": components["schemas"]["SeGroupPatch"];
             };
         };
@@ -11455,6 +18220,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -11487,13 +18261,17 @@ export interface operations {
     rendered_se_groups_api_v1_tenants__t__se_groups__object_id__rendered_get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11564,13 +18342,99 @@ export interface operations {
             };
         };
     };
+    search_objects_api_v1_tenants__t__search_get: {
+        parameters: {
+            query: {
+                /** @description Free text. */
+                q: string;
+                /** @description Restrict to these object types (repeat the parameter). */
+                types?: components["schemas"]["ObjectType"][] | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "hits": [
+                     *         {
+                     *           "detail": "192.0.2.100",
+                     *           "id": "0192f3a0-0000-7000-8000-000000000013",
+                     *           "matched": "name",
+                     *           "name": "shop",
+                     *           "type": "virtual_service"
+                     *         }
+                     *       ],
+                     *       "query": "shop",
+                     *       "truncated": false
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     engine_status_api_v1_tenants__t__status_engines_get: {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11601,7 +18465,8 @@ export interface operations {
                      *               "name": "VI_edge",
                      *               "state": "MASTER"
                      *             }
-                     *           ]
+                     *           ],
+                     *           "withdrawn_prefixes": []
                      *         },
                      *         "drift": [
                      *           {
@@ -11670,26 +18535,57 @@ export interface operations {
     status_stream_api_v1_tenants__t__status_stream_get: {
         parameters: {
             query?: {
+                /** @description Keep the stream open (`true`) or send one snapshot and close. */
                 follow?: boolean;
+                /** @description Seconds between database polls. */
                 interval?: number;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description `text/event-stream`; each `status` event carries the JSON array of `GET /status/engines`. */
+            /** @description `text/event-stream`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "text/event-stream": string;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Validation Error */
@@ -11707,9 +18603,11 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11725,7 +18623,10 @@ export interface operations {
                     /**
                      * @example [
                      *       {
+                     *         "health": "degraded",
                      *         "id": "00000000-0000-0000-0000-0000000000d1",
+                     *         "members_total": 4,
+                     *         "members_up": 3,
                      *         "name": "dns",
                      *         "protocol": "udp",
                      *         "state": "serving"
@@ -11773,13 +18674,130 @@ export interface operations {
             };
         };
     };
+    tenant_summary_api_v1_tenants__t__summary_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "drifted_engines": [
+                     *         {
+                     *           "engine": "edge-2",
+                     *           "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                     *           "kinds": [
+                     *             "haproxy_config"
+                     *           ],
+                     *           "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                     *         }
+                     *       ],
+                     *       "expiring_certificates": [
+                     *         {
+                     *           "days_left": 14,
+                     *           "id": "0192f3a0-0000-7000-8000-000000000016",
+                     *           "name": "shop",
+                     *           "not_after": "2026-10-25T00:00:00Z"
+                     *         }
+                     *       ],
+                     *       "failing_members": [
+                     *         {
+                     *           "backend": "pool_web",
+                     *           "engine": "edge-1",
+                     *           "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                     *           "server": "web-2",
+                     *           "status": "DOWN"
+                     *         }
+                     *       ],
+                     *       "jobs": {
+                     *         "failed": 0,
+                     *         "queued": 0,
+                     *         "running": 1
+                     *       },
+                     *       "latest_revision": {
+                     *         "author": "user:alice",
+                     *         "created_at": "2026-10-10T08:30:00Z",
+                     *         "number": 42,
+                     *         "summary": "Add shop"
+                     *       },
+                     *       "open_drafts": 2,
+                     *       "pending_approval": 0,
+                     *       "services": {
+                     *         "degraded": 1,
+                     *         "disabled": 1,
+                     *         "down": 0,
+                     *         "healthy": 2,
+                     *         "total": 4,
+                     *         "unknown": 0
+                     *       },
+                     *       "unreachable_engines": []
+                     *     }
+                     */
+                    "application/json": components["schemas"]["TenantSummary"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_tokens_api_v1_tenants__t__tokens_get: {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11848,15 +18866,24 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "name": "ci",
+                 *       "role": "operator",
+                 *       "ttl_days": 90
+                 *     }
+                 */
                 "application/json": components["schemas"]["TokenIn"];
             };
         };
@@ -11904,6 +18931,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -11919,10 +18955,13 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description API token id. */
                 token: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11935,6 +18974,156 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_tenant_users_api_v1_tenants__t__users_get: {
+        parameters: {
+            query?: {
+                /** @description Free text. */
+                q?: string | null;
+                /** @description Identity provider id. */
+                provider?: string | null;
+                /** @description `true` for disabled users only, `false` for enabled ones. */
+                disabled?: boolean | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "email": "alice@example.test",
+                     *           "first_login_at": "2026-10-01T08:00:00Z",
+                     *           "grants": [
+                     *             {
+                     *               "role": "operator",
+                     *               "tenant": "acme",
+                     *               "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *               "via": [
+                     *                 {
+                     *                   "group": "acme-ops",
+                     *                   "provider": "authentik"
+                     *                 }
+                     *               ]
+                     *             }
+                     *           ],
+                     *           "groups": [
+                     *             "acme-ops"
+                     *           ],
+                     *           "id": "0192f3a0-0000-7000-8000-000000000051",
+                     *           "last_login_at": "2026-10-10T11:58:00Z",
+                     *           "last_seen_at": "2026-10-10T12:00:00Z",
+                     *           "provider": "authentik",
+                     *           "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *           "username": "alice"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Page_UserRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -11950,15 +19139,25 @@ export interface operations {
     list_vip_pools_api_v1_tenants__t__vip_pools_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
                 cursor?: string | null;
+                /** @description Page size. */
                 limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -11993,6 +19192,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Page_VipPoolRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -12036,20 +19244,37 @@ export interface operations {
     create_vip_pools_api_v1_tenants__t__vip_pools_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "name": "dmz-vips",
+                 *       "network_id": "0192f3a0-0000-7000-8000-000000000010",
+                 *       "ranges": [
+                 *         {
+                 *           "end": "192.0.2.200",
+                 *           "start": "192.0.2.100"
+                 *         }
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["VipPoolCreate"];
             };
         };
@@ -12097,6 +19322,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -12111,13 +19345,17 @@ export interface operations {
     get_vip_pools_api_v1_tenants__t__vip_pools__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -12193,15 +19431,21 @@ export interface operations {
     delete_vip_pools_api_v1_tenants__t__vip_pools__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -12251,6 +19495,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -12283,21 +19536,37 @@ export interface operations {
     update_vip_pools_api_v1_tenants__t__vip_pools__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "ranges": [
+                 *         {
+                 *           "end": "192.0.2.220",
+                 *           "start": "192.0.2.100"
+                 *         }
+                 *       ]
+                 *     }
+                 */
                 "application/json": components["schemas"]["VipPoolPatch"];
             };
         };
@@ -12345,6 +19614,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -12374,18 +19652,204 @@ export interface operations {
             };
         };
     };
-    list_virtual_services_api_v1_tenants__t__virtual_services_get: {
+    vip_pool_allocations_api_v1_tenants__t__vip_pools__pool_id__allocations_get: {
         parameters: {
             query?: {
-                name?: string | null;
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
-                cursor?: string | null;
-                limit?: number;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description VIP pool id. */
+                pool_id: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "allocations": [
+                     *         {
+                     *           "address": "192.0.2.100",
+                     *           "draft_status": "unchanged",
+                     *           "enabled": true,
+                     *           "virtual_service_id": "0192f3a0-0000-7000-8000-000000000013",
+                     *           "virtual_service_name": "shop"
+                     *         }
+                     *       ],
+                     *       "free": 98,
+                     *       "next_free": "192.0.2.101",
+                     *       "pool_id": "0192f3a0-0000-7000-8000-000000000011",
+                     *       "total": 99,
+                     *       "used": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["VipPoolUsage"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    vip_pool_next_free_api_v1_tenants__t__vip_pools__pool_id__next_free_post: {
+        parameters: {
+            query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
+                change_set?: string | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description VIP pool id. */
+                pool_id: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "address": "192.0.2.101"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["NextFree"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_virtual_services_api_v1_tenants__t__virtual_services_get: {
+        parameters: {
+            query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
+                change_set?: string | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
+                limit?: number;
+                /** @description Exactly this name. */
+                name?: string | null;
+                /** @description Substring of the name, case-insensitive. */
+                q?: string | null;
+                /** @description Order by name, ascending or descending. */
+                sort?: "name" | "-name";
+                /** @description Served by this SE group. */
+                se_group?: string | null;
+                /** @description `http`, `tcp` or `udp`. */
+                protocol?: components["schemas"]["Protocol"] | null;
+                /** @description Only enabled or only disabled. */
+                enabled?: boolean | null;
+                /** @description Uses this pool (default or in a route). */
+                pool?: string | null;
+                /** @description Uses this certificate. */
+                certificate?: string | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -12432,6 +19896,15 @@ export interface operations {
                     "application/json": components["schemas"]["Page_VirtualServiceRead_"];
                 };
             };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description Missing, invalid or expired credentials. */
             401: {
                 headers: {
@@ -12473,20 +19946,50 @@ export interface operations {
     create_virtual_services_api_v1_tenants__t__virtual_services_post: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
+                /** @description Object id. */
                 object_id?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "allow_list_id": null,
+                 *       "certificate_ids": [],
+                 *       "default_pool_id": "0192f3a0-0000-7000-8000-000000000014",
+                 *       "enabled": true,
+                 *       "enforce_allow_list": false,
+                 *       "name": "web",
+                 *       "policy_set_ids": [],
+                 *       "ports": [
+                 *         {
+                 *           "https_redirect_port": null,
+                 *           "port": 80,
+                 *           "proxy_protocol": false,
+                 *           "tls": false
+                 *         }
+                 *       ],
+                 *       "protocol": "http",
+                 *       "restore_client_ip_header": null,
+                 *       "routes": [],
+                 *       "se_group_id": "0192f3a0-0000-7000-8000-000000000012",
+                 *       "vip": "192.0.2.100",
+                 *       "vip_pool_id": "0192f3a0-0000-7000-8000-000000000011"
+                 *     }
+                 */
                 "application/json": components["schemas"]["VirtualServiceCreate"];
             };
         };
@@ -12534,6 +20037,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
@@ -12548,13 +20060,17 @@ export interface operations {
     get_virtual_services_api_v1_tenants__t__virtual_services__object_id__get: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -12640,15 +20156,21 @@ export interface operations {
     delete_virtual_services_api_v1_tenants__t__virtual_services__object_id__delete: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -12698,6 +20220,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -12730,21 +20261,32 @@ export interface operations {
     update_virtual_services_api_v1_tenants__t__virtual_services__object_id__patch: {
         parameters: {
             query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
                 change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
                 apply?: boolean;
             };
             header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
                 "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
+                /**
+                 * @example {
+                 *       "enabled": false
+                 *     }
+                 */
                 "application/json": components["schemas"]["VirtualServicePatch"];
             };
         };
@@ -12792,6 +20334,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["ProblemOut"];
                 };
             };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
             /** @description `If-Match` does not match the object's current version (stale write). */
             412: {
                 headers: {
@@ -12821,16 +20372,234 @@ export interface operations {
             };
         };
     };
-    rendered_virtual_services_api_v1_tenants__t__virtual_services__object_id__rendered_get: {
+    service_logs_api_v1_tenants__t__virtual_services__object_id__logs_get: {
         parameters: {
             query?: {
-                change_set?: string | null;
+                /** @description Only events at or after this time (ISO 8601). */
+                since?: string | null;
+                /** @description Only events before this time (ISO 8601). */
+                until?: string | null;
+                /** @description Free text. */
+                q?: string | null;
+                /** @description Only responses of this class: 2, 3, 4 or 5. */
+                status_class?: number | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
+                limit?: number;
             };
             header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
                 authorization?: string | null;
             };
             path: {
+                /** @description Object id. */
                 object_id: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "available": true,
+                     *       "entries": [
+                     *         {
+                     *           "at": "2026-10-10T08:30:00Z",
+                     *           "backend": "pool_web",
+                     *           "bytes": 512,
+                     *           "client_ip": "198.51.100.7",
+                     *           "duration_ms": 13,
+                     *           "frontend": "vs_shop",
+                     *           "method": "GET",
+                     *           "path": "/cart",
+                     *           "raw": "198.51.100.7:51514 [10/Oct/2026:08:30:00.123] vs_shop pool_web/web-1 0/0/1/12/13 200 512 - - ---- 1/1/0/0/0 0/0 \"GET /cart HTTP/1.1\"",
+                     *           "server": "web-1",
+                     *           "status": 200
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AccessLogs"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    service_metrics_api_v1_tenants__t__virtual_services__object_id__metrics_get: {
+        parameters: {
+            query?: {
+                /** @description Seconds back from now. */
+                window_s?: number;
+                /** @description Seconds between points; default fits ~120 points. */
+                step_s?: number | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Object id. */
+                object_id: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "available": true,
+                     *       "metrics": {
+                     *         "active_connections": [
+                     *           {
+                     *             "t": "2026-10-10T08:30:00Z",
+                     *             "v": 42
+                     *           }
+                     *         ],
+                     *         "error_5xx_ratio": [
+                     *           {
+                     *             "t": "2026-10-10T08:30:00Z",
+                     *             "v": 0.002
+                     *           }
+                     *         ],
+                     *         "p95_ms": [
+                     *           {
+                     *             "t": "2026-10-10T08:30:00Z",
+                     *             "v": 18
+                     *           }
+                     *         ],
+                     *         "rps": [
+                     *           {
+                     *             "t": "2026-10-10T08:30:00Z",
+                     *             "v": 120.5
+                     *           }
+                     *         ],
+                     *         "step_s": 30,
+                     *         "summary": {
+                     *           "active_connections": 42,
+                     *           "error_5xx_ratio": 0.002,
+                     *           "p95_ms": 18,
+                     *           "rps": 120.5
+                     *         },
+                     *         "window_s": 3600
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["MetricsRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    rendered_virtual_services_api_v1_tenants__t__virtual_services__object_id__rendered_get: {
+        parameters: {
+            query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
+                change_set?: string | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Object id. */
+                object_id: string;
+                /** @description Tenant name or id. */
                 t: string;
             };
             cookie?: never;
@@ -12861,6 +20630,522 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["RenderedConfig"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_users_api_v1_users_get: {
+        parameters: {
+            query?: {
+                /** @description Free text. */
+                q?: string | null;
+                /** @description Identity provider id. */
+                provider?: string | null;
+                /** @description Only this tenant (id or name). */
+                tenant?: string | null;
+                /** @description `true` for disabled users only, `false` for enabled ones. */
+                disabled?: boolean | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "email": "alice@example.test",
+                     *           "first_login_at": "2026-10-01T08:00:00Z",
+                     *           "grants": [
+                     *             {
+                     *               "role": "operator",
+                     *               "tenant": "acme",
+                     *               "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *               "via": [
+                     *                 {
+                     *                   "group": "acme-ops",
+                     *                   "provider": "authentik"
+                     *                 }
+                     *               ]
+                     *             }
+                     *           ],
+                     *           "groups": [
+                     *             "acme-ops"
+                     *           ],
+                     *           "id": "0192f3a0-0000-7000-8000-000000000051",
+                     *           "last_login_at": "2026-10-10T11:58:00Z",
+                     *           "last_seen_at": "2026-10-10T12:00:00Z",
+                     *           "provider": "authentik",
+                     *           "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *           "username": "alice"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Page_UserRead_"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_user_api_v1_users__user__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description User id. */
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "active_sessions": 1,
+                     *       "email": "alice@example.test",
+                     *       "first_login_at": "2026-10-01T08:00:00Z",
+                     *       "grants": [
+                     *         {
+                     *           "role": "operator",
+                     *           "tenant": "acme",
+                     *           "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *           "via": [
+                     *             {
+                     *               "group": "acme-ops",
+                     *               "provider": "authentik"
+                     *             }
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "groups": [
+                     *         "acme-ops"
+                     *       ],
+                     *       "id": "0192f3a0-0000-7000-8000-000000000051",
+                     *       "last_login_at": "2026-10-10T11:58:00Z",
+                     *       "last_seen_at": "2026-10-10T12:00:00Z",
+                     *       "provider": "authentik",
+                     *       "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "subject": "u-1",
+                     *       "username": "alice"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["UserDetail"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_user_api_v1_users__user__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description User id. */
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    disable_user_api_v1_users__user__disable_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description User id. */
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "active_sessions": 1,
+                     *       "email": "alice@example.test",
+                     *       "first_login_at": "2026-10-01T08:00:00Z",
+                     *       "grants": [
+                     *         {
+                     *           "role": "operator",
+                     *           "tenant": "acme",
+                     *           "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *           "via": [
+                     *             {
+                     *               "group": "acme-ops",
+                     *               "provider": "authentik"
+                     *             }
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "groups": [
+                     *         "acme-ops"
+                     *       ],
+                     *       "id": "0192f3a0-0000-7000-8000-000000000051",
+                     *       "last_login_at": "2026-10-10T11:58:00Z",
+                     *       "last_seen_at": "2026-10-10T12:00:00Z",
+                     *       "provider": "authentik",
+                     *       "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "subject": "u-1",
+                     *       "username": "alice"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["UserDetail"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    enable_user_api_v1_users__user__enable_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description User id. */
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "active_sessions": 1,
+                     *       "email": "alice@example.test",
+                     *       "first_login_at": "2026-10-01T08:00:00Z",
+                     *       "grants": [
+                     *         {
+                     *           "role": "operator",
+                     *           "tenant": "acme",
+                     *           "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *           "via": [
+                     *             {
+                     *               "group": "acme-ops",
+                     *               "provider": "authentik"
+                     *             }
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "groups": [
+                     *         "acme-ops"
+                     *       ],
+                     *       "id": "0192f3a0-0000-7000-8000-000000000051",
+                     *       "last_login_at": "2026-10-10T11:58:00Z",
+                     *       "last_seen_at": "2026-10-10T12:00:00Z",
+                     *       "provider": "authentik",
+                     *       "provider_id": "0192f3a0-0000-7000-8000-000000000042",
+                     *       "subject": "u-1",
+                     *       "username": "alice"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["UserDetail"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    revoke_user_sessions_api_v1_users__user__revoke_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description User id. */
+                user: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "revoked": 2
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SessionsRevoked"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */

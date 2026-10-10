@@ -43,3 +43,4 @@ Date: YYYY-MM-DD
 | [0040](0040-api-completeness-for-the-ui.md) | API completeness for the UI: audit, IPAM, health, telemetry, events, documentation rules | Accepted |
 | [0041](0041-agent-member-probe-and-withdrawn-prefixes.md) | Agent member probe (health monitor test) and the withdrawn prefix list | Accepted |
 | [0018](0018-saml-login.md) | SAML 2.0 login (signxml, signed assertions, replay cache, SP metadata) | Accepted |
+| [0042](0042-ui-theme-and-fonts.md) | UI theme: shadcn tokens, status tokens and fonts | Accepted |

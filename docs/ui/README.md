@@ -3,8 +3,8 @@
 The web UI lives in `ui/` (React 19, TypeScript strict, Vite, Tailwind v4, TanStack Query). See
 `docs/design/03-frontend-design.md` for the design and `04-frontend-scope.md` for per-screen scope.
 
-**Status: groundwork only.** There are no screens yet. Screens wait for the Claude Design mockups;
-what exists is the scaffold, the typed API client, session plumbing and the permission helper.
+**Status:** scaffold, typed client, session plumbing and theme are in; screens are being built in
+small MRs from the design handoff (`docs/design/ui-handoff/README.md`).
 
 ## Commands
 
@@ -45,5 +45,4 @@ TypeScript is pinned to 5.9 because `openapi-typescript` needs the JS compiler A
 
 - `POST /auth/refresh`, `GET /permissions` and the problem `code` member are G1 work and are not in
   `openapi.json` yet; the client reads `code` loosely until they land.
-- Design tokens in `ui/src/styles/globals.css` are a neutral placeholder; replace them with the
-  committed shadcn theme from the Claude Design system.
+- The theme is `ui/src/globals.css` from the design handoff (ADR 0042).
