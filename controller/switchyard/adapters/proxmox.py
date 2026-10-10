@@ -78,12 +78,12 @@ class Proxmox(Protocol):
 
     async def ensure_zone(
         self, zone: str, *, kind: str = "vxlan", peers: str | None = None
-    ) -> None:
-        """Create the SDN zone if it does not exist."""
+    ) -> bool:
+        """Create the SDN zone if it does not exist. Returns True when this call created it."""
         ...
 
-    async def ensure_vnet(self, vnet: str, zone: str, *, tag: int | None = None) -> None:
-        """Create the VNet if it does not exist."""
+    async def ensure_vnet(self, vnet: str, zone: str, *, tag: int | None = None) -> bool:
+        """Create the VNet if it does not exist. Returns True when this call created it."""
         ...
 
     async def ensure_subnet(self, vnet: str, subnet: SdnSubnet) -> None:
@@ -92,6 +92,14 @@ class Proxmox(Protocol):
 
     async def delete_vnet(self, vnet: str) -> None:
         """Delete a VNet and its subnets (idempotent)."""
+        ...
+
+    async def delete_zone(self, zone: str) -> None:
+        """Delete an SDN zone (idempotent). Fails if VNets still use it."""
+        ...
+
+    async def zone_vnets(self, zone: str) -> list[str]:
+        """Names of the VNets in a zone."""
         ...
 
     async def apply_sdn(self) -> None:
@@ -203,23 +211,25 @@ class HttpProxmox:
 
     async def ensure_zone(
         self, zone: str, *, kind: str = "vxlan", peers: str | None = None
-    ) -> None:
-        """Create the SDN zone if missing."""
+    ) -> bool:
+        """Create the SDN zone if missing. Returns True when created."""
         if await self._exists(f"/cluster/sdn/zones/{zone}"):
-            return
+            return False
         data = {"zone": zone, "type": kind}
         if peers:
             data["peers"] = peers
         await self._call("POST", "/cluster/sdn/zones", data)
+        return True
 
-    async def ensure_vnet(self, vnet: str, zone: str, *, tag: int | None = None) -> None:
-        """Create the VNet if missing."""
+    async def ensure_vnet(self, vnet: str, zone: str, *, tag: int | None = None) -> bool:
+        """Create the VNet if missing. Returns True when created."""
         if await self._exists(f"/cluster/sdn/vnets/{vnet}"):
-            return
+            return False
         data: dict[str, Any] = {"vnet": vnet, "zone": zone}
         if tag is not None:
             data["tag"] = tag
         await self._call("POST", "/cluster/sdn/vnets", data)
+        return True
 
     async def ensure_subnet(self, vnet: str, subnet: SdnSubnet) -> None:
         """Create the subnet if missing."""
@@ -237,6 +247,15 @@ class HttpProxmox:
         for s in subnets or []:
             await self._call("DELETE", f"/cluster/sdn/vnets/{vnet}/subnets/{s['id']}")
         await self._call("DELETE", f"/cluster/sdn/vnets/{vnet}", ok_missing=True)
+
+    async def delete_zone(self, zone: str) -> None:
+        """Delete the SDN zone (no error if it is already gone)."""
+        await self._call("DELETE", f"/cluster/sdn/zones/{zone}", ok_missing=True)
+
+    async def zone_vnets(self, zone: str) -> list[str]:
+        """Names of the VNets that belong to ``zone``."""
+        vnets = await self._call("GET", "/cluster/sdn/vnets") or []
+        return sorted(str(v["vnet"]) for v in vnets if v.get("zone") == zone)
 
     async def apply_sdn(self) -> None:
         """Apply pending SDN configuration."""
@@ -327,17 +346,23 @@ class FakeProxmox:
 
     async def ensure_zone(
         self, zone: str, *, kind: str = "vxlan", peers: str | None = None
-    ) -> None:
-        """Record the zone."""
+    ) -> bool:
+        """Record the zone. Returns True when it did not exist."""
         self._do("ensure_zone", zone)
-        self.zones.setdefault(zone, kind)
+        if zone in self.zones:
+            return False
+        self.zones[zone] = kind
+        return True
 
-    async def ensure_vnet(self, vnet: str, zone: str, *, tag: int | None = None) -> None:
-        """Record the VNet (its zone must exist)."""
+    async def ensure_vnet(self, vnet: str, zone: str, *, tag: int | None = None) -> bool:
+        """Record the VNet (its zone must exist). Returns True when it did not exist."""
         self._do("ensure_vnet", vnet)
         if zone not in self.zones:
             raise ProxmoxError(f"zone {zone} does not exist")
-        self.vnets.setdefault(vnet, (zone, tag))
+        if vnet in self.vnets:
+            return False
+        self.vnets[vnet] = (zone, tag)
+        return True
 
     async def ensure_subnet(self, vnet: str, subnet: SdnSubnet) -> None:
         """Record the subnet (the VNet must exist)."""
@@ -353,6 +378,17 @@ class FakeProxmox:
         self._do("delete_vnet", vnet)
         self.vnets.pop(vnet, None)
         self.subnets.pop(vnet, None)
+
+    async def delete_zone(self, zone: str) -> None:
+        """Remove the zone; fails while a VNet uses it, like Proxmox."""
+        self._do("delete_zone", zone)
+        if any(z == zone for z, _ in self.vnets.values()):
+            raise ProxmoxError(f"zone {zone} still has vnets")
+        self.zones.pop(zone, None)
+
+    async def zone_vnets(self, zone: str) -> list[str]:
+        """Names of the VNets in ``zone``."""
+        return sorted(v for v, (z, _) in self.vnets.items() if z == zone)
 
     async def apply_sdn(self) -> None:
         """Count the apply."""
