@@ -37,12 +37,20 @@ TypeScript is pinned to 5.9 because `openapi-typescript` needs the JS compiler A
   `setSessionExpiredHandler` (the future re-login modal).
 - `useProviders()` reads `GET /auth/providers`; `loginUrl(id)` is a full-page redirect;
   `useBreakGlassLogin()` and `useLogout()` cover the rest.
-- `useCan(tenantId)` returns `can(action)` giving `{allowed, required, reason}`. The matrix in
-  `ui/src/lib/permissions.ts` mirrors "Roles and the permission matrix" in the backend design
-  (ADR 0030). The backend still enforces everything. Switch to `GET /permissions` when it ships.
+- `useCan(tenantId)` returns `can(verb, object)` giving `{allowed, required, reason}`. It reads the
+  matrix from `GET /permissions` and the caller's role from `/me`; nothing is hard-coded. `reason`
+  is the permission's description plus the needed role, for the tooltip on a disabled control.
+- `POST /auth/refresh` is "Refresh access" in the user menu.
+
+## Shell
+
+`src/features/shell/` holds the top bar, nav, TenantSwitcher, command palette (`GET /search`),
+user menu and ChangeSetBar. Routes are file-based (`src/routes`, generated `routeTree.gen.ts` is
+committed). Screens that are not built yet render a `NotBuilt` placeholder. Review and the create
+wizard sit outside the shell (full screen), as in the design handoff.
 
 ## Open items
 
-- `POST /auth/refresh`, `GET /permissions` and the problem `code` member are G1 work and are not in
-  `openapi.json` yet; the client reads `code` loosely until they land.
-- The theme is `ui/src/globals.css` from the design handoff (ADR 0042).
+- Theme: `ui/src/globals.css` from the design handoff (ADR 0042).
+- The open draft is found by matching the change set's `author` to `/me` name or email
+  (`features/shell/draft.ts`); confirm the API's author format.

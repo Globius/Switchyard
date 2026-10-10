@@ -46,10 +46,37 @@ export function useMe() {
   });
 }
 
-/** `can(action)` for a tenant; denies everything until `/me` has loaded. */
+/** The permission matrix (`GET /permissions`); fetched once, it only changes with a deploy. */
+export function usePermissions() {
+  return useQuery({
+    queryKey: ["permissions"],
+    staleTime: Infinity,
+    queryFn: async () => unwrap(await api.GET("/api/v1/permissions")),
+  });
+}
+
+/** `can(verb, object)` for a tenant id; denies everything until `/me` and the matrix have loaded. */
 export function useCan(tenantId: string | undefined) {
-  const { data } = useMe();
-  return useMemo(() => createCan(data, tenantId), [data, tenantId]);
+  const { data: me } = useMe();
+  const { data: matrix } = usePermissions();
+  return useMemo(() => createCan(me, tenantId, matrix), [me, matrix, tenantId]);
+}
+
+/** Tenants the caller can see (`GET /tenants`). */
+export function useTenants() {
+  return useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => unwrap(await api.GET("/api/v1/tenants")),
+  });
+}
+
+/** Recompute roles from the current mappings now (`POST /auth/refresh`) and reload `/me`. */
+export function useRefreshAccess() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await api.POST("/api/v1/auth/refresh")),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
+  });
 }
 
 /** URL that starts a provider login (a full-page redirect, not a fetch). */

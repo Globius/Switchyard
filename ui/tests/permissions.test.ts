@@ -1,19 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { createCan, DEFAULT_MATRIX, roleAtLeast, roleIn } from "@/lib/permissions";
+import { createCan, roleAtLeast, roleIn, type PermissionMatrix } from "@/lib/permissions";
 import { t } from "@/lib/i18n";
 
 const T1 = "00000000-0000-0000-0000-000000000001";
 const T2 = "00000000-0000-0000-0000-000000000002";
-const me = (role: "viewer" | "operator" | "tenant-admin" | "system-admin", is_system = false) => ({
+const ROLES = ["viewer", "operator", "tenant-admin", "system-admin"] as const;
+
+const MATRIX: PermissionMatrix = {
+  roles: [...ROLES],
+  permissions: [
+    { verb: "read", object: "tenant_data", min_role: "viewer", description: "Read everything." },
+    {
+      verb: "apply",
+      object: "change_set",
+      min_role: "operator",
+      description: "Apply a change set.",
+    },
+    { verb: "manage", object: "engine", min_role: "tenant-admin", description: "Manage engines." },
+  ],
+};
+
+const me = (role: (typeof ROLES)[number], is_system = false) => ({
   is_system,
-  tenants: [{ id: T1, name: "acme", role }],
+  tenants: [{ id: T1, role }],
 });
 
 describe("permissions", () => {
-  it("roles nest", () => {
-    expect(roleAtLeast("tenant-admin", "operator")).toBe(true);
-    expect(roleAtLeast("viewer", "operator")).toBe(false);
-    expect(roleAtLeast(null, "viewer")).toBe(false);
+  it("roles nest in the matrix's order", () => {
+    expect(roleAtLeast("tenant-admin", "operator", ROLES)).toBe(true);
+    expect(roleAtLeast("viewer", "operator", ROLES)).toBe(false);
+    expect(roleAtLeast(null, "viewer", ROLES)).toBe(false);
   });
 
   it("grants are per tenant; system admins hold system-admin everywhere", () => {
@@ -23,37 +39,27 @@ describe("permissions", () => {
     expect(roleIn(undefined, T1)).toBeNull();
   });
 
-  // Rows of the matrix in docs/design/02-backend-design.md, per role.
-  const cases: [string, "viewer" | "operator" | "tenant-admin" | "system-admin"][] = [
-    ["read", "viewer"],
-    ["app.write", "operator"],
-    ["infra.write", "tenant-admin"],
-    ["approval.request", "operator"],
-    ["approval.decide", "tenant-admin"],
-    ["apply", "operator"],
-    ["apply.break_glass", "system-admin"],
-    ["rollback", "tenant-admin"],
-    ["engine.manage", "tenant-admin"],
-    ["require_approval.disable", "system-admin"],
-    ["token.manage", "tenant-admin"],
-  ];
-  it.each(cases)("%s needs %s", (action, min) => {
-    const order = ["viewer", "operator", "tenant-admin", "system-admin"] as const;
-    for (const role of order) {
-      const d = createCan(me(role), T1)(action as keyof typeof DEFAULT_MATRIX);
-      expect(d.allowed).toBe(order.indexOf(role) >= order.indexOf(min));
-    }
+  it.each([
+    ["viewer", false, false],
+    ["operator", true, false],
+    ["tenant-admin", true, true],
+  ] as const)("%s: apply=%s engine.manage=%s", (role, apply, manage) => {
+    const can = createCan(me(role), T1, MATRIX);
+    expect(can("apply", "change_set").allowed).toBe(apply);
+    expect(can("manage", "engine").allowed).toBe(manage);
   });
 
-  it("explains a denial and denies when signed out", () => {
-    expect(createCan(me("viewer"), T1)("apply").reason).toBe("Requires the operator role");
-    expect(createCan(undefined, T1)("read").allowed).toBe(false);
+  it("explains a denial with the permission's description", () => {
+    const d = createCan(me("viewer"), T1, MATRIX)("apply", "change_set");
+    expect(d.reason).toBe("Apply a change set. (needs operator)");
+    expect(d.required).toBe("operator");
   });
 
-  it("uses a supplied matrix and treats unknown actions as system-only", () => {
-    const can = createCan(me("viewer"), T1, { apply: "viewer" });
-    expect(can("apply").allowed).toBe(true);
-    expect(can("read").required).toBe("system-admin");
+  it("denies when signed out, before the matrix loads, and for unlisted pairs", () => {
+    expect(createCan(undefined, T1, MATRIX)("read", "tenant_data").allowed).toBe(false);
+    expect(createCan(me("system-admin"), T1, undefined)("read", "tenant_data").allowed).toBe(false);
+    const d = createCan(me("system-admin"), T1, MATRIX)("deploy", "se_group");
+    expect(d).toEqual({ allowed: false, required: null });
   });
 });
 
