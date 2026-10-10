@@ -18,6 +18,12 @@ from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.services.changesets import APPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.infra import (
+    APPLY_SDN_JOB,
+    DEPLOY_SE_GROUP_JOB,
+    DeployRequest,
+    InfraService,
+)
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
@@ -32,12 +38,14 @@ def build_handlers(
     pipeline: ApplyPipeline,
     mirror: GitMirror | None,
     status: StatusService | None = None,
+    infra: InfraService | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
         mirror: Git mirror; when ``None`` the ``git_mirror`` kind is not handled (jobs wait in the
             queue until a worker with a mirror runs).
@@ -50,6 +58,16 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set}
+    if infra is not None:
+
+        async def apply_sdn(job: Job) -> dict[str, Any]:
+            return await infra.apply_sdn(UUID(job.payload["tenant_id"]))
+
+        async def deploy_se_group(job: Job) -> dict[str, Any]:
+            return await infra.deploy_se_group(DeployRequest.from_payload(job.payload))
+
+        handlers[APPLY_SDN_JOB] = apply_sdn
+        handlers[DEPLOY_SE_GROUP_JOB] = deploy_se_group
     if status is not None:
 
         async def poll_status(job: Job) -> dict[str, Any]:

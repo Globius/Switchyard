@@ -242,6 +242,81 @@
         "title": "ChangeSetState",
         "type": "string"
       },
+      "DeployIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /se-groups/{id}/deploy``.",
+        "properties": {
+          "count": {
+            "description": "Total engines the group should have afterwards.",
+            "maximum": 16.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "credentials_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credentials Ref"
+          },
+          "mgmt_pool_id": {
+            "format": "uuid",
+            "title": "Mgmt Pool Id",
+            "type": "string"
+          },
+          "nodes": {
+            "description": "Proxmox nodes to spread new VMs over.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "pool": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pool"
+          },
+          "ssh_public_keys": {
+            "anyOf": [
+              {
+                "maxLength": 8192,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssh Public Keys"
+          },
+          "template_vmid": {
+            "minimum": 100.0,
+            "title": "Template Vmid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "nodes",
+          "template_vmid",
+          "mgmt_pool_id"
+        ],
+        "title": "DeployIn",
+        "type": "object"
+      },
       "EngineIn": {
         "description": "Register a service engine.",
         "properties": {
@@ -4743,6 +4818,69 @@
         ]
       }
     },
+    "/api/v1/tenants/{t}/networks/apply-sdn": {
+      "post": {
+        "description": "Create or update the Proxmox SDN objects of the tenant's managed networks.",
+        "operationId": "apply_sdn_api_v1_tenants__t__networks_apply_sdn_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Apply Sdn Api V1 Tenants  T  Networks Apply Sdn Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Sdn",
+        "tags": [
+          "infrastructure"
+        ]
+      }
+    },
     "/api/v1/tenants/{t}/networks/{object_id}": {
       "delete": {
         "operationId": "delete_networks_api_v1_tenants__t__networks__object_id__delete",
@@ -7215,6 +7353,89 @@
         "summary": "Create Se-Groups",
         "tags": [
           "se-groups"
+        ]
+      }
+    },
+    "/api/v1/tenants/{t}/se-groups/{group}/deploy": {
+      "post": {
+        "description": "Grow an SE group to ``count`` engines by cloning the SE template on Proxmox.",
+        "operationId": "deploy_group_api_v1_tenants__t__se_groups__group__deploy_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Group",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeployIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Deploy Group Api V1 Tenants  T  Se Groups  Group  Deploy Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Deploy Group",
+        "tags": [
+          "infrastructure"
         ]
       }
     },

@@ -34,6 +34,7 @@ from switchyard.pipeline.engines import EngineDirectory
 from switchyard.services.changesets import ChangeSetDetail, ChangeSetService
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineService
+from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.members import MemberService
 from switchyard.services.status import EngineStatus, StatusService
 from switchyard.services.tenants import TenantRecord, TenantService
@@ -53,6 +54,7 @@ class ApiServices:
     engines: EngineService
     members: MemberService
     status: StatusService
+    infra: InfraJobs
 
 
 def build_services(
@@ -67,6 +69,7 @@ def build_services(
         engines=EngineService(db),
         members=MemberService(db, directory),
         status=StatusService(db, directory, secrets),
+        infra=InfraJobs(db),
     )
 
 
@@ -87,6 +90,19 @@ class Accepted(BaseModel):
     object_id: UUID | None = None
     job_id: UUID | None = None
     op_index: int | None = None
+
+
+class DeployIn(BaseModel):
+    """Body of ``POST /se-groups/{id}/deploy``."""
+
+    model_config = ConfigDict(extra="forbid")
+    count: int = Field(ge=1, le=16, description="Total engines the group should have afterwards.")
+    nodes: list[str] = Field(min_length=1, description="Proxmox nodes to spread new VMs over.")
+    template_vmid: int = Field(ge=100)
+    mgmt_pool_id: UUID
+    pool: str | None = Field(default=None, max_length=64)
+    credentials_ref: str | None = None
+    ssh_public_keys: str | None = Field(default=None, max_length=8192)
 
 
 class OpIn(BaseModel):
@@ -736,6 +752,32 @@ def create_app(services: ApiServices) -> FastAPI:
     async def revoke_token(token: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
         await svc.tokens.revoke(who, tenant.id, token, request_id=_rid())
         return Response(status_code=204)
+
+    # infrastructure jobs
+    @router.post("/tenants/{t}/networks/apply-sdn", status_code=202, tags=["infrastructure"])
+    async def apply_sdn(tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
+        """Create or update the Proxmox SDN objects of the tenant's managed networks."""
+        job = await svc.infra.request_sdn_apply(who, tenant.id, request_id=_rid())
+        return {"job_id": str(job)}
+
+    @router.post("/tenants/{t}/se-groups/{group}/deploy", status_code=202, tags=["infrastructure"])
+    async def deploy_group(
+        group: UUID, body: DeployIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Grow an SE group to ``count`` engines by cloning the SE template on Proxmox."""
+        request = DeployRequest(
+            tenant_id=tenant.id,
+            se_group_id=group,
+            count=body.count,
+            nodes=tuple(body.nodes),
+            template_vmid=body.template_vmid,
+            mgmt_pool_id=body.mgmt_pool_id,
+            pool=body.pool,
+            credentials_ref=body.credentials_ref,
+            ssh_public_keys=body.ssh_public_keys,
+        )
+        job = await svc.infra.request_deploy(who, tenant.id, request, request_id=_rid())
+        return {"job_id": str(job)}
 
     # live status
     def status_json(s: EngineStatus) -> dict[str, Any]:

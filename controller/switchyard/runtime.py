@@ -12,6 +12,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from switchyard.adapters.git import GitLabMirror, GitMirror
+from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
 from switchyard.adapters.secrets import EnvSecrets
 from switchyard.config import database_url
@@ -22,6 +23,7 @@ from switchyard.jobs.worker import Worker
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
 from switchyard.services.context import Databases
+from switchyard.services.infra import InfraService
 from switchyard.services.status import StatusService
 
 
@@ -51,6 +53,24 @@ def git_mirror() -> GitMirror | None:
     return GitLabMirror(url, project, token) if url and project and token else None
 
 
+def infra_service(db: Databases, secrets: EnvSecrets) -> InfraService | None:
+    """The Proxmox-backed infrastructure jobs, if ``SWITCHYARD_PVE_URL`` is configured.
+
+    Also needs ``SWITCHYARD_PVE_TOKEN_ID`` and the token secret under the secret reference
+    ``SWITCHYARD_PVE_TOKEN_REF`` (default ``kv/proxmox/token``); ``SWITCHYARD_PVE_CA`` is optional.
+    """
+    url = os.environ.get("SWITCHYARD_PVE_URL")
+    token_id = os.environ.get("SWITCHYARD_PVE_TOKEN_ID")
+    if not url or not token_id:
+        return None
+    ref = os.environ.get("SWITCHYARD_PVE_TOKEN_REF", "kv/proxmox/token")
+    secret = os.environ.get(EnvSecrets.variable_name(ref))
+    if not secret:
+        return None
+    ca = os.environ.get("SWITCHYARD_PVE_CA")
+    return InfraService(db, HttpProxmox(url, token_id, secret, verify=ca or True))
+
+
 def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     """A worker (apply, Git mirror, status polling) and the scheduler that feeds it."""
     sandbox = DockerSandbox() if os.environ.get("SWITCHYARD_SANDBOX") == "docker" else None
@@ -58,6 +78,6 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     secrets = EnvSecrets()
     pipeline = ApplyPipeline(db, engines, sandbox=sandbox, secrets=secrets)
     status = StatusService(db, engines, secrets)
-    handlers = build_handlers(db, pipeline, git_mirror(), status)
+    handlers = build_handlers(db, pipeline, git_mirror(), status, infra_service(db, secrets))
     scheduler = Scheduler(db.admin, {POLL_STATUS_JOB: timedelta(seconds=10)})
     return Worker(db.admin, handlers, worker_id=worker_id), scheduler
