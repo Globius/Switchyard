@@ -6,7 +6,7 @@ replicas.
 **Before you start.** SEs keep serving without the controller. Decide the target: the latest state (omit
 `--type` and `--target`) or a time just before the mistake (`--type=time --target="YYYY-MM-DD HH:MM:SS+00"`,
 UTC). Check a backup covers it: `docker compose exec patroni pgbackrest --stanza=switchyard info`.
-If only one node is broken and the others are healthy, do **not** restore: use `patronictl reinit` (step 6).
+If only one node is broken and the others are healthy, do **not** restore: use `patronictl reinit` (step 7).
 
 1. Stop the API and workers on all three nodes so nothing writes: `docker compose stop api worker`.
 2. Stop Patroni on all three nodes: `docker compose stop patroni` (leave etcd running).
@@ -19,10 +19,12 @@ If only one node is broken and the others are healthy, do **not** restore: use `
    from `pgbackrest restore --type=time --target-action=promote` instead of `initdb`, replays WAL to the
    target and promotes. Check `patronictl -c /etc/patroni.yml list` shows it as leader. Then clear the
    variable in `node.env` so a later restart does not try to restore again.
-6. Start Patroni on the other two nodes with empty volumes; each builds itself from the leader (pgBackRest,
-   then `basebackup`). A node that kept old data must be rebuilt with
-   `patronictl -c /etc/patroni.yml reinit switchyard <member> --force`.
-7. Take a new full backup straight away: `pgbackrest --stanza=switchyard --type=full backup`.
+6. Take a new full backup now, on the leader: `pgbackrest --stanza=switchyard --type=full backup`. This must
+   come **before** you build any replica: the archive still holds WAL from the abandoned timeline, and a replica
+   restored from an older backup replays it and then cannot follow the new leader.
+7. Start Patroni on the other two nodes with empty volumes; each builds itself from the new backup and then
+   streams from the leader. A node that kept old data must be rebuilt with
+   `patronictl -c /etc/patroni.yml reinit switchyard <member> --force` (after the new backup exists).
 8. Start the API and workers: `docker compose up -d api worker`. The `migrate` step is idempotent.
 
 **Confirm.** `GET /api/v1/healthz` answers, the UI lists the tenants, and `syctl render` for one SE group matches

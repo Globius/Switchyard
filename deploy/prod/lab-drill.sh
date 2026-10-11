@@ -33,9 +33,15 @@ $D rm -f db1 db2 db3 >/dev/null
 docker volume rm switchyard-lab_pgdata1 switchyard-lab_pgdata2 switchyard-lab_pgdata3 >/dev/null
 RESTORE_TARGET_TIME="$TARGET" $D up -d --no-deps db1 >/dev/null
 n=0; until $SQL -c "select 1" >/dev/null 2>&1; do n=$((n+1)); [ $n -lt 60 ] || { $D logs --tail 30 db1; exit 1; }; sleep 3; done
+# A backup taken on the new timeline must exist before replicas are built, or they replay the
+# abandoned timeline from the archive and cannot follow the new leader.
+$D exec -T db1 pgbackrest --stanza=switchyard --type=full backup
 $D up -d --no-deps db2 db3 >/dev/null
-n=0; until [ "$(members db1 | grep -c -E 'Replica|Sync Standby')" = 2 ] && ! members db1 | grep -q -E 'stopping|starting|creating'; do n=$((n+1)); [ $n -lt 60 ] || break; sleep 5; done
+n=0; until [ "$(members db1 | grep -c streaming)" = 2 ]; do n=$((n+1)); [ $n -lt 90 ] || break; sleep 5; done
 members db1
 GOT=$($SQL -c "select string_agg(n::text,',' order by n) from drill")
 [ "$GOT" = "1,2,3,4" ] || { echo "FAIL: expected 1,2,3,4 after restore, got '$GOT'"; exit 1; }
+if [ "$(members db1 | grep -c streaming)" != 2 ]; then
+  echo "FAIL: replicas did not come up"; $D logs --tail 40 db2; exit 1
+fi
 echo "restore drill passed: $GOT"
