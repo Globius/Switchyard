@@ -6550,13 +6550,20 @@ export interface components {
             name: string;
             /**
              * Quotas
-             * @description Object-count limits by object type.
+             * @description Object-count limits by object type name (`virtual_service`, `pool`, ...).
              */
             quotas: {
                 [key: string]: number;
             };
             /** Require Approval */
             require_approval: boolean;
+            /**
+             * Usage
+             * @description Objects the tenant owns now, by object type name (zeros included).
+             */
+            usage?: {
+                [key: string]: number;
+            };
             /** Version */
             version: number;
         };
@@ -10198,9 +10205,14 @@ export interface operations {
                      *         "id": "0192f3a0-0000-7000-8000-000000000001",
                      *         "name": "acme",
                      *         "quotas": {
-                     *           "virtual_services": 50
+                     *           "virtual_service": 50
                      *         },
                      *         "require_approval": true,
+                     *         "usage": {
+                     *           "network": 2,
+                     *           "pool": 20,
+                     *           "virtual_service": 12
+                     *         },
                      *         "version": 2
                      *       }
                      *     ]
@@ -10282,9 +10294,14 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
                      *       "quotas": {
-                     *         "virtual_services": 50
+                     *         "virtual_service": 50
                      *       },
                      *       "require_approval": true,
+                     *       "usage": {
+                     *         "network": 2,
+                     *         "pool": 20,
+                     *         "virtual_service": 12
+                     *       },
                      *       "version": 2
                      *     }
                      */
@@ -10357,9 +10374,14 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
                      *       "quotas": {
-                     *         "virtual_services": 50
+                     *         "virtual_service": 50
                      *       },
                      *       "require_approval": true,
+                     *       "usage": {
+                     *         "network": 2,
+                     *         "pool": 20,
+                     *         "virtual_service": 12
+                     *       },
                      *       "version": 2
                      *     }
                      */
@@ -10510,9 +10532,14 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
                      *       "quotas": {
-                     *         "virtual_services": 50
+                     *         "virtual_service": 50
                      *       },
                      *       "require_approval": true,
+                     *       "usage": {
+                     *         "network": 2,
+                     *         "pool": 20,
+                     *         "virtual_service": 12
+                     *       },
                      *       "version": 2
                      *     }
                      */

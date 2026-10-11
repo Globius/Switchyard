@@ -23,6 +23,7 @@ import {
   describeCreated,
   describeDeleted,
   parseUnified,
+  problemHint,
   phaseOf,
   TYPE_LABEL,
   TYPE_PATH,
@@ -240,6 +241,7 @@ function ImpactTab({ diff }: { diff: Diff }) {
             <div className="font-mono text-xs text-muted-foreground">
               {p.path} · {p.code}
             </div>
+            {problemHint(p) && <p className="mt-1">{problemHint(p)}</p>}
           </div>
         ))}
         {diff.warnings.map((w, i) => (
@@ -397,6 +399,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
                       <li key={`${p.path}-${i}`}>
                         {p.message}{" "}
                         <span className="font-mono text-xs text-muted-foreground">{p.path}</span>
+                        {problemHint(p) && <span className="block">{problemHint(p)}</span>}
                       </li>
                     ))}
                   </ul>

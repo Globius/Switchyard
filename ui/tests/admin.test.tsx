@@ -20,6 +20,7 @@ const TENANTS = [
     version: 3,
     require_approval: true,
     quotas: { virtual_services: 20, service_engines: 4 },
+    usage: { virtual_services: 7, service_engines: 4 },
   },
   { id: "t2", name: "globius-lab", version: 1, require_approval: false, quotas: {} },
 ];
@@ -210,6 +211,7 @@ describe("admin area", () => {
     renderAt("/admin/tenants");
     expect(await screen.findByText("20 VS · 4 SE")).toBeInTheDocument();
     expect(screen.getByText("Required")).toBeInTheDocument();
+    expect(await screen.findByText("Used")).toBeInTheDocument();
     const q1 = await screen.findByLabelText("Limit 1");
     await userEvent.clear(q1);
     await userEvent.type(q1, "25");

@@ -19,6 +19,10 @@ const INPUT =
   "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 const SHORT: Record<string, string> = {
+  virtual_service: "VS",
+  service_engine: "SE",
+  pool: "pools",
+  certificate: "certs",
   virtual_services: "VS",
   service_engines: "SE",
   pools: "pools",
@@ -93,6 +97,7 @@ function Detail({ tenant, onDeleted }: { tenant: Tenant; onDeleted: () => void }
                 <tr>
                   <th className="px-3 py-2 font-medium">{t("Quota")}</th>
                   <th className="px-3 py-2 font-medium">{t("Limit")}</th>
+                  <th className="px-3 py-2 font-medium">{t("Used")}</th>
                   <th />
                 </tr>
               </thead>
@@ -121,6 +126,9 @@ function Detail({ tenant, onDeleted }: { tenant: Tenant; onDeleted: () => void }
                           )
                         }
                       />
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {tenant.usage?.[r.key] ?? 0}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Button

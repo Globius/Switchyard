@@ -595,12 +595,17 @@ function TenantSettings({ tenant }: { tenant: string }) {
           <p className="text-sm text-muted-foreground">{t("No limits set.")}</p>
         ) : (
           <dl className="grid grid-cols-[14rem_1fr] gap-y-1 text-sm">
-            {quotas.map(([k, v]) => (
-              <div key={k} className="contents">
-                <dt className="text-muted-foreground">{k.replace(/_/g, " ")}</dt>
-                <dd>{v}</dd>
-              </div>
-            ))}
+            {quotas.map(([k, v]) => {
+              const used = info.data.usage?.[k] ?? 0;
+              return (
+                <div key={k} className="contents">
+                  <dt className="text-muted-foreground">{k.replace(/_/g, " ")}</dt>
+                  <dd className={used >= v ? "font-medium text-status-down" : undefined}>
+                    {t("{used} of {limit}", { used, limit: v })}
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
         )}
         <p className="text-xs text-muted-foreground">{t("Set by a system-admin.")}</p>
