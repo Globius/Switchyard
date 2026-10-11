@@ -24,6 +24,7 @@ import { Route as TTenantShellJobsRouteImport } from './routes/t.$tenant._shell.
 import { Route as TTenantShellPoliciesRouteImport } from './routes/t.$tenant._shell.policies'
 import { Route as TTenantShellPoolsRouteImport } from './routes/t.$tenant._shell.pools'
 import { Route as TTenantShellRevisionsRouteImport } from './routes/t.$tenant._shell.revisions'
+import { Route as TTenantShellSeGroupsRouteImport } from './routes/t.$tenant._shell.se-groups'
 import { Route as TTenantReviewCsRouteImport } from './routes/t.$tenant.review.$cs'
 import { Route as TTenantShellVirtualServicesIndexRouteImport } from './routes/t.$tenant._shell.virtual-services.index'
 import { Route as TTenantShellVirtualServicesIdRouteImport } from './routes/t.$tenant._shell.virtual-services.$id'
@@ -108,6 +109,11 @@ const TTenantShellRevisionsRoute = TTenantShellRevisionsRouteImport.update({
   path: '/revisions',
   getParentRoute: () => TTenantShellRoute,
 } as any)
+const TTenantShellSeGroupsRoute = TTenantShellSeGroupsRouteImport.update({
+  id: '/se-groups',
+  path: '/se-groups',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
 const TTenantReviewCsRoute = TTenantReviewCsRouteImport.update({
   id: '/review/$cs',
   path: '/review/$cs',
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/t/$tenant/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
   '/t/$tenant/revisions': typeof TTenantShellRevisionsRoute
+  '/t/$tenant/se-groups': typeof TTenantShellSeGroupsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/': typeof TTenantShellIndexRoute
   '/t/$tenant/virtual-services/$id': typeof TTenantShellVirtualServicesIdRouteWithChildren
@@ -187,6 +194,7 @@ export interface FileRoutesByTo {
   '/t/$tenant/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
   '/t/$tenant/revisions': typeof TTenantShellRevisionsRoute
+  '/t/$tenant/se-groups': typeof TTenantShellSeGroupsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/virtual-services': typeof TTenantShellVirtualServicesIndexRoute
   '/t/$tenant/virtual-services/$id/history': typeof TTenantShellVirtualServicesIdHistoryRoute
@@ -210,6 +218,7 @@ export interface FileRoutesById {
   '/t/$tenant/_shell/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/_shell/pools': typeof TTenantShellPoolsRoute
   '/t/$tenant/_shell/revisions': typeof TTenantShellRevisionsRoute
+  '/t/$tenant/_shell/se-groups': typeof TTenantShellSeGroupsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/_shell/': typeof TTenantShellIndexRoute
   '/t/$tenant/_shell/virtual-services/$id': typeof TTenantShellVirtualServicesIdRouteWithChildren
@@ -235,6 +244,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/policies'
     | '/t/$tenant/pools'
     | '/t/$tenant/revisions'
+    | '/t/$tenant/se-groups'
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/'
     | '/t/$tenant/virtual-services/$id'
@@ -258,6 +268,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/policies'
     | '/t/$tenant/pools'
     | '/t/$tenant/revisions'
+    | '/t/$tenant/se-groups'
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/virtual-services'
     | '/t/$tenant/virtual-services/$id/history'
@@ -280,6 +291,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/_shell/policies'
     | '/t/$tenant/_shell/pools'
     | '/t/$tenant/_shell/revisions'
+    | '/t/$tenant/_shell/se-groups'
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/_shell/'
     | '/t/$tenant/_shell/virtual-services/$id'
@@ -404,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTenantShellRevisionsRouteImport
       parentRoute: typeof TTenantShellRoute
     }
+    '/t/$tenant/_shell/se-groups': {
+      id: '/t/$tenant/_shell/se-groups'
+      path: '/se-groups'
+      fullPath: '/t/$tenant/se-groups'
+      preLoaderRoute: typeof TTenantShellSeGroupsRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
     '/t/$tenant/review/$cs': {
       id: '/t/$tenant/review/$cs'
       path: '/review/$cs'
@@ -489,6 +508,7 @@ interface TTenantShellRouteChildren {
   TTenantShellPoliciesRoute: typeof TTenantShellPoliciesRoute
   TTenantShellPoolsRoute: typeof TTenantShellPoolsRoute
   TTenantShellRevisionsRoute: typeof TTenantShellRevisionsRoute
+  TTenantShellSeGroupsRoute: typeof TTenantShellSeGroupsRoute
   TTenantShellIndexRoute: typeof TTenantShellIndexRoute
   TTenantShellVirtualServicesIdRoute: typeof TTenantShellVirtualServicesIdRouteWithChildren
   TTenantShellVirtualServicesIndexRoute: typeof TTenantShellVirtualServicesIndexRoute
@@ -503,6 +523,7 @@ const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellPoliciesRoute: TTenantShellPoliciesRoute,
   TTenantShellPoolsRoute: TTenantShellPoolsRoute,
   TTenantShellRevisionsRoute: TTenantShellRevisionsRoute,
+  TTenantShellSeGroupsRoute: TTenantShellSeGroupsRoute,
   TTenantShellIndexRoute: TTenantShellIndexRoute,
   TTenantShellVirtualServicesIdRoute:
     TTenantShellVirtualServicesIdRouteWithChildren,
