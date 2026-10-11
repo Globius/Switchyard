@@ -93,6 +93,8 @@ const server = setupServer(
           description: "Roll back.",
         },
         { verb: "edit", object: "draft", min_role: "operator", description: "Edit." },
+        { verb: "retry", object: "job", min_role: "tenant-admin", description: "Retry." },
+        { verb: "cancel", object: "job", min_role: "tenant-admin", description: "Cancel." },
       ],
     }),
   ),
@@ -338,5 +340,55 @@ describe("tenant home", () => {
     expect(within(failing).getByText("api-v1-01")).toBeInTheDocument();
     expect(screen.getByText("se-edge-a-02", { selector: "span" })).toBeInTheDocument();
     expect(await screen.findByText("Move billing-db")).toBeInTheDocument();
+  });
+});
+
+describe("jobs", () => {
+  it("lists jobs with the handoff's states and shows stages, log and a retry for dead jobs", async () => {
+    const job = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      kind: "deploy_se_group",
+      state,
+      attempts: 5,
+      max_attempts: 5,
+      created_at: "2026-10-11T10:00:00Z",
+      started_at: null,
+      finished_at: null,
+      change_set_id: null,
+      tenant_id: null,
+      error: null,
+      ok: null,
+      result: null,
+      retrying: false,
+      stages: [],
+      ...extra,
+    });
+    let retried = false;
+    server.use(
+      http.get("*/api/v1/tenants/acme/jobs", () =>
+        HttpResponse.json({
+          items: [job("j1", "dead", { error: "boom" }), job("j2", "queued", { retrying: true })],
+          next_cursor: null,
+        }),
+      ),
+      http.get("*/api/v1/tenants/acme/jobs/:id/log", () =>
+        HttpResponse.json({
+          job_id: "j1",
+          lines: [{ at: "2026-10-11T10:00:00Z", level: "info", message: "lock acquired" }],
+        }),
+      ),
+      http.post("*/api/v1/tenants/acme/jobs/j1/retry", () => {
+        retried = true;
+        return HttpResponse.json(job("j1", "queued"));
+      }),
+    );
+    renderAt("/t/acme/jobs");
+    expect(await screen.findByText("Dead · gave up", { selector: "td *" })).toBeInTheDocument();
+    expect(screen.getByText("Retrying after error")).toBeInTheDocument();
+    expect(await screen.findByText(/lock acquired/)).toBeInTheDocument();
+    const btn = await screen.findByRole("button", { name: "Retry job" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    await userEvent.click(btn);
+    await waitFor(() => expect(retried).toBe(true));
   });
 });
