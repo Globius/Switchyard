@@ -103,6 +103,7 @@ describe("shell helpers", () => {
     expect(pickOwnDraft([cs({ author: "someone" })], me)).toBeUndefined();
     expect(pickOwnDraft([cs({ state: "applied" })], me)).toBeUndefined();
     expect(pickOwnDraft([cs({ author: "m@example.test" })], me)?.id).toBe("cs1");
+    expect(pickOwnDraft([cs({ author: "user:local:Miguel Rodriguez" })], me)?.id).toBe("cs1");
     expect(pickOwnDraft([cs({ state: "pending_approval" })], me)?.id).toBe("cs1");
     expect(pickOwnDraft([cs({})], undefined)).toBeUndefined();
   });
