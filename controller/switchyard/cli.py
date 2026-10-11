@@ -200,23 +200,6 @@ def serve(
     run(uvicorn.Server(config).serve())
 
 
-@app.command("openbao-policy")
-def openbao_policy(
-    shared: Annotated[
-        list[str] | None, typer.Option("--shared", help="A shared prefix such as kv/se/.")
-    ] = None,
-    platform: Annotated[
-        list[str] | None,
-        typer.Option("--platform", help="A platform secret such as kv/proxmox/token."),
-    ] = None,
-    mount: Annotated[str, typer.Option(help="KV v2 mount.")] = "kv",
-) -> None:
-    """Print the OpenBao policy for the controller's token (matches the secret path rules)."""
-    from switchyard.services.openbao_policy import controller_policy
-
-    typer.echo(controller_policy(shared or [], mount=mount, platform=platform or []), nl=False)
-
-
 @app.command("adopt")
 def adopt_command(
     file: Annotated[Path, typer.Argument(help="Adoption file (snapshot YAML plus `engines`).")],
@@ -241,6 +224,23 @@ def adopt_command(
         raise fail(str(exc), 1) from exc
     except (ValueError, DomainValidationError, OSError) as exc:
         raise fail(str(exc), 2) from exc
+
+
+@app.command("openbao-policy")
+def openbao_policy(
+    shared: Annotated[
+        list[str] | None, typer.Option("--shared", help="A shared prefix such as kv/se/.")
+    ] = None,
+    platform: Annotated[
+        list[str] | None,
+        typer.Option("--platform", help="A platform secret such as kv/proxmox/token."),
+    ] = None,
+    mount: Annotated[str, typer.Option(help="KV v2 mount.")] = "kv",
+) -> None:
+    """Print the OpenBao policy for the controller's token (matches the secret path rules)."""
+    from switchyard.services.openbao_policy import controller_policy
+
+    typer.echo(controller_policy(shared or [], mount=mount, platform=platform or []), nl=False)
 
 
 @app.command("worker")

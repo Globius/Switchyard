@@ -33,6 +33,11 @@ x-controller: &controller
   environment: &controller-env
     SWITCHYARD_DATABASE_URL: postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write
     SWITCHYARD_PUBLIC_URL: ${PUBLIC_URL}
+    # Behind the proxy: login throttling uses the last X-Forwarded-For entry (ADR 0072).
+    SWITCHYARD_TRUST_FORWARDED: "1"
+    # Hand-registered engines outside their group's mgmt network, and secret paths shared by tenants.
+    SWITCHYARD_ENGINE_CIDRS: ${ENGINE_CIDRS:-}
+    SWITCHYARD_SHARED_SECRET_PREFIXES: ${SHARED_SECRET_PREFIXES:-}
     # Bearer token for /metrics and the Prometheus service-discovery endpoint (backend !67).
     SWITCHYARD_METRICS_TOKEN: ${METRICS_TOKEN}
     SWITCHYARD_OPENBAO_ADDR: ${OPENBAO_ADDR:-}

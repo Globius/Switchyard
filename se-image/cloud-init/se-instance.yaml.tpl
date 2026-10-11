@@ -1,6 +1,7 @@
 #cloud-config
 # Per-SE user-data snippet the controller attaches with cicustom (user=...). Placeholders are filled by
-# the deploy job; the enrollment token is single use and expires (ADR 0011).
+# the deploy job; the enrollment token is single use and expires (ADR 0011). controller_url MUST be https://:
+# the agent refuses http (the answer carries the CA and the bundle key); `--insecure-plain-http` is for labs only.
 write_files:
   - path: /etc/switchyard/agent/enroll.env
     permissions: "0600"
