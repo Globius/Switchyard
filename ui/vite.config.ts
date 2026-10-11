@@ -33,6 +33,8 @@ function config(api: string, devToken?: string): ViteUserConfig {
       coverage: {
         provider: "v8",
         include: ["src/lib/**", "src/auth/**", "src/features/**"],
+        // The Monaco loader only runs in a real browser; the Playwright checks exercise it.
+        exclude: ["src/lib/monaco.ts"],
         thresholds: { lines: 80, functions: 80, statements: 80, branches: 80 },
       },
     },
