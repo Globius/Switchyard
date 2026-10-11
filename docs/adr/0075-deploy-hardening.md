@@ -18,6 +18,6 @@ engine address fields. Three problems came out of the deploy request, which a te
 3. **Engine addresses and service VIPs do not collide.** The deploy job treats the VIPs of the tenant's services on a network as taken when it gives
    the NICs addresses from a pool, and `GET /vip-pools/{id}/allocations` counts addresses held by engines (management and data NICs) as used and
    lists them in `engine_addresses`, so `next_free` and `POST .../next-free` never offer one.
-4. Left as findings (design level): `guest_kind: lxc` is reachable in production (the template decides whether the container is privileged), the
+4. Left as findings (design level; the LXC one is closed by ADR 0076): `guest_kind: lxc` was reachable in production, the
    lab enrolment script leaves one-time tokens in a work directory, and a service VIP can still be typed by hand onto an engine's address
    (the domain model does not know engine addresses).

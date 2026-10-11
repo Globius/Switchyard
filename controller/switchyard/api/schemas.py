@@ -428,6 +428,33 @@ class MeSession(ApiModel):
     )
 
 
+class SystemSettingsRead(ApiModel):
+    """Controller-wide settings as they are in effect."""
+
+    allow_lxc_guests: bool = Field(
+        description="Whether SE groups may be deployed as containers (LXC). Off by default: a "
+        "privileged container shares the Proxmox host's kernel."
+    )
+    allow_lxc_guests_forced: bool = Field(
+        description="True when the deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`); the stored "
+        "value then has no effect."
+    )
+
+
+class SystemSettingsIn(ApiModel):
+    """Change settings; send only the ones to change."""
+
+    allow_lxc_guests: bool | None = None
+
+
+class MeFeatures(ApiModel):
+    """Optional features, so the UI can show or hide controls."""
+
+    lxc_guests: bool = Field(
+        default=False, description="Container (LXC) guests may be deployed (`allow_lxc_guests`)."
+    )
+
+
 class MeLinks(ApiModel):
     """Where the UI may link to, set by the operator of the controller."""
 
@@ -456,6 +483,7 @@ class Me(ApiModel):
     session: MeSession | None = Field(description="Null for API tokens.")
     tenants: list[MeTenant]
     links: MeLinks = Field(default_factory=MeLinks)
+    features: MeFeatures = Field(default_factory=MeFeatures)
 
 
 PermissionVerb = Literal[

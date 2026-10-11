@@ -29,6 +29,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_ENGINE_CIDRS`, `SWITCHYARD_ENGINE_POLICY` | Networks hand-registered engines may live in besides their group's `mgmt` networks (comma-separated); `open` turns the engine address policy off (labs). ADR 0072 |
 | `SWITCHYARD_SHARED_SECRET_PREFIXES`, `SWITCHYARD_SECRET_POLICY` | Secret paths every tenant may name besides `kv/tenants/<tenant>/` (each ending in `/`); `open` allows any path (labs). `syctl openbao-policy` prints the matching OpenBao policy. ADR 0072 |
 | `SWITCHYARD_TRUST_FORWARDED` | `1` behind a reverse proxy: login throttling uses the last `X-Forwarded-For` entry as the source address |
+| `SWITCHYARD_ALLOW_LXC` | `1` forces container (LXC) guests on (labs and the quickstart); otherwise a system administrator enables them with `PATCH /system/settings` or `syctl setting allow_lxc_guests true`. ADR 0076 |
 | `SWITCHYARD_AUDIT_SYSLOG` | Also send every audit event to syslog as one JSON line (`udp://host[:514]`, `tcp://host[:514]` or `unix:///dev/log`, facility local0) |
 | `SWITCHYARD_GRAFANA_URL` | Grafana base URL (http or https); the UI links to it from `GET /me` `links.grafana` |
 | `SWITCHYARD_PROMETHEUS_URL`, `SWITCHYARD_LOKI_URL` | Metrics (and with Loki: access logs and p95) for the UI; see below |

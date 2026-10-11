@@ -186,6 +186,12 @@ state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
   `desired_fingerprint`, `fingerprint_matches` and `matches_desired` (stamp and text); `agent` lists each routing file's `sha256` against
   `desired_sha256` (hashes only: the agent cannot read files back). Tenants get a fixed `error` sentence. See ADR 0073.
 
+## System settings
+
+`GET /system/settings` and `PATCH /system/settings` (`system-admin`) read and change controller-wide settings; today `allow_lxc_guests` (default
+`false`) with `allow_lxc_guests_forced` when `SWITCHYARD_ALLOW_LXC=1` forces it on. While it is off, a deploy with `guest_kind: lxc` answers `403`
+with code `lxc_disabled`. `GET /me` returns `features.lxc_guests` for the UI. See ADR 0076.
+
 ## Controller metrics and discovery
 
 `GET /metrics` (outside `/api/v1`) and `GET /api/v1/discovery/prometheus?exporter=haproxy|node&port=` are for Prometheus: the

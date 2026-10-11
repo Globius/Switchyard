@@ -163,6 +163,8 @@ ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
 ROUTES[("GET", "/audit-actions")] = ANY
 ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
 ROUTES[("GET", "/principals")] = ("manage", "tenant")
+ROUTES[("GET", "/system/settings")] = ("manage", "tenant")
+ROUTES[("PATCH", "/system/settings")] = ("manage", "tenant")
 ROUTES[("GET", "/audit-events/export")] = ("manage", "tenant")
 ROUTES.pop(("GET", "/tenants/{t}/networks/{object_id}/rendered"), None)
 ROUTES.pop(("GET", "/tenants/{t}/vip-pools/{object_id}/rendered"), None)
@@ -203,6 +205,7 @@ BODIES: dict[tuple[str, str], Any] = {
     },
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
+    ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
     ("POST", "/tenants/{t}/certificates/{certificate}/replace"): {"pem": "x"},
     ("POST", "/tenants/{t}/certificates/issue"): {
         "name": "c2",

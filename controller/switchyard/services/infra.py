@@ -35,6 +35,7 @@ from switchyard.pipeline.locks import PgGroupLocks
 from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import PermissionDeniedError
+from switchyard.services.settings import LXC_DISABLED, SystemSettings
 
 log = logging.getLogger("switchyard.infra")
 
@@ -179,6 +180,7 @@ class InfraJobs:
     def __init__(self, db: Databases) -> None:
         """Create the service."""
         self._db = db
+        self._settings = SystemSettings(db)
 
     async def sdn_status(self, principal: Principal, tenant_id: UUID) -> list[SdnApplyState]:
         """The SDN apply state of every managed network, by name.
@@ -261,6 +263,8 @@ class InfraJobs:
         self._check(principal, tenant_id, "deploy", "se_group")
         if request.tenant_id != tenant_id:
             raise PermissionDeniedError("request is for another tenant")
+        if request.guest_kind == "lxc" and not await self._settings.lxc_allowed():
+            raise PermissionDeniedError(LXC_DISABLED)
         if request.credentials_ref:
             async with admin_session(self._db.admin) as session:
                 tenant_name = (

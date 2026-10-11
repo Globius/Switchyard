@@ -84,12 +84,12 @@ storage and link handling (none: React renders text, links go through the router
 | S1 | Medium | **A deploy could clone any guest.** `template_vmid` is tenant input and the adapter cloned whatever it named, so a tenant administrator could copy another tenant's running engine (disk, agent key, enrolment, Data Plane credentials) into a guest on their own network. | The adapter refuses a guest that is not a Proxmox template (`template: 1`). |
 | S2 | Medium | **Node and pool names went into Proxmox request paths unchecked** (`/nodes/<node>/...`), so `../` or a query in `nodes` could redirect a call made with the controller's Proxmox token. | Strict patterns in the API model and again when the job reads its payload. |
 | S3 | Medium | **Engine NIC addresses could equal service VIPs** (the deploy ignored VIPs, and `next-free` ignored engine addresses): a duplicate address takes the service down. | Both directions now count the other as used; `engine_addresses` is returned with the pool usage. |
+| S4 | Medium | **`guest_kind: lxc` was available to every tenant administrator in production**; a privileged container with nesting means root in the guest is root on the Proxmox host. | System setting `allow_lxc_guests`, default off; a deploy with `lxc` answers `403` `lxc_disabled`; `SWITCHYARD_ALLOW_LXC=1` forces it on for labs (ADR 0076). |
 
 Open (design level):
 
 | # | Sev | Finding | Recommendation |
 | --- | --- | --- | --- |
-| S4 | Medium | **`guest_kind: lxc` is available to every tenant administrator in production.** The UI asks for an acknowledgement, but the API does not; the template decides whether the container is privileged, and a privileged container with nesting means root in the guest is root on the Proxmox host. | Only enable it in labs: a controller setting that refuses `lxc` unless set (and an unprivileged template where possible). Not done here so as not to break the running lab. |
 | S5 | Low | **The lab enrolment script keeps one-time tokens** in `deploy/lab/e2e/work/` and `/root` of the Proxmox container after use (files are `0600` inside the guest). | Delete them after `pct push` (not changed here: that directory belongs to the operations work). |
 | S6 | Low | **`HTTP 500` with "does not exist" or "no such" is treated as "missing"** by the Proxmox adapter. A different 500 that happens to contain those words (a missing storage or node) could make a destroy or lookup skip as if the guest were gone. | Match the guest-specific messages only, or look the guest up in the cluster resources list. |
 | S7 | Low | **A VIP can be typed onto an engine's address by hand**: the domain model cannot see engine addresses. | Show the conflict as a warning in the change set preview. |
