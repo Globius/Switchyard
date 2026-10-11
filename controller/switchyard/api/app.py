@@ -54,6 +54,7 @@ from switchyard.api.schemas import (
     ChangeSetRead,
     ChangeSetSummary,
     DeployIn,
+    DiscoveryGroup,
     EngineIn,
     EngineRead,
     EngineStateOut,
@@ -268,6 +269,28 @@ Services = Annotated[ApiServices, Depends(_services)]
 
 SESSION_COOKIE = "sy_session"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+async def scrape_access(
+    request: Request, services: Services, authorization: Annotated[str | None, Header()] = None
+) -> None:
+    """Allow the metrics scrape token, or a system administrator.
+
+    The scrape token is ``SWITCHYARD_METRICS_TOKEN``: it can read ``/metrics`` and the Prometheus
+    service-discovery list and nothing else, so Prometheus needs no administrator account.
+    """
+    token: str | None = request.app.state.metrics_token
+    if (
+        token
+        and authorization
+        and authorization.lower().startswith("bearer ")
+        and hmac.compare_digest(authorization[7:].strip().encode(), token.encode())
+    ):
+        return
+    require(await current_identity(request, services, authorization), "manage", "tenant")
+
+
+Scrape = Depends(scrape_access)
 
 
 async def current_identity(
@@ -1129,13 +1152,17 @@ def _int_cursor(cursor: str | None) -> int | None:
         raise ApiError(400, "cursor is not one issued by this API") from None
 
 
-def create_app(services: ApiServices, *, public_url: str | None = None) -> FastAPI:
+def create_app(
+    services: ApiServices, *, public_url: str | None = None, metrics_token: str | None = None
+) -> FastAPI:
     """Build the application over ready-made services.
 
     Args:
         services: The wired services.
         public_url: External base URL (``https://switchyard.example.test``), used to build login
             redirect URIs and to decide whether cookies are ``Secure``.
+        metrics_token: Bearer token that may read ``/metrics`` and the Prometheus
+            service-discovery list; without it only system administrators can.
     """
     app = FastAPI(
         title="Switchyard API",
@@ -1152,6 +1179,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     )
     app.state.services = services
     app.state.public_url = public_url
+    app.state.metrics_token = metrics_token
     install_handlers(app)
 
     @app.middleware("http")
@@ -1165,7 +1193,41 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         response.headers["X-Request-ID"] = rid
         return response
 
+    @app.get("/metrics", include_in_schema=False, dependencies=[Scrape])
+    async def metrics() -> Response:
+        """The controller's own metrics, Prometheus text format (ADR 0061)."""
+        from switchyard.services.observability import collect_metrics, render_exposition
+
+        body = render_exposition(await collect_metrics(services.db))
+        return Response(body, media_type="text/plain; version=0.0.4; charset=utf-8")
+
     router = APIRouter(prefix="/api/v1")
+
+    @router.get(
+        "/discovery/prometheus",
+        tags=["meta"],
+        summary="Prometheus service discovery for the SE exporters",
+        description=(
+            "Prometheus `http_sd_configs` target groups, one per enabled engine with a management "
+            "address, labelled `tenant`, `tenant_name`, `se_group`, `engine` and `vs`. `exporter` "
+            "is `haproxy` (default port 8405) or `node` (9100); `port` overrides the port. "
+            "Requires `system-admin` or the metrics scrape token."
+        ),
+        response_model=list[DiscoveryGroup],
+        responses=_ok(ex.DISCOVERY),
+        dependencies=[Scrape],
+    )
+    async def prometheus_discovery(
+        exporter: Annotated[str, Query(description="`haproxy` or `node`.")] = "haproxy",
+        port: Annotated[
+            int | None, Query(ge=1, le=65535, description="Exporter port; default per exporter.")
+        ] = None,
+    ) -> list[dict[str, object]]:
+        from switchyard.services.observability import EXPORTERS, discovery_targets
+
+        if exporter not in EXPORTERS:
+            raise ApiError(422, f"exporter must be one of: {', '.join(sorted(EXPORTERS))}")
+        return await discovery_targets(services.db, exporter=exporter, port=port)
 
     @router.get(
         "/healthz",

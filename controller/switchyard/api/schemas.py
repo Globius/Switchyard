@@ -1072,6 +1072,16 @@ class VirtualServiceHealth(StrEnum):
     DISABLED = "disabled"
 
 
+class DiscoveryGroup(ApiModel):
+    """One Prometheus HTTP service-discovery target group (the format Prometheus reads)."""
+
+    targets: list[str] = Field(description="`host:port` of the exporter.")
+    labels: dict[str, str] = Field(
+        description="`tenant` (id), `tenant_name`, `se_group`, `engine` and `vs` (the group's "
+        "service names between commas, for example `,shop,www,`)."
+    )
+
+
 class HostStorageRead(ApiModel):
     """A storage of a Proxmox node. Sizes are bytes."""
 

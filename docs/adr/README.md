@@ -49,3 +49,4 @@ Date: YYYY-MM-DD
 | [0047](0047-member-health-detail.md) | Per-member health and last check | Accepted |
 | [0046](0046-revision-message.md) | Revision message on apply | Accepted |
 | [0045](0045-tenant-quota-enforcement.md) | Tenant quota enforcement and usage counts | Accepted |
+| [0061](0061-controller-metrics-and-sd.md) | Controller metrics and Prometheus service discovery | Accepted |

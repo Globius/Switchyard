@@ -163,6 +163,12 @@ name, so every virtual service using it is unchanged; the secret reference, name
 `sync_cloudflare_ips`, `poll_status`, `git_mirror`, `gc`. States: `queued`, `running`, `succeeded`, `failed`, `dead`,
 `cancelled`.
 
+## Controller metrics and discovery
+
+`GET /metrics` (outside `/api/v1`) and `GET /api/v1/discovery/prometheus?exporter=haproxy|node&port=` are for Prometheus: the
+controller's own metrics and `http_sd_configs` targets for the SEs, labelled `tenant`, `tenant_name`, `se_group`, `engine`, `vs`.
+System administrators or the `SWITCHYARD_METRICS_TOKEN` bearer token only. See `docs/operating.md` and ADR 0061.
+
 ## Audit
 
 `GET /tenants/{t}/audit-events` and, for system administrators, `GET /audit-events?tenant=` filter by `actor`,

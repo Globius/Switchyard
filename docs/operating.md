@@ -24,6 +24,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_PVE_URL`, `_PVE_TOKEN_ID`, `_PVE_CA` | Proxmox API (token secret at reference `kv/proxmox/token`) |
 | `SWITCHYARD_CLOUDFLARE_TOKEN` | DNS-01, Origin CA and IP-range sync |
 | `SWITCHYARD_ACME_DIRECTORY`, `_EMAIL`, `_ACCOUNT_KEY_FILE` | ACME issuance |
+| `SWITCHYARD_METRICS_TOKEN` | Bearer token that may read `/metrics` and the Prometheus service-discovery list (and nothing else); system administrators can too |
 | `SWITCHYARD_PROMETHEUS_URL`, `SWITCHYARD_LOKI_URL` | Metrics (and with Loki: access logs and p95) for the UI; see below |
 | `SWITCHYARD_GITLAB_URL`, `_PROJECT`, `_TOKEN` | Git mirror of every revision |
 | `SWITCHYARD_SANDBOX=docker` | Validate configuration with `haproxy -c` in a container before pushing |
@@ -95,6 +96,32 @@ label (tenant id) and HAProxy's `proxy="vs_<service name>"`; Loki lines from the
 labels `tenant` and `frontend="vs_<service name>"`. Set `SWITCHYARD_PROMETHEUS_URL` (and `SWITCHYARD_LOKI_URL`).
 Without them the metrics and log routes answer `available: false` and the UI shows "no data source". The
 exporter scrape config and the log shipper on the SE image are not part of the controller yet (ADR 0040).
+
+## The controller's own metrics and SE discovery
+
+`GET /metrics` (Prometheus text format, outside `/api/v1`) reports the job queue by kind and state, the run time of
+finished jobs (`switchyard_job_duration_seconds_count`/`_sum`), change sets by state (`failed` are apply failures),
+engines by reachability, engines with drift, drift findings and the age of the newest status poll
+(`switchyard_status_age_seconds`, alert when it grows). Values come from the database, so every replica answers alike.
+
+`GET /api/v1/discovery/prometheus?exporter=haproxy|node&port=` is a Prometheus HTTP service-discovery list: one group
+per enabled engine with a management address, labelled `tenant` (id), `tenant_name`, `se_group`, `engine` and `vs`
+(service names between commas). Default ports: HAProxy exporter 8405, node exporter 9100. Authenticate both with
+`SWITCHYARD_METRICS_TOKEN`:
+
+```yaml
+scrape_configs:
+  - job_name: switchyard
+    authorization: { credentials_file: /etc/prometheus/switchyard-token }
+    static_configs: [{ targets: ["controller.example.test:8000"] }]
+  - job_name: se-haproxy
+    authorization: { credentials_file: /etc/prometheus/switchyard-token }
+    http_sd_configs:
+      - url: https://controller.example.test/api/v1/discovery/prometheus?exporter=haproxy
+        authorization: { credentials_file: /etc/prometheus/switchyard-token }
+```
+
+The SE image must serve the exporters on those ports; that is part of the SE image recipe, not the controller (ADR 0061).
 
 ## Audit log
 

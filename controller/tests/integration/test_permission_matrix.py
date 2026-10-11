@@ -40,6 +40,7 @@ COLLECTIONS_INFRA = ["networks", "vip-pools", "se-groups", "routing-profiles"]
 
 ROUTES: dict[tuple[str, str], Any] = {
     ("GET", "/healthz"): PUBLIC,
+    ("GET", "/discovery/prometheus"): ("manage", "tenant"),
     ("GET", "/schema/virtual-service"): ANY,
     ("GET", "/auth/providers"): PUBLIC,
     ("GET", "/auth/login/{provider}"): PUBLIC,
