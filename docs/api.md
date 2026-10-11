@@ -128,6 +128,15 @@ service in a change set.
 create one per engine (`POST …/enrollment-token`). `ssh_public_keys` on deploy is for human access to the VM
 (cloud-init); the controller never uses SSH.
 
+## Certificate import
+
+`POST /tenants/{t}/certificates/import` takes `{name, pem}` (chain then unencrypted key) **or**
+`{name, pkcs12_b64, password}` (a base64 PKCS#12/PFX; `password` may be omitted when the file has none).
+Exactly one source is accepted. The controller unpacks leaf, chain and key, checks the key matches the leaf and
+stores the same PEM bundle in OpenBao as for a PEM import; the password is never logged, audited or stored.
+Errors are 422 problem+json with `errors[].path` `password` (wrong password), `pkcs12_b64` (not base64, not a
+PKCS#12, no key or certificate, legacy RC2/3DES encryption: re-export with AES). See ADR 0043.
+
 ## Jobs
 
 `kind` is an enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert` (result

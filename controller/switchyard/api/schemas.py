@@ -22,7 +22,7 @@ from functools import reduce
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, create_model, model_validator
 
 from switchyard.domain import models as dm
 from switchyard.domain.changes import Action, DraftStatus, ObjectType
@@ -1270,10 +1270,32 @@ class EnrollIn(ApiModel):
 
 
 class CertImportIn(ApiModel):
-    """Body of ``POST /certificates/import``."""
+    """Body of ``POST /certificates/import``: send ``pem`` or ``pkcs12_b64`` with ``password``."""
 
     name: str
-    pem: str = Field(max_length=65536, description="Certificate chain followed by the private key.")
+    pem: str | None = Field(
+        default=None,
+        max_length=65536,
+        description="Certificate chain followed by the private key (PEM).",
+    )
+    pkcs12_b64: str | None = Field(
+        default=None,
+        max_length=262144,
+        description="Base64 of a PKCS#12/PFX file holding the leaf, chain and key.",
+    )
+    password: SecretStr | None = Field(
+        default=None,
+        max_length=1024,
+        description="Password of the PKCS#12 file; never logged or stored. Empty if none.",
+    )
+
+    @model_validator(mode="after")
+    def _exactly_one_source(self) -> "CertImportIn":
+        if (self.pem is None) == (self.pkcs12_b64 is None):
+            raise ValueError("send exactly one of pem or pkcs12_b64")
+        if self.pem is not None and self.password is not None:
+            raise ValueError("password only applies to pkcs12_b64")
+        return self
 
 
 class CertIssueIn(ApiModel):

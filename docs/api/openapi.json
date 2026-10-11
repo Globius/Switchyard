@@ -1395,22 +1395,56 @@
       },
       "CertImportIn": {
         "additionalProperties": false,
-        "description": "Body of ``POST /certificates/import``.",
+        "description": "Body of ``POST /certificates/import``: send ``pem`` or ``pkcs12_b64`` with ``password``.",
         "properties": {
           "name": {
             "title": "Name",
             "type": "string"
           },
+          "password": {
+            "anyOf": [
+              {
+                "format": "password",
+                "maxLength": 1024,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Password of the PKCS#12 file; never logged or stored. Empty if none.",
+            "title": "Password"
+          },
           "pem": {
-            "description": "Certificate chain followed by the private key.",
-            "maxLength": 65536,
-            "title": "Pem",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 65536,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Certificate chain followed by the private key (PEM).",
+            "title": "Pem"
+          },
+          "pkcs12_b64": {
+            "anyOf": [
+              {
+                "maxLength": 262144,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base64 of a PKCS#12/PFX file holding the leaf, chain and key.",
+            "title": "Pkcs12 B64"
           }
         },
         "required": [
-          "name",
-          "pem"
+          "name"
         ],
         "title": "CertImportIn",
         "type": "object"
@@ -15836,7 +15870,7 @@
     },
     "/api/v1/tenants/{t}/certificates/import": {
       "post": {
-        "description": "Store an uploaded certificate and key, and add the certificate object to a change set.\n\n**Access:** `operator` or higher in the tenant.",
+        "description": "Store an uploaded certificate and key (PEM or PKCS#12) and add it to a change set.\n\n**Access:** `operator` or higher in the tenant.",
         "operationId": "import_certificate_api_v1_tenants__t__certificates_import_post",
         "parameters": [
           {
