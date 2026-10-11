@@ -486,6 +486,7 @@ def _engine_json(d: EngineDetail, online: dict[str, bool]) -> dict[str, Any]:
         "pve_node": d.pve_node,
         "vmid": d.vmid,
         "guest_kind": d.guest_kind,
+        "addresses": [{"network_id": n, "address": a} for n, a in d.data_ips],
         "agent_enrolled": d.agent_cert_serial is not None,
         "agent_cert_serial": d.agent_cert_serial,
         "host_online": online.get(d.pve_node) if d.pve_node else None,

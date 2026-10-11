@@ -282,6 +282,7 @@ ENGINE_READ = {
     "pve_node": "pve1",
     "vmid": 9101,
     "guest_kind": "qemu",
+    "addresses": [{"network_id": NETWORK, "address": "192.0.2.31"}],
     "agent_enrolled": True,
     "agent_cert_serial": "3f2a9c",
     "host_online": True,
