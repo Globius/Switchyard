@@ -11,6 +11,7 @@ x-patroni-env: &patroni-env
   PATRONI_SUPERUSER_PASSWORD: ${PG_SUPERUSER_PASSWORD}
   PATRONI_REPLICATION_PASSWORD: ${PG_REPLICATION_PASSWORD}
   PATRONI_TAGS_NOFAILOVER: ${PATRONI_NOFAILOVER:-false}
+  RESTORE_TARGET_TIME: ${RESTORE_TARGET_TIME:-}
   PGBACKREST_STANZA: switchyard
   PGBACKREST_PG1_PATH: /data/pgdata
   PGBACKREST_PG1_SOCKET_PATH: /var/run/postgresql
@@ -40,8 +41,13 @@ x-controller: &controller
     SWITCHYARD_PVE_URL: ${PVE_URL:-}
     SWITCHYARD_PVE_TOKEN_ID: ${PVE_TOKEN_ID:-}
     SWITCHYARD_BUNDLE_KEY_FILE: /run/switchyard/bundle.key
+    # mTLS to agents and Data Plane APIs. The controller refuses to start with a bundle key but no CA.
+    SWITCHYARD_DATAPLANE_CA: /run/switchyard/mtls/ca.crt
+    SWITCHYARD_DATAPLANE_CERT: /run/switchyard/mtls/client.crt
+    SWITCHYARD_DATAPLANE_KEY: /run/switchyard/mtls/client.key
   volumes:
     - ${BUNDLE_KEY_FILE:-./secrets/bundle.key}:/run/switchyard/bundle.key:ro
+    - ${MTLS_DIR:-./secrets/mtls}:/run/switchyard/mtls:ro
 services:
   etcd:
     image: quay.io/coreos/etcd:v3.5.17
@@ -71,11 +77,22 @@ services:
   migrate:
     <<: *controller
     restart: "no"
-    command: ["db", "upgrade", "--url", "postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write"]
+    command: ["db", "upgrade"]   # reads SWITCHYARD_DATABASE_URL
   api:
     <<: *controller
-    ports: ["${API_BIND:-0.0.0.0}:8000:8000"]
+    # Direct access for recovery only (loopback by default); users and Prometheus go through the proxy.
+    ports: ["${API_BIND:-127.0.0.1}:8000:8000"]
     depends_on: {migrate: {condition: service_completed_successfully}}
+  proxy:
+    build:
+      context: ../..
+      dockerfile: deploy/proxy/Dockerfile
+    image: ${PROXY_IMAGE:-switchyard-proxy:latest}
+    restart: unless-stopped
+    environment:
+      CONTROLLER_UPSTREAM: api:8000
+    ports: ["${PROXY_BIND:-0.0.0.0}:8080:8080"]   # the management SE group's pool points here
+    depends_on: [api]
   worker:
     <<: *controller
     command: ["worker", "--name", "${NODE_NAME}"]

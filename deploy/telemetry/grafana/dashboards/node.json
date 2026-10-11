@@ -1,0 +1,242 @@
+{
+ "uid": "sy-node",
+ "title": "SE nodes",
+ "tags": [
+  "switchyard"
+ ],
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "30s",
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "timeseries",
+   "title": "CPU busy",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "1 - avg by (engine) (rate(node_cpu_seconds_total{mode=\"idle\",tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"}[5m]))",
+     "legendFormat": "{{engine}}"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "type": "timeseries",
+   "title": "Memory available",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "node_memory_MemAvailable_bytes{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"} / node_memory_MemTotal_bytes{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"}",
+     "legendFormat": "{{engine}}"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "type": "timeseries",
+   "title": "Network receive",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "Bps"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (engine) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*\",tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"}[1m]))",
+     "legendFormat": "{{engine}}"
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "type": "timeseries",
+   "title": "Network transmit",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "Bps"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (engine) (rate(node_network_transmit_bytes_total{device!~\"lo|veth.*\",tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"}[1m]))",
+     "legendFormat": "{{engine}}"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "timeseries",
+   "title": "Root filesystem used",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/\",tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"} / node_filesystem_size_bytes{mountpoint=\"/\",tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"}",
+     "legendFormat": "{{engine}}"
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "timeseries",
+   "title": "Load average (1m)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 16,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "node_load1{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"}",
+     "legendFormat": "{{engine}}"
+    }
+   ]
+  }
+ ],
+ "templating": {
+  "list": [
+   {
+    "name": "tenant",
+    "label": "tenant",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(up{job=\"se-node\"}, tenant_name)",
+     "refId": "v"
+    },
+    "refresh": 2,
+    "includeAll": true,
+    "multi": true,
+    "allValue": ".*",
+    "current": {}
+   },
+   {
+    "name": "se_group",
+    "label": "se_group",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(up{job=\"se-node\",tenant_name=~\"$tenant\"}, se_group)",
+     "refId": "v"
+    },
+    "refresh": 2,
+    "includeAll": true,
+    "multi": true,
+    "allValue": ".*",
+    "current": {}
+   },
+   {
+    "name": "engine",
+    "label": "engine",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(up{job=\"se-node\",se_group=~\"$se_group\"}, engine)",
+     "refId": "v"
+    },
+    "refresh": 2,
+    "includeAll": true,
+    "multi": true,
+    "allValue": ".*",
+    "current": {}
+   }
+  ]
+ }
+}

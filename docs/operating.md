@@ -7,6 +7,7 @@
 | `syctl db upgrade` | Apply database migrations |
 | `syctl serve` | HTTP API (`/api/v1`; Swagger UI `/api/v1/docs`, ReDoc `/api/v1/redoc`, OpenAPI `/api/v1/openapi.json`) |
 | `syctl worker` | Job worker and scheduler (apply, Git mirror, status polling, certificates, housekeeping) |
+| `syctl adopt FILE` | Adopt infrastructure built outside the controller (the `management` tenant bootstrap; ADR 0051) |
 | `syctl token` | Create a system-admin API token directly in the database (bootstrap and recovery) |
 
 Run any number of workers; one of them (whoever holds the advisory lock) schedules the recurring jobs.
@@ -100,7 +101,8 @@ query. The telemetry pipeline must provide: Prometheus series from each SE's HAP
 label (tenant id) and HAProxy's `proxy="vs_<service name>"`; Loki lines from the SE's HAProxy `httplog` with the
 labels `tenant` and `frontend="vs_<service name>"`. Set `SWITCHYARD_PROMETHEUS_URL` (and `SWITCHYARD_LOKI_URL`).
 Without them the metrics and log routes answer `available: false` and the UI shows "no data source". The
-exporter scrape config and the log shipper on the SE image are not part of the controller yet (ADR 0040).
+pipeline itself (Prometheus, Loki, Grafana, and the Vector log shipper on the SEs) is `deploy/telemetry/`; see ADR 0052
+and `docs/runbooks/telemetry.md`.
 
 ## The controller's own metrics and SE discovery
 

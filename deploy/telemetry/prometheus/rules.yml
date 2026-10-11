@@ -1,0 +1,15 @@
+groups:
+  - name: switchyard
+    rules:
+      - alert: ControllerStatusPollStale
+        expr: switchyard_status_age_seconds > 300
+        for: 5m
+        annotations: { summary: "Engine status has not been polled for 5 minutes" }
+      - alert: ApplyFailures
+        expr: switchyard_change_sets{state="failed"} > 0
+        for: 10m
+        annotations: { summary: "Change sets are in the failed state" }
+      - alert: EngineUnreachable
+        expr: up{job=~"se-haproxy|se-node"} == 0
+        for: 5m
+        annotations: { summary: "An SE exporter has been down for 5 minutes" }
