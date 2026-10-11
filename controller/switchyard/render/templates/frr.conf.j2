@@ -35,9 +35,12 @@ router bgp {{ asn }}
   network {{ net }}
 {% endfor %}
 {% for peer in v4_peers %}
-  neighbor {{ peer }} activate
-  neighbor {{ peer }} route-map SY-OUT out
-  neighbor {{ peer }} route-map SY-IN in
+  neighbor {{ peer.ip }} activate
+  neighbor {{ peer.ip }} route-map SY-OUT out
+  neighbor {{ peer.ip }} route-map SY-IN in
+{% if peer.max_prefixes %}
+  neighbor {{ peer.ip }} maximum-prefix {{ peer.max_prefixes }} restart 5
+{% endif %}
 {% endfor %}
   maximum-paths {{ max_paths }}
  exit-address-family
@@ -47,9 +50,12 @@ router bgp {{ asn }}
   network {{ net }}
 {% endfor %}
 {% for peer in v6_peers %}
-  neighbor {{ peer }} activate
-  neighbor {{ peer }} route-map SY-OUT out
-  neighbor {{ peer }} route-map SY-IN in
+  neighbor {{ peer.ip }} activate
+  neighbor {{ peer.ip }} route-map SY-OUT out
+  neighbor {{ peer.ip }} route-map SY-IN in
+{% if peer.max_prefixes %}
+  neighbor {{ peer.ip }} maximum-prefix {{ peer.max_prefixes }} restart 5
+{% endif %}
 {% endfor %}
   maximum-paths {{ max_paths }}
  exit-address-family

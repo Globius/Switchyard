@@ -40,7 +40,7 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Jobs: list, stages, log, retry, cancel; SSE `job_progress` | done | | |
 | `sy-agent`, enrollment, mTLS, bundles, status, watchdog (M3), Go unit tests | done | | |
 | Routing profiles: VRRP, BGP, BFD, static routes, MD5 ref | done | | |
-| BGP prefix limits (01 routing profile) | missing | *not started*: no model field, no `maximum-prefix` in `frr.conf.j2` | Model field, template line, golden case |
+| BGP prefix limits (01 routing profile) | done | `max_prefixes` on the profile and per neighbour (ADR 0065) | |
 | Status polling, SSE stream, event catalog, drift detection | done | Drift is reported, never fixed (by design) | |
 | Proxmox adapter, SDN apply, IPAM, SE group deploy, retire (M4) | done | | |
 | Engine host online state | done | `host_online` on `GET /engines` (ADR 0049) | |
