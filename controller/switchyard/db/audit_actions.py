@@ -28,6 +28,7 @@ def _a(action: str, description: str) -> AuditAction:
 
 
 CATALOG: tuple[AuditAction, ...] = (
+    _a("audit.export", "Audit events were downloaded as a file."),
     _a("auth.break_glass_failed", "A break-glass login failed."),
     _a("auth.break_glass_login", "The break-glass administrator signed in."),
     _a("auth.local_admin_created", "A local administrator was created from the command line."),

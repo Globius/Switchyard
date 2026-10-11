@@ -8,7 +8,7 @@ draft, ``?apply=true`` opens an implicit single-operation change set and applies
 
 import hmac
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -111,6 +111,7 @@ from switchyard.api.schemas import (
     VirtualServiceStatusRead,
 )
 from switchyard.api.stream_models import EVENTS
+from switchyard.db import audit_log
 from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import permissions
@@ -582,6 +583,83 @@ async def _audit_page(session: Any, f: AuditFilters) -> Page[Any]:
             else None
         ),
     )
+
+
+EXPORT_FORMATS = {"csv": "text/csv", "jsonl": "application/x-ndjson"}
+EXPORT_PAGE = 500
+EXPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
+    200: {
+        "description": "The events as a file.",
+        "content": {
+            "text/csv": {
+                "example": "at,tenant_id,actor,action,object,request_id,diff\n"
+                "2026-10-11T08:30:00Z,,user:alice,change_set.apply,change_set:1,r-1,\n"
+            },
+            "application/x-ndjson": {
+                "example": '{"action": "change_set.apply", "actor": "user:alice", '
+                '"at": "2026-10-11T08:30:00Z", "diff": null, "object": "change_set:1", '
+                '"request_id": "r-1", "tenant_id": null}\n'
+            },
+        },
+    }
+}
+CSV_COLUMNS = ("at", "tenant_id", "actor", "action", "object", "request_id", "diff")
+
+
+async def _audit_export(
+    open_session: Callable[[], Any], f: AuditFilters, fmt: str
+) -> AsyncIterator[str]:
+    """Stream every audit event matching ``f``, newest first, in pages of ``EXPORT_PAGE``.
+
+    Each page runs in its own short transaction, so a long export holds no connection open.
+    """
+    import copy
+    import csv
+    import io
+    import json
+
+    page_filters = copy.copy(f)
+    page_filters.limit = EXPORT_PAGE
+    if fmt == "csv":
+        out = io.StringIO()
+        csv.writer(out).writerow(CSV_COLUMNS)
+        yield out.getvalue()
+    while True:
+        async with open_session() as session:
+            page = await _audit_page(session, page_filters)
+        out = io.StringIO()
+        writer = csv.writer(out)
+        for event in page.items:
+            data = event.model_dump(mode="json")
+            if fmt == "csv":
+                data["diff"] = json.dumps(data["diff"], sort_keys=True) if data["diff"] else ""
+                writer.writerow(["" if data[c] is None else data[c] for c in CSV_COLUMNS])
+            else:
+                out.write(json.dumps(data, sort_keys=True) + "\n")
+        if out.tell():
+            yield out.getvalue()
+        if page.next_cursor is None:
+            return
+        page_filters.cursor = page.next_cursor
+
+
+def _export_response(
+    open_session: Callable[[], Any], f: AuditFilters, fmt: str, name: str
+) -> StreamingResponse:
+    if fmt not in EXPORT_FORMATS:
+        raise ApiError(422, f"format must be one of: {', '.join(sorted(EXPORT_FORMATS))}")
+    f.cursor = None
+    return StreamingResponse(
+        _audit_export(open_session, f, fmt),
+        media_type=EXPORT_FORMATS[fmt] + "; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{name}.{fmt}"'},
+    )
+
+
+def _export_diff(f: AuditFilters, fmt: str) -> dict[str, Any]:
+    """The filters of an export, for its audit event."""
+    fields = ("actor", "action", "object", "since", "until", "q")
+    return {"format": fmt} | {k: str(getattr(f, k)) for k in fields if getattr(f, k)}
 
 
 async def _pool_usage(
@@ -3437,6 +3515,72 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             filters.tenant_id = (await svc.tenants.resolve(who, tenant)).id
         async with admin_session(svc.db.admin) as session:
             return await _audit_page(session, filters)
+
+    @router.get(
+        "/tenants/{t}/audit-events/export",
+        tags=["audit"],
+        summary="Download audit events as CSV or JSON Lines",
+        description=(
+            "The same filters as the list (`actor`, `action`, `object`, `since`, `until`, `q`; "
+            "`cursor` and `limit` are ignored) but every matching event, newest first, streamed "
+            "as a file. `format` is `csv` (default) or `jsonl`. The export itself is audited as "
+            "`audit.export`. Requires any role in the tenant, like the list."
+        ),
+        response_class=StreamingResponse,
+        responses=EXPORT_RESPONSES,
+    )
+    async def export_audit_events(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        filters: Annotated[AuditFilters, Depends()],
+        format: Annotated[str, Query(description="`csv` or `jsonl`.")] = "csv",  # noqa: A002
+    ) -> StreamingResponse:
+        filters.tenant_id = tenant.id
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            await audit_log.record(
+                session,
+                tenant_id=tenant.id,
+                actor=who.actor,
+                action="audit.export",
+                diff=_export_diff(filters, format),
+                request_id=_rid(),
+            )
+        return _export_response(
+            lambda: tenant_session(svc.db.app, [tenant.id]), filters, format, f"audit-{tenant.name}"
+        )
+
+    @router.get(
+        "/audit-events/export",
+        tags=["audit"],
+        summary="Download audit events across tenants (system-admin)",
+        description=(
+            "As `GET /tenants/{t}/audit-events/export` over every tenant and the system-level "
+            "events; narrow it with `tenant` (id or name). Requires `system-admin`."
+        ),
+        response_class=StreamingResponse,
+        responses=EXPORT_RESPONSES,
+    )
+    async def export_system_audit_events(
+        who: Who,
+        svc: Services,
+        filters: Annotated[AuditFilters, Depends()],
+        tenant: Annotated[str | None, Query(description="Tenant id or name.")] = None,
+        format: Annotated[str, Query(description="`csv` or `jsonl`.")] = "csv",  # noqa: A002
+    ) -> StreamingResponse:
+        require(who, "manage", "tenant")
+        if tenant:
+            filters.tenant_id = (await svc.tenants.resolve(who, tenant)).id
+        async with admin_session(svc.db.admin) as session:
+            await audit_log.record(
+                session,
+                tenant_id=filters.tenant_id,
+                actor=who.actor,
+                action="audit.export",
+                diff=_export_diff(filters, format),
+                request_id=_rid(),
+            )
+        return _export_response(lambda: admin_session(svc.db.admin), filters, format, "audit-all")
 
     @router.get(
         "/audit-actions",

@@ -168,6 +168,8 @@ name, so every virtual service using it is unchanged; the secret reference, name
 `GET /tenants/{t}/audit-events` and, for system administrators, `GET /audit-events?tenant=` filter by `actor`,
 `action` (a trailing `*` means prefix), `object`, `since`, `until` and `q`, newest first, with a cursor.
 `GET /audit-actions` lists every action name with a category and description.
+`GET /tenants/{t}/audit-events/export` and `GET /audit-events/export` take the same filters and stream every matching event
+as a file (`format=csv|jsonl`, no paging, default `csv`). Each export is audited as `audit.export`. See ADR 0060.
 
 ## Search
 
