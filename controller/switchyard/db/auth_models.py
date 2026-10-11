@@ -241,6 +241,17 @@ class LoginThrottleRow(Base):
     updated_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
 
 
+class SystemSettingRow(Base):
+    """``system_setting``: a controller-wide switch set by a system administrator."""
+
+    __tablename__ = "system_setting"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[Any] = mapped_column(JSONB, nullable=False)
+    updated_by: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    updated_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
 class BreakGlassSettingRow(Base):
     """``break_glass_setting``: the single row that says whether break-glass was switched on."""
 

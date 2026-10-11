@@ -103,6 +103,8 @@ from switchyard.api.schemas import (
     SessionsRevoked,
     StateOut,
     SystemRoleMappingIn,
+    SystemSettingsIn,
+    SystemSettingsRead,
     SystemTokenCreated,
     SystemTokenIn,
     SystemTokenRead,
@@ -167,6 +169,7 @@ from switchyard.services.sessions import (
     SessionService,
     UserDisabledError,
 )
+from switchyard.services.settings import LXC_DISABLED, SystemSettings
 from switchyard.services.status import (
     EngineStatus,
     StatusService,
@@ -205,6 +208,7 @@ class ApiServices:
     identity_providers: IdentityProviderService | None = None
     break_glass: BreakGlassService | None = None
     hosts: HostService | None = None
+    settings: SystemSettings = None  # type: ignore[assignment]
 
 
 def build_services(
@@ -262,6 +266,7 @@ def build_services(
         identity_providers=identity_providers,
         break_glass=break_glass,
         hosts=HostService(db, engines, proxmox),
+        settings=SystemSettings(db),
     )
 
 
@@ -746,7 +751,20 @@ async def _pool_usage(
         (v for v in snapshot.virtual_services if v.vip in inside),
         key=lambda v: (int(v.vip), v.name),
     )
-    taken = {v.vip for v in held}
+    from sqlalchemy import select
+
+    from switchyard.db.ops_models import ServiceEngineRow
+    from switchyard.services.infra import ipam_address
+
+    async with tenant_session(services.db.app, [tenant.id]) as session:
+        engine_rows = (await session.execute(select(ServiceEngineRow))).scalars().all()
+    held_by_engines = {
+        ipam_address(a)
+        for r in engine_rows
+        for a in [r.mgmt_ip, *[e["address"] for e in r.data_ips]]
+        if a
+    } & inside
+    taken = {v.vip for v in held} | held_by_engines
     try:
         next_free: str | None = str(ipam.allocate(pool, network, taken))
     except ipam.PoolExhaustedError:
@@ -756,6 +774,7 @@ async def _pool_usage(
         total=len(addresses),
         used=len(taken),
         free=len(addresses) - len(taken),
+        engine_addresses=[str(a) for a in sorted(held_by_engines, key=int)],
         allocations=[
             VipAllocation(
                 address=str(v.vip),
@@ -1550,6 +1569,7 @@ def create_app(
                 for t in tenants
             ],
             "links": {"grafana": grafana_url},
+            "features": {"lxc_guests": await svc.settings.lxc_allowed()},
         }
 
     @router.post(
@@ -2807,6 +2827,43 @@ def create_app(
         return svc.break_glass
 
     @router.get(
+        "/system/settings",
+        tags=["system"],
+        summary="Controller-wide settings",
+        description=(
+            "The settings in effect: today `allow_lxc_guests` (default off) and whether the "
+            "deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`). Requires `system-admin`; every "
+            "signed-in user can read what they need from `GET /me` `features`."
+        ),
+        response_model=SystemSettingsRead,
+        responses=_ok(ex.SYSTEM_SETTINGS),
+    )
+    async def get_system_settings(who: Who, svc: Services) -> dict[str, Any]:
+        require(who, "manage", "tenant")
+        return (await svc.settings.view()).__dict__
+
+    @router.patch(
+        "/system/settings",
+        tags=["system"],
+        summary="Change controller-wide settings",
+        description=(
+            "Send only the settings to change. `allow_lxc_guests` lets tenant administrators "
+            "deploy SE groups as containers; while it is off a deploy with `guest_kind: lxc` "
+            "answers `403` with code `lxc_disabled`. Audited as `system.settings_changed`. "
+            "Requires `system-admin`."
+        ),
+        response_model=SystemSettingsRead,
+        responses=_ok(ex.SYSTEM_SETTINGS) | VALIDATION_RESPONSE,
+    )
+    async def patch_system_settings(
+        body: SystemSettingsIn, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        view = await svc.settings.update(
+            who, allow_lxc_guests=body.allow_lxc_guests, request_id=_rid()
+        )
+        return view.__dict__
+
+    @router.get(
         "/system/break-glass",
         tags=["break-glass"],
         summary="Break-glass login status",
@@ -3477,7 +3534,12 @@ def create_app(
     async def deploy_group(
         group: UUID, body: DeployIn, tenant: Tenant, who: Who, svc: Services
     ) -> dict[str, str]:
-        """Grow an SE group to ``count`` engines by cloning the SE template on Proxmox."""
+        """Grow an SE group to ``count`` engines by cloning the SE template on Proxmox.
+
+        `403` with code `lxc_disabled` when `guest_kind` is `lxc` and containers are not enabled.
+        """
+        if body.guest_kind == "lxc" and not await svc.settings.lxc_allowed():
+            raise ApiError(403, LXC_DISABLED, code="lxc_disabled")
         request = DeployRequest(
             tenant_id=tenant.id,
             se_group_id=group,

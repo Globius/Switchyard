@@ -348,6 +348,13 @@ class HttpProxmox:
         lxc = spec.kind == "lxc"
         kind = "lxc" if lxc else "qemu"
         vmid = int(await self._call("GET", "/cluster/nextid"))
+        config_path = f"/nodes/{spec.node}/{kind}/{spec.template_vmid}/config"
+        template = await self._call("GET", config_path, ok_missing=True)
+        if template is None:
+            raise ProxmoxError(f"template {spec.template_vmid} does not exist on {spec.node}")
+        if str(template.get("template", 0)) != "1":
+            # Cloning any other guest would copy another engine's disk, keys and enrollment.
+            raise ProxmoxError(f"guest {spec.template_vmid} is not a Proxmox template")
         clone: dict[str, Any] = {"newid": vmid, "target": spec.node, "full": 1}
         clone["hostname" if lxc else "name"] = spec.name
         if spec.pool:
@@ -494,6 +501,8 @@ class FakeProxmox:
     sdn_applied: int = 0
     nodes: list[NodeInfo] = field(default_factory=list)
     storages: dict[str, list[StorageInfo]] = field(default_factory=dict)
+    #: When set, only these guest ids may be cloned (the real adapter checks the template flag).
+    templates: set[int] | None = None
     _next: int = 100
 
     def _do(self, op: str, arg: str = "") -> None:
@@ -556,6 +565,8 @@ class FakeProxmox:
     async def create_vm(self, spec: VmSpec) -> VmInfo:
         """Create a stopped VM with the next free id."""
         self._do("create_vm", spec.name)
+        if self.templates is not None and spec.template_vmid not in self.templates:
+            raise ProxmoxError(f"guest {spec.template_vmid} is not a Proxmox template")
         if any(s.name == spec.name for s, _ in self.vms.values()):
             raise ProxmoxError(f"VM name {spec.name} is already in use")
         self._next += 1

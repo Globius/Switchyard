@@ -374,3 +374,57 @@ async def test_two_groups_on_one_network_never_share_an_address(pg_url: str) -> 
         await infra.deploy_se_group(request(1, se_group_id=uuid.UUID(symbolic_uuid("sg-second"))))
         addresses = [s.mgmt_ip_cidr for s, _ in pve.vms.values()]
         assert len(addresses) == 2 and len(set(addresses)) == 2, addresses
+
+
+async def test_an_engine_never_gets_the_address_of_a_service_vip(pg_url: str) -> None:
+    d = infra_data()
+    d["pools"].append(
+        {
+            "id": "tcp-pool",
+            "tenant_id": "t-acme",
+            "name": "tcp-pool",
+            "members": [{"address": "10.20.0.60", "port": 9000}],
+        }
+    )
+    for i, vip in enumerate(("192.0.2.10", "192.0.2.11")):  # the first two addresses of the pool
+        d["virtual_services"].append(
+            {
+                "id": f"vs-edge{i}",
+                "tenant_id": "t-acme",
+                "se_group_id": "seg-1",
+                "name": f"edge{i}",
+                "protocol": "tcp",
+                "vip": vip,
+                "ports": [{"port": 9000 + i}],
+                "default_pool_id": "tcp-pool",
+            }
+        )
+    async with world(pg_url, d) as w:
+        pve = FakeProxmox()
+        lb = uuid.UUID(symbolic_uuid("net-lb"))
+        pools = {lb: uuid.UUID(symbolic_uuid("vp-main"))}
+        await InfraService(w.db, pve).deploy_se_group(request(1, nic_pools=pools))
+        (spec,) = [s for s, _ in pve.vms.values()]
+        assert spec.nic_addresses[0] not in ("192.0.2.10/24", "192.0.2.11/24")
+        assert spec.nic_addresses[0] == "192.0.2.12/24"
+
+
+def test_node_names_cannot_change_a_proxmox_path() -> None:
+    from switchyard.services.infra import validate_node_name
+
+    assert validate_node_name("pve-atl-01") == "pve-atl-01"
+    for bad in ("../cluster", "pve1/qemu/5", "a?b", "", "-x", "a" * 64, "pve 1"):
+        with pytest.raises(ValueError):
+            validate_node_name(bad)
+    payload = request(1).as_payload() | {"nodes": ["../cluster"]}
+    with pytest.raises(ValueError):
+        DeployRequest.from_payload(payload)
+
+
+async def test_only_templates_can_be_cloned_by_a_deploy(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        pve.templates = {9000}
+        with pytest.raises(DeployError, match="not a Proxmox template"):
+            await InfraService(w.db, pve).deploy_se_group(request(1, template_vmid=123))
+        assert not pve.vms

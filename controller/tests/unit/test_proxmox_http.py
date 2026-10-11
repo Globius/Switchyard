@@ -30,6 +30,14 @@ class Api:
             )
         if request.method == "GET" and path.endswith("/subnets"):
             return httpx.Response(200, json={"data": []})
+        if request.method == "GET" and path.endswith("/config"):
+            # guests 9000 and 9001 are templates; anything else is a running guest
+            vmid = int(path.split("/")[-2])
+            if vmid in (9000, 9001, 9901):
+                return httpx.Response(200, json={"data": {"template": 1}})
+            if vmid == 7777:
+                return httpx.Response(200, json={"data": {"name": "someones-engine"}})
+            return httpx.Response(500, text=f"Configuration file 'x/{vmid}.conf' does not exist")
         if request.method == "GET" and path == "/nodes":
             return httpx.Response(
                 200,
@@ -229,3 +237,20 @@ async def test_data_nic_addresses_reach_the_config() -> None:
     assert q["ipconfig1"] == ["ip=10.1.0.5/24"] and "ipconfig2" not in q
     assert c["net1"] == ["name=eth1,bridge=vnet1,ip=10.1.0.5/24"]
     assert c["net2"] == ["name=eth2,bridge=vnet2,tag=120"]
+
+
+async def test_only_proxmox_templates_can_be_cloned() -> None:
+    api = Api()
+    pve = client(api)
+    spec = VmSpec(
+        name="se-1",
+        node="pve1",
+        template_vmid=7777,
+        mgmt_ip_cidr="10.30.0.5/24",
+    )
+    with pytest.raises(ProxmoxError, match="not a Proxmox template"):
+        await pve.create_vm(spec)
+    gone = VmSpec(name="se-2", node="pve1", template_vmid=4242, mgmt_ip_cidr="10.30.0.6/24")
+    with pytest.raises(ProxmoxError, match="does not exist"):
+        await pve.create_vm(gone)
+    assert not any(m == "POST" and p.endswith("/clone") for m, p, _ in api.requests)

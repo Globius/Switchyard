@@ -2340,8 +2340,9 @@
             "title": "Nic Pools"
           },
           "nodes": {
-            "description": "Proxmox nodes to spread new VMs over.",
+            "description": "Proxmox nodes to spread new VMs over (node names).",
             "items": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,62}$",
               "type": "string"
             },
             "minItems": 1,
@@ -2351,7 +2352,7 @@
           "pool": {
             "anyOf": [
               {
-                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
                 "type": "string"
               },
               {
@@ -4914,6 +4915,9 @@
             ],
             "title": "Email"
           },
+          "features": {
+            "$ref": "#/components/schemas/MeFeatures"
+          },
           "id": {
             "anyOf": [
               {
@@ -4973,6 +4977,20 @@
           "tenants"
         ],
         "title": "Me",
+        "type": "object"
+      },
+      "MeFeatures": {
+        "additionalProperties": false,
+        "description": "Optional features, so the UI can show or hide controls.",
+        "properties": {
+          "lxc_guests": {
+            "default": false,
+            "description": "Container (LXC) guests may be deployed (`allow_lxc_guests`).",
+            "title": "Lxc Guests",
+            "type": "boolean"
+          }
+        },
+        "title": "MeFeatures",
         "type": "object"
       },
       "MeLinks": {
@@ -9876,6 +9894,47 @@
         "title": "SystemRoleMappingIn",
         "type": "object"
       },
+      "SystemSettingsIn": {
+        "additionalProperties": false,
+        "description": "Change settings; send only the ones to change.",
+        "properties": {
+          "allow_lxc_guests": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Lxc Guests"
+          }
+        },
+        "title": "SystemSettingsIn",
+        "type": "object"
+      },
+      "SystemSettingsRead": {
+        "additionalProperties": false,
+        "description": "Controller-wide settings as they are in effect.",
+        "properties": {
+          "allow_lxc_guests": {
+            "description": "Whether SE groups may be deployed as containers (LXC). Off by default: a privileged container shares the Proxmox host's kernel.",
+            "title": "Allow Lxc Guests",
+            "type": "boolean"
+          },
+          "allow_lxc_guests_forced": {
+            "description": "True when the deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`); the stored value then has no effect.",
+            "title": "Allow Lxc Guests Forced",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "allow_lxc_guests",
+          "allow_lxc_guests_forced"
+        ],
+        "title": "SystemSettingsRead",
+        "type": "object"
+      },
       "SystemTokenCreated": {
         "additionalProperties": false,
         "description": "A new system token; the plaintext is shown once.",
@@ -10832,6 +10891,14 @@
               "$ref": "#/components/schemas/VipAllocation"
             },
             "title": "Allocations",
+            "type": "array"
+          },
+          "engine_addresses": {
+            "description": "Addresses in the pool that engines hold (a management or data NIC). They count as used and are never offered as `next_free`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Engine Addresses",
             "type": "array"
           },
           "free": {
@@ -12832,6 +12899,9 @@
                   "break_glass": false,
                   "csrf_token": "c3JmLXRva2Vu",
                   "email": "alice@example.test",
+                  "features": {
+                    "lxc_guests": false
+                  },
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
                   "links": {
@@ -13312,6 +13382,9 @@
                   "break_glass": false,
                   "csrf_token": "c3JmLXRva2Vu",
                   "email": "alice@example.test",
+                  "features": {
+                    "lxc_guests": false
+                  },
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
                   "links": {
@@ -14816,6 +14889,9 @@
                   "break_glass": false,
                   "csrf_token": "c3JmLXRva2Vu",
                   "email": "alice@example.test",
+                  "features": {
+                    "lxc_guests": false
+                  },
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
                   "links": {
@@ -16339,6 +16415,189 @@
         "summary": "Confirm the authenticator",
         "tags": [
           "break-glass"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/settings": {
+      "get": {
+        "description": "The settings in effect: today `allow_lxc_guests` (default off) and whether the deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`). Requires `system-admin`; every signed-in user can read what they need from `GET /me` `features`.\n\n**Access:** `system-admin` only.",
+        "operationId": "get_system_settings_api_v1_system_settings_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "allow_lxc_guests": false,
+                  "allow_lxc_guests_forced": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingsRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Controller-wide settings",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "patch": {
+        "description": "Send only the settings to change. `allow_lxc_guests` lets tenant administrators deploy SE groups as containers; while it is off a deploy with `guest_kind: lxc` answers `403` with code `lxc_disabled`. Audited as `system.settings_changed`. Requires `system-admin`.\n\n**Access:** `system-admin` only.",
+        "operationId": "patch_system_settings_api_v1_system_settings_patch",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "allow_lxc_guests": true
+              },
+              "schema": {
+                "$ref": "#/components/schemas/SystemSettingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "allow_lxc_guests": false,
+                  "allow_lxc_guests_forced": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingsRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Change controller-wide settings",
+        "tags": [
+          "system"
         ],
         "x-required-role": "system-admin"
       }
@@ -30050,7 +30309,7 @@
     },
     "/api/v1/tenants/{t}/se-groups/{group}/deploy": {
       "post": {
-        "description": "Grow an SE group to ``count`` engines by cloning the SE template on Proxmox.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "description": "Grow an SE group to ``count`` engines by cloning the SE template on Proxmox.\n\n`403` with code `lxc_disabled` when `guest_kind` is `lxc` and containers are not enabled.\n\n**Access:** `tenant-admin` or higher in the tenant.",
         "operationId": "deploy_group_api_v1_tenants__t__se_groups__group__deploy_post",
         "parameters": [
           {
@@ -36531,6 +36790,10 @@
     {
       "description": "The local emergency administrator and system tokens.",
       "name": "break-glass"
+    },
+    {
+      "description": "Controller-wide settings (system administrators).",
+      "name": "system"
     }
   ]
 }

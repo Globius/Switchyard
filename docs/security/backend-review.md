@@ -73,6 +73,27 @@ the SAML and OIDC validation were reviewed in a second pass (see below).
   wrapping test), exactly one assertion, issuer, audience, validity window, `InResponseTo`, recipient and destination checked, replay cache, DTDs
   refused, SP-initiated only. The existing tests cover tampering, wrapping, replay, expiry, unsigned and IdP-initiated responses.
 
+## Second review (2026-10-11): !85, !86, !89, !91 and the UI in !87, !88, !90
+
+Scope: LXC guest kind and the Proxmox adapter changes (!85), the two-engine lab and data NIC addressing (!89), engine addresses on reads (!91), the bundle
+binding (reviewed in the first pass, ADR 0074), the deploy and NIC address UI. Method as before; the UI diffs were searched for raw HTML, `eval`,
+storage and link handling (none: React renders text, links go through the router). Fixed in ADR 0075 with tests:
+
+| # | Sev | Finding | Fix |
+| --- | --- | --- | --- |
+| S1 | Medium | **A deploy could clone any guest.** `template_vmid` is tenant input and the adapter cloned whatever it named, so a tenant administrator could copy another tenant's running engine (disk, agent key, enrolment, Data Plane credentials) into a guest on their own network. | The adapter refuses a guest that is not a Proxmox template (`template: 1`). |
+| S2 | Medium | **Node and pool names went into Proxmox request paths unchecked** (`/nodes/<node>/...`), so `../` or a query in `nodes` could redirect a call made with the controller's Proxmox token. | Strict patterns in the API model and again when the job reads its payload. |
+| S3 | Medium | **Engine NIC addresses could equal service VIPs** (the deploy ignored VIPs, and `next-free` ignored engine addresses): a duplicate address takes the service down. | Both directions now count the other as used; `engine_addresses` is returned with the pool usage. |
+| S4 | Medium | **`guest_kind: lxc` was available to every tenant administrator in production**; a privileged container with nesting means root in the guest is root on the Proxmox host. | System setting `allow_lxc_guests`, default off; a deploy with `lxc` answers `403` `lxc_disabled`; `SWITCHYARD_ALLOW_LXC=1` forces it on for labs (ADR 0076). |
+
+Open (design level):
+
+| # | Sev | Finding | Recommendation |
+| --- | --- | --- | --- |
+| S5 | Low | **The lab enrolment script keeps one-time tokens** in `deploy/lab/e2e/work/` and `/root` of the Proxmox container after use (files are `0600` inside the guest). | Delete them after `pct push` (not changed here: that directory belongs to the operations work). |
+| S6 | Low | **`HTTP 500` with "does not exist" or "no such" is treated as "missing"** by the Proxmox adapter. A different 500 that happens to contain those words (a missing storage or node) could make a destroy or lookup skip as if the guest were gone. | Match the guest-specific messages only, or look the guest up in the cluster resources list. |
+| S7 | Low | **A VIP can be typed onto an engine's address by hand**: the domain model cannot see engine addresses. | Show the conflict as a warning in the change set preview. |
+
 ## Not covered
 
 The UI (XSS, token storage), OpenBao and Patroni configuration, the reverse proxy and TLS termination in front of the API, the SE image, and

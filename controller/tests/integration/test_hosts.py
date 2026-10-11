@@ -1,5 +1,6 @@
 """Proxmox host state and placement, over a real database and the fake Proxmox."""
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator
 
@@ -205,3 +206,86 @@ async def test_tenants_get_a_fixed_engine_error_and_administrators_the_real_one(
     assert seen and "10.9.9.9" not in seen[0]["error"] and seen[0]["error"]
     full = (await c.get(url, headers={"Authorization": f"Bearer {root_token}"})).json()
     assert "10.9.9.9" in full[0]["error"]
+
+
+async def test_containers_are_off_until_a_system_administrator_enables_them(
+    client: tuple[httpx.AsyncClient, dict[str, str], World], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from switchyard.services.settings import SystemSettings
+
+    monkeypatch.delenv("SWITCHYARD_ALLOW_LXC", raising=False)
+    c, viewer, w = client
+    services = build_services(w.db, StaticEngineDirectory({}))
+    root_token, _ = await services.tokens.create(ROOT, None, "root", Role.SYSTEM_ADMIN)
+    root = {"Authorization": f"Bearer {root_token}"}
+    admin_token, _ = await services.tokens.create(ROOT, TENANT, "admin", Role.TENANT_ADMIN)
+    tenant_admin = {"Authorization": f"Bearer {admin_token}"}
+    body = {
+        "count": 1,
+        "nodes": ["pve1"],
+        "template_vmid": 9000,
+        "mgmt_pool_id": str(uuid.uuid4()),
+        "guest_kind": "lxc",
+    }
+    deploy = f"/api/v1/tenants/acme/se-groups/{GROUP}/deploy"
+
+    assert (await c.get("/api/v1/me", headers=viewer)).json()["features"] == {"lxc_guests": False}
+    refused = await c.post(deploy, json=body, headers=tenant_admin)
+    assert refused.status_code == 403 and refused.json()["code"] == "lxc_disabled"
+    assert "disabled" in refused.json()["detail"]
+    # only system administrators read or change the setting
+    assert (await c.get("/api/v1/system/settings", headers=viewer)).status_code == 403
+    denied = await c.patch(
+        "/api/v1/system/settings", json={"allow_lxc_guests": True}, headers=viewer
+    )
+    assert denied.status_code == 403
+    assert (await c.get("/api/v1/system/settings", headers=root)).json() == {
+        "allow_lxc_guests": False,
+        "allow_lxc_guests_forced": False,
+    }
+
+    on = await c.patch("/api/v1/system/settings", json={"allow_lxc_guests": True}, headers=root)
+    assert on.status_code == 200 and on.json()["allow_lxc_guests"] is True
+    assert (await c.get("/api/v1/me", headers=viewer)).json()["features"] == {"lxc_guests": True}
+    accepted = await c.post(deploy, json=body, headers=tenant_admin)
+    assert accepted.status_code == 202, accepted.text
+    async with admin_session(w.db.admin) as s:
+        audited = await s.execute(
+            text("SELECT count(*) FROM audit_event WHERE action = 'system.settings_changed'")
+        )
+        assert audited.scalar_one() == 1
+
+    await c.patch("/api/v1/system/settings", json={"allow_lxc_guests": False}, headers=root)
+    assert (await c.post(deploy, json=body, headers=tenant_admin)).status_code == 403
+    # the VM kind is never affected
+    assert (
+        await c.post(deploy, json=body | {"guest_kind": "qemu"}, headers=tenant_admin)
+    ).status_code == 202
+
+    # a deployment can force it on, as with break-glass
+    monkeypatch.setenv("SWITCHYARD_ALLOW_LXC", "1")
+    forced = (await c.get("/api/v1/system/settings", headers=root)).json()
+    assert forced == {"allow_lxc_guests": True, "allow_lxc_guests_forced": True}
+    assert (await c.post(deploy, json=body, headers=tenant_admin)).status_code == 202
+    monkeypatch.delenv("SWITCHYARD_ALLOW_LXC")
+    assert await SystemSettings(w.db).lxc_allowed() is False
+
+
+async def test_the_command_line_can_set_a_setting(pg_url: str) -> None:
+    from typer.testing import CliRunner
+
+    from switchyard.cli import app
+    from switchyard.services.settings import SystemSettings
+
+    async with world(pg_url) as w:
+        result = await asyncio.to_thread(
+            CliRunner().invoke,
+            app,
+            ["setting", "allow_lxc_guests", "true", "--database-url", pg_url],
+        )
+        assert result.exit_code == 0, result.output
+        assert await SystemSettings(w.db).lxc_allowed() is True
+        bad = await asyncio.to_thread(
+            CliRunner().invoke, app, ["setting", "nope", "true", "--database-url", pg_url]
+        )
+        assert bad.exit_code == 2

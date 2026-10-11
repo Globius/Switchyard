@@ -10,6 +10,7 @@ that run are destroyed and their rows removed; engines that already existed are 
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import cycle
@@ -34,6 +35,7 @@ from switchyard.pipeline.locks import PgGroupLocks
 from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import PermissionDeniedError
+from switchyard.services.settings import LXC_DISABLED, SystemSettings
 
 log = logging.getLogger("switchyard.infra")
 
@@ -43,6 +45,29 @@ DEPLOY_SE_GROUP_JOB = "deploy_se_group"
 
 #: Stand-in "group id" for the cluster-wide SDN lock.
 SDN_LOCK_ID = UUID("00000000-0000-7000-8000-5344e0000001")
+
+
+NODE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,62}")
+POOL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def validate_node_name(value: str) -> str:
+    """Accept a Proxmox node name; refuse anything that could change a request path.
+
+    The node is placed in the URL of every Proxmox call (``/nodes/<node>/...``), so a tenant must
+    not be able to send ``..``, a slash or a query.
+
+    Example:
+        >>> validate_node_name("pve-atl-01")
+        'pve-atl-01'
+        >>> validate_node_name("../cluster")
+        Traceback (most recent call last):
+            ...
+        ValueError: invalid Proxmox node name '../cluster'
+    """
+    if not NODE_NAME.fullmatch(value):
+        raise ValueError(f"invalid Proxmox node name {value!r}")
+    return value
 
 
 class DeployError(Exception):
@@ -92,7 +117,7 @@ class DeployRequest:
             tenant_id=UUID(payload["tenant_id"]),
             se_group_id=UUID(payload["se_group_id"]),
             count=int(payload["count"]),
-            nodes=tuple(payload["nodes"]),
+            nodes=tuple(validate_node_name(n) for n in payload["nodes"]),
             template_vmid=int(payload["template_vmid"]),
             mgmt_pool_id=UUID(payload["mgmt_pool_id"]),
             pool=payload.get("pool"),
@@ -155,6 +180,7 @@ class InfraJobs:
     def __init__(self, db: Databases) -> None:
         """Create the service."""
         self._db = db
+        self._settings = SystemSettings(db)
 
     async def sdn_status(self, principal: Principal, tenant_id: UUID) -> list[SdnApplyState]:
         """The SDN apply state of every managed network, by name.
@@ -237,6 +263,8 @@ class InfraJobs:
         self._check(principal, tenant_id, "deploy", "se_group")
         if request.tenant_id != tenant_id:
             raise PermissionDeniedError("request is for another tenant")
+        if request.guest_kind == "lxc" and not await self._settings.lxc_allowed():
+            raise PermissionDeniedError(LXC_DISABLED)
         if request.credentials_ref:
             async with admin_session(self._db.admin) as session:
                 tenant_name = (
@@ -428,6 +456,12 @@ class InfraService:
                             taken.setdefault(UUID(entry["network_id"]), []).append(
                                 ipam_address(entry["address"])
                             )
+                    # A service VIP on a network is an address in use there too, whichever pool it
+                    # came from; an engine must never be given the address of a VIP.
+                    for svc in snapshot.virtual_services:
+                        for net_id, net in networks.items():
+                            if svc.vip in net.cidr:
+                                taken.setdefault(net_id, []).append(svc.vip)
                     existing = sorted(r.name for r in rows)
                     taken_names = set(existing)
                 nodes = cycle(request.nodes)

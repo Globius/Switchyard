@@ -22,7 +22,15 @@ from functools import reduce
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, create_model, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    create_model,
+    model_validator,
+)
 
 from switchyard.domain import models as dm
 from switchyard.domain.changes import Action, DraftStatus, ObjectType
@@ -420,6 +428,33 @@ class MeSession(ApiModel):
     )
 
 
+class SystemSettingsRead(ApiModel):
+    """Controller-wide settings as they are in effect."""
+
+    allow_lxc_guests: bool = Field(
+        description="Whether SE groups may be deployed as containers (LXC). Off by default: a "
+        "privileged container shares the Proxmox host's kernel."
+    )
+    allow_lxc_guests_forced: bool = Field(
+        description="True when the deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`); the stored "
+        "value then has no effect."
+    )
+
+
+class SystemSettingsIn(ApiModel):
+    """Change settings; send only the ones to change."""
+
+    allow_lxc_guests: bool | None = None
+
+
+class MeFeatures(ApiModel):
+    """Optional features, so the UI can show or hide controls."""
+
+    lxc_guests: bool = Field(
+        default=False, description="Container (LXC) guests may be deployed (`allow_lxc_guests`)."
+    )
+
+
 class MeLinks(ApiModel):
     """Where the UI may link to, set by the operator of the controller."""
 
@@ -448,6 +483,7 @@ class Me(ApiModel):
     session: MeSession | None = Field(description="Null for API tokens.")
     tenants: list[MeTenant]
     links: MeLinks = Field(default_factory=MeLinks)
+    features: MeFeatures = Field(default_factory=MeFeatures)
 
 
 PermissionVerb = Literal[
@@ -1413,6 +1449,11 @@ class VipPoolUsage(ApiModel):
     used: int
     free: int
     allocations: list[VipAllocation]
+    engine_addresses: list[str] = Field(
+        default_factory=list,
+        description="Addresses in the pool that engines hold (a management or data NIC). They "
+        "count as used and are never offered as `next_free`.",
+    )
     next_free: str | None = Field(
         description="The address a new service would get (lowest free), or null when exhausted."
     )
@@ -1575,14 +1616,20 @@ class CertIssueIn(ApiModel):
     sans: list[str] = Field(min_length=1, max_length=50)
 
 
+#: A Proxmox node name: it becomes a path segment of every Proxmox call.
+NODE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9-]{0,62}$"
+
+
 class DeployIn(ApiModel):
     """Body of ``POST /se-groups/{id}/deploy``."""
 
     count: int = Field(ge=1, le=16, description="Total engines the group should have afterwards.")
-    nodes: list[str] = Field(min_length=1, description="Proxmox nodes to spread new VMs over.")
+    nodes: list[Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9-]{0,62}$")]] = (
+        Field(min_length=1, description="Proxmox nodes to spread new VMs over (node names).")
+    )
     template_vmid: int = Field(ge=100)
     mgmt_pool_id: UUID
-    pool: str | None = Field(default=None, max_length=64)
+    pool: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
     credentials_ref: str | None = None
     ssh_public_keys: str | None = Field(default=None, max_length=8192)
     nic_pools: dict[UUID, UUID] | None = Field(

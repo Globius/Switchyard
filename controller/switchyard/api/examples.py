@@ -287,6 +287,7 @@ ENGINE_READ = {
     "agent_cert_serial": "3f2a9c",
     "host_online": True,
 }
+SYSTEM_SETTINGS = {"allow_lxc_guests": False, "allow_lxc_guests_forced": False}
 SERVICE_ENGINES = [{"id": ENGINE, "name": "edge-1", "mgmt_ip": "192.0.2.21", "state": "enabled"}]
 ENGINE_RENDERED = {
     "engine": "edge-1",
@@ -547,6 +548,7 @@ ME = {
         }
     ],
     "links": {"grafana": "https://grafana.example.test"},
+    "features": {"lxc_guests": False},
 }
 PERMISSIONS = {
     "roles": ["viewer", "operator", "tenant-admin", "system-admin"],

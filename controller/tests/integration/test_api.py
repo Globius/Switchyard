@@ -1,5 +1,6 @@
 """The HTTP API against a real database (ASGI transport, fake engines)."""
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -1010,3 +1011,34 @@ async def test_engine_credentials_cannot_point_at_another_tenants_secret(api: Ap
         url, json=body | {"credentials_ref": "kv/tenants/acme/engines/dataplane"}, headers=h
     )
     assert own.status_code == 201
+
+
+async def test_engine_addresses_count_as_used_in_a_vip_pool(api: Api) -> None:
+    from sqlalchemy import text
+
+    from switchyard.db.tenancy import admin_session
+    from switchyard.domain.loader import symbolic_uuid
+
+    async with admin_session(api.w.db.admin) as s:
+        await s.execute(
+            text(
+                "INSERT INTO service_engine (id, tenant_id, se_group_id, name, dataplane_url, "
+                "state, mgmt_ip, data_ips) VALUES (gen_random_uuid(), :t, :g, 'held', "
+                "'https://x', 'enabled', '192.0.2.11', CAST(:d AS jsonb))"
+            ),
+            {
+                "t": TENANT,
+                "g": GROUP,
+                "d": json.dumps([{"network_id": symbolic_uuid("net-lb"), "address": "192.0.2.10"}]),
+            },
+        )
+    h = await api.token(Role.VIEWER)
+    pool = symbolic_uuid("vp-main")
+    url = f"{V1}/tenants/acme/vip-pools/{pool}"
+    usage = (await api.client.get(f"{url}/allocations", headers=h)).json()
+    assert usage["engine_addresses"] == ["192.0.2.10", "192.0.2.11"]
+    assert usage["used"] == 3 and usage["free"] == 38
+    assert usage["next_free"] == "192.0.2.12"
+    assert (await api.client.post(f"{url}/next-free", headers=h)).json() == {
+        "address": "192.0.2.12"
+    }

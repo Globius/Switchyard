@@ -78,6 +78,7 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("se_group.reapplied", "The desired state was pushed to an SE group again to repair drift."),
     _a("se_group.reapply_failed", "Re-applying the desired state to an SE group failed."),
     _a("se_group.reapply_requested", "Someone asked to re-apply the desired state to an SE group."),
+    _a("system.settings_changed", "A controller-wide setting was changed."),
     _a("tenant.update", "A tenant was changed."),
     _a("auth.session_revoked", "A user's sessions were ended."),
     _a("break_glass.admin_confirmed", "The break-glass authenticator was confirmed."),

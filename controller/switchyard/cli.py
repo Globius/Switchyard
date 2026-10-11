@@ -266,6 +266,37 @@ def run_worker(
         run(go())
 
 
+@app.command("setting")
+def set_setting(
+    key: Annotated[str, typer.Argument(help="Setting name, for example allow_lxc_guests.")],
+    value: Annotated[bool, typer.Argument(help="true or false.")],
+    url: DatabaseUrl = DEFAULT_DATABASE_URL,
+) -> None:
+    """Set a controller-wide setting directly in the database (labs and bootstrap)."""
+    from switchyard import runtime
+    from switchyard.services.context import Databases
+    from switchyard.services.settings import SystemSettings
+
+    async def go() -> None:
+        db = (
+            runtime.databases()
+            if url == DEFAULT_DATABASE_URL
+            else Databases(
+                app=make_engine(url, role=APP_ROLE), admin=make_engine(url, role=ADMIN_ROLE)
+            )
+        )
+        try:
+            await SystemSettings(db).set_value(key, value)
+        finally:
+            await db.dispose()
+
+    try:
+        run(go())
+    except ValueError as exc:
+        raise fail(str(exc), 2) from exc
+    typer.echo(f"{key} = {str(value).lower()}")
+
+
 @app.command("token")
 def create_system_token(
     name: Annotated[str, typer.Option(help="Token name.")] = "bootstrap",
