@@ -411,6 +411,41 @@ ${KEY_ONLY}
     expect(replaced[0]?.query).toBe("?change_set=cs1");
   });
 
+  it("toggles OCSP stapling into the draft, and does not offer it for Cloudflare Origin CA", async () => {
+    renderAt("/t/acme/certificates");
+    await userEvent.click(await screen.findByRole("button", { name: "Where wildcard is used" }));
+    const sw = await screen.findByRole("switch", { name: "OCSP stapling" });
+    await waitFor(() => expect(sw).toBeEnabled());
+    await userEvent.click(sw);
+    await waitFor(() =>
+      expect(posted?.ops[0]).toMatchObject({ action: "update", body: { ocsp_stapling: true } }),
+    );
+  });
+
+  it("imports a client CA with an optional CRL into the draft", async () => {
+    let body: unknown = null;
+    server.use(
+      http.post("*/api/v1/tenants/acme/certificates/import-ca", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ change_set_id: "cs1", object_id: "ca1" }, { status: 202 });
+      }),
+    );
+    renderAt("/t/acme/certificates");
+    const open = await screen.findByRole("button", { name: "Import client CA" });
+    await waitFor(() => expect(open).toBeEnabled());
+    await userEvent.click(open);
+    const dlg = within(await screen.findByRole("dialog"));
+    await userEvent.type(dlg.getByLabelText("Name"), "office-ca");
+    await userEvent.type(dlg.getByLabelText("CA certificate"), CERT_ONLY);
+    await userEvent.type(
+      dlg.getByLabelText("CRL (optional)"),
+      "-----BEGIN X509 CRL-----x-----END X509 CRL-----",
+    );
+    await userEvent.click(dlg.getByRole("button", { name: "Add to draft" }));
+    await waitFor(() => expect(body).toMatchObject({ name: "office-ca", pem: CERT_ONLY }));
+    expect((body as { crl_pem: string }).crl_pem).toContain("X509 CRL");
+  });
+
   it("a certificate nobody uses says it can be deleted", async () => {
     renderAt("/t/acme/certificates");
     await userEvent.click(await screen.findByRole("button", { name: "Where mqtt is used" }));

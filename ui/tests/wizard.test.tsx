@@ -244,8 +244,8 @@ const server = setupServer(
   http.get("*/api/v1/tenants/acme/health-monitors", () =>
     HttpResponse.json({
       items: [
-        { id: "m1", name: "http-healthz", type: "http", interval_s: 5 },
-        { id: "m2", name: "wg-udp", type: "udp", interval_s: 10 },
+        { id: "m1", name: "http-healthz", type: "http", interval_s: 5, rise: 2, fall: 3 },
+        { id: "m2", name: "wg-udp", type: "udp", interval_s: 10, rise: 1, fall: 3 },
       ],
       next_cursor: null,
     }),
@@ -456,6 +456,9 @@ describe("create wizard", () => {
     await userEvent.selectOptions(screen.getByLabelText("Pool choice"), "new");
     await next();
     await userEvent.selectOptions(await screen.findByLabelText("Monitor choice"), "m1");
+    expect(
+      screen.getByText("Checks every 5 s. Up after 2 passing, down after 3 failing."),
+    ).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText("Monitor choice"), "new");
     await userEvent.selectOptions(screen.getByLabelText("Monitor type"), "http");
     await userEvent.clear(screen.getByLabelText("Monitor path"));

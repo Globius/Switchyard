@@ -170,14 +170,16 @@ afterEach(() => {
 });
 afterAll(() => server.close());
 
+let lastClient: ReturnType<typeof createQueryClient> | null = null;
 function renderAt(path: string) {
+  lastClient = createQueryClient();
   const router = createRouter({
     routeTree,
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   render(
     <ThemeProvider>
-      <QueryClientProvider client={createQueryClient()}>
+      <QueryClientProvider client={lastClient!}>
         <RouterProvider router={router} />
       </QueryClientProvider>
     </ThemeProvider>,
@@ -247,6 +249,17 @@ describe("tenant access and settings", () => {
     expect(done).toBeDisabled();
     await userEvent.click(screen.getByLabelText("I have stored it"));
     await userEvent.click(done);
+    // The created token is not kept in the mutation cache once the dialog is closed.
+    await waitFor(() =>
+      expect(
+        JSON.stringify(
+          lastClient!
+            .getMutationCache()
+            .getAll()
+            .map((m) => m.state.data),
+        ),
+      ).not.toContain("sy_secret"),
+    );
     const row = screen.getByText("gitlab-ci").closest("tr")!;
     await userEvent.click(within(row).getByRole("button", { name: "Revoke" }));
     await userEvent.click(await screen.findByRole("button", { name: "Revoke token" }));

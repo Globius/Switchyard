@@ -358,8 +358,23 @@ describe("tenant home", () => {
     expect(await screen.findByText("Move billing-db")).toBeInTheDocument();
   });
 
-  it("offers Re-apply revision #N on a drifted engine and opens a rollback draft", async () => {
+  it("re-applies the desired state to the drifted engine's SE group as a job, with a link to it", async () => {
+    let reapplied = false;
     server.use(
+      http.get("*/api/v1/permissions", () =>
+        HttpResponse.json({
+          roles: ["viewer", "operator", "tenant-admin", "system-admin"],
+          permissions: [
+            {
+              verb: "rollback",
+              object: "revision",
+              min_role: "tenant-admin",
+              description: "Roll back.",
+              group: "Infrastructure",
+            },
+          ],
+        }),
+      ),
       http.get("*/api/v1/tenants/acme/summary", () =>
         HttpResponse.json({
           services: { total: 0, healthy: 0, degraded: 0, down: 0, disabled: 0, unknown: 0 },
@@ -369,7 +384,7 @@ describe("tenant home", () => {
               engine: "se-edge-a-02",
               engine_id: "e2",
               kinds: ["haproxy_config"],
-              se_group_id: "g",
+              se_group_id: "g9",
             },
           ],
           unreachable_engines: [],
@@ -381,14 +396,21 @@ describe("tenant home", () => {
         }),
       ),
       http.get("*/api/v1/tenants/acme/engines", () => HttpResponse.json([])),
+      http.post("*/api/v1/tenants/acme/se-groups/g9/reapply", () => {
+        reapplied = true;
+        return HttpResponse.json({ job_id: "j1" }, { status: 202 });
+      }),
     );
-    const router = renderAt("/t/acme");
-    const btn = await screen.findByRole("button", { name: "Re-apply revision #41" });
+    renderAt("/t/acme");
+    const btn = await screen.findByRole("button", { name: "Re-apply desired state" });
     await waitFor(() => expect(btn).toBeEnabled());
     await userEvent.click(btn);
-    await userEvent.click(await screen.findByRole("button", { name: "Open draft" }));
-    await waitFor(() => expect(rollbackCalled).toBe(41));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/t/acme/review/cs-rb"));
+    await userEvent.click(await screen.findByRole("button", { name: "Re-apply" }));
+    await waitFor(() => expect(reapplied).toBe(true));
+    expect(await screen.findByRole("link", { name: "Open job" })).toHaveAttribute(
+      "href",
+      "/t/acme/jobs",
+    );
   });
 });
 

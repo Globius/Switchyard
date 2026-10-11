@@ -124,6 +124,7 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
           </span>
           <span className="hidden sm:inline">Switchyard</span>
         </Link>
+        <span aria-hidden className="hidden h-6 w-px bg-border sm:block" />
         <TenantSwitcher tenant={tenant} />
         <button
           type="button"
@@ -194,7 +195,7 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
           ))}
         </nav>
         <main className={cn("min-w-0 flex-1 p-4 md:p-8", draft && "pb-24")}>
-          <Outlet />
+          <Outlet key={tenant} />
         </main>
       </div>
       {draft && <ChangeSetBar tenant={tenant} draft={draft} />}

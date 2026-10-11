@@ -7,12 +7,7 @@ import { expect, test } from "./fixtures";
 
 test.skip(!process.env.PW_BASE_URL, "needs the production proxy: set PW_BASE_URL");
 
-const PAGES = [
-  "/login",
-  "/t/acme",
-  "/t/acme/virtual-services/v1/rendered",
-  "/t/acme/revisions",
-];
+const PAGES = ["/login", "/t/acme", "/t/acme/virtual-services/v1/rendered", "/t/acme/revisions"];
 
 for (const path of PAGES)
   test(`no CSP violations on ${path}`, async ({ page }) => {
@@ -42,6 +37,7 @@ for (const path of PAGES)
     const response = await page.goto(path);
     expect(response?.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
     await page.waitForLoadState("networkidle");
-    if (path.endsWith("/rendered")) await expect(page.locator(".monaco-editor").first()).toBeVisible();
+    if (path.endsWith("/rendered"))
+      await expect(page.locator(".monaco-editor").first()).toBeVisible();
     expect(violations).toEqual([]);
   });

@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import { loadEnv } from "vite";
 import { defineConfig, type ViteUserConfig } from "vitest/config";
+import { securityHeaders } from "./src/lib/security";
 
 // Dev only. SY_API is the controller (default http://localhost:8000). SY_DEV_TOKEN, when set in
 // ui/.env.local, is sent as a bearer token so you can use the UI before the login screen exists.
@@ -17,6 +18,7 @@ function config(api: string, devToken?: string): ViteUserConfig {
     plugins: [tanstackRouter({ target: "react", autoCodeSplitting: true }), react(), tailwindcss()],
     resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
     server: {
+      headers: securityHeaders(true),
       proxy: {
         "/api": {
           target: api,
@@ -24,6 +26,7 @@ function config(api: string, devToken?: string): ViteUserConfig {
         },
       },
     },
+    preview: { headers: securityHeaders(false) },
     test: {
       environment: "jsdom",
       globals: true,
@@ -33,6 +36,8 @@ function config(api: string, devToken?: string): ViteUserConfig {
       coverage: {
         provider: "v8",
         include: ["src/lib/**", "src/auth/**", "src/features/**"],
+        // The Monaco loader only runs in a real browser; the Playwright checks exercise it.
+        exclude: ["src/lib/monaco.ts"],
         thresholds: { lines: 80, functions: 80, statements: 80, branches: 80 },
       },
     },

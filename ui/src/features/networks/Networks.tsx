@@ -46,6 +46,28 @@ function usePools(tenant: string, changeSet?: string) {
   });
 }
 
+function useSdnStatus(tenant: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "sdn-status"],
+    refetchInterval: 8000,
+    queryFn: async () =>
+      unwrap(await api.GET("/api/v1/tenants/{t}/sdn/status", { params: { path: { t: tenant } } })),
+  });
+}
+
+/** Chip for a network's latest SDN apply: queued or running, or the failure. Nothing when idle. */
+export function SdnChip({ state, error }: { state: string; error?: string | null }) {
+  if (state === "queued" || state === "running")
+    return <StatusPill status="pending">{t("SDN apply running")}</StatusPill>;
+  if (state === "failed")
+    return (
+      <span title={error ?? undefined}>
+        <StatusPill status="down">{t("SDN apply failed")}</StatusPill>
+      </span>
+    );
+  return null;
+}
+
 function useGroups(tenant: string) {
   return useQuery({
     queryKey: ["t", tenant, "se-groups"],
@@ -598,6 +620,7 @@ export function Networks({ tenant }: { tenant: string }) {
   const networks = useNetworks(tenant, draft?.id);
   const pools = usePools(tenant, draft?.id);
   const groups = useGroups(tenant);
+  const sdnStatus = useSdnStatus(tenant);
   const can = useCan(tenant);
   const write = can("write", "application");
   const manage = can("apply", "sdn");
@@ -726,6 +749,10 @@ export function Networks({ tenant }: { tenant: string }) {
                         >
                           {n.name}
                         </button>
+                        {(() => {
+                          const st = sdnStatus.data?.find((x) => x.network_id === n.id);
+                          return st ? <SdnChip state={st.state} error={st.error} /> : null;
+                        })()}
                       </span>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">{n.cidr}</td>

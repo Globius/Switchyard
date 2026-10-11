@@ -28,3 +28,4 @@ ui-gen-api:
 # All UI gates, including "generated client matches the spec".
 ui-check: ui-lint ui-typecheck ui-test ui-build
 	cd ui && pnpm gen:api:check
+	cd ui && pnpm audit --audit-level high

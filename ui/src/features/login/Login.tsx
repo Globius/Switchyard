@@ -55,7 +55,16 @@ const INPUT =
 
 /** Where to go after signing in: the page you were on, if it is a path inside this app. */
 export function safeNext(next: string | undefined): string | undefined {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : undefined;
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\"))
+    return undefined;
+  if (/^\/(%5c|%2f)/i.test(next)) return undefined;
+  try {
+    // Control characters and encoded slashes resolve to a host here, so require the same origin.
+    const u = new URL(next, window.location.origin);
+    return u.origin === window.location.origin ? u.pathname + u.search + u.hash : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function Login({ error, next }: { error?: LoginError; next?: string }) {

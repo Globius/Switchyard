@@ -21,6 +21,7 @@ const TENANTS = [
     require_approval: true,
     quotas: { virtual_services: 20, service_engines: 4 },
     usage: { virtual_services: 7, service_engines: 4 },
+    members: 4,
   },
   { id: "t2", name: "globius-lab", version: 1, require_approval: false, quotas: {} },
 ];
@@ -210,6 +211,8 @@ describe("admin area", () => {
   it("lists tenants, saves quotas and approval with If-Match, creates and deletes tenants", async () => {
     renderAt("/admin/tenants");
     expect(await screen.findByText("20 VS · 4 SE")).toBeInTheDocument();
+    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
+    expect(screen.getByText(/4 people have access./)).toBeInTheDocument();
     expect(screen.getByText("Required")).toBeInTheDocument();
     expect(await screen.findByText("Used")).toBeInTheDocument();
     const q1 = await screen.findByLabelText("Limit 1");
@@ -309,12 +312,26 @@ describe("admin area", () => {
         HttpResponse.json({
           roles: ["viewer", "operator", "tenant-admin", "system-admin"],
           permissions: [
-            { verb: "read", object: "x", min_role: "viewer", description: "Read everything" },
+            {
+              verb: "read",
+              object: "x",
+              min_role: "viewer",
+              description: "Read everything",
+              group: "Read",
+            },
+            {
+              verb: "list",
+              object: "y",
+              min_role: "viewer",
+              description: "List things",
+              group: "Read",
+            },
             {
               verb: "manage",
               object: "tenant",
               min_role: "system-admin",
               description: "Create tenants",
+              group: "System",
             },
           ],
         }),
@@ -334,7 +351,11 @@ describe("admin area", () => {
     );
     renderAt("/admin/role-mappings");
     expect(await screen.findByText("sy-platform-admins")).toBeInTheDocument();
-    expect(await screen.findByText("Read everything")).toBeInTheDocument();
+    expect(await screen.findByText("2 permissions")).toBeInTheDocument();
+    expect(screen.getByText("System")).toBeInTheDocument();
+    expect(screen.queryByText("Read everything")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Read" }));
+    expect(screen.getByText("Read everything")).toBeInTheDocument();
     expect(screen.getAllByLabelText("allowed").length).toBeGreaterThan(4);
     await userEvent.selectOptions(await screen.findByLabelText("Role of sy-prod"), "operator");
     await waitFor(() =>

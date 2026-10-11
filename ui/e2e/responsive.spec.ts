@@ -14,15 +14,18 @@ for (const path of PAGES)
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
-    const culprits = overflow > 1
-      ? await page.evaluate(() => {
-          const w = document.documentElement.clientWidth;
-          return [...document.querySelectorAll<HTMLElement>("body *")]
-            .filter((e) => e.getBoundingClientRect().right > w + 1 && !e.closest("[class*=overflow-x]"))
-            .slice(0, 5)
-            .map((e) => `${e.tagName.toLowerCase()}.${String(e.className).slice(0, 60)}`);
-        })
-      : [];
+    const culprits =
+      overflow > 1
+        ? await page.evaluate(() => {
+            const w = document.documentElement.clientWidth;
+            return [...document.querySelectorAll<HTMLElement>("body *")]
+              .filter(
+                (e) => e.getBoundingClientRect().right > w + 1 && !e.closest("[class*=overflow-x]"),
+              )
+              .slice(0, 5)
+              .map((e) => `${e.tagName.toLowerCase()}.${String(e.className).slice(0, 60)}`);
+          })
+        : [];
     expect({ overflow, culprits }).toEqual({ overflow: expect.any(Number), culprits: [] });
     expect(overflow).toBeLessThanOrEqual(1);
   });

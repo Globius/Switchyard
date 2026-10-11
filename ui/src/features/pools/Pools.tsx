@@ -25,8 +25,15 @@ export interface PoolForm {
   tls: boolean;
   tls_verify: boolean;
   persistence: { type: "source_ip"; table_size: number; timeout_s: number } | null;
+  passive_check: PassiveCheck | null;
+  slow_start_s: number | null;
   members: Member[];
 }
+export type PassiveCheck = {
+  observe: "layer4" | "layer7";
+  error_limit: number;
+  on_error: "mark-down" | "fastinter" | "fail-check" | "sudden-death";
+};
 
 const INPUT =
   "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -45,6 +52,8 @@ export function emptyPool(): PoolForm {
     tls: false,
     tls_verify: false,
     persistence: null,
+    passive_check: null,
+    slow_start_s: null,
     members: [],
   };
 }
@@ -63,6 +72,8 @@ export function toForm(p: PoolRead): PoolForm {
           timeout_s: p.persistence.timeout_s ?? 1800,
         }
       : null,
+    passive_check: p.passive_check ? { ...p.passive_check } : null,
+    slow_start_s: p.slow_start_s ?? null,
     members: structuredClone(p.members),
   };
 }
@@ -318,6 +329,111 @@ function PoolSheet({
           <p className="text-xs text-muted-foreground">
             {t("Source IP is the only persistence type in phase 1.")}
           </p>
+        </fieldset>
+        <fieldset className="space-y-3 rounded-lg border p-4">
+          <legend className="px-1 text-sm font-medium">{t("Passive check and slow start")}</legend>
+          {!f.health_monitor_id && (
+            <p className="text-xs text-muted-foreground">
+              {t("Both need a health monitor on this pool.")}
+            </p>
+          )}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              aria-label={t("Judge members by their real traffic")}
+              disabled={!write.allowed || !f.health_monitor_id}
+              checked={f.passive_check != null}
+              onChange={(e) =>
+                set({
+                  passive_check: e.target.checked
+                    ? { observe: "layer7", error_limit: 10, on_error: "mark-down" }
+                    : null,
+                })
+              }
+            />
+            {t("Judge members by their real traffic as well as the monitor")}
+          </label>
+          {f.passive_check && (
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="block space-y-1.5 text-sm font-medium">
+                {t("Observe")}
+                <select
+                  aria-label={t("Observe")}
+                  className={INPUT}
+                  disabled={!write.allowed}
+                  value={f.passive_check.observe}
+                  onChange={(e) =>
+                    set({
+                      passive_check: {
+                        ...f.passive_check!,
+                        observe: e.target.value as PassiveCheck["observe"],
+                      },
+                    })
+                  }
+                >
+                  <option value="layer4">{t("Connections (layer 4)")}</option>
+                  <option value="layer7">{t("HTTP responses (layer 7)")}</option>
+                </select>
+              </label>
+              <label className="block space-y-1.5 text-sm font-medium">
+                {t("Error limit")}
+                <input
+                  aria-label={t("Error limit")}
+                  type="number"
+                  min={1}
+                  max={1000}
+                  className={INPUT}
+                  disabled={!write.allowed}
+                  value={f.passive_check.error_limit}
+                  onChange={(e) =>
+                    set({
+                      passive_check: { ...f.passive_check!, error_limit: Number(e.target.value) },
+                    })
+                  }
+                />
+              </label>
+              <label className="block space-y-1.5 text-sm font-medium">
+                {t("On error")}
+                <select
+                  aria-label={t("On error")}
+                  className={INPUT}
+                  disabled={!write.allowed}
+                  value={f.passive_check.on_error}
+                  onChange={(e) =>
+                    set({
+                      passive_check: {
+                        ...f.passive_check!,
+                        on_error: e.target.value as PassiveCheck["on_error"],
+                      },
+                    })
+                  }
+                >
+                  <option value="mark-down">{t("Mark down")}</option>
+                  <option value="fastinter">{t("Check faster")}</option>
+                  <option value="fail-check">{t("Count a failed check")}</option>
+                  <option value="sudden-death">{t("Fail and mark down")}</option>
+                </select>
+              </label>
+            </div>
+          )}
+          <label className="block max-w-xs space-y-1.5 text-sm font-medium">
+            {t("Slow start (s)")}
+            <input
+              aria-label={t("Slow start")}
+              type="number"
+              min={1}
+              max={3600}
+              className={INPUT}
+              disabled={!write.allowed || !f.health_monitor_id}
+              value={f.slow_start_s ?? ""}
+              onChange={(e) =>
+                set({ slow_start_s: e.target.value ? Number(e.target.value) : null })
+              }
+            />
+            <span className="block text-xs font-normal text-muted-foreground">
+              {t("A member that comes back takes traffic gradually over this time. Empty is off.")}
+            </span>
+          </label>
         </fieldset>
         <section className="space-y-2">
           <div className="flex items-center gap-2">

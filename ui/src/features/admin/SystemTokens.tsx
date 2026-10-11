@@ -27,6 +27,8 @@ export function SystemTokens() {
     queryFn: async () => unwrap(await api.GET("/api/v1/system/tokens")),
   });
   const create = useMutation({
+    // The created token is shown once; do not keep it in the mutation cache.
+    gcTime: 0,
     mutationFn: async () =>
       unwrap(
         await api.POST("/api/v1/system/tokens", {
@@ -49,6 +51,7 @@ export function SystemTokens() {
   const close = () => {
     setCreating(false);
     setShown(null);
+    create.reset();
     setStored(false);
   };
   return (

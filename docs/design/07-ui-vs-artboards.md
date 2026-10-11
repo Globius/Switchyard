@@ -235,3 +235,49 @@ Effort: S = under a day, M = a few days, L = a week or more. "Code" refers to th
 | B20 | Add axe to CI; decide on RHF/Zod and TanStack Table | Foundations | S | none |
 
 Suggested sequence: B1 first (everything else restyles on top of it), then B6, B7, B8, B9 in parallel, then B2, B3, B4, B5, B10.
+
+## Status after the build threads (completeness sweep, 2026-10-11)
+
+Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 thread, **backend** = blocked on an API.
+
+| Item | Status | Owner / note |
+| --- | --- | --- |
+| V1 VS Settings | done | UI, cards, two columns, VIP radios, routes table, footer (!57) |
+| V2 Rendered config | done | Monaco, HAProxy highlighting, range, Copy, With my draft / Live toggle. Engine picker shows the files one engine gets (group and engine scope, secrets redacted) |
+| V3 VS History | done | UI (!61) |
+| V4 Policies, Routing profiles | done | Policies by part 2 (!63); Routing profiles were master-detail already |
+| V5 Audit log | part 2 | formatters in !60, remaining columns with part 2 |
+| V6 Revisions | part 2 | !60 |
+| V7 Names and dates | part 2 | !60 |
+| V8 Certificates | part 2 | |
+| V9 Networks | done | Edit service by part 2; per-network SDN chip from `/sdn/status` (!76) |
+| V10 SE groups | done | engines table, placement, re-apply job, agent version. "View running config" on drifted engines: running HAProxy config in Monaco with its fingerprint against the desired one, and agent file hashes (hashes only) |
+| V11 Create wizard | done | header logo and tenant, monitor summary ("Up after 2 passing, down after 3"); the other explainers were already in |
+| V12 Admin tenants | done | Members column and "N people have access" (!76) |
+| V13 Role matrix grouping | done | grouped by the `group` the server sends; open a group to see each permission (!76) |
+| V14 VS list | done | |
+| V15 VS Overview | done | Grafana link from `/me`, Reorder link on the routes card, dashed unavailable card, certificate status icon |
+| V16 Top bar | done | divider added; initials come from the display name |
+| V17 Identity providers | done | remaining-time text shipped; forced-on text styling is minor (UI) |
+| V18 System tokens | done | ShowOnceSecret (!64) |
+| V19 Tenant home | done | |
+| V20 Login | deviation | logo glyph differs |
+| B1 shadcn primitives, `@switchyard` registry | deviation | No artboard or the Foundations page shows an opened select or combobox other than the ChipInput list (built); the design source itself uses native `<select>` elements. Selects stay native; dialogs, sheets, switches, menus and the chip input are Radix-based. The `@switchyard` registry is not set up |
+| B2 Monaco | done | !58 |
+| B3 VS Settings | done | !57 |
+| B4 VS History | done | !61 |
+| B5 Master-detail | done | |
+| B6 SSE patching, stale banner, refetch | done | !53 |
+| B7 Session-expired modal | done | !65 |
+| B8 ShowOnceSecret | done | !64 |
+| B9 Names and dates | part 2 | |
+| B10 SE groups | mostly done | see V10 |
+| B11 Networks | part 2 | |
+| B12 Review links and copy | done | "Open job" link and "You can leave this page" |
+| B13 Jobs | done | change set link, Duration column, live updates |
+| B14-B17 | part 2 | revisions, audit, certificates, admin tenants |
+| B18 Wizard explainers | done | |
+| B19 Polish | done | |
+| B20 axe, RHF/Zod, TanStack Table | partly done | axe and keyboard and phone checks via Playwright (!69); RHF, Zod and TanStack Table not adopted (deviation, record an ADR if kept) |
+| Backend-fed items | done | quota usage, revision message, per-member health and last check, host placement, audit export, BGP max prefixes |
+| Pool passive checks, slow start, TLS profile per port, OCSP stapling | done | pool sheet, Edit ports sheet, certificate sheet (!76) |

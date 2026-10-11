@@ -21,7 +21,12 @@ import { cn } from "@/lib/utils";
 type Profile = components["schemas"]["BgpProfileRead"] | components["schemas"]["VrrpProfileRead"];
 type Bgp = components["schemas"]["BgpProfileRead"];
 type Vrrp = components["schemas"]["VrrpProfileRead"];
-type Peer = { peer_ip: string; remote_asn: number; md5_ref: string | null };
+type Peer = {
+  peer_ip: string;
+  remote_asn: number;
+  md5_ref: string | null;
+  max_prefixes?: number | null;
+};
 type Route = { prefix: string; next_hop: string };
 
 const INPUT =
@@ -228,7 +233,7 @@ function Editor({
           {problem != null && <ErrorState error={problem} />}
           {isBgp(profile) ? (
             <>
-              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]">
                 <Field label={t("Name")} error={errors.name}>
                   <input
                     aria-label={t("Name")}
@@ -240,6 +245,23 @@ function Editor({
                 </Field>
                 {num("asn", t("Local ASN"))}
                 {num("max_paths", t("Max paths"), "1–64")}
+                <Field
+                  label={t("Max prefixes")}
+                  hint={t("Default for peers; empty is no limit")}
+                  error={errors.max_prefixes}
+                >
+                  <input
+                    aria-label={t("Max prefixes")}
+                    type="number"
+                    min={1}
+                    className={INPUT}
+                    disabled={dis}
+                    value={(f.max_prefixes as number | null | undefined) ?? ""}
+                    onChange={(e) =>
+                      set({ max_prefixes: e.target.value ? Number(e.target.value) : null })
+                    }
+                  />
+                </Field>
                 <div className="space-y-1.5 text-sm font-medium">
                   {t("BFD")}
                   <div className="flex h-9 items-center gap-2 font-normal">
@@ -280,6 +302,7 @@ function Editor({
                       <th className="px-3 py-2 font-medium">{t("Peer IP")}</th>
                       <th className="px-3 py-2 font-medium">{t("Remote ASN")}</th>
                       <th className="px-3 py-2 font-medium">{t("MD5 password")}</th>
+                      <th className="px-3 py-2 font-medium">{t("Max prefixes")}</th>
                       <th />
                     </tr>
                   </thead>
@@ -316,6 +339,22 @@ function Editor({
                               disabled={dis}
                               value={p.md5_ref ?? ""}
                               onChange={(e) => upd({ md5_ref: e.target.value || null })}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              aria-label={t("Peer {n} max prefixes", { n: i + 1 })}
+                              type="number"
+                              min={1}
+                              placeholder={t("Profile default")}
+                              className={INPUT}
+                              disabled={dis}
+                              value={p.max_prefixes ?? ""}
+                              onChange={(e) =>
+                                upd({
+                                  max_prefixes: e.target.value ? Number(e.target.value) : null,
+                                })
+                              }
                             />
                           </td>
                           <td className="px-3 py-2 text-right">

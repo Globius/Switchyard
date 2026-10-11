@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { Signpost } from "lucide-react";
 import { useState } from "react";
 import { api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
@@ -171,10 +172,17 @@ export function Wizard({ tenant }: { tenant: string }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="flex h-14 items-center gap-3 border-b bg-card px-5">
-        <span className="font-semibold">{t("New virtual service")}</span>
-        <span className="text-sm text-muted-foreground">
-          {t("Tenant")} {tenant}
+        <span className="flex items-center gap-2 font-semibold">
+          <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
+            <Signpost className="size-4" aria-hidden />
+          </span>
+          Switchyard
         </span>
+        <span aria-hidden className="h-6 w-px bg-border" />
+        <span className="text-sm text-muted-foreground">
+          {t("Tenant")} <span className="font-medium text-foreground">{tenant}</span>
+        </span>
+        <h1 className="sr-only">{t("New virtual service")}</h1>
         <Button variant="ghost" className="ml-auto" asChild>
           <Link to="/t/$tenant/virtual-services" params={{ tenant }}>
             {t("Cancel")}
@@ -799,6 +807,23 @@ export function Wizard({ tenant }: { tenant: string }) {
                       {t("Only UDP monitors can check a UDP pool.")}
                     </p>
                   )}
+                  {(() => {
+                    const m = monitorOptions.find((x) => x.id === s.monitor_choice);
+                    return m ? (
+                      <p className="text-xs text-muted-foreground">
+                        {m.type === "udp"
+                          ? t("Checks every {i} s; down after {f} failed checks.", {
+                              i: m.interval_s,
+                              f: m.fall,
+                            })
+                          : t("Checks every {i} s. Up after {r} passing, down after {f} failing.", {
+                              i: m.interval_s,
+                              r: m.rise,
+                              f: m.fall,
+                            })}
+                      </p>
+                    ) : null;
+                  })()}
                   {s.monitor_choice === "new" && (
                     <div className="grid gap-4 rounded-lg border bg-card p-4 md:grid-cols-2">
                       <Field label={t("Name")} error={errors.monitor_name}>

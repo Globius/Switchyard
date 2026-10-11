@@ -10,6 +10,7 @@ import { DraftMarker, expiryStatus, StatusPill } from "@/components/sy/StatusPil
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
@@ -117,6 +118,86 @@ export function toBase64(bytes: Uint8Array): string {
 }
 
 /** Import a new certificate, or with `replace` swap the material of an existing one (same id and usages). */
+/** Import a CA certificate (and optional CRL) that virtual services use to verify client certificates. */
+function ImportCaSheet({ tenant, onClose }: { tenant: string; onClose: () => void }) {
+  const ensure = useEnsureDraft(tenant);
+  const qc = useQueryClient();
+  const [name, setName] = useState("");
+  const [pem, setPem] = useState("");
+  const [crl, setCrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<unknown>(null);
+  const pemOk = looksLikePem(pem).cert;
+  return (
+    <Sheet
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={t("Import client CA")}
+      footer={
+        <>
+          <Button variant="ghost" className="ml-auto" onClick={onClose}>
+            {t("Cancel")}
+          </Button>
+          <Button
+            disabled={busy || !name || !pemOk}
+            onClick={async () => {
+              setBusy(true);
+              setProblem(null);
+              try {
+                const cs = await ensure.mutateAsync();
+                unwrap(
+                  await api.POST("/api/v1/tenants/{t}/certificates/import-ca", {
+                    params: { path: { t: tenant }, query: { change_set: cs } },
+                    body: { name, pem, ...(crl.trim() ? { crl_pem: crl } : {}) },
+                  }),
+                );
+                await qc.invalidateQueries({ queryKey: ["t", tenant] });
+                onClose();
+              } catch (e) {
+                setProblem(e);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {t("Add to draft")}
+          </Button>
+        </>
+      }
+    >
+      {problem != null && <ErrorState error={problem} />}
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "A CA certificate for verifying client certificates on TLS ports. It has no private key. Add its revocation list (CRL) to refuse revoked clients.",
+        )}
+      </p>
+      <label className="block space-y-1.5 text-sm font-medium">
+        {t("Name")}
+        <input
+          aria-label={t("Name")}
+          className={INPUT}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <PemField
+        label={t("CA certificate")}
+        value={pem}
+        onChange={setPem}
+        ok={pemOk}
+        hint={t("PEM. One or more CA certificates.")}
+      />
+      <PemField
+        label={t("CRL (optional)")}
+        value={crl}
+        onChange={setCrl}
+        ok={!crl.trim() || crl.includes("BEGIN X509 CRL")}
+        hint={t("PEM revocation list.")}
+      />
+    </Sheet>
+  );
+}
+
 function ImportSheet({
   tenant,
   onClose,
@@ -383,6 +464,48 @@ function RenewalEditor({ tenant, cert }: { tenant: string; cert: CertRow }) {
   );
 }
 
+/** OCSP stapling: engines attach the CA's revocation answer. Not offered for Cloudflare Origin CA certificates. */
+function OcspEditor({ tenant, cert }: { tenant: string; cert: CertRow }) {
+  const save = useSaveOp(tenant, "certificate");
+  const can = useCan(tenant);
+  const write = can("write", "application");
+  const [problem, setProblem] = useState<unknown>(null);
+  if (cert.source === "cloudflare_origin") return null;
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-3">
+        <h3 className="text-sm font-semibold">{t("OCSP stapling")}</h3>
+        <Tip label={write.reason}>
+          <span>
+            <Switch
+              aria-label={t("OCSP stapling")}
+              checked={cert.ocsp_stapling}
+              disabled={!write.allowed || save.isPending}
+              onCheckedChange={async (on) => {
+                setProblem(null);
+                try {
+                  await save.mutateAsync({
+                    action: "update",
+                    id: cert.id,
+                    version: cert.version,
+                    body: { ocsp_stapling: on },
+                  });
+                } catch (e) {
+                  setProblem(e);
+                }
+              }}
+            />
+          </span>
+        </Tip>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {t("Engines fetch the CA's revocation answer and send it with the certificate.")}
+      </p>
+      {problem != null && <ErrorState error={problem} />}
+    </section>
+  );
+}
+
 function UsageSheet({
   tenant,
   cert,
@@ -435,6 +558,7 @@ function UsageSheet({
         <dd className="font-mono text-xs">{cert.secret_ref}</dd>
       </dl>
       <RenewalEditor key={`${cert.id}-${cert.version}`} tenant={tenant} cert={cert} />
+      <OcspEditor key={`o-${cert.id}-${cert.version}`} tenant={tenant} cert={cert} />
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">
           {t("Used by {n} virtual services", { n: services.length })}
@@ -605,7 +729,7 @@ export function Certificates({ tenant }: { tenant: string }) {
   const runtime = can("manage", "certificate");
   const del = useSaveOp(tenant, "certificate");
   const qc = useQueryClient();
-  const [sheet, setSheet] = useState<"import" | "issue" | null>(null);
+  const [sheet, setSheet] = useState<"import" | "import-ca" | "issue" | null>(null);
   const [replacing, setReplacing] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string; version: number } | null>(
@@ -654,6 +778,15 @@ export function Certificates({ tenant }: { tenant: string }) {
               onClick={() => setSheet("import")}
             >
               {t("Import")}
+            </Button>
+          </Tip>
+          <Tip label={runtime.reason}>
+            <Button
+              variant="outline"
+              disabled={!runtime.allowed}
+              onClick={() => setSheet("import-ca")}
+            >
+              {t("Import client CA")}
             </Button>
           </Tip>
           <Tip label={runtime.reason}>
@@ -714,7 +847,14 @@ export function Certificates({ tenant }: { tenant: string }) {
                         </button>
                       </span>
                     </td>
-                    <td className="px-4 py-3">{t(SOURCE[c.source] ?? c.source)}</td>
+                    <td className="px-4 py-3">
+                      {t(SOURCE[c.source] ?? c.source)}
+                      {c.purpose === "client_ca" && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          · {t("client CA")}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-mono text-xs">{c.sans.join(", ")}</td>
                     <td className="px-4 py-3">
                       <span className="flex items-center gap-2 whitespace-nowrap">
@@ -775,6 +915,7 @@ export function Certificates({ tenant }: { tenant: string }) {
         )}
       </p>
       {sheet === "import" && <ImportSheet tenant={tenant} onClose={() => setSheet(null)} />}
+      {sheet === "import-ca" && <ImportCaSheet tenant={tenant} onClose={() => setSheet(null)} />}
       {sheet === "issue" && <IssueSheet tenant={tenant} onClose={() => setSheet(null)} />}
       {detail && (
         <UsageSheet

@@ -1,7 +1,7 @@
 /** Admin: system-wide and per-tenant role mappings, plus what each role can do (from the server's permission list). */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useProviders, usePermissions } from "@/auth/session";
@@ -231,10 +231,57 @@ function Table({
   );
 }
 
+const GROUPS = [
+  "Read",
+  "Applications",
+  "Infrastructure",
+  "Change sets",
+  "Runtime",
+  "Tenant settings",
+  "Access",
+  "System",
+];
+
+/** Permissions grouped as the server labels them; the group row shows the lowest role that has any of them. */
+export function groupPermissions<T extends { group: string; min_role: Role }>(
+  perms: T[],
+): { group: string; min: Role; items: T[] }[] {
+  const rank = (r: Role) => ROLES.indexOf(r);
+  const names = [...GROUPS, ...new Set(perms.map((p) => p.group))].filter(
+    (g, i, all) => all.indexOf(g) === i,
+  );
+  return names
+    .map((group) => {
+      const items = perms.filter((p) => p.group === group);
+      const min = items.reduce<Role>(
+        (m, p) => (rank(p.min_role) < rank(m) ? p.min_role : m),
+        "system-admin",
+      );
+      return { group, min, items };
+    })
+    .filter((g) => g.items.length > 0);
+}
+
 function RoleMatrix() {
   const matrix = usePermissions();
+  const [open, setOpen] = useState<string | null>(null);
   if (!matrix.data) return null;
   const rank = (r: Role) => ROLES.indexOf(r);
+  const groups = groupPermissions(
+    matrix.data.permissions.map((p) => ({ ...p, group: p.group ?? "Other" })),
+  );
+  const ticks = (min: Role) =>
+    ROLES.map((r) => (
+      <td key={r} className="px-3 py-2.5 text-center">
+        {rank(r) >= rank(min) ? (
+          <Check className="mx-auto size-4" aria-label={t("allowed")} />
+        ) : (
+          <span className="text-muted-foreground" aria-label={t("not allowed")}>
+            –
+          </span>
+        )}
+      </td>
+    ));
   return (
     <section className="overflow-hidden rounded-lg border bg-card">
       <header className="flex items-baseline gap-3 border-b px-4 py-3">
@@ -255,27 +302,38 @@ function RoleMatrix() {
           </tr>
         </thead>
         <tbody className="divide-y">
-          {matrix.data.permissions.map((p) => (
-            <tr key={`${p.verb}-${p.object}`}>
-              <td className="px-4 py-2.5">{p.description}</td>
-              {ROLES.map((r) => (
-                <td key={r} className="px-3 py-2.5 text-center">
-                  {rank(r) >= rank(p.min_role) ? (
-                    <Check className="mx-auto size-4" aria-label={t("allowed")} />
-                  ) : (
-                    <span className="text-muted-foreground" aria-label={t("not allowed")}>
-                      –
-                    </span>
-                  )}
+          {groups.map((g) => (
+            <Fragment key={g.group}>
+              <tr>
+                <td className="px-4 py-2.5">
+                  <button
+                    type="button"
+                    aria-expanded={open === g.group}
+                    className="text-left font-medium hover:underline"
+                    onClick={() => setOpen(open === g.group ? null : g.group)}
+                  >
+                    {t(g.group)}
+                  </button>{" "}
+                  <span className="text-xs text-muted-foreground">
+                    {t("{n} permissions", { n: g.items.length })}
+                  </span>
                 </td>
-              ))}
-            </tr>
+                {ticks(g.min)}
+              </tr>
+              {open === g.group &&
+                g.items.map((p) => (
+                  <tr key={`${p.verb}-${p.object}`} className="bg-muted/30">
+                    <td className="px-4 py-2 pl-8 text-muted-foreground">{p.description}</td>
+                    {ticks(p.min_role)}
+                  </tr>
+                ))}
+            </Fragment>
           ))}
         </tbody>
       </table>
       <p className="border-t px-4 py-3 text-xs text-muted-foreground">
         {t(
-          "Read from the server's permission list, so disabled buttons always match what the API enforces. Each permission carries a one-line description used for tooltips.",
+          "Read from the server's permission list, so disabled buttons always match what the API enforces. Open a group to see each permission.",
         )}
       </p>
     </section>

@@ -650,6 +650,16 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
                   {phase === "failed" && <StatusPill status="down">{t("Failed")}</StatusPill>}
                 </div>
                 <JobProgress stages={job.data.stages} />
+                <p className="text-xs text-muted-foreground">
+                  {t("You can leave this page; the apply keeps running.")}{" "}
+                  <Link
+                    to="/t/$tenant/jobs"
+                    params={{ tenant }}
+                    className="text-primary hover:underline"
+                  >
+                    {t("Open job")}
+                  </Link>
+                </p>
                 {(job.data.error ||
                   (job.data.result as { error?: string | null } | null)?.error) && (
                   <p role="alert" className="text-sm text-status-down">

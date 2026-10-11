@@ -8,6 +8,7 @@ import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ReapplyButton } from "@/features/drift/ReapplyButton";
+import { RunningConfigButton } from "@/features/drift/RunningConfig";
 import { useDraft } from "@/features/shell/draft";
 import { ago } from "@/features/vs/member-health";
 import { t } from "@/lib/i18n";
@@ -106,7 +107,6 @@ export function Home({ tenant }: { tenant: string }) {
   const unreachable = s.unreachable_engines.length;
   const soon = s.expiring_certificates.length;
   const week = s.expiring_certificates.filter((c) => c.days_left <= 7).length;
-  const problems = s.failing_members.length + unreachable + s.drifted_engines.length + soon;
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
@@ -120,7 +120,6 @@ export function Home({ tenant }: { tenant: string }) {
         </div>
         <Button
           variant="outline"
-          disabled={problems === 0}
           onClick={() =>
             document.getElementById("failing-members")?.scrollIntoView({ behavior: "smooth" })
           }
@@ -271,7 +270,13 @@ export function Home({ tenant }: { tenant: string }) {
                         "Running config differs from the last revision. Reported only; nothing is changed automatically.",
                       )}
                     </p>
-                    <ReapplyButton tenant={tenant} engine={e.engine} />
+                    <span className="flex flex-wrap items-center gap-2">
+                      <ReapplyButton tenant={tenant} groupId={e.se_group_id} engine={e.engine} />
+                      <RunningConfigButton
+                        tenant={tenant}
+                        engine={{ id: e.engine_id, name: e.engine }}
+                      />
+                    </span>
                   </li>
                 ))}
               </ul>

@@ -122,6 +122,28 @@ const server = setupServer(
     ops.push(...b.ops);
     return HttpResponse.json({ ok: true });
   }),
+  http.get("*/api/v1/tenants/acme/sdn/status", () =>
+    HttpResponse.json([
+      {
+        network_id: "n1",
+        network: "edge-vip",
+        state: "running",
+        job_id: "j",
+        started_at: null,
+        finished_at: null,
+        error: null,
+      },
+      {
+        network_id: "n2",
+        network: "backend",
+        state: "failed",
+        job_id: "k",
+        started_at: null,
+        finished_at: null,
+        error: "zone missing",
+      },
+    ]),
+  ),
   http.post("*/api/v1/tenants/acme/networks/apply-sdn", () => {
     sdnCalled = true;
     return HttpResponse.json({ job_id: "j" }, { status: 202 });
@@ -158,6 +180,8 @@ describe("networks and VIP pools", () => {
     renderAt("/t/acme/networks");
     const row = (await screen.findByRole("button", { name: "edge-vip" })).closest("tr")!;
     expect(within(row).getByText("Created by Switchyard")).toBeInTheDocument();
+    expect(await within(row).findByText("SDN apply running")).toBeInTheDocument();
+    expect(await screen.findByText("SDN apply failed")).toBeInTheDocument();
     expect(within(row).getByText("evpn-prod · vnedge")).toBeInTheDocument();
     expect(within(row).getByText("VNI 10012")).toBeInTheDocument();
     expect(within(row).getByText("se-edge-a (VIP), vip-edge")).toBeInTheDocument();

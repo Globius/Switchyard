@@ -18,6 +18,7 @@ const BGP = {
   name: "edge-bgp",
   asn: 65040,
   max_paths: 4,
+  max_prefixes: 5000,
   bfd: true,
   peers: [
     { peer_ip: "10.40.12.2", remote_asn: 65000, md5_ref: "openbao://kv/x" },
@@ -139,6 +140,22 @@ describe("routing profiles", () => {
       peers: [{ peer_ip: "10.40.12.2", remote_asn: 65000, md5_ref: "openbao://kv/x" }],
     });
     expect(screen.getByText("se-edge-a", { selector: "a" })).toBeInTheDocument();
+  });
+
+  it("edits BGP prefix limits on the profile and a peer", async () => {
+    renderAt("/t/acme/routing-profiles");
+    const prof = await screen.findByLabelText("Max prefixes");
+    await waitFor(() => expect(prof).toBeEnabled());
+    expect(prof).toHaveValue(5000);
+    await userEvent.clear(prof);
+    await userEvent.type(prof, "9000");
+    await userEvent.type(screen.getByLabelText("Peer 2 max prefixes"), "100");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(ops).toHaveLength(1));
+    expect(ops[0]!.body).toMatchObject({ max_prefixes: 9000 });
+    expect((ops[0]!.body as { peers: { max_prefixes?: number }[] }).peers[1]!.max_prefixes).toBe(
+      100,
+    );
   });
 
   it("edits a VRRP profile and adds a static route", async () => {

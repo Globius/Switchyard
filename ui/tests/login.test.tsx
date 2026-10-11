@@ -95,6 +95,9 @@ describe("login helpers", () => {
     expect(safeNext("//evil.test")).toBeUndefined();
     expect(safeNext("https://evil.test")).toBeUndefined();
     expect(safeNext(undefined)).toBeUndefined();
+    for (const bad of ["/\\x", "//x", "javascript:alert(1)", "/\t/x", "/%5Cx", "/\\evil.test"])
+      expect(safeNext(bad), JSON.stringify(bad)).toBeUndefined();
+    expect(safeNext("/t/acme/pools?x=1#top")).toBe("/t/acme/pools?x=1#top");
   });
   it("has copy for every error code", () => {
     for (const c of [

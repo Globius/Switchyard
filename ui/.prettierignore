@@ -3,3 +3,6 @@ coverage
 pnpm-lock.yaml
 src/api/schema.d.ts
 src/routeTree.gen.ts
+
+test-results
+playwright-report

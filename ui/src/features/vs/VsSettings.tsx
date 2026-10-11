@@ -149,9 +149,11 @@ function PortsSheet({
   disabled,
   portForbidden,
   errors,
+  clientCas,
   onChange,
   onClose,
 }: {
+  clientCas: { id: string; name: string }[];
   ports: PortRow[];
   disabled: boolean;
   portForbidden: Set<string>;
@@ -179,6 +181,7 @@ function PortsSheet({
                   http2: false,
                   proxy_protocol: false,
                   https_redirect_port: null,
+                  client_verify: "required",
                 },
               ])
             }
@@ -219,6 +222,81 @@ function PortsSheet({
               {k === "tls" ? "TLS" : k === "http2" ? "HTTP/2" : "PROXY"}
             </label>
           ))}
+          {p.tls && (
+            <label className="flex items-center gap-1.5">
+              {t("TLS profile")}
+              <select
+                aria-label={t("Port {n} TLS profile", { n: i + 1 })}
+                className={cn(INPUT, "w-36")}
+                disabled={disabled}
+                value={p.tls_profile ?? ""}
+                onChange={(e) =>
+                  onChange(
+                    ports.map((x, j) =>
+                      j === i
+                        ? { ...x, tls_profile: (e.target.value || null) as PortRow["tls_profile"] }
+                        : x,
+                    ),
+                  )
+                }
+              >
+                <option value="">{t("Default")}</option>
+                <option value="modern">{t("Modern")}</option>
+                <option value="intermediate">{t("Intermediate")}</option>
+                <option value="legacy">{t("Legacy")}</option>
+              </select>
+            </label>
+          )}
+          {p.tls && (
+            <>
+              <label className="flex items-center gap-1.5">
+                {t("Client CA")}
+                <select
+                  aria-label={t("Port {n} client CA", { n: i + 1 })}
+                  className={cn(INPUT, "w-44")}
+                  disabled={disabled}
+                  value={p.client_ca_id ?? ""}
+                  onChange={(e) =>
+                    onChange(
+                      ports.map((x, j) =>
+                        j === i ? { ...x, client_ca_id: e.target.value || null } : x,
+                      ),
+                    )
+                  }
+                >
+                  <option value="">{t("None")}</option>
+                  {clientCas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {p.client_ca_id && (
+                <label className="flex items-center gap-1.5">
+                  {t("Client certificate")}
+                  <select
+                    aria-label={t("Port {n} client verification", { n: i + 1 })}
+                    className={cn(INPUT, "w-32")}
+                    disabled={disabled}
+                    value={p.client_verify ?? "required"}
+                    onChange={(e) =>
+                      onChange(
+                        ports.map((x, j) =>
+                          j === i
+                            ? { ...x, client_verify: e.target.value as PortRow["client_verify"] }
+                            : x,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="required">{t("Required")}</option>
+                    <option value="optional">{t("Optional")}</option>
+                  </select>
+                </label>
+              )}
+            </>
+          )}
           <label className="flex items-center gap-1.5">
             {t("HTTPS redirect to")}
             <input
@@ -662,7 +740,13 @@ function SettingsForm({
                 {form.ports.map((p, i) => (
                   <tr key={i} data-field={`ports.${i}`}>
                     <td className="px-3 py-2 font-mono">{p.port}</td>
-                    <td className="px-3 py-2">{p.tls ? t("On") : t("Off")}</td>
+                    <td className="px-3 py-2">
+                      {p.tls
+                        ? p.tls_profile
+                          ? `${t("On")} · ${p.tls_profile}`
+                          : t("On")
+                        : t("Off")}
+                    </td>
                     <td className="px-3 py-2">{p.http2 ? t("On") : t("Off")}</td>
                     <td className="px-3 py-2">{p.proxy_protocol ? t("On") : t("Off")}</td>
                     <td className="px-3 py-2">{p.https_redirect_port ?? "—"}</td>
@@ -1091,6 +1175,7 @@ function SettingsForm({
           disabled={disabled}
           portForbidden={portForbidden}
           errors={errors}
+          clientCas={(certs.data?.items ?? []).filter((c) => c.purpose === "client_ca")}
           onChange={(ports) => set("ports", ports)}
           onClose={() => setPortsOpen(false)}
         />

@@ -19,12 +19,20 @@ export function RenderedConfigView({ fragment }: { fragment: Fragment }) {
     <figure className="overflow-hidden rounded-lg border bg-card">
       <figcaption className="flex items-center justify-between border-b bg-muted/60 px-4 py-2 text-xs">
         <span className="font-mono">{fragment.file}</span>
+        <button
+          type="button"
+          className="mr-3 ml-auto text-primary hover:underline"
+          onClick={() => void navigator.clipboard?.writeText(fragment.content)}
+        >
+          {t("Copy")}
+        </button>
         <span className="text-muted-foreground">
           {t("config hash")} <span className="font-mono">{fragment.fingerprint.slice(0, 12)}</span>
         </span>
       </figcaption>
       <ConfigEditor
         content={fragment.content}
+        language={fragment.language === "plaintext" ? "plaintext" : "haproxy"}
         range={
           fragment.range && fragment.range.length >= 2
             ? [fragment.range[0]!, fragment.range[1]!]
