@@ -66,62 +66,69 @@ export function StatePill({ state }: { state: string }) {
   }
 }
 
-function Detail({ tenant, id }: { tenant: string; id: string }) {
+function Detail({ tenant, id, mine }: { tenant: string; id: string; mine: boolean }) {
   const cs = useChangeSet(tenant, id);
   if (cs.isPending) return <TableSkeleton rows={2} cols={2} />;
   if (cs.isError) return <ErrorState error={cs.error} onRetry={() => void cs.refetch()} />;
   const c = cs.data;
+  const row = (label: string, value: React.ReactNode) => (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd>{value}</dd>
+    </>
+  );
   return (
-    <div className="space-y-3 border-t bg-muted/30 p-4 text-sm">
-      <dl className="grid grid-cols-[8rem_1fr] gap-y-1">
-        <dt className="text-muted-foreground">{t("Base revision")}</dt>
-        <dd>#{c.base_revision}</dd>
-        <dt className="text-muted-foreground">{t("Created")}</dt>
-        <dd>{new Date(c.created_at).toLocaleString()}</dd>
-        {c.approver && (
-          <>
-            <dt className="text-muted-foreground">{t("Approver")}</dt>
-            <dd>{c.approver}</dd>
-          </>
-        )}
+    <aside className="rounded-lg border bg-card" aria-label={t("Change set details")}>
+      <h2 className="border-b px-4 py-3 text-base font-semibold">
+        {c.summary || t("(no summary)")}
+      </h2>
+      <div className="space-y-4 p-4 text-sm">
+        <dl className="grid grid-cols-[8rem_1fr] gap-y-2">
+          {row(t("Author"), c.author)}
+          {row(t("State"), <StatePill state={c.state} />)}
+          {row(t("Base revision"), `#${c.base_revision}`)}
+          {row(t("Created"), new Date(c.created_at).toLocaleString())}
+          {c.approver && row(t("Approver"), c.approver)}
+          {c.error && row(t("Error"), <span className="text-status-down">{c.error}</span>)}
+        </dl>
         {c.reject_comment && (
-          <>
-            <dt className="text-muted-foreground">{t("Rejection comment")}</dt>
-            <dd>{c.reject_comment}</dd>
-          </>
+          <p className="rounded-md bg-muted p-3">
+            <span className="font-medium">{t("Rejection comment:")}</span> {c.reject_comment}
+          </p>
         )}
-        {c.error && (
-          <>
-            <dt className="text-muted-foreground">{t("Error")}</dt>
-            <dd className="text-status-down">{c.error}</dd>
-          </>
-        )}
-      </dl>
-      <div>
-        <div className="mb-1 font-medium">{t("Ops · {n}", { n: c.ops.length })}</div>
-        <ul className="divide-y rounded-md border bg-card">
+        <div className="space-y-2">
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {t("Ops · {n}", { n: c.ops.length })}
+          </div>
           {c.ops.map((o, i) => (
-            <li key={i} className="flex flex-wrap gap-x-3 px-3 py-2">
-              <span className="font-mono">{o.action}</span>
-              <span>{o.object_type.replace("_", " ")}</span>
-              <span className="font-medium">
-                {String((o.body as { name?: string } | null)?.name ?? o.object_id.slice(0, 8))}
-              </span>
-              {o.expected_version != null && (
-                <span className="text-muted-foreground">
-                  {t("expects v{n}", { n: o.expected_version })}
+            <div key={i} className="rounded-md border p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded bg-muted px-1.5 py-0.5 text-xs">{o.action}</span>
+                <span className="font-medium">
+                  {o.object_type.replace("_", " ")}{" "}
+                  {String((o.body as { name?: string } | null)?.name ?? o.object_id.slice(0, 8))}
                 </span>
-              )}
+                {o.expected_version != null && (
+                  <span className="ml-auto font-mono text-xs text-muted-foreground">
+                    {t("expects v{n}", { n: o.expected_version })}
+                  </span>
+                )}
+              </div>
               {o.body && o.action === "update" && (
-                <span className="font-mono text-xs text-muted-foreground">
+                <p className="mt-1 font-mono text-xs text-muted-foreground">
                   {Object.keys(o.body).join(", ")}
-                </span>
+                </p>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
+        {!mine && (
+          <p className="text-xs text-muted-foreground">
+            {t("This is someone else's draft; it does not affect your view.")}
+          </p>
+        )}
       </div>
-    </div>
+    </aside>
   );
 }
 
@@ -133,6 +140,7 @@ export function ChangeSets({ tenant }: { tenant: string }) {
   const open = useChangeSets(tenant, OPEN);
   const history = useChangeSets(tenant, HISTORY);
   const q = tab === "open" ? open : history;
+  const selected = q.data?.find((c) => c.id === openId) ?? q.data?.[0];
 
   return (
     <div className="space-y-4">
@@ -162,59 +170,69 @@ export function ChangeSets({ tenant }: { tenant: string }) {
           </button>
         ))}
       </div>
-      <div className="rounded-lg border bg-card">
-        {q.isPending ? (
-          <TableSkeleton cols={5} />
-        ) : q.isError ? (
-          <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-        ) : q.data.length === 0 ? (
-          <EmptyState
-            title={tab === "open" ? t("No open change sets") : t("No history yet")}
-            body={
-              tab === "open"
-                ? t("Edit anything and your draft appears here.")
-                : t("Applied and discarded change sets appear here.")
-            }
-          />
-        ) : (
-          <ul className="divide-y">
-            {q.data.map((c) => {
-              const mine = pickOwnDraft([c], me) !== undefined;
-              return (
-                <li key={c.id}>
-                  <div className="flex items-center gap-4 px-4 py-3 text-[13px]">
-                    <button
-                      type="button"
-                      className="flex-1 text-left font-medium text-primary hover:underline"
-                      aria-expanded={openId === c.id}
-                      onClick={() => setOpenId(openId === c.id ? null : c.id)}
-                    >
-                      {c.summary || t("(no summary)")}
-                      {mine && (
-                        <span className="ml-2 text-xs text-muted-foreground">{t("yours")}</span>
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="rounded-lg border bg-card">
+          {q.isPending ? (
+            <TableSkeleton cols={5} />
+          ) : q.isError ? (
+            <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+          ) : q.data.length === 0 ? (
+            <EmptyState
+              title={tab === "open" ? t("No open change sets") : t("No history yet")}
+              body={
+                tab === "open"
+                  ? t("Edit anything and your draft appears here.")
+                  : t("Applied and discarded change sets appear here.")
+              }
+            />
+          ) : (
+            <ul className="divide-y">
+              {q.data.map((c) => {
+                const mine = pickOwnDraft([c], me) !== undefined;
+                return (
+                  <li key={c.id} className={cn(selected?.id === c.id && "bg-accent/40")}>
+                    <div className="flex items-center gap-4 px-4 py-3 text-[13px]">
+                      <button
+                        type="button"
+                        className="flex-1 text-left font-medium text-primary hover:underline"
+                        aria-current={selected?.id === c.id}
+                        onClick={() => setOpenId(c.id)}
+                      >
+                        {c.summary || t("(no summary)")}
+                        {mine && (
+                          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                            {t("yours")}
+                          </span>
+                        )}
+                      </button>
+                      <span className="w-44 truncate text-muted-foreground">{c.author}</span>
+                      <StatePill state={c.state} />
+                      <span className="w-10 text-right text-muted-foreground">{c.op_count}</span>
+                      <span className="w-28 text-right font-mono text-xs text-muted-foreground">
+                        {c.id.slice(0, 8)}…
+                      </span>
+                      {(c.state === "draft" ||
+                        c.state === "pending_approval" ||
+                        c.state === "failed") && (
+                        <Button size="sm" variant="outline" asChild>
+                          <Link to="/t/$tenant/review/$cs" params={{ tenant, cs: c.id }}>
+                            {mine ? t("Review") : t("View")}
+                          </Link>
+                        </Button>
                       )}
-                    </button>
-                    <span className="w-44 truncate text-muted-foreground">{c.author}</span>
-                    <StatePill state={c.state} />
-                    <span className="w-10 text-right text-muted-foreground">{c.op_count}</span>
-                    <span className="w-28 text-right font-mono text-xs text-muted-foreground">
-                      {c.id.slice(0, 8)}…
-                    </span>
-                    {(c.state === "draft" ||
-                      c.state === "pending_approval" ||
-                      c.state === "failed") && (
-                      <Button size="sm" variant="outline" asChild>
-                        <Link to="/t/$tenant/review/$cs" params={{ tenant, cs: c.id }}>
-                          {mine ? t("Review") : t("View")}
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
-                  {openId === c.id && <Detail tenant={tenant} id={c.id} />}
-                </li>
-              );
-            })}
-          </ul>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        {selected && (
+          <Detail
+            tenant={tenant}
+            id={selected.id}
+            mine={pickOwnDraft([selected], me) !== undefined}
+          />
         )}
       </div>
     </div>
