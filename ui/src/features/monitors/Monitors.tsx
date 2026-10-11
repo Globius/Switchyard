@@ -1,0 +1,596 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ApiError, api, unwrap } from "@/api/client";
+import type { components } from "@/api/schema";
+import { useCan } from "@/auth/session";
+import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
+import { DraftMarker, StatusPill } from "@/components/sy/StatusPill";
+import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
+import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
+import { Tip } from "@/components/ui/tooltip";
+import { useSaveOp } from "@/features/objects/save";
+import { useDraft } from "@/features/shell/draft";
+import { usePools } from "@/features/vs/detail-queries";
+import { t } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+
+type Monitor = components["schemas"]["HealthMonitorRead"];
+export interface MonitorForm {
+  name: string;
+  type: "tcp" | "http" | "udp";
+  interval_s: number;
+  timeout_s: number;
+  rise: number;
+  fall: number;
+  port: number | null;
+  http: { method: string; path: string; host: string | null; expect_status: number[] } | null;
+  udp: { payload_hex: string | null; require_reply: boolean } | null;
+}
+
+const INPUT =
+  "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+export function emptyMonitor(): MonitorForm {
+  return {
+    name: "",
+    type: "tcp",
+    interval_s: 5,
+    timeout_s: 2,
+    rise: 2,
+    fall: 3,
+    port: null,
+    http: null,
+    udp: null,
+  };
+}
+
+export function toForm(m: Monitor): MonitorForm {
+  return {
+    name: m.name,
+    type: m.type,
+    interval_s: m.interval_s,
+    timeout_s: m.timeout_s,
+    rise: m.rise,
+    fall: m.fall,
+    port: m.port ?? null,
+    http: m.http
+      ? {
+          method: m.http.method ?? "GET",
+          path: m.http.path ?? "/",
+          host: m.http.host ?? null,
+          expect_status: m.http.expect_status ?? [200],
+        }
+      : null,
+    udp: m.udp
+      ? { payload_hex: m.udp.payload_hex ?? null, require_reply: m.udp.require_reply ?? false }
+      : null,
+  };
+}
+
+/** The "Check" column: what the monitor sends. */
+export function describeCheck(m: Pick<MonitorForm, "type" | "http" | "udp">): string {
+  if (m.type === "http" && m.http)
+    return `${m.http.method} ${m.http.path} → ${m.http.expect_status.join(", ")}`;
+  if (m.type === "udp")
+    return m.udp?.require_reply ? "UDP probe, reply required" : "UDP probe, no reply required";
+  return "TCP connect";
+}
+
+function useMonitorList(tenant: string, changeSet?: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "health-monitors", { changeSet }],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/v1/tenants/{t}/health-monitors", {
+          params: { path: { t: tenant }, query: { limit: 200, change_set: changeSet } },
+        }),
+      ),
+  });
+}
+
+function useEngines(tenant: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "engines"],
+    queryFn: async () =>
+      unwrap(await api.GET("/api/v1/tenants/{t}/engines", { params: { path: { t: tenant } } })),
+  });
+}
+
+function TestBox({ tenant, monitor }: { tenant: string; monitor: Monitor }) {
+  const pools = usePools(tenant);
+  const engines = useEngines(tenant);
+  const using = (pools.data?.items ?? []).filter((p) => p.health_monitor_id === monitor.id);
+  const options = using.flatMap((p) => p.members.map((m) => ({ pool: p, member: m })));
+  const [pick, setPick] = useState("");
+  const [engine, setEngine] = useState("");
+  const run = useMutation({
+    mutationFn: async () => {
+      const o = options.find((x) => x.member.id === pick)!;
+      return unwrap(
+        await api.POST("/api/v1/tenants/{t}/health-monitors/{monitor_id}/test", {
+          params: { path: { t: tenant, monitor_id: monitor.id } },
+          body: {
+            pool_id: o.pool.id,
+            member_id: o.member.id,
+            ...(engine ? { engine_id: engine } : {}),
+          },
+        }),
+      );
+    },
+  });
+  return (
+    <section className="space-y-2 rounded-lg border p-4">
+      <h3 className="text-sm font-medium">{t("Test against one member")}</h3>
+      <div className="grid grid-cols-2 gap-3">
+        <select
+          aria-label={t("Member to test")}
+          className={INPUT}
+          value={pick}
+          onChange={(e) => setPick(e.target.value)}
+        >
+          <option value="">{t("Member to test")}</option>
+          {options.map(({ pool, member }) => (
+            <option key={member.id} value={member.id}>
+              {member.name ?? member.address} · {member.address}:{member.port} ({pool.name})
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={t("From engine")}
+          className={INPUT}
+          value={engine}
+          onChange={(e) => setEngine(e.target.value)}
+        >
+          <option value="">{t("Any engine")}</option>
+          {engines.data?.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        disabled={!pick || run.isPending}
+        onClick={() => run.mutate()}
+      >
+        {t("Run test")}
+      </Button>
+      {run.data && (
+        <p role="status" className="text-sm">
+          {run.data.ok ? (
+            <StatusPill status="healthy">{t("Passed")}</StatusPill>
+          ) : (
+            <StatusPill status="down">{t("Failed")}</StatusPill>
+          )}{" "}
+          {run.data.detail} ·{" "}
+          <span className="font-mono text-xs">
+            {run.data.target} · {run.data.protocol} · {t("from {e}", { e: run.data.engine })} ·{" "}
+            {run.data.latency_ms} ms
+          </span>
+        </p>
+      )}
+      {run.error && <ErrorState error={run.error} />}
+      <p className="text-xs text-muted-foreground">
+        {t(
+          "Runs this monitor's saved settings once from the engine you pick. Nothing is saved and the live check is not changed.",
+        )}
+      </p>
+    </section>
+  );
+}
+
+function MonitorSheet({
+  tenant,
+  monitor,
+  onClose,
+}: {
+  tenant: string;
+  monitor: Monitor | "new";
+  onClose: () => void;
+}) {
+  const save = useSaveOp(tenant, "health_monitor");
+  const can = useCan(tenant);
+  const write = can("write", "application");
+  const pools = usePools(tenant);
+  const base = useMemo(() => (monitor === "new" ? emptyMonitor() : toForm(monitor)), [monitor]);
+  const [f, setF] = useState<MonitorForm>(base);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [problem, setProblem] = useState<unknown>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const set = (p: Partial<MonitorForm>) => setF({ ...f, ...p });
+  const patch = useMemo(() => {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(f) as (keyof MonitorForm)[])
+      if (JSON.stringify(base[k]) !== JSON.stringify(f[k])) out[k] = f[k];
+    return out;
+  }, [f, base]);
+  const dirty = monitor === "new" ? f.name !== "" : Object.keys(patch).length > 0;
+  const udp = f.type === "udp";
+  const using =
+    monitor === "new"
+      ? []
+      : (pools.data?.items ?? []).filter((p) => p.health_monitor_id === monitor.id);
+
+  async function submit() {
+    setProblem(null);
+    setErrors({});
+    try {
+      const body = {
+        ...f,
+        http:
+          f.type === "http"
+            ? (f.http ?? { method: "GET", path: "/", host: null, expect_status: [200] })
+            : null,
+        udp: udp ? (f.udp ?? { payload_hex: null, require_reply: false }) : null,
+      };
+      if (monitor === "new") await save.mutateAsync({ action: "create", body });
+      else
+        await save.mutateAsync({
+          action: "update",
+          id: monitor.id,
+          version: monitor.version,
+          body: patch,
+        });
+      onClose();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 422) {
+        const m: Record<string, string> = {};
+        for (const x of e.problem?.errors ?? []) m[x.path] = x.message;
+        setErrors(m);
+      } else setProblem(e);
+    }
+  }
+  const num = (k: "interval_s" | "timeout_s" | "rise" | "fall", label: string) => (
+    <label className="text-sm font-medium">
+      {label}
+      <input
+        aria-label={label}
+        type="number"
+        className={INPUT}
+        disabled={!write.allowed}
+        value={f[k]}
+        onChange={(e) => set({ [k]: Number(e.target.value) })}
+      />
+      {errors[k] && (
+        <span role="alert" className="block text-xs font-normal text-status-down">
+          {errors[k]}
+        </span>
+      )}
+    </label>
+  );
+
+  return (
+    <>
+      <Sheet
+        open
+        onOpenChange={(o) => !o && onClose()}
+        title={
+          monitor === "new" ? t("New monitor") : t("Edit monitor {name}", { name: monitor.name })
+        }
+        badge={
+          monitor !== "new" && monitor.draft_status !== "unchanged" ? (
+            <DraftMarker status={monitor.draft_status} />
+          ) : undefined
+        }
+        footer={
+          <>
+            {monitor !== "new" && (
+              <Tip label={write.reason}>
+                <Button
+                  variant="outline"
+                  disabled={!write.allowed}
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  {t("Delete")}
+                </Button>
+              </Tip>
+            )}
+            <Button variant="ghost" className="ml-auto" onClick={onClose}>
+              {t("Cancel")}
+            </Button>
+            <Tip label={write.reason}>
+              <Button
+                disabled={!write.allowed || !dirty || save.isPending}
+                onClick={() => void submit()}
+              >
+                {t("Save to draft")}
+              </Button>
+            </Tip>
+          </>
+        }
+      >
+        {problem != null && <ErrorState error={problem} />}
+        <label className="block space-y-1.5 text-sm font-medium">
+          {t("Name")}
+          <input
+            aria-label={t("Name")}
+            className={INPUT}
+            disabled={!write.allowed}
+            value={f.name}
+            onChange={(e) => set({ name: e.target.value })}
+          />
+          {errors.name && (
+            <span role="alert" className="block text-xs font-normal text-status-down">
+              {errors.name}
+            </span>
+          )}
+        </label>
+        <label className="block space-y-1.5 text-sm font-medium">
+          {t("Type")}
+          <select
+            aria-label={t("Type")}
+            className={INPUT}
+            disabled={!write.allowed || monitor !== "new"}
+            value={f.type}
+            onChange={(e) => set({ type: e.target.value as MonitorForm["type"] })}
+          >
+            <option value="tcp">TCP</option>
+            <option value="http">HTTP</option>
+            <option value="udp">UDP</option>
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          {num("interval_s", t("Interval"))}
+          {num("timeout_s", t("Timeout"))}
+          {!udp && num("rise", t("Rise"))}
+          {num("fall", t("Fall"))}
+        </div>
+        {udp && (
+          <p className="text-xs text-muted-foreground">
+            {t("UDP checks have no rise count: a member comes back after its next passing check.")}
+          </p>
+        )}
+        <label className="block space-y-1.5 text-sm font-medium">
+          {t("Port")}
+          <input
+            aria-label={t("Port")}
+            type="number"
+            className={INPUT}
+            disabled={!write.allowed}
+            value={f.port ?? ""}
+            onChange={(e) => set({ port: e.target.value ? Number(e.target.value) : null })}
+          />
+          <span className="block text-xs font-normal text-muted-foreground">
+            {t("Leave empty to check each member on its own port.")}
+          </span>
+        </label>
+        {f.type === "http" && (
+          <fieldset className="space-y-3 rounded-lg border p-4">
+            <legend className="px-1 text-sm font-medium">{t("HTTP request")}</legend>
+            {(() => {
+              const h = f.http ?? { method: "GET", path: "/", host: null, expect_status: [200] };
+              const sh = (p: Partial<typeof h>) => set({ http: { ...h, ...p } });
+              return (
+                <>
+                  <select
+                    aria-label={t("Method")}
+                    className={INPUT}
+                    disabled={!write.allowed}
+                    value={h.method}
+                    onChange={(e) => sh({ method: e.target.value })}
+                  >
+                    <option>GET</option>
+                    <option>HEAD</option>
+                    <option>OPTIONS</option>
+                  </select>
+                  <input
+                    aria-label={t("Path")}
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    value={h.path}
+                    onChange={(e) => sh({ path: e.target.value })}
+                  />
+                  <input
+                    aria-label={t("Host header")}
+                    placeholder={t("Host header")}
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    value={h.host ?? ""}
+                    onChange={(e) => sh({ host: e.target.value || null })}
+                  />
+                  <input
+                    aria-label={t("Expected status codes")}
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    value={h.expect_status.join(", ")}
+                    onChange={(e) =>
+                      sh({
+                        expect_status: e.target.value
+                          .split(",")
+                          .map((x) => Number(x.trim()))
+                          .filter(Boolean),
+                      })
+                    }
+                  />
+                </>
+              );
+            })()}
+          </fieldset>
+        )}
+        {udp && (
+          <fieldset className="space-y-3 rounded-lg border p-4">
+            <legend className="px-1 text-sm font-medium">{t("UDP probe")}</legend>
+            <input
+              aria-label={t("Probe payload (hex)")}
+              placeholder={t("Probe payload (hex)")}
+              className={cn(INPUT, "font-mono")}
+              disabled={!write.allowed}
+              value={f.udp?.payload_hex ?? ""}
+              onChange={(e) =>
+                set({
+                  udp: {
+                    payload_hex: e.target.value || null,
+                    require_reply: f.udp?.require_reply ?? false,
+                  },
+                })
+              }
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                disabled={!write.allowed}
+                checked={f.udp?.require_reply ?? false}
+                onChange={(e) =>
+                  set({
+                    udp: {
+                      payload_hex: f.udp?.payload_hex ?? null,
+                      require_reply: e.target.checked,
+                    },
+                  })
+                }
+              />
+              {t("Require a reply")}
+            </label>
+          </fieldset>
+        )}
+        {monitor !== "new" && <TestBox tenant={tenant} monitor={monitor} />}
+        {monitor !== "new" && using.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "Used by {n} pools. A change here re-renders all of them and shows in the review's Config tab.",
+              { n: using.length },
+            )}
+          </p>
+        )}
+      </Sheet>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={t("Delete monitor {name}?", { name: monitor === "new" ? "" : monitor.name })}
+        confirmLabel={t("Add delete to draft")}
+        busy={save.isPending}
+        onConfirm={async () => {
+          if (monitor === "new") return;
+          try {
+            await save.mutateAsync({ action: "delete", id: monitor.id, version: monitor.version });
+            onClose();
+          } catch (e) {
+            setProblem(e);
+          } finally {
+            setConfirmDelete(false);
+          }
+        }}
+      >
+        <p>
+          {using.length > 0
+            ? t(
+                "{n} pools use this monitor; the validator blocks the apply until they use another.",
+                { n: using.length },
+              )
+            : t("No pool uses this monitor.")}
+        </p>
+      </ConfirmDialog>
+    </>
+  );
+}
+
+/** Health monitors: what each checks, timing, and the pools using it. */
+export function Monitors({ tenant }: { tenant: string }) {
+  const { draft } = useDraft(tenant);
+  const list = useMonitorList(tenant, draft?.id);
+  const pools = usePools(tenant, draft?.id);
+  const can = useCan(tenant);
+  const write = can("write", "application");
+  const [editing, setEditing] = useState<Monitor | "new" | null>(null);
+  const usedBy = new Map<string, string[]>();
+  for (const p of pools.data?.items ?? [])
+    if (p.health_monitor_id)
+      usedBy.set(p.health_monitor_id, [...(usedBy.get(p.health_monitor_id) ?? []), p.name]);
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">{t("Health monitors")}</h1>
+          <p className="text-sm text-muted-foreground">
+            {t("{n} monitors", { n: list.data?.items.length ?? 0 })}
+          </p>
+        </div>
+        <Tip label={write.reason}>
+          <Button disabled={!write.allowed} onClick={() => setEditing("new")}>
+            <Plus /> {t("New monitor")}
+          </Button>
+        </Tip>
+      </div>
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        {list.isPending ? (
+          <TableSkeleton cols={6} />
+        ) : list.isError ? (
+          <ErrorState error={list.error} onRetry={() => void list.refetch()} />
+        ) : list.data.items.length === 0 ? (
+          <EmptyState
+            title={t("No health monitors yet")}
+            body={t("A monitor decides how the engines tell whether a pool member is up.")}
+            action={
+              write.allowed ? (
+                <Button onClick={() => setEditing("new")}>{t("Create a monitor")}</Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
+              <tr>
+                {[
+                  "Name",
+                  "Type",
+                  "Check",
+                  "Interval · timeout",
+                  "Rise · fall",
+                  "Pools using it",
+                ].map((h) => (
+                  <th key={h} className="px-4 py-2.5 font-medium">
+                    {t(h)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {list.data.items.map((m) => (
+                <tr key={m.id}>
+                  <td className="px-4 py-3">
+                    <span className="flex items-center gap-2">
+                      {m.draft_status !== "unchanged" && <DraftMarker status={m.draft_status} />}
+                      <button
+                        type="button"
+                        className={cn(
+                          "font-medium text-primary hover:underline",
+                          m.draft_status === "deleted" && "line-through",
+                        )}
+                        onClick={() => setEditing(m)}
+                      >
+                        {m.name}
+                      </button>
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 uppercase">{m.type}</td>
+                  <td className="px-4 py-3 font-mono text-xs">{t(describeCheck(toForm(m)))}</td>
+                  <td className="px-4 py-3">
+                    {m.interval_s} s · {m.timeout_s} s
+                  </td>
+                  <td className="px-4 py-3">
+                    {m.type === "udp" ? "—" : m.rise} · {m.fall}
+                  </td>
+                  <td className="px-4 py-3">{usedBy.get(m.id)?.join(", ") ?? t("none")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {editing && (
+        <MonitorSheet
+          key={
+            editing === "new" ? "new" : `${editing.id}-${editing.version}-${editing.draft_status}`
+          }
+          tenant={tenant}
+          monitor={editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </div>
+  );
+}
