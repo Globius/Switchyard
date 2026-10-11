@@ -324,7 +324,7 @@ async def insert_deployment(
     session: AsyncSession,
     *,
     tenant_id: UUID,
-    change_set_id: UUID,
+    change_set_id: UUID | None,
     revision_id: UUID | None,
     se_group_id: UUID,
     state: DeploymentState,

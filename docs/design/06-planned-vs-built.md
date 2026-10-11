@@ -119,7 +119,7 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Admin: tenants, users, identity providers, break-glass, mappings, system tokens | done | | | |
 | Admin role matrix | partial | Lists every server permission, not the artboard's eight grouped rows | *UI to wire* (`group` on `/permissions`, ADR 0068) | Group by `group` in the UI |
 | Admin audit log | partial | Export covers loaded events only | *UI to wire* (export endpoint done, ADR 0060) | Use `GET /audit-events/export` |
-| Drift: "Re-apply revision #N" offer | missing | Drift is shown; the one explicit action is not | *not started* | Button opening a rollback draft to the live revision |
+| Drift: "Re-apply revision #N" offer | partial | `POST /se-groups/{group}/reapply` exists (ADR 0069); the UI button is not wired | *UI to wire* | Button calling the endpoint (not a rollback draft: the state is unchanged) |
 | Handoff components (ShowOnceSecret, LiveBadge, IpUsageBar, BgpSessionChip, VrrpStateChip, WizardStepper, ApprovalBanner, MemberStateList, JobProgress) | partial | Built inside features, not as shared `@switchyard` components; only ChipInput, StatusPill, states, RenderedConfigView, ConfirmDialog are shared (JobProgress is in `features/review`) | *not started* | Extract when reused |
 | Viewer (read-only) states | partial | Tests only; no viewer user in the demo data | *not started* | Seed a viewer in `syctl seed --example` |
 

@@ -2132,6 +2132,27 @@ def create_app(
         return {"job_id": str(job)}
 
     @router.post(
+        "/tenants/{t}/se-groups/{group}/reapply",
+        status_code=202,
+        tags=["se-groups"],
+        summary="Re-apply the desired state to an SE group (drift repair)",
+        description=(
+            "Pushes the tenant's current desired state to every engine of the group again, canary "
+            "first, to put engines that drifted back to what the database says. It makes no "
+            "revision and changes no desired state. Drift is never corrected on its own; this is "
+            "the explicit action. Returns the job (`reapply_se_group`); its result has `ok`, "
+            "`revision_number` (the revision that was pushed) and `error`. Requires "
+            "`tenant-admin`, because it overwrites what the engines run now. `404` if the group "
+            "does not exist."
+        ),
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202),
+    )
+    async def reapply_group(group: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
+        job = await svc.change_sets.reapply_group(who, tenant.id, group, request_id=_rid())
+        return {"job_id": str(job)}
+
+    @router.post(
         "/tenants/{t}/change-sets/{cs}/discard",
         tags=["change-sets"],
         summary="Discard a draft",

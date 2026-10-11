@@ -26,6 +26,8 @@ from switchyard.db.tenancy import admin_session
 MAX_LOG_LINES = 500
 #: Apply stages in order (backend design, "Change pipeline").
 APPLY_STAGES = ("lock", "render", "validate", "canary", "rollout", "commit")
+#: Stages of a re-apply: the same, without a commit (no revision is made).
+REAPPLY_STAGES = ("lock", "render", "validate", "canary", "rollout")
 
 
 class StageState(enum.StrEnum):
