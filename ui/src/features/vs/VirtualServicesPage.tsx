@@ -36,7 +36,7 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
   const status = useVsStatus(tenant);
   const metrics = useVsMetrics(tenant);
   const groups = useSeGroups(tenant);
-  const certs = useCertificates(tenant);
+  const certs = useCertificates(tenant, draft?.id);
 
   const rows = useMemo(() => list.data?.pages.flatMap((p) => p.items) ?? [], [list.data]);
   const groupName = new Map(groups.data?.items.map((g) => [g.id, g.name]));

@@ -250,7 +250,7 @@ function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }
 /** Certificates: source, SANs, expiry, renewal and which services use each. Keys live only in OpenBao. */
 export function Certificates({ tenant }: { tenant: string }) {
   const { draft } = useDraft(tenant);
-  const list = useCertificates(tenant);
+  const list = useCertificates(tenant, draft?.id);
   const services = useServices(tenant, draft?.id);
   const can = useCan(tenant);
   const write = can("write", "application");

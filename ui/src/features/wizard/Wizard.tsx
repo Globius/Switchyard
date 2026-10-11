@@ -93,7 +93,7 @@ export function Wizard({ tenant }: { tenant: string }) {
   const ensure = useEnsureDraft(tenant);
   const groups = useSeGroups(tenant);
   const vipPools = useVipPools(tenant);
-  const certs = useCertificates(tenant);
+  const certs = useCertificates(tenant, draft?.id);
   const pools = usePools(tenant);
   const monitors = useMonitors(tenant);
   const existing = useVirtualServices(tenant, {});

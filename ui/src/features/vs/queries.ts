@@ -67,14 +67,14 @@ export function useSeGroups(tenant: string) {
   });
 }
 
-/** All certificates (expiry column). */
-export function useCertificates(tenant: string) {
+/** All certificates (expiry column, pickers); `changeSet` overlays the open draft. */
+export function useCertificates(tenant: string, changeSet?: string) {
   return useQuery({
-    queryKey: ["t", tenant, "certificates"],
+    queryKey: ["t", tenant, "certificates", { changeSet }],
     queryFn: async () =>
       unwrap(
         await api.GET("/api/v1/tenants/{t}/certificates", {
-          params: { path: { t: tenant }, query: { limit: 200 } },
+          params: { path: { t: tenant }, query: { limit: 200, change_set: changeSet } },
         }),
       ),
   });
