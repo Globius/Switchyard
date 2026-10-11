@@ -11,6 +11,7 @@ export function Sheet({
   badge,
   children,
   footer,
+  centered,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -18,12 +19,20 @@ export function Sheet({
   badge?: ReactNode;
   children: ReactNode;
   footer: ReactNode;
+  /** Centred dialog instead of a right-hand sheet (short forms such as issuing a certificate). */
+  centered?: boolean;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/30" />
-        <Dialog.Content className="fixed inset-y-0 right-0 z-50 flex w-[min(40rem,100vw)] flex-col border-l bg-card shadow-2xl">
+        <Dialog.Content
+          className={
+            centered
+              ? "fixed top-1/2 left-1/2 z-50 flex max-h-[90vh] w-[min(34rem,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border bg-card shadow-2xl"
+              : "fixed inset-y-0 right-0 z-50 flex w-[min(40rem,100vw)] flex-col border-l bg-card shadow-2xl"
+          }
+        >
           <div className="flex items-center gap-3 border-b px-5 py-3">
             <Dialog.Title className="text-base font-semibold">{title}</Dialog.Title>
             {badge}
