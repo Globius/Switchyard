@@ -10,6 +10,7 @@ x-patroni: &patroni
     PATRONI_SUPERUSER_PASSWORD: lab-superuser
     PATRONI_REPLICATION_PASSWORD: lab-replication
     PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+    RESTORE_TARGET_TIME: ${RESTORE_TARGET_TIME:-}
     PGBACKREST_STANZA: switchyard
     PGBACKREST_PG1_PATH: /data/pgdata
     PGBACKREST_PG1_SOCKET_PATH: /var/run/postgresql

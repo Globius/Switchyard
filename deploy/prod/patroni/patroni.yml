@@ -23,6 +23,7 @@ bootstrap:
         archive_mode: "on"
         archive_timeout: 60s
         archive_command: pgbackrest --stanza=switchyard archive-push %p
+        restore_command: pgbackrest --stanza=switchyard archive-get %f "%p"
   initdb:
     - encoding: UTF8
     - data-checksums
