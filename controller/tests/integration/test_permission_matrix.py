@@ -76,6 +76,7 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/revisions/{n}/rollback"): ("rollback", "revision"),
     ("PUT", "/tenants/{t}/pools/{pool}/members/{member}/state"): ("set_state", "member"),
     ("GET", "/tenants/{t}/se-groups/{group}/engines"): READ,
+    ("GET", "/tenants/{t}/se-groups/{group}/placement"): READ,
     ("POST", "/tenants/{t}/se-groups/{group}/engines"): ("manage", "engine"),
     ("PUT", "/tenants/{t}/engines/{engine}/state"): ("manage", "engine"),
     ("DELETE", "/tenants/{t}/engines/{engine}"): ("manage", "engine"),

@@ -2588,6 +2588,18 @@
             "description": "`host:port` of `sy-agent`, if any.",
             "title": "Agent Url"
           },
+          "host_online": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether Proxmox reports the engine's node online; null when the engine has no node or Proxmox is not configured or not reachable.",
+            "title": "Host Online"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -3457,6 +3469,212 @@
           "changed_fields"
         ],
         "title": "HealthMonitorRead",
+        "type": "object"
+      },
+      "HostEngineRead": {
+        "additionalProperties": false,
+        "description": "An engine of the SE group on a node.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngineState"
+          },
+          "vmid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vmid"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state"
+        ],
+        "title": "HostEngineRead",
+        "type": "object"
+      },
+      "HostNodeRead": {
+        "additionalProperties": false,
+        "description": "A Proxmox node and the SE group's engines on it.",
+        "properties": {
+          "cpu": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "CPU load, 0 to 1.",
+            "title": "Cpu"
+          },
+          "engines": {
+            "items": {
+              "$ref": "#/components/schemas/HostEngineRead"
+            },
+            "title": "Engines",
+            "type": "array"
+          },
+          "max_cpu": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cpu"
+          },
+          "mem_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bytes.",
+            "title": "Mem Total"
+          },
+          "mem_used": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bytes.",
+            "title": "Mem Used"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "online": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As the cluster reports it; null when Proxmox could not be asked.",
+            "title": "Online"
+          },
+          "storage": {
+            "items": {
+              "$ref": "#/components/schemas/HostStorageRead"
+            },
+            "title": "Storage",
+            "type": "array"
+          },
+          "uptime_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uptime S"
+          }
+        },
+        "required": [
+          "name",
+          "online",
+          "storage",
+          "engines"
+        ],
+        "title": "HostNodeRead",
+        "type": "object"
+      },
+      "HostStorageRead": {
+        "additionalProperties": false,
+        "description": "A storage of a Proxmox node. Sizes are bytes.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          },
+          "content": {
+            "description": "What the storage holds, for example `images`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Content",
+            "type": "array"
+          },
+          "kind": {
+            "description": "Storage type, for example `lvmthin`, `zfspool`, `nfs`.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "used": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "active",
+          "content"
+        ],
+        "title": "HostStorageRead",
         "type": "object"
       },
       "HttpCheck": {
@@ -6204,6 +6422,40 @@
           }
         },
         "title": "PersistenceSourceIp",
+        "type": "object"
+      },
+      "PlacementRead": {
+        "additionalProperties": false,
+        "description": "Where an SE group's engines run on the Proxmox cluster.\n\nWith `available: false` (Proxmox not configured or not reachable) `nodes` lists only the nodes\nthe group's engines are placed on, with `online: null` and no capacity.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/HostNodeRead"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "available",
+          "nodes"
+        ],
+        "title": "PlacementRead",
         "type": "object"
       },
       "Pool": {
@@ -19396,6 +19648,7 @@
                     "agent_cert_serial": "3f2a9c",
                     "agent_enrolled": true,
                     "agent_url": "192.0.2.21:7443",
+                    "host_online": true,
                     "id": "0192f3a0-0000-7000-8000-000000000022",
                     "mgmt_ip": "192.0.2.21",
                     "name": "edge-1",
@@ -19621,6 +19874,7 @@
                   "agent_cert_serial": "3f2a9c",
                   "agent_enrolled": true,
                   "agent_url": "192.0.2.21:7443",
+                  "host_online": true,
                   "id": "0192f3a0-0000-7000-8000-000000000022",
                   "mgmt_ip": "192.0.2.21",
                   "name": "edge-1",
@@ -28172,6 +28426,7 @@
                     "agent_cert_serial": "3f2a9c",
                     "agent_enrolled": true,
                     "agent_url": "192.0.2.21:7443",
+                    "host_online": true,
                     "id": "0192f3a0-0000-7000-8000-000000000022",
                     "mgmt_ip": "192.0.2.21",
                     "name": "edge-1",
@@ -28308,6 +28563,7 @@
                   "agent_cert_serial": "3f2a9c",
                   "agent_enrolled": true,
                   "agent_url": "192.0.2.21:7443",
+                  "host_online": true,
                   "id": "0192f3a0-0000-7000-8000-000000000022",
                   "mgmt_ip": "192.0.2.21",
                   "name": "edge-1",
@@ -28380,6 +28636,151 @@
           "engines"
         ],
         "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/se-groups/{group}/placement": {
+      "get": {
+        "description": "The Proxmox cluster nodes with online state, load, memory and storage, and the group's engines on each: the data of the Placement card. Read from Proxmox and cached for 15 seconds. When Proxmox is not configured or not reachable the answer is `available: false` with the nodes the engines claim to run on and `online: null`. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "se_group_placement_api_v1_tenants__t__se_groups__group__placement_get",
+        "parameters": [
+          {
+            "description": "SE group id.",
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Group",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "available": true,
+                  "nodes": [
+                    {
+                      "cpu": 0.12,
+                      "engines": [
+                        {
+                          "id": "0192f3a0-0000-7000-8000-000000000022",
+                          "name": "edge-1",
+                          "state": "enabled",
+                          "vmid": 9101
+                        }
+                      ],
+                      "max_cpu": 32,
+                      "mem_total": 274877906944,
+                      "mem_used": 68719476736,
+                      "name": "pve1",
+                      "online": true,
+                      "storage": [
+                        {
+                          "active": true,
+                          "available": 879609302221,
+                          "content": [
+                            "images",
+                            "rootdir"
+                          ],
+                          "kind": "lvmthin",
+                          "name": "local-lvm",
+                          "total": 1099511627776,
+                          "used": 219902325555
+                        }
+                      ],
+                      "uptime_s": 1209600
+                    },
+                    {
+                      "engines": [],
+                      "name": "pve2",
+                      "online": false,
+                      "storage": []
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Where an SE group's engines run on Proxmox",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/se-groups/{object_id}": {

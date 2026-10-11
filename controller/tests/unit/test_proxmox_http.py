@@ -30,6 +30,42 @@ class Api:
             )
         if request.method == "GET" and path.endswith("/subnets"):
             return httpx.Response(200, json={"data": []})
+        if request.method == "GET" and path == "/nodes":
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {"node": "pve2", "status": "offline"},
+                        {
+                            "node": "pve1",
+                            "status": "online",
+                            "cpu": 0.5,
+                            "maxcpu": 8,
+                            "mem": 10,
+                            "maxmem": 20,
+                            "uptime": 99,
+                        },
+                    ]
+                },
+            )
+        if request.method == "GET" and path == "/nodes/pve1/storage":
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "storage": "local-lvm",
+                            "type": "lvmthin",
+                            "active": 1,
+                            "content": "rootdir,images",
+                            "total": 100,
+                            "used": 40,
+                            "avail": 60,
+                        },
+                        {"storage": "iso", "type": "dir", "active": 0},
+                    ]
+                },
+            )
         if request.method == "GET" and path == "/cluster/nextid":
             return httpx.Response(200, json={"data": "101"})
         if request.method == "GET" and "/tasks/" in path:
@@ -129,3 +165,26 @@ async def test_destroy_of_a_missing_vm_is_a_no_op_and_errors_surface() -> None:
     broken = HttpProxmox("https://pve1:8006", "a@b!c", "s", transport=httpx.MockTransport(boom))
     with pytest.raises(ProxmoxError, match="HTTP 500"):
         await broken.apply_sdn()
+
+
+async def test_nodes_and_storage_are_read_and_sorted() -> None:
+    pve = client(Api())
+    nodes = await pve.list_nodes()
+    assert [(n.name, n.online) for n in nodes] == [("pve1", True), ("pve2", False)]
+    assert (nodes[0].cpu, nodes[0].max_cpu, nodes[0].mem_total, nodes[0].uptime_s) == (
+        0.5,
+        8,
+        20,
+        99,
+    )
+    assert (nodes[1].cpu, nodes[1].mem_total) == (None, None)
+    storage = await pve.list_storage("pve1")
+    assert [s.name for s in storage] == ["iso", "local-lvm"]
+    lvm = storage[1]
+    assert (lvm.kind, lvm.active, lvm.content, lvm.available) == (
+        "lvmthin",
+        True,
+        ("images", "rootdir"),
+        60,
+    )
+    assert (storage[0].active, storage[0].content, storage[0].total) == (False, (), None)

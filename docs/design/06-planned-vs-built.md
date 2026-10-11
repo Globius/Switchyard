@@ -43,8 +43,8 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | BGP prefix limits (01 routing profile) | missing | *not started*: no model field, no `maximum-prefix` in `frr.conf.j2` | Model field, template line, golden case |
 | Status polling, SSE stream, event catalog, drift detection | done | Drift is reported, never fixed (by design) | |
 | Proxmox adapter, SDN apply, IPAM, SE group deploy, retire (M4) | done | | |
-| Engine host online state | missing | *no API*: A6 notes it is not exposed | Proxmox node-status call in the adapter and a field on `GET /engines` |
-| Proxmox host layout and capacity (Placement) | missing | *no API*; engines only carry `pve_node` and `vmid` | Adapter call for nodes and storage, read endpoint |
+| Engine host online state | done | `host_online` on `GET /engines` (ADR 0049) | |
+| Proxmox host layout and capacity (Placement) | done | `GET /se-groups/{group}/placement` (ADR 0049) | |
 | Certificates: import, PKCS#12 (ADR 0043), replace (ADR 0044), ACME DNS-01 (incl. step-ca), Origin CA, renew job (M5) | done | | |
 | OCSP stapling, cipher and TLS-version profiles, mTLS to client and backend | missing | *not started*: in the 01 mapping, no model field or template output | Model fields, template, golden tests, ADR |
 | Cloudflare-only allow list sync job | done | | |
@@ -111,7 +111,7 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Pools, health monitors (with test), policies | done | | | |
 | Certificates: PEM, PKCS#12, issue, renew, replace | partial | `.p12` upload never run live | *not started* (live check) | Upload a real `.p12` against OpenBao |
 | Networks, VIP pools, allocations, apply SDN | done | | | |
-| SE groups: engines, deploy, register, enrollment, retire | partial | No Placement card; routing mode and networks read-only in group settings; "Host state not reported" | *no API* (host layout and state) | Host API (section 1), then the edit forms |
+| SE groups: engines, deploy, register, enrollment, retire | partial | No Placement card; routing mode and networks read-only in group settings; "Host state not reported" | *UI to wire* (host API done, ADR 0049) | Placement card, then the edit forms |
 | Routing profiles | done | | | |
 | Tenant access and settings | partial | Quota limits only, no usage counts | *no API* | Counts per object type on the tenant read |
 | Admin: tenants, users, identity providers, break-glass, mappings, system tokens | done | | | |
