@@ -10,8 +10,15 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as AdminSplatRouteImport } from './routes/admin.$'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAuditLogRouteImport } from './routes/admin.audit-log'
+import { Route as AdminIdentityProvidersRouteImport } from './routes/admin.identity-providers'
+import { Route as AdminRoleMappingsRouteImport } from './routes/admin.role-mappings'
+import { Route as AdminTenantsRouteImport } from './routes/admin.tenants'
+import { Route as AdminTokensRouteImport } from './routes/admin.tokens'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as TTenantRouteImport } from './routes/t.$tenant'
 import { Route as TTenantShellRouteImport } from './routes/t.$tenant._shell'
 import { Route as TTenantNewRouteImport } from './routes/t.$tenant.new'
@@ -41,15 +48,50 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminSplatRoute = AdminSplatRouteImport.update({
-  id: '/admin/$',
-  path: '/admin/$',
-  getParentRoute: () => rootRouteImport,
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
+  id: '/audit-log',
+  path: '/audit-log',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminIdentityProvidersRoute = AdminIdentityProvidersRouteImport.update({
+  id: '/identity-providers',
+  path: '/identity-providers',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRoleMappingsRoute = AdminRoleMappingsRouteImport.update({
+  id: '/role-mappings',
+  path: '/role-mappings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTenantsRoute = AdminTenantsRouteImport.update({
+  id: '/tenants',
+  path: '/tenants',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTokensRoute = AdminTokensRouteImport.update({
+  id: '/tokens',
+  path: '/tokens',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
 } as any)
 const TTenantRoute = TTenantRouteImport.update({
   id: '/t/$tenant',
@@ -177,9 +219,16 @@ const TTenantShellVirtualServicesIdSettingsRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
-  '/admin/$': typeof AdminSplatRoute
+  '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/role-mappings': typeof AdminRoleMappingsRoute
+  '/admin/tenants': typeof AdminTenantsRoute
+  '/admin/tokens': typeof AdminTokensRoute
+  '/admin/users': typeof AdminUsersRoute
   '/t/$tenant': typeof TTenantRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/$': typeof TTenantShellSplatRoute
   '/t/$tenant/access': typeof TTenantShellAccessRoute
@@ -205,8 +254,14 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/admin/$': typeof AdminSplatRoute
+  '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/role-mappings': typeof AdminRoleMappingsRoute
+  '/admin/tenants': typeof AdminTenantsRoute
+  '/admin/tokens': typeof AdminTokensRoute
+  '/admin/users': typeof AdminUsersRoute
   '/t/$tenant': typeof TTenantShellIndexRoute
+  '/admin': typeof AdminIndexRoute
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/$': typeof TTenantShellSplatRoute
   '/t/$tenant/access': typeof TTenantShellAccessRoute
@@ -230,9 +285,16 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
-  '/admin/$': typeof AdminSplatRoute
+  '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/role-mappings': typeof AdminRoleMappingsRoute
+  '/admin/tenants': typeof AdminTenantsRoute
+  '/admin/tokens': typeof AdminTokensRoute
+  '/admin/users': typeof AdminUsersRoute
   '/t/$tenant': typeof TTenantRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
   '/t/$tenant/_shell': typeof TTenantShellRouteWithChildren
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/_shell/$': typeof TTenantShellSplatRoute
@@ -260,9 +322,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/login'
-    | '/admin/$'
+    | '/admin/audit-log'
+    | '/admin/identity-providers'
+    | '/admin/role-mappings'
+    | '/admin/tenants'
+    | '/admin/tokens'
+    | '/admin/users'
     | '/t/$tenant'
+    | '/admin/'
     | '/t/$tenant/new'
     | '/t/$tenant/$'
     | '/t/$tenant/access'
@@ -288,8 +357,14 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
-    | '/admin/$'
+    | '/admin/audit-log'
+    | '/admin/identity-providers'
+    | '/admin/role-mappings'
+    | '/admin/tenants'
+    | '/admin/tokens'
+    | '/admin/users'
     | '/t/$tenant'
+    | '/admin'
     | '/t/$tenant/new'
     | '/t/$tenant/$'
     | '/t/$tenant/access'
@@ -312,9 +387,16 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/login'
-    | '/admin/$'
+    | '/admin/audit-log'
+    | '/admin/identity-providers'
+    | '/admin/role-mappings'
+    | '/admin/tenants'
+    | '/admin/tokens'
+    | '/admin/users'
     | '/t/$tenant'
+    | '/admin/'
     | '/t/$tenant/_shell'
     | '/t/$tenant/new'
     | '/t/$tenant/_shell/$'
@@ -341,8 +423,8 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
-  AdminSplatRoute: typeof AdminSplatRoute
   TTenantRoute: typeof TTenantRouteWithChildren
 }
 
@@ -355,6 +437,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -362,12 +451,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/$': {
-      id: '/admin/$'
-      path: '/admin/$'
-      fullPath: '/admin/$'
-      preLoaderRoute: typeof AdminSplatRouteImport
-      parentRoute: typeof rootRouteImport
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/audit-log': {
+      id: '/admin/audit-log'
+      path: '/audit-log'
+      fullPath: '/admin/audit-log'
+      preLoaderRoute: typeof AdminAuditLogRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/identity-providers': {
+      id: '/admin/identity-providers'
+      path: '/identity-providers'
+      fullPath: '/admin/identity-providers'
+      preLoaderRoute: typeof AdminIdentityProvidersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/role-mappings': {
+      id: '/admin/role-mappings'
+      path: '/role-mappings'
+      fullPath: '/admin/role-mappings'
+      preLoaderRoute: typeof AdminRoleMappingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/tenants': {
+      id: '/admin/tenants'
+      path: '/tenants'
+      fullPath: '/admin/tenants'
+      preLoaderRoute: typeof AdminTenantsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/tokens': {
+      id: '/admin/tokens'
+      path: '/tokens'
+      fullPath: '/admin/tokens'
+      preLoaderRoute: typeof AdminTokensRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/t/$tenant': {
       id: '/t/$tenant'
@@ -533,6 +664,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminAuditLogRoute: typeof AdminAuditLogRoute
+  AdminIdentityProvidersRoute: typeof AdminIdentityProvidersRoute
+  AdminRoleMappingsRoute: typeof AdminRoleMappingsRoute
+  AdminTenantsRoute: typeof AdminTenantsRoute
+  AdminTokensRoute: typeof AdminTokensRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAuditLogRoute: AdminAuditLogRoute,
+  AdminIdentityProvidersRoute: AdminIdentityProvidersRoute,
+  AdminRoleMappingsRoute: AdminRoleMappingsRoute,
+  AdminTenantsRoute: AdminTenantsRoute,
+  AdminTokensRoute: AdminTokensRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 interface TTenantShellVirtualServicesIdRouteChildren {
   TTenantShellVirtualServicesIdHistoryRoute: typeof TTenantShellVirtualServicesIdHistoryRoute
   TTenantShellVirtualServicesIdRenderedRoute: typeof TTenantShellVirtualServicesIdRenderedRoute
@@ -615,8 +768,8 @@ const TTenantRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
-  AdminSplatRoute: AdminSplatRoute,
   TTenantRoute: TTenantRouteWithChildren,
 }
 export const routeTree = rootRouteImport
