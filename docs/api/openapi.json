@@ -560,6 +560,19 @@
               }
             ],
             "title": "Break Glass Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Revision message, kept on the revision and in the Git mirror commit.",
+            "title": "Message"
           }
         },
         "title": "ApplyIn",
@@ -7071,6 +7084,12 @@
             ],
             "title": "Git Sha"
           },
+          "message": {
+            "default": "",
+            "description": "The message given when it was applied.",
+            "title": "Message",
+            "type": "string"
+          },
           "number": {
             "title": "Number",
             "type": "integer"
@@ -7116,6 +7135,12 @@
               }
             ],
             "title": "Git Sha"
+          },
+          "message": {
+            "default": "",
+            "description": "The message given when it was applied.",
+            "title": "Message",
+            "type": "string"
           },
           "number": {
             "title": "Number",
@@ -25018,6 +25043,7 @@
                       "author": "user:alice",
                       "created_at": "2026-10-10T08:30:00Z",
                       "git_sha": "3f9c2ab",
+                      "message": "Ticket OPS-412: leastconn evens out the long uploads.",
                       "number": 12,
                       "summary": "Switch web-pool to leastconn"
                     }
@@ -25139,6 +25165,7 @@
                   "author": "user:alice",
                   "created_at": "2026-10-10T08:30:00Z",
                   "git_sha": "3f9c2ab",
+                  "message": "Ticket OPS-412: leastconn evens out the long uploads.",
                   "number": 12,
                   "snapshot": {
                     "pools": [

@@ -131,12 +131,13 @@ class World:
         who: Principal | None = None,
         *,
         summary: str = "test change",
+        message: str | None = None,
     ) -> Any:
         """Open a change set, add ``ops``, queue it and run the pipeline. Returns the report."""
         who = who or principal()
         detail = await self.service.open(who, TENANT, summary)
         await self.service.add_ops(who, TENANT, detail.record.id, ops)
-        await self.service.apply(who, TENANT, detail.record.id)
+        await self.service.apply(who, TENANT, detail.record.id, message=message)
         return await self.pipeline.run(TENANT, detail.record.id)
 
 

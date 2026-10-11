@@ -107,7 +107,7 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Approval, apply progress | done | | | |
 | Conflict resolver | partial | Built and unit-tested; never run live against a controller | *not started* (live check) | Provoke a 412 against a real stack |
 | Change sets list, Jobs | done | | | |
-| Revisions: compare, rollback | partial | Revision "message" is read-only; apply takes no message | *no API* | `message` on apply and on the revision |
+| Revisions: compare, rollback | partial | Revision "message" is read-only in the UI; the API now takes `message` on apply (ADR 0046) | *UI to wire* | Message field on the apply dialog |
 | Pools, health monitors (with test), policies | done | | | |
 | Certificates: PEM, PKCS#12, issue, renew, replace | partial | `.p12` upload never run live | *not started* (live check) | Upload a real `.p12` against OpenBao |
 | Networks, VIP pools, allocations, apply SDN | done | | | |
