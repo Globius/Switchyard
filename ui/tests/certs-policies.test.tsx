@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
-import { buildBundle, looksLikePem } from "@/features/certificates/Certificates";
+import { buildBundle, looksLikePem, toBase64 } from "@/features/certificates/Certificates";
 import { parseCidrs } from "@/features/policies/Policies";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
@@ -387,6 +387,61 @@ describe("certificates", () => {
     renderAt("/t/acme/certificates");
     await userEvent.click(await screen.findByRole("button", { name: "Where mqtt is used" }));
     expect(await screen.findByText(/can be deleted/)).toBeInTheDocument();
+  });
+
+  it("imports a PKCS#12 file with its password, sending base64 once", async () => {
+    expect(toBase64(new Uint8Array([0, 1, 2, 250, 255]))).toBe("AAEC+v8=");
+    renderAt("/t/acme/certificates");
+    const imp = await screen.findByRole("button", { name: "Import" });
+    await waitFor(() => expect(imp).toBeEnabled());
+    await userEvent.click(imp);
+    await userEvent.type(await screen.findByLabelText("Name"), "bundle");
+    await userEvent.click(screen.getByRole("button", { name: "PKCS#12 / PFX" }));
+    const add = screen.getByRole("button", { name: "Add to draft" });
+    expect(add).toBeDisabled();
+    await userEvent.upload(
+      screen.getByLabelText("PKCS#12 file"),
+      new File([new Uint8Array([0, 1, 2, 250, 255])], "site.pfx"),
+    );
+    expect(await screen.findByText("Selected site.pfx")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Password"), "s3cret");
+    await waitFor(() => expect(add).toBeEnabled());
+    await userEvent.click(add);
+    await waitFor(() =>
+      expect(imported?.body).toEqual({
+        name: "bundle",
+        pkcs12_b64: "AAEC+v8=",
+        password: "s3cret",
+      }),
+    );
+  });
+
+  it("shows the server's reason for a wrong PKCS#12 password", async () => {
+    server.use(
+      http.post("*/api/v1/tenants/acme/certificates/import", () =>
+        HttpResponse.json(
+          {
+            title: "Validation failed",
+            status: 422,
+            detail: "the PKCS#12 password is wrong",
+            errors: [{ path: "password", code: "bad_password", message: "Wrong password." }],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderAt("/t/acme/certificates");
+    const imp = await screen.findByRole("button", { name: "Import" });
+    await waitFor(() => expect(imp).toBeEnabled());
+    await userEvent.click(imp);
+    await userEvent.type(await screen.findByLabelText("Name"), "bundle");
+    await userEvent.click(screen.getByRole("button", { name: "PKCS#12 / PFX" }));
+    await userEvent.upload(
+      screen.getByLabelText("PKCS#12 file"),
+      new File([new Uint8Array([1])], "a.p12"),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Add to draft" }));
+    expect(await screen.findByText(/Wrong password/)).toBeInTheDocument();
   });
 
   it("shows why an import failed", async () => {
