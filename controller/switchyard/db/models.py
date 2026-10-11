@@ -187,6 +187,9 @@ class CertificateRow(TenantOwnedMixin, Base):
     renew_before_days: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("30")
     )
+    ocsp_stapling: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
 
 
 class PolicySetRow(TenantOwnedMixin, Base):
@@ -293,6 +296,7 @@ class VsPortRow(Base):
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         tenant_fk("vs_id", "virtual_service", cascade=True),
         CheckConstraint("port BETWEEN 1 AND 65535", name="port"),
+        enum_check("tls_profile", dm.TlsProfile),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -302,6 +306,7 @@ class VsPortRow(Base):
     http2: Mapped[bool] = mapped_column(Boolean, nullable=False)
     proxy_protocol: Mapped[bool] = mapped_column(Boolean, nullable=False)
     https_redirect_port: Mapped[int | None] = mapped_column(Integer)
+    tls_profile: Mapped[str | None] = mapped_column(Text)
 
 
 class VsRouteRow(Base):

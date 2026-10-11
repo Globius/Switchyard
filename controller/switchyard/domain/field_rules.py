@@ -19,7 +19,13 @@ UDP_FORBIDDEN_SERVICE_FIELDS = (
     "routes",
 )
 #: Fields of a port that a UDP service cannot use.
-UDP_FORBIDDEN_PORT_FIELDS = ("tls", "proxy_protocol", "http2", "https_redirect_port")
+UDP_FORBIDDEN_PORT_FIELDS = (
+    "tls",
+    "proxy_protocol",
+    "http2",
+    "https_redirect_port",
+    "tls_profile",
+)
 
 
 @dataclass(frozen=True)

@@ -82,7 +82,9 @@ def full_data() -> dict:  # type: ignore[type-arg]
             "members": [{"address": "10.20.0.30", "port": 6443}],
         }
     )
+    data["certificates"][0].update(source="acme", ocsp_stapling=True, renew_before_days=14)
     vs = data["virtual_services"][0]
+    vs["ports"][0]["tls_profile"] = "modern"
     vs.update(
         policy_set_ids=["ps-redir"],
         allow_list_id="ps-cf",

@@ -88,6 +88,8 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
 | Pool `persistence` (source IP) | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
 | Pool `passive_check`, `slow_start_s` | server options `observe <layer> error-limit <n> on-error <action>` and `slowstart <n>s`; both need the pool's health monitor (ADR 0066) |
+| Port `tls_profile` | `ssl-min-ver`, `ciphers` and `ciphersuites` on the TLS `bind` (`modern`, `intermediate`, `legacy`; none keeps the default), see ADR 0067 |
+| Certificate `ocsp_stapling` | `[ocsp-update on]` on the certificate's `crt-list` line |
 | Pool `tls`, `tls_verify` | server options `ssl verify none` or `ssl verify required ca-file /etc/ssl/certs/ca-certificates.crt`, plus `sni` from the Host header on HTTP pools |
 | Member `address`, `port` | `server <name> <ip>[:<port>]`; a member without a port uses the client's port |
 | Member `weight`, `admin_state` | `weight <n>`; `drain` and `disabled` both add the `disabled` keyword (see ADR 0006) |

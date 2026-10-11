@@ -95,6 +95,19 @@ class CertSource(enum.StrEnum):
     STEP_CA = "step_ca"
 
 
+class TlsProfile(enum.StrEnum):
+    """Protocol versions and ciphers a TLS port offers (Mozilla's server-side TLS guidelines).
+
+    ``modern``: TLS 1.3 only. ``intermediate``: TLS 1.2 and 1.3 with forward-secret AEAD ciphers.
+    ``legacy``: TLS 1.0 to 1.3 for old clients; use it only while such clients exist. A port
+    without a profile keeps the engine default: TLS 1.2 or later with HAProxy's own cipher list.
+    """
+
+    MODERN = "modern"
+    INTERMEDIATE = "intermediate"
+    LEGACY = "legacy"
+
+
 class RenewPolicy(enum.StrEnum):
     """Whether the controller renews the certificate."""
 
@@ -351,6 +364,8 @@ class VsPort(Model):
         proxy_protocol: Accept the PROXY protocol header from the client side.
         https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port
             (which must be a TLS port of the same service).
+        tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine
+            default (TLS 1.2 or later, HAProxy's default ciphers).
     """
 
     port: Port
@@ -358,11 +373,14 @@ class VsPort(Model):
     http2: bool = False
     proxy_protocol: bool = False
     https_redirect_port: Port | None = None
+    tls_profile: TlsProfile | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         if self.http2 and not self.tls:
             raise ValueError("http2 requires tls")
+        if self.tls_profile is not None and not self.tls:
+            raise ValueError("tls_profile requires tls")
         if self.https_redirect_port is not None and self.tls:
             raise ValueError("https_redirect_port is only valid on a plaintext port")
         return self
@@ -614,6 +632,9 @@ class Certificate(TenantOwned):
         renew_policy: Whether the controller renews it.
         renew_before_days: How many days before ``not_after`` an ``auto`` certificate is
             renewed (the artboard's "Auto, 30 days before").
+        ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate
+            (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not
+            ``cloudflare_origin``.
     """
 
     source: CertSource
@@ -622,9 +643,12 @@ class Certificate(TenantOwned):
     secret_ref: SecretRef
     renew_policy: RenewPolicy = RenewPolicy.MANUAL
     renew_before_days: int = Field(default=30, ge=1, le=365)
+    ocsp_stapling: bool = False
 
     @model_validator(mode="after")
     def _checked(self) -> Self:
+        if self.ocsp_stapling and self.source is CertSource.CLOUDFLARE_ORIGIN:
+            raise ValueError("Cloudflare Origin CA certificates have no OCSP responder")
         if self.not_after.tzinfo is None:
             raise ValueError("not_after must be timezone-aware")
         if len(set(self.sans)) != len(self.sans):

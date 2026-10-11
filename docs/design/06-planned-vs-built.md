@@ -46,7 +46,8 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Engine host online state | done | `host_online` on `GET /engines` (ADR 0049) | |
 | Proxmox host layout and capacity (Placement) | done | `GET /se-groups/{group}/placement` (ADR 0049) | |
 | Certificates: import, PKCS#12 (ADR 0043), replace (ADR 0044), ACME DNS-01 (incl. step-ca), Origin CA, renew job (M5) | done | | |
-| OCSP stapling, cipher and TLS-version profiles, mTLS to client and backend | missing | *not started*: in the 01 mapping, no model field or template output | Model fields, template, golden tests, ADR |
+| OCSP stapling, cipher and TLS-version profiles | done | `tls_profile` on ports, `ocsp_stapling` on certificates (ADR 0067) | |
+| mTLS to client and backend | missing | *not started*: needs a CA bundle object and agent bundle support (ADR 0067) | CA object, bundle, ADR |
 | Cloudflare-only allow list sync job | done | | |
 | Cloudflare DNS record created from a virtual service | partial | Adapter has DNS calls; no service flow uses them (01 phase 2) | A job or change-set hook plus a model flag |
 | Login: OIDC, SAML, break-glass, sessions, refresh (T1, G1-2, G1-4, G1-7) | done | | |

@@ -119,6 +119,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 secret_ref=c.secret_ref,
                 renew_policy=c.renew_policy.value,
                 renew_before_days=c.renew_before_days,
+                ocsp_stapling=c.ocsp_stapling,
             )
         )
     for ps in snapshot.policy_sets:
@@ -217,6 +218,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     http2=port.http2,
                     proxy_protocol=port.proxy_protocol,
                     https_redirect_port=port.https_redirect_port,
+                    tls_profile=port.tls_profile.value if port.tls_profile else None,
                 )
             )
         for i, r in enumerate(s.routes):
@@ -369,6 +371,7 @@ def rows_to_snapshot(
                 "secret_ref": c.secret_ref,
                 "renew_policy": c.renew_policy,
                 "renew_before_days": c.renew_before_days,
+                "ocsp_stapling": c.ocsp_stapling,
             }
             for c in certificates
         ],
@@ -433,6 +436,7 @@ def rows_to_snapshot(
                         "http2": p.http2,
                         "proxy_protocol": p.proxy_protocol,
                         "https_redirect_port": p.https_redirect_port,
+                        "tls_profile": p.tls_profile,
                     }
                     for p in sorted(ports.get(s.id, []), key=lambda r: r.port)
                 ],

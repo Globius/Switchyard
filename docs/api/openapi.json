@@ -1621,7 +1621,7 @@
       },
       "Certificate": {
         "additionalProperties": false,
-        "description": "Certificate metadata. Key material lives in OpenBao; only ``secret_ref`` is stored.\n\nAttributes:\n    source: Where it came from.\n    sans: Subject alternative names; wildcards cover one label.\n    not_after: Expiry (timezone-aware).\n    secret_ref: OpenBao path of the PEM bundle.\n    renew_policy: Whether the controller renews it.\n    renew_before_days: How many days before ``not_after`` an ``auto`` certificate is\n        renewed (the artboard's \"Auto, 30 days before\").",
+        "description": "Certificate metadata. Key material lives in OpenBao; only ``secret_ref`` is stored.\n\nAttributes:\n    source: Where it came from.\n    sans: Subject alternative names; wildcards cover one label.\n    not_after: Expiry (timezone-aware).\n    secret_ref: OpenBao path of the PEM bundle.\n    renew_policy: Whether the controller renews it.\n    renew_before_days: How many days before ``not_after`` an ``auto`` certificate is\n        renewed (the artboard's \"Auto, 30 days before\").\n    ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate\n        (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not\n        ``cloudflare_origin``.",
         "properties": {
           "id": {
             "format": "uuid",
@@ -1636,6 +1636,11 @@
             "format": "date-time",
             "title": "Not After",
             "type": "string"
+          },
+          "ocsp_stapling": {
+            "default": false,
+            "title": "Ocsp Stapling",
+            "type": "boolean"
           },
           "renew_before_days": {
             "default": 30,
@@ -1699,6 +1704,11 @@
             "title": "Not After",
             "type": "string"
           },
+          "ocsp_stapling": {
+            "default": false,
+            "title": "Ocsp Stapling",
+            "type": "boolean"
+          },
           "renew_before_days": {
             "default": 30,
             "maximum": 365.0,
@@ -1761,6 +1771,17 @@
               }
             ],
             "title": "Not After"
+          },
+          "ocsp_stapling": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocsp Stapling"
           },
           "renew_before_days": {
             "anyOf": [
@@ -1851,6 +1872,11 @@
             "format": "date-time",
             "title": "Not After",
             "type": "string"
+          },
+          "ocsp_stapling": {
+            "default": false,
+            "title": "Ocsp Stapling",
+            "type": "boolean"
           },
           "renew_before_days": {
             "default": 30,
@@ -9543,6 +9569,16 @@
         "title": "TenantSummary",
         "type": "object"
       },
+      "TlsProfile": {
+        "description": "Protocol versions and ciphers a TLS port offers (Mozilla's server-side TLS guidelines).\n\n``modern``: TLS 1.3 only. ``intermediate``: TLS 1.2 and 1.3 with forward-secret AEAD ciphers.\n``legacy``: TLS 1.0 to 1.3 for old clients; use it only while such clients exist. A port\nwithout a profile keeps the engine default: TLS 1.2 or later with HAProxy's own cipher list.",
+        "enum": [
+          "modern",
+          "intermediate",
+          "legacy"
+        ],
+        "title": "TlsProfile",
+        "type": "string"
+      },
       "TokenCreated": {
         "additionalProperties": false,
         "description": "A new API token; the plaintext is shown once.",
@@ -11339,7 +11375,7 @@
       },
       "VsPort": {
         "additionalProperties": false,
-        "description": "One listening port on a virtual service's VIP.\n\nAttributes:\n    port: Listening port.\n    tls: Terminate TLS on this port using the service's certificates.\n    http2: Offer HTTP/2 via ALPN (requires ``tls``).\n    proxy_protocol: Accept the PROXY protocol header from the client side.\n    https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port\n        (which must be a TLS port of the same service).",
+        "description": "One listening port on a virtual service's VIP.\n\nAttributes:\n    port: Listening port.\n    tls: Terminate TLS on this port using the service's certificates.\n    http2: Offer HTTP/2 via ALPN (requires ``tls``).\n    proxy_protocol: Accept the PROXY protocol header from the client side.\n    https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port\n        (which must be a TLS port of the same service).\n    tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine\n        default (TLS 1.2 or later, HAProxy's default ciphers).",
         "properties": {
           "http2": {
             "default": false,
@@ -11370,6 +11406,16 @@
             "default": false,
             "title": "Tls",
             "type": "boolean"
+          },
+          "tls_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TlsProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
