@@ -7,24 +7,17 @@ import { useMe } from "@/auth/session";
 export type ChangeSetSummary = components["schemas"]["ChangeSetSummary"];
 
 /**
- * The caller's open draft (state `draft` or `pending_approval`), or undefined.
- *
- * The API's author is `user:<provider>:<subject>` for sessions and `token:<name>` for tokens, and
- * `/me` does not return it, so this matches the name, the email or a trailing `:<name>`. That is
- * a guess for providers whose subject differs from the user name; `/me` should return the author
- * string (raised with backend). Other people's drafts are listed on the Change sets page, not here.
+ * The caller's open draft (state `draft` or `pending_approval`), or undefined. A draft is yours
+ * when its `author` is the `principal` that `GET /me` returns. Other people's drafts are listed
+ * on the Change sets page, not here.
  */
 export function pickOwnDraft(
   items: ChangeSetSummary[],
-  me: { name: string; email?: string | null } | undefined,
+  me: { principal?: string } | undefined,
 ): ChangeSetSummary | undefined {
-  if (!me) return undefined;
+  if (!me?.principal) return undefined;
   return items.find(
-    (c) =>
-      (c.state === "draft" || c.state === "pending_approval") &&
-      (c.author === me.name ||
-        c.author.endsWith(`:${me.name}`) ||
-        (me.email != null && c.author === me.email)),
+    (c) => (c.state === "draft" || c.state === "pending_approval") && c.author === me.principal,
   );
 }
 

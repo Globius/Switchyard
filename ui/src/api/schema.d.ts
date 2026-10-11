@@ -4520,6 +4520,11 @@ export interface components {
             is_system: boolean;
             /** Name */
             name: string;
+            /**
+             * Principal
+             * @description Author string the API stores for this caller's writes (a draft's `author`), such as `user:local:breakglass`; generally `user:<provider>:<subject>`.
+             */
+            principal: string;
             /** @description Null for API tokens. */
             session: components["schemas"]["MeSession"] | null;
             /** Tenants */
@@ -7608,6 +7613,7 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "name": "Alice Example",
+                     *       "principal": "user:authentik:alice",
                      *       "session": {
                      *         "expires_at": "2026-10-10T16:00:00Z",
                      *         "grants_computed_at": "2026-10-10T12:00:30Z",
@@ -7939,6 +7945,7 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "name": "Alice Example",
+                     *       "principal": "user:authentik:alice",
                      *       "session": {
                      *         "expires_at": "2026-10-10T16:00:00Z",
                      *         "grants_computed_at": "2026-10-10T12:00:30Z",
@@ -8883,6 +8890,7 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "name": "Alice Example",
+                     *       "principal": "user:authentik:alice",
                      *       "session": {
                      *         "expires_at": "2026-10-10T16:00:00Z",
                      *         "grants_computed_at": "2026-10-10T12:00:30Z",
