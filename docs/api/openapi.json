@@ -8844,13 +8844,21 @@
             "additionalProperties": {
               "type": "integer"
             },
-            "description": "Object-count limits by object type.",
+            "description": "Object-count limits by object type name (`virtual_service`, `pool`, ...).",
             "title": "Quotas",
             "type": "object"
           },
           "require_approval": {
             "title": "Require Approval",
             "type": "boolean"
+          },
+          "usage": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Objects the tenant owns now, by object type name (zeros included).",
+            "title": "Usage",
+            "type": "object"
           },
           "version": {
             "title": "Version",
@@ -11138,12 +11146,13 @@
             }
           },
           {
-            "description": "",
+            "description": "`csv` or `jsonl`.",
             "in": "query",
             "name": "format",
             "required": false,
             "schema": {
               "default": "csv",
+              "description": "`csv` or `jsonl`.",
               "title": "Format",
               "type": "string"
             }
@@ -11304,10 +11313,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/x-ndjson": {},
-              "text/csv": {}
+              "application/x-ndjson": {
+                "example": "{\"action\": \"change_set.apply\", \"actor\": \"user:alice\", \"at\": \"2026-10-11T08:30:00Z\", \"diff\": null, \"object\": \"change_set:1\", \"request_id\": \"r-1\", \"tenant_id\": null}\n"
+              },
+              "text/csv": {
+                "example": "at,tenant_id,actor,action,object,request_id,diff\n2026-10-11T08:30:00Z,,user:alice,change_set.apply,change_set:1,r-1,\n"
+              }
             },
-            "description": "Successful Response"
+            "description": "The events as a file."
           },
           "400": {
             "content": {
@@ -14947,9 +14960,14 @@
                     "id": "0192f3a0-0000-7000-8000-000000000001",
                     "name": "acme",
                     "quotas": {
-                      "virtual_services": 50
+                      "virtual_service": 50
                     },
                     "require_approval": true,
+                    "usage": {
+                      "network": 2,
+                      "pool": 20,
+                      "virtual_service": 12
+                    },
                     "version": 2
                   }
                 ],
@@ -15058,9 +15076,14 @@
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
                   "quotas": {
-                    "virtual_services": 50
+                    "virtual_service": 50
                   },
                   "require_approval": true,
+                  "usage": {
+                    "network": 2,
+                    "pool": 20,
+                    "virtual_service": 12
+                  },
                   "version": 2
                 },
                 "schema": {
@@ -15252,9 +15275,14 @@
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
                   "quotas": {
-                    "virtual_services": 50
+                    "virtual_service": 50
                   },
                   "require_approval": true,
+                  "usage": {
+                    "network": 2,
+                    "pool": 20,
+                    "virtual_service": 12
+                  },
                   "version": 2
                 },
                 "schema": {
@@ -15389,9 +15417,14 @@
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
                   "quotas": {
-                    "virtual_services": 50
+                    "virtual_service": 50
                   },
                   "require_approval": true,
+                  "usage": {
+                    "network": 2,
+                    "pool": 20,
+                    "virtual_service": 12
+                  },
                   "version": 2
                 },
                 "schema": {
@@ -15744,12 +15777,13 @@
             }
           },
           {
-            "description": "",
+            "description": "`csv` or `jsonl`.",
             "in": "query",
             "name": "format",
             "required": false,
             "schema": {
               "default": "csv",
+              "description": "`csv` or `jsonl`.",
               "title": "Format",
               "type": "string"
             }
@@ -15910,10 +15944,14 @@
         "responses": {
           "200": {
             "content": {
-              "application/x-ndjson": {},
-              "text/csv": {}
+              "application/x-ndjson": {
+                "example": "{\"action\": \"change_set.apply\", \"actor\": \"user:alice\", \"at\": \"2026-10-11T08:30:00Z\", \"diff\": null, \"object\": \"change_set:1\", \"request_id\": \"r-1\", \"tenant_id\": null}\n"
+              },
+              "text/csv": {
+                "example": "at,tenant_id,actor,action,object,request_id,diff\n2026-10-11T08:30:00Z,,user:alice,change_set.apply,change_set:1,r-1,\n"
+              }
             },
-            "description": "Successful Response"
+            "description": "The events as a file."
           },
           "400": {
             "content": {

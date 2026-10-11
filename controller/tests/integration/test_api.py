@@ -949,3 +949,28 @@ async def test_audit_export_pages_through_more_than_one_page(api: Api) -> None:
     assert len(events) >= 5 and len({(e["at"], e["request_id"], e["action"]) for e in events}) > 2
     assert [e["at"] for e in events] == sorted((e["at"] for e in events), reverse=True)
     assert len(events) <= len(total["items"]) + 1
+
+
+async def test_tenant_read_reports_usage_and_quotas_block_growth(api: Api) -> None:
+    root = await api.token(Role.SYSTEM_ADMIN)
+    before = (await api.client.get(f"{V1}/tenants/acme", headers=root)).json()
+    pools = before["usage"]["pool"]
+    assert pools >= 1 and before["usage"]["virtual_service"] >= 1
+    bad = await api.client.patch(
+        f"{V1}/tenants/acme", json={"quotas": {"nope": 1}}, headers={**root, "If-Match": '"1"'}
+    )
+    assert bad.status_code == 422
+    ok = await api.client.patch(
+        f"{V1}/tenants/acme",
+        json={"quotas": {"pool": pools}},
+        headers={**root, "If-Match": f'"{before["version"]}"'},
+    )
+    assert ok.status_code == 200 and ok.json()["usage"]["pool"] == pools
+    h = await api.token()
+    refused = await api.client.post(
+        f"{V1}/tenants/acme/pools?apply=true",
+        json={"name": "one-too-many", "members": []},
+        headers=h,
+    )
+    assert refused.status_code == 422
+    assert "quota_exceeded" in refused.text

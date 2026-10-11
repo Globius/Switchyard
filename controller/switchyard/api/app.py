@@ -574,6 +574,22 @@ async def _audit_page(session: Any, f: AuditFilters) -> Page[Any]:
 
 EXPORT_FORMATS = {"csv": "text/csv", "jsonl": "application/x-ndjson"}
 EXPORT_PAGE = 500
+EXPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
+    200: {
+        "description": "The events as a file.",
+        "content": {
+            "text/csv": {
+                "example": "at,tenant_id,actor,action,object,request_id,diff\n"
+                "2026-10-11T08:30:00Z,,user:alice,change_set.apply,change_set:1,r-1,\n"
+            },
+            "application/x-ndjson": {
+                "example": '{"action": "change_set.apply", "actor": "user:alice", '
+                '"at": "2026-10-11T08:30:00Z", "diff": null, "object": "change_set:1", '
+                '"request_id": "r-1", "tenant_id": null}\n'
+            },
+        },
+    }
+}
 CSV_COLUMNS = ("at", "tenant_id", "actor", "action", "object", "request_id", "diff")
 
 
@@ -3465,14 +3481,14 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "`audit.export`. Requires any role in the tenant, like the list."
         ),
         response_class=StreamingResponse,
-        responses={200: {"content": {"text/csv": {}, "application/x-ndjson": {}}}},
+        responses=EXPORT_RESPONSES,
     )
     async def export_audit_events(
         tenant: Tenant,
         who: Who,
         svc: Services,
         filters: Annotated[AuditFilters, Depends()],
-        format: Annotated[str, Query()] = "csv",  # noqa: A002 - the query parameter is the API
+        format: Annotated[str, Query(description="`csv` or `jsonl`.")] = "csv",  # noqa: A002
     ) -> StreamingResponse:
         filters.tenant_id = tenant.id
         async with tenant_session(svc.db.app, [tenant.id]) as session:
@@ -3497,14 +3513,14 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "events; narrow it with `tenant` (id or name). Requires `system-admin`."
         ),
         response_class=StreamingResponse,
-        responses={200: {"content": {"text/csv": {}, "application/x-ndjson": {}}}},
+        responses=EXPORT_RESPONSES,
     )
     async def export_system_audit_events(
         who: Who,
         svc: Services,
         filters: Annotated[AuditFilters, Depends()],
         tenant: Annotated[str | None, Query(description="Tenant id or name.")] = None,
-        format: Annotated[str, Query()] = "csv",  # noqa: A002 - the query parameter is the API
+        format: Annotated[str, Query(description="`csv` or `jsonl`.")] = "csv",  # noqa: A002
     ) -> StreamingResponse:
         require(who, "manage", "tenant")
         if tenant:

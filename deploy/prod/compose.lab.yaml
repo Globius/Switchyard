@@ -1,0 +1,76 @@
+# Three-node cluster on ONE Docker host, for testing failover and restore (not for production).
+#   docker compose -f compose.lab.yaml up -d --build --wait
+name: switchyard-lab
+x-patroni: &patroni
+  build: ./patroni
+  image: switchyard-patroni:17
+  depends_on: [etcd1, etcd2, etcd3]
+  environment: &pe
+    PATRONI_ETCD3_HOSTS: etcd1:2379,etcd2:2379,etcd3:2379
+    PATRONI_SUPERUSER_PASSWORD: lab-superuser
+    PATRONI_REPLICATION_PASSWORD: lab-replication
+    PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+    PGBACKREST_STANZA: switchyard
+    PGBACKREST_PG1_PATH: /data/pgdata
+    PGBACKREST_PG1_SOCKET_PATH: /var/run/postgresql
+    PGBACKREST_REPO1_TYPE: posix
+    PGBACKREST_REPO1_PATH: /var/lib/pgbackrest
+    PGBACKREST_REPO1_RETENTION_FULL: "2"
+    PGBACKREST_LOG_PATH: /var/log/pgbackrest
+x-etcd: &etcd
+  image: quay.io/coreos/etcd:v3.5.17
+services:
+  etcd1:
+    <<: *etcd
+    command: [etcd, --name=etcd1, --data-dir=/d, "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://etcd1:2379", "--listen-peer-urls=http://0.0.0.0:2380", "--initial-advertise-peer-urls=http://etcd1:2380", "--initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380", --initial-cluster-token=lab]
+  db1:
+    <<: *patroni
+    hostname: db1
+    environment:
+      <<: *pe
+      PATRONI_NAME: db1
+      PATRONI_RESTAPI_CONNECT_ADDRESS: db1:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: db1:5432
+    volumes: [pgdata1:/data, repo:/var/lib/pgbackrest]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:8008/health"]
+      interval: 3s
+      retries: 40
+  etcd2:
+    <<: *etcd
+    command: [etcd, --name=etcd2, --data-dir=/d, "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://etcd2:2379", "--listen-peer-urls=http://0.0.0.0:2380", "--initial-advertise-peer-urls=http://etcd2:2380", "--initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380", --initial-cluster-token=lab]
+  db2:
+    <<: *patroni
+    hostname: db2
+    environment:
+      <<: *pe
+      PATRONI_NAME: db2
+      PATRONI_RESTAPI_CONNECT_ADDRESS: db2:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: db2:5432
+    volumes: [pgdata2:/data, repo:/var/lib/pgbackrest]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:8008/health"]
+      interval: 3s
+      retries: 40
+  etcd3:
+    <<: *etcd
+    command: [etcd, --name=etcd3, --data-dir=/d, "--listen-client-urls=http://0.0.0.0:2379", "--advertise-client-urls=http://etcd3:2379", "--listen-peer-urls=http://0.0.0.0:2380", "--initial-advertise-peer-urls=http://etcd3:2380", "--initial-cluster=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380", --initial-cluster-token=lab]
+  db3:
+    <<: *patroni
+    hostname: db3
+    environment:
+      <<: *pe
+      PATRONI_NAME: db3
+      PATRONI_RESTAPI_CONNECT_ADDRESS: db3:8008
+      PATRONI_POSTGRESQL_CONNECT_ADDRESS: db3:5432
+    volumes: [pgdata3:/data, repo:/var/lib/pgbackrest]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf localhost:8008/health"]
+      interval: 3s
+      retries: 40
+  haproxy:
+    image: haproxy:3.2
+    ports: ["127.0.0.1:15432:5432"]
+    volumes: [./haproxy-lab.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro]
+    depends_on: [db1, db2, db3]
+volumes: {repo: {}, pgdata1: {}, pgdata2: {}, pgdata3: {}}

@@ -45,3 +45,4 @@ Date: YYYY-MM-DD
 | [0018](0018-saml-login.md) | SAML 2.0 login (signxml, signed assertions, replay cache, SP metadata) | Accepted |
 | [0042](0042-ui-theme-and-fonts.md) | UI theme: shadcn tokens, status tokens and fonts | Accepted |
 | [0060](0060-audit-export.md) | Audit export endpoint | Accepted |
+| [0045](0045-tenant-quota-enforcement.md) | Tenant quota enforcement and usage counts | Accepted |
