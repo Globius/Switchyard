@@ -1,6 +1,7 @@
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { t } from "@/lib/i18n";
 import { useObjectAudit, useObjectRevisions, useVs } from "./detail-queries";
+import { principalName, shortWhen } from "@/lib/format";
 
 /** Revisions and audit events for one service. */
 export function VsHistory({ tenant, id }: { tenant: string; id: string }) {
@@ -38,9 +39,9 @@ export function VsHistory({ tenant, id }: { tenant: string; id: string }) {
             <li key={r.number} className="flex items-center gap-4 px-4 py-3 text-[13px]">
               <span className="font-mono">#{r.number}</span>
               <span className="flex-1">{r.summary}</span>
-              <span className="text-muted-foreground">{r.author}</span>
+              <span className="text-muted-foreground">{principalName(r.author)}</span>
               <time className="text-muted-foreground" dateTime={r.created_at}>
-                {new Date(r.created_at).toLocaleString()}
+                {shortWhen(r.created_at)}
               </time>
             </li>
           ))}
@@ -52,9 +53,9 @@ export function VsHistory({ tenant, id }: { tenant: string; id: string }) {
           {audit.data!.items.map((e, i) => (
             <li key={`${e.at}-${i}`} className="flex items-center gap-4 px-4 py-3 text-[13px]">
               <span className="font-mono">{e.action}</span>
-              <span className="text-muted-foreground">{e.actor}</span>
+              <span className="text-muted-foreground">{principalName(e.actor)}</span>
               <time className="ml-auto text-muted-foreground" dateTime={e.at}>
-                {new Date(e.at).toLocaleString()}
+                {shortWhen(e.at)}
               </time>
             </li>
           ))}

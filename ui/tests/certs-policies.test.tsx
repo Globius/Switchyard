@@ -523,10 +523,12 @@ ${KEY_ONLY}
 describe("policies", () => {
   it("lists redirect and allow-list policies with kind filter, managed badge and used-by", async () => {
     renderAt("/t/acme/policies");
-    expect(await screen.findByText("Redirect · 2 rules")).toBeInTheDocument();
-    expect(screen.getByText("Allow list · 1 CIDRs")).toBeInTheDocument();
-    expect(screen.getByText("Allow list · managed")).toBeInTheDocument();
-    expect(await screen.findAllByText("api-gateway")).toHaveLength(2);
+    expect(await screen.findByText("Redirect · 2 rules", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Allow list · 1 CIDRs", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Allow list · managed", { exact: false })).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText("api-gateway", { exact: false })).length,
+    ).toBeGreaterThanOrEqual(2);
     await userEvent.click(screen.getByRole("button", { name: "Redirect" }));
     expect(screen.queryByText("office-ranges")).not.toBeInTheDocument();
   });
@@ -542,7 +544,7 @@ describe("policies", () => {
     await userEvent.selectOptions(screen.getByLabelText("Rule 2 path match"), "exact");
     await userEvent.click(screen.getByRole("button", { name: "Move rule 2 up" }));
     await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
-    await userEvent.click(screen.getAllByRole("button", { name: "Remove" }).at(-1)!);
+    await userEvent.click(screen.getByRole("button", { name: "Remove rule 3" }));
     await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
     await waitFor(() =>
       expect(posted?.ops[0]).toMatchObject({

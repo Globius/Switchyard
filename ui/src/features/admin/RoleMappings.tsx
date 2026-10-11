@@ -324,7 +324,7 @@ export function RoleMappings() {
               <EmptyState title={t("No tenants yet")} body={t("Create a tenant first.")} />
             ) : (
               <>
-                <div role="tablist" className="flex gap-1 border-b px-4">
+                <div role="tablist" className="flex gap-1 overflow-x-auto border-b px-4">
                   {tenantItems.map((x) => (
                     <button
                       key={x.id}
