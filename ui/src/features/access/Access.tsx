@@ -338,6 +338,8 @@ function Tokens({ tenant, myRole }: { tenant: string; myRole: Role | undefined }
       unwrap(await api.GET("/api/v1/tenants/{t}/tokens", { params: { path: { t: tenant } } })),
   });
   const create = useMutation({
+    // The created token is shown once; do not keep it in the mutation cache.
+    gcTime: 0,
     mutationFn: async () =>
       unwrap(
         await api.POST("/api/v1/tenants/{t}/tokens", {
@@ -444,6 +446,7 @@ function Tokens({ tenant, myRole }: { tenant: string; myRole: Role | undefined }
             if (!o && !(shown && !stored)) {
               setCreating(false);
               setShown(null);
+              create.reset();
               setStored(false);
             }
           }}
@@ -457,6 +460,7 @@ function Tokens({ tenant, myRole }: { tenant: string; myRole: Role | undefined }
                 onClick={() => {
                   setCreating(false);
                   setShown(null);
+                  create.reset();
                   setStored(false);
                 }}
               >

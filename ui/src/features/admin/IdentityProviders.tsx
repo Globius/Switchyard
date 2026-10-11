@@ -338,7 +338,12 @@ function BreakGlass() {
           body: { username: status.data?.admin?.username ?? "breakglass" },
         }),
       ),
-    onSuccess: (r) => setEnrol(r),
+    gcTime: 0,
+    onSuccess: (r) => {
+      setEnrol(r);
+      // The password and authenticator secret live in component state only while the dialog is open.
+      setTimeout(() => enrolAdmin.reset(), 0);
+    },
   });
   const confirm = useMutation({
     mutationFn: async () =>

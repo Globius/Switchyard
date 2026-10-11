@@ -149,6 +149,7 @@ const ROUTES: [RegExp, unknown][] = [
     },
   ],
   [/\/engines$/, []],
+  [/\/principals$/, []],
 ];
 
 async function mock(route: Route) {

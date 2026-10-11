@@ -316,6 +316,7 @@ function EnginesCard({
                               disabled: !manage.allowed,
                               onSelect: async () => {
                                 const r = await act.mutateAsync({ kind: "token", engine: e.id });
+                                act.reset();
                                 setTokenStored(false);
                                 setToken({
                                   name: e.name,
