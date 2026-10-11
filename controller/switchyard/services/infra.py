@@ -417,11 +417,15 @@ class InfraService:
                         .scalars()
                         .all()
                     )
-                    used = [ipam_address(r.mgmt_ip) for r in rows if r.mgmt_ip]
-                    used_data: dict[UUID, list[dm.IPAddress]] = {}
-                    for r in rows:
+                    # Addresses are taken across the whole tenant, not just this group: groups share
+                    # networks and pools, and two engines must never get the same address.
+                    everyone = (await session.execute(select(ServiceEngineRow))).scalars().all()
+                    taken: dict[UUID, list[dm.IPAddress]] = {}
+                    for r in everyone:
+                        if r.mgmt_ip:
+                            taken.setdefault(mgmt.id, []).append(ipam_address(r.mgmt_ip))
                         for entry in r.data_ips:
-                            used_data.setdefault(UUID(entry["network_id"]), []).append(
+                            taken.setdefault(UUID(entry["network_id"]), []).append(
                                 ipam_address(entry["address"])
                             )
                     existing = sorted(r.name for r in rows)
@@ -433,8 +437,8 @@ class InfraService:
                     name = f"{group.name}-{number}"
                     if name in taken_names:
                         continue
-                    address = ipam.allocate(pool, mgmt, used)
-                    used.append(address)
+                    address = ipam.allocate(pool, mgmt, taken.setdefault(mgmt.id, []))
+                    taken[mgmt.id].append(address)
                     nic_cidrs: list[str | None] = []
                     data_ips: list[dict[str, str]] = []
                     for net in extra_nets:
@@ -442,9 +446,9 @@ class InfraService:
                         if data_pool is None:
                             nic_cidrs.append(None)
                             continue
-                        taken = used_data.setdefault(net.id, [])
-                        data_address = ipam.allocate(data_pool, net, taken)
-                        taken.append(data_address)
+                        on_net = taken.setdefault(net.id, [])
+                        data_address = ipam.allocate(data_pool, net, on_net)
+                        on_net.append(data_address)
                         nic_cidrs.append(f"{data_address}/{net.cidr.prefixlen}")
                         data_ips.append({"network_id": str(net.id), "address": str(data_address)})
                     spec = VmSpec(

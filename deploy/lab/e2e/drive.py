@@ -1,8 +1,12 @@
-"""API steps of the end-to-end lab. Runs inside the controller container: python - <phase> < drive.py
+"""API steps of the end-to-end lab. Runs inside the controller container: python - <command> [args] < drive.py
 
-Phases: deploy (grow the group with LXC engines, print engine details and an enrollment token),
-vs (create the virtual service and wait for the rollout), status (print engine status).
-Environment: SY_TOKEN (admin API token). Prints one JSON object per phase.
+Commands:
+  deploy GROUP COUNT      grow the group to COUNT LXC engines (data NICs addressed from pools); print the group's
+                          engines, with a fresh enrollment token for every engine that has not enrolled
+  vs NAME GROUP VIP       create an HTTP virtual service on the pool `controller-api` and wait for the rollout
+  status                  engine status (reachability, members, VRRP, BGP, drift)
+  lastapply               log and result of the newest apply job
+Environment: SY_TOKEN (admin API token), TEMPLATE_VMID. Prints one JSON document.
 """
 
 import asyncio
@@ -21,48 +25,59 @@ TENANT = "lab"
 class Lab(ApiClient):
     def __init__(self) -> None:
         super().__init__(Profile("https://127.0.0.1:8443", os.environ["SY_TOKEN"]))
-        self._http._transport = httpx.AsyncHTTPTransport(verify=ssl.create_default_context(cafile="/e2e/ca.pem"))  # noqa: SLF001
+        ctx = ssl.create_default_context(cafile="/e2e/ca.pem")
+        self._http._transport = httpx.AsyncHTTPTransport(verify=ctx)  # noqa: SLF001
 
     async def get(self, path: str) -> object:
         return await self.request("GET", f"/tenants/{TENANT}{path}")
 
+    async def items(self, path: str) -> list[dict]:
+        page = await self.get(path)
+        return page["items"] if isinstance(page, dict) else page
+
     async def find(self, collection: str, name: str) -> dict:
-        page = await self.get(f"/{collection}?limit=200")
-        items = page["items"] if isinstance(page, dict) else page
-        return next(i for i in items if i["name"] == name)
+        return next(i for i in await self.items(f"/{collection}?limit=200") if i["name"] == name)
 
 
-async def deploy(lab: Lab) -> dict:
-    group = await lab.find("se-groups", "edge")
-    pool = await lab.find("vip-pools", "mgmt")
+async def deploy(lab: Lab, group_name: str, count: str) -> dict:
+    group = await lab.find("se-groups", group_name)
+    pool = lambda name: lab.find("vip-pools", name)  # noqa: E731
+    net = lambda name: lab.find("networks", name)  # noqa: E731
     accepted = await lab.request(
         "POST",
         f"/tenants/{TENANT}/se-groups/{group['id']}/deploy",
         json_body={
-            "count": 1,
+            "count": int(count),
             "nodes": ["pve"],
             "template_vmid": int(os.environ["TEMPLATE_VMID"]),
-            "mgmt_pool_id": pool["id"],
+            "mgmt_pool_id": (await pool("mgmt-addrs"))["id"],
+            "nic_pools": {
+                (await net("vip"))["id"]: (await pool("se-vip-addrs"))["id"],
+                (await net("backend"))["id"]: (await pool("se-be-addrs"))["id"],
+            },
             "credentials_ref": "kv/se/e2e-dpapi",
             "guest_kind": "lxc",
         },
     )
-    await lab.wait_job(accepted["job_id"], timeout_s=600)
-    found = await lab.get(f"/engines?se_group={group['id']}")
-    engine = (found["items"] if isinstance(found, dict) else found)[0]
-    token = await lab.request("POST", f"/tenants/{TENANT}/engines/{engine['id']}/enrollment-token")
-    return {"engine": engine, "token": token}
+    await lab.wait_job(accepted["job_id"], timeout_s=900)
+    engines = await lab.items(f"/engines?se_group={group['id']}")
+    for engine in engines:
+        if not engine["agent_enrolled"]:
+            engine["token"] = await lab.request(
+                "POST", f"/tenants/{TENANT}/engines/{engine['id']}/enrollment-token"
+            )
+    return {"engines": engines}
 
 
-async def vs(lab: Lab) -> dict:
+async def vs(lab: Lab, name: str, group_name: str, vip: str) -> dict:
     pool = await lab.find("pools", "controller-api")
-    group = await lab.find("se-groups", "edge")
+    group = await lab.find("se-groups", group_name)
     vips = await lab.find("vip-pools", "vips")
     body = {
-        "name": "api",
+        "name": name,
         "protocol": "http",
         "se_group_id": group["id"],
-        "vip": "172.30.0.240",
+        "vip": vip,
         "vip_pool_id": vips["id"],
         "ports": [{"port": 80}],
         "default_pool_id": pool["id"],
@@ -71,27 +86,29 @@ async def vs(lab: Lab) -> dict:
         "POST", f"/tenants/{TENANT}/virtual-services", json_body=body, params={"apply": "true"}
     )
     await lab.wait_job(accepted["job_id"], timeout_s=300)
-    return await lab.get(f"/virtual-services/{accepted['object_id']}")
+    created = await lab.get(f"/change-sets/{accepted['change_set_id']}")
+    if created["state"] != "applied":
+        return {"state": created["state"], "error": created.get("error")}
+    return {"state": "applied", "object": await lab.get(f"/virtual-services/{accepted['object_id']}")}
 
 
-async def reapply(lab: Lab) -> dict:
-    """Apply the newest failed change set again (after fixing the engine)."""
-    page = await lab.get("/change-sets?limit=20")
-    failed = next(c for c in (page["items"] if isinstance(page, dict) else page) if c["state"] == "failed")
-    accepted = await lab.request("POST", f"/tenants/{TENANT}/change-sets/{failed['id']}/apply", json_body={})
-    await lab.wait_job(accepted["job_id"], timeout_s=300)
-    done = await lab.get(f"/change-sets/{failed['id']}")
-    return {"state": done["state"], "error": done.get("error")}
-
-
-async def status(lab: Lab) -> dict:
+async def status(lab: Lab) -> list:
     return await lab.get("/status/engines")
+
+
+async def lastapply(lab: Lab) -> dict:
+    jobs = [j for j in await lab.items("/jobs?limit=50") if j["kind"] == "apply_change_set"]
+    job = jobs[0]
+    return {"job": job, "log": await lab.get(f"/jobs/{job['id']}/log")}
+
+
+COMMANDS = {"deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply}
 
 
 async def main() -> None:
     lab = Lab()
     try:
-        out = await {"deploy": deploy, "vs": vs, "status": status, "reapply": reapply}[sys.argv[1]](lab)
+        out = await COMMANDS[sys.argv[1]](lab, *sys.argv[2:])
     except ApiClientError as exc:
         out = {"error": str(exc), "errors": exc.errors}
     finally:

@@ -354,3 +354,17 @@ async def test_deploy_rejects_a_nic_pool_on_the_wrong_network(pg_url: str) -> No
         wrong = {uuid.UUID(symbolic_uuid("net-lb")): uuid.UUID(symbolic_uuid("vp-backend-se"))}
         with pytest.raises(DeployError):
             await InfraService(w.db, FakeProxmox()).deploy_se_group(request(1, nic_pools=wrong))
+
+
+async def test_two_groups_on_one_network_never_share_an_address(pg_url: str) -> None:
+    d = infra_data()
+    second = copy.deepcopy(d["se_groups"][0])
+    second.update(id="sg-second", name="second")
+    d["se_groups"].append(second)
+    async with world(pg_url, d) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        await infra.deploy_se_group(request(1))
+        await infra.deploy_se_group(request(1, se_group_id=uuid.UUID(symbolic_uuid("sg-second"))))
+        addresses = [s.mgmt_ip_cidr for s, _ in pve.vms.values()]
+        assert len(addresses) == 2 and len(set(addresses)) == 2, addresses

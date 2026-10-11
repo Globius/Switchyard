@@ -40,8 +40,11 @@ id keepalived_script >/dev/null 2>&1 || useradd --system --no-create-home --shel
 install -d /etc/systemd/system/keepalived.service.d
 install -m 0644 "$SRC"/files/keepalived-dropin.conf /etc/systemd/system/keepalived.service.d/switchyard.conf
 install -m 0644 "$SRC"/files/tmpfiles-switchyard.conf /etc/tmpfiles.d/switchyard.conf
+install -d /etc/systemd/system/frr.service.d
+install -m 0644 "$SRC"/files/frr-dropin.conf /etc/systemd/system/frr.service.d/switchyard.conf
 ln -sf /etc/switchyard/frr/frr.conf /etc/frr/frr.conf
 sed -i 's/^bgpd=no/bgpd=yes/' /etc/frr/daemons
+sed -i 's/^bfdd=no/bfdd=yes/' /etc/frr/daemons
 install -m 0644 "$SRC"/files/vector.yaml /etc/switchyard/vector.yaml
 install -d /etc/systemd/system/vector.service.d
 install -m 0644 "$SRC"/files/vector-dropin.conf /etc/systemd/system/vector.service.d/switchyard.conf
@@ -49,10 +52,10 @@ install -m 0644 "$SRC"/files/vector-dropin.conf /etc/systemd/system/vector.servi
 sed -i 's#^ARGS=.*#ARGS="--web.listen-address=:9100"#' /etc/default/prometheus-node-exporter
 
 # The controller owns these; do not let packages start stock configs.
-# HAProxy runs the bootstrap config until the first apply (the Data Plane API reloads it); FRR and Keepalived are
-# started by the agent once it has a config for them.
-systemctl disable frr keepalived 2>/dev/null || true
-systemctl enable haproxy 2>/dev/null || true
+# HAProxy runs the bootstrap config until the first apply (the Data Plane API reloads it). Keepalived and FRR are
+# enabled too, but each skips itself until the controller's config file exists (drop-ins), so an SE that reboots
+# comes back with its VIP and BGP sessions without the controller (SEs must survive a controller outage).
+systemctl enable haproxy frr keepalived 2>/dev/null || true
 systemctl enable vector dataplaneapi.service sy-agent-enroll.service sy-agent.service sy-agent-renew.timer prometheus-node-exporter \
   qemu-guest-agent chrony 2>/dev/null || true
 # Generalize so clones get fresh identities.
