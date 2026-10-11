@@ -287,6 +287,40 @@ describe("certificates", () => {
     expect(imported?.query).toBe("?change_set=cs1");
   });
 
+  it("opens a draft first when there is none, then imports into it", async () => {
+    let opened = false;
+    server.use(
+      http.get("*/api/v1/tenants/acme/change-sets", () =>
+        HttpResponse.json({ items: [], next_cursor: null }),
+      ),
+      http.post("*/api/v1/tenants/acme/change-sets", () => {
+        opened = true;
+        return HttpResponse.json(
+          {
+            id: "cs9",
+            state: "draft",
+            author: "me",
+            summary: "x",
+            base_revision: 1,
+            created_at: "2026-10-10T10:00:00Z",
+            ops: [],
+          },
+          { status: 201 },
+        );
+      }),
+    );
+    renderAt("/t/acme/certificates");
+    const imp = await screen.findByRole("button", { name: "Import" });
+    await waitFor(() => expect(imp).toBeEnabled());
+    await userEvent.click(imp);
+    await userEvent.type(await screen.findByLabelText("Name"), "status");
+    await userEvent.click(screen.getByLabelText("Certificate and key PEM"));
+    await userEvent.paste(PEM);
+    await userEvent.click(screen.getByRole("button", { name: "Add to draft" }));
+    await waitFor(() => expect(imported?.query).toBe("?change_set=cs9"));
+    expect(opened).toBe(true);
+  });
+
   it("shows why an import failed", async () => {
     importStatus = 503;
     renderAt("/t/acme/certificates");

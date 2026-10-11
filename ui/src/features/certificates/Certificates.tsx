@@ -10,6 +10,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
+import { useEnsureDraft } from "@/features/shell/draft-write";
 import { useCertificates } from "@/features/vs/queries";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ function useServices(tenant: string, cs?: string) {
 }
 
 function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void }) {
-  const { draft } = useDraft(tenant);
+  const ensure = useEnsureDraft(tenant);
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [pem, setPem] = useState("");
@@ -57,9 +58,10 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
     setBusy(true);
     setProblem(null);
     try {
+      const cs = await ensure.mutateAsync();
       unwrap(
         await api.POST("/api/v1/tenants/{t}/certificates/import", {
-          params: { path: { t: tenant }, query: { change_set: draft?.id } },
+          params: { path: { t: tenant }, query: { change_set: cs } },
           body: { name, pem },
         }),
       );
