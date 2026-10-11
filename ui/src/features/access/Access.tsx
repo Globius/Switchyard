@@ -103,7 +103,9 @@ function Members({ tenant }: { tenant: string }) {
                     </td>
                     <td className="px-4 py-3">{g && <Badge>{g.role}</Badge>}</td>
                     <td className="px-4 py-3 font-mono text-xs">
-                      {g?.via?.length ? g.via.join(", ") : "—"}
+                      {g?.via?.length
+                        ? g.via.map((v) => `${v.provider} · ${v.group}`).join(", ")
+                        : "—"}
                     </td>
                     <td className="px-4 py-3">{sinceText(u.last_login_at)}</td>
                   </tr>
