@@ -253,6 +253,7 @@ REVISION_SUMMARY = {
     "number": 12,
     "author": "user:alice",
     "summary": "Switch web-pool to leastconn",
+    "message": "Ticket OPS-412: leastconn evens out the long uploads.",
     "git_sha": "3f9c2ab",
     "created_at": WHEN,
 }
