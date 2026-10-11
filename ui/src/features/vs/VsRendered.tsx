@@ -4,6 +4,7 @@ import { RenderedConfigView } from "@/components/sy/RenderedConfigView";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { useVsRendered } from "./detail-queries";
 import { findingsOfError } from "./findings";
 
@@ -37,16 +38,37 @@ export function VsRendered({ tenant, id }: { tenant: string; id: string }) {
     );
   return (
     <div className="space-y-4">
-      {live ? (
+      {draft && (
+        <div
+          role="radiogroup"
+          aria-label={t("Version")}
+          className="inline-flex overflow-hidden rounded-md border"
+        >
+          {([false, true] as const).map((isLive) => (
+            <button
+              key={String(isLive)}
+              type="button"
+              role="radio"
+              aria-checked={live === isLive}
+              onClick={() => setLive(isLive)}
+              className={cn(
+                "px-3 py-1.5 text-sm",
+                live === isLive
+                  ? "bg-accent font-medium"
+                  : "text-muted-foreground hover:bg-accent/50",
+              )}
+            >
+              {isLive ? t("Live") : t("With my draft")}
+            </button>
+          ))}
+        </div>
+      )}
+      {draft && (
         <p className="text-sm text-muted-foreground">
-          {t("Showing the live version, without your draft.")}
+          {live
+            ? t("Showing the live version, without your draft.")
+            : t("Showing the config with your draft applied.")}
         </p>
-      ) : (
-        draft && (
-          <p className="text-sm text-muted-foreground">
-            {t("Showing the config with your draft applied.")}
-          </p>
-        )
       )}
       {q.data.items.map((f, i) => (
         <RenderedConfigView key={`${f.file}-${i}`} fragment={f} />

@@ -177,7 +177,22 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
             <header className="flex items-center gap-3 border-b px-4 py-3">
               <h2 className="text-base font-semibold">{t("Routes")}</h2>
               <span className="text-sm text-muted-foreground">{t("first match wins")}</span>
-              <Button variant="outline" size="sm" className="ml-auto" asChild>
+              {v.routes.length > 1 && (
+                <Link
+                  to={settings}
+                  params={{ tenant, id }}
+                  search={{ field: "routes" }}
+                  className="ml-auto text-sm text-primary hover:underline"
+                >
+                  {t("Reorder")}
+                </Link>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className={v.routes.length > 1 ? undefined : "ml-auto"}
+                asChild
+              >
                 <Link to={settings} params={{ tenant, id }} search={{ field: "routes" }}>
                   {t("Add route")}
                 </Link>
@@ -461,7 +476,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                 return (
                   <div key={c.id} className="space-y-1">
                     <div className="font-medium text-primary">{c.name}</div>
-                    <StatusPill status={ex.status}>
+                    <StatusPill status={ex.status === "neutral" ? "healthy" : ex.status}>
                       {ex.status === "neutral"
                         ? ex.label
                         : t("Expires in {n} days", { n: ex.days })}

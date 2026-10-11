@@ -243,7 +243,7 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | Item | Status | Owner / note |
 | --- | --- | --- |
 | V1 VS Settings | done | UI, cards, two columns, VIP radios, routes table, footer (!57) |
-| V2 Rendered config | partly done | Monaco, HAProxy highlighting, range (!58). Open: Copy button, Live / With my draft toggle (UI). Deviation: engine select (no per-engine render endpoint) |
+| V2 Rendered config | done | Monaco, HAProxy highlighting, range, Copy, With my draft / Live toggle. Deviation: engine select (no per-engine render endpoint) |
 | V3 VS History | done | UI (!61) |
 | V4 Policies, Routing profiles | done | Policies by part 2 (!63); Routing profiles were master-detail already |
 | V5 Audit log | part 2 | formatters in !60, remaining columns with part 2 |
@@ -251,16 +251,16 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | V7 Names and dates | part 2 | !60 |
 | V8 Certificates | part 2 | |
 | V9 Networks | done | Edit service by part 2; per-network SDN chip from `/sdn/status` (!76) |
-| V10 SE groups | mostly done | engines table, placement (!74), re-apply (!51), agent version. Open: "View running config" (UI) |
-| V11 Create wizard | open | header logo and explainers (UI) |
+| V10 SE groups | done | engines table, placement, re-apply job, agent version. Deviation: "View running config" (no API returns an engine's running config) |
+| V11 Create wizard | done | header logo and tenant, monitor summary ("Up after 2 passing, down after 3"); the other explainers were already in |
 | V12 Admin tenants | done | Members column and "N people have access" (!76) |
 | V13 Role matrix grouping | done | grouped by the `group` the server sends; open a group to see each permission (!76) |
 | V14 VS list | done | |
-| V15 VS Overview | partly done | "Open in Grafana" shows when `/me` has a Grafana URL (!76). Open: per-route menu, dashed unavailable card, certificate status icon (UI) |
-| V16 Top bar | open | divider and avatar initials (UI) |
+| V15 VS Overview | done | Grafana link from `/me`, Reorder link on the routes card, dashed unavailable card, certificate status icon |
+| V16 Top bar | done | divider added; initials come from the display name |
 | V17 Identity providers | done | remaining-time text shipped; forced-on text styling is minor (UI) |
 | V18 System tokens | done | ShowOnceSecret (!64) |
-| V19 Tenant home | open | "Jump to problems" enabled (UI) |
+| V19 Tenant home | done | |
 | V20 Login | deviation | logo glyph differs |
 | B1 shadcn primitives, `@switchyard` registry | deviation | No artboard or the Foundations page shows an opened select or combobox other than the ChipInput list (built); the design source itself uses native `<select>` elements. Selects stay native; dialogs, sheets, switches, menus and the chip input are Radix-based. The `@switchyard` registry is not set up |
 | B2 Monaco | done | !58 |
@@ -273,11 +273,11 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | B9 Names and dates | part 2 | |
 | B10 SE groups | mostly done | see V10 |
 | B11 Networks | part 2 | |
-| B12 Review links and copy | open | "Open job" link, viewer approve copy (UI) |
-| B13 Jobs | open | change set link, durations (UI) |
+| B12 Review links and copy | done | "Open job" link and "You can leave this page" |
+| B13 Jobs | done | change set link, Duration column, live updates |
 | B14-B17 | part 2 | revisions, audit, certificates, admin tenants |
-| B18 Wizard explainers | open | UI |
-| B19 Polish | open | kebab menus, dashed cards, top bar (UI) |
+| B18 Wizard explainers | done | |
+| B19 Polish | done | |
 | B20 axe, RHF/Zod, TanStack Table | partly done | axe and keyboard and phone checks via Playwright (!69); RHF, Zod and TanStack Table not adopted (deviation, record an ADR if kept) |
 | Backend-fed items | done | quota usage, revision message, per-member health and last check, host placement, audit export, BGP max prefixes |
 | Pool passive checks, slow start, TLS profile per port, OCSP stapling | done | pool sheet, Edit ports sheet, certificate sheet (!76) |

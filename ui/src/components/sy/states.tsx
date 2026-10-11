@@ -82,7 +82,7 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 /** A part of the screen whose backend is not configured; shows the API's `reason`. */
 export function UnavailableState({ title, reason }: { title: string; reason?: string | null }) {
   return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+    <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-5 text-center text-xs text-muted-foreground">
       <Info className="size-4 shrink-0" aria-hidden />
       <span>
         <span className="font-medium">{title}</span>
