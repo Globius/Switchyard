@@ -51,23 +51,35 @@ user menu and ChangeSetBar. Routes are file-based (`src/routes`, generated `rout
 committed). Screens that are not built yet render a `NotBuilt` placeholder. Review and the create
 wizard sit outside the shell (full screen), as in the design handoff.
 
-## Built (U1)
+## Built
 
-Virtual services (list, page with Overview / Settings / Rendered config / History, create wizard),
-pools, health monitors, certificates (PEM files or PKCS#12, issue, usage), policies, change sets,
-revisions with compare and rollback, review and apply (objects, config, impact, approval, conflict
-resolution, job progress), login and the shell. Checked against Design's v46 screenshots.
+Every artboard of Design's v46 handoff has a screen:
+
+- Tenant: home, virtual services (list, page with Overview / Settings / Rendered config / History,
+  create wizard), pools, health monitors, certificates (PEM files or PKCS#12, issue, replace, usage),
+  policies, networks and VIP pools, SE groups (engines, deploy, register), routing profiles, change
+  sets, revisions with compare and rollback, jobs, review and apply (objects, config, impact,
+  approval, conflict resolution, job progress), access and settings (members, role mappings, API
+  tokens, approval and quotas).
+- Admin (`/admin`, system-admin only): tenants, users, identity providers with break-glass, role
+  mappings, system tokens, audit log.
+- Login and the shell.
 
 - The open draft is the change set whose `author` equals `principal` from `GET /me`.
 - Every edit is an op in that draft; reads pass `?change_set=` so lists show your draft.
+- Engine actions, tenant and admin settings act immediately (marked Live) and are audited; they do
+  not go through a change set.
 
 ## Known differences from the design
 
-- Revision "message" is read-only: the apply endpoint takes none.
+- Revision "message" is read-only: the apply endpoint takes no message.
 - Config diff is plain text, not Monaco.
-- No per-member health on the Overview (the API has none).
-- Certificates have no "Replace" action yet: it needs an in-place replace endpoint.
-- Not built: tenant home, networks and VIP pools, SE groups, routing profiles, jobs, admin and tenant access
-  screens (they render `NotBuilt`).
+- No per-member health on the Overview, and no "last check" column for failing members on Home
+  (the API has neither).
+- SE groups have no Placement card (no API for the Proxmox host layout); routing mode and networks
+  are read-only in the group's settings.
+- Tenant access shows quota limits only (no usage counts); the admin role matrix lists every server
+  permission instead of the artboard's eight grouped rows.
+- Audit log Export covers the events already loaded.
 - Viewer (read-only) states are covered by tests only; no viewer user exists in the demo data.
 - Theme: `ui/src/globals.css` from the design handoff (ADR 0042).
