@@ -70,3 +70,127 @@ def test_secret_references_are_valid_and_unique_per_serial() -> None:
     a = secret_ref_for("acme", "wild", "ab12")
     assert validate_secret_ref(a) == a
     assert a != secret_ref_for("acme", "wild", "cd34")
+
+
+def _p12(pem: str, password: str | None, *, legacy: bool = False) -> str:
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.serialization import pkcs12
+
+    certs = x509.load_pem_x509_certificates(pem.encode())
+    key = serialization.load_pem_private_key(
+        pem[pem.index("-----BEGIN PRIVATE KEY") :].encode(), None
+    )
+    enc = (
+        serialization.BestAvailableEncryption(password.encode())
+        if password
+        else serialization.NoEncryption()
+    )
+    return base64.b64encode(
+        pkcs12.serialize_key_and_certificates(b"x", key, certs[0], certs[1:] or None, enc)  # type: ignore[arg-type]
+    ).decode()
+
+
+def test_pkcs12_round_trips_to_the_same_bundle() -> None:
+    from switchyard.services.certs import pkcs12_to_pem
+
+    pem = make_pem(("a.example.test",))
+    for password in ("s3cret", None):
+        out = pkcs12_to_pem(_p12(pem, password), password)
+        assert inspect_pem(out).sans == ("a.example.test",)
+        assert inspect_pem(out).pem == inspect_pem(pem).pem
+
+
+@pytest.mark.parametrize(
+    ("b64", "password", "path", "code"),
+    [
+        ("!!not-base64!!", None, "pkcs12_b64", "invalid"),
+        ("QUJDRA==", None, "pkcs12_b64", "invalid"),
+    ],
+)
+def test_pkcs12_bad_input_names_the_field(
+    b64: str, password: str | None, path: str, code: str
+) -> None:
+    from switchyard.services.certs import Pkcs12Error, pkcs12_to_pem
+
+    with pytest.raises(Pkcs12Error) as err:
+        pkcs12_to_pem(b64, password)
+    assert (err.value.path, err.value.code) == (path, code)
+
+
+def test_pkcs12_wrong_password() -> None:
+    from switchyard.services.certs import Pkcs12Error, pkcs12_to_pem
+
+    blob = _p12(make_pem(("a.example.test",)), "right")
+    with pytest.raises(Pkcs12Error) as err:
+        pkcs12_to_pem(blob, "wrong")
+    assert err.value.path == "password" and "secret" not in str(err.value)
+
+
+def test_pkcs12_without_a_key_is_refused() -> None:
+    import base64
+
+    from cryptography.hazmat.primitives.serialization import pkcs12
+
+    from switchyard.services.certs import Pkcs12Error, pkcs12_to_pem
+
+    cert = x509.load_pem_x509_certificate(make_pem(("a.example.test",), with_key=False).encode())
+    blob = base64.b64encode(
+        pkcs12.serialize_key_and_certificates(None, None, cert, None, serialization_none())
+    ).decode()
+    with pytest.raises(Pkcs12Error) as err:
+        pkcs12_to_pem(blob, None)
+    assert err.value.code == "no_key"
+
+
+def serialization_none():  # type: ignore[no-untyped-def]
+    from cryptography.hazmat.primitives import serialization
+
+    return serialization.NoEncryption()
+
+
+def test_legacy_pkcs12_is_refused_clearly(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    import base64
+    import shutil
+    import subprocess
+
+    from switchyard.services.certs import Pkcs12Error, pkcs12_to_pem
+
+    openssl = shutil.which("openssl")
+    if openssl is None:
+        pytest.skip("openssl not available")
+    pem = make_pem(("a.example.test",))
+    (tmp_path / "b.pem").write_text(pem)
+    out = tmp_path / "b.p12"
+    done = subprocess.run(
+        [
+            openssl,
+            "pkcs12",
+            "-export",
+            "-in",
+            str(tmp_path / "b.pem"),
+            "-out",
+            str(out),
+            "-passout",
+            "pass:pw",
+            "-legacy",
+            "-certpbe",
+            "PBE-SHA1-3DES",
+            "-keypbe",
+            "PBE-SHA1-3DES",
+            "-macalg",
+            "sha1",
+        ],
+        capture_output=True,
+    )
+    if done.returncode != 0:
+        pytest.skip("openssl cannot make a legacy file here")
+    blob = base64.b64encode(out.read_bytes()).decode()
+    try:
+        result = pkcs12_to_pem(blob, "pw")
+    except Pkcs12Error as exc:
+        code = exc.code
+        assert code in {"unsupported_encryption", "invalid"}
+    else:
+        assert "BEGIN PRIVATE KEY" in result  # 3DES is readable by this build

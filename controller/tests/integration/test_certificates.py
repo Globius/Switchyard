@@ -214,6 +214,35 @@ async def test_api_import_issue_and_renew_endpoints_and_the_worker_jobs(pg_url: 
                 json={"name": "bad", "pem": make_pem(other_key=True)},
             )
             assert bad.status_code == 422 and "does not match" in bad.text
+            from tests.unit.test_certs import _p12
+
+            blob = _p12(make_pem(("pfx.example.test",)), "pw")
+            good = await client.post(
+                f"{base}/import?apply=true",
+                headers=headers,
+                json={"name": "pfx", "pkcs12_b64": blob, "password": "pw"},
+            )
+            assert good.status_code == 202, good.text
+            assert "pw" not in good.text
+            wrong = await client.post(
+                f"{base}/import",
+                headers=headers,
+                json={"name": "pfx2", "pkcs12_b64": blob, "password": "nope"},
+            )
+            assert wrong.status_code == 422
+            assert wrong.json()["errors"][0]["path"] == "password" and "nope" not in wrong.text
+            junk = await client.post(
+                f"{base}/import",
+                headers=headers,
+                json={"name": "pfx3", "pkcs12_b64": "%%%"},
+            )
+            assert junk.json()["errors"][0]["path"] == "pkcs12_b64"
+            both = await client.post(
+                f"{base}/import",
+                headers=headers,
+                json={"name": "x", "pem": "a", "pkcs12_b64": blob},
+            )
+            assert both.status_code == 422
             issue = await client.post(
                 f"{base}/issue",
                 headers=headers,
