@@ -70,7 +70,7 @@ sh enroll.sh work/deploy-bgp.json >/dev/null
 wait_for "BGP engine reachable" "[ \"\$(engine_state edge-bgp-1 reachable)\" = True ]" 40
 api vs bgpweb edge-bgp 10.99.0.230 > work/vs-bgp.json
 getj "assert d.get('state')=='applied', d" < work/vs-bgp.json
-wait_for "BGP session Established on the upstream" "pct exec 9970 -- vtysh -c 'show bgp summary' | grep -q Estab" 20
+wait_for "BGP session Established on the upstream" "pct exec 9970 -- vtysh -c 'show bgp neighbors $M1' | grep -q 'BGP state = Established'" 20
 wait_for "upstream learned the VIP" "pct exec 9970 -- vtysh -c 'show ip route 10.99.0.230/32' | grep -q '$M1,'" 20
 wait_for "traffic from the upstream router reaches the VIP over BGP" "pct exec 9970 -- curl -s -m 3 -o /dev/null -w '%{http_code}' http://10.99.0.230/api/v1/healthz | grep -q 200" 20
 pct exec "$B1" -- systemctl stop haproxy
