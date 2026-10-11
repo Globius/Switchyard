@@ -619,7 +619,7 @@ export function Access({ tenant }: { tenant: string }) {
             : t("Who can use {tenant}, and how.", { tenant })}
         </p>
       </div>
-      <div role="tablist" className="flex gap-1 border-b">
+      <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
         {TABS.map((x) => (
           <button
             key={x.key}

@@ -153,7 +153,7 @@ export function ChangeSets({ tenant }: { tenant: string }) {
           )}
         </p>
       </div>
-      <div role="tablist" className="flex gap-1 border-b">
+      <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
         {(["open", "history"] as const).map((k) => (
           <button
             key={k}
