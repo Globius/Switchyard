@@ -20,6 +20,10 @@ import { Route as TTenantShellSplatRouteImport } from './routes/t.$tenant._shell
 import { Route as TTenantReviewCsRouteImport } from './routes/t.$tenant.review.$cs'
 import { Route as TTenantShellVirtualServicesIndexRouteImport } from './routes/t.$tenant._shell.virtual-services.index'
 import { Route as TTenantShellVirtualServicesIdRouteImport } from './routes/t.$tenant._shell.virtual-services.$id'
+import { Route as TTenantShellVirtualServicesIdIndexRouteImport } from './routes/t.$tenant._shell.virtual-services.$id.index'
+import { Route as TTenantShellVirtualServicesIdHistoryRouteImport } from './routes/t.$tenant._shell.virtual-services.$id.history'
+import { Route as TTenantShellVirtualServicesIdRenderedRouteImport } from './routes/t.$tenant._shell.virtual-services.$id.rendered'
+import { Route as TTenantShellVirtualServicesIdSettingsRouteImport } from './routes/t.$tenant._shell.virtual-services.$id.settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -77,6 +81,30 @@ const TTenantShellVirtualServicesIdRoute =
     path: '/virtual-services/$id',
     getParentRoute: () => TTenantShellRoute,
   } as any)
+const TTenantShellVirtualServicesIdIndexRoute =
+  TTenantShellVirtualServicesIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => TTenantShellVirtualServicesIdRoute,
+  } as any)
+const TTenantShellVirtualServicesIdHistoryRoute =
+  TTenantShellVirtualServicesIdHistoryRouteImport.update({
+    id: '/history',
+    path: '/history',
+    getParentRoute: () => TTenantShellVirtualServicesIdRoute,
+  } as any)
+const TTenantShellVirtualServicesIdRenderedRoute =
+  TTenantShellVirtualServicesIdRenderedRouteImport.update({
+    id: '/rendered',
+    path: '/rendered',
+    getParentRoute: () => TTenantShellVirtualServicesIdRoute,
+  } as any)
+const TTenantShellVirtualServicesIdSettingsRoute =
+  TTenantShellVirtualServicesIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
+    getParentRoute: () => TTenantShellVirtualServicesIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -87,8 +115,12 @@ export interface FileRoutesByFullPath {
   '/t/$tenant/$': typeof TTenantShellSplatRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/': typeof TTenantShellIndexRoute
-  '/t/$tenant/virtual-services/$id': typeof TTenantShellVirtualServicesIdRoute
+  '/t/$tenant/virtual-services/$id': typeof TTenantShellVirtualServicesIdRouteWithChildren
   '/t/$tenant/virtual-services/': typeof TTenantShellVirtualServicesIndexRoute
+  '/t/$tenant/virtual-services/$id/history': typeof TTenantShellVirtualServicesIdHistoryRoute
+  '/t/$tenant/virtual-services/$id/rendered': typeof TTenantShellVirtualServicesIdRenderedRoute
+  '/t/$tenant/virtual-services/$id/settings': typeof TTenantShellVirtualServicesIdSettingsRoute
+  '/t/$tenant/virtual-services/$id/': typeof TTenantShellVirtualServicesIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -98,8 +130,11 @@ export interface FileRoutesByTo {
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/$': typeof TTenantShellSplatRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
-  '/t/$tenant/virtual-services/$id': typeof TTenantShellVirtualServicesIdRoute
   '/t/$tenant/virtual-services': typeof TTenantShellVirtualServicesIndexRoute
+  '/t/$tenant/virtual-services/$id/history': typeof TTenantShellVirtualServicesIdHistoryRoute
+  '/t/$tenant/virtual-services/$id/rendered': typeof TTenantShellVirtualServicesIdRenderedRoute
+  '/t/$tenant/virtual-services/$id/settings': typeof TTenantShellVirtualServicesIdSettingsRoute
+  '/t/$tenant/virtual-services/$id': typeof TTenantShellVirtualServicesIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -112,8 +147,12 @@ export interface FileRoutesById {
   '/t/$tenant/_shell/$': typeof TTenantShellSplatRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/_shell/': typeof TTenantShellIndexRoute
-  '/t/$tenant/_shell/virtual-services/$id': typeof TTenantShellVirtualServicesIdRoute
+  '/t/$tenant/_shell/virtual-services/$id': typeof TTenantShellVirtualServicesIdRouteWithChildren
   '/t/$tenant/_shell/virtual-services/': typeof TTenantShellVirtualServicesIndexRoute
+  '/t/$tenant/_shell/virtual-services/$id/history': typeof TTenantShellVirtualServicesIdHistoryRoute
+  '/t/$tenant/_shell/virtual-services/$id/rendered': typeof TTenantShellVirtualServicesIdRenderedRoute
+  '/t/$tenant/_shell/virtual-services/$id/settings': typeof TTenantShellVirtualServicesIdSettingsRoute
+  '/t/$tenant/_shell/virtual-services/$id/': typeof TTenantShellVirtualServicesIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -128,6 +167,10 @@ export interface FileRouteTypes {
     | '/t/$tenant/'
     | '/t/$tenant/virtual-services/$id'
     | '/t/$tenant/virtual-services/'
+    | '/t/$tenant/virtual-services/$id/history'
+    | '/t/$tenant/virtual-services/$id/rendered'
+    | '/t/$tenant/virtual-services/$id/settings'
+    | '/t/$tenant/virtual-services/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -137,8 +180,11 @@ export interface FileRouteTypes {
     | '/t/$tenant/new'
     | '/t/$tenant/$'
     | '/t/$tenant/review/$cs'
-    | '/t/$tenant/virtual-services/$id'
     | '/t/$tenant/virtual-services'
+    | '/t/$tenant/virtual-services/$id/history'
+    | '/t/$tenant/virtual-services/$id/rendered'
+    | '/t/$tenant/virtual-services/$id/settings'
+    | '/t/$tenant/virtual-services/$id'
   id:
     | '__root__'
     | '/'
@@ -152,6 +198,10 @@ export interface FileRouteTypes {
     | '/t/$tenant/_shell/'
     | '/t/$tenant/_shell/virtual-services/$id'
     | '/t/$tenant/_shell/virtual-services/'
+    | '/t/$tenant/_shell/virtual-services/$id/history'
+    | '/t/$tenant/_shell/virtual-services/$id/rendered'
+    | '/t/$tenant/_shell/virtual-services/$id/settings'
+    | '/t/$tenant/_shell/virtual-services/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -240,20 +290,73 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTenantShellVirtualServicesIdRouteImport
       parentRoute: typeof TTenantShellRoute
     }
+    '/t/$tenant/_shell/virtual-services/$id/': {
+      id: '/t/$tenant/_shell/virtual-services/$id/'
+      path: '/'
+      fullPath: '/t/$tenant/virtual-services/$id/'
+      preLoaderRoute: typeof TTenantShellVirtualServicesIdIndexRouteImport
+      parentRoute: typeof TTenantShellVirtualServicesIdRoute
+    }
+    '/t/$tenant/_shell/virtual-services/$id/history': {
+      id: '/t/$tenant/_shell/virtual-services/$id/history'
+      path: '/history'
+      fullPath: '/t/$tenant/virtual-services/$id/history'
+      preLoaderRoute: typeof TTenantShellVirtualServicesIdHistoryRouteImport
+      parentRoute: typeof TTenantShellVirtualServicesIdRoute
+    }
+    '/t/$tenant/_shell/virtual-services/$id/rendered': {
+      id: '/t/$tenant/_shell/virtual-services/$id/rendered'
+      path: '/rendered'
+      fullPath: '/t/$tenant/virtual-services/$id/rendered'
+      preLoaderRoute: typeof TTenantShellVirtualServicesIdRenderedRouteImport
+      parentRoute: typeof TTenantShellVirtualServicesIdRoute
+    }
+    '/t/$tenant/_shell/virtual-services/$id/settings': {
+      id: '/t/$tenant/_shell/virtual-services/$id/settings'
+      path: '/settings'
+      fullPath: '/t/$tenant/virtual-services/$id/settings'
+      preLoaderRoute: typeof TTenantShellVirtualServicesIdSettingsRouteImport
+      parentRoute: typeof TTenantShellVirtualServicesIdRoute
+    }
   }
 }
+
+interface TTenantShellVirtualServicesIdRouteChildren {
+  TTenantShellVirtualServicesIdHistoryRoute: typeof TTenantShellVirtualServicesIdHistoryRoute
+  TTenantShellVirtualServicesIdRenderedRoute: typeof TTenantShellVirtualServicesIdRenderedRoute
+  TTenantShellVirtualServicesIdSettingsRoute: typeof TTenantShellVirtualServicesIdSettingsRoute
+  TTenantShellVirtualServicesIdIndexRoute: typeof TTenantShellVirtualServicesIdIndexRoute
+}
+
+const TTenantShellVirtualServicesIdRouteChildren: TTenantShellVirtualServicesIdRouteChildren =
+  {
+    TTenantShellVirtualServicesIdHistoryRoute:
+      TTenantShellVirtualServicesIdHistoryRoute,
+    TTenantShellVirtualServicesIdRenderedRoute:
+      TTenantShellVirtualServicesIdRenderedRoute,
+    TTenantShellVirtualServicesIdSettingsRoute:
+      TTenantShellVirtualServicesIdSettingsRoute,
+    TTenantShellVirtualServicesIdIndexRoute:
+      TTenantShellVirtualServicesIdIndexRoute,
+  }
+
+const TTenantShellVirtualServicesIdRouteWithChildren =
+  TTenantShellVirtualServicesIdRoute._addFileChildren(
+    TTenantShellVirtualServicesIdRouteChildren,
+  )
 
 interface TTenantShellRouteChildren {
   TTenantShellSplatRoute: typeof TTenantShellSplatRoute
   TTenantShellIndexRoute: typeof TTenantShellIndexRoute
-  TTenantShellVirtualServicesIdRoute: typeof TTenantShellVirtualServicesIdRoute
+  TTenantShellVirtualServicesIdRoute: typeof TTenantShellVirtualServicesIdRouteWithChildren
   TTenantShellVirtualServicesIndexRoute: typeof TTenantShellVirtualServicesIndexRoute
 }
 
 const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellSplatRoute: TTenantShellSplatRoute,
   TTenantShellIndexRoute: TTenantShellIndexRoute,
-  TTenantShellVirtualServicesIdRoute: TTenantShellVirtualServicesIdRoute,
+  TTenantShellVirtualServicesIdRoute:
+    TTenantShellVirtualServicesIdRouteWithChildren,
   TTenantShellVirtualServicesIndexRoute: TTenantShellVirtualServicesIndexRoute,
 }
 
