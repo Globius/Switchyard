@@ -285,3 +285,13 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 ## Admin screens, live check
 
 Checked on 2026-10-11 against a local controller, signed in as the break-glass system-admin: Tenants, Users, Identity providers, Role mappings, System tokens and Audit log all load and match the artboards. One gap fixed: the Break-glass card showed an empty "Enabled" value when the deployment forces it on; it now says "Always on (set by the deployment)". Rechecked after rebuilding the controller from main (database migrated to head): actor names resolve through `/principals` and the role matrix shows its eight groups (Read, Applications, Infrastructure, Change sets, Runtime, Tenant settings, Access, System). The only remaining console 404 is the dev server's missing favicon.
+
+## Design v49: SE deploy guest type
+
+| Item | Status |
+| --- | --- |
+| Guest type radio cards (VM recommended, Container LXC) first in "Deploy engines for <group>" | Done. Sends `guest_kind` on the deploy request. |
+| Template field follows the guest type | Done and resolved in favour of the API (Design v50): numeric Proxmox ID for both kinds, sent as `template_vmid`. Labels "Template VM ID" / "Template container ID", with help text. |
+| LXC inline warning with required acknowledgement; Start deploy disabled with the reason | Done. The checkbox is UI-only and clears when the guest type changes. |
+| Engine sub-line "VM 201 · pve-atl-01 · ip · agent" / "CT 203 ..." | Done from `guest_kind`, `vmid` and `pve_node` on the engine read; left out when the engine has no guest type. Placement cards use the same VM/CT label. |
+| Header buttons, sheet titles, Retire/Remove help text | Renamed to "engine", "VM or container" and "guest". |

@@ -31,6 +31,8 @@ const ENGINE = (id: string, name: string, state = "enabled") => ({
   agent_enrolled: true,
   mgmt_ip: "10.40.0.21",
   vmid: 100,
+  pve_node: "pve-atl-01",
+  guest_kind: "qemu",
 });
 const STATUS = (id: string, name: string, drift: unknown[] = []) => ({
   engine: name,
@@ -188,7 +190,7 @@ describe("SE groups", () => {
       }),
     );
     renderAt("/t/acme/se-groups");
-    const open = await screen.findByRole("button", { name: "Deploy VMs" });
+    const open = await screen.findByRole("button", { name: "Deploy engines" });
     await waitFor(() => expect(open).toBeEnabled());
     await userEvent.click(open);
     await userEvent.type(await screen.findByLabelText("Template VM ID"), "9001");
@@ -209,6 +211,63 @@ describe("SE groups", () => {
     expect(await screen.findByText(/Deploying as a job/)).toBeInTheDocument();
   });
 
+  it("deploys containers only after the risks are confirmed", async () => {
+    let body: unknown = null;
+    server.use(
+      http.get("*/api/v1/tenants/acme/vip-pools", () =>
+        HttpResponse.json({ items: [{ id: "mp", name: "se-mgmt" }], next_cursor: null }),
+      ),
+      http.post("*/api/v1/tenants/acme/se-groups/g1/deploy", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ job_id: "j" }, { status: 202 });
+      }),
+    );
+    renderAt("/t/acme/se-groups");
+    const open = await screen.findByRole("button", { name: "Deploy engines" });
+    await waitFor(() => expect(open).toBeEnabled());
+    await userEvent.click(open);
+    const dlg = within(await screen.findByRole("dialog"));
+    expect(dlg.getByRole("radio", { name: /Virtual machine/ })).toBeChecked();
+    expect(dlg.queryByText("Containers are privileged and partly untested")).toBeNull();
+    await userEvent.click(dlg.getByRole("radio", { name: /Container \(LXC\)/ }));
+    expect(dlg.getByText("Containers are privileged and partly untested")).toBeInTheDocument();
+    await userEvent.type(dlg.getByLabelText("Template container ID"), "9100");
+    await userEvent.type(dlg.getByLabelText("Proxmox nodes"), "pve-01,");
+    await userEvent.selectOptions(
+      await dlg.findByLabelText("Management addresses from"),
+      await dlg.findByRole("option", { name: "se-mgmt" }),
+    );
+    const start = dlg.getByRole("button", { name: "Start deploy" });
+    expect(start).toBeDisabled();
+    expect(dlg.getByText("Confirm the container risks above to deploy.")).toBeInTheDocument();
+    await userEvent.click(dlg.getByRole("checkbox"));
+    expect(start).toBeEnabled();
+    await userEvent.click(dlg.getByRole("radio", { name: /Virtual machine/ }));
+    await userEvent.click(dlg.getByRole("radio", { name: /Container \(LXC\)/ }));
+    expect(dlg.getByRole("checkbox")).not.toBeChecked();
+    await userEvent.click(dlg.getByRole("checkbox"));
+    await userEvent.click(start);
+    await waitFor(() =>
+      expect(body).toMatchObject({ guest_kind: "lxc", template_vmid: 9100, nodes: ["pve-01"] }),
+    );
+  });
+
+  it("shows each engine's guest type, Proxmox ID and node", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/engines", () =>
+        HttpResponse.json([
+          { ...ENGINE("e1", "se-edge-a-01"), vmid: 201 },
+          { ...ENGINE("e3", "se-edge-a-03"), vmid: 203, guest_kind: "lxc" },
+          { ...ENGINE("e4", "se-edge-a-04"), guest_kind: null, vmid: null, pve_node: null },
+        ]),
+      ),
+    );
+    renderAt("/t/acme/se-groups");
+    expect(await screen.findByText(/^VM 201 · pve-atl-01 · 10\.40\.0\.21/)).toBeInTheDocument();
+    expect(screen.getByText(/^CT 203 · pve-atl-01 · 10\.40\.0\.21/)).toBeInTheDocument();
+    expect(screen.getByText(/^10\.40\.0\.21 · agent|^10\.40\.0\.21$/)).toBeInTheDocument();
+  });
+
   it("registers an existing VM", async () => {
     let body: unknown = null;
     server.use(
@@ -218,7 +277,7 @@ describe("SE groups", () => {
       }),
     );
     renderAt("/t/acme/se-groups");
-    const open = await screen.findByRole("button", { name: "Register existing VM" });
+    const open = await screen.findByRole("button", { name: "Register existing engine" });
     await waitFor(() => expect(open).toBeEnabled());
     await userEvent.click(open);
     const dlg = within(await screen.findByRole("dialog"));
