@@ -27,13 +27,21 @@ install -d -m 0755 /etc/switchyard /etc/switchyard/agent /etc/switchyard/haproxy
 install -m 0644 "$SRC"/files/sy-agent.service "$SRC"/files/sy-agent-renew.service \
   "$SRC"/files/sy-agent-renew.timer "$SRC"/files/sy-agent-enroll.service \
   "$SRC"/files/dataplaneapi.service /etc/systemd/system/
-install -m 0644 "$SRC"/files/dataplaneapi.yml /etc/switchyard/dataplaneapi.yml
+install -m 0644 "$SRC"/files/dataplaneapi.yml.tmpl /etc/switchyard/dataplaneapi.yml.tmpl
+install -m 0755 "$SRC"/files/sy-render-dataplane /usr/local/sbin/sy-render-dataplane
 install -m 0644 "$SRC"/files/haproxy-bootstrap.cfg /etc/switchyard/haproxy/haproxy.cfg
 install -d /etc/switchyard/certs /etc/switchyard/haproxy/maps /etc/switchyard/haproxy/lists /var/lib/dataplaneapi/transactions
 install -m 0644 "$SRC"/files/90-switchyard.conf /etc/sysctl.d/90-switchyard.conf
 install -m 0644 "$SRC"/files/modules-switchyard.conf /etc/modules-load.d/switchyard.conf
 install -d /etc/systemd/system/haproxy.service.d /etc/systemd/system/prometheus-node-exporter.service.d
 install -m 0644 "$SRC"/files/haproxy-dropin.conf /etc/systemd/system/haproxy.service.d/switchyard.conf
+# Keepalived and FRR read their configuration from /etc/switchyard (the only place the agent may write).
+id keepalived_script >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin keepalived_script
+install -d /etc/systemd/system/keepalived.service.d
+install -m 0644 "$SRC"/files/keepalived-dropin.conf /etc/systemd/system/keepalived.service.d/switchyard.conf
+install -m 0644 "$SRC"/files/tmpfiles-switchyard.conf /etc/tmpfiles.d/switchyard.conf
+ln -sf /etc/switchyard/frr/frr.conf /etc/frr/frr.conf
+sed -i 's/^bgpd=no/bgpd=yes/' /etc/frr/daemons
 install -m 0644 "$SRC"/files/vector.yaml /etc/switchyard/vector.yaml
 install -d /etc/systemd/system/vector.service.d
 install -m 0644 "$SRC"/files/vector-dropin.conf /etc/systemd/system/vector.service.d/switchyard.conf
@@ -41,7 +49,10 @@ install -m 0644 "$SRC"/files/vector-dropin.conf /etc/systemd/system/vector.servi
 sed -i 's#^ARGS=.*#ARGS="--web.listen-address=:9100"#' /etc/default/prometheus-node-exporter
 
 # The controller owns these; do not let packages start stock configs.
-systemctl disable haproxy frr keepalived 2>/dev/null || true
+# HAProxy runs the bootstrap config until the first apply (the Data Plane API reloads it); FRR and Keepalived are
+# started by the agent once it has a config for them.
+systemctl disable frr keepalived 2>/dev/null || true
+systemctl enable haproxy 2>/dev/null || true
 systemctl enable vector dataplaneapi.service sy-agent-enroll.service sy-agent.service sy-agent-renew.timer prometheus-node-exporter \
   qemu-guest-agent chrony 2>/dev/null || true
 # Generalize so clones get fresh identities.

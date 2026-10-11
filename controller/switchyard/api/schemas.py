@@ -1115,6 +1115,13 @@ class MemberStatus(ApiModel):
     backend: str
     server: str
     status: str = Field(description="HAProxy status, for example `UP`, `DOWN`, `MAINT`.")
+    check_status: str | None = Field(
+        default=None,
+        description="Short code of the last health check (`L4OK`, `L7OK`, `L7STS`, `L4TOUT`, ...).",
+    )
+    last_change_s: int | None = Field(
+        default=None, description="Seconds since the member's status last changed."
+    )
 
 
 class BgpSessionStatus(ApiModel):

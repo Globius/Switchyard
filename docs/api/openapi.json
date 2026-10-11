@@ -5048,6 +5048,30 @@
             "title": "Backend",
             "type": "string"
           },
+          "check_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Short code of the last health check (`L4OK`, `L7OK`, `L7STS`, `L4TOUT`, ...).",
+            "title": "Check Status"
+          },
+          "last_change_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds since the member's status last changed.",
+            "title": "Last Change S"
+          },
           "server": {
             "title": "Server",
             "type": "string"

@@ -12,7 +12,7 @@ Recipe for the Proxmox VM template that SE group deploys clone (`template_vmid`)
 | `tofu/` | OpenTofu (bpg/proxmox) for the build VM |
 | `test/` | Docker test: provisions Debian 13, checks versions and units, runs Data Plane API over mTLS |
 
-Ports on a provisioned SE: agent 7443 (mTLS), Data Plane API 5555 (mTLS), node exporter 9100,
+Ports on a provisioned SE: agent 7443 (mTLS), Data Plane API 5556 (mTLS), node exporter 9100,
 HAProxy exporter 8405 (a rendered listener, not part of the bootstrap config), local health 127.0.0.1:8404.
 
 Container variant: `lxc/build-template.sh VMID AGENT DATAPLANE` (run on a Proxmox node) builds the same image as a privileged

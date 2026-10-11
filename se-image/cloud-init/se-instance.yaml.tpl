@@ -7,6 +7,8 @@ write_files:
     permissions: "0600"
     content: |
       CONTROLLER_URL=${controller_url}
+      DP_USER=${dataplane_user}
+      DP_PASSWORD=${dataplane_password}
   - path: /etc/switchyard/agent/enroll.token
     permissions: "0600"
     content: "${enroll_token}\n"

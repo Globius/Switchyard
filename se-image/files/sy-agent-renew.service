@@ -6,4 +6,4 @@ ConditionPathExists=/etc/switchyard/agent/renew.token
 Type=oneshot
 EnvironmentFile=/etc/switchyard/agent/enroll.env
 ExecStart=/usr/local/bin/sy-agent renew --controller ${CONTROLLER_URL} --controller-ca /etc/switchyard/agent/controller-ca.crt
-ExecStartPost=/bin/systemctl try-restart sy-agent.service
+ExecStartPost=/bin/systemctl try-restart sy-agent.service dataplaneapi.service

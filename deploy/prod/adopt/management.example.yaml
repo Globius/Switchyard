@@ -63,14 +63,14 @@ engines:
   - se_group: management
     name: se-mgmt-1
     mgmt_ip: 10.0.0.21
-    dataplane_url: https://10.0.0.21:5555
+    dataplane_url: https://10.0.0.21:5556
     agent_url: https://10.0.0.21:7443
     pve_node: pve1
     vmid: 9101
   - se_group: management
     name: se-mgmt-2
     mgmt_ip: 10.0.0.22
-    dataplane_url: https://10.0.0.22:5555
+    dataplane_url: https://10.0.0.22:5556
     agent_url: https://10.0.0.22:7443
     pve_node: pve2
     vmid: 9102

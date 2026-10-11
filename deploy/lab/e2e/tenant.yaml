@@ -1,0 +1,54 @@
+# The tenant the end-to-end lab adopts: one network that plays management, VIP and backend (the lab Proxmox
+# bridge vmbr0 is 172.30.0.0/24, gateway 172.30.0.1 = the Proxmox container itself).
+tenants:
+  - id: lab
+    name: lab
+networks:
+  - id: net
+    tenant_id: lab
+    name: lab
+    cidr: 172.30.0.0/24
+    gateway: 172.30.0.1
+    vnet: vmbr0
+vip_pools:
+  - id: pool-mgmt
+    tenant_id: lab
+    name: mgmt
+    network_id: net
+    ranges: [{start: 172.30.0.100, end: 172.30.0.110}]
+  - id: pool-vips
+    tenant_id: lab
+    name: vips
+    network_id: net
+    ranges: [{start: 172.30.0.240, end: 172.30.0.250}]
+routing_profiles:
+  - id: rp
+    tenant_id: lab
+    name: vrrp
+    kind: vrrp
+    vrid: 51
+    interface: eth0
+se_groups:
+  - id: sg
+    tenant_id: lab
+    name: edge
+    ha_mode: vrrp
+    routing_profile_id: rp
+    canary_seconds: 0
+    networks:
+      - {network_id: net, role: mgmt}
+      - {network_id: net, role: vip}
+      - {network_id: net, role: backend}
+health_monitors:
+  - id: hm
+    tenant_id: lab
+    name: api-up
+    type: http
+    http: {path: /api/v1/healthz, expect_status: [200]}
+pools:
+  - id: pool-api
+    tenant_id: lab
+    name: controller-api
+    health_monitor_id: hm
+    members:
+      - {address: 172.30.0.1, port: 8000}

@@ -14,7 +14,7 @@ built with cloud-init and OpenTofu.
 - HAProxy 3.2 comes from haproxy.debian.net (Debian 13 ships 3.0). The Data Plane API binary and `sy-agent` are
   supplied by the caller (pinned release, built agent) rather than downloaded inside the script.
 - HAProxy runs from `/etc/switchyard/haproxy/haproxy.cfg` with a bootstrap config; the Data Plane API
-  (mTLS with the agent's certificate, port 5555) replaces it, as the adapter's `CONFIG_PATH` expects.
+  (mTLS with the agent's certificate, port 5556) replaces it, as the adapter's `CONFIG_PATH` expects.
 - Enrollment: the per-SE cloud-init snippet writes the controller URL, CA and a one-time token;
   `sy-agent-enroll.service` trades it for a certificate (ADR 0011) and deletes the token; a timer renews every 8 h.
 - Machine identity (machine-id, cloud-init state) is cleared at the end so clones are unique.

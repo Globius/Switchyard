@@ -141,6 +141,12 @@ The node exporter (9100) is part of the SE image. The HAProxy exporter (8405) is
 An hourly job expires drafts untouched for 14 days, finished jobs after 30 days, stale engine status and
 expired login or enrollment material. It never touches desired state, revisions or the audit log.
 
+## End-to-end lab
+
+`sh deploy/lab/e2e/run.sh` (about eight minutes; needs the dev PostgreSQL and OpenBao) deploys an LXC engine on a real
+Proxmox through the controller, enrolls it, applies a virtual service and sends traffic through the VIP; `teardown.sh` removes
+it. See ADR 0056.
+
 ## Testing against a Proxmox API
 
 `docker compose -f deploy/lab/pve/compose.yaml up -d`, then `sh deploy/lab/pve/bootstrap.sh` prints the `SWITCHYARD_TEST_PVE_*`

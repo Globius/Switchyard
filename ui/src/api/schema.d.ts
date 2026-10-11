@@ -5237,6 +5237,16 @@ export interface components {
         MemberStatus: {
             /** Backend */
             backend: string;
+            /**
+             * Check Status
+             * @description Short code of the last health check (`L4OK`, `L7OK`, `L7STS`, `L4TOUT`, ...).
+             */
+            check_status?: string | null;
+            /**
+             * Last Change S
+             * @description Seconds since the member's status last changed.
+             */
+            last_change_s?: number | null;
             /** Server */
             server: string;
             /**

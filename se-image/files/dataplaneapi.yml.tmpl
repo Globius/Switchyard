@@ -1,20 +1,22 @@
-# Data Plane API v3 on the SE. mTLS with the agent's certificate; the controller is the only client.
+# Template of the Data Plane API config. sy-render-dataplane writes /etc/switchyard/dataplaneapi.yml from it, with
+# DP_USER and DP_PASSWORD from /etc/switchyard/agent/enroll.env (cloud-init). mTLS with the agent's certificate
+# plus basic auth; the controller is the only client and reads the same credentials from its secret reference.
 config_version: 2
 name: switchyard-se
 dataplaneapi:
   host: 0.0.0.0
-  port: 5555            # plain listener disabled below; only the TLS listener answers
+  port: 5556            # plain listener disabled below; only the TLS listener answers
   scheme: [https]
   tls:
     tls_host: 0.0.0.0
-    tls_port: 5555
+    tls_port: 5556
     tls_certificate: /etc/switchyard/agent/tls.crt
     tls_key: /etc/switchyard/agent/tls.key
     tls_ca: /etc/switchyard/agent/ca.crt
   user:
-    - name: switchyard
-      insecure: false
-      password: "$5$disabled"   # unused: mTLS authenticates; replace per SE if basic auth is ever enabled
+    - name: "@DP_USER@"            # basic auth on top of mTLS; rendered per SE by sy-render-dataplane
+      insecure: true
+      password: "@DP_PASSWORD@"
   transaction:
     transaction_dir: /var/lib/dataplaneapi/transactions
   resources:

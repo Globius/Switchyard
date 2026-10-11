@@ -23,12 +23,18 @@ cd /tmp
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=sy-test -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
   -keyout /etc/switchyard/agent/tls.key -out /etc/switchyard/agent/tls.crt 2>/dev/null
 cp /etc/switchyard/agent/tls.crt /etc/switchyard/agent/ca.crt
+printf 'CONTROLLER_URL=https://c
+DP_USER=sy
+DP_PASSWORD=s3cret
+' > /etc/switchyard/agent/enroll.env
+/usr/local/sbin/sy-render-dataplane
+grep -q 'password: "s3cret"' /etc/switchyard/dataplaneapi.yml || fail "credentials not rendered"
 mkdir -p /run/haproxy
 haproxy -c -f /etc/switchyard/haproxy/haproxy.cfg >/dev/null || fail "bootstrap haproxy.cfg invalid"
 haproxy -D -f /etc/switchyard/haproxy/haproxy.cfg -p /run/haproxy.pid
 dataplaneapi -f /etc/switchyard/dataplaneapi.yml >/tmp/dp.log 2>&1 &
-i=0; until curl -sk --cert /etc/switchyard/agent/tls.crt --key /etc/switchyard/agent/tls.key https://127.0.0.1:5555/v3/info | grep -q api; do
+i=0; until curl -sk --cert /etc/switchyard/agent/tls.crt --key /etc/switchyard/agent/tls.key -u sy:s3cret https://127.0.0.1:5556/v3/info | grep -q api; do
   i=$((i+1)); [ $i -lt 20 ] || { cat /tmp/dp.log; fail "dataplaneapi did not answer over mTLS"; }; sleep 0.5; done
-code=$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:5555/v3/info || true)
+code=$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:5556/v3/info || true)
 [ "$code" = 000 ] || [ "$code" = 401 ] || fail "dataplaneapi answered without a client certificate ($code)"
 echo "dataplaneapi mTLS ok"
