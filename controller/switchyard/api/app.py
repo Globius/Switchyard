@@ -155,7 +155,12 @@ from switchyard.services.sessions import (
     SessionService,
     UserDisabledError,
 )
-from switchyard.services.status import EngineStatus, StatusService, virtual_service_states
+from switchyard.services.status import (
+    EngineStatus,
+    StatusService,
+    VirtualServiceStatus,
+    virtual_service_states,
+)
 from switchyard.services.tenants import TenantRecord, TenantService
 from switchyard.services.tokens import TokenService
 from switchyard.services.users import UserRecord, UserService
@@ -3168,6 +3173,18 @@ def create_app(
             "observed_at": s.observed_at,
         }
 
+    def vs_status_json(v: VirtualServiceStatus) -> dict[str, Any]:
+        return {
+            "id": v.id,
+            "name": v.name,
+            "protocol": v.protocol,
+            "state": v.state,
+            "health": v.health,
+            "members_up": v.members_up,
+            "members_total": v.members_total,
+            "members": [m.__dict__ for m in v.members],
+        }
+
     @router.get(
         "/tenants/{t}/status/engines",
         tags=["status"],
@@ -3189,18 +3206,7 @@ def create_app(
         tenant: Tenant, who: Who, svc: Services
     ) -> list[dict[str, Any]]:
         """UDP services are `serving` (IPVS); `not_served` is reserved for unrenderable ones."""
-        return [
-            {
-                "id": v.id,
-                "name": v.name,
-                "protocol": v.protocol,
-                "state": v.state,
-                "health": v.health,
-                "members_up": v.members_up,
-                "members_total": v.members_total,
-            }
-            for v in await svc.status.virtual_services(who, tenant.id)
-        ]
+        return [vs_status_json(v) for v in await svc.status.virtual_services(who, tenant.id)]
 
     @router.get(
         "/tenants/{t}/status/stream",
@@ -3250,17 +3256,9 @@ def create_app(
                     for s in await svc.status.list_status(who, tenant.id)
                 ]
                 states = [
-                    VirtualServiceStatusRead.model_validate(
-                        {
-                            "id": v.id,
-                            "name": v.name,
-                            "protocol": v.protocol,
-                            "state": v.state,
-                            "health": v.health,
-                            "members_up": v.members_up,
-                            "members_total": v.members_total,
-                        }
-                    ).model_dump(mode="json")
+                    VirtualServiceStatusRead.model_validate(vs_status_json(v)).model_dump(
+                        mode="json"
+                    )
                     for v in await svc.status.virtual_services(who, tenant.id)
                 ]
                 for name, payload in (("status", engines), ("vs_state", states)):

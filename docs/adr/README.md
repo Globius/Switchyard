@@ -44,6 +44,7 @@ Date: YYYY-MM-DD
 | [0041](0041-agent-member-probe-and-withdrawn-prefixes.md) | Agent member probe (health monitor test) and the withdrawn prefix list | Accepted |
 | [0018](0018-saml-login.md) | SAML 2.0 login (signxml, signed assertions, replay cache, SP metadata) | Accepted |
 | [0042](0042-ui-theme-and-fonts.md) | UI theme: shadcn tokens, status tokens and fonts | Accepted |
+| [0047](0047-member-health-detail.md) | Per-member health and last check | Accepted |
 | [0046](0046-revision-message.md) | Revision message on apply | Accepted |
 | [0045](0045-tenant-quota-enforcement.md) | Tenant quota enforcement and usage counts | Accepted |
 | [0061](0061-controller-metrics-and-sd.md) | Controller metrics and Prometheus service discovery | Accepted |

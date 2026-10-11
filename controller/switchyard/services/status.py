@@ -18,7 +18,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, select
 
 from switchyard.adapters.agent import AgentEngine, AgentError, AgentStatus, IpvsRealServer
-from switchyard.adapters.haproxy import HaproxyEngine, HaproxyError
+from switchyard.adapters.haproxy import HaproxyEngine, HaproxyError, ServerStatus
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.db import audit_log
 from switchyard.db.models import TenantRow
@@ -54,6 +54,17 @@ class EngineStatus:
     agent: dict[str, Any] | None
     drift: list[dict[str, str]]
     observed_at: datetime
+
+
+def _member_row(s: ServerStatus) -> dict[str, str]:
+    row = {"backend": s.backend, "server": s.server, "status": s.status}
+    if s.check_status:
+        row["check_status"] = s.check_status
+    if s.last_check:
+        row["last_check"] = s.last_check
+    if s.last_change_s is not None:
+        row["last_change_s"] = str(s.last_change_s)
+    return row
 
 
 _IPVS_STATUS = {"up": "UP", "down": "DOWN", "drain": "DRAIN"}
@@ -128,6 +139,84 @@ class VirtualServiceStatus:
     health: str = "unknown"
     members_up: int = 0
     members_total: int = 0
+    members: tuple["MemberRow", ...] = ()
+
+
+@dataclass(frozen=True)
+class MemberRow:
+    """One pool member as one engine reports it.
+
+    Attributes:
+        pool: Pool name.
+        pool_id: Pool id.
+        member_id: Pool member id.
+        address: Member address.
+        port: Member port, if the pool member has one.
+        engine: Reporting engine name.
+        engine_id: Reporting engine id.
+        status: HAProxy status (``UP``, ``DOWN``, ...).
+        check_status: Short code of the last health check, when the engine reports one.
+        last_check: HAProxy description of the last check.
+        last_change_s: Seconds since the status last changed.
+        last_checked_at: When the controller last read this engine's check results.
+    """
+
+    pool: str
+    pool_id: UUID
+    member_id: UUID
+    address: str
+    port: int | None
+    engine: str
+    engine_id: UUID
+    status: str
+    check_status: str | None
+    last_check: str | None
+    last_change_s: int | None
+    last_checked_at: datetime
+
+
+def virtual_service_members(
+    snapshot: Snapshot, service: VirtualService, statuses: Sequence["EngineStatus"]
+) -> tuple[MemberRow, ...]:
+    """List the reported member rows of the service pools, one per engine and member.
+
+    Only reachable engines of the service SE group count, as for ``virtual_service_health``.
+    Rows are sorted by pool, address, port and engine.
+    """
+    if not service.enabled:
+        return ()
+    pool_ids = {r.pool_id for r in service.routes if r.pool_id}
+    if service.default_pool_id:
+        pool_ids.add(service.default_pool_id)
+    rows: list[MemberRow] = []
+    for pool in (p for p in snapshot.pools if p.id in pool_ids):
+        backend = "pool_" + ident(pool.name)
+        by_server = {m.server_name: m for m in pool.members}
+        for engine in statuses:
+            if engine.se_group_id != service.se_group_id or not engine.reachable:
+                continue
+            for row in engine.members:
+                member = by_server.get(row["server"]) if row["backend"] == backend else None
+                if member is None:
+                    continue
+                changed = row.get("last_change_s")
+                rows.append(
+                    MemberRow(
+                        pool=pool.name,
+                        pool_id=pool.id,
+                        member_id=member.id,
+                        address=str(member.address),
+                        port=member.port,
+                        engine=engine.name,
+                        engine_id=engine.engine_id,
+                        status=row["status"],
+                        check_status=row.get("check_status"),
+                        last_check=row.get("last_check"),
+                        last_change_s=int(changed) if changed is not None else None,
+                        last_checked_at=engine.observed_at,
+                    )
+                )
+    return tuple(sorted(rows, key=lambda r: (r.pool, r.address, r.port or 0, r.engine)))
 
 
 def is_up(status: str) -> bool:
@@ -201,7 +290,10 @@ def virtual_service_states(
     for s in snapshot.virtual_services:
         state = "serving" if s.enabled else "disabled"
         health, up, total = virtual_service_health(snapshot, s, statuses)
-        out.append(VirtualServiceStatus(s.id, s.name, str(s.protocol), state, health, up, total))
+        members = virtual_service_members(snapshot, s, statuses)
+        out.append(
+            VirtualServiceStatus(s.id, s.name, str(s.protocol), state, health, up, total, members)
+        )
     return sorted(out, key=lambda v: v.name)
 
 
@@ -290,10 +382,7 @@ class StatusService:
             async with self._limit:
                 engine = await self._directory.connect(record)
                 fingerprint = await engine.fingerprint()
-                members = [
-                    {"backend": s.backend, "server": s.server, "status": s.status}
-                    for s in await engine.server_statuses()
-                ]
+                members = [_member_row(s) for s in await engine.server_statuses()]
         except HaproxyError as exc:
             reachable, error = False, str(exc)
         finally:

@@ -1074,6 +1074,30 @@ class DiscoveryGroup(ApiModel):
     labels: dict[str, str] = Field(
         description="`tenant` (id), `tenant_name`, `se_group`, `engine` and `vs` (the group's "
         "service names between commas, for example `,shop,www,`)."
+
+
+class VirtualServiceMemberRead(ApiModel):
+    """One pool member of a virtual service as one engine reports it."""
+
+    pool: str
+    pool_id: UUID
+    member_id: UUID
+    address: str
+    port: int | None = None
+    engine: str
+    engine_id: UUID
+    status: str = Field(description="HAProxy status, for example `UP`, `DOWN`, `DRAIN`.")
+    check_status: str | None = Field(
+        default=None, description="Short code of the last health check, for example `L7STS`."
+    )
+    last_check: str | None = Field(
+        default=None, description="HAProxy description of the last health check."
+    )
+    last_change_s: int | None = Field(
+        default=None, description="Seconds since the member status last changed."
+    )
+    last_checked_at: datetime = Field(
+        description="When the controller last read this engine's check results."
     )
 
 
@@ -1096,6 +1120,10 @@ class VirtualServiceStatusRead(ApiModel):
     health: VirtualServiceHealth
     members_up: int = Field(description="Reported member rows that are `UP`, across engines.")
     members_total: int = Field(description="Reported member rows of the service's pools.")
+    members: list[VirtualServiceMemberRead] = Field(
+        default_factory=list,
+        description="The reported rows behind the counts, one per engine and pool member.",
+    )
 
 
 class DriftKind(StrEnum):
