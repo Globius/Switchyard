@@ -9096,13 +9096,21 @@
             "additionalProperties": {
               "type": "integer"
             },
-            "description": "Object-count limits by object type.",
+            "description": "Object-count limits by object type name (`virtual_service`, `pool`, ...).",
             "title": "Quotas",
             "type": "object"
           },
           "require_approval": {
             "title": "Require Approval",
             "type": "boolean"
+          },
+          "usage": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Objects the tenant owns now, by object type name (zeros included).",
+            "title": "Usage",
+            "type": "object"
           },
           "version": {
             "title": "Version",
@@ -14956,9 +14964,14 @@
                     "id": "0192f3a0-0000-7000-8000-000000000001",
                     "name": "acme",
                     "quotas": {
-                      "virtual_services": 50
+                      "virtual_service": 50
                     },
                     "require_approval": true,
+                    "usage": {
+                      "network": 2,
+                      "pool": 20,
+                      "virtual_service": 12
+                    },
                     "version": 2
                   }
                 ],
@@ -15067,9 +15080,14 @@
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
                   "quotas": {
-                    "virtual_services": 50
+                    "virtual_service": 50
                   },
                   "require_approval": true,
+                  "usage": {
+                    "network": 2,
+                    "pool": 20,
+                    "virtual_service": 12
+                  },
                   "version": 2
                 },
                 "schema": {
@@ -15261,9 +15279,14 @@
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
                   "quotas": {
-                    "virtual_services": 50
+                    "virtual_service": 50
                   },
                   "require_approval": true,
+                  "usage": {
+                    "network": 2,
+                    "pool": 20,
+                    "virtual_service": 12
+                  },
                   "version": 2
                 },
                 "schema": {
@@ -15398,9 +15421,14 @@
                   "id": "0192f3a0-0000-7000-8000-000000000001",
                   "name": "acme",
                   "quotas": {
-                    "virtual_services": 50
+                    "virtual_service": 50
                   },
                   "require_approval": true,
+                  "usage": {
+                    "network": 2,
+                    "pool": 20,
+                    "virtual_service": 12
+                  },
                   "version": 2
                 },
                 "schema": {

@@ -186,7 +186,9 @@ function renderAt(path: string) {
 describe("change sets", () => {
   it("lists open change sets with state, yours marker and a Review/View action; History tab", async () => {
     renderAt("/t/acme/change-sets");
-    const mine = (await screen.findByText("Draft by Miguel, 10:42")).closest("li")!;
+    const mine = (await screen.findByRole("button", { name: /Draft by Miguel, 10:42/ })).closest(
+      "li",
+    )!;
     await waitFor(() => expect(within(mine).getByText("yours")).toBeInTheDocument());
     expect(within(mine).getByRole("link", { name: "Review" })).toHaveAttribute(
       "href",
@@ -340,6 +342,39 @@ describe("tenant home", () => {
     expect(within(failing).getByText("api-v1-01")).toBeInTheDocument();
     expect(screen.getByText("se-edge-a-02", { selector: "span" })).toBeInTheDocument();
     expect(await screen.findByText("Move billing-db")).toBeInTheDocument();
+  });
+
+  it("offers Re-apply revision #N on a drifted engine and opens a rollback draft", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/summary", () =>
+        HttpResponse.json({
+          services: { total: 0, healthy: 0, degraded: 0, down: 0, disabled: 0, unknown: 0 },
+          failing_members: [],
+          drifted_engines: [
+            {
+              engine: "se-edge-a-02",
+              engine_id: "e2",
+              kinds: ["haproxy_config"],
+              se_group_id: "g",
+            },
+          ],
+          unreachable_engines: [],
+          expiring_certificates: [],
+          jobs: { running: 0, queued: 0, failed: 0 },
+          open_drafts: 0,
+          pending_approval: 0,
+          latest_revision: null,
+        }),
+      ),
+      http.get("*/api/v1/tenants/acme/engines", () => HttpResponse.json([])),
+    );
+    const router = renderAt("/t/acme");
+    const btn = await screen.findByRole("button", { name: "Re-apply revision #41" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    await userEvent.click(btn);
+    await userEvent.click(await screen.findByRole("button", { name: "Open draft" }));
+    await waitFor(() => expect(rollbackCalled).toBe(41));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/t/acme/review/cs-rb"));
   });
 });
 
