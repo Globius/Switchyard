@@ -177,6 +177,10 @@ System administrators or the `SWITCHYARD_METRICS_TOKEN` bearer token only. See `
 `GET /tenants/{t}/audit-events/export` and `GET /audit-events/export` take the same filters and stream every matching event
 as a file (`format=csv|jsonl`, no paging, default `csv`). Each export is audited as `audit.export`. See ADR 0060.
 
+`GET /tenants/{t}/principals?actor=user:…&actor=token:…` (and `GET /principals` for system administrators) turns the
+labels audit events, change sets and revisions carry into `display_name`s (`kind`: `user`, `token`, `local`, `login`,
+`system`, `unknown`). A user only resolves to a provider name when they appear in the tenant's own history. See ADR 0062.
+
 ## Search
 
 `GET /tenants/{t}/search?q=&types=&limit=` finds objects by name; virtual services also match their VIP, certificates

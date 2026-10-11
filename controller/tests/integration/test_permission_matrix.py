@@ -60,6 +60,7 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("PATCH", "/tenants/{t}"): ("enable", "require_approval"),
     ("DELETE", "/tenants/{t}"): ("manage", "tenant"),
     ("GET", "/tenants/{t}/audit-events"): READ,
+    ("GET", "/tenants/{t}/principals"): READ,
     ("GET", "/tenants/{t}/audit-events/export"): READ,
     ("GET", "/tenants/{t}/change-sets"): READ,
     ("POST", "/tenants/{t}/change-sets"): DRAFT,
@@ -155,6 +156,7 @@ for _read in (
 ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
 ROUTES[("GET", "/audit-actions")] = ANY
 ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
+ROUTES[("GET", "/principals")] = ("manage", "tenant")
 ROUTES[("GET", "/audit-events/export")] = ("manage", "tenant")
 ROUTES.pop(("GET", "/tenants/{t}/networks/{object_id}/rendered"), None)
 ROUTES.pop(("GET", "/tenants/{t}/vip-pools/{object_id}/rendered"), None)

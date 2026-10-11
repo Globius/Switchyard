@@ -85,6 +85,7 @@ from switchyard.api.schemas import (
     Page,
     PermissionMatrix,
     PlacementRead,
+    PrincipalNameRead,
     ProblemOut,
     ProtocolRulesRead,
     ReasonIn,
@@ -131,6 +132,7 @@ from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
 from switchyard.render.escape import RenderError
 from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
+from switchyard.services import principals
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
 from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import (
@@ -3577,6 +3579,57 @@ def create_app(
             filters.tenant_id = (await svc.tenants.resolve(who, tenant)).id
         async with admin_session(svc.db.admin) as session:
             return await _audit_page(session, filters)
+
+    actor_query = Query(
+        description="A principal label to resolve (repeat up to 100 times).", max_length=100
+    )
+
+    @router.get(
+        "/tenants/{t}/principals",
+        tags=["audit"],
+        summary="Names for principal labels",
+        description=(
+            "Turns the labels that audit events, change sets and revisions carry (`user:...`, "
+            "`token:...`, `local:...`, `system:...`) into names for people, in the order given, "
+            "one answer per distinct label. Users who appear in this tenant's own history get the "
+            "name their identity provider gave; any other `user:` label is answered from the "
+            "label alone. Requires any role in the tenant."
+        ),
+        response_model=list[PrincipalNameRead],
+        responses=_ok(ex.PRINCIPALS),
+    )
+    async def tenant_principals(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        actor: Annotated[list[str] | None, actor_query] = None,
+    ) -> list[dict[str, str]]:
+        try:
+            names = await principals.display_names(svc.db, actor or [], tenant_id=tenant.id)
+        except ValueError as exc:
+            raise ApiError(422, str(exc)) from None
+        return [n.__dict__ for n in names]
+
+    @router.get(
+        "/principals",
+        tags=["audit"],
+        summary="Names for principal labels (system-admin)",
+        description=(
+            "As `GET /tenants/{t}/principals` for any user, for the cross-tenant audit log. "
+            "Requires `system-admin`."
+        ),
+        response_model=list[PrincipalNameRead],
+        responses=_ok(ex.PRINCIPALS),
+    )
+    async def system_principals(
+        who: Who, svc: Services, actor: Annotated[list[str] | None, actor_query] = None
+    ) -> list[dict[str, str]]:
+        require(who, "manage", "tenant")
+        try:
+            names = await principals.display_names(svc.db, actor or [])
+        except ValueError as exc:
+            raise ApiError(422, str(exc)) from None
+        return [n.__dict__ for n in names]
 
     @router.get(
         "/tenants/{t}/audit-events/export",
