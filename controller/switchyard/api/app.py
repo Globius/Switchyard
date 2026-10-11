@@ -2937,10 +2937,20 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         change_set: UUID | None = None,
         apply: bool = False,
     ) -> Accepted:
-        """Store an uploaded certificate and key, and add the certificate object to a change set."""
+        """Store an uploaded certificate and key (PEM or PKCS#12) and add it to a change set."""
         if svc.certs is None:
             raise ApiError(503, "no secrets backend is configured for certificates")
-        data = await svc.certs.import_pem(who, tenant.id, body.name, body.pem)
+        if body.pkcs12_b64 is not None:
+            data = await svc.certs.import_pkcs12(
+                who,
+                tenant.id,
+                body.name,
+                body.pkcs12_b64,
+                body.password.get_secret_value() if body.password else None,
+            )
+        else:
+            pem = body.pem or ""
+            data = await svc.certs.import_pem(who, tenant.id, body.name, pem)
         op = ChangeOp(
             object_type=ObjectType.CERTIFICATE, object_id=uuid7(), action=Action.CREATE, body=data
         )

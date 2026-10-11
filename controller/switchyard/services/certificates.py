@@ -36,13 +36,15 @@ from switchyard.jobs import queue
 from switchyard.services.certs import (
     CertificateError,
     CertInfo,
+    Pkcs12Error,
     generate_key_and_csr,
     inspect_pem,
+    pkcs12_to_pem,
     secret_ref_for,
 )
 from switchyard.services.changesets import ChangeSetService, require
 from switchyard.services.context import Databases, Principal
-from switchyard.services.errors import NotFoundError, PermissionDeniedError
+from switchyard.services.errors import FieldErrors, NotFoundError, PermissionDeniedError
 
 log = logging.getLogger("switchyard.certificates")
 
@@ -202,6 +204,34 @@ class CertificateService:
                 diff={"sans": list(issued.info.sans), "secret_ref": issued.secret_ref},
             )
         return {"name": name} | self._body(issued, dm.CertSource.UPLOAD, dm.RenewPolicy.MANUAL)
+
+    async def import_pkcs12(
+        self,
+        principal: Principal,
+        tenant_id: UUID,
+        name: str,
+        pkcs12_b64: str,
+        password: str | None,
+    ) -> dict[str, Any]:
+        """Unpack an uploaded PKCS#12 file, then store it like :meth:`import_pem`.
+
+        The password is used for decryption only: it is not logged, audited or stored, and the
+        stored secret is the same unencrypted PEM bundle a PEM import produces.
+
+        Raises:
+            FieldErrors: With the field path when the file or password is wrong.
+            CertificateError: If the unpacked bundle is unusable.
+        """
+        if not principal.can_access(tenant_id):
+            raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
+        require(principal, "manage", "certificate")
+        try:
+            pem = pkcs12_to_pem(pkcs12_b64, password)
+        except Pkcs12Error as exc:
+            errors = FieldErrors()
+            errors.add(exc.path, exc.code, str(exc))
+            raise errors from None
+        return await self.import_pem(principal, tenant_id, name, pem)
 
     # -- issuing ----------------------------------------------------------------------------------
 

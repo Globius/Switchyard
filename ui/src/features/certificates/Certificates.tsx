@@ -107,6 +107,14 @@ export function buildBundle(cert: string, chain: string, key: string): string {
   );
 }
 
+/** Base64 of raw bytes (a PKCS#12 file), without a big spread that overflows on large files. */
+export function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void }) {
   const ensure = useEnsureDraft(tenant);
   const qc = useQueryClient();
@@ -114,6 +122,9 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
   const [cert, setCert] = useState("");
   const [chain, setChain] = useState("");
   const [key, setKey] = useState("");
+  const [mode, setMode] = useState<"pem" | "pfx">("pem");
+  const [pfx, setPfx] = useState<{ name: string; b64: string } | null>(null);
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<unknown>(null);
   const certOk = looksLikePem(cert).cert;
@@ -127,10 +138,14 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
       unwrap(
         await api.POST("/api/v1/tenants/{t}/certificates/import", {
           params: { path: { t: tenant }, query: { change_set: cs } },
-          body: { name, pem: buildBundle(cert, chain, key) },
+          body:
+            mode === "pem"
+              ? { name, pem: buildBundle(cert, chain, key) }
+              : { name, pkcs12_b64: pfx!.b64, password },
         }),
       );
       setKey("");
+      setPassword("");
       await qc.invalidateQueries({ queryKey: ["t", tenant] });
       onClose();
     } catch (e) {
@@ -150,7 +165,7 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
             {t("Cancel")}
           </Button>
           <Button
-            disabled={busy || !name || !certOk || !chainOk || !keyOk}
+            disabled={busy || !name || (mode === "pem" ? !certOk || !chainOk || !keyOk : !pfx)}
             onClick={() => void submit()}
           >
             {t("Add to draft")}
@@ -168,27 +183,86 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
           onChange={(e) => setName(e.target.value)}
         />
       </label>
-      <PemField
-        label={t("Certificate")}
-        value={cert}
-        onChange={setCert}
-        ok={certOk}
-        hint={t("The leaf certificate (PEM).")}
-      />
-      <PemField
-        label={t("Chain (optional)")}
-        value={chain}
-        onChange={setChain}
-        ok={chainOk}
-        hint={t("Intermediate certificates, in order.")}
-      />
-      <PemField
-        label={t("Private key")}
-        value={key}
-        onChange={setKey}
-        ok={keyOk}
-        hint={t("Unencrypted PEM. Sent once, stored in OpenBao, never shown again.")}
-      />
+      <div
+        role="group"
+        aria-label={t("Import format")}
+        className="inline-flex overflow-hidden rounded-md border text-sm"
+      >
+        {(["pem", "pfx"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            aria-pressed={mode === m}
+            onClick={() => setMode(m)}
+            className="px-3 py-1.5 aria-pressed:bg-accent"
+          >
+            {m === "pem" ? t("PEM files") : t("PKCS#12 / PFX")}
+          </button>
+        ))}
+      </div>
+      {mode === "pem" ? (
+        <>
+          <PemField
+            label={t("Certificate")}
+            value={cert}
+            onChange={setCert}
+            ok={certOk}
+            hint={t("The leaf certificate (PEM).")}
+          />
+          <PemField
+            label={t("Chain (optional)")}
+            value={chain}
+            onChange={setChain}
+            ok={chainOk}
+            hint={t("Intermediate certificates, in order.")}
+          />
+          <PemField
+            label={t("Private key")}
+            value={key}
+            onChange={setKey}
+            ok={keyOk}
+            hint={t("Unencrypted PEM. Sent once, stored in OpenBao, never shown again.")}
+          />
+        </>
+      ) : (
+        <div className="space-y-3">
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("PKCS#12 file (.p12 or .pfx)")}
+            <input
+              type="file"
+              aria-label={t("PKCS#12 file")}
+              accept=".p12,.pfx,application/x-pkcs12"
+              className="block w-full text-sm"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return setPfx(null);
+                setPfx({ name: f.name, b64: toBase64(new Uint8Array(await f.arrayBuffer())) });
+              }}
+            />
+          </label>
+          {pfx && (
+            <p className="text-xs text-muted-foreground">
+              {t("Selected {file}", { file: pfx.name })}
+            </p>
+          )}
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("Password")}
+            <input
+              aria-label={t("Password")}
+              type="password"
+              autoComplete="off"
+              className={INPUT}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <span className="block text-xs font-normal text-muted-foreground">
+              {t(
+                "Leave empty if the file has no password. The file and password are sent once, never stored or shown again; the key goes to OpenBao.",
+              )}
+            </span>
+          </label>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">
         {t(
           "SANs and expiry are read from the certificate. Importing adds the certificate to your draft.",

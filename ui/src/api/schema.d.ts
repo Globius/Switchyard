@@ -790,7 +790,7 @@ export interface paths {
         put?: never;
         /**
          * Import a certificate and key
-         * @description Store an uploaded certificate and key, and add the certificate object to a change set.
+         * @description Store an uploaded certificate and key (PEM or PKCS#12) and add it to a change set.
          *
          *     **Access:** `operator` or higher in the tenant.
          */
@@ -3256,16 +3256,26 @@ export interface components {
         };
         /**
          * CertImportIn
-         * @description Body of ``POST /certificates/import``.
+         * @description Body of ``POST /certificates/import``: send ``pem`` or ``pkcs12_b64`` with ``password``.
          */
         CertImportIn: {
             /** Name */
             name: string;
             /**
-             * Pem
-             * @description Certificate chain followed by the private key.
+             * Password
+             * @description Password of the PKCS#12 file; never logged or stored. Empty if none.
              */
-            pem: string;
+            password?: string | null;
+            /**
+             * Pem
+             * @description Certificate chain followed by the private key (PEM).
+             */
+            pem?: string | null;
+            /**
+             * Pkcs12 B64
+             * @description Base64 of a PKCS#12/PFX file holding the leaf, chain and key.
+             */
+            pkcs12_b64?: string | null;
         };
         /**
          * CertIssueIn
