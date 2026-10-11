@@ -372,6 +372,10 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n"
         "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n",
     },
+    "POST /tenants/{t}/certificates/{certificate}/replace": {
+        "pkcs12_b64": "MIIJ...",
+        "password": "export-password",
+    },
     "POST /tenants/{t}/certificates/issue": {
         "name": "web-example",
         "source": "acme",

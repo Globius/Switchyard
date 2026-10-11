@@ -16391,6 +16391,10 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "password": "export-password",
+                "pkcs12_b64": "MIIJ..."
+              },
               "schema": {
                 "$ref": "#/components/schemas/CertReplaceIn"
               }
