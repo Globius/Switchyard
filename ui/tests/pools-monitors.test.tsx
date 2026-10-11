@@ -376,8 +376,7 @@ describe("health monitors", () => {
     await waitFor(() => expect(interval).toBeEnabled());
     await userEvent.clear(interval);
     await userEvent.type(interval, "10");
-    await userEvent.clear(screen.getByLabelText("Expected status codes"));
-    await userEvent.type(screen.getByLabelText("Expected status codes"), "200");
+    await userEvent.click(screen.getByRole("button", { name: /Remove 204/ }));
     await userEvent.selectOptions(screen.getByLabelText("Method"), "HEAD");
     await userEvent.type(screen.getByLabelText("Port"), "9000");
     await userEvent.type(screen.getByLabelText("Host header"), "x.test");
@@ -410,7 +409,7 @@ describe("health monitors", () => {
     await waitFor(() => expect(n).toBeEnabled());
     await userEvent.click(n);
     await userEvent.type(await screen.findByLabelText("Name"), "wg-udp");
-    await userEvent.selectOptions(screen.getByLabelText("Type"), "udp");
+    await userEvent.click(screen.getByRole("radio", { name: "UDP" }));
     expect(screen.queryByLabelText("Rise")).not.toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Probe payload (hex)"), "ab");
     await userEvent.click(screen.getByLabelText("Require a reply"));
