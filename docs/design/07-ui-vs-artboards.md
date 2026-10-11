@@ -281,3 +281,7 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | B20 axe, RHF/Zod, TanStack Table | partly done | axe and keyboard and phone checks via Playwright (!69); RHF, Zod and TanStack Table not adopted (deviation, record an ADR if kept) |
 | Backend-fed items | done | quota usage, revision message, per-member health and last check, host placement, audit export, BGP max prefixes |
 | Pool passive checks, slow start, TLS profile per port, OCSP stapling | done | pool sheet, Edit ports sheet, certificate sheet (!76) |
+
+## Admin screens, live check
+
+Checked on 2026-10-11 against a local controller, signed in as the break-glass system-admin: Tenants, Users, Identity providers, Role mappings, System tokens and Audit log all load and match the artboards. One gap fixed: the Break-glass card showed an empty "Enabled" value when the deployment forces it on; it now says "Always on (set by the deployment)". Not verifiable on that controller build: `/principals` answers 404 and `/permissions` carries no `group`, so actor names fall back to ids and the role matrix shows one "Other" group. Both work against the current API spec.

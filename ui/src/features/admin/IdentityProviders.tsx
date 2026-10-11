@@ -416,6 +416,10 @@ function BreakGlass() {
                   : ""}
                 {b.enabled_by ? ` ${t("by {who}", { who: b.enabled_by })}` : ""}
                 {b.reason ? ` · “${b.reason}”` : ""}
+                {!b.enabled_until &&
+                  !b.enabled_by &&
+                  !b.reason &&
+                  t("Always on (set by the deployment)")}
               </dd>
             </>
           )}
