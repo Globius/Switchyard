@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -37,100 +38,198 @@ export function isListField(field: string, before: unknown, after: unknown): boo
   );
 }
 
-/** "api.example.com /v2* → pool api-v2", or "→ redirect 301 https://…". */
+/** "api.example.com prefix /v2/ → api-v2", or "→ redirect 301 https://…". */
 export function describeRoute(r: RouteLike, labels: Labels): string {
   const m = r.match;
-  const path = m.path_exact ? `= ${m.path_exact}` : m.path_prefix ? `${m.path_prefix}*` : "";
+  const path = m.path_exact
+    ? `exact ${m.path_exact}`
+    : m.path_prefix
+      ? `prefix ${m.path_prefix}`
+      : "";
   const when = [m.host, path].filter(Boolean).join(" ") || t("any request");
   const to = r.redirect
     ? t("redirect {code} {to}", { code: r.redirect.code, to: r.redirect.location })
-    : t("pool {name}", { name: (r.pool_id && labels[r.pool_id]) || "—" });
+    : (r.pool_id && labels[r.pool_id]) || "—";
   return `${when} → ${to}`;
 }
 
 function describeMember(m: Member): string {
-  return `${m.name ?? m.address} ${m.address}${m.port ? `:${m.port}` : ""}${m.weight != null ? ` w${m.weight}` : ""}${m.admin_state && m.admin_state !== "enabled" ? ` ${m.admin_state}` : ""}`;
+  return `${m.address}${m.port ? `:${m.port}` : ""} · weight ${m.weight ?? "—"} · ${m.admin_state ?? "enabled"}`;
 }
 
 function describePort(p: Port): string {
   return `${p.port}${p.tls ? " TLS" : ""}${p.http2 ? " h2" : ""}${p.proxy_protocol ? " PROXY" : ""}`;
 }
 
-const TONE: Record<Marker, string> = {
-  "+": "bg-diff-add",
-  "−": "bg-diff-del",
-  "~": "bg-status-degraded-bg",
-  "↕": "bg-status-draining-bg",
-  " ": "",
-};
-const LABEL: Record<Marker, string> = {
+const WORD: Record<Marker, string> = {
   "+": "added",
   "−": "removed",
   "~": "changed",
   "↕": "moved",
+  " ": "same",
+};
+const PILL: Record<Marker, string> = {
+  "+": "bg-diff-add text-status-healthy",
+  "−": "bg-diff-del text-status-down",
+  "~": "bg-status-degraded-bg text-status-degraded",
+  "↕": "bg-status-draining-bg text-status-draining",
   " ": "",
 };
 
-function Mark({ m }: { m: Marker }) {
-  return (
-    <span className="w-5 shrink-0 text-center" title={t(LABEL[m])}>
-      {m}
-      <span className="sr-only">{t(LABEL[m])}</span>
-    </span>
-  );
+/** "3 members → 4 members · 1 added · 3 unchanged (hidden)". */
+function summary(
+  noun: string,
+  before: number,
+  after: number,
+  counts: Record<string, number>,
+  hidden?: number,
+) {
+  const parts = Object.entries(counts)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${n} ${t(k)}`);
+  return `${t("{n} {noun}", { n: before, noun })} → ${t("{n} {noun}", { n: after, noun })}${parts.length ? ` · ${parts.join(" · ")}` : ""}${hidden ? ` · ${t("{n} unchanged (hidden)", { n: hidden })}` : ""}`;
 }
 
-function OrderedList<T>({ rows, text }: { rows: OrderedRow<T>[]; text: (x: T) => string }) {
-  return (
-    <ol className="divide-y font-mono text-xs">
-      {rows.map((r, i) => (
-        <li key={i} data-marker={r.marker} className={cn("flex gap-3 px-4 py-1.5", TONE[r.marker])}>
-          <Mark m={r.marker} />
-          <span className="w-6 shrink-0 text-muted-foreground">{r.position}</span>
-          <span>
-            {r.marker === "~" && r.before !== undefined && (
-              <span className="mr-2 text-muted-foreground line-through">{text(r.before)}</span>
-            )}
-            {text((r.after ?? r.before) as T)}
-          </span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-function KeyedList<T>({
-  diff,
+function OrderedTable<T>({
+  rows,
   text,
+  revision,
 }: {
-  diff: { rows: KeyedRow<T>[]; unchanged: number };
+  rows: OrderedRow<T>[];
   text: (x: T) => string;
+  revision?: number;
 }) {
   return (
-    <ul className="divide-y font-mono text-xs">
-      {diff.rows.map((r) => (
-        <li
-          key={`${r.marker}-${r.key}`}
-          data-marker={r.marker}
-          className={cn("flex gap-3 px-4 py-1.5", TONE[r.marker])}
-        >
-          <Mark m={r.marker} />
-          <span>
-            {r.marker === "~" && r.before !== undefined && (
-              <span className="mr-2 text-muted-foreground line-through">{text(r.before)}</span>
-            )}
-            {text((r.after ?? r.before) as T)}
-          </span>
-        </li>
-      ))}
-      {diff.unchanged > 0 && (
-        <li className="px-4 py-1.5 text-muted-foreground">
-          {t("{n} unchanged", { n: diff.unchanged })}
-        </li>
-      )}
-    </ul>
+    <table className="w-full border text-xs">
+      <thead className="bg-muted/60 text-left text-muted-foreground">
+        <tr>
+          <th className="w-10 px-3 py-1.5 font-medium">#</th>
+          <th className="px-3 py-1.5 font-medium">
+            {revision ? t("Live (rev #{n})", { n: revision }) : t("Live")}
+          </th>
+          <th className="px-3 py-1.5 font-medium">{t("Draft")}</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y font-mono">
+        {rows.map((r, i) => (
+          <tr key={i} data-marker={r.marker}>
+            <td className="px-3 py-1.5 text-muted-foreground">
+              {r.position}
+              <span className="sr-only">{t(WORD[r.marker])}</span>
+            </td>
+            <td className={cn("px-3 py-1.5", r.marker === "−" && "bg-diff-del")}>
+              {r.before !== undefined ? (
+                <span className={cn(r.marker === "~" && "line-through")}>
+                  {r.marker === "−" ? "− " : ""}
+                  {text(r.before)}
+                </span>
+              ) : (
+                "—"
+              )}
+            </td>
+            <td
+              className={cn(
+                "px-3 py-1.5",
+                r.marker === "+" && "bg-diff-add",
+                r.marker === "~" && "bg-status-degraded-bg",
+              )}
+            >
+              {r.marker === " " ? (
+                <span className="text-muted-foreground">{t("same")}</span>
+              ) : r.marker === "−" ? (
+                <span className="text-muted-foreground">{t("removed")}</span>
+              ) : r.marker === "↕" ? (
+                <span>↕ {t("moved")}</span>
+              ) : (
+                <span>
+                  {r.marker === "+" ? "+ " : "~ "}
+                  {text((r.after ?? r.before) as T)}
+                </span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
+
+function KeyedTable<T>({
+  rows,
+  unchanged,
+  noun,
+  text,
+  revision,
+}: {
+  rows: KeyedRow<T>[];
+  unchanged: number;
+  noun: string;
+  text: (x: T) => string;
+  revision?: number;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="space-y-2">
+      <table className="w-full border text-xs">
+        <thead className="bg-muted/60 text-left text-muted-foreground">
+          <tr>
+            <th className="px-3 py-1.5 font-medium">{t(noun)}</th>
+            <th className="px-3 py-1.5 font-medium">
+              {revision ? t("Live (rev #{n})", { n: revision }) : t("Live")}
+            </th>
+            <th className="px-3 py-1.5 font-medium">{t("Draft")}</th>
+            <th className="px-3 py-1.5 font-medium">{t("Change")}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y font-mono">
+          {rows.map((r) => (
+            <tr key={`${r.marker}-${r.key}`} data-marker={r.marker}>
+              <td className="px-3 py-1.5 font-sans">{r.key}</td>
+              <td className={cn("px-3 py-1.5", r.marker === "−" && "bg-diff-del")}>
+                {r.before !== undefined ? (
+                  <span className={cn(r.marker === "~" && "line-through")}>{text(r.before)}</span>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td
+                className={cn(
+                  "px-3 py-1.5",
+                  r.marker === "+" && "bg-diff-add",
+                  r.marker === "~" && "bg-status-degraded-bg",
+                )}
+              >
+                {r.after !== undefined ? text(r.after) : "—"}
+              </td>
+              <td className="px-3 py-1.5 font-sans">
+                <span className={cn("inline-flex rounded-full px-2 py-0.5", PILL[r.marker])}>
+                  {r.marker} {t(WORD[r.marker])}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {unchanged > 0 && (
+        <button
+          type="button"
+          className="text-xs text-primary hover:underline"
+          onClick={() => setShow(!show)}
+        >
+          {show ? t("Hide unchanged") : t("Show {n} unchanged", { n: unchanged })}
+        </button>
+      )}
+      {show && (
+        <p className="text-xs text-muted-foreground">{t("{n} unchanged", { n: unchanged })}</p>
+      )}
+    </div>
+  );
+}
+
+const LEGEND_ORDERED =
+  "Markers: + added · − removed · ~ changed (old → new) · ↕ moved (old → new position). Matched by host, path and match type; positions are shown 1-based.";
+const LEGEND_KEYED =
+  "Members, ports and certificate lists are matched by their key (member name, port number, certificate), so order changes don't show as edits.";
 
 /**
  * One list field of a changed object: routes as a numbered ordered diff, members, ports,
@@ -141,32 +240,78 @@ export function ListDiff({
   before,
   after,
   labels,
+  revision,
 }: {
   field: string;
   before: unknown;
   after: unknown;
   labels: Labels;
+  /** Base revision number for the "Live (rev #N)" column header. */
+  revision?: number;
 }) {
   const b = (Array.isArray(before) ? before : []) as unknown[];
   const a = (Array.isArray(after) ? after : []) as unknown[];
-  if (field === "routes")
+  if (field === "routes") {
+    const rows = diffOrdered(b as RouteLike[], a as RouteLike[], routeKey);
+    const count = (m: Marker) => rows.filter((r) => r.marker === m).length;
     return (
-      <OrderedList
-        rows={diffOrdered(b as RouteLike[], a as RouteLike[], routeKey)}
-        text={(r) => describeRoute(r, labels)}
+      <div className="space-y-2">
+        <p className="text-xs">
+          {summary("routes", b.length, a.length, {
+            added: count("+"),
+            removed: count("−"),
+            changed: count("~"),
+            moved: count("↕"),
+          })}
+        </p>
+        <OrderedTable rows={rows} text={(r) => describeRoute(r, labels)} revision={revision} />
+        <p className="text-xs text-muted-foreground">{t(LEGEND_ORDERED)}</p>
+      </div>
+    );
+  }
+  const keyed = (() => {
+    if (field === "members")
+      return {
+        noun: "Member",
+        d: diffKeyed(b as Member[], a as Member[], memberKey),
+        text: describeMember as (x: never) => string,
+        plural: "members",
+      };
+    if (field === "ports")
+      return {
+        noun: "Port",
+        d: diffKeyed(b as Port[], a as Port[], (p) => String(p.port)),
+        text: describePort as (x: never) => string,
+        plural: "ports",
+      };
+    const name = (id: string) => labels[id] ?? id;
+    return {
+      noun: field === "certificate_ids" ? "Certificate" : "Policy set",
+      d: diffKeyed(b as string[], a as string[], name),
+      text: ((x: string) => name(x)) as (x: never) => string,
+      plural: field === "certificate_ids" ? "certificates" : "policy sets",
+    };
+  })();
+  const n = (m: Marker) => keyed.d.rows.filter((r) => r.marker === m).length;
+  return (
+    <div className="space-y-2">
+      <p className="text-xs">
+        {summary(
+          keyed.plural,
+          b.length,
+          a.length,
+          { added: n("+"), removed: n("−"), changed: n("~") },
+          keyed.d.unchanged,
+        )}
+      </p>
+      <KeyedTable
+        rows={keyed.d.rows as KeyedRow<never>[]}
+        unchanged={keyed.d.unchanged}
+        noun={keyed.noun}
+        text={keyed.text}
+        revision={revision}
       />
-    );
-  if (field === "members")
-    return (
-      <KeyedList diff={diffKeyed(b as Member[], a as Member[], memberKey)} text={describeMember} />
-    );
-  if (field === "ports")
-    return (
-      <KeyedList
-        diff={diffKeyed(b as Port[], a as Port[], (p) => String(p.port))}
-        text={describePort}
-      />
-    );
-  const name = (id: string) => labels[id] ?? id;
-  return <KeyedList diff={diffKeyed(b as string[], a as string[], name)} text={name} />;
+      <p className="text-xs text-muted-foreground">{t(LEGEND_KEYED)}</p>
+    </div>
+  );
 }

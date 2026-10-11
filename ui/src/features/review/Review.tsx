@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ApiError } from "@/api/client";
 import { useCan, useMe } from "@/auth/session";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
-import { DraftMarker, StatusPill } from "@/components/sy/StatusPill";
+import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,17 @@ import { cn } from "@/lib/utils";
 import { ConflictResolver } from "./ConflictResolver";
 import { JobProgress } from "./JobProgress";
 import { isListField, ListDiff } from "./ListDiff";
-import { blocked, countsLine, parseUnified, phaseOf, TYPE_LABEL, type Diff } from "./model";
+import {
+  blocked,
+  countsLine,
+  describeCreated,
+  describeDeleted,
+  parseUnified,
+  phaseOf,
+  TYPE_LABEL,
+  TYPE_PATH,
+  type Diff,
+} from "./model";
 import {
   useApplyJob,
   useChangeSetActions,
@@ -29,67 +39,105 @@ import {
 
 type Tab = "objects" | "config" | "impact";
 
+/** Where "Open" takes you for an object of this type. */
+function OpenLink({ tenant, type, id }: { tenant: string; type: string; id: string }) {
+  if (type === "virtual_service")
+    return (
+      <Link
+        to="/t/$tenant/virtual-services/$id"
+        params={{ tenant, id }}
+        className="ml-auto text-sm text-primary hover:underline"
+      >
+        {t("Open")}
+      </Link>
+    );
+  const section = TYPE_PATH[type];
+  return section ? (
+    <Link
+      to="/t/$tenant/$"
+      params={{ tenant, _splat: section }}
+      className="ml-auto text-sm text-primary hover:underline"
+    >
+      {t("Open")}
+    </Link>
+  ) : null;
+}
+
 function ObjectCard({
   tenant,
   cs,
+  baseRevision,
   o,
   labels,
 }: {
   tenant: string;
   cs: string;
+  baseRevision: number;
   o: Diff["objects"][number];
   labels: Record<string, string>;
 }) {
   const q = useObjectChange(tenant, o.type, o.id, cs, o.status);
   const deleted = o.status === "deleted";
+  const created = o.status === "created";
+  const status = o.status === "unchanged" ? "modified" : o.status;
   return (
     <section className="rounded-lg border bg-card">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5 text-sm">
         <Badge>{t(TYPE_LABEL[o.type] ?? o.type)}</Badge>
         <span className={cn("font-semibold", deleted && "line-through")}>{o.name}</span>
-        <DraftMarker status={o.status === "unchanged" ? "modified" : o.status} />
-        {o.status === "modified" && (
-          <span className="text-xs text-muted-foreground">
-            {t("{n} fields", { n: o.changed_fields.length })}
+        <StatusPill status="draft">
+          {status === "modified"
+            ? t("Modified · {n} fields", { n: o.changed_fields.length })
+            : status === "created"
+              ? t("Created")
+              : t("Deleted")}
+        </StatusPill>
+        {created && q.data?.draft && (
+          <span className="text-muted-foreground">
+            {describeCreated(o.type, q.data.draft, labels)}
           </span>
         )}
+        {deleted && (
+          <span className="text-muted-foreground">
+            {describeDeleted(o.type, q.data?.live, labels)}
+          </span>
+        )}
+        {!deleted && <OpenLink tenant={tenant} type={o.type} id={o.id} />}
       </header>
-      {deleted ? (
-        <p className="px-4 py-3 text-sm text-muted-foreground">
-          {t("This object is removed. Anything that used its address or name is released.")}
-        </p>
-      ) : q.isPending ? (
+      {q.isPending && !deleted && !created ? (
         <TableSkeleton rows={2} cols={2} />
       ) : q.isError ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-      ) : (
+      ) : deleted || created ? null : (
         <table className="w-full text-[13px]">
           <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-4 py-2 font-medium">{t("Field")}</th>
-              {o.status === "modified" && <th className="px-4 py-2 font-medium">{t("Live")}</th>}
+              <th className="w-56 px-4 py-2 font-medium">{t("Field")}</th>
+              <th className="px-4 py-2 font-medium">{t("Live (rev #{n})", { n: baseRevision })}</th>
               <th className="px-4 py-2 font-medium">{t("Draft")}</th>
             </tr>
           </thead>
           <tbody className="divide-y font-mono text-xs">
-            {q.data.fields.map((f) =>
+            {q.data!.fields.map((f) =>
               isListField(f.field, f.before, f.after) ? (
                 <tr key={f.field}>
-                  <td colSpan={o.status === "modified" ? 3 : 2} className="p-0">
-                    <div className="px-4 py-2 font-sans text-xs font-medium text-muted-foreground">
-                      {f.field}
-                    </div>
-                    <ListDiff field={f.field} before={f.before} after={f.after} labels={labels} />
+                  <td className="px-4 py-3 align-top">{f.field}</td>
+                  <td colSpan={2} className="px-4 py-3">
+                    <ListDiff
+                      field={f.field}
+                      before={f.before}
+                      after={f.after}
+                      labels={labels}
+                      revision={baseRevision}
+                    />
                   </td>
                 </tr>
               ) : (
                 <tr key={f.field}>
                   <td className="px-4 py-2">{f.field}</td>
-                  {o.status === "modified" && (
-                    <td className="px-4 py-2">
-                      <span className="bg-diff-del px-1">− {show(f.before)}</span>
-                    </td>
-                  )}
+                  <td className="px-4 py-2">
+                    <span className="bg-diff-del px-1">− {show(f.before)}</span>
+                  </td>
                   <td className="px-4 py-2">
                     <span className="bg-diff-add px-1">+ {show(f.after)}</span>
                   </td>
@@ -359,12 +407,36 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
                     )}
                   >
                     {{ objects: t("Objects"), config: t("Config"), impact: t("Impact") }[k]}
-                    {k === "objects" && diff.data ? ` ${diff.data.objects.length}` : ""}
+                    {k === "objects" && diff.data && (
+                      <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs">
+                        {diff.data.objects.length}
+                      </span>
+                    )}
+                    {k === "config" &&
+                      diff.data &&
+                      diff.data.se_groups.some((g) => g.files.length > 0 || g.error) && (
+                        <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-xs">
+                          {t("{n} SE group", {
+                            n: diff.data.se_groups.filter((g) => g.files.length > 0 || g.error)
+                              .length,
+                          })}
+                        </span>
+                      )}
+                    {k === "impact" && diff.data && diff.data.problems.length > 0 && (
+                      <span className="ml-2 rounded-full bg-status-down-bg px-2 py-0.5 text-xs text-status-down">
+                        {t("{n} problems", { n: diff.data.problems.length })}
+                      </span>
+                    )}
                     {k === "impact" &&
-                    diff.data &&
-                    diff.data.warnings.length + diff.data.problems.length > 0
-                      ? ` ${diff.data.warnings.length + diff.data.problems.length}`
-                      : ""}
+                      diff.data &&
+                      diff.data.problems.length === 0 &&
+                      diff.data.warnings.length > 0 && (
+                        <span className="ml-2 rounded-full bg-status-degraded-bg px-2 py-0.5 text-xs text-status-degraded">
+                          {t(diff.data.warnings.length === 1 ? "{n} warning" : "{n} warnings", {
+                            n: diff.data.warnings.length,
+                          })}
+                        </span>
+                      )}
                   </button>
                 ))}
               </div>
@@ -375,7 +447,14 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
               ) : tab === "objects" ? (
                 <div className="space-y-3">
                   {diff.data.objects.map((o) => (
-                    <ObjectCard key={o.id} tenant={tenant} cs={cs} o={o} labels={labels} />
+                    <ObjectCard
+                      key={o.id}
+                      tenant={tenant}
+                      cs={cs}
+                      baseRevision={c.base_revision}
+                      o={o}
+                      labels={labels}
+                    />
                   ))}
                   <p className="text-xs text-muted-foreground">
                     {t(

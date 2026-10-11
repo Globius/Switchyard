@@ -22,6 +22,7 @@ const ME = (role: string) => ({
   id: "s1",
   is_system: false,
   name: "Miguel Rodriguez",
+  principal: "Miguel Rodriguez",
   session: null,
   tenants: [{ id: "t1", name: "acme", role, via: [] }],
 });
@@ -262,4 +263,116 @@ describe("virtual services list", () => {
     );
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   }, 15000);
+
+  it("has an Enabled switch that adds an update op to the draft", async () => {
+    list = [vs({ id: "v1", name: "web", version: 7 })];
+    let ops: {
+      ops: { action: string; object_id: string; body: unknown; expected_version: number }[];
+    } | null = null;
+    server.use(
+      http.post("*/api/v1/tenants/acme/change-sets", () =>
+        HttpResponse.json(
+          {
+            id: "cs1",
+            state: "draft",
+            author: "Miguel Rodriguez",
+            summary: "x",
+            base_revision: 1,
+            created_at: "2026-10-10T10:00:00Z",
+            ops: [],
+          },
+          { status: 201 },
+        ),
+      ),
+      http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", async ({ request }) => {
+        ops = (await request.json()) as typeof ops;
+        return HttpResponse.json({ id: "cs1" });
+      }),
+    );
+    renderAt("/t/acme/virtual-services");
+    const sw = await screen.findByRole("switch", { name: "Enable web" });
+    await waitFor(() => expect(sw).toBeEnabled());
+    expect(sw).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(sw);
+    await waitFor(() =>
+      expect(ops?.ops[0]).toMatchObject({
+        action: "update",
+        object_id: "v1",
+        expected_version: 7,
+        body: { enabled: false },
+      }),
+    );
+  });
+
+  it("Restore removes the draft's delete op for a deleted service", async () => {
+    list = [vs({ id: "v9", name: "legacy", draft_status: "deleted" })];
+    let removed: number | null = null;
+    server.use(
+      http.get("*/api/v1/tenants/acme/change-sets", ({ request }) =>
+        HttpResponse.json({
+          items:
+            new URL(request.url).searchParams.get("state") === "draft"
+              ? [
+                  {
+                    id: "cs1",
+                    state: "draft",
+                    author: "Miguel Rodriguez",
+                    summary: "d",
+                    base_revision: 1,
+                    created_at: "2026-10-10T10:00:00Z",
+                    op_count: 2,
+                  },
+                ]
+              : [],
+          next_cursor: null,
+        }),
+      ),
+      http.get("*/api/v1/tenants/acme/change-sets/cs1", () =>
+        HttpResponse.json({
+          id: "cs1",
+          state: "draft",
+          author: "Miguel Rodriguez",
+          summary: "d",
+          base_revision: 1,
+          created_at: "2026-10-10T10:00:00Z",
+          approver: null,
+          reject_comment: null,
+          error: null,
+          ops: [
+            {
+              action: "update",
+              object_type: "pool",
+              object_id: "p",
+              expected_version: 1,
+              body: {},
+            },
+            {
+              action: "delete",
+              object_type: "virtual_service",
+              object_id: "v9",
+              expected_version: 1,
+              body: null,
+            },
+          ],
+        }),
+      ),
+      http.delete("*/api/v1/tenants/acme/change-sets/cs1/ops/:index", ({ params }) => {
+        removed = Number(params.index);
+        return HttpResponse.json({});
+      }),
+    );
+    renderAt("/t/acme/virtual-services");
+    const btn = await screen.findByRole("button", { name: "Restore" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    await userEvent.click(btn);
+    await waitFor(() => expect(removed).toBe(1));
+  });
+
+  it("viewers see the switch disabled", async () => {
+    role = "viewer";
+    list = [vs({ id: "v1", name: "web" })];
+    renderAt("/t/acme/virtual-services");
+    const sw = await screen.findByRole("switch", { name: "Enable web" });
+    await waitFor(() => expect(sw).toBeDisabled());
+  });
 });

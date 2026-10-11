@@ -7,6 +7,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { t } from "@/lib/i18n";
 
@@ -24,7 +25,7 @@ const ICON = {
 } as const;
 
 /** Status as icon plus label, never colour alone (handoff status vocabulary). */
-export function StatusPill({ status, children }: { status: Status; children: string }) {
+export function StatusPill({ status, children }: { status: Status; children: ReactNode }) {
   const Icon = status === "neutral" ? null : ICON[status];
   return (
     <Badge tone={status}>
@@ -35,14 +36,29 @@ export function StatusPill({ status, children }: { status: Status; children: str
 }
 
 /** Health as the API reports it for a virtual service. */
-export function HealthPill({ health }: { health: string | undefined }) {
+export function HealthPill({ health, detail }: { health: string | undefined; detail?: string }) {
   switch (health) {
     case "healthy":
-      return <StatusPill status="healthy">{t("Healthy")}</StatusPill>;
+      return (
+        <StatusPill status="healthy">
+          {t("Healthy")}
+          {detail ? ` · ${detail}` : ""}
+        </StatusPill>
+      );
     case "degraded":
-      return <StatusPill status="degraded">{t("Degraded")}</StatusPill>;
+      return (
+        <StatusPill status="degraded">
+          {t("Degraded")}
+          {detail ? ` · ${detail}` : ""}
+        </StatusPill>
+      );
     case "down":
-      return <StatusPill status="down">{t("Down")}</StatusPill>;
+      return (
+        <StatusPill status="down">
+          {t("Down")}
+          {detail ? ` · ${detail}` : ""}
+        </StatusPill>
+      );
     case "disabled":
       return <StatusPill status="neutral">{t("Disabled")}</StatusPill>;
     default:

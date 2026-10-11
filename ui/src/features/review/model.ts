@@ -104,3 +104,64 @@ export function parseUnified(diff: string): UnifiedLine[] {
 export function blocked(diff: Diff | undefined): boolean {
   return !diff || diff.problems.length > 0;
 }
+
+type Obj = Record<string, unknown>;
+
+/** One-line summary of a created object, for the Objects tab (names resolved through `labels`). */
+export function describeCreated(type: string, o: Obj, labels: Record<string, string>): string {
+  const name = (id: unknown) => (typeof id === "string" ? (labels[id] ?? id) : "—");
+  if (type === "virtual_service") {
+    const ports =
+      (o.ports as
+        | { port: number; tls?: boolean; http2?: boolean; https_redirect_port?: number | null }[]
+        | undefined) ?? [];
+    const portText = ports
+      .map((p) =>
+        p.https_redirect_port
+          ? `${p.port} → ${p.https_redirect_port}`
+          : `${p.port}${p.tls ? " TLS" : ""}${p.http2 ? " h2" : ""}`,
+      )
+      .join(", ");
+    const routes = ((o.routes as unknown[] | undefined) ?? []).length;
+    const parts = [
+      String(o.protocol ?? "").toUpperCase(),
+      name(o.se_group_id),
+      `VIP ${o.vip_pool_id ? `from ${name(o.vip_pool_id)}` : (o.vip ?? "—")}${o.vip ? ` (${o.vip})` : ""}`,
+      portText,
+      routes
+        ? `${routes} route${routes === 1 ? "" : "s"}${o.default_pool_id ? ` → ${name(o.default_pool_id)}` : ""}`
+        : o.default_pool_id
+          ? `→ ${name(o.default_pool_id)}`
+          : "",
+    ];
+    return parts.filter(Boolean).join(" · ");
+  }
+  if (type === "pool") {
+    const m = (o.members as { address: string; port?: number | null }[] | undefined) ?? [];
+    return `${String(o.algorithm ?? "")} · ${m.length} member${m.length === 1 ? "" : "s"}${m.length ? ` (${m.map((x) => `${x.address}${x.port ? `:${x.port}` : ""}`).join(", ")})` : ""}`;
+  }
+  if (type === "health_monitor")
+    return `${String(o.type ?? "").toUpperCase()} · every ${o.interval_s} s, timeout ${o.timeout_s} s`;
+  if (type === "certificate")
+    return `${String(o.source ?? "")} · ${((o.sans as string[] | undefined) ?? []).join(", ")}`;
+  if (type === "policy_set") return String(o.kind ?? "");
+  return Object.entries(o)
+    .filter(
+      ([k]) =>
+        !["id", "name", "tenant_id", "version", "changed_fields", "draft_status"].includes(k),
+    )
+    .slice(0, 4)
+    .map(([k, v]) => `${k} ${typeof v === "object" ? JSON.stringify(v) : v}`)
+    .join(" · ");
+}
+
+/** What deleting an object releases, for the Objects tab. */
+export function describeDeleted(
+  type: string,
+  o: Obj | undefined,
+  labels: Record<string, string>,
+): string {
+  if (type === "virtual_service" && o?.vip)
+    return `Frees ${o.vip}${typeof o.vip_pool_id === "string" ? ` back to ${labels[o.vip_pool_id] ?? "its VIP pool"}` : ""}`;
+  return "Removed when the change set is applied.";
+}

@@ -30,5 +30,10 @@ export function findingsOfError(error: unknown): Finding[] {
 export function useServiceFindings(tenant: string, name: string | undefined) {
   const { draft } = useDraft(tenant);
   const diff = useDiff(tenant, draft?.id ?? "", !!draft);
-  return { draft, findings: draft ? findingsFor(diff.data?.problems ?? [], name) : [] };
+  return {
+    draft,
+    findings: draft ? findingsFor(diff.data?.problems ?? [], name) : [],
+    /** Validator warnings of this service (they do not block applying). */
+    warnings: draft ? findingsFor(diff.data?.warnings ?? [], name) : [],
+  };
 }

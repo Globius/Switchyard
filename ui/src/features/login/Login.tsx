@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Signpost } from "lucide-react";
 import { useState } from "react";
 import { ApiError } from "@/api/client";
 import { loginUrl, useBreakGlassLogin, useProviders } from "@/auth/session";
@@ -79,7 +79,7 @@ export function Login({ error, next }: { error?: LoginError; next?: string }) {
       <div className="w-full max-w-sm space-y-4">
         <div className="flex items-center justify-center gap-2 text-lg font-semibold">
           <span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground">
-            S
+            <Signpost className="size-5" aria-hidden />
           </span>
           Switchyard
         </div>
