@@ -81,6 +81,8 @@ Lists of objects, change sets, revisions, jobs, audit events and access logs tak
 apply), `warnings` (`{code, path, message}`; they never block), `impact` (services, VIPs, SE groups and hostnames
 the change reaches) and `se_groups` with the changed files (`before`, `after`, unified `diff`).
 
+`POST …/apply` takes an optional `message` (up to 2000 characters) that is kept as the revision message: revisions return `message`, and the Git mirror commit body carries it.
+
 Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`. A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type.
 
 `POST …/apply` returns `202 {job_id}`. When the tenant has `require_approval` it answers `403` unless the caller is

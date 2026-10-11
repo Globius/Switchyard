@@ -961,6 +961,7 @@ class RevisionSummary(ApiModel):
     number: int
     author: str
     summary: str
+    message: str = Field(default="", description="The message given when it was applied.")
     git_sha: str | None = None
     created_at: datetime
 
@@ -1394,6 +1395,11 @@ class ApplyIn(ApiModel):
     """Options for apply."""
 
     break_glass_reason: str | None = Field(default=None, max_length=1000)
+    message: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Revision message, kept on the revision and in the Git mirror commit.",
+    )
 
 
 class MemberStateIn(ApiModel):

@@ -1968,6 +1968,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             tenant.id,
             cs,
             break_glass_reason=body.break_glass_reason if body else None,
+            message=body.message if body else None,
             request_id=_rid(),
         )
         return {"job_id": str(job)}
@@ -2050,6 +2051,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
                     number=r.number,
                     author=r.author,
                     summary=r.summary,
+                    message=r.message,
                     git_sha=r.git_sha,
                     created_at=r.created_at,
                 )
@@ -2071,6 +2073,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             "number": r.number,
             "author": r.author,
             "summary": r.summary,
+            "message": r.message,
             "git_sha": r.git_sha,
             "created_at": r.created_at,
             "snapshot": r.snapshot,
