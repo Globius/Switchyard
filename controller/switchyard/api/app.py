@@ -48,6 +48,7 @@ from switchyard.api.schemas import (
     BreakGlassSwitchIn,
     CertImportIn,
     CertIssueIn,
+    CertReplaceIn,
     ChangeSetDiff,
     ChangeSetRead,
     ChangeSetSummary,
@@ -2979,6 +2980,43 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             request_id=_rid(),
         )
         return {"job_id": str(job)}
+
+    @router.post(
+        "/tenants/{t}/certificates/{certificate}/replace",
+        status_code=202,
+        tags=["certificates"],
+        summary="Replace a certificate's material, keeping its id and usages",
+        response_model=Accepted,
+        responses=_ok(ex.ACCEPTED, 202) | VALIDATION_RESPONSE,
+    )
+    async def replace_certificate(
+        certificate: UUID,
+        body: CertReplaceIn,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+        apply: bool = False,
+    ) -> Accepted:
+        """Store new certificate and key (PEM or PKCS#12) and update the object in a change set."""
+        if svc.certs is None:
+            raise ApiError(503, "no secrets backend is configured for certificates")
+        data, version = await svc.certs.replace(
+            who,
+            tenant.id,
+            certificate,
+            pem=body.pem,
+            pkcs12_b64=body.pkcs12_b64,
+            password=body.password.get_secret_value() if body.password else None,
+        )
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE,
+            object_id=certificate,
+            action=Action.UPDATE,
+            body=data,
+            expected_version=version,
+        )
+        return await _write(svc, who, tenant, op, change_set, apply, "replace certificate")
 
     @router.post(
         "/tenants/{t}/certificates/{certificate}/renew",

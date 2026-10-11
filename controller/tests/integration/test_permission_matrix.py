@@ -85,6 +85,7 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import"): ("manage", "certificate"),
     ("POST", "/tenants/{t}/certificates/issue"): ("manage", "certificate"),
     ("POST", "/tenants/{t}/certificates/{certificate}/renew"): ("manage", "certificate"),
+    ("POST", "/tenants/{t}/certificates/{certificate}/replace"): ("manage", "certificate"),
     ("GET", "/tenants/{t}/status/engines"): READ,
     ("GET", "/tenants/{t}/status/virtual-services"): READ,
     ("GET", "/tenants/{t}/status/stream"): READ,
@@ -189,6 +190,7 @@ BODIES: dict[tuple[str, str], Any] = {
         "mgmt_pool_id": "{uuid}",
     },
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
+    ("POST", "/tenants/{t}/certificates/{certificate}/replace"): {"pem": "x"},
     ("POST", "/tenants/{t}/certificates/issue"): {
         "name": "c2",
         "source": "acme",
@@ -359,6 +361,7 @@ NOT_CONFIGURED = {
     ("POST", "/tenants/{t}/certificates/import"),
     ("POST", "/tenants/{t}/certificates/issue"),
     ("POST", "/tenants/{t}/certificates/{certificate}/renew"),
+    ("POST", "/tenants/{t}/certificates/{certificate}/replace"),
 }
 #: Routes that change the tenant itself go last, so they cannot affect the requests after them
 #: (turning approval on makes later writes need a reviewer).

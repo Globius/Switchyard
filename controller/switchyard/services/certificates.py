@@ -233,6 +233,48 @@ class CertificateService:
             raise errors from None
         return await self.import_pem(principal, tenant_id, name, pem)
 
+    async def replace(
+        self,
+        principal: Principal,
+        tenant_id: UUID,
+        certificate_id: UUID,
+        *,
+        pem: str | None,
+        pkcs12_b64: str | None,
+        password: str | None,
+    ) -> tuple[dict[str, Any], int]:
+        """Check and store new material for an existing certificate.
+
+        The object keeps its id (so every virtual service that uses it keeps working) and name; its
+        secret reference, names, expiry and source change, and renewal becomes manual because the
+        material is now an upload.
+
+        Returns:
+            The ``certificate`` update body and the version it must be applied against.
+
+        Raises:
+            NotFoundError: If the certificate does not exist.
+            FieldErrors: With the field path when a PKCS#12 file or password is wrong.
+            CertificateError: If the material is unusable.
+        """
+        if not principal.can_access(tenant_id):
+            raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
+        require(principal, "manage", "certificate")
+        existing = next(
+            (c for c in (await self._snapshot(tenant_id)).certificates if c.id == certificate_id),
+            None,
+        )
+        if existing is None:
+            raise NotFoundError(f"certificate {certificate_id} does not exist")
+        if pkcs12_b64 is not None:
+            data = await self.import_pkcs12(
+                principal, tenant_id, existing.name, pkcs12_b64, password
+            )
+        else:
+            data = await self.import_pem(principal, tenant_id, existing.name, pem or "")
+        data.pop("name")
+        return data, existing.version
+
     # -- issuing ----------------------------------------------------------------------------------
 
     async def _obtain(self, source: dm.CertSource, sans: tuple[str, ...]) -> str:

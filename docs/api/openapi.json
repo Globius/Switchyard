@@ -1395,7 +1395,7 @@
       },
       "CertImportIn": {
         "additionalProperties": false,
-        "description": "Body of ``POST /certificates/import``: send ``pem`` or ``pkcs12_b64`` with ``password``.",
+        "description": "Body of ``POST /certificates/import``.",
         "properties": {
           "name": {
             "title": "Name",
@@ -1481,6 +1481,55 @@
           "sans"
         ],
         "title": "CertIssueIn",
+        "type": "object"
+      },
+      "CertReplaceIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /certificates/{id}/replace``: new material for an existing certificate.",
+        "properties": {
+          "password": {
+            "anyOf": [
+              {
+                "format": "password",
+                "maxLength": 1024,
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Password of the PKCS#12 file; never logged or stored. Empty if none.",
+            "title": "Password"
+          },
+          "pem": {
+            "anyOf": [
+              {
+                "maxLength": 65536,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Certificate chain followed by the private key (PEM).",
+            "title": "Pem"
+          },
+          "pkcs12_b64": {
+            "anyOf": [
+              {
+                "maxLength": 262144,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base64 of a PKCS#12/PFX file holding the leaf, chain and key.",
+            "title": "Pkcs12 B64"
+          }
+        },
+        "title": "CertReplaceIn",
         "type": "object"
       },
       "CertSource": {
@@ -16260,6 +16309,163 @@
           }
         },
         "summary": "Renew a certificate",
+        "tags": [
+          "certificates"
+        ],
+        "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/certificates/{certificate}/replace": {
+      "post": {
+        "description": "Store new certificate and key (PEM or PKCS#12) and update the object in a change set.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "replace_certificate_api_v1_tenants__t__certificates__certificate__replace_post",
+        "parameters": [
+          {
+            "description": "Certificate id.",
+            "in": "path",
+            "name": "certificate",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read the state as this open change set would leave it (draft view).",
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "description": "`true` applies the change immediately as a one-operation change set.",
+            "in": "query",
+            "name": "apply",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Apply",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CertReplaceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                  "object_id": "0192f3a0-0000-7000-8000-000000000014",
+                  "op_index": 0
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Replace a certificate's material, keeping its id and usages",
         "tags": [
           "certificates"
         ],

@@ -137,6 +137,11 @@ stores the same PEM bundle in OpenBao as for a PEM import; the password is never
 Errors are 422 problem+json with `errors[].path` `password` (wrong password), `pkcs12_b64` (not base64, not a
 PKCS#12, no key or certificate, legacy RC2/3DES encryption: re-export with AES). See ADR 0043.
 
+`POST /tenants/{t}/certificates/{id}/replace` takes the same `pem` or `pkcs12_b64` + `password` (no `name`) and
+updates the existing certificate object in a change set (`?apply=true` or `?change_set=`). The object keeps its id and
+name, so every virtual service using it is unchanged; the secret reference, names and expiry change, `source` becomes
+`upload` and `renew_policy` `manual`. Unknown id: 404. See ADR 0044.
+
 ## Jobs
 
 `kind` is an enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert` (result
