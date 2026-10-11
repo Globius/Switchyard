@@ -19,8 +19,16 @@ declare module "@tanstack/react-router" {
   }
 }
 
-// Until the re-login modal is built, an expired session goes back to the login page.
-setSessionExpiredHandler(() => void router.navigate({ to: "/login" }));
+// Until the re-login modal is built, an expired session goes back to the login page and returns
+// to the page you were on afterwards.
+setSessionExpiredHandler(() => {
+  const l = router.state.location;
+  if (l.pathname === "/login") return;
+  void router.navigate({
+    to: "/login",
+    search: { error: "session_ended", next: l.pathname + (l.searchStr ?? "") },
+  });
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

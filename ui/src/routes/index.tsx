@@ -1,4 +1,5 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useMe, useTenants } from "@/auth/session";
 import { ApiError } from "@/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,9 +8,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 function Landing() {
   const me = useMe();
   const tenants = useTenants();
-  if (me.error instanceof ApiError && me.error.status === 401) return <Navigate to="/login" />;
-  const first = tenants.data?.[0];
-  if (first) return <Navigate to="/t/$tenant" params={{ tenant: first.name }} />;
+  const navigate = useNavigate();
+  const unauthorized = me.error instanceof ApiError && me.error.status === 401;
+  const first = tenants.data?.[0]?.name;
+  useEffect(() => {
+    if (unauthorized) void navigate({ to: "/login", replace: true });
+    else if (first) void navigate({ to: "/t/$tenant", params: { tenant: first }, replace: true });
+  }, [unauthorized, first, navigate]);
   return <Skeleton className="m-8 h-10 w-64" />;
 }
 
