@@ -49,6 +49,7 @@ const STATUS = (id: string, name: string, drift: unknown[] = []) => ({
   },
 });
 
+let lxcEnabled = true;
 let stateCall: { engine: string; state: string | null } | null = null;
 let patched: { body: unknown; id: string } | null = null;
 const server = setupServer(
@@ -64,6 +65,7 @@ const server = setupServer(
       principal: "Miguel",
       session: null,
       tenants: [{ id: "t1", name: "acme", role: "tenant-admin", via: [] }],
+      features: { lxc_guests: lxcEnabled },
     }),
   ),
   http.get("*/api/v1/permissions", () =>
@@ -391,6 +393,42 @@ describe("SE groups", () => {
     ).toBe("edge-vip 10.40.12.6 · backend —");
     expect(addressLine({ addresses: [] }, nets, name)).toBe("");
     expect(addressLine({}, nets, name)).toBe("");
+  });
+
+  it("hides the container option while LXC guests are off, and explains a lxc_disabled refusal", async () => {
+    lxcEnabled = false;
+    server.use(
+      http.get("*/api/v1/tenants/acme/vip-pools", () =>
+        HttpResponse.json({
+          items: [{ id: "mp", name: "se-mgmt", network_id: "nm" }],
+          next_cursor: null,
+        }),
+      ),
+      http.post("*/api/v1/tenants/acme/se-groups/g1/deploy", async ({ request }) => {
+        expect(await request.json()).toMatchObject({ guest_kind: "qemu" });
+        return HttpResponse.json(
+          { title: "Forbidden", status: 403, code: "lxc_disabled", detail: "off" },
+          { status: 403 },
+        );
+      }),
+    );
+    try {
+      renderAt("/t/acme/se-groups");
+      const open = await screen.findByRole("button", { name: "Deploy engines" });
+      await waitFor(() => expect(open).toBeEnabled());
+      await userEvent.click(open);
+      const dlg = within(await screen.findByRole("dialog"));
+      expect(dlg.queryByRole("radio", { name: /Container/ })).toBeNull();
+      await userEvent.type(dlg.getByLabelText("Template VM ID"), "9001");
+      await userEvent.type(dlg.getByLabelText("Proxmox nodes"), "pve-01,");
+      await userEvent.selectOptions(await dlg.findByLabelText("Management addresses from"), "mp");
+      await userEvent.click(dlg.getByRole("button", { name: "Start deploy" }));
+      expect(
+        await dlg.findByText(/Containers are turned off on this controller/),
+      ).toBeInTheDocument();
+    } finally {
+      lxcEnabled = true;
+    }
   });
 
   it("registers an existing VM", async () => {

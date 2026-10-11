@@ -6,7 +6,7 @@ import { DropdownMenu } from "radix-ui";
 import { useMemo, useState } from "react";
 import { api, ApiError, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
-import { useCan } from "@/auth/session";
+import { useCan, useMe } from "@/auth/session";
 import { NicAddresses, nicPoolsBody } from "./NicAddresses";
 import { ChipInput } from "@/components/sy/ChipInput";
 import { ShowOnceSecret } from "@/components/sy/ShowOnceSecret";
@@ -505,6 +505,7 @@ function DeploySheet({
   const [nicChoice, setNicChoice] = useState<Record<string, string | undefined>>({});
   const qc = useQueryClient();
   const [total, setTotal] = useState(current + 1);
+  const lxcAllowed = useMe().data?.features?.lxc_guests === true;
   const [guest, setGuest] = useState<"qemu" | "lxc">("qemu");
   const [ack, setAck] = useState(false);
   const [template, setTemplate] = useState("");
@@ -522,7 +523,7 @@ function DeploySheet({
           params: { path: { t: tenant, group: group.id } },
           body: {
             count: total - current,
-            guest_kind: guest,
+            guest_kind: lxcAllowed ? guest : "qemu",
             nic_pools: nicPoolsBody(group.networks, nicChoice, pools.data?.items ?? []),
             template_vmid: Number(template),
             nodes,
@@ -552,7 +553,7 @@ function DeploySheet({
     problem.status === 422 &&
     Object.keys(nicErrors).length > 0 &&
     otherErrors.length === 0;
-  const lxc = guest === "lxc";
+  const lxc = guest === "lxc" && lxcAllowed;
   const valid =
     total > current && Number(template) > 0 && nodes.length > 0 && mgmt !== "" && (!lxc || ack);
   return (
@@ -584,7 +585,20 @@ function DeploySheet({
         </>
       }
     >
-      {problem != null && !nicOnly && <ErrorState error={problem} />}
+      {problem instanceof ApiError &&
+      problem.status === 403 &&
+      problem.problem?.code === "lxc_disabled" ? (
+        <p
+          role="alert"
+          className="rounded-md border border-status-down/40 bg-status-down-bg p-3 text-sm"
+        >
+          {t(
+            "Containers are turned off on this controller. Deploy a virtual machine, or ask a system administrator to allow containers under Admin > System settings.",
+          )}
+        </p>
+      ) : (
+        problem != null && !nicOnly && <ErrorState error={problem} />
+      )}
       {done ? (
         <p role="status" className="text-sm">
           {t("Deploying as a job. Follow it on the Jobs screen.")}
@@ -596,57 +610,59 @@ function DeploySheet({
               "Clones engines from a template on Proxmox and registers them. Runs as a job; if a step fails, the guests it created are removed and existing engines are untouched.",
             )}
           </p>
-          <fieldset className="space-y-1.5">
-            <legend className="mb-1.5 text-sm font-medium">{t("Guest type")}</legend>
-            <div role="radiogroup" className="grid grid-cols-2 gap-2">
-              {(
-                [
+          {lxcAllowed && (
+            <fieldset className="space-y-1.5">
+              <legend className="mb-1.5 text-sm font-medium">{t("Guest type")}</legend>
+              <div role="radiogroup" className="grid grid-cols-2 gap-2">
+                {(
                   [
-                    "qemu",
-                    "Virtual machine",
-                    "Own kernel. The tested option for HTTP, TCP, UDP, VRRP failover and BGP.",
-                  ],
-                  [
-                    "lxc",
-                    "Container (LXC)",
-                    "Lighter and faster to start. Privileged, and VRRP failover and BGP are untested.",
-                  ],
-                ] as const
-              ).map(([k, label, text]) => (
-                <label
-                  key={k}
-                  className={cn(
-                    "flex cursor-pointer items-start gap-2.5 rounded-lg border bg-card px-3 py-2.5",
-                    guest === k && "border-primary ring-1 ring-primary",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="guest-kind"
-                    value={k}
-                    checked={guest === k}
-                    className="mt-1"
-                    onChange={() => {
-                      setGuest(k);
-                      setAck(false);
-                    }}
-                  />
-                  <span className="flex flex-col gap-0.5 text-sm">
-                    <span className="font-medium">
-                      {t(label)}
-                      {k === "qemu" && (
-                        <span className="font-normal text-muted-foreground">
-                          {" "}
-                          {t("(recommended)")}
-                        </span>
-                      )}
+                    [
+                      "qemu",
+                      "Virtual machine",
+                      "Own kernel. The tested option for HTTP, TCP, UDP, VRRP failover and BGP.",
+                    ],
+                    [
+                      "lxc",
+                      "Container (LXC)",
+                      "Lighter and faster to start. Privileged, and VRRP failover and BGP are untested.",
+                    ],
+                  ] as const
+                ).map(([k, label, text]) => (
+                  <label
+                    key={k}
+                    className={cn(
+                      "flex cursor-pointer items-start gap-2.5 rounded-lg border bg-card px-3 py-2.5",
+                      guest === k && "border-primary ring-1 ring-primary",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="guest-kind"
+                      value={k}
+                      checked={guest === k}
+                      className="mt-1"
+                      onChange={() => {
+                        setGuest(k);
+                        setAck(false);
+                      }}
+                    />
+                    <span className="flex flex-col gap-0.5 text-sm">
+                      <span className="font-medium">
+                        {t(label)}
+                        {k === "qemu" && (
+                          <span className="font-normal text-muted-foreground">
+                            {" "}
+                            {t("(recommended)")}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-xs text-muted-foreground">{t(text)}</span>
                     </span>
-                    <span className="text-xs text-muted-foreground">{t(text)}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
           {lxc && (
             <div
               role="note"
