@@ -170,6 +170,7 @@ describe("networks and VIP pools", () => {
       "/t/acme/virtual-services/v-web-portal",
     );
     expect(screen.getByText("Live · held")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit service" })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Find IP or service"), "grafana");
     expect(screen.queryByText("web-portal")).not.toBeInTheDocument();
   });

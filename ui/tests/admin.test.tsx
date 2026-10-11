@@ -416,6 +416,14 @@ describe("admin area", () => {
     ).toBe(
       "/api/v1/audit-events/export?format=csv&limit=500&q=x&tenant=acme&since=2026-10-11T11%3A00%3A00.000Z",
     );
+    expect(
+      exportUrl("csv", { since: "2026-10-01T00:00:00.000Z", until: "2026-10-03T00:00:00.000Z" }),
+    ).toBe(
+      "/api/v1/audit-events/export?format=csv&limit=500&since=2026-10-01T00%3A00%3A00.000Z&until=2026-10-03T00%3A00%3A00.000Z",
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Time range"), "custom");
+    await userEvent.type(screen.getByLabelText("From"), "2026-10-01");
+    await waitFor(() => expect(queries.at(-1)).toContain("since="));
     expect(screen.getByRole("link", { name: "Export CSV" })).toHaveAttribute(
       "href",
       expect.stringContaining("format=csv"),
