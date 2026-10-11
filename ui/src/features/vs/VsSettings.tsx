@@ -111,6 +111,7 @@ export function VsSettings({ tenant, id }: { tenant: string; id: string }) {
       v={vs.data}
       liveVs={live.data}
       draftState={draft?.state}
+      draftId={draft?.id}
       onReload={() => setGeneration((g) => g + 1)}
     />
   );
@@ -122,6 +123,7 @@ function SettingsForm({
   v,
   liveVs,
   draftState,
+  draftId,
   onReload,
 }: {
   tenant: string;
@@ -129,10 +131,11 @@ function SettingsForm({
   v: VsRead;
   liveVs: VsRead | undefined;
   draftState: string | undefined;
+  draftId: string | undefined;
   onReload: () => void;
 }) {
   const pools = usePools(tenant);
-  const certs = useCertificates(tenant);
+  const certs = useCertificates(tenant, draftId);
   const groups = useSeGroups(tenant);
   const policies = usePolicySets(tenant);
   const rules = useProtocolRules(v.protocol);
