@@ -525,9 +525,12 @@ class ChangeSetService:
         change_set_id: UUID,
         *,
         break_glass_reason: str | None = None,
+        message: str | None = None,
         request_id: str | None = None,
     ) -> UUID:
         """Queue the change set for the apply pipeline. Returns the job id.
+
+        ``message`` is the revision message: free text kept on the revision and in the Git mirror.
 
         When the tenant requires approval, only a system administrator may skip it ("break glass"),
         and must give a reason that is recorded.
@@ -556,6 +559,7 @@ class ChangeSetService:
                 change_set_id,
                 ChangeSetState.APPLYING,
                 break_glass_reason=break_glass_reason,
+                message=(message or "").strip(),
                 error=None,
             )
             await audit_log.record(

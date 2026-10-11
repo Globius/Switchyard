@@ -168,8 +168,9 @@ TENANT_READ = {
     "id": TENANT,
     "name": "acme",
     "version": 2,
-    "quotas": {"virtual_services": 50},
+    "quotas": {"virtual_service": 50},
     "require_approval": True,
+    "usage": {"virtual_service": 12, "pool": 20, "network": 2},
 }
 OP = {
     "object_type": "pool",
@@ -253,6 +254,7 @@ REVISION_SUMMARY = {
     "number": 12,
     "author": "user:alice",
     "summary": "Switch web-pool to leastconn",
+    "message": "Ticket OPS-412: leastconn evens out the long uploads.",
     "git_sha": "3f9c2ab",
     "created_at": WHEN,
 }

@@ -261,8 +261,14 @@ class TenantRead(ApiModel):
     id: UUID
     name: str
     version: int
-    quotas: dict[str, int] = Field(description="Object-count limits by object type.")
+    quotas: dict[str, int] = Field(
+        description="Object-count limits by object type name (`virtual_service`, `pool`, ...)."
+    )
     require_approval: bool
+    usage: dict[str, int] = Field(
+        default_factory=dict,
+        description="Objects the tenant owns now, by object type name (zeros included).",
+    )
 
 
 class TokenRead(ApiModel):
@@ -955,6 +961,7 @@ class RevisionSummary(ApiModel):
     number: int
     author: str
     summary: str
+    message: str = Field(default="", description="The message given when it was applied.")
     git_sha: str | None = None
     created_at: datetime
 
@@ -1359,6 +1366,11 @@ class ApplyIn(ApiModel):
     """Options for apply."""
 
     break_glass_reason: str | None = Field(default=None, max_length=1000)
+    message: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Revision message, kept on the revision and in the Git mirror commit.",
+    )
 
 
 class MemberStateIn(ApiModel):
