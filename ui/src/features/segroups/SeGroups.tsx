@@ -679,6 +679,101 @@ function RegisterSheet({
   );
 }
 
+function usePlacement(tenant: string, group: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "se-groups", group, "placement"],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/v1/tenants/{t}/se-groups/{group}/placement", {
+          params: { path: { t: tenant, group } },
+        }),
+      ),
+  });
+}
+
+const GIB = 1024 ** 3;
+
+/** Where the group's engines run on Proxmox, with a warning when one host carries them all. */
+function PlacementCard({ tenant, group }: { tenant: string; group: Group }) {
+  const q = usePlacement(tenant, group.id);
+  const nodes = q.data?.nodes ?? [];
+  const withEngines = nodes.filter((n) => n.engines.length > 0);
+  return (
+    <section className="overflow-hidden rounded-lg border bg-card">
+      <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
+        <h2 className="text-lg font-semibold">{t("Placement on Proxmox")}</h2>
+        <Live />
+        <span className="text-xs text-muted-foreground">
+          {t("all SE groups in {tenant}", { tenant })}
+        </span>
+      </header>
+      {q.isPending ? (
+        <TableSkeleton cols={3} />
+      ) : q.isError ? (
+        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+      ) : !q.data.available ? (
+        <p className="p-4 text-sm text-muted-foreground">
+          {t("Host state not reported")}
+          {q.data.reason ? `: ${q.data.reason}` : ""}
+        </p>
+      ) : (
+        <div className="space-y-3 p-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {nodes.map((n) => (
+              <div key={n.name} className="space-y-2 rounded-lg border p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-medium">{n.name}</span>
+                  {n.online === false ? (
+                    <StatusPill status="down">{t("Offline")}</StatusPill>
+                  ) : (
+                    <StatusPill status="healthy">{t("Online")}</StatusPill>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {n.cpu != null && n.max_cpu
+                    ? t("CPU {pct}% of {n}", { pct: Math.round(n.cpu * 100), n: n.max_cpu })
+                    : t("CPU not reported")}
+                  {" · "}
+                  {n.mem_used != null && n.mem_total
+                    ? t("memory {used} of {total} GiB", {
+                        used: (n.mem_used / GIB).toFixed(0),
+                        total: (n.mem_total / GIB).toFixed(0),
+                      })
+                    : t("memory not reported")}
+                </div>
+                {n.engines.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t("No engines of yours")}</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {n.engines.map((e) => (
+                      <li key={e.id} className="rounded-md bg-muted px-2 py-1 font-mono text-xs">
+                        {e.name}
+                        {e.vmid != null ? ` · VM ${e.vmid}` : ""}
+                        {e.state === "disabled" ? ` · ${t("disabled")}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+          {nodes.length > 0 && withEngines.length === 1 && withEngines[0]!.engines.length > 1 && (
+            <p
+              role="alert"
+              className="rounded-md border border-status-degraded/40 bg-status-degraded-bg p-3 text-sm"
+            >
+              {t(
+                "All engines run on {node}. Losing that host takes every engine down; spread them over more hosts.",
+                { node: withEngines[0]!.name },
+              )}
+            </p>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function Settings({ tenant, group }: { tenant: string; group: Group }) {
   const profiles = useRoutingProfiles(tenant);
   const networks = useNetworks(tenant);
@@ -957,6 +1052,7 @@ export function SeGroups({ tenant }: { tenant: string }) {
                 onDeploy={() => setSheet("deploy")}
                 onRegister={() => setSheet("register")}
               />
+              <PlacementCard tenant={tenant} group={group} />
               <Settings tenant={tenant} group={group} />
               {sheet === "deploy" && (
                 <DeploySheet

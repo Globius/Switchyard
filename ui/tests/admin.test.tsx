@@ -7,7 +7,7 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
 import { quotaLine } from "@/features/admin/Tenants";
-import { toCsv } from "@/features/admin/AuditLog";
+import { exportUrl } from "@/features/admin/AuditLog";
 import { mappingSummary } from "@/features/admin/IdentityProviders";
 import { accessText } from "@/features/admin/Users";
 import { ThemeProvider } from "@/lib/theme";
@@ -408,18 +408,22 @@ describe("admin area", () => {
     await userEvent.selectOptions(screen.getByLabelText("Time range"), "all");
     await waitFor(() => expect(queries.at(-1)).not.toContain("since="));
     expect(
-      toCsv([
-        {
-          at: "t",
-          actor: "a,b",
-          action: "x",
-          object: null,
-          request_id: null,
-          diff: { k: 1 },
-          tenant_id: null,
-        },
-      ]),
-    ).toBe('time,actor,action,object,request_id,diff\nt,"a,b",x,,,"{""k"":1}"');
+      exportUrl(
+        "csv",
+        { q: "x", tenant: "acme", sinceMs: 3_600_000 },
+        Date.parse("2026-10-11T12:00:00Z"),
+      ),
+    ).toBe(
+      "/api/v1/audit-events/export?format=csv&limit=500&q=x&tenant=acme&since=2026-10-11T11%3A00%3A00.000Z",
+    );
+    expect(screen.getByRole("link", { name: "Export CSV" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("format=csv"),
+    );
+    expect(screen.getByRole("link", { name: "Export JSON Lines" })).toHaveAttribute(
+      "href",
+      expect.stringContaining("format=jsonl"),
+    );
   });
 
   it("summarises mappings per provider", () => {
