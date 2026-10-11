@@ -118,6 +118,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 not_after=c.not_after,
                 secret_ref=c.secret_ref,
                 renew_policy=c.renew_policy.value,
+                renew_before_days=c.renew_before_days,
             )
         )
     for ps in snapshot.policy_sets:
@@ -365,6 +366,7 @@ def rows_to_snapshot(
                 "not_after": c.not_after,
                 "secret_ref": c.secret_ref,
                 "renew_policy": c.renew_policy,
+                "renew_before_days": c.renew_before_days,
             }
             for c in certificates
         ],

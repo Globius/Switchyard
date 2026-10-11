@@ -11,6 +11,7 @@ from sqlalchemy import text
 from switchyard.adapters.cloudflare import FakeCloudflare, IpRanges
 from switchyard.adapters.secrets import MemorySecrets
 from switchyard.db.tenancy import admin_session
+from switchyard.domain.changes import Action, ChangeOp, ObjectType
 from switchyard.domain.models import AllowListPolicySet, CertSource
 from switchyard.domain.workflow import Role
 from switchyard.services.certificates import CertificateService
@@ -110,6 +111,25 @@ async def test_renewal_replaces_only_certificates_that_are_due(pg_url: str) -> N
         assert cert.not_after > datetime.now(UTC) + timedelta(days=365)
         assert cert.version == 2
         assert await svc.renew_due() == [], "nothing is due any more"
+
+
+async def test_the_renewal_window_is_per_certificate(pg_url: str) -> None:
+    async with world(pg_url, due_data()) as w:
+        svc = service(w, MemorySecrets(CERT_SECRETS), origin_ca())
+        cert = next(c for c in (await w.snapshot()).certificates if c.name == "origin-example-test")
+        assert cert.renew_before_days == 30, "the old fixed window is the default"
+        # Expires in less than 30 days: a one-day window does not renew it yet.
+        change = ChangeOp(
+            object_type=ObjectType.CERTIFICATE,
+            object_id=cert.id,
+            action=Action.UPDATE,
+            body={"renew_before_days": 1},
+            expected_version=cert.version,
+        )
+        assert (await w.run_change([change])).ok
+        assert await svc.renew_due() == []
+        again = next(c for c in (await w.snapshot()).certificates if c.id == cert.id)
+        assert again.renew_before_days == 1
 
 
 async def test_a_failed_renewal_is_audited_and_does_not_stop_the_others(pg_url: str) -> None:

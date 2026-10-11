@@ -175,6 +175,7 @@ class CertificateRow(TenantOwnedMixin, Base):
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         enum_check("source", dm.CertSource),
         enum_check("renew_policy", dm.RenewPolicy),
+        CheckConstraint("renew_before_days BETWEEN 1 AND 365", name="renew_before_days"),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -183,6 +184,9 @@ class CertificateRow(TenantOwnedMixin, Base):
     not_after: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     secret_ref: Mapped[str] = mapped_column(Text, nullable=False)
     renew_policy: Mapped[str] = mapped_column(Text, nullable=False)
+    renew_before_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("30")
+    )
 
 
 class PolicySetRow(TenantOwnedMixin, Base):
