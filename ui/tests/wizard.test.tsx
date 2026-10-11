@@ -280,6 +280,12 @@ function renderAt(path: string) {
   return router;
 }
 
+async function pickCertificate() {
+  const box = await screen.findByRole("combobox", { name: "Certificates" });
+  await userEvent.click(box);
+  await userEvent.click(await screen.findByRole("option", { name: /wildcard/ }));
+}
+
 const next = () => userEvent.click(screen.getByRole("button", { name: "Next" }));
 
 describe("create wizard", () => {
@@ -302,7 +308,7 @@ describe("create wizard", () => {
     await next();
     await screen.findByRole("heading", { name: "Ports and TLS" });
     expect(screen.getByText(/suggested/)).toHaveTextContent("192.0.2.77");
-    await userEvent.selectOptions(screen.getByLabelText("Certificates"), "c1");
+    await pickCertificate();
     await next();
 
     await screen.findByRole("heading", { name: "Routes and pools" });
@@ -365,7 +371,7 @@ describe("create wizard", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Fixed address" }));
     await userEvent.type(screen.getByLabelText("VIP address"), "192.0.2.9");
     await next();
-    await userEvent.selectOptions(await screen.findByLabelText("Certificates"), "c1");
+    await pickCertificate();
     await next();
     await userEvent.type(await screen.findByLabelText("Pool name"), "p1");
     await userEvent.type(screen.getByLabelText("Member 1 address"), "10.1.0.1");
@@ -400,7 +406,7 @@ describe("create wizard", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Fixed address" }));
     await userEvent.type(screen.getByLabelText("VIP address"), "192.0.2.9");
     await next();
-    await userEvent.selectOptions(await screen.findByLabelText("Certificates"), "c1");
+    await pickCertificate();
     await next();
     await userEvent.type(await screen.findByLabelText("Pool name"), "p1");
     await userEvent.type(screen.getByLabelText("Member 1 address"), "10.1.0.1");
@@ -429,7 +435,7 @@ describe("create wizard", () => {
     for (const box of screen.getAllByRole("checkbox")) await userEvent.click(box);
     await userEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]!);
     expect(screen.queryByLabelText("Port 2")).not.toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("Certificates"), "c1");
+    await pickCertificate();
     await next();
     await screen.findByRole("heading", { name: "Routes and pools" });
     await userEvent.click(screen.getByRole("button", { name: "Add route" }));
@@ -481,7 +487,7 @@ describe("create wizard", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Fixed address" }));
     await userEvent.type(screen.getByLabelText("VIP address"), "192.0.2.9");
     await next();
-    await userEvent.selectOptions(await screen.findByLabelText("Certificates"), "c1");
+    await pickCertificate();
     await next();
     await userEvent.selectOptions(await screen.findByLabelText("Pool choice"), "p1");
     await next();

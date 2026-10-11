@@ -3,7 +3,8 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
-import { StatusPill } from "@/components/sy/StatusPill";
+import { expiryStatus, StatusPill } from "@/components/sy/StatusPill";
+import { ChipInput } from "@/components/sy/ChipInput";
 import { ErrorState } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
@@ -499,21 +500,18 @@ export function Wizard({ tenant }: { tenant: string }) {
                       : undefined
                   }
                 >
-                  <select
-                    multiple
-                    aria-label={t("Certificates")}
-                    className={cn(INPUT, "h-28")}
+                  <ChipInput
+                    label={t("Certificates")}
                     value={s.certificate_ids}
-                    onChange={(e) =>
-                      set({ certificate_ids: [...e.target.selectedOptions].map((o) => o.value) })
-                    }
-                  >
-                    {certs.data?.items.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => set({ certificate_ids: v })}
+                    options={(certs.data?.items ?? []).map((c) => ({
+                      value: c.id,
+                      label: c.name,
+                      hint: expiryStatus(c.not_after).label,
+                    }))}
+                    emptyMessage={(q) => t("No certificate named “{q}”.", { q })}
+                    placeholder={t("Search certificates")}
+                  />
                 </Field>
               )}
             </section>

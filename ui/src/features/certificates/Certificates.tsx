@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
+import { ChipInput, validateHostname } from "@/components/sy/ChipInput";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { DraftMarker, expiryStatus, StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
@@ -283,7 +284,7 @@ function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }
   const qc = useQueryClient();
   const [source, setSource] = useState<"acme" | "cloudflare_origin">("acme");
   const [name, setName] = useState("");
-  const [sans, setSans] = useState("");
+  const [sans, setSans] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [problem, setProblem] = useState<unknown>(null);
@@ -294,7 +295,7 @@ function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }
       unwrap(
         await api.POST("/api/v1/tenants/{t}/certificates/issue", {
           params: { path: { t: tenant } },
-          body: { name, source, sans: sans.split(/[\s,]+/).filter(Boolean) },
+          body: { name, source, sans },
         }),
       );
       await qc.invalidateQueries({ queryKey: ["t", tenant] });
@@ -316,7 +317,7 @@ function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }
             {done ? t("Close") : t("Cancel")}
           </Button>
           {!done && (
-            <Button disabled={busy || !name || !sans.trim()} onClick={() => void submit()}>
+            <Button disabled={busy || !name || sans.length === 0} onClick={() => void submit()}>
               {t("Start issuing")}
             </Button>
           )}
@@ -374,19 +375,21 @@ function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          <label className="block space-y-1.5 text-sm font-medium">
-            {t("Names (SANs)")}
-            <input
-              aria-label={t("Names (SANs)")}
-              className={cn(INPUT, "font-mono")}
-              placeholder="docs.example.com, www.example.com"
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">{t("Names (SANs)")}</div>
+            <ChipInput
+              label={t("Names (SANs)")}
               value={sans}
-              onChange={(e) => setSans(e.target.value)}
+              onChange={setSans}
+              freeText={{ validate: validateHostname }}
+              placeholder="docs.example.com"
             />
-            <span className="block text-xs font-normal text-muted-foreground">
-              {t("Each name must be in a Cloudflare zone this tenant can edit.")}
+            <span className="block text-xs text-muted-foreground">
+              {t(
+                "Press Enter or comma to add a name. Each must be in a Cloudflare zone this tenant can edit.",
+              )}
             </span>
-          </label>
+          </div>
         </>
       )}
     </Sheet>

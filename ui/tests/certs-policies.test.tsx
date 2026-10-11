@@ -409,8 +409,8 @@ describe("certificates", () => {
     await userEvent.click(await screen.findByRole("radio", { name: "Cloudflare Origin CA" }));
     await userEvent.type(screen.getByLabelText("Name"), "docs");
     await userEvent.type(
-      screen.getByLabelText("Names (SANs)"),
-      "docs.example.test, www.example.test",
+      screen.getByRole("combobox", { name: "Names (SANs)" }),
+      "docs.example.test,www.example.test{enter}",
     );
     await userEvent.click(screen.getByRole("button", { name: "Start issuing" }));
     await waitFor(() =>

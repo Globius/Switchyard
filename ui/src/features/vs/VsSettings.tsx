@@ -2,7 +2,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
+import { ChipInput } from "@/components/sy/ChipInput";
 import { FindingsSummary, focusField } from "@/components/sy/Findings";
+import { expiryStatus } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -171,6 +173,15 @@ function SettingsForm({
     liveEditable ? JSON.stringify(liveEditable[k]) : undefined;
   const revert = (k: keyof Editable) => () => liveEditable && set(k, liveEditable[k]);
   const er = (path: string) => messagesFor(errors, path);
+  /** Errors on `field.N` belong to the chip at index N. */
+  const itemErrors = (field: string, values: string[]) =>
+    Object.fromEntries(
+      Object.entries(errors).flatMap(([path, msgs]) => {
+        const idx = path.startsWith(`${field}.`) ? Number(path.slice(field.length + 1)) : NaN;
+        const v = Number.isInteger(idx) ? values[idx] : undefined;
+        return v ? [[v, msgs.join(" ")]] : [];
+      }),
+    );
   const disabled = !write.allowed;
 
   async function save() {
@@ -426,27 +437,22 @@ function SettingsForm({
             changed={changed("certificate_ids")}
             live={liveText("certificate_ids")}
             onRevert={revert("certificate_ids")}
-            errors={er("certificate_ids")}
+            errors={errors.certificate_ids ?? []}
           >
-            <select
-              multiple
-              aria-label={t("Certificates")}
-              className={cn(INPUT, "h-24")}
+            <ChipInput
+              label={t("Certificates")}
               disabled={disabled}
               value={form.certificate_ids}
-              onChange={(e) =>
-                set(
-                  "certificate_ids",
-                  [...e.target.selectedOptions].map((o) => o.value),
-                )
-              }
-            >
-              {certs.data?.items.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => set("certificate_ids", v)}
+              options={(certs.data?.items ?? []).map((c) => ({
+                value: c.id,
+                label: c.name,
+                hint: expiryStatus(c.not_after).label,
+              }))}
+              itemErrors={itemErrors("certificate_ids", form.certificate_ids)}
+              emptyMessage={(q) => t("No certificate named “{q}”.", { q })}
+              placeholder={t("Search certificates")}
+            />
           </Field>
           <Field
             label={t("Policy sets")}
@@ -454,27 +460,18 @@ function SettingsForm({
             changed={changed("policy_set_ids")}
             live={liveText("policy_set_ids")}
             onRevert={revert("policy_set_ids")}
-            errors={er("policy_set_ids")}
+            errors={errors.policy_set_ids ?? []}
           >
-            <select
-              multiple
-              aria-label={t("Policy sets")}
-              className={cn(INPUT, "h-24")}
+            <ChipInput
+              label={t("Policy sets")}
               disabled={disabled}
               value={form.policy_set_ids}
-              onChange={(e) =>
-                set(
-                  "policy_set_ids",
-                  [...e.target.selectedOptions].map((o) => o.value),
-                )
-              }
-            >
-              {policies.data?.items.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => set("policy_set_ids", v)}
+              options={(policies.data?.items ?? []).map((x) => ({ value: x.id, label: x.name }))}
+              itemErrors={itemErrors("policy_set_ids", form.policy_set_ids)}
+              emptyMessage={(q) => t("No policy named “{q}”.", { q })}
+              placeholder={t("Search policy sets")}
+            />
           </Field>
         </section>
       )}
