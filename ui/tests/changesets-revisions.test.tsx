@@ -77,6 +77,7 @@ const server = setupServer(
       id: "s",
       is_system: false,
       name: "Miguel Rodriguez",
+      principal: "Miguel Rodriguez",
       session: null,
       tenants: [{ id: "t1", name: "acme", role, via: [] }],
     }),

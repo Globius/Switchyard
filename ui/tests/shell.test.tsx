@@ -20,6 +20,7 @@ const ME = {
   id: "s1",
   is_system: false,
   name: "Miguel Rodriguez",
+  principal: "Miguel Rodriguez",
   session: null,
   tenants: [
     { id: "t1", name: "acme", role: "viewer", via: [{ provider: "p", group: "sy-acme-view" }] },
@@ -98,14 +99,15 @@ function renderAt(path: string) {
 
 describe("shell helpers", () => {
   const cs = (o: Partial<ChangeSetSummary>) => ({ ...DRAFT, ...o }) as ChangeSetSummary;
-  it("picks only the caller's open draft", () => {
-    const me = { name: "Miguel Rodriguez", email: "m@example.test" };
+  it("picks only the caller's open draft, by principal", () => {
+    const me = { principal: "user:authentik:abc123" };
+    const mine = { author: "user:authentik:abc123" };
     expect(pickOwnDraft([cs({ author: "someone" })], me)).toBeUndefined();
-    expect(pickOwnDraft([cs({ state: "applied" })], me)).toBeUndefined();
-    expect(pickOwnDraft([cs({ author: "m@example.test" })], me)?.id).toBe("cs1");
-    expect(pickOwnDraft([cs({ author: "user:local:Miguel Rodriguez" })], me)?.id).toBe("cs1");
-    expect(pickOwnDraft([cs({ state: "pending_approval" })], me)?.id).toBe("cs1");
-    expect(pickOwnDraft([cs({})], undefined)).toBeUndefined();
+    expect(pickOwnDraft([cs({ ...mine, state: "applied" })], me)).toBeUndefined();
+    expect(pickOwnDraft([cs(mine)], me)?.id).toBe("cs1");
+    expect(pickOwnDraft([cs({ ...mine, state: "pending_approval" })], me)?.id).toBe("cs1");
+    expect(pickOwnDraft([cs(mine)], undefined)).toBeUndefined();
+    expect(pickOwnDraft([cs(mine)], {})).toBeUndefined();
   });
   it("makes initials", () => {
     expect(initials("Miguel Rodriguez")).toBe("MR");
