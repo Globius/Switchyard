@@ -146,6 +146,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       a SAN of the service's certificates (wildcards cover exactly one label).
     - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
+    - ``needs_health_monitor`` and ``passive_check_layer7_needs_http``: passive checks and slow
+      start build on a health monitor, and ``layer7`` observation needs an HTTP-only pool.
 
     Returns:
         Findings sorted by path; empty when the snapshot is valid.
@@ -433,6 +435,15 @@ def _check_udp_pools(
                         "persistence is not valid on a udp pool; use the source algorithm",
                     )
                 )
+            for field in ("passive_check", "slow_start_s"):
+                if getattr(pool, field) is not None:
+                    problems.append(
+                        Problem(
+                            f"{base}.{field}",
+                            "udp_field_not_allowed",
+                            f"{field} is not valid on a udp pool",
+                        )
+                    )
             if pool.algorithm is Algorithm.RANDOM:
                 problems.append(
                     Problem(
@@ -458,7 +469,11 @@ def _check_udp_pools(
                         f"a {monitor.type} monitor cannot check a udp pool; use a udp monitor",
                     )
                 )
-        elif monitor is not None and monitor.type is MonitorType.UDP and protocols:
+        else:
+            _check_live_traffic(pool, protocols, monitor, base, problems)
+        if protocols != {Protocol.UDP} and (
+            monitor is not None and monitor.type is MonitorType.UDP and protocols
+        ):
             problems.append(
                 Problem(
                     f"{base}.health_monitor_id",
@@ -466,6 +481,41 @@ def _check_udp_pools(
                     "a udp monitor can only check a pool used by udp services",
                 )
             )
+
+
+def _check_live_traffic(
+    pool: Pool,
+    protocols: set[Protocol],
+    monitor: HealthMonitor | None,
+    base: str,
+    problems: list[Problem],
+) -> None:
+    """Passive checks and slow start build on the health monitor; ``layer7`` needs HTTP.
+
+    Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``) and
+    ``passive_check_layer7_needs_http``.
+    """
+    for field in ("passive_check", "slow_start_s"):
+        if getattr(pool, field) is not None and monitor is None:
+            problems.append(
+                Problem(
+                    f"{base}.{field}",
+                    "needs_health_monitor",
+                    f"{field} needs a health monitor on the pool",
+                )
+            )
+    if (
+        pool.passive_check is not None
+        and pool.passive_check.observe == "layer7"
+        and Protocol.TCP in protocols
+    ):
+        problems.append(
+            Problem(
+                f"{base}.passive_check.observe",
+                "passive_check_layer7_needs_http",
+                "layer7 observation needs a pool used only by http services; use layer4 for tcp",
+            )
+        )
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:

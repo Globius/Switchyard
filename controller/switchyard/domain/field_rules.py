@@ -59,7 +59,7 @@ def protocol_rules(protocol: Protocol) -> ProtocolRules:
             protocol,
             UDP_FORBIDDEN_SERVICE_FIELDS,
             UDP_FORBIDDEN_PORT_FIELDS,
-            ("tls", "tls_verify", "persistence"),
+            ("tls", "tls_verify", "persistence", "passive_check", "slow_start_s"),
             tuple(a for a in Algorithm if a is not Algorithm.RANDOM),
             (MonitorType.UDP,),
             True,

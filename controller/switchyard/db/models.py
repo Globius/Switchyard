@@ -229,6 +229,8 @@ class PoolRow(TenantOwnedMixin, Base):
     health_monitor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     tls: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    passive_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    slow_start_s: Mapped[int | None] = mapped_column(Integer)
 
 
 class PoolMemberRow(Base):

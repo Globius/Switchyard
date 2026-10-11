@@ -54,3 +54,4 @@ Date: YYYY-MM-DD
 | [0063](0063-haproxy-exporter-listener.md) | HAProxy Prometheus exporter listener on the management network | Accepted |
 | [0064](0064-certificate-renew-before-days.md) | Certificate renewal window (`renew_before_days`) | Accepted |
 | [0065](0065-bgp-prefix-limits.md) | BGP prefix limits | Accepted |
+| [0066](0066-pool-passive-checks-and-slow-start.md) | Pool passive checks and slow start | Accepted |

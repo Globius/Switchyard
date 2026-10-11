@@ -515,6 +515,14 @@ class _Renderer:
                 parts.append(f"port {monitor.port}")
             if pool.tls:
                 parts.append("check-ssl")
+            if pool.passive_check is not None:
+                passive = pool.passive_check
+                parts.append(
+                    f"observe {passive.observe} error-limit {passive.error_limit} "
+                    f"on-error {passive.on_error}"
+                )
+            if pool.slow_start_s is not None:
+                parts.append(f"slowstart {pool.slow_start_s}s")
         if pool.tls:
             parts.append(
                 f"ssl verify required ca-file {CA_BUNDLE}" if pool.tls_verify else "ssl verify none"

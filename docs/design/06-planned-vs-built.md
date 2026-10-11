@@ -64,7 +64,8 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | `waf_policy`, Coraza SPOA | missing | *deferred*: phase 2 | Table, renderer, agent bundle, UI |
 | Rate limits, IP groups | missing | *deferred*: phase 2 | |
 | CrowdSec, oauth2-proxy SSO, caching, compression, Lua | missing | *deferred* or out of scope in 01 | |
-| Passive checks (`observe layer7`), `external-check`, slow-start | missing | *not started*: in the 01 mapping, not in the model | Model fields and render rules |
+| Passive checks (`observe`) and slow-start | done | `passive_check` and `slow_start_s` on the pool (ADR 0066) | |
+| `external-check` | missing | *not built on purpose*: runs a command on the SE (ADR 0066) | Fixed named checks in the SE image, own ADR |
 | Pool discovery by Proxmox tags | missing | *deferred*: phase 2 | |
 | Kubernetes connector | missing | *deferred*: phase 2 | |
 | Avi config importer | missing | *deferred*: phase 2 | |

@@ -445,6 +445,26 @@ class PersistenceSourceIp(Model):
     table_size: int = Field(default=100_000, ge=1_000, le=10_000_000)
 
 
+class PassiveCheck(Model):
+    """Judge members by their real traffic as well as by the health monitor (HAProxy ``observe``).
+
+    Attributes:
+        observe: ``layer4`` watches connection failures; ``layer7`` also watches HTTP responses
+            (``http`` pools only).
+        error_limit: Consecutive errors that trigger ``on_error``.
+        on_error: What to do at the limit: ``mark-down``, ``fastinter`` (check faster),
+            ``fail-check`` (count one failed check) or ``sudden-death`` (fail and mark down).
+
+    Example:
+        >>> PassiveCheck().on_error
+        'mark-down'
+    """
+
+    observe: Literal["layer4", "layer7"] = "layer7"
+    error_limit: int = Field(default=10, ge=1, le=1000)
+    on_error: Literal["mark-down", "fastinter", "fail-check", "sudden-death"] = "mark-down"
+
+
 class PoolMember(Model):
     """One backend server.
 
@@ -489,6 +509,9 @@ class Pool(TenantOwned):
         tls: Connect to members over TLS.
         tls_verify: Verify the member certificate against the system CA store. Off by default to
             match Avi behaviour for internal backends with private certificates.
+        passive_check: Also judge members by their live traffic. Needs a health monitor.
+        slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
+            weight (HAProxy ``slowstart``). Needs a health monitor.
         members: Backend servers, unique by name.
     """
 
@@ -497,6 +520,8 @@ class Pool(TenantOwned):
     health_monitor_id: UUID | None = None
     tls: bool = False
     tls_verify: bool = False
+    passive_check: PassiveCheck | None = None
+    slow_start_s: int | None = Field(default=None, ge=1, le=3600)
     members: tuple[PoolMember, ...] = ()
 
     @model_validator(mode="after")

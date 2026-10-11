@@ -68,6 +68,8 @@ def full_data() -> dict:  # type: ignore[type-arg]
         persistence={"type": "source_ip", "timeout_s": 600},
         tls=True,
         algorithm="leastconn",
+        passive_check={"observe": "layer7", "error_limit": 4, "on_error": "fastinter"},
+        slow_start_s=45,
     )
     pool["members"].append(
         {"address": "10.20.0.12", "port": 80, "weight": 50, "admin_state": "drain", "name": "b"}

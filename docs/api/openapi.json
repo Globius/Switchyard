@@ -6413,6 +6413,41 @@
         "title": "Page[VirtualServiceRead]",
         "type": "object"
       },
+      "PassiveCheck": {
+        "additionalProperties": false,
+        "description": "Judge members by their real traffic as well as by the health monitor (HAProxy ``observe``).\n\nAttributes:\n    observe: ``layer4`` watches connection failures; ``layer7`` also watches HTTP responses\n        (``http`` pools only).\n    error_limit: Consecutive errors that trigger ``on_error``.\n    on_error: What to do at the limit: ``mark-down``, ``fastinter`` (check faster),\n        ``fail-check`` (count one failed check) or ``sudden-death`` (fail and mark down).\n\nExample:\n    >>> PassiveCheck().on_error\n    'mark-down'",
+        "properties": {
+          "error_limit": {
+            "default": 10,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Error Limit",
+            "type": "integer"
+          },
+          "observe": {
+            "default": "layer7",
+            "enum": [
+              "layer4",
+              "layer7"
+            ],
+            "title": "Observe",
+            "type": "string"
+          },
+          "on_error": {
+            "default": "mark-down",
+            "enum": [
+              "mark-down",
+              "fastinter",
+              "fail-check",
+              "sudden-death"
+            ],
+            "title": "On Error",
+            "type": "string"
+          }
+        },
+        "title": "PassiveCheck",
+        "type": "object"
+      },
       "PermissionMatrix": {
         "additionalProperties": false,
         "description": "The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.",
@@ -6583,7 +6618,7 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    members: Backend servers, unique by name.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    members: Backend servers, unique by name.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
@@ -6618,6 +6653,16 @@
             "title": "Name",
             "type": "string"
           },
+          "passive_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassiveCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persistence": {
             "anyOf": [
               {
@@ -6627,6 +6672,19 @@
                 "type": "null"
               }
             ]
+          },
+          "slow_start_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Start S"
           },
           "tenant_id": {
             "format": "uuid",
@@ -6689,6 +6747,16 @@
             "title": "Name",
             "type": "string"
           },
+          "passive_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassiveCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persistence": {
             "anyOf": [
               {
@@ -6698,6 +6766,19 @@
                 "type": "null"
               }
             ]
+          },
+          "slow_start_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Start S"
           },
           "tls": {
             "default": false,
@@ -6829,6 +6910,16 @@
             ],
             "title": "Name"
           },
+          "passive_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassiveCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persistence": {
             "anyOf": [
               {
@@ -6838,6 +6929,17 @@
                 "type": "null"
               }
             ]
+          },
+          "slow_start_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Start S"
           },
           "tls": {
             "anyOf": [
@@ -6914,6 +7016,16 @@
             "title": "Name",
             "type": "string"
           },
+          "passive_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassiveCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persistence": {
             "anyOf": [
               {
@@ -6923,6 +7035,19 @@
                 "type": "null"
               }
             ]
+          },
+          "slow_start_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Start S"
           },
           "tenant_id": {
             "format": "uuid",
