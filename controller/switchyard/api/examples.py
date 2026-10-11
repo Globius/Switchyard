@@ -254,6 +254,7 @@ REVISION_SUMMARY = {
     "number": 12,
     "author": "user:alice",
     "summary": "Switch web-pool to leastconn",
+    "message": "Ticket OPS-412: leastconn evens out the long uploads.",
     "git_sha": "3f9c2ab",
     "created_at": WHEN,
 }
@@ -328,6 +329,22 @@ VIRTUAL_SERVICE_STATUS = {
     "health": "degraded",
     "members_up": 3,
     "members_total": 4,
+    "members": [
+        {
+            "pool": "dns-pool",
+            "pool_id": "00000000-0000-0000-0000-0000000000d2",
+            "member_id": "00000000-0000-0000-0000-0000000000d3",
+            "address": "10.20.0.53",
+            "port": 53,
+            "engine": "edge-1",
+            "engine_id": ENGINE,
+            "status": "DOWN",
+            "check_status": "L4TOUT",
+            "last_check": "Layer4 timeout",
+            "last_change_s": 95,
+            "last_checked_at": WHEN,
+        }
+    ],
 }
 
 ENGINE_STATUS = {
@@ -578,6 +595,10 @@ SUMMARY = {
             "backend": "pool_web",
             "server": "web-2",
             "status": "DOWN",
+            "check_status": "L7STS",
+            "last_check": "Layer7 wrong status",
+            "last_change_s": 95,
+            "last_checked_at": WHEN,
         }
     ],
     "drifted_engines": [

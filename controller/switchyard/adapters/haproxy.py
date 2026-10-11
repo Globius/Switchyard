@@ -72,11 +72,17 @@ class ServerStatus:
         backend: Backend name (``pool_<name>``).
         server: Server name.
         status: HAProxy status string: ``UP``, ``DOWN``, ``MAINT``, ``DRAIN``, ``NOLB`` and so on.
+        check_status: Short code of the last health check (``L4OK``, ``L7STS``, ``L4TOUT``, ...).
+        last_check: HAProxy description of the last check (``Layer7 check passed``, ...).
+        last_change_s: Seconds since the status last changed.
     """
 
     backend: str
     server: str
     status: str
+    check_status: str | None = None
+    last_check: str | None = None
+    last_change_s: int | None = None
 
     @property
     def serving(self) -> bool:
