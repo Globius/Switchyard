@@ -197,6 +197,19 @@ def _udp_host_files(servers: list[IpvsServer]) -> dict[str, str]:
     }
 
 
+def _peer_view(peer: dm.BgpPeer, profile: dm.BgpProfile) -> dict[str, object]:
+    """A neighbour for the address-family sections: its address and its effective prefix limit.
+
+    Example:
+        >>> peer = dm.BgpPeer(peer_ip="10.0.0.1", remote_asn=65001, max_prefixes=10)
+        >>> _peer_view(peer, dm.BgpProfile(name="p", tenant_id=UUID(int=1), id=UUID(int=2),
+        ...     asn=65000, peers=(peer,), max_prefixes=100))
+        {'ip': '10.0.0.1', 'max_prefixes': 10}
+    """
+    limit = peer.max_prefixes if peer.max_prefixes is not None else profile.max_prefixes
+    return {"ip": str(peer.peer_ip), "max_prefixes": limit}
+
+
 def _route_lines(routes: tuple[dm.StaticRoute, ...], style: str) -> list[str]:
     out = []
     for r in sorted(
@@ -316,8 +329,8 @@ def render_frr(
         bfd=profile.bfd,
         v4_vips=v4,
         v6_vips=v6,
-        v4_peers=[str(p.peer_ip) for p in ordered if p.peer_ip.version == 4],
-        v6_peers=[str(p.peer_ip) for p in ordered if p.peer_ip.version == 6],
+        v4_peers=[_peer_view(p, profile) for p in ordered if p.peer_ip.version == 4],
+        v6_peers=[_peer_view(p, profile) for p in ordered if p.peer_ip.version == 6],
         max_paths=profile.max_paths,
         routes=_route_lines(profile.static_routes, "frr"),
     )

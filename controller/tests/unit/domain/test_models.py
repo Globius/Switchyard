@@ -282,3 +282,21 @@ class TestPolicySets:
                     ],
                 }
             )
+
+
+def test_bgp_prefix_limits_are_optional_and_bounded() -> None:
+    import uuid
+
+    from pydantic import ValidationError
+
+    from switchyard.domain.models import BgpPeer, BgpProfile
+
+    peer = BgpPeer(peer_ip="192.0.2.1", remote_asn=65001)
+    assert peer.max_prefixes is None
+    profile = BgpProfile(
+        id=uuid.uuid4(), tenant_id=uuid.uuid4(), name="p", asn=65000, peers=(peer,)
+    )
+    assert profile.max_prefixes is None
+    for bad in (0, -1, 10_000_001):
+        with pytest.raises(ValidationError):
+            BgpPeer(peer_ip="192.0.2.1", remote_asn=65001, max_prefixes=bad)

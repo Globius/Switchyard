@@ -234,11 +234,13 @@ class BgpPeer(Model):
         peer_ip: Neighbour address.
         remote_asn: Neighbour AS number.
         md5_ref: OpenBao reference of the session password; the password itself is never stored.
+        max_prefixes: Prefix limit for this neighbour; overrides the profile's ``max_prefixes``.
     """
 
     peer_ip: IPAddress
     remote_asn: int = Field(ge=1, le=4_294_967_295)
     md5_ref: SecretRef | None = None
+    max_prefixes: int | None = Field(default=None, ge=1, le=10_000_000)
 
 
 class VrrpProfile(TenantOwned):
@@ -269,6 +271,9 @@ class BgpProfile(TenantOwned):
         asn: The engines' AS number.
         bfd: Run BFD with the peers for sub-second failure detection.
         peers: Upstream neighbours (at least one).
+        max_prefixes: Default prefix limit per neighbour (``maximum-prefix``): FRR resets the
+            session when a neighbour announces more, and tries again after five minutes.
+            ``None`` sets no limit.
         max_paths: ECMP width.
         static_routes: Routes installed on every engine.
     """
@@ -277,6 +282,7 @@ class BgpProfile(TenantOwned):
     asn: int = Field(ge=1, le=4_294_967_295)
     bfd: bool = True
     peers: tuple[BgpPeer, ...] = Field(min_length=1)
+    max_prefixes: int | None = Field(default=None, ge=1, le=10_000_000)
     max_paths: int = Field(default=4, ge=1, le=64)
     static_routes: tuple[StaticRoute, ...] = ()
 
