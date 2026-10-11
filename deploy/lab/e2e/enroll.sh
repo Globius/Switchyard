@@ -7,7 +7,7 @@ export MSYS_NO_PATHCONV=1
 PVE=switchyard-pve-lab-pve-1
 VMID=$(python -c "import json;print(json.load(open('work/deploy.json'))['engine']['vmid'])")
 TOKEN=$(python -c "import json;print(json.load(open('work/deploy.json'))['token']['token'])")
-printf 'CONTROLLER_URL=https://172.30.0.1:8443\nDP_USER=switchyard\nDP_PASSWORD=%s\n' "$(cat work/dp_password)" > work/enroll.env
+printf 'CONTROLLER_URL=https://172.30.0.1:8443\nCONTROLLER_CN=switchyard-controller\nDP_USER=switchyard\nDP_PASSWORD=%s\n' "$(cat work/dp_password)" > work/enroll.env
 printf '%s\n' "$TOKEN" > work/enroll.token
 docker cp work/enroll.env $PVE:/root/enroll.env
 docker cp work/enroll.token $PVE:/root/enroll.token

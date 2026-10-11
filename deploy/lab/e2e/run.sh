@@ -59,5 +59,7 @@ api vs > work/vs.json
 python -c "import json;d=json.load(open('work/vs.json'));assert d.get('name')=='api', d" || { cat work/vs.json | cut -c1-600; fail "virtual service apply"; }
 n=0; until [ "$(docker exec $PVE curl -s -m 5 -o /dev/null -w '%{http_code}' http://172.30.0.240/api/v1/healthz)" = 200 ]; do
   n=$((n+1)); [ $n -lt 12 ] || fail "no 200 through the VIP"; sleep 3; done
-api status | grep -q '"status": "UP"' || fail "backend member is not UP in the engine status"
+n=0; until api status | grep -q '"status": "UP"'; do n=$((n+1)); [ $n -lt 20 ] || { api status | cut -c1-700; fail "backend member is not UP in the engine status"; }; sleep 3; done
+n=0; until api status | grep -q '"state": "MASTER"'; do n=$((n+1)); [ $n -lt 20 ] || { api status | cut -c1-700; fail "VRRP is not MASTER"; }; sleep 3; done
+api status | grep -q '"drift": \[\]' || fail "engine reports drift"
 echo "E2E PASSED: deploy, enroll, renew, mTLS, apply, VIP traffic"

@@ -19,6 +19,9 @@ to start) and are the only guests that run on hosts without KVM, such as the Doc
 - Containers have no cloud-init. Management address, gateway and keys are set through the container config; the
   enrollment token, controller URL and CA must be pushed in out of band (`pct push`), as for VMs today (ADR 0011).
 
+- The kind is stored on the engine at deploy (`service_engine.guest_kind`, NULL for hand-built engines, existing deployed
+  engines became `qemu`) and returned as `guest_kind` on the engine read, for a VM/CT marker in lists.
+
 ## Consequences
 Verified in the lab: the template builds, a full clone starts, HAProxy 3.2 answers on the local health port, node
 exporter on 9100, Keepalived 2.3.3 and FRR installed (started by the agent, not at boot). Not verified: VRRP/BGP in a
