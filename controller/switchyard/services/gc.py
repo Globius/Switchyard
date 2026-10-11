@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, delete, or_, select, update
 
 from switchyard.db import audit_log
-from switchyard.db.auth_models import LoginStateRow, UserSessionRow
+from switchyard.db.auth_models import LoginStateRow, LoginThrottleRow, UserSessionRow
 from switchyard.db.ops_models import (
     ChangeSetRow,
     EngineStatusRow,
@@ -73,6 +73,12 @@ class GarbageCollector:
                 delete(LoginStateRow).where(LoginStateRow.expires_at < now)
             )
             done["login_states_deleted"] = states.rowcount  # type: ignore[attr-defined]
+            throttle = await session.execute(
+                delete(LoginThrottleRow).where(
+                    LoginThrottleRow.updated_at < now - timedelta(days=1)
+                )
+            )
+            done["login_throttle_deleted"] = throttle.rowcount  # type: ignore[attr-defined]
             old = now - CREDENTIAL_GRACE
             sessions = await session.execute(
                 delete(UserSessionRow).where(

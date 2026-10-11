@@ -61,6 +61,12 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("DELETE", "/tenants/{t}"): ("manage", "tenant"),
     ("GET", "/tenants/{t}/audit-events"): READ,
     ("GET", "/tenants/{t}/principals"): READ,
+    ("GET", "/tenants/{t}/virtual-services/{service}/engines"): READ,
+    ("GET", "/tenants/{t}/virtual-services/{service}/engines/{engine}/rendered"): READ,
+    ("GET", "/tenants/{t}/engines/{engine}/running-config"): READ,
+    ("POST", "/tenants/{t}/certificates/import-ca"): ("manage", "certificate"),
+    ("POST", "/tenants/{t}/se-groups/{group}/reapply"): ("rollback", "revision"),
+    ("GET", "/tenants/{t}/sdn/status"): READ,
     ("GET", "/tenants/{t}/audit-events/export"): READ,
     ("GET", "/tenants/{t}/change-sets"): READ,
     ("POST", "/tenants/{t}/change-sets"): DRAFT,
@@ -196,6 +202,7 @@ BODIES: dict[tuple[str, str], Any] = {
         "mgmt_pool_id": "{uuid}",
     },
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
+    ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/{certificate}/replace"): {"pem": "x"},
     ("POST", "/tenants/{t}/certificates/issue"): {
         "name": "c2",
@@ -365,6 +372,7 @@ NOT_REQUESTED = {("GET", "/tenants/{t}/status/stream")}
 NOT_CONFIGURED = {
     ("POST", "/tenants/{t}/engines/{engine}/enrollment-token"),
     ("POST", "/tenants/{t}/certificates/import"),
+    ("POST", "/tenants/{t}/certificates/import-ca"),
     ("POST", "/tenants/{t}/certificates/issue"),
     ("POST", "/tenants/{t}/certificates/{certificate}/renew"),
     ("POST", "/tenants/{t}/certificates/{certificate}/replace"),

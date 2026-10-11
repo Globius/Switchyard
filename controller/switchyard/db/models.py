@@ -176,6 +176,7 @@ class CertificateRow(TenantOwnedMixin, Base):
         enum_check("source", dm.CertSource),
         enum_check("renew_policy", dm.RenewPolicy),
         CheckConstraint("renew_before_days BETWEEN 1 AND 365", name="renew_before_days"),
+        CheckConstraint("purpose IN ('server', 'client_ca')", name="purpose"),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -187,6 +188,11 @@ class CertificateRow(TenantOwnedMixin, Base):
     renew_before_days: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("30")
     )
+    ocsp_stapling: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    purpose: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'server'"))
+    crl_secret_ref: Mapped[str | None] = mapped_column(Text)
 
 
 class PolicySetRow(TenantOwnedMixin, Base):
@@ -229,6 +235,8 @@ class PoolRow(TenantOwnedMixin, Base):
     health_monitor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     tls: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    passive_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    slow_start_s: Mapped[int | None] = mapped_column(Integer)
 
 
 class PoolMemberRow(Base):
@@ -291,6 +299,9 @@ class VsPortRow(Base):
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         tenant_fk("vs_id", "virtual_service", cascade=True),
         CheckConstraint("port BETWEEN 1 AND 65535", name="port"),
+        enum_check("tls_profile", dm.TlsProfile),
+        tenant_fk("client_ca_id", "certificate"),
+        CheckConstraint("client_verify IN ('required', 'optional')", name="client_verify"),
     )
 
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -300,6 +311,11 @@ class VsPortRow(Base):
     http2: Mapped[bool] = mapped_column(Boolean, nullable=False)
     proxy_protocol: Mapped[bool] = mapped_column(Boolean, nullable=False)
     https_redirect_port: Mapped[int | None] = mapped_column(Integer)
+    tls_profile: Mapped[str | None] = mapped_column(Text)
+    client_ca_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    client_verify: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'required'")
+    )
 
 
 class VsRouteRow(Base):

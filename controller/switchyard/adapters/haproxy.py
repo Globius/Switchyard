@@ -135,6 +135,10 @@ class HaproxyEngine(Protocol):
         """Return the running worker's pid and uptime."""
         ...
 
+    async def running_config(self) -> str | None:
+        """Return the configuration text HAProxy is running, or ``None`` if there is none."""
+        ...
+
     async def server_statuses(self) -> list[ServerStatus]:
         """Return the live status of every backend server."""
         ...

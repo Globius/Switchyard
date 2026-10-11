@@ -1,0 +1,2 @@
+/etc/switchyard/certs/wild-example-test.pem *.apps.example.test *.example.test example.test
+/etc/switchyard/certs/shop-example-org.pem [ocsp-update on] shop.example.org

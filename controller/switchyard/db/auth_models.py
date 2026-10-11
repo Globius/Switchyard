@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     ForeignKeyConstraint,
@@ -225,6 +226,19 @@ class LocalAdminRow(Base):
     #: Null until the TOTP enrollment was confirmed with a valid code; such an admin cannot log in.
     totp_confirmed_at: Mapped[datetime | None] = _timestamp()
     last_login_at: Mapped[datetime | None] = _timestamp()
+    #: Last accepted TOTP time step (unix time // 30); a code for this step or earlier is refused.
+    totp_last_step: Mapped[int | None] = mapped_column(BigInteger)
+
+
+class LoginThrottleRow(Base):
+    """``login_throttle``: failed sign-ins per key and until when the key is blocked."""
+
+    __tablename__ = "login_throttle"
+
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    blocked_until: Mapped[datetime | None] = _timestamp()
+    updated_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
 
 
 class BreakGlassSettingRow(Base):

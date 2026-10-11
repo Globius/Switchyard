@@ -75,3 +75,30 @@ def sign_csr(csr_pem: str, *, days: int = 365 * 15) -> str:
     for ext in csr.extensions:
         builder = builder.add_extension(ext.value, ext.critical)
     return builder.sign(ca_key, hashes.SHA256()).public_bytes(serialization.Encoding.PEM).decode()
+
+
+def make_ca_pem(*, ca: bool = True, days: int = 3650) -> tuple[str, str]:
+    """Return ``(certificate PEM, empty CRL PEM)`` of a throw-away CA (no key in the output)."""
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "test client ca")])
+    now = datetime.now(UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=10))
+        .not_valid_after(now + timedelta(days=days))
+        .add_extension(x509.BasicConstraints(ca=ca, path_length=None), critical=True)
+        .sign(key, hashes.SHA256())
+    )
+    crl = (
+        x509.CertificateRevocationListBuilder()
+        .issuer_name(name)
+        .last_update(now)
+        .next_update(now + timedelta(days=7))
+        .sign(key, hashes.SHA256())
+    )
+    pem = cert.public_bytes(serialization.Encoding.PEM).decode()
+    return pem, crl.public_bytes(serialization.Encoding.PEM).decode()

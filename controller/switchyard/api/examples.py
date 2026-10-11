@@ -172,6 +172,7 @@ TENANT_READ = {
     "quotas": {"virtual_service": 50},
     "require_approval": True,
     "usage": {"virtual_service": 12, "pool": 20, "network": 2},
+    "members": 7,
 }
 OP = {
     "object_type": "pool",
@@ -283,6 +284,54 @@ ENGINE_READ = {
     "agent_enrolled": True,
     "agent_cert_serial": "3f2a9c",
     "host_online": True,
+}
+SERVICE_ENGINES = [{"id": ENGINE, "name": "edge-1", "mgmt_ip": "192.0.2.21", "state": "enabled"}]
+ENGINE_RENDERED = {
+    "engine": "edge-1",
+    "engine_id": ENGINE,
+    "se_group_id": SE_GROUP,
+    "fingerprint": "0" * 64,
+    "files": [
+        {
+            "file": "haproxy/haproxy.cfg",
+            "scope": "group",
+            "language": "haproxy",
+            "content": "global\n    maxconn 20000\n",
+        },
+        {
+            "file": "frr/frr.conf",
+            "scope": "engine",
+            "language": "plaintext",
+            "content": "router bgp 65000\n neighbor 192.0.2.1 password REDACTED\n",
+        },
+    ],
+}
+RUNNING_CONFIG = {
+    "engine": "edge-1",
+    "engine_id": ENGINE,
+    "se_group_id": SE_GROUP,
+    "reachable": True,
+    "error": None,
+    "haproxy": {
+        "content": "global\n    maxconn 20000\n",
+        "fingerprint": "0" * 64,
+        "desired_fingerprint": "0" * 64,
+        "fingerprint_matches": True,
+        "matches_desired": True,
+    },
+    "agent": {
+        "bundle_id": "b-1",
+        "desired_bundle_id": "b-1",
+        "files": [
+            {
+                "path": "frr/frr.conf",
+                "sha256": "a" * 64,
+                "desired_sha256": "a" * 64,
+                "matches_desired": True,
+            }
+        ],
+    },
+    "fetched_at": WHEN,
 }
 PLACEMENT = {
     "available": True,
@@ -495,6 +544,7 @@ ME = {
             "via": [{"provider": "authentik", "group": "acme-admins"}],
         }
     ],
+    "links": {"grafana": "https://grafana.example.test"},
 }
 PERMISSIONS = {
     "roles": ["viewer", "operator", "tenant-admin", "system-admin"],
@@ -504,21 +554,35 @@ PERMISSIONS = {
             "object": "tenant_data",
             "min_role": "viewer",
             "description": "Read everything in the tenant.",
+            "group": "Read",
         },
         {
             "verb": "apply",
             "object": "change_set",
             "min_role": "operator",
             "description": "Apply a change set when the tenant does not require approval.",
+            "group": "Change sets",
         },
         {
             "verb": "manage",
             "object": "engine",
             "min_role": "tenant-admin",
             "description": "Register, enable, disable, retire or remove service engines.",
+            "group": "Infrastructure",
         },
     ],
 }
+SDN_STATUS = [
+    {
+        "network_id": "0192f3a0-0000-7000-8000-000000000061",
+        "network": "lb",
+        "state": "running",
+        "job_id": JOB,
+        "started_at": "2026-10-11T08:30:00Z",
+        "finished_at": None,
+        "error": None,
+    }
+]
 ROLE_MAPPING = {
     "id": "0192f3a0-0000-7000-8000-000000000041",
     "provider_id": "0192f3a0-0000-7000-8000-000000000042",

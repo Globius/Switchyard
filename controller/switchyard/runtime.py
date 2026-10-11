@@ -16,9 +16,13 @@ Login: ``SWITCHYARD_PUBLIC_URL`` (external base URL, for redirect URIs and Secur
 (``SWITCHYARD_PKI_MOUNT``, ``SWITCHYARD_PKI_ROLE``).
 """
 
+import logging
 import os
+import socket
 from datetime import timedelta
+from logging.handlers import SysLogHandler
 from pathlib import Path
+from urllib.parse import urlparse
 
 from switchyard.adapters.acme import AcmeIssuer, new_account_key
 from switchyard.adapters.agent import BundleSigner
@@ -31,6 +35,7 @@ from switchyard.adapters.secrets import EnvSecrets, OpenBaoSecrets, SecretsReade
 from switchyard.adapters.telemetry import HttpTelemetry, Telemetry
 from switchyard.config import database_url
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
+from switchyard.domain.validators import configure_secret_policy
 from switchyard.jobs.handlers import POLL_STATUS_JOB, build_handlers
 from switchyard.jobs.scheduler import Scheduler
 from switchyard.jobs.worker import Worker
@@ -62,6 +67,16 @@ def directory(db: Databases) -> DbEngineDirectory:
     ca = os.environ.get("SWITCHYARD_DATAPLANE_CA")
     cert = os.environ.get("SWITCHYARD_DATAPLANE_CERT")
     key = os.environ.get("SWITCHYARD_DATAPLANE_KEY")
+    if (
+        bundle_signer() is not None
+        and not ca
+        and os.environ.get("SWITCHYARD_INSECURE_AGENT") != "1"
+    ):
+        raise RuntimeError(
+            "SWITCHYARD_BUNDLE_KEY_FILE is set but SWITCHYARD_DATAPLANE_CA is not: agent bundles "
+            "(which carry private keys) would travel without TLS. Set the CA, or "
+            "SWITCHYARD_INSECURE_AGENT=1 for a throwaway lab."
+        )
     tls = DataPlaneTls(
         ca_file=Path(ca) if ca else None,
         client_cert=(Path(cert), Path(key)) if cert and key else None,
@@ -178,6 +193,84 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     """
     client = proxmox_client()
     return InfraService(db, client) if client else None
+
+
+def audit_syslog_target(value: str) -> tuple[str | tuple[str, int], socket.SocketKind]:
+    """Parse ``SWITCHYARD_AUDIT_SYSLOG`` into a ``SysLogHandler`` address and socket type.
+
+    Forms: ``udp://host[:514]``, ``tcp://host[:514]`` and ``unix:///dev/log``.
+
+    Example:
+        >>> audit_syslog_target("udp://logs.example.test")[0]
+        ('logs.example.test', 514)
+        >>> audit_syslog_target("unix:///dev/log")[0]
+        '/dev/log'
+        >>> audit_syslog_target("http://x")
+        Traceback (most recent call last):
+            ...
+        ValueError: SWITCHYARD_AUDIT_SYSLOG must be udp://host[:port], tcp://host[:port] or unix:///path
+    """
+    parsed = urlparse(value)
+    message = "SWITCHYARD_AUDIT_SYSLOG must be udp://host[:port], tcp://host[:port] or unix:///path"
+    if parsed.scheme == "unix" and parsed.path:
+        return parsed.path, socket.SOCK_DGRAM
+    if parsed.scheme in {"udp", "tcp"} and parsed.hostname:
+        kind = socket.SOCK_DGRAM if parsed.scheme == "udp" else socket.SOCK_STREAM
+        return (parsed.hostname, parsed.port or 514), kind
+    raise ValueError(message)
+
+
+def setup_audit_syslog() -> bool:
+    """Send audit events to syslog when ``SWITCHYARD_AUDIT_SYSLOG`` is set. Returns whether it did.
+
+    Audit events are always written to the database; this adds a copy as one JSON line per event
+    on the ``switchyard.audit`` logger, facility ``local0``, so a central log host keeps them even
+    if the database is lost.
+    """
+    value = os.environ.get("SWITCHYARD_AUDIT_SYSLOG", "").strip()
+    if not value:
+        return False
+    address, kind = audit_syslog_target(value)
+    handler = SysLogHandler(address=address, facility=SysLogHandler.LOG_LOCAL0, socktype=kind)
+    handler.setFormatter(logging.Formatter("switchyard-audit: %(message)s"))
+    audit = logging.getLogger("switchyard.audit")
+    audit.addHandler(handler)
+    audit.setLevel(logging.INFO)
+    return True
+
+
+def configure_secret_policy_from_env() -> None:
+    """Apply ``SWITCHYARD_SHARED_SECRET_PREFIXES`` and ``SWITCHYARD_SECRET_POLICY`` (ADR 0072).
+
+    ``SWITCHYARD_SHARED_SECRET_PREFIXES`` is a comma-separated list of paths every tenant may name
+    besides its own ``kv/tenants/<tenant>/`` (each ending in ``/``);
+    ``SWITCHYARD_SECRET_POLICY=open`` allows any other path (labs only).
+    """
+    raw = os.environ.get("SWITCHYARD_SHARED_SECRET_PREFIXES", "")
+    prefixes = tuple(p.strip() for p in raw.split(",") if p.strip())
+    configure_secret_policy(prefixes, open=os.environ.get("SWITCHYARD_SECRET_POLICY") == "open")
+
+
+def grafana_url() -> str | None:
+    """The Grafana base URL from ``SWITCHYARD_GRAFANA_URL``, if it is an http(s) URL.
+
+    The UI links to it, so anything else (a ``javascript:`` URL, a path) is ignored.
+
+    Example:
+        >>> import os
+        >>> os.environ["SWITCHYARD_GRAFANA_URL"] = "https://grafana.example.test/"
+        >>> grafana_url()
+        'https://grafana.example.test'
+        >>> os.environ["SWITCHYARD_GRAFANA_URL"] = "javascript:alert(1)"
+        >>> grafana_url() is None
+        True
+        >>> del os.environ["SWITCHYARD_GRAFANA_URL"]
+    """
+    value = os.environ.get("SWITCHYARD_GRAFANA_URL", "").strip()
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username:
+        return None
+    return value.rstrip("/")
 
 
 def proxmox_client() -> HttpProxmox | None:

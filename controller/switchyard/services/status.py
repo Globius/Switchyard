@@ -7,11 +7,12 @@ Drift is reported, never corrected (CLAUDE.md): a manual hotfix must be noticed,
 """
 
 import asyncio
+import contextlib
 import dataclasses
 import logging
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -25,16 +26,16 @@ from switchyard.db.models import TenantRow
 from switchyard.db.ops_models import EngineStatusRow, ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
-from switchyard.domain.models import Protocol, VirtualService
+from switchyard.domain.models import BgpProfile, Protocol, VirtualService
 from switchyard.domain.snapshot import Snapshot
 from switchyard.pipeline.apply import bundle_id, file_hashes
 from switchyard.pipeline.bundles import BundleError, engine_files
 from switchyard.pipeline.engines import EngineDirectory, EngineRecord
 from switchyard.render.escape import RenderError, ident
-from switchyard.render.haproxy import render_haproxy
-from switchyard.render.routing import EngineSlot
+from switchyard.render.haproxy import fingerprint_of, render_haproxy
+from switchyard.render.routing import EngineSlot, render_agent_bundle
 from switchyard.services.context import Databases, Principal
-from switchyard.services.errors import PermissionDeniedError
+from switchyard.services.errors import NotFoundError, PermissionDeniedError
 
 log = logging.getLogger("switchyard.status")
 
@@ -300,8 +301,16 @@ def virtual_service_states(
 @dataclass
 class _Expected:
     fingerprint: str | None = None
+    config_text: str | None = None
     udp_members: dict[tuple[str, str, int], tuple[str, str]] = field(default_factory=dict)
     bundles: dict[str, dict[str, str]] = field(default_factory=dict)  # engine name -> hashes
+
+
+def _same_text(a: str, b: str) -> bool:
+    """Equal configuration text, ignoring line endings and trailing blanks."""
+    return [x.rstrip() for x in a.strip().splitlines()] == [
+        x.rstrip() for x in b.strip().splitlines()
+    ]
 
 
 def _agent_json(status: AgentStatus) -> dict[str, Any]:
@@ -347,6 +356,7 @@ class StatusService:
             return out
         if "frontend vs_" in rendered.files["haproxy/haproxy.cfg"]:
             out.fingerprint = rendered.fingerprint
+            out.config_text = rendered.files["haproxy/haproxy.cfg"]
         out.udp_members = _udp_member_names(snapshot, group_id)
         group = next((g for g in snapshot.se_groups if g.id == group_id), None)
         if group is None or out.fingerprint is None:
@@ -510,6 +520,169 @@ class StatusService:
         async with tenant_session(self._db.app, [tenant_id]) as session:
             snapshot = await load_snapshot(session)
         return virtual_service_states(snapshot, await self._stored(tenant_id))
+
+    async def engines_of_service(
+        self, principal: Principal, tenant_id: UUID, service_id: UUID
+    ) -> list[EngineRecord]:
+        """The enabled engines a virtual service is placed on (those of its SE group), by name.
+
+        Raises:
+            NotFoundError: If the service does not exist in the tenant.
+        """
+        self._read_check(principal, tenant_id)
+        _, service = await self._service(tenant_id, service_id)
+        return await self._enabled(tenant_id, service.se_group_id)
+
+    async def rendered_for_engine(
+        self, principal: Principal, tenant_id: UUID, service_id: UUID, engine_id: UUID
+    ) -> tuple[EngineRecord, str, dict[str, str]]:
+        """Everything rendered for one engine of a service's group, without any secret.
+
+        Returns the engine, the render fingerprint and ``path -> content``: the HAProxy files (the
+        same on every engine of the group) and the engine's own routing files (FRR or Keepalived,
+        with BGP passwords replaced by ``REDACTED``). Certificates and keys are never included.
+
+        Raises:
+            NotFoundError: If the service or the engine (of the service's group) is not found.
+        """
+        self._read_check(principal, tenant_id)
+        snapshot, service = await self._service(tenant_id, service_id)
+        engines = await self._enabled(tenant_id, service.se_group_id)
+        index = next((i for i, e in enumerate(engines) if e.id == engine_id), None)
+        if index is None:
+            raise NotFoundError(f"engine {engine_id} does not serve this service")
+        record = engines[index]
+        group = next(g for g in snapshot.se_groups if g.id == service.se_group_id)
+        rendered = render_haproxy(snapshot, group.id)
+        files = dict(rendered.files)
+        if group.routing_profile_id is not None:
+            slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
+            refs = {
+                peer.md5_ref: "REDACTED"
+                for profile in snapshot.routing_profiles
+                if profile.id == group.routing_profile_id and isinstance(profile, BgpProfile)
+                for peer in profile.peers
+                if peer.md5_ref
+            }
+            # a group that cannot render its routing yet shows the HAProxy files only
+            with contextlib.suppress(RenderError):
+                files |= render_agent_bundle(snapshot, group.id, slot, refs)
+        return record, rendered.fingerprint, files
+
+    async def running_config(
+        self, principal: Principal, tenant_id: UUID, engine_id: UUID
+    ) -> dict[str, Any]:
+        """Ask one engine what it is running and compare it with the desired state.
+
+        HAProxy's configuration comes from its Data Plane API. The agent has no call that reads
+        files back (by design), so for the routing files it reports their hashes, which are
+        compared with the hashes of what the controller would send now.
+
+        Raises:
+            NotFoundError: If the engine is not in the tenant.
+        """
+        self._read_check(principal, tenant_id)
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            snapshot = await load_snapshot(session)
+            row = (
+                await session.execute(
+                    select(ServiceEngineRow).where(ServiceEngineRow.id == engine_id)
+                )
+            ).scalar_one_or_none()
+        if row is None:
+            raise NotFoundError(f"engine {engine_id} not found")
+        engines = await self._enabled(tenant_id, row.se_group_id)
+        record = next((e for e in engines if e.id == engine_id), None)
+        if record is None:  # disabled engines are not part of rollouts; look it up anyway
+            record = next(
+                e
+                for e in await self._directory.list_engines(tenant_id, row.se_group_id)
+                if e.id == engine_id
+            )
+        expected = await self._expected(snapshot, engines or [record])
+        out: dict[str, Any] = {
+            "engine": record.name,
+            "engine_id": record.id,
+            "se_group_id": record.se_group_id,
+            "reachable": True,
+            "error": None,
+            "haproxy": None,
+            "agent": None,
+        }
+        engine = None
+        agent = None
+        try:
+            async with self._limit:
+                engine = await self._directory.connect(record)
+                content = await engine.running_config()
+            if content is not None:
+                stamp = fingerprint_of(content)
+                same_stamp = expected.fingerprint is not None and stamp == expected.fingerprint
+                out["haproxy"] = {
+                    "content": content,
+                    "fingerprint": stamp,
+                    "desired_fingerprint": expected.fingerprint,
+                    "fingerprint_matches": same_stamp,
+                    "matches_desired": same_stamp
+                    and _same_text(content, expected.config_text or ""),
+                }
+        except HaproxyError as exc:
+            log.warning("running config of %s: %s", record.name, exc)
+            out["reachable"], out["error"] = False, str(exc)
+        finally:
+            if engine is not None:
+                await engine.close()
+        try:
+            agent = await self._directory.connect_agent(record)
+            if agent is not None:
+                status = await agent.status()
+                wanted = expected.bundles.get(record.name, {})
+                paths = sorted(
+                    set(status.file_hashes) | {p for p in wanted if p != "__bundle_id__"}
+                )
+                out["agent"] = {
+                    "bundle_id": status.bundle_id or None,
+                    "desired_bundle_id": wanted.get("__bundle_id__"),
+                    "files": [
+                        {
+                            "path": p,
+                            "sha256": status.file_hashes.get(p),
+                            "desired_sha256": wanted.get(p),
+                            "matches_desired": status.file_hashes.get(p) == wanted.get(p),
+                        }
+                        for p in paths
+                    ],
+                }
+        except AgentError as exc:
+            log.warning("agent status of %s: %s", record.name, exc)
+            out["reachable"], out["error"] = (
+                False,
+                f"{out['error'] + '; ' if out['error'] else ''}{exc}",
+            )
+        finally:
+            if agent is not None:
+                await agent.close()
+        out["fetched_at"] = datetime.now(UTC)
+        return out
+
+    def _read_check(self, principal: Principal, tenant_id: UUID) -> None:
+        if not principal.can_access(tenant_id):
+            raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
+
+    async def _service(self, tenant_id: UUID, service_id: UUID) -> tuple[Snapshot, VirtualService]:
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            snapshot = await load_snapshot(session)
+        service = next((s for s in snapshot.virtual_services if s.id == service_id), None)
+        if service is None:
+            raise NotFoundError(f"virtual service {service_id} not found")
+        return snapshot, service
+
+    async def _enabled(self, tenant_id: UUID, group_id: UUID) -> list[EngineRecord]:
+        return [
+            r
+            for r in await self._directory.list_engines(tenant_id, group_id)
+            if r.state.value == "enabled"
+        ]
 
     async def list_status(self, principal: Principal, tenant_id: UUID) -> list[EngineStatus]:
         """Return the stored status of a tenant's engines."""

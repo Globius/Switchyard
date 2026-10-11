@@ -16,6 +16,8 @@ from switchyard.render.escape import RenderError
 from switchyard.render.routing import EngineSlot, render_agent_bundle
 
 CERT_PATH = "certs/{name}.pem"
+CA_PATH = "certs/ca-{name}.pem"
+CRL_PATH = "certs/ca-{name}.crl"
 
 
 class BundleError(Exception):
@@ -37,6 +39,9 @@ def referenced_certs(snapshot: Snapshot, se_group_id: UUID) -> list[dm.Certifica
             for cert_id in svc.certificate_ids:
                 if cert_id in certs:
                     wanted[cert_id] = certs[cert_id]
+            for port in svc.ports:
+                if port.client_ca_id in certs:
+                    wanted[port.client_ca_id] = certs[port.client_ca_id]
     return sorted(wanted.values(), key=lambda c: c.name)
 
 
@@ -61,6 +66,31 @@ async def _bgp_secrets(
     return found
 
 
+async def _ca_files(cert: dm.Certificate, secrets: SecretsReader | None) -> dict[str, str]:
+    """The CA bundle (certificates only) and the optional revocation list of a client CA."""
+    if secrets is None:
+        raise BundleError("client CAs are in use but no secrets backend is available")
+    name = esc.ident(cert.name)
+    try:
+        pem = await secrets.get(cert.secret_ref)
+    except LookupError as exc:
+        raise BundleError(f"secret {cert.secret_ref} for client CA {cert.name} not found") from exc
+    if "PRIVATE KEY" in pem or "BEGIN CERTIFICATE" not in pem:
+        raise BundleError(f"secret for client CA {cert.name} must hold certificates only")
+    files = {CA_PATH.format(name=name): pem if pem.endswith("\n") else pem + "\n"}
+    if cert.crl_secret_ref:
+        try:
+            crl = await secrets.get(cert.crl_secret_ref)
+        except LookupError as exc:
+            raise BundleError(
+                f"secret {cert.crl_secret_ref} for the CRL of {cert.name} not found"
+            ) from exc
+        if "BEGIN X509 CRL" not in crl:
+            raise BundleError(f"secret for the CRL of {cert.name} must hold a PEM CRL")
+        files[CRL_PATH.format(name=name)] = crl if crl.endswith("\n") else crl + "\n"
+    return files
+
+
 async def engine_files(
     snapshot: Snapshot, group: dm.SeGroup, slot: EngineSlot, secrets: SecretsReader | None
 ) -> dict[str, str]:
@@ -77,6 +107,9 @@ async def engine_files(
         except RenderError as exc:
             raise BundleError(str(exc)) from exc
     for cert in referenced_certs(snapshot, group.id):
+        if cert.purpose == "client_ca":
+            files |= await _ca_files(cert, secrets)
+            continue
         if secrets is None:
             raise BundleError("certificates are in use but no secrets backend is available")
         try:

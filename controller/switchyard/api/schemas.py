@@ -269,6 +269,11 @@ class TenantRead(ApiModel):
         default_factory=dict,
         description="Objects the tenant owns now, by object type name (zeros included).",
     )
+    members: int = Field(
+        default=0,
+        description="People with a grant in the tenant: signed-in users whose provider groups "
+        "match one of the tenant's role mappings.",
+    )
 
 
 class TokenRead(ApiModel):
@@ -397,6 +402,15 @@ class MeSession(ApiModel):
     )
 
 
+class MeLinks(ApiModel):
+    """Where the UI may link to, set by the operator of the controller."""
+
+    grafana: str | None = Field(
+        default=None,
+        description="Base URL of Grafana (`SWITCHYARD_GRAFANA_URL`), or null when none is set.",
+    )
+
+
 class Me(ApiModel):
     """The authenticated caller."""
 
@@ -415,6 +429,7 @@ class Me(ApiModel):
     )
     session: MeSession | None = Field(description="Null for API tokens.")
     tenants: list[MeTenant]
+    links: MeLinks = Field(default_factory=MeLinks)
 
 
 PermissionVerb = Literal[
@@ -467,6 +482,104 @@ PermissionObject = Literal[
 ]
 
 
+class SdnApplyRead(ApiModel):
+    """Where the Proxmox SDN apply stands for one managed network.
+
+    An apply is tenant-wide: while one is `queued` or `running` it counts for every managed
+    network. After it, `succeeded` and `failed` come from the latest finished apply, and `never`
+    marks a network that no finished apply has included yet.
+    """
+
+    network_id: UUID
+    network: str
+    state: Literal["queued", "running", "succeeded", "failed", "never"]
+    job_id: UUID | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    error: str | None = None
+
+
+class ServiceEngineRead(ApiModel):
+    """An engine a virtual service is placed on (the enabled engines of its SE group)."""
+
+    id: UUID
+    name: str
+    mgmt_ip: str | None = None
+    state: EngineState
+
+
+class EngineFileRead(ApiModel):
+    """One rendered file."""
+
+    file: str = Field(description="Path relative to /etc/switchyard/ on the SE.")
+    scope: Literal["group", "engine"] = Field(
+        description="`group`: the same on every engine of the SE group (HAProxy). `engine`: this "
+        "engine's own routing files (FRR or Keepalived)."
+    )
+    language: Literal["haproxy", "plaintext"]
+    content: str
+
+
+class EngineRenderedRead(ApiModel):
+    """Everything the controller renders for one engine of a virtual service's SE group.
+
+    Certificates and keys are never included, and BGP passwords in `frr/frr.conf` read `REDACTED`.
+    """
+
+    engine: str
+    engine_id: UUID
+    se_group_id: UUID
+    fingerprint: str = Field(description="Render fingerprint of the group's HAProxy files.")
+    files: list[EngineFileRead]
+
+
+class RunningHaproxyRead(ApiModel):
+    """HAProxy's running configuration, from the Data Plane API."""
+
+    content: str
+    fingerprint: str | None = Field(description="Fingerprint stamped in the running config.")
+    desired_fingerprint: str | None = Field(description="What the desired state renders to.")
+    fingerprint_matches: bool = Field(description="The stamped fingerprints are equal.")
+    matches_desired: bool = Field(
+        description="The stamps are equal and the text is the same as the desired file, so a "
+        "hand edit that kept the stamp shows as `false`."
+    )
+
+
+class RunningAgentFileRead(ApiModel):
+    """One routing or certificate file on the engine, by hash."""
+
+    path: str
+    sha256: str | None = Field(description="Hash the agent reports; null if absent on the engine.")
+    desired_sha256: str | None = Field(description="Hash of what the controller would send now.")
+    matches_desired: bool
+
+
+class RunningAgentRead(ApiModel):
+    """What the agent reports. It has no call that reads file contents, only hashes."""
+
+    bundle_id: str | None
+    desired_bundle_id: str | None
+    files: list[RunningAgentFileRead]
+
+
+class RunningConfigRead(ApiModel):
+    """What one engine is running, compared with the desired state.
+
+    `haproxy` is null when the engine could not be reached or has no configuration, `agent` is null
+    when the engine has no agent. For tenants `error` is a fixed sentence.
+    """
+
+    engine: str
+    engine_id: UUID
+    se_group_id: UUID
+    reachable: bool
+    error: str | None = None
+    haproxy: RunningHaproxyRead | None = None
+    agent: RunningAgentRead | None = None
+    fetched_at: datetime
+
+
 class PermissionRead(ApiModel):
     """One cell of the permission matrix. `verb` and `object` are published as enums."""
 
@@ -474,6 +587,10 @@ class PermissionRead(ApiModel):
     object: PermissionObject
     min_role: Role = Field(description="The weakest role that may do this.")
     description: str = Field(description="One sentence for tooltips.")
+    group: str = Field(
+        description="The group the role matrix screen shows it under: `Read`, `Applications`, "
+        "`Infrastructure`, `Change sets`, `Runtime`, `Tenant settings`, `Access` or `System`."
+    )
 
 
 class PermissionMatrix(ApiModel):
@@ -1409,6 +1526,16 @@ class CertImportIn(CertMaterialIn):
     """Body of ``POST /certificates/import``."""
 
     name: str
+
+
+class CaImportIn(ApiModel):
+    """Body of `POST /certificates/import-ca`: a client CA bundle for mutual TLS."""
+
+    name: str
+    pem: str = Field(max_length=65536, description="The CA certificates (PEM), no private key.")
+    crl_pem: str | None = Field(
+        default=None, max_length=1048576, description="Optional certificate revocation list (PEM)."
+    )
 
 
 class CertReplaceIn(CertMaterialIn):

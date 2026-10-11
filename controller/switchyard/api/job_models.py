@@ -21,6 +21,9 @@ class JobKind(StrEnum):
     Attributes:
         APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,
             commit). Result: `ApplyJobResult`.
+        REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift
+            (stages lock, render, validate, canary, rollout; no revision). Result:
+            `{ok, se_group_id, se_group, revision_number, error, details}`.
         DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.
         RETIRE_ENGINE: Destroys an engine's VM and removes its record.
         APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.
@@ -34,6 +37,7 @@ class JobKind(StrEnum):
     """
 
     APPLY_CHANGE_SET = "apply_change_set"
+    REAPPLY_SE_GROUP = "reapply_se_group"
     DEPLOY_SE_GROUP = "deploy_se_group"
     RETIRE_ENGINE = "retire_engine"
     APPLY_SDN = "apply_sdn"

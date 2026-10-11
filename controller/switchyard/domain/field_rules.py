@@ -19,7 +19,14 @@ UDP_FORBIDDEN_SERVICE_FIELDS = (
     "routes",
 )
 #: Fields of a port that a UDP service cannot use.
-UDP_FORBIDDEN_PORT_FIELDS = ("tls", "proxy_protocol", "http2", "https_redirect_port")
+UDP_FORBIDDEN_PORT_FIELDS = (
+    "tls",
+    "proxy_protocol",
+    "http2",
+    "https_redirect_port",
+    "tls_profile",
+    "client_ca_id",
+)
 
 
 @dataclass(frozen=True)
@@ -59,7 +66,7 @@ def protocol_rules(protocol: Protocol) -> ProtocolRules:
             protocol,
             UDP_FORBIDDEN_SERVICE_FIELDS,
             UDP_FORBIDDEN_PORT_FIELDS,
-            ("tls", "tls_verify", "persistence"),
+            ("tls", "tls_verify", "persistence", "passive_check", "slow_start_s"),
             tuple(a for a in Algorithm if a is not Algorithm.RANDOM),
             (MonitorType.UDP,),
             True,

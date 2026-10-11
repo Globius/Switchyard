@@ -83,7 +83,8 @@ the change reaches) and `se_groups` with the changed files (`before`, `after`, u
 
 `POST …/apply` takes an optional `message` (up to 2000 characters) that is kept as the revision message: revisions return `message`, and the Git mirror commit body carries it.
 
-Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`. A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type.
+Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`. A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type, and `members`, the number of people with a
+grant in the tenant.
 
 `POST …/apply` returns `202 {job_id}`. When the tenant has `require_approval` it answers `403` unless the caller is
 a system administrator who sends `break_glass_reason`; use `request-approval` then. The approver must be a
@@ -104,6 +105,8 @@ tenant administrator and not the author or requester.
   controller read the engine, see ADR 0047.
 - `GET /tenants/{t}/summary`: the tenant home in one call (services by health, failing members, drifted and
   unreachable engines, certificates expiring within 30 days, job counts, open drafts, latest revision).
+- `POST /tenants/{t}/se-groups/{group}/reapply` (`tenant-admin`, 202 with a job) is the one explicit drift repair: it pushes the current
+desired state to the group's engines again, canary first, without a revision (job `reapply_se_group`, ADR 0069).
 - `GET /tenants/{t}/status/stream` (server-sent events): `status` (array), `vs_state` (array), `job_progress` (one
   job), `revision_applied` (one revision summary). Every event has an `id`; a reconnect restarts from a snapshot.
   Payload models are under `x-sse-events` of the operation.
@@ -156,6 +159,10 @@ updates the existing certificate object in a change set (`?apply=true` or `?chan
 name, so every virtual service using it is unchanged; the secret reference, names and expiry change, `source` becomes
 `upload` and `renew_policy` `manual`. Unknown id: 404. See ADR 0044.
 
+`POST /tenants/{t}/certificates/import-ca` (`{name, pem, crl_pem?}`) imports a client CA (certificates only, optional CRL) as a
+certificate with `purpose: client_ca`. A TLS port names it as `client_ca_id` with `client_verify` `required` or `optional`; the
+validator reports `wrong_certificate_purpose` for mix-ups. See ADR 0070.
+
 Certificates carry `renew_before_days` (1 to 365, default 30): an `auto` certificate is renewed that many days before it
 expires. Read it with the certificate, change it with a normal update operation. See ADR 0064.
 
@@ -165,6 +172,19 @@ expires. Read it with the certificate, change it with a normal update operation.
 `{change_set_id}`: the `system:certs` change set that records the certificate), `renew_certs`,
 `sync_cloudflare_ips`, `poll_status`, `git_mirror`, `gc`. States: `queued`, `running`, `succeeded`, `failed`, `dead`,
 `cancelled`.
+
+`GET /permissions` gives every entry a `group` (eight names) for the grouped role matrix; `GET /me` returns
+`links.grafana` (from `SWITCHYARD_GRAFANA_URL`, else `null`). `GET /tenants/{t}/sdn/status` lists each managed network's SDN apply
+state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
+
+## Engine views
+
+- `GET /tenants/{t}/virtual-services/{service}/engines`: the enabled engines of the service's SE group.
+- `GET /tenants/{t}/virtual-services/{service}/engines/{engine}/rendered`: `files[]` (`file`, `scope` `group|engine`, `language`, `content`) and the
+  render `fingerprint`; no certificates or keys, BGP passwords as `REDACTED`.
+- `GET /tenants/{t}/engines/{engine}/running-config`: asks the engine now. `haproxy` has the running `content`, its `fingerprint`, the
+  `desired_fingerprint`, `fingerprint_matches` and `matches_desired` (stamp and text); `agent` lists each routing file's `sha256` against
+  `desired_sha256` (hashes only: the agent cannot read files back). Tenants get a fixed `error` sentence. See ADR 0073.
 
 ## Controller metrics and discovery
 
