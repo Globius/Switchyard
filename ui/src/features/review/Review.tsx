@@ -13,6 +13,7 @@ import { StatePill } from "@/features/changesets/ChangeSets";
 import { t } from "@/lib/i18n";
 import { show } from "@/lib/snapshot-diff";
 import { cn } from "@/lib/utils";
+import { ConflictResolver } from "./ConflictResolver";
 import { JobProgress } from "./JobProgress";
 import { isListField, ListDiff } from "./ListDiff";
 import { blocked, countsLine, parseUnified, phaseOf, TYPE_LABEL, type Diff } from "./model";
@@ -281,6 +282,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
   };
   const conflict =
     problem instanceof ApiError && problem.status === 412 ? problem.problem : undefined;
+  const stale = conflict?.conflict ?? undefined;
 
   return (
     <div className="min-h-screen bg-background">
@@ -317,6 +319,15 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
             </p>
           ) : (
             <>
+              {stale && (
+                <ConflictResolver
+                  tenant={tenant}
+                  cs={cs}
+                  conflict={stale}
+                  changeSet={c}
+                  onResolved={() => setProblem(null)}
+                />
+              )}
               {invalid && diff.data && (
                 <section
                   role="alert"
@@ -572,9 +583,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
               <div className="font-semibold">
                 {t("Someone else changed an object in this draft")}
               </div>
-              <p>
-                {t("Reload the draft and pick a value for each changed field before applying.")}
-              </p>
+              <p>{t("Pick a value for each conflicting field, then apply again.")}</p>
             </div>
           )}
           {problem != null && !conflict && <ErrorState error={problem} />}

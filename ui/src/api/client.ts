@@ -30,6 +30,13 @@ export interface Problem {
   detail: string;
   code?: string;
   required_role?: string;
+  /** On a 412 caused by a stale operation: which object and which versions. */
+  conflict?: {
+    object_type: string;
+    object_id: string;
+    expected_version: number;
+    current_version: number;
+  } | null;
   errors?: { path: string; code: string; message: string }[] | null;
 }
 
