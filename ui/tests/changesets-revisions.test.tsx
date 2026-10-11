@@ -186,7 +186,9 @@ function renderAt(path: string) {
 describe("change sets", () => {
   it("lists open change sets with state, yours marker and a Review/View action; History tab", async () => {
     renderAt("/t/acme/change-sets");
-    const mine = (await screen.findByText("Draft by Miguel, 10:42")).closest("li")!;
+    const mine = (await screen.findByRole("button", { name: /Draft by Miguel, 10:42/ })).closest(
+      "li",
+    )!;
     await waitFor(() => expect(within(mine).getByText("yours")).toBeInTheDocument());
     expect(within(mine).getByRole("link", { name: "Review" })).toHaveAttribute(
       "href",
