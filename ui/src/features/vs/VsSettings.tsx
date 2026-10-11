@@ -149,9 +149,11 @@ function PortsSheet({
   disabled,
   portForbidden,
   errors,
+  clientCas,
   onChange,
   onClose,
 }: {
+  clientCas: { id: string; name: string }[];
   ports: PortRow[];
   disabled: boolean;
   portForbidden: Set<string>;
@@ -179,6 +181,7 @@ function PortsSheet({
                   http2: false,
                   proxy_protocol: false,
                   https_redirect_port: null,
+                  client_verify: "required",
                 },
               ])
             }
@@ -243,6 +246,56 @@ function PortsSheet({
                 <option value="legacy">{t("Legacy")}</option>
               </select>
             </label>
+          )}
+          {p.tls && (
+            <>
+              <label className="flex items-center gap-1.5">
+                {t("Client CA")}
+                <select
+                  aria-label={t("Port {n} client CA", { n: i + 1 })}
+                  className={cn(INPUT, "w-44")}
+                  disabled={disabled}
+                  value={p.client_ca_id ?? ""}
+                  onChange={(e) =>
+                    onChange(
+                      ports.map((x, j) =>
+                        j === i ? { ...x, client_ca_id: e.target.value || null } : x,
+                      ),
+                    )
+                  }
+                >
+                  <option value="">{t("None")}</option>
+                  {clientCas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {p.client_ca_id && (
+                <label className="flex items-center gap-1.5">
+                  {t("Client certificate")}
+                  <select
+                    aria-label={t("Port {n} client verification", { n: i + 1 })}
+                    className={cn(INPUT, "w-32")}
+                    disabled={disabled}
+                    value={p.client_verify ?? "required"}
+                    onChange={(e) =>
+                      onChange(
+                        ports.map((x, j) =>
+                          j === i
+                            ? { ...x, client_verify: e.target.value as PortRow["client_verify"] }
+                            : x,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="required">{t("Required")}</option>
+                    <option value="optional">{t("Optional")}</option>
+                  </select>
+                </label>
+              )}
+            </>
           )}
           <label className="flex items-center gap-1.5">
             {t("HTTPS redirect to")}
@@ -1122,6 +1175,7 @@ function SettingsForm({
           disabled={disabled}
           portForbidden={portForbidden}
           errors={errors}
+          clientCas={(certs.data?.items ?? []).filter((c) => c.purpose === "client_ca")}
           onChange={(ports) => set("ports", ports)}
           onClose={() => setPortsOpen(false)}
         />

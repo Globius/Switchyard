@@ -893,6 +893,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/certificates/import-ca": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a client CA for mutual TLS
+         * @description Stores CA certificates (no key) and an optional revocation list, and adds a `certificate` with `purpose: client_ca` to a change set. Reference it from a TLS port as `client_ca_id` (with `client_verify` `required` or `optional`) to check client certificates. It cannot be used as a server certificate.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["import_client_ca_api_v1_tenants__t__certificates_import_ca_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/certificates/issue": {
         parameters: {
             query?: never;
@@ -3476,6 +3498,24 @@ export interface components {
             ttl_minutes?: number | null;
         };
         /**
+         * CaImportIn
+         * @description Body of `POST /certificates/import-ca`: a client CA bundle for mutual TLS.
+         */
+        CaImportIn: {
+            /**
+             * Crl Pem
+             * @description Optional certificate revocation list (PEM).
+             */
+            crl_pem?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Pem
+             * @description The CA certificates (PEM), no private key.
+             */
+            pem: string;
+        };
+        /**
          * CertImportIn
          * @description Body of ``POST /certificates/import``.
          */
@@ -3555,8 +3595,13 @@ export interface components {
          *         ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate
          *             (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not
          *             ``cloudflare_origin``.
+         *         purpose: ``server`` (a certificate with a key that a port presents) or ``client_ca``
+         *             (trusted CA certificates, no key, that a port uses to check client certificates).
+         *         crl_secret_ref: OpenBao path of a PEM certificate revocation list (``client_ca`` only).
          */
         Certificate: {
+            /** Crl Secret Ref */
+            crl_secret_ref?: string | null;
             /**
              * Id
              * Format: uuid
@@ -3575,13 +3620,22 @@ export interface components {
              */
             ocsp_stapling: boolean;
             /**
+             * Purpose
+             * @default server
+             * @enum {string}
+             */
+            purpose: "server" | "client_ca";
+            /**
              * Renew Before Days
              * @default 30
              */
             renew_before_days: number;
             /** @default manual */
             renew_policy: components["schemas"]["RenewPolicy"];
-            /** Sans */
+            /**
+             * Sans
+             * @default []
+             */
             sans: string[];
             /** Secret Ref */
             secret_ref: string;
@@ -3599,6 +3653,8 @@ export interface components {
         };
         /** CertificateCreate */
         CertificateCreate: {
+            /** Crl Secret Ref */
+            crl_secret_ref?: string | null;
             /** Name */
             name: string;
             /**
@@ -3612,13 +3668,22 @@ export interface components {
              */
             ocsp_stapling: boolean;
             /**
+             * Purpose
+             * @default server
+             * @enum {string}
+             */
+            purpose: "server" | "client_ca";
+            /**
              * Renew Before Days
              * @default 30
              */
             renew_before_days: number;
             /** @default manual */
             renew_policy: components["schemas"]["RenewPolicy"];
-            /** Sans */
+            /**
+             * Sans
+             * @default []
+             */
             sans: string[];
             /** Secret Ref */
             secret_ref: string;
@@ -3626,12 +3691,16 @@ export interface components {
         };
         /** CertificatePatch */
         CertificatePatch: {
+            /** Crl Secret Ref */
+            crl_secret_ref?: string | null;
             /** Name */
             name?: string | null;
             /** Not After */
             not_after?: string | null;
             /** Ocsp Stapling */
             ocsp_stapling?: boolean | null;
+            /** Purpose */
+            purpose?: ("server" | "client_ca") | null;
             /** Renew Before Days */
             renew_before_days?: number | null;
             renew_policy?: components["schemas"]["RenewPolicy"] | null;
@@ -3651,6 +3720,8 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            /** Crl Secret Ref */
+            crl_secret_ref?: string | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
             /**
@@ -3671,13 +3742,22 @@ export interface components {
              */
             ocsp_stapling: boolean;
             /**
+             * Purpose
+             * @default server
+             * @enum {string}
+             */
+            purpose: "server" | "client_ca";
+            /**
              * Renew Before Days
              * @default 30
              */
             renew_before_days: number;
             /** @default manual */
             renew_policy: components["schemas"]["RenewPolicy"];
-            /** Sans */
+            /**
+             * Sans
+             * @default []
+             */
             sans: string[];
             /** Secret Ref */
             secret_ref: string;
@@ -7988,8 +8068,20 @@ export interface components {
          *             (which must be a TLS port of the same service).
          *         tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine
          *             default (TLS 1.2 or later, HAProxy's default ciphers).
+         *         client_ca_id: A ``client_ca`` certificate: clients must present a certificate it signed
+         *             (mutual TLS). Needs ``tls``.
+         *         client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
+         *             certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
          */
         VsPort: {
+            /** Client Ca Id */
+            client_ca_id?: string | null;
+            /**
+             * Client Verify
+             * @default required
+             * @enum {string}
+             */
+            client_verify: "required" | "optional";
             /**
              * Http2
              * @default false
@@ -11892,6 +11984,109 @@ export interface operations {
                  *     }
                  */
                 "application/json": components["schemas"]["CertImportIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                     *       "object_id": "0192f3a0-0000-7000-8000-000000000014",
+                     *       "op_index": 0
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Accepted"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description No secrets backend (OpenBao) is configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    import_client_ca_api_v1_tenants__t__certificates_import_ca_post: {
+        parameters: {
+            query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
+                change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
+                apply?: boolean;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "crl_pem": "-----BEGIN X509 CRL-----\nMIIB...\n-----END X509 CRL-----\n",
+                 *       "name": "partners",
+                 *       "pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CaImportIn"];
             };
         };
         responses: {

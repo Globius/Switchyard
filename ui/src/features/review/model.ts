@@ -173,6 +173,10 @@ export function describeDeleted(
 
 /** What to do about a validator problem, when there is a standard answer (currently quotas). */
 export function problemHint(p: { code?: string | null; path: string }): string | null {
+  if (p.code === "wrong_certificate_purpose")
+    return t(
+      "A client CA can only verify client certificates, and a server certificate cannot be used as a client CA. Pick a certificate with the right purpose.",
+    );
   if (p.code !== "quota_exceeded") return null;
   const type = p.path.replace(/^quota\./, "").replace(/_/g, " ");
   return t(
