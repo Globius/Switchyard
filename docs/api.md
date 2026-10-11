@@ -98,6 +98,10 @@ tenant administrator and not the author or requester.
   reported member rows of the service's pools on the reachable engines of its SE group; `healthy` if every row is `UP`
   and every reachable engine reported, `down` if none is `UP` or a pool has no members, `unknown` if nothing was
   reported, otherwise `degraded`. Draining is not `UP`.
+  `members[]` lists the rows behind the counts, one per engine and pool member (`pool`, `member_id`, `address`, `port`,
+  `engine`, `status`, `check_status`, `last_check`, `last_change_s`, `last_checked_at`); the same rows come in the
+  `vs_state` event. `failing_members` of the summary carry the check fields too. `last_checked_at` is when the
+  controller read the engine, see ADR 0047.
 - `GET /tenants/{t}/summary`: the tenant home in one call (services by health, failing members, drifted and
   unreachable engines, certificates expiring within 30 days, job counts, open drafts, latest revision).
 - `GET /tenants/{t}/status/stream` (server-sent events): `status` (array), `vs_state` (array), `job_progress` (one

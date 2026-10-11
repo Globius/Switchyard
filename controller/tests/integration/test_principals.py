@@ -95,7 +95,7 @@ async def test_api_resolves_in_the_tenant_and_for_system_admins(
         ("user:sub-alice", "Alice Admin"),
         ("system:drift_detector", "drift detector (system)"),
     ]
-    assert (await c.get("/api/v1/tenants/acme/principals", headers=h)).status_code == 422
+    assert (await c.get("/api/v1/tenants/acme/principals", headers=h)).json() == []
     assert (await c.get("/api/v1/principals?actor=user:sub-eve", headers=h)).status_code == 403
     many = "&".join(f"actor=token:t{i}" for i in range(101))
     assert (await c.get(f"/api/v1/tenants/acme/principals?{many}", headers=h)).status_code == 422
