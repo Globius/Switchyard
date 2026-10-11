@@ -17,6 +17,8 @@ import { Route as TTenantShellRouteImport } from './routes/t.$tenant._shell'
 import { Route as TTenantNewRouteImport } from './routes/t.$tenant.new'
 import { Route as TTenantShellIndexRouteImport } from './routes/t.$tenant._shell.index'
 import { Route as TTenantShellSplatRouteImport } from './routes/t.$tenant._shell.$'
+import { Route as TTenantShellChangeSetsRouteImport } from './routes/t.$tenant._shell.change-sets'
+import { Route as TTenantShellRevisionsRouteImport } from './routes/t.$tenant._shell.revisions'
 import { Route as TTenantReviewCsRouteImport } from './routes/t.$tenant.review.$cs'
 import { Route as TTenantShellVirtualServicesIndexRouteImport } from './routes/t.$tenant._shell.virtual-services.index'
 import { Route as TTenantShellVirtualServicesIdRouteImport } from './routes/t.$tenant._shell.virtual-services.$id'
@@ -62,6 +64,16 @@ const TTenantShellIndexRoute = TTenantShellIndexRouteImport.update({
 const TTenantShellSplatRoute = TTenantShellSplatRouteImport.update({
   id: '/$',
   path: '/$',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
+const TTenantShellChangeSetsRoute = TTenantShellChangeSetsRouteImport.update({
+  id: '/change-sets',
+  path: '/change-sets',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
+const TTenantShellRevisionsRoute = TTenantShellRevisionsRouteImport.update({
+  id: '/revisions',
+  path: '/revisions',
   getParentRoute: () => TTenantShellRoute,
 } as any)
 const TTenantReviewCsRoute = TTenantReviewCsRouteImport.update({
@@ -113,6 +125,8 @@ export interface FileRoutesByFullPath {
   '/t/$tenant': typeof TTenantRouteWithChildren
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/$': typeof TTenantShellSplatRoute
+  '/t/$tenant/change-sets': typeof TTenantShellChangeSetsRoute
+  '/t/$tenant/revisions': typeof TTenantShellRevisionsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/': typeof TTenantShellIndexRoute
   '/t/$tenant/virtual-services/$id': typeof TTenantShellVirtualServicesIdRouteWithChildren
@@ -129,6 +143,8 @@ export interface FileRoutesByTo {
   '/t/$tenant': typeof TTenantShellIndexRoute
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/$': typeof TTenantShellSplatRoute
+  '/t/$tenant/change-sets': typeof TTenantShellChangeSetsRoute
+  '/t/$tenant/revisions': typeof TTenantShellRevisionsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/virtual-services': typeof TTenantShellVirtualServicesIndexRoute
   '/t/$tenant/virtual-services/$id/history': typeof TTenantShellVirtualServicesIdHistoryRoute
@@ -145,6 +161,8 @@ export interface FileRoutesById {
   '/t/$tenant/_shell': typeof TTenantShellRouteWithChildren
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/_shell/$': typeof TTenantShellSplatRoute
+  '/t/$tenant/_shell/change-sets': typeof TTenantShellChangeSetsRoute
+  '/t/$tenant/_shell/revisions': typeof TTenantShellRevisionsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
   '/t/$tenant/_shell/': typeof TTenantShellIndexRoute
   '/t/$tenant/_shell/virtual-services/$id': typeof TTenantShellVirtualServicesIdRouteWithChildren
@@ -163,6 +181,8 @@ export interface FileRouteTypes {
     | '/t/$tenant'
     | '/t/$tenant/new'
     | '/t/$tenant/$'
+    | '/t/$tenant/change-sets'
+    | '/t/$tenant/revisions'
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/'
     | '/t/$tenant/virtual-services/$id'
@@ -179,6 +199,8 @@ export interface FileRouteTypes {
     | '/t/$tenant'
     | '/t/$tenant/new'
     | '/t/$tenant/$'
+    | '/t/$tenant/change-sets'
+    | '/t/$tenant/revisions'
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/virtual-services'
     | '/t/$tenant/virtual-services/$id/history'
@@ -194,6 +216,8 @@ export interface FileRouteTypes {
     | '/t/$tenant/_shell'
     | '/t/$tenant/new'
     | '/t/$tenant/_shell/$'
+    | '/t/$tenant/_shell/change-sets'
+    | '/t/$tenant/_shell/revisions'
     | '/t/$tenant/review/$cs'
     | '/t/$tenant/_shell/'
     | '/t/$tenant/_shell/virtual-services/$id'
@@ -267,6 +291,20 @@ declare module '@tanstack/react-router' {
       path: '/$'
       fullPath: '/t/$tenant/$'
       preLoaderRoute: typeof TTenantShellSplatRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
+    '/t/$tenant/_shell/change-sets': {
+      id: '/t/$tenant/_shell/change-sets'
+      path: '/change-sets'
+      fullPath: '/t/$tenant/change-sets'
+      preLoaderRoute: typeof TTenantShellChangeSetsRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
+    '/t/$tenant/_shell/revisions': {
+      id: '/t/$tenant/_shell/revisions'
+      path: '/revisions'
+      fullPath: '/t/$tenant/revisions'
+      preLoaderRoute: typeof TTenantShellRevisionsRouteImport
       parentRoute: typeof TTenantShellRoute
     }
     '/t/$tenant/review/$cs': {
@@ -347,6 +385,8 @@ const TTenantShellVirtualServicesIdRouteWithChildren =
 
 interface TTenantShellRouteChildren {
   TTenantShellSplatRoute: typeof TTenantShellSplatRoute
+  TTenantShellChangeSetsRoute: typeof TTenantShellChangeSetsRoute
+  TTenantShellRevisionsRoute: typeof TTenantShellRevisionsRoute
   TTenantShellIndexRoute: typeof TTenantShellIndexRoute
   TTenantShellVirtualServicesIdRoute: typeof TTenantShellVirtualServicesIdRouteWithChildren
   TTenantShellVirtualServicesIndexRoute: typeof TTenantShellVirtualServicesIndexRoute
@@ -354,6 +394,8 @@ interface TTenantShellRouteChildren {
 
 const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellSplatRoute: TTenantShellSplatRoute,
+  TTenantShellChangeSetsRoute: TTenantShellChangeSetsRoute,
+  TTenantShellRevisionsRoute: TTenantShellRevisionsRoute,
   TTenantShellIndexRoute: TTenantShellIndexRoute,
   TTenantShellVirtualServicesIdRoute:
     TTenantShellVirtualServicesIdRouteWithChildren,

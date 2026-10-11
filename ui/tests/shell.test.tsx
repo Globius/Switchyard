@@ -134,6 +134,56 @@ describe("app shell", () => {
     expect(screen.queryByRole("link", { name: "Admin" })).not.toBeInTheDocument();
   });
 
+  it("discards the draft after confirming", async () => {
+    let discarded = false;
+    server.use(
+      http.get("*/api/v1/permissions", () =>
+        HttpResponse.json({
+          roles: ["viewer", "operator", "tenant-admin", "system-admin"],
+          permissions: [
+            { verb: "edit", object: "draft", min_role: "viewer", description: "Edit a draft." },
+          ],
+        }),
+      ),
+      http.post("*/api/v1/tenants/acme/change-sets/cs1/discard", () => {
+        discarded = true;
+        return HttpResponse.json({ ...DRAFT, state: "discarded", ops: [] });
+      }),
+    );
+    renderAt("/t/acme");
+    const btn = await screen.findByRole("button", { name: "Discard" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    await userEvent.click(btn);
+    expect(await screen.findByText(/Nothing has gone live/)).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Discard" }).at(-1)!);
+    await waitFor(() => expect(discarded).toBe(true));
+  });
+
+  it("shows why a discard failed", async () => {
+    server.use(
+      http.get("*/api/v1/permissions", () =>
+        HttpResponse.json({
+          roles: ["viewer", "operator", "tenant-admin", "system-admin"],
+          permissions: [
+            { verb: "edit", object: "draft", min_role: "viewer", description: "Edit a draft." },
+          ],
+        }),
+      ),
+      http.post("*/api/v1/tenants/acme/change-sets/cs1/discard", () =>
+        HttpResponse.json(
+          { title: "Conflict", status: 409, detail: "It is already applying." },
+          { status: 409 },
+        ),
+      ),
+    );
+    renderAt("/t/acme");
+    const btn = await screen.findByRole("button", { name: "Discard" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    await userEvent.click(btn);
+    await userEvent.click(screen.getAllByRole("button", { name: "Discard" }).at(-1)!);
+    expect(await screen.findByText("It is already applying.")).toBeInTheDocument();
+  });
+
   it("lists tenants with the approval badge in the switcher", async () => {
     renderAt("/t/acme");
     await userEvent.click(await screen.findByRole("button", { name: /switch tenant/i }));
