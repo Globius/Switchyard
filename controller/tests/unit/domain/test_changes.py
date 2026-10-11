@@ -249,3 +249,31 @@ class TestOpsBetween:
         assert [(o.action, o.object_type) for o in ops] == [
             (Action.DELETE, ObjectType.VIRTUAL_SERVICE)
         ]
+
+
+class TestQuotas:
+    def _limited(self, limit: int) -> Any:
+        base = base_snapshot()
+        tenants = tuple(t.model_copy(update={"quotas": {"pool": limit}}) for t in base.tenants)
+        return base.model_copy(update={"tenants": tenants})
+
+    def test_growth_past_the_limit_is_a_problem(self) -> None:
+        base = self._limited(len(base_snapshot().pools))
+        draft = apply_ops(base, [new_pool(1)], tenant_id=TENANT)
+        assert [p.code for p in draft.problems] == ["quota_exceeded"]
+        assert draft.problems[0].path == "quota.pool"
+
+    def test_growth_within_the_limit_is_fine(self) -> None:
+        base = self._limited(len(base_snapshot().pools) + 1)
+        assert not apply_ops(base, [new_pool(1)], tenant_id=TENANT).problems
+
+    def test_a_tenant_over_a_lowered_quota_can_still_edit(self) -> None:
+        base = self._limited(0)
+        edit = op(Action.UPDATE, ObjectType.POOL, POOL, body={"tls": True}, expected_version=1)
+        assert not apply_ops(base, [edit], tenant_id=TENANT).problems
+
+    def test_unknown_quota_keys_are_ignored_by_the_check(self) -> None:
+        base = base_snapshot()
+        tenants = tuple(t.model_copy(update={"quotas": {"max_vs": 0}}) for t in base.tenants)
+        base = base.model_copy(update={"tenants": tenants})
+        assert not apply_ops(base, [new_pool(1)], tenant_id=TENANT).problems

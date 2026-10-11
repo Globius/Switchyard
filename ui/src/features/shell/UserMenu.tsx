@@ -112,10 +112,7 @@ export function UserMenu() {
         </div>
         <div className="flex flex-col p-1 text-sm">
           {me.is_system && (
-            <Link
-              to="/admin/tenants"
-              className="rounded-md px-3 py-2 hover:bg-accent"
-            >
+            <Link to="/admin/tenants" className="rounded-md px-3 py-2 hover:bg-accent">
               {t("Admin")}
             </Link>
           )}

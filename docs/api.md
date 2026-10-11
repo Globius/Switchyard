@@ -83,6 +83,8 @@ the change reaches) and `se_groups` with the changed files (`before`, `after`, u
 
 `POST …/apply` takes an optional `message` (up to 2000 characters) that is kept as the revision message: revisions return `message`, and the Git mirror commit body carries it.
 
+Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`. A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type.
+
 `POST …/apply` returns `202 {job_id}`. When the tenant has `require_approval` it answers `403` unless the caller is
 a system administrator who sends `break_glass_reason`; use `request-approval` then. The approver must be a
 tenant administrator and not the author or requester.

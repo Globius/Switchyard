@@ -7,6 +7,7 @@ import { StatusPill, expiryStatus } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ReapplyButton } from "@/features/drift/ReapplyButton";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 
@@ -253,6 +254,7 @@ export function Home({ tenant }: { tenant: string }) {
                         "Running config differs from the last revision. Reported only; nothing is changed automatically.",
                       )}
                     </p>
+                    <ReapplyButton tenant={tenant} engine={e.engine} />
                   </li>
                 ))}
               </ul>
