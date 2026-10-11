@@ -391,4 +391,79 @@ describe("jobs", () => {
     await userEvent.click(btn);
     await waitFor(() => expect(retried).toBe(true));
   });
+
+  it("shows running stage, reverted and failed-before-canary pills, filters, cancels a queued job", async () => {
+    const mk = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      kind: "apply_change_set",
+      state,
+      attempts: 1,
+      max_attempts: 3,
+      created_at: "2026-10-11T10:00:00Z",
+      started_at: "2026-10-11T10:00:01Z",
+      finished_at: null,
+      change_set_id: "cs-9999999999",
+      tenant_id: null,
+      error: null,
+      ok: null,
+      result: null,
+      retrying: false,
+      stages: [],
+      ...extra,
+    });
+    const asked: string[] = [];
+    let cancelled = false;
+    server.use(
+      http.get("*/api/v1/tenants/acme/jobs", ({ request }) => {
+        asked.push(new URL(request.url).search);
+        return HttpResponse.json({
+          items: [
+            mk("a", "running", { stages: [{ name: "canary", state: "running" }] }),
+            mk("b", "succeeded", {
+              ok: false,
+              stages: [{ name: "canary", state: "failed" }],
+            }),
+            mk("c", "succeeded", { ok: false, stages: [{ name: "render", state: "failed" }] }),
+            mk("d", "failed"),
+            mk("e", "cancelled"),
+            mk("f", "queued"),
+          ],
+          next_cursor: null,
+        });
+      }),
+      http.get("*/api/v1/tenants/acme/jobs/:id/log", () =>
+        HttpResponse.json({ job_id: "a", lines: [] }),
+      ),
+      http.post("*/api/v1/tenants/acme/jobs/f/cancel", () => {
+        cancelled = true;
+        return HttpResponse.json({});
+      }),
+    );
+    renderAt("/t/acme/jobs");
+    expect(await screen.findByText("Running · canary", { selector: "td *" })).toBeInTheDocument();
+    expect(screen.getByText("Reverted at canary")).toBeInTheDocument();
+    expect(screen.getByText("Failed at render")).toBeInTheDocument();
+    expect(screen.getByText("Cancelled")).toBeInTheDocument();
+    expect(await screen.findByText("No log lines yet.")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("State"), "queued");
+    await waitFor(() => expect(asked.some((q) => q.includes("state=queued"))).toBe(true));
+    await userEvent.selectOptions(screen.getByLabelText("Kind"), "apply_change_set");
+    await waitFor(() => expect(asked.some((q) => q.includes("kind=apply_change_set"))).toBe(true));
+    const queued = screen.getAllByRole("button", { name: "Apply" }).at(-1)!;
+    await userEvent.click(queued);
+    const cancel = await screen.findByRole("button", { name: "Cancel job" });
+    await waitFor(() => expect(cancel).toBeEnabled());
+    await userEvent.click(cancel);
+    await waitFor(() => expect(cancelled).toBe(true));
+  });
+
+  it("says when there are no jobs", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/jobs", () =>
+        HttpResponse.json({ items: [], next_cursor: null }),
+      ),
+    );
+    renderAt("/t/acme/jobs");
+    expect(await screen.findByText("No jobs")).toBeInTheDocument();
+  });
 });
