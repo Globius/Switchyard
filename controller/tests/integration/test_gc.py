@@ -70,6 +70,7 @@ async def test_old_things_are_expired_and_the_rest_is_untouched(pg_url: str) -> 
             "jobs_deleted": 1,
             "status_rows_deleted": 2,
             "login_states_deleted": 1,
+            "login_throttle_deleted": 0,
             "sessions_deleted": 1,
             "enrollment_tokens_deleted": 0,
         }

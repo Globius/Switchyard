@@ -44,6 +44,10 @@ type Config struct {
 	Dir           string       // usually /etc/switchyard/agent
 	Hostname      string       // used as the CSR common name (the controller sets the real names)
 	HTTP          *http.Client // nil means a client with a 30 second timeout
+	// AllowPlainHTTP permits an http:// controller URL. Tests only: the response carries the CA,
+	// the bundle signing key and the renewal token, so over plain HTTP anyone on the path could
+	// take over the agent's trust.
+	AllowPlainHTTP bool
 }
 
 type request struct {
@@ -64,6 +68,9 @@ type response struct {
 func Run(ctx context.Context, cfg Config) (string, error) {
 	if cfg.Token == "" || cfg.ControllerURL == "" || cfg.Dir == "" {
 		return "", errors.New("controller URL, token and directory are required")
+	}
+	if !cfg.AllowPlainHTTP && !strings.HasPrefix(strings.ToLower(cfg.ControllerURL), "https://") {
+		return "", errors.New("the controller URL must use https")
 	}
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

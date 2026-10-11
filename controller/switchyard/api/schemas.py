@@ -499,6 +499,87 @@ class SdnApplyRead(ApiModel):
     error: str | None = None
 
 
+class ServiceEngineRead(ApiModel):
+    """An engine a virtual service is placed on (the enabled engines of its SE group)."""
+
+    id: UUID
+    name: str
+    mgmt_ip: str | None = None
+    state: EngineState
+
+
+class EngineFileRead(ApiModel):
+    """One rendered file."""
+
+    file: str = Field(description="Path relative to /etc/switchyard/ on the SE.")
+    scope: Literal["group", "engine"] = Field(
+        description="`group`: the same on every engine of the SE group (HAProxy). `engine`: this "
+        "engine's own routing files (FRR or Keepalived)."
+    )
+    language: Literal["haproxy", "plaintext"]
+    content: str
+
+
+class EngineRenderedRead(ApiModel):
+    """Everything the controller renders for one engine of a virtual service's SE group.
+
+    Certificates and keys are never included, and BGP passwords in `frr/frr.conf` read `REDACTED`.
+    """
+
+    engine: str
+    engine_id: UUID
+    se_group_id: UUID
+    fingerprint: str = Field(description="Render fingerprint of the group's HAProxy files.")
+    files: list[EngineFileRead]
+
+
+class RunningHaproxyRead(ApiModel):
+    """HAProxy's running configuration, from the Data Plane API."""
+
+    content: str
+    fingerprint: str | None = Field(description="Fingerprint stamped in the running config.")
+    desired_fingerprint: str | None = Field(description="What the desired state renders to.")
+    fingerprint_matches: bool = Field(description="The stamped fingerprints are equal.")
+    matches_desired: bool = Field(
+        description="The stamps are equal and the text is the same as the desired file, so a "
+        "hand edit that kept the stamp shows as `false`."
+    )
+
+
+class RunningAgentFileRead(ApiModel):
+    """One routing or certificate file on the engine, by hash."""
+
+    path: str
+    sha256: str | None = Field(description="Hash the agent reports; null if absent on the engine.")
+    desired_sha256: str | None = Field(description="Hash of what the controller would send now.")
+    matches_desired: bool
+
+
+class RunningAgentRead(ApiModel):
+    """What the agent reports. It has no call that reads file contents, only hashes."""
+
+    bundle_id: str | None
+    desired_bundle_id: str | None
+    files: list[RunningAgentFileRead]
+
+
+class RunningConfigRead(ApiModel):
+    """What one engine is running, compared with the desired state.
+
+    `haproxy` is null when the engine could not be reached or has no configuration, `agent` is null
+    when the engine has no agent. For tenants `error` is a fixed sentence.
+    """
+
+    engine: str
+    engine_id: UUID
+    se_group_id: UUID
+    reachable: bool
+    error: str | None = None
+    haproxy: RunningHaproxyRead | None = None
+    agent: RunningAgentRead | None = None
+    fetched_at: datetime
+
+
 class PermissionRead(ApiModel):
     """One cell of the permission matrix. `verb` and `object` are published as enums."""
 

@@ -85,7 +85,7 @@ func TestEnrollWritesAllFilesWithSafeModes(t *testing.T) {
 	srv := httptest.NewServer(s.handler(t, "syenr_ok", false))
 	defer srv.Close()
 	dir := filepath.Join(t.TempDir(), "agent")
-	engine, err := Run(context.Background(), Config{ControllerURL: srv.URL, Token: "syenr_ok", Dir: dir, Hostname: "se-a"})
+	engine, err := Run(context.Background(), Config{ControllerURL: srv.URL, Token: "syenr_ok", Dir: dir, Hostname: "se-a", AllowPlainHTTP: true})
 	if err != nil || engine != "se-a" {
 		t.Fatalf("enroll: %q %v", engine, err)
 	}
@@ -114,12 +114,12 @@ func TestEnrollRefusedAndMismatchedCertificatesChangeNothing(t *testing.T) {
 	}
 	bad := httptest.NewServer(s.handler(t, "right", false))
 	defer bad.Close()
-	if _, err := Run(context.Background(), Config{ControllerURL: bad.URL, Token: "wrong", Dir: dir}); err == nil || !strings.Contains(err.Error(), "401") {
+	if _, err := Run(context.Background(), Config{ControllerURL: bad.URL, Token: "wrong", Dir: dir, AllowPlainHTTP: true}); err == nil || !strings.Contains(err.Error(), "401") {
 		t.Errorf("a refused token must fail with the status: %v", err)
 	}
 	mismatch := httptest.NewServer(s.handler(t, "t", true))
 	defer mismatch.Close()
-	if _, err := Run(context.Background(), Config{ControllerURL: mismatch.URL, Token: "t", Dir: dir}); err == nil || !strings.Contains(err.Error(), "does not match") {
+	if _, err := Run(context.Background(), Config{ControllerURL: mismatch.URL, Token: "t", Dir: dir, AllowPlainHTTP: true}); err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Errorf("a certificate for another key must be rejected: %v", err)
 	}
 	if got, _ := os.ReadFile(filepath.Join(dir, KeyFile)); string(got) != "old-key" {
@@ -135,7 +135,7 @@ func TestReloaderPicksUpRenewedCertificates(t *testing.T) {
 	srv := httptest.NewServer(s.handler(t, "t", false))
 	defer srv.Close()
 	dir := t.TempDir()
-	cfg := Config{ControllerURL: srv.URL, Token: "t", Dir: dir}
+	cfg := Config{ControllerURL: srv.URL, Token: "t", Dir: dir, AllowPlainHTTP: true}
 	if _, err := Run(context.Background(), cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +157,15 @@ func TestReloaderPicksUpRenewedCertificates(t *testing.T) {
 	renewed, err := r.GetCertificate(nil)
 	if err != nil || renewed == first {
 		t.Errorf("a replaced certificate must be reloaded (err=%v)", err)
+	}
+}
+
+func TestEnrollmentRefusesAPlainHTTPController(t *testing.T) {
+	s := newSigner(t)
+	srv := httptest.NewServer(s.handler(t, "t", false))
+	defer srv.Close()
+	_, err := Run(context.Background(), Config{ControllerURL: srv.URL, Token: "t", Dir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "https") {
+		t.Fatalf("an http:// controller URL was accepted: %v", err)
 	}
 }

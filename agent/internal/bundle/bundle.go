@@ -56,10 +56,11 @@ func verb(unit string) string {
 	return "reload"
 }
 
-// suffixOnly restricts a managed directory to files with one suffix. The Data Plane API keeps its
-// crt-lists in the same directory as the certificates, so only "*.pem" files there are the
+// suffixOnly restricts a managed directory to files with one of these suffixes. The Data Plane API
+// keeps its crt-lists in the same directory as the certificates, so only "*.pem" files (server
+// certificates and client CA bundles) and "*.crl" files (client CA revocation lists) there are the
 // agent's; everything else is left alone and never removed.
-var suffixOnly = map[string]string{"certs": ".pem"}
+var suffixOnly = map[string][]string{"certs": {".pem", ".crl"}}
 
 // secretDirs hold private keys and are written with owner-only permissions.
 var secretDirs = map[string]bool{"certs": true}
@@ -69,8 +70,19 @@ func managedFile(rel string) bool {
 	if !ok {
 		return false
 	}
-	suffix, restricted := suffixOnly[prefix]
-	return !restricted || (strings.HasSuffix(rest, suffix) && !strings.Contains(rest, "/"))
+	suffixes, restricted := suffixOnly[prefix]
+	if !restricted {
+		return true
+	}
+	if strings.Contains(rest, "/") {
+		return false
+	}
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(rest, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // Applier applies bundles under Root.

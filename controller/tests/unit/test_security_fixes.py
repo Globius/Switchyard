@@ -1,27 +1,40 @@
 """Fixes from the backend security review (docs/security/backend-review.md)."""
 
 import copy
+from collections.abc import Iterator
 
 import pytest
 
 from switchyard.domain.loader import snapshot_from_mapping
 from switchyard.domain.snapshot import validate_snapshot
-from switchyard.domain.validators import check_secret_ref_scope
+from switchyard.domain.validators import check_secret_ref_scope, configure_secret_policy
 from switchyard.services.sessions import safe_return_to
 from tests.factories import BASE
 
 
-@pytest.mark.parametrize(
-    "ref",
-    [
-        "kv/tenants/acme/certs/x/01",
-        "kv/lab",
-        "kv/se/dpapi",
-        "kv/bgp/peer-1",
-    ],
-)
-def test_own_and_neutral_secret_references_are_allowed(ref: str) -> None:
+@pytest.fixture
+def strict() -> Iterator[None]:
+    configure_secret_policy(("kv/se/",))
+    yield
+    configure_secret_policy((), open=True)  # back to the test default (see conftest)
+
+
+@pytest.mark.parametrize("ref", ["kv/tenants/acme/certs/x/01", "kv/se/dpapi"])
+def test_own_and_shared_secret_references_are_allowed(strict: None, ref: str) -> None:
     assert check_secret_ref_scope(ref, "acme") is None
+
+
+@pytest.mark.parametrize("ref", ["kv/lab", "kv/bgp/peer-1", "kv/sensitive/x", "kv/sex/x"])
+def test_other_paths_are_refused_unless_the_policy_is_open(strict: None, ref: str) -> None:
+    assert check_secret_ref_scope(ref, "acme")
+    configure_secret_policy((), open=True)
+    assert check_secret_ref_scope(ref, "acme") is None
+
+
+def test_shared_prefixes_are_validated() -> None:
+    for bad in (("kv/se",), ("kv/tenants/",), ("kv/proxmox/",), ("KV/x/",)):
+        with pytest.raises(ValueError):
+            configure_secret_policy(bad)
 
 
 @pytest.mark.parametrize(
@@ -98,3 +111,23 @@ def test_an_agent_without_a_ca_is_refused_unless_explicitly_allowed(
         runtime.directory(None)  # type: ignore[arg-type]
     monkeypatch.setenv("SWITCHYARD_INSECURE_AGENT", "1")
     assert runtime.directory(None) is not None  # type: ignore[arg-type]
+
+
+def test_the_openbao_policy_matches_the_path_rules() -> None:
+    from switchyard.services.openbao_policy import controller_policy
+
+    policy = controller_policy(["kv/se/"], platform=["kv/proxmox/token"])
+    assert 'path "kv/data/tenants/*"' in policy
+    assert 'path "kv/data/se/*"' in policy and 'path "kv/data/proxmox/token"' in policy
+    for denied in ('path "kv/delete/*"', 'path "kv/destroy/*"'):
+        assert denied in policy
+    assert 'path "kv/data/*"' not in policy, "no blanket access"
+
+
+def test_the_cli_prints_the_policy() -> None:
+    from typer.testing import CliRunner
+
+    from switchyard.cli import app
+
+    result = CliRunner().invoke(app, ["openbao-policy", "--shared", "kv/se/"])
+    assert result.exit_code == 0 and 'path "kv/data/se/*"' in result.output

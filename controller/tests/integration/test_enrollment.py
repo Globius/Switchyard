@@ -259,7 +259,14 @@ async def test_the_real_go_agent_enrolls_against_the_real_endpoint(
                 return done.returncode, done.stdout + done.stderr
 
             code, output = await run(
-                "enroll", "--controller", url, "--token", token, "--dir", str(agent_state)
+                "enroll",
+                "--controller",
+                url,
+                "--token",
+                token,
+                "--dir",
+                str(agent_state),
+                "--insecure-plain-http",
             )
             assert code == 0, output
             cert = x509.load_pem_x509_certificate((agent_state / "tls.crt").read_bytes())
@@ -267,11 +274,20 @@ async def test_the_real_go_agent_enrolls_against_the_real_endpoint(
             assert cert.subject.rfc4514_string() == "CN=se-a"
             assert (agent_state / "bundle.pub").read_text().strip()
             renew = (agent_state / "renew.token").read_text().strip()
-            code, output = await run("renew", "--controller", url, "--dir", str(agent_state))
+            code, output = await run(
+                "renew", "--controller", url, "--dir", str(agent_state), "--insecure-plain-http"
+            )
             assert code == 0, output
             assert (agent_state / "renew.token").read_text().strip() != renew
             code, output = await run(
-                "enroll", "--controller", url, "--token", token, "--dir", str(tmp_path / "other")
+                "enroll",
+                "--controller",
+                url,
+                "--token",
+                token,
+                "--dir",
+                str(tmp_path / "other"),
+                "--insecure-plain-http",
             )
             assert code != 0 and "401" in output
         finally:

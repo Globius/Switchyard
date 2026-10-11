@@ -174,6 +174,7 @@ def serve(
     from switchyard.api.app import build_services, create_app
 
     runtime.setup_audit_syslog()
+    runtime.configure_secret_policy_from_env()
     db = runtime.databases()
     secrets = runtime.secrets_backend()
     services = build_services(
@@ -198,6 +199,23 @@ def serve(
     run(uvicorn.Server(config).serve())
 
 
+@app.command("openbao-policy")
+def openbao_policy(
+    shared: Annotated[
+        list[str] | None, typer.Option("--shared", help="A shared prefix such as kv/se/.")
+    ] = None,
+    platform: Annotated[
+        list[str] | None,
+        typer.Option("--platform", help="A platform secret such as kv/proxmox/token."),
+    ] = None,
+    mount: Annotated[str, typer.Option(help="KV v2 mount.")] = "kv",
+) -> None:
+    """Print the OpenBao policy for the controller's token (matches the secret path rules)."""
+    from switchyard.services.openbao_policy import controller_policy
+
+    typer.echo(controller_policy(shared or [], mount=mount, platform=platform or []), nl=False)
+
+
 @app.command("worker")
 def run_worker(
     name: Annotated[str, typer.Option(help="Worker id recorded on claimed jobs.")] = "worker-1",
@@ -206,6 +224,7 @@ def run_worker(
     from switchyard import runtime
 
     runtime.setup_audit_syslog()
+    runtime.configure_secret_policy_from_env()
 
     async def go() -> None:
         db = runtime.databases()
