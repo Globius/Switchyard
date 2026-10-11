@@ -7,6 +7,7 @@ draft, ``?apply=true`` opens an implicit single-operation change set and applies
 """
 
 import hmac
+import os
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextvars import ContextVar
@@ -58,6 +59,7 @@ from switchyard.api.schemas import (
     DiscoveryGroup,
     EngineIn,
     EngineRead,
+    EngineRenderedRead,
     EngineStateOut,
     EngineStatusRead,
     EnrollIn,
@@ -95,7 +97,9 @@ from switchyard.api.schemas import (
     RoleMappingIn,
     RoleMappingPatch,
     RoleMappingRead,
+    RunningConfigRead,
     SdnApplyRead,
+    ServiceEngineRead,
     SessionsRevoked,
     StateOut,
     SystemRoleMappingIn,
@@ -170,6 +174,7 @@ from switchyard.services.status import (
     virtual_service_states,
 )
 from switchyard.services.tenants import TenantRecord, TenantService
+from switchyard.services.throttle import source_rule
 from switchyard.services.tokens import TokenService
 from switchyard.services.users import UserRecord, UserService
 
@@ -612,6 +617,9 @@ async def _audit_page(session: Any, f: AuditFilters) -> Page[Any]:
     )
 
 
+GENERIC_ENGINE_ERROR = (
+    "The controller could not reach or talk to this engine; ask an administrator."
+)
 EXPORT_FORMATS = {"csv": "text/csv", "jsonl": "application/x-ndjson"}
 EXPORT_PAGE = 500
 EXPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
@@ -1301,6 +1309,18 @@ def create_app(
             path="/",
         )
 
+    def client_source(request: Request) -> str:
+        """The address a login attempt comes from, for throttling.
+
+        Behind a reverse proxy set ``SWITCHYARD_TRUST_FORWARDED=1`` to use the last
+        ``X-Forwarded-For`` entry (the one the proxy added); otherwise the socket peer is used.
+        """
+        if os.environ.get("SWITCHYARD_TRUST_FORWARDED") == "1":
+            forwarded = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()
+            if forwarded:
+                return forwarded
+        return request.client.host if request.client else "unknown"
+
     def login_failed(code: str) -> Response:
         """Send a browser whose sign-in failed to the login page, which explains ``code``."""
         return Response(status_code=302, headers={"Location": f"/login?error={code}"})
@@ -1365,13 +1385,18 @@ def create_app(
     ) -> Response:
         """Finish the login, set the session cookie and send the browser back to the app."""
         sessions = require_sessions(svc)
+        rules = [source_rule(client_source(request))]
+        if await sessions.throttle.blocked_for(rules):
+            return login_failed("too_many_attempts")
         if error or not code or not state:
+            await sessions.throttle.record_failure(rules)
             return login_failed("provider_error")
         try:
             result = await sessions.complete_login(
                 state=state, code=code, redirect_uri=callback_url(request, provider)
             )
         except LoginError as exc:
+            await sessions.throttle.record_failure(rules)
             return login_failed(exc.code)
         response = Response(status_code=302, headers={"Location": result.return_to})
         if isinstance(result, LoginResult):  # a test sign-in sets no cookie
@@ -1410,6 +1435,9 @@ def create_app(
         header does not apply.
         """
         sessions = require_sessions(svc)
+        rules = [source_rule(client_source(request))]
+        if await sessions.throttle.blocked_for(rules):
+            return login_failed("too_many_attempts")
         form = parse_qs((await request.body()).decode("utf-8", errors="replace"))
         try:
             result = await sessions.complete_saml_login(
@@ -1419,6 +1447,7 @@ def create_app(
                 acs_url=callback_url(request, provider),
             )
         except LoginError as exc:
+            await sessions.throttle.record_failure(rules)
             return login_failed(exc.code)
         response = Response(status_code=302, headers={"Location": result.return_to})
         if isinstance(result, LoginResult):  # a test sign-in sets no cookie
@@ -1466,7 +1495,9 @@ def create_app(
         """Log in the local administrator (password + TOTP). Off unless enabled."""
         sessions = require_sessions(svc)
         try:
-            result = await sessions.break_glass_login(body.username, body.password, body.totp)
+            result = await sessions.break_glass_login(
+                body.username, body.password, body.totp, client_source(request)
+            )
         except LoginError as exc:
             raise ApiError(401, str(exc)) from exc
         set_session_cookie(request, response, result.cookie, result.session)
@@ -2145,6 +2176,90 @@ def create_app(
             request_id=_rid(),
         )
         return {"job_id": str(job)}
+
+    @router.get(
+        "/tenants/{t}/virtual-services/{service}/engines",
+        tags=["virtual-services"],
+        summary="Engines a virtual service is placed on",
+        description=(
+            "The enabled engines of the service's SE group, by name: where its configuration is "
+            "pushed. Requires any role in the tenant."
+        ),
+        response_model=list[ServiceEngineRead],
+        responses=_ok(ex.SERVICE_ENGINES),
+    )
+    async def service_engines(
+        service: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> list[dict[str, Any]]:
+        records = await svc.status.engines_of_service(who, tenant.id, service)
+        return [
+            {"id": r.id, "name": r.name, "mgmt_ip": r.mgmt_ip, "state": r.state.value}
+            for r in records
+        ]
+
+    @router.get(
+        "/tenants/{t}/virtual-services/{service}/engines/{engine}/rendered",
+        tags=["virtual-services"],
+        summary="Rendered configuration for one engine of a service",
+        description=(
+            "All files the controller renders for the engine: the HAProxy files (`scope: group`, "
+            "the same on every engine of the SE group) and the engine's own routing files "
+            "(`scope: engine`, FRR or Keepalived). Certificates and keys are never included and "
+            "BGP passwords read `REDACTED`. `404` if the engine does not serve the service. "
+            "Requires any role in the tenant."
+        ),
+        response_model=EngineRenderedRead,
+        responses=_ok(ex.ENGINE_RENDERED),
+    )
+    async def service_engine_rendered(
+        service: UUID, engine: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        try:
+            record, fingerprint, files = await svc.status.rendered_for_engine(
+                who, tenant.id, service, engine
+            )
+        except RenderError as exc:
+            raise ApiError(422, f"cannot render: {exc}") from exc
+        return {
+            "engine": record.name,
+            "engine_id": record.id,
+            "se_group_id": record.se_group_id,
+            "fingerprint": fingerprint,
+            "files": [
+                {
+                    "file": path,
+                    "scope": "group"
+                    if path.startswith("haproxy/") or path.startswith("certs/")
+                    else "engine",
+                    "language": "haproxy" if path.endswith(".cfg") else "plaintext",
+                    "content": content,
+                }
+                for path, content in sorted(files.items())
+            ],
+        }
+
+    @router.get(
+        "/tenants/{t}/engines/{engine}/running-config",
+        tags=["engines"],
+        summary="What an engine is running now, compared with the desired state",
+        description=(
+            "Asks the engine live: HAProxy's running configuration from its Data Plane API with "
+            "the fingerprint it carries and whether it equals what the desired state renders, "
+            "and, through the agent, the hash of every routing file against the hash of what the "
+            "controller would send now (the agent cannot read file contents back, by design). "
+            "Not stored. For tenants an unreachable engine reports a fixed `error` sentence. "
+            "Requires any role in the tenant."
+        ),
+        response_model=RunningConfigRead,
+        responses=_ok(ex.RUNNING_CONFIG),
+    )
+    async def engine_running_config(
+        engine: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        out = await svc.status.running_config(who, tenant.id, engine)
+        if out["error"] and not who.is_system:
+            out["error"] = GENERIC_ENGINE_ERROR
+        return out
 
     @router.post(
         "/tenants/{t}/se-groups/{group}/reapply",
@@ -3376,13 +3491,15 @@ def create_app(
         return {"job_id": str(job)}
 
     # live status
-    def status_json(s: EngineStatus) -> dict[str, Any]:
+    def status_json(s: EngineStatus, who: Principal) -> dict[str, Any]:
+        # Raw connection errors name addresses and TLS details; tenants get a fixed sentence.
+        error = s.error if who.is_system or not s.error else GENERIC_ENGINE_ERROR
         return {
             "engine": s.name,
             "engine_id": str(s.engine_id),
             "se_group_id": str(s.se_group_id),
             "reachable": s.reachable,
-            "error": s.error,
+            "error": error,
             "haproxy_fingerprint": s.haproxy_fingerprint,
             "members": s.members,
             "agent": s.agent,
@@ -3410,7 +3527,7 @@ def create_app(
         responses=_ok([ex.ENGINE_STATUS]),
     )
     async def engine_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
-        return [status_json(s) for s in await svc.status.list_status(who, tenant.id)]
+        return [status_json(s, who) for s in await svc.status.list_status(who, tenant.id)]
 
     @router.get(
         "/tenants/{t}/status/virtual-services",
@@ -3469,7 +3586,7 @@ def create_app(
             while True:
                 sent = False
                 engines = [
-                    EngineStatusRead.model_validate(status_json(s)).model_dump(mode="json")
+                    EngineStatusRead.model_validate(status_json(s, who)).model_dump(mode="json")
                     for s in await svc.status.list_status(who, tenant.id)
                 ]
                 states = [

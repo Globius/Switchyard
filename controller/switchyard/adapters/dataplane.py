@@ -295,6 +295,13 @@ class DataPlaneEngine:
             raise self._unexpected("reading configuration", response)
         return fingerprint_of(response.text)
 
+    async def running_config(self) -> str | None:
+        """Return the raw configuration the Data Plane API holds (what HAProxy is running)."""
+        response = await self._send("GET", f"{API}/configuration/raw")
+        if response.status_code != 200:
+            raise self._unexpected("reading configuration", response)
+        return response.text or None
+
     # -- runtime -----------------------------------------------------------------------------
 
     async def server_statuses(self) -> list[ServerStatus]:

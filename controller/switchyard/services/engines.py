@@ -5,7 +5,10 @@ registers them. An engine row says where its Data Plane API is and which secret 
 credentials; the controller never stores the credentials themselves.
 """
 
+import ipaddress
+import os
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -14,7 +17,9 @@ from sqlalchemy import delete, select
 from switchyard.db import audit_log
 from switchyard.db.models import SeGroupRow, TenantRow
 from switchyard.db.ops_models import ServiceEngineRow
+from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import tenant_session
+from switchyard.domain.models import NetworkRole
 from switchyard.domain.validators import (
     check_secret_ref_scope,
     validate_name,
@@ -51,6 +56,52 @@ def validate_dataplane_url(url: str) -> str:
     if not ok:
         raise ValueError("dataplane_url must be http(s)://host[:port]")
     return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def engine_policy_open() -> bool:
+    """True when ``SWITCHYARD_ENGINE_POLICY=open`` turns the engine address policy off (labs)."""
+    return os.environ.get("SWITCHYARD_ENGINE_POLICY", "strict") == "open"
+
+
+def extra_engine_cidrs() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Networks engines may live in besides the SE group's own ``mgmt`` networks.
+
+    Set ``SWITCHYARD_ENGINE_CIDRS`` to a comma-separated list, for example ``10.30.0.0/16``.
+
+    Example:
+        >>> import os
+        >>> os.environ["SWITCHYARD_ENGINE_CIDRS"] = "10.0.0.0/8, 192.0.2.0/24"
+        >>> [str(n) for n in extra_engine_cidrs()]
+        ['10.0.0.0/8', '192.0.2.0/24']
+        >>> del os.environ["SWITCHYARD_ENGINE_CIDRS"]
+    """
+    raw = os.environ.get("SWITCHYARD_ENGINE_CIDRS", "")
+    return [ipaddress.ip_network(part.strip()) for part in raw.split(",") if part.strip()]
+
+
+def check_engine_address(
+    host: str, allowed: list[ipaddress.IPv4Network | ipaddress.IPv6Network], what: str
+) -> None:
+    """Raise ``ValueError`` unless ``host`` is an IP address inside one of ``allowed``.
+
+    A tenant administrator names where the controller connects to, so the address must be a literal
+    IP (a name could be re-pointed after this check) inside the group's management networks or the
+    operator's allow-list. Nothing else can be reached through an engine registration.
+
+    Example:
+        >>> net = [ipaddress.ip_network("10.30.0.0/24")]
+        >>> check_engine_address("10.30.0.5", net, "dataplane_url")
+        >>> check_engine_address("10.31.0.5", net, "dataplane_url")
+        Traceback (most recent call last):
+            ...
+        ValueError: dataplane_url must be an address in the SE group's management network
+    """
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        raise ValueError(f"{what} must use an IP address, not a name") from None
+    if not any(ip in net for net in allowed):
+        raise ValueError(f"{what} must be an address in the SE group's management network")
 
 
 @dataclass(frozen=True)
@@ -96,6 +147,29 @@ class EngineService:
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
         require(principal, "manage", "engine")
 
+    @staticmethod
+    async def _check_endpoints(
+        session: Any, se_group_id: UUID, url: str, mgmt_ip: str | None, agent_url: str | None
+    ) -> None:
+        """Apply the engine address policy: https, and addresses in the group's mgmt networks."""
+        if not url.startswith("https://"):
+            raise ValueError("dataplane_url must use https")
+        snapshot = await load_snapshot(session)
+        group = next((g for g in snapshot.se_groups if g.id == se_group_id), None)
+        networks = {n.id: n for n in snapshot.networks}
+        allowed = extra_engine_cidrs()
+        if group is not None:
+            allowed += [
+                networks[gn.network_id].cidr
+                for gn in group.networks
+                if gn.role is NetworkRole.MGMT and gn.network_id in networks
+            ]
+        check_engine_address(urlparse(url).hostname or "", allowed, "dataplane_url")
+        if mgmt_ip:
+            check_engine_address(mgmt_ip, allowed, "mgmt_ip")
+        if agent_url:
+            check_engine_address(urlparse("//" + agent_url).hostname or "", allowed, "agent_url")
+
     async def register(
         self,
         principal: Principal,
@@ -122,6 +196,8 @@ class EngineService:
         if credentials_ref is not None:
             validate_secret_ref(credentials_ref)
         async with tenant_session(self._db.app, [tenant_id]) as session:
+            if not engine_policy_open():
+                await self._check_endpoints(session, se_group_id, url, mgmt_ip, agent_url)
             if credentials_ref is not None:
                 tenant_name = (
                     await session.execute(select(TenantRow.name).where(TenantRow.id == tenant_id))

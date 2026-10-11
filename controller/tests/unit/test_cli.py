@@ -59,3 +59,17 @@ def test_audit_syslog_is_off_by_default_and_parses_its_targets(
         for handler in audit.handlers[len(before) :]:
             audit.removeHandler(handler)
             handler.close()
+
+
+def test_backoff_grows_and_is_capped() -> None:
+    from switchyard.services.throttle import backoff_seconds
+
+    assert [backoff_seconds(n, free=5) for n in (1, 4, 5, 6, 7, 8, 30)] == [
+        0,
+        0,
+        30,
+        60,
+        120,
+        240,
+        900,
+    ]

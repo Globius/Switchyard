@@ -285,6 +285,54 @@ ENGINE_READ = {
     "agent_cert_serial": "3f2a9c",
     "host_online": True,
 }
+SERVICE_ENGINES = [{"id": ENGINE, "name": "edge-1", "mgmt_ip": "192.0.2.21", "state": "enabled"}]
+ENGINE_RENDERED = {
+    "engine": "edge-1",
+    "engine_id": ENGINE,
+    "se_group_id": SE_GROUP,
+    "fingerprint": "0" * 64,
+    "files": [
+        {
+            "file": "haproxy/haproxy.cfg",
+            "scope": "group",
+            "language": "haproxy",
+            "content": "global\n    maxconn 20000\n",
+        },
+        {
+            "file": "frr/frr.conf",
+            "scope": "engine",
+            "language": "plaintext",
+            "content": "router bgp 65000\n neighbor 192.0.2.1 password REDACTED\n",
+        },
+    ],
+}
+RUNNING_CONFIG = {
+    "engine": "edge-1",
+    "engine_id": ENGINE,
+    "se_group_id": SE_GROUP,
+    "reachable": True,
+    "error": None,
+    "haproxy": {
+        "content": "global\n    maxconn 20000\n",
+        "fingerprint": "0" * 64,
+        "desired_fingerprint": "0" * 64,
+        "fingerprint_matches": True,
+        "matches_desired": True,
+    },
+    "agent": {
+        "bundle_id": "b-1",
+        "desired_bundle_id": "b-1",
+        "files": [
+            {
+                "path": "frr/frr.conf",
+                "sha256": "a" * 64,
+                "desired_sha256": "a" * 64,
+                "matches_desired": True,
+            }
+        ],
+    },
+    "fetched_at": WHEN,
+}
 PLACEMENT = {
     "available": True,
     "reason": None,

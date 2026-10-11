@@ -35,6 +35,7 @@ from switchyard.adapters.secrets import EnvSecrets, OpenBaoSecrets, SecretsReade
 from switchyard.adapters.telemetry import HttpTelemetry, Telemetry
 from switchyard.config import database_url
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
+from switchyard.domain.validators import configure_secret_policy
 from switchyard.jobs.handlers import POLL_STATUS_JOB, build_handlers
 from switchyard.jobs.scheduler import Scheduler
 from switchyard.jobs.worker import Worker
@@ -236,6 +237,18 @@ def setup_audit_syslog() -> bool:
     audit.addHandler(handler)
     audit.setLevel(logging.INFO)
     return True
+
+
+def configure_secret_policy_from_env() -> None:
+    """Apply ``SWITCHYARD_SHARED_SECRET_PREFIXES`` and ``SWITCHYARD_SECRET_POLICY`` (ADR 0072).
+
+    ``SWITCHYARD_SHARED_SECRET_PREFIXES`` is a comma-separated list of paths every tenant may name
+    besides its own ``kv/tenants/<tenant>/`` (each ending in ``/``);
+    ``SWITCHYARD_SECRET_POLICY=open`` allows any other path (labs only).
+    """
+    raw = os.environ.get("SWITCHYARD_SHARED_SECRET_PREFIXES", "")
+    prefixes = tuple(p.strip() for p in raw.split(",") if p.strip())
+    configure_secret_policy(prefixes, open=os.environ.get("SWITCHYARD_SECRET_POLICY") == "open")
 
 
 def grafana_url() -> str | None:

@@ -199,6 +199,28 @@ func TestWritesAreAtomicAndLeaveNoTemporaryFiles(t *testing.T) {
 	}
 }
 
+func TestClientCAFilesAreManagedAndKeepOwnerOnlyPermissions(t *testing.T) {
+	a, priv, _ := setup(t)
+	files := map[string]string{"certs/ca-partners.pem": "CA", "certs/ca-partners.crl": "CRL"}
+	resp := a.Apply(context.Background(), request(t, priv, "ca1", files))
+	if !resp.Ok {
+		t.Fatalf("a client CA bundle with a CRL was refused: %s", resp.Error)
+	}
+	if got := read(t, a, "certs/ca-partners.crl"); got != "CRL" {
+		t.Errorf("crl not written: %q", got)
+	}
+	if info, _ := os.Stat(filepath.Join(a.Root, "certs", "ca-partners.crl")); runtimeIsUnix() && info.Mode().Perm() != 0o600 {
+		t.Errorf("crl mode %v, want 0600", info.Mode().Perm())
+	}
+	resp = a.Apply(context.Background(), request(t, priv, "ca2", map[string]string{"frr/frr.conf": "x"}))
+	if !resp.Ok {
+		t.Fatalf("apply failed: %s", resp.Error)
+	}
+	if _, err := os.Stat(filepath.Join(a.Root, "certs", "ca-partners.crl")); err == nil {
+		t.Error("the CRL should have been removed with the bundle that dropped it")
+	}
+}
+
 func TestCertsAreManagedOnlyAsFlatPemFilesAndCrtListsAreLeftAlone(t *testing.T) {
 	a, priv, r := setup(t)
 	if err := os.MkdirAll(filepath.Join(a.Root, "certs"), 0o750); err != nil {

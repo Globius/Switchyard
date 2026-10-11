@@ -16,10 +16,24 @@ from testcontainers.community.postgres import PostgresContainer
 
 from switchyard.db import migrate
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
+from switchyard.domain.validators import configure_secret_policy
 from tests.lab import Lab
 
 if sys.platform == "win32":  # psycopg cannot use the default ProactorEventLoop
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+
+# Module-scoped fixtures (the Docker lab) render before any function fixture runs.
+configure_secret_policy((), open=True)
+
+
+@pytest.fixture(autouse=True)
+def _open_engine_policy(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Tests register engines at lab addresses; the address policy has its own tests."""
+    monkeypatch.setenv("SWITCHYARD_ENGINE_POLICY", "open")
+    configure_secret_policy((), open=True)
+    yield
+    configure_secret_policy()
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

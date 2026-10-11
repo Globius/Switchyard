@@ -2769,6 +2769,46 @@
         "title": "EffectiveGrantRead",
         "type": "object"
       },
+      "EngineFileRead": {
+        "additionalProperties": false,
+        "description": "One rendered file.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "file": {
+            "description": "Path relative to /etc/switchyard/ on the SE.",
+            "title": "File",
+            "type": "string"
+          },
+          "language": {
+            "enum": [
+              "haproxy",
+              "plaintext"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "scope": {
+            "description": "`group`: the same on every engine of the SE group (HAProxy). `engine`: this engine's own routing files (FRR or Keepalived).",
+            "enum": [
+              "group",
+              "engine"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "scope",
+          "language",
+          "content"
+        ],
+        "title": "EngineFileRead",
+        "type": "object"
+      },
       "EngineIn": {
         "additionalProperties": false,
         "description": "Register a service engine.",
@@ -2935,6 +2975,47 @@
           "agent_enrolled"
         ],
         "title": "EngineRead",
+        "type": "object"
+      },
+      "EngineRenderedRead": {
+        "additionalProperties": false,
+        "description": "Everything the controller renders for one engine of a virtual service's SE group.\n\nCertificates and keys are never included, and BGP passwords in `frr/frr.conf` read `REDACTED`.",
+        "properties": {
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "engine_id": {
+            "format": "uuid",
+            "title": "Engine Id",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/EngineFileRead"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "fingerprint": {
+            "description": "Render fingerprint of the group's HAProxy files.",
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "se_group_id": {
+            "format": "uuid",
+            "title": "Se Group Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "engine",
+          "engine_id",
+          "se_group_id",
+          "fingerprint",
+          "files"
+        ],
+        "title": "EngineRenderedRead",
         "type": "object"
       },
       "EngineState": {
@@ -8124,6 +8205,216 @@
         "title": "RouteMatch",
         "type": "object"
       },
+      "RunningAgentFileRead": {
+        "additionalProperties": false,
+        "description": "One routing or certificate file on the engine, by hash.",
+        "properties": {
+          "desired_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hash of what the controller would send now.",
+            "title": "Desired Sha256"
+          },
+          "matches_desired": {
+            "title": "Matches Desired",
+            "type": "boolean"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hash the agent reports; null if absent on the engine.",
+            "title": "Sha256"
+          }
+        },
+        "required": [
+          "path",
+          "sha256",
+          "desired_sha256",
+          "matches_desired"
+        ],
+        "title": "RunningAgentFileRead",
+        "type": "object"
+      },
+      "RunningAgentRead": {
+        "additionalProperties": false,
+        "description": "What the agent reports. It has no call that reads file contents, only hashes.",
+        "properties": {
+          "bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Id"
+          },
+          "desired_bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desired Bundle Id"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/RunningAgentFileRead"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bundle_id",
+          "desired_bundle_id",
+          "files"
+        ],
+        "title": "RunningAgentRead",
+        "type": "object"
+      },
+      "RunningConfigRead": {
+        "additionalProperties": false,
+        "description": "What one engine is running, compared with the desired state.\n\n`haproxy` is null when the engine could not be reached or has no configuration, `agent` is null\nwhen the engine has no agent. For tenants `error` is a fixed sentence.",
+        "properties": {
+          "agent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunningAgentRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "engine_id": {
+            "format": "uuid",
+            "title": "Engine Id",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "fetched_at": {
+            "format": "date-time",
+            "title": "Fetched At",
+            "type": "string"
+          },
+          "haproxy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunningHaproxyRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          },
+          "se_group_id": {
+            "format": "uuid",
+            "title": "Se Group Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "engine",
+          "engine_id",
+          "se_group_id",
+          "reachable",
+          "fetched_at"
+        ],
+        "title": "RunningConfigRead",
+        "type": "object"
+      },
+      "RunningHaproxyRead": {
+        "additionalProperties": false,
+        "description": "HAProxy's running configuration, from the Data Plane API.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "desired_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the desired state renders to.",
+            "title": "Desired Fingerprint"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fingerprint stamped in the running config.",
+            "title": "Fingerprint"
+          },
+          "fingerprint_matches": {
+            "description": "The stamped fingerprints are equal.",
+            "title": "Fingerprint Matches",
+            "type": "boolean"
+          },
+          "matches_desired": {
+            "description": "The stamps are equal and the text is the same as the desired file, so a hand edit that kept the stamp shows as `false`.",
+            "title": "Matches Desired",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "content",
+          "fingerprint",
+          "desired_fingerprint",
+          "fingerprint_matches",
+          "matches_desired"
+        ],
+        "title": "RunningHaproxyRead",
+        "type": "object"
+      },
       "SamlProviderIn": {
         "additionalProperties": false,
         "description": "Create a SAML provider. Send metadata (URL or XML) or the fields it would fill in.",
@@ -9078,6 +9369,42 @@
           "truncated"
         ],
         "title": "SearchResults",
+        "type": "object"
+      },
+      "ServiceEngineRead": {
+        "additionalProperties": false,
+        "description": "An engine a virtual service is placed on (the enabled engines of its SE group).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mgmt_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mgmt Ip"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngineState"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state"
+        ],
+        "title": "ServiceEngineRead",
         "type": "object"
       },
       "ServiceHealthCounts": {
@@ -21189,6 +21516,135 @@
           "infrastructure"
         ],
         "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/engines/{engine}/running-config": {
+      "get": {
+        "description": "Asks the engine live: HAProxy's running configuration from its Data Plane API with the fingerprint it carries and whether it equals what the desired state renders, and, through the agent, the hash of every routing file against the hash of what the controller would send now (the agent cannot read file contents back, by design). Not stored. For tenants an unreachable engine reports a fixed `error` sentence. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "engine_running_config_api_v1_tenants__t__engines__engine__running_config_get",
+        "parameters": [
+          {
+            "description": "Engine id.",
+            "in": "path",
+            "name": "engine",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engine",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "agent": {
+                    "bundle_id": "b-1",
+                    "desired_bundle_id": "b-1",
+                    "files": [
+                      {
+                        "desired_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                        "matches_desired": true,
+                        "path": "frr/frr.conf",
+                        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                      }
+                    ]
+                  },
+                  "engine": "edge-1",
+                  "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                  "fetched_at": "2026-10-10T08:30:00Z",
+                  "haproxy": {
+                    "content": "global\n    maxconn 20000\n",
+                    "desired_fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                    "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                    "fingerprint_matches": true,
+                    "matches_desired": true
+                  },
+                  "reachable": true,
+                  "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RunningConfigRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "What an engine is running now, compared with the desired state",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/engines/{engine}/state": {
@@ -34823,6 +35279,255 @@
           }
         },
         "summary": "Rendered config of a virtual service",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/virtual-services/{service}/engines": {
+      "get": {
+        "description": "The enabled engines of the service's SE group, by name: where its configuration is pushed. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "service_engines_api_v1_tenants__t__virtual_services__service__engines_get",
+        "parameters": [
+          {
+            "description": "Virtual service id.",
+            "in": "path",
+            "name": "service",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Service",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "id": "0192f3a0-0000-7000-8000-000000000022",
+                    "mgmt_ip": "192.0.2.21",
+                    "name": "edge-1",
+                    "state": "enabled"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ServiceEngineRead"
+                  },
+                  "title": "Response Service Engines Api V1 Tenants  T  Virtual Services  Service  Engines Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Engines a virtual service is placed on",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/virtual-services/{service}/engines/{engine}/rendered": {
+      "get": {
+        "description": "All files the controller renders for the engine: the HAProxy files (`scope: group`, the same on every engine of the SE group) and the engine's own routing files (`scope: engine`, FRR or Keepalived). Certificates and keys are never included and BGP passwords read `REDACTED`. `404` if the engine does not serve the service. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "service_engine_rendered_api_v1_tenants__t__virtual_services__service__engines__engine__rendered_get",
+        "parameters": [
+          {
+            "description": "Virtual service id.",
+            "in": "path",
+            "name": "service",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Service",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Engine id.",
+            "in": "path",
+            "name": "engine",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engine",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "engine": "edge-1",
+                  "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                  "files": [
+                    {
+                      "content": "global\n    maxconn 20000\n",
+                      "file": "haproxy/haproxy.cfg",
+                      "language": "haproxy",
+                      "scope": "group"
+                    },
+                    {
+                      "content": "router bgp 65000\n neighbor 192.0.2.1 password REDACTED\n",
+                      "file": "frr/frr.conf",
+                      "language": "plaintext",
+                      "scope": "engine"
+                    }
+                  ],
+                  "fingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/EngineRenderedRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rendered configuration for one engine of a service",
         "tags": [
           "virtual-services"
         ],
