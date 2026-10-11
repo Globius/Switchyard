@@ -5,7 +5,7 @@ directly with the admin database role and audited, not through change sets.
 """
 
 import contextlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +15,7 @@ from switchyard.db import audit_log
 from switchyard.db import models as m
 from switchyard.db.models import TenantRow
 from switchyard.db.tenancy import admin_session
+from switchyard.domain.changes import ObjectType
 from switchyard.domain.validators import validate_name
 from switchyard.ids import uuid7
 from switchyard.services.changesets import require
@@ -25,16 +26,35 @@ from switchyard.services.errors import (
     NotFoundError,
 )
 
-_OBJECT_TABLES = (
-    m.VirtualServiceRow,
-    m.PoolRow,
-    m.PolicySetRow,
-    m.CertificateRow,
-    m.HealthMonitorRow,
-    m.VipPoolRow,
-    m.SeGroupRow,
-    m.NetworkRow,
-)
+#: Tables counted for quota usage, by quota key (the object type name).
+_USAGE_TABLES: dict[ObjectType, Any] = {
+    ObjectType.VIRTUAL_SERVICE: m.VirtualServiceRow,
+    ObjectType.POOL: m.PoolRow,
+    ObjectType.POLICY_SET: m.PolicySetRow,
+    ObjectType.CERTIFICATE: m.CertificateRow,
+    ObjectType.HEALTH_MONITOR: m.HealthMonitorRow,
+    ObjectType.VIP_POOL: m.VipPoolRow,
+    ObjectType.SE_GROUP: m.SeGroupRow,
+    ObjectType.NETWORK: m.NetworkRow,
+    ObjectType.ROUTING_PROFILE: m.RoutingProfileRow,
+}
+_OBJECT_TABLES = tuple(_USAGE_TABLES.values())
+
+
+def validate_quotas(quotas: dict[str, int]) -> dict[str, int]:
+    """Check quota keys are object type names and limits are not negative.
+
+    Example:
+        >>> validate_quotas({"pool": 5})
+        {'pool': 5}
+    """
+    valid = {t.value for t in ObjectType}
+    for key, limit in quotas.items():
+        if key not in valid:
+            raise ValueError(f"unknown quota {key!r}; use one of {', '.join(sorted(valid))}")
+        if limit < 0:
+            raise ValueError(f"quota {key!r} must not be negative")
+    return quotas
 
 
 @dataclass(frozen=True)
@@ -46,16 +66,32 @@ class TenantRecord:
     version: int
     quotas: dict[str, int]
     require_approval: bool
+    usage: dict[str, int] = field(default_factory=dict)
 
 
-def _record(row: TenantRow) -> TenantRecord:
+def _record(row: TenantRow, usage: dict[str, int] | None = None) -> TenantRecord:
     return TenantRecord(
         id=row.id,
         name=row.name,
         version=row.version,
         quotas=dict(row.quotas),
         require_approval=row.require_approval,
+        usage=usage if usage is not None else {t.value: 0 for t in _USAGE_TABLES},
     )
+
+
+async def _usage(session: Any, tenant_ids: list[UUID]) -> dict[UUID, dict[str, int]]:
+    """Count each tenant's objects per type, zeros included."""
+    out = {t: {k.value: 0 for k in _USAGE_TABLES} for t in tenant_ids}
+    for object_type, table in _USAGE_TABLES.items():
+        rows = await session.execute(
+            select(table.tenant_id, func.count())
+            .where(table.tenant_id.in_(tenant_ids))
+            .group_by(table.tenant_id)
+        )
+        for tenant_id, count in rows:
+            out[tenant_id][object_type.value] = count
+    return out
 
 
 class TenantService:
@@ -81,9 +117,9 @@ class TenantService:
                 row = (
                     await session.execute(select(TenantRow).where(TenantRow.name == ref))
                 ).scalar_one_or_none()
-        if row is None or not principal.can_access(row.id):
-            raise NotFoundError(f"tenant {ref!r} not found")
-        return _record(row)
+            if row is not None and principal.can_access(row.id):
+                return _record(row, (await _usage(session, [row.id]))[row.id])
+        raise NotFoundError(f"tenant {ref!r} not found")
 
     async def list_tenants(self, principal: Principal) -> list[TenantRecord]:
         """List the tenants the principal can access."""
@@ -91,7 +127,9 @@ class TenantService:
             query = select(TenantRow).order_by(TenantRow.name)
             if not principal.is_system:
                 query = query.where(TenantRow.id.in_(sorted(principal.tenant_ids)))
-            return [_record(r) for r in (await session.execute(query)).scalars()]
+            rows = list((await session.execute(query)).scalars())
+            usage = await _usage(session, [r.id for r in rows])
+            return [_record(r, usage[r.id]) for r in rows]
 
     async def create(
         self,
@@ -105,6 +143,7 @@ class TenantService:
         """Create a tenant (system administrators only)."""
         require(principal, "manage", "tenant")
         validate_name(name)
+        validate_quotas(quotas or {})
         async with admin_session(self._db.admin) as session:
             if (await session.execute(select(TenantRow.id).where(TenantRow.name == name))).first():
                 raise AlreadyExistsError(f"tenant {name!r} already exists")
@@ -144,6 +183,8 @@ class TenantService:
         allowed = {"quotas", "require_approval"}
         if unknown := set(changes) - allowed:
             raise ValueError(f"cannot change: {', '.join(sorted(unknown))}")
+        if changes.get("quotas") is not None:
+            validate_quotas(changes["quotas"])
         if not principal.can_access(tenant_id):
             raise NotFoundError("tenant not found")
         if not principal.is_system:
@@ -174,7 +215,7 @@ class TenantService:
                 diff=dict(changes),
                 request_id=request_id,
             )
-            return _record(row)
+            return _record(row, (await _usage(session, [row.id]))[row.id])
 
     async def delete(
         self, principal: Principal, tenant_id: UUID, *, request_id: str | None = None

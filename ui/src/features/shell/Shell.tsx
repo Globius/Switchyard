@@ -8,7 +8,7 @@ import { useTheme } from "@/lib/theme";
 import { ChangeSetBar } from "./ChangeSetBar";
 import { CommandPalette } from "./CommandPalette";
 import { useDraft } from "./draft";
-import { useStreamState } from "./stream";
+import { useTenantStream, type Stream, type StreamState } from "./stream";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { UserMenu } from "./UserMenu";
 
@@ -44,8 +44,7 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
   { heading: "Tenant", items: [{ label: "Access and settings", to: "access" }] },
 ];
 
-function StreamIndicator({ tenant }: { tenant: string }) {
-  const s = useStreamState(tenant);
+function StreamIndicator({ s }: { s: StreamState }) {
   if (s === "live")
     return (
       <Badge tone="healthy">
@@ -76,9 +75,30 @@ function ThemeToggle() {
   );
 }
 
+/** Shown while live updates are paused: values on the page may be stale until the stream is back. */
+function StreamBanner({ stream }: { stream: Stream }) {
+  if (stream.state !== "down") return null;
+  return (
+    <div
+      role="alert"
+      className="flex items-center gap-3 border-b bg-status-degraded/15 px-4 py-2 text-sm"
+    >
+      <WifiOff className="size-4" aria-hidden />
+      <span>
+        {t("Live updates paused. Values may be out of date.")}{" "}
+        {stream.retryIn != null && t("Reconnecting in {n} s", { n: stream.retryIn })}
+      </span>
+      <Button size="sm" variant="outline" className="ml-auto" onClick={stream.retryNow}>
+        {t("Retry now")}
+      </Button>
+    </div>
+  );
+}
+
 /** Top bar, left nav and the change-set bar around every tenant page. */
 export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean }) {
   const [palette, setPalette] = useState(false);
+  const stream = useTenantStream(tenant);
   const { draft } = useDraft(tenant);
   const sections = isSystem
     ? [...NAV, { heading: "System", items: [{ label: "Admin", to: "../../admin/tenants" }] }]
@@ -102,10 +122,11 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
           <span className="flex-1 text-left">{t("Jump to any object")}</span>
           <kbd className="rounded border px-1.5 font-mono text-xs">Ctrl K</kbd>
         </button>
-        <StreamIndicator tenant={tenant} />
+        <StreamIndicator s={stream.state} />
         <ThemeToggle />
         <UserMenu />
       </header>
+      <StreamBanner stream={stream} />
       <div className="flex flex-1">
         <nav aria-label={t("Sections")} className="w-56 shrink-0 border-r bg-sidebar p-3 text-sm">
           {sections.map((s) => (
