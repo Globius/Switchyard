@@ -19,3 +19,11 @@ the UI charts and log tail stop saying "no data source".
 
 **Retention and disk.** Metrics 30 days (`PROM_RETENTION`), logs 14 days (`loki.yaml`). Volumes: `prometheus-data`,
 `loki-data`, `grafana-data`. Losing them loses history only.
+
+**Proxmox host and guest metrics.** Create a read-only user and token on Proxmox (`pveum user add monitor@pve`,
+`pveum aclmod / -user monitor@pve -role PVEAuditor`, `pveum user token add monitor@pve prometheus --privsep 0`), put
+them in `telemetry.env` (`PVE_USER`, `PVE_TOKEN_NAME`, `PVE_TOKEN_VALUE`), copy
+`prometheus/scrape.d/pve.yml.example` to `pve.yml` with your node address, then
+`docker compose --profile pve up -d`. The "Proxmox" dashboard shows node CPU and memory, running and stopped guests
+by type (qemu and lxc), top guests and storage use. Checked against the lab Proxmox with `sh deploy/telemetry/pve-smoke.sh`
+(node, memory and storage series appear; no guests existed, so the guest panels are untested with data).

@@ -64,7 +64,9 @@ class DeployRequest:
         credentials_ref: Secret reference for the Data Plane API credentials of the new engines.
         dataplane_port: Data Plane API port.
         agent_port: ``sy-agent`` gRPC port.
-        ssh_public_keys: Operator keys for cloud-init.
+        ssh_public_keys: Operator keys for cloud-init (or the container's authorized keys).
+        guest_kind: ``qemu`` (cloud-init VMs, the default) or ``lxc`` (containers: lighter, no
+            cloud-init, so enrollment material is delivered out of band; ADR 0054).
     """
 
     tenant_id: UUID
@@ -78,6 +80,7 @@ class DeployRequest:
     dataplane_port: int = 5556
     agent_port: int = 7443
     ssh_public_keys: str | None = None
+    guest_kind: str = "qemu"
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "DeployRequest":
@@ -94,6 +97,7 @@ class DeployRequest:
             dataplane_port=int(payload.get("dataplane_port", 5556)),
             agent_port=int(payload.get("agent_port", 7443)),
             ssh_public_keys=payload.get("ssh_public_keys"),
+            guest_kind=str(payload.get("guest_kind", "qemu")),
         )
 
     def as_payload(self) -> dict[str, Any]:
@@ -107,6 +111,7 @@ class DeployRequest:
             "mgmt_pool_id": str(self.mgmt_pool_id),
             "dataplane_port": self.dataplane_port,
             "agent_port": self.agent_port,
+            "guest_kind": self.guest_kind,
         }
         for key in ("pool", "credentials_ref", "ssh_public_keys"):
             if getattr(self, key) is not None:
@@ -419,6 +424,7 @@ class InfraService:
                         mgmt_bridge=mgmt.vnet,
                         nics=tuple(extra),
                         ssh_public_keys=request.ssh_public_keys,
+                        kind=request.guest_kind,
                     )
                     info = await self._pve.create_vm(spec)
                     created.append((info.node, info.vmid, UUID(int=0)))

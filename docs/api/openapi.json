@@ -2305,6 +2305,16 @@
             ],
             "title": "Credentials Ref"
           },
+          "guest_kind": {
+            "default": "qemu",
+            "description": "`qemu` clones a cloud-init VM template; `lxc` clones a container template (lighter, no cloud-init: enrollment material must be delivered out of band).",
+            "enum": [
+              "qemu",
+              "lxc"
+            ],
+            "title": "Guest Kind",
+            "type": "string"
+          },
           "mgmt_pool_id": {
             "format": "uuid",
             "title": "Mgmt Pool Id",
@@ -29985,6 +29995,7 @@
               "example": {
                 "count": 2,
                 "credentials_ref": "kv/tenants/acme/engines/dataplane",
+                "guest_kind": "qemu",
                 "mgmt_pool_id": "0192f3a0-0000-7000-8000-000000000011",
                 "nodes": [
                   "pve1",

@@ -3951,6 +3951,13 @@ export interface components {
             /** Credentials Ref */
             credentials_ref?: string | null;
             /**
+             * Guest Kind
+             * @description `qemu` clones a cloud-init VM template; `lxc` clones a container template (lighter, no cloud-init: enrollment material must be delivered out of band).
+             * @default qemu
+             * @enum {string}
+             */
+            guest_kind: "qemu" | "lxc";
+            /**
              * Mgmt Pool Id
              * Format: uuid
              */
@@ -19487,6 +19494,7 @@ export interface operations {
                  * @example {
                  *       "count": 2,
                  *       "credentials_ref": "kv/tenants/acme/engines/dataplane",
+                 *       "guest_kind": "qemu",
                  *       "mgmt_pool_id": "0192f3a0-0000-7000-8000-000000000011",
                  *       "nodes": [
                  *         "pve1",

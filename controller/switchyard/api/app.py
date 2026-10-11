@@ -3486,6 +3486,7 @@ def create_app(
             pool=body.pool,
             credentials_ref=body.credentials_ref,
             ssh_public_keys=body.ssh_public_keys,
+            guest_kind=body.guest_kind,
         )
         job = await svc.infra.request_deploy(who, tenant.id, request, request_id=_rid())
         return {"job_id": str(job)}

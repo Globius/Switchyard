@@ -1560,6 +1560,11 @@ class DeployIn(ApiModel):
     pool: str | None = Field(default=None, max_length=64)
     credentials_ref: str | None = None
     ssh_public_keys: str | None = Field(default=None, max_length=8192)
+    guest_kind: Literal["qemu", "lxc"] = Field(
+        default="qemu",
+        description="`qemu` clones a cloud-init VM template; `lxc` clones a container template "
+        "(lighter, no cloud-init: enrollment material must be delivered out of band).",
+    )
 
 
 class OpIn(ApiModel):

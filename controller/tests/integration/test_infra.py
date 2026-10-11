@@ -151,6 +151,21 @@ async def test_deploy_creates_vms_registers_engines_and_spreads_over_nodes(pg_ur
         )
 
 
+async def test_deploy_can_ask_for_containers(pg_url: str) -> None:
+    async with world(pg_url, infra_data()) as w:
+        pve = FakeProxmox()
+        await InfraService(w.db, pve).deploy_se_group(request(1, guest_kind="lxc"))
+        assert [s.kind for s, _ in pve.vms.values()] == ["lxc"]
+        roundtrip = DeployRequest.from_payload(request(1, guest_kind="lxc").as_payload())
+        assert roundtrip.guest_kind == "lxc"
+        assert (
+            DeployRequest.from_payload(
+                {k: v for k, v in request(1).as_payload().items() if k != "guest_kind"}
+            ).guest_kind
+            == "qemu"
+        )  # jobs queued before this field existed
+
+
 async def test_deploy_only_adds_the_missing_engines(pg_url: str) -> None:
     async with world(pg_url, infra_data()) as w:
         pve = FakeProxmox()

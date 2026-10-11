@@ -15,6 +15,9 @@ Recipe for the Proxmox VM template that SE group deploys clone (`template_vmid`)
 Ports on a provisioned SE: agent 7443 (mTLS), Data Plane API 5555 (mTLS), node exporter 9100,
 HAProxy exporter 8405 (a rendered listener, not part of the bootstrap config), local health 127.0.0.1:8404.
 
+Container variant: `lxc/build-template.sh VMID AGENT DATAPLANE` (run on a Proxmox node) builds the same image as a privileged
+LXC template, for deploy requests with `guest_kind: "lxc"` (ADR 0055). Load the IPVS and conntrack modules on the host.
+
 Enrollment is https only (the agent refuses an `http://` controller URL). The agent also writes `certs/*.crl`
 (client CA revocation lists) beside the certificates in `/etc/switchyard/certs`; that directory is inside the
 agent's `ReadWritePaths` and is the Data Plane API's `ssl_certs_dir`, so no extra path is needed.
