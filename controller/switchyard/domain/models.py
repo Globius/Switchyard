@@ -581,6 +581,8 @@ class Certificate(TenantOwned):
         not_after: Expiry (timezone-aware).
         secret_ref: OpenBao path of the PEM bundle.
         renew_policy: Whether the controller renews it.
+        renew_before_days: How many days before ``not_after`` an ``auto`` certificate is
+            renewed (the artboard's "Auto, 30 days before").
     """
 
     source: CertSource
@@ -588,6 +590,7 @@ class Certificate(TenantOwned):
     not_after: datetime
     secret_ref: SecretRef
     renew_policy: RenewPolicy = RenewPolicy.MANUAL
+    renew_before_days: int = Field(default=30, ge=1, le=365)
 
     @model_validator(mode="after")
     def _checked(self) -> Self:

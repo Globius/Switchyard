@@ -1558,7 +1558,7 @@
       },
       "Certificate": {
         "additionalProperties": false,
-        "description": "Certificate metadata. Key material lives in OpenBao; only ``secret_ref`` is stored.\n\nAttributes:\n    source: Where it came from.\n    sans: Subject alternative names; wildcards cover one label.\n    not_after: Expiry (timezone-aware).\n    secret_ref: OpenBao path of the PEM bundle.\n    renew_policy: Whether the controller renews it.",
+        "description": "Certificate metadata. Key material lives in OpenBao; only ``secret_ref`` is stored.\n\nAttributes:\n    source: Where it came from.\n    sans: Subject alternative names; wildcards cover one label.\n    not_after: Expiry (timezone-aware).\n    secret_ref: OpenBao path of the PEM bundle.\n    renew_policy: Whether the controller renews it.\n    renew_before_days: How many days before ``not_after`` an ``auto`` certificate is\n        renewed (the artboard's \"Auto, 30 days before\").",
         "properties": {
           "id": {
             "format": "uuid",
@@ -1573,6 +1573,13 @@
             "format": "date-time",
             "title": "Not After",
             "type": "string"
+          },
+          "renew_before_days": {
+            "default": 30,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Renew Before Days",
+            "type": "integer"
           },
           "renew_policy": {
             "$ref": "#/components/schemas/RenewPolicy",
@@ -1629,6 +1636,13 @@
             "title": "Not After",
             "type": "string"
           },
+          "renew_before_days": {
+            "default": 30,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Renew Before Days",
+            "type": "integer"
+          },
           "renew_policy": {
             "$ref": "#/components/schemas/RenewPolicy",
             "default": "manual"
@@ -1684,6 +1698,17 @@
               }
             ],
             "title": "Not After"
+          },
+          "renew_before_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renew Before Days"
           },
           "renew_policy": {
             "anyOf": [
@@ -1763,6 +1788,13 @@
             "format": "date-time",
             "title": "Not After",
             "type": "string"
+          },
+          "renew_before_days": {
+            "default": 30,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Renew Before Days",
+            "type": "integer"
           },
           "renew_policy": {
             "$ref": "#/components/schemas/RenewPolicy",
@@ -16934,6 +16966,7 @@
                       "id": "0192f3a0-0000-7000-8000-000000000016",
                       "name": "web-example",
                       "not_after": "2027-01-08T00:00:00Z",
+                      "renew_before_days": 30,
                       "renew_policy": "auto",
                       "sans": [
                         "www.example.test"
@@ -17094,6 +17127,7 @@
               "example": {
                 "name": "web-example",
                 "not_after": "2027-01-08T00:00:00Z",
+                "renew_before_days": 30,
                 "renew_policy": "auto",
                 "sans": [
                   "www.example.test"
@@ -17995,6 +18029,7 @@
                   "id": "0192f3a0-0000-7000-8000-000000000016",
                   "name": "web-example",
                   "not_after": "2027-01-08T00:00:00Z",
+                  "renew_before_days": 30,
                   "renew_policy": "auto",
                   "sans": [
                     "www.example.test"

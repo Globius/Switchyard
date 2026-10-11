@@ -51,7 +51,6 @@ log = logging.getLogger("switchyard.certificates")
 ISSUE_CERT_JOB = "issue_cert"
 RENEW_CERTS_JOB = "renew_certs"
 SYNC_CLOUDFLARE_IPS_JOB = "sync_cloudflare_ips"
-RENEW_BEFORE = timedelta(days=30)
 
 
 class SecretStore(SecretsReader, SecretsWriter, Protocol):
@@ -366,7 +365,7 @@ class CertificateService:
                 due = (
                     cert.renew_policy is dm.RenewPolicy.AUTO
                     and cert.source in {dm.CertSource.ACME, dm.CertSource.CLOUDFLARE_ORIGIN}
-                    and cert.not_after - RENEW_BEFORE <= now
+                    and cert.not_after - timedelta(days=cert.renew_before_days) <= now
                 )
                 if not due:
                     continue
