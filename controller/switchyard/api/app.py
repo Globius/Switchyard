@@ -746,7 +746,20 @@ async def _pool_usage(
         (v for v in snapshot.virtual_services if v.vip in inside),
         key=lambda v: (int(v.vip), v.name),
     )
-    taken = {v.vip for v in held}
+    from sqlalchemy import select
+
+    from switchyard.db.ops_models import ServiceEngineRow
+    from switchyard.services.infra import ipam_address
+
+    async with tenant_session(services.db.app, [tenant.id]) as session:
+        engine_rows = (await session.execute(select(ServiceEngineRow))).scalars().all()
+    held_by_engines = {
+        ipam_address(a)
+        for r in engine_rows
+        for a in [r.mgmt_ip, *[e["address"] for e in r.data_ips]]
+        if a
+    } & inside
+    taken = {v.vip for v in held} | held_by_engines
     try:
         next_free: str | None = str(ipam.allocate(pool, network, taken))
     except ipam.PoolExhaustedError:
@@ -756,6 +769,7 @@ async def _pool_usage(
         total=len(addresses),
         used=len(taken),
         free=len(addresses) - len(taken),
+        engine_addresses=[str(a) for a in sorted(held_by_engines, key=int)],
         allocations=[
             VipAllocation(
                 address=str(v.vip),

@@ -2340,8 +2340,9 @@
             "title": "Nic Pools"
           },
           "nodes": {
-            "description": "Proxmox nodes to spread new VMs over.",
+            "description": "Proxmox nodes to spread new VMs over (node names).",
             "items": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,62}$",
               "type": "string"
             },
             "minItems": 1,
@@ -2351,7 +2352,7 @@
           "pool": {
             "anyOf": [
               {
-                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
                 "type": "string"
               },
               {
@@ -10832,6 +10833,14 @@
               "$ref": "#/components/schemas/VipAllocation"
             },
             "title": "Allocations",
+            "type": "array"
+          },
+          "engine_addresses": {
+            "description": "Addresses in the pool that engines hold (a management or data NIC). They count as used and are never offered as `next_free`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Engine Addresses",
             "type": "array"
           },
           "free": {

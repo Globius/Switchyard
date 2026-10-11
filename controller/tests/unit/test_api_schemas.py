@@ -192,3 +192,22 @@ def test_member_status_carries_the_health_check_fields() -> None:
         MemberStatus.model_validate({"backend": "be", "server": "s1", "status": "UP"}).check_status
         is None
     )
+
+
+def test_a_deploy_request_cannot_carry_a_path_in_a_node_or_pool_name() -> None:
+    from pydantic import ValidationError
+
+    from switchyard.api.schemas import DeployIn
+
+    base = {
+        "count": 1,
+        "nodes": ["pve1"],
+        "template_vmid": 9000,
+        "mgmt_pool_id": "0192f3a0-0000-7000-8000-000000000001",
+    }
+    assert DeployIn.model_validate(base).nodes == ["pve1"]
+    for nodes in (["../x"], ["pve1/qemu"], ["a b"]):
+        with pytest.raises(ValidationError):
+            DeployIn.model_validate(base | {"nodes": nodes})
+    with pytest.raises(ValidationError):
+        DeployIn.model_validate(base | {"pool": "../pool"})
