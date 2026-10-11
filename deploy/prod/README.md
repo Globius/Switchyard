@@ -7,6 +7,12 @@
    `ETCD_CLUSTER_STATE=new` on all three at once; later joins use `existing`.
 4. `docker compose exec patroni patronictl -c /etc/patroni.yml list` shows leader, sync standby and replica.
 
+OpenBao: load the controller's policy before first start, matching your secret layout:
+`syctl openbao-policy --shared kv/se/ --platform kv/proxmox/token | bao policy write switchyard-controller -`
+(drop `--shared` if no shared Data Plane credentials exist), and give the controller's AppRole that policy.
+The `SWITCHYARD_INSECURE_AGENT`, `SWITCHYARD_ENGINE_POLICY=open` and `SWITCHYARD_SECRET_POLICY=open` switches exist for
+throwaway labs only (ADR 0072); the production Compose never sets them.
+
 Monitoring (Prometheus, Loki, Grafana) runs separately from `deploy/telemetry/`; the scrape token is `METRICS_TOKEN` in `node.env`.
 
 Try failover and restore locally first: `docker compose -f compose.lab.yaml up -d --build --wait`.
