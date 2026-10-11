@@ -6,12 +6,15 @@ Every stored secret gets a *new* reference (it ends with the leaf serial number)
 certificate changes the object and the apply pipeline sees a real difference to roll out.
 """
 
+import base64
+import binascii
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 
 from switchyard.domain.validators import validate_host_pattern
@@ -42,6 +45,74 @@ class CertInfo:
 
 def _utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+class Pkcs12Error(CertificateError):
+    """A PKCS#12 upload is unusable; ``path`` names the request field at fault."""
+
+    def __init__(self, path: str, code: str, message: str) -> None:
+        """Create the error for the request field ``path``."""
+        super().__init__(message)
+        self.path = path
+        self.code = code
+
+
+def pkcs12_to_pem(pkcs12_b64: str, password: str | None) -> str:
+    """Unpack a base64 PKCS#12/PFX into the PEM bundle ``inspect_pem`` expects.
+
+    The result is the leaf, then the chain, then the unencrypted PKCS#8 key. The key must match
+    the leaf (``inspect_pem`` checks that afterwards). The password is only used to decrypt and is
+    never kept. Legacy files (RC2/3DES-era encryption that OpenSSL 3 no longer reads) are refused
+    with advice to re-export them.
+
+    Example:
+        >>> pkcs12_to_pem("!!", None)
+        Traceback (most recent call last):
+        ...
+        switchyard.services.certs.Pkcs12Error: pkcs12_b64 is not valid base64
+
+    Raises:
+        Pkcs12Error: On bad base64, a wrong password, unsupported encryption or missing key.
+    """
+    try:
+        raw = base64.b64decode(pkcs12_b64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise Pkcs12Error("pkcs12_b64", "invalid", "pkcs12_b64 is not valid base64") from exc
+    try:
+        key, leaf, chain = pkcs12.load_key_and_certificates(
+            raw, password.encode() if password else None
+        )
+    except ValueError as exc:
+        text = str(exc).lower()
+        if "mac" in text or "password" in text:
+            raise Pkcs12Error(
+                "password", "wrong_password", "wrong password for the PKCS#12 file"
+            ) from exc
+        if "unsupported" in text or "rc2" in text or "legacy" in text:
+            raise Pkcs12Error(
+                "pkcs12_b64",
+                "unsupported_encryption",
+                "this PKCS#12 uses legacy encryption (RC2/3DES) that is not supported; "
+                "re-export it with AES, for example: openssl pkcs12 -export -aes256 ...",
+            ) from exc
+        raise Pkcs12Error(
+            "pkcs12_b64", "invalid", "pkcs12_b64 is not a readable PKCS#12 file"
+        ) from exc
+    except TypeError as exc:
+        raise Pkcs12Error(
+            "password", "wrong_password", "the PKCS#12 file needs a password, or has none"
+        ) from exc
+    if key is None:
+        raise Pkcs12Error("pkcs12_b64", "no_key", "the PKCS#12 file holds no private key")
+    if leaf is None:
+        raise Pkcs12Error("pkcs12_b64", "no_certificate", "the PKCS#12 file holds no certificate")
+    enc = serialization.Encoding.PEM
+    return (
+        "".join(c.public_bytes(enc).decode() for c in [leaf, *chain])
+        + key.private_bytes(
+            enc, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+        ).decode()
+    )
 
 
 def inspect_pem(pem: str, *, now: datetime | None = None) -> CertInfo:
