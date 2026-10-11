@@ -6,6 +6,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
+import { addressLine } from "@/features/segroups/SeGroups";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
 
@@ -359,6 +360,37 @@ describe("SE groups", () => {
     await userEvent.click(dlg.getByRole("button", { name: "Start deploy" }));
     expect(await dlg.findByText("Only 1 free address")).toBeInTheDocument();
     expect(dlg.queryByText("Unprocessable")).toBeNull();
+  });
+
+  it("shows each engine's address per VIP and backend network", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/engines", () =>
+        HttpResponse.json([
+          {
+            ...ENGINE("e1", "se-edge-a-01"),
+            addresses: [{ network_id: "n1", address: "10.40.12.6" }],
+          },
+          { ...ENGINE("e2", "se-edge-a-02"), addresses: [] },
+        ]),
+      ),
+    );
+    renderAt("/t/acme/se-groups");
+    expect(await screen.findByText("edge-vip 10.40.12.6")).toBeInTheDocument();
+    expect(screen.queryByText(/edge-vip —/)).toBeNull();
+  });
+
+  it("marks unaddressed networks with a dash and skips management", () => {
+    const nets = [
+      { network_id: "a", role: "vip" },
+      { network_id: "b", role: "backend" },
+      { network_id: "m", role: "mgmt" },
+    ];
+    const name = (id: string) => ({ a: "edge-vip", b: "backend", m: "se-mgmt" })[id] ?? id;
+    expect(
+      addressLine({ addresses: [{ network_id: "a", address: "10.40.12.6" }] }, nets, name),
+    ).toBe("edge-vip 10.40.12.6 · backend —");
+    expect(addressLine({ addresses: [] }, nets, name)).toBe("");
+    expect(addressLine({}, nets, name)).toBe("");
   });
 
   it("registers an existing VM", async () => {
