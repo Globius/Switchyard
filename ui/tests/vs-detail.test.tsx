@@ -306,4 +306,29 @@ describe("virtual service detail", () => {
     renderAt("/t/acme/virtual-services/v1");
     expect(await screen.findByRole("alert")).toHaveTextContent("No such virtual service.");
   });
+
+  it("lists the field findings of a rejected draft on the rendered tab", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/virtual-services/v1/rendered", () =>
+        HttpResponse.json(
+          {
+            title: "Validation failed",
+            status: 422,
+            detail: "the state breaks domain rules",
+            errors: [
+              {
+                path: "virtual_services.web.vip",
+                code: "vip_outside_network",
+                message: "10.9.9.9 is outside 10.0.0.0/24",
+              },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderAt("/t/acme/virtual-services/v1/rendered");
+    expect(await screen.findByText(/10.9.9.9 is outside 10.0.0.0\/24/)).toBeInTheDocument();
+    expect(screen.getByText("virtual_services.web.vip")).toBeInTheDocument();
+  });
 });

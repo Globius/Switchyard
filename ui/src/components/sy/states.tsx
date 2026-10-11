@@ -57,6 +57,15 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
         <div className="text-foreground">
           {p?.detail ?? (error instanceof Error ? error.message : t("Unknown error."))}
         </div>
+        {p?.errors && p.errors.length > 0 && (
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-foreground">
+            {p.errors.map((e, i) => (
+              <li key={`${e.path}-${i}`}>
+                <span className="font-mono text-xs">{e.path}</span>: {e.message}
+              </li>
+            ))}
+          </ul>
+        )}
         {error instanceof ApiError && (
           <div className="mt-1 font-mono text-xs text-muted-foreground">{error.status}</div>
         )}
