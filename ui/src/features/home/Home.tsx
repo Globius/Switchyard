@@ -11,7 +11,7 @@ import { ReapplyButton } from "@/features/drift/ReapplyButton";
 import { useDraft } from "@/features/shell/draft";
 import { ago } from "@/features/vs/member-health";
 import { t } from "@/lib/i18n";
-import { principalName } from "@/lib/format";
+import { usePrincipalNames } from "@/lib/principals";
 
 function useSummary(tenant: string) {
   return useQuery({
@@ -94,6 +94,10 @@ export function Home({ tenant }: { tenant: string }) {
   const drafts = useOpenDrafts(tenant);
   const revisions = useRecentRevisions(tenant);
   const { draft } = useDraft(tenant);
+  const name = usePrincipalNames(
+    tenant,
+    (revisions.data?.items ?? []).map((r) => r.author),
+  );
   if (summary.isPending) return <TableSkeleton rows={4} cols={4} />;
   if (summary.isError)
     return <ErrorState error={summary.error} onRetry={() => void summary.refetch()} />;
@@ -315,7 +319,7 @@ export function Home({ tenant }: { tenant: string }) {
                   <li key={r.number} className="flex items-center gap-3 px-4 py-2.5">
                     <span className="font-mono text-xs text-muted-foreground">#{r.number}</span>
                     <span className="min-w-0 flex-1 truncate">{r.summary}</span>
-                    <span className="text-muted-foreground">{principalName(r.author)}</span>
+                    <span className="text-muted-foreground">{name(r.author)}</span>
                   </li>
                 ))}
               </ul>

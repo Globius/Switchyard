@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { objectLabel, principalName, shortRequestId, shortWhen } from "@/lib/format";
+import { objectLabel, shortRequestId, shortWhen } from "@/lib/format";
+import { usePrincipalNames } from "@/lib/principals";
 
 type Event = components["schemas"]["AuditEventRead"];
 
@@ -88,15 +89,24 @@ export function AuditLog() {
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   const events = list.data?.pages.flatMap((p) => p.items) ?? [];
+  const name = usePrincipalNames(
+    null,
+    events.map((e) => e.actor),
+  );
   const tenantName = (id: string | null | undefined) =>
     tenants.data?.find((x) => x.id === id)?.name;
+  /** Streams the full filtered log from the server, not just the rows loaded here. */
   function exportCsv() {
-    const url = URL.createObjectURL(new Blob([toCsv(events)], { type: "text/csv" }));
+    const params = new URLSearchParams({ format: "csv" });
+    if (q) params.set("q", q);
+    if (tenant) params.set("tenant", tenant);
+    if (action) params.set("action", action);
+    if (actor) params.set("actor", actor);
+    if (span) params.set("since", new Date(Date.now() - span).toISOString());
     const a = document.createElement("a");
-    a.href = url;
+    a.href = `/api/v1/audit-events/export?${params.toString()}`;
     a.download = "audit-log.csv";
     a.click();
-    URL.revokeObjectURL(url);
   }
   return (
     <div className="space-y-4">
@@ -214,7 +224,7 @@ export function AuditLog() {
                         </button>
                       </td>
                       <td className="px-3 py-2.5 font-mono text-xs">{shortWhen(e.at)}</td>
-                      <td className="px-3 py-2.5">{principalName(e.actor)}</td>
+                      <td className="px-3 py-2.5">{name(e.actor)}</td>
                       <td className="px-3 py-2.5">
                         <span className="font-mono text-xs">{e.action}</span>
                         {live && (

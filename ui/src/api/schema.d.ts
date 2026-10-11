@@ -50,6 +50,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-events/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download audit events across tenants (system-admin)
+         * @description As `GET /tenants/{t}/audit-events/export` over every tenant and the system-level events; narrow it with `tenant` (id or name). Requires `system-admin`.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
+         */
+        get: operations["export_system_audit_events_api_v1_audit_events_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/break-glass": {
         parameters: {
             query?: never;
@@ -210,6 +234,28 @@ export interface paths {
          *     **Access:** Public: no credentials needed.
          */
         get: operations["auth_saml_metadata_api_v1_auth_saml__provider__metadata_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discovery/prometheus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Prometheus service discovery for the SE exporters
+         * @description Prometheus `http_sd_configs` target groups, one per enabled engine with a management address, labelled `tenant`, `tenant_name`, `se_group`, `engine` and `vs`. `exporter` is `haproxy` (default port 8405) or `node` (9100); `port` overrides the port. Requires `system-admin` or the metrics scrape token.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["prometheus_discovery_api_v1_discovery_prometheus_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -433,6 +479,28 @@ export interface paths {
          *     **Access:** Any authenticated caller.
          */
         get: operations["get_permissions_api_v1_permissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/principals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Names for principal labels (system-admin)
+         * @description As `GET /tenants/{t}/principals` for any user, for the cross-tenant audit log. Requires `system-admin`.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["system_principals_api_v1_principals_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -741,6 +809,30 @@ export interface paths {
          *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
          */
         get: operations["audit_events_api_v1_tenants__t__audit_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/audit-events/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download audit events as CSV or JSON Lines
+         * @description The same filters as the list (`actor`, `action`, `object`, `since`, `until`, `q`; `cursor` and `limit` are ignored) but every matching event, newest first, streamed as a file. `format` is `csv` (default) or `jsonl`. The export itself is audited as `audit.export`. Requires any role in the tenant, like the list.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
+         */
+        get: operations["export_audit_events_api_v1_tenants__t__audit_events_export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1787,6 +1879,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/principals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Names for principal labels
+         * @description Turns the labels that audit events, change sets and revisions carry (`user:...`, `token:...`, `local:...`, `system:...`) into names for people, in the order given, one answer per distinct label. Users who appear in this tenant's own history get the name their identity provider gave; any other `user:` label is answered from the label alone. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["tenant_principals_api_v1_tenants__t__principals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/revisions": {
         parameters: {
             query?: never;
@@ -2047,6 +2161,28 @@ export interface paths {
          *     **Access:** `tenant-admin` or higher in the tenant.
          */
         post: operations["add_engine_api_v1_tenants__t__se_groups__group__engines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/se-groups/{group}/placement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where an SE group's engines run on Proxmox
+         * @description The Proxmox cluster nodes with online state, load, memory and storage, and the group's engines on each: the data of the Placement card. Read from Proxmox and cached for 15 seconds. When Proxmox is not configured or not reachable the answer is `available: false` with the nodes the engines claim to run on and `online: null`. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["se_group_placement_api_v1_tenants__t__se_groups__group__placement_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3704,6 +3840,24 @@ export interface components {
             path: string;
         };
         /**
+         * DiscoveryGroup
+         * @description One Prometheus HTTP service-discovery target group (the format Prometheus reads).
+         */
+        DiscoveryGroup: {
+            /**
+             * Labels
+             * @description `tenant` (id), `tenant_name`, `se_group`, `engine` and `vs` (the group's service names between commas, for example `,shop,www,`).
+             */
+            labels: {
+                [key: string]: string;
+            };
+            /**
+             * Targets
+             * @description `host:port` of the exporter.
+             */
+            targets: string[];
+        };
+        /**
          * DraftStatus
          * @description How an object differs between the base state and a draft.
          * @enum {string}
@@ -3802,6 +3956,11 @@ export interface components {
              * @description `host:port` of `sy-agent`, if any.
              */
             agent_url?: string | null;
+            /**
+             * Host Online
+             * @description Whether Proxmox reports the engine's node online; null when the engine has no node or Proxmox is not configured or not reachable.
+             */
+            host_online?: boolean | null;
             /**
              * Id
              * Format: uuid
@@ -4205,6 +4364,84 @@ export interface components {
              * @default 1
              */
             version: number;
+        };
+        /**
+         * HostEngineRead
+         * @description An engine of the SE group on a node.
+         */
+        HostEngineRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            state: components["schemas"]["EngineState"];
+            /** Vmid */
+            vmid?: number | null;
+        };
+        /**
+         * HostNodeRead
+         * @description A Proxmox node and the SE group's engines on it.
+         */
+        HostNodeRead: {
+            /**
+             * Cpu
+             * @description CPU load, 0 to 1.
+             */
+            cpu?: number | null;
+            /** Engines */
+            engines: components["schemas"]["HostEngineRead"][];
+            /** Max Cpu */
+            max_cpu?: number | null;
+            /**
+             * Mem Total
+             * @description Bytes.
+             */
+            mem_total?: number | null;
+            /**
+             * Mem Used
+             * @description Bytes.
+             */
+            mem_used?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Online
+             * @description As the cluster reports it; null when Proxmox could not be asked.
+             */
+            online: boolean | null;
+            /** Storage */
+            storage: components["schemas"]["HostStorageRead"][];
+            /** Uptime S */
+            uptime_s?: number | null;
+        };
+        /**
+         * HostStorageRead
+         * @description A storage of a Proxmox node. Sizes are bytes.
+         */
+        HostStorageRead: {
+            /** Active */
+            active: boolean;
+            /** Available */
+            available?: number | null;
+            /**
+             * Content
+             * @description What the storage holds, for example `images`.
+             */
+            content: string[];
+            /**
+             * Kind
+             * @description Storage type, for example `lvmthin`, `zfspool`, `nfs`.
+             */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Total */
+            total?: number | null;
+            /** Used */
+            used?: number | null;
         };
         /**
          * HttpCheck
@@ -5354,6 +5591,21 @@ export interface components {
             type: "source_ip";
         };
         /**
+         * PlacementRead
+         * @description Where an SE group's engines run on the Proxmox cluster.
+         *
+         *     With `available: false` (Proxmox not configured or not reachable) `nodes` lists only the nodes
+         *     the group's engines are placed on, with `online: null` and no capacity.
+         */
+        PlacementRead: {
+            /** Available */
+            available: boolean;
+            /** Nodes */
+            nodes: components["schemas"]["HostNodeRead"][];
+            /** Reason */
+            reason?: string | null;
+        };
+        /**
          * Pool
          * @description A group of backend servers.
          *
@@ -5526,6 +5778,27 @@ export interface components {
              * @default 1
              */
             version: number;
+        };
+        /**
+         * PrincipalNameRead
+         * @description A principal label (`actor`, `author`, `approver`) with a name for people.
+         */
+        PrincipalNameRead: {
+            /**
+             * Actor
+             * @description The label as given, for example `user:3f9a`, `token:ci-bot`.
+             */
+            actor: string;
+            /**
+             * Display Name
+             * @description Never empty; users get the name their provider gave.
+             */
+            display_name: string;
+            /**
+             * Kind
+             * @description `user`, `token`, `local`, `login`, `system` or `unknown`.
+             */
+            kind: string;
         };
         /**
          * ProblemDetail
@@ -7736,6 +8009,92 @@ export interface operations {
             };
         };
     };
+    export_system_audit_events_api_v1_audit_events_export_get: {
+        parameters: {
+            query?: {
+                /** @description Tenant id or name. */
+                tenant?: string | null;
+                /** @description `csv` or `jsonl`. */
+                format?: string;
+                /** @description Who acted, for example `user:alice`; end with `*` for a prefix. */
+                actor?: string | null;
+                /** @description Audit action (see `GET /audit-actions`); end with `*` for a prefix. */
+                action?: string | null;
+                /** @description Exact object reference, for example `change_set:<id>`; on revisions, an object id. */
+                object?: string | null;
+                /** @description Only events at or after this time (ISO 8601). */
+                since?: string | null;
+                /** @description Only events before this time (ISO 8601). */
+                until?: string | null;
+                /** @description Free text. */
+                q?: string | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The events as a file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /** @example {"action": "change_set.apply", "actor": "user:alice", "at": "2026-10-11T08:30:00Z", "diff": null, "object": "change_set:1", "request_id": "r-1", "tenant_id": null} */
+                    "application/x-ndjson": unknown;
+                    /**
+                     * @example at,tenant_id,actor,action,object,request_id,diff
+                     *     2026-10-11T08:30:00Z,,user:alice,change_set.apply,change_set:1,r-1,
+                     */
+                    "text/csv": unknown;
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     auth_break_glass_api_v1_auth_break_glass_post: {
         parameters: {
             query?: never;
@@ -8218,6 +8577,86 @@ export interface operations {
             };
             /** @description Login is not configured on this controller. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    prometheus_discovery_api_v1_discovery_prometheus_get: {
+        parameters: {
+            query?: {
+                /** @description `haproxy` or `node`. */
+                exporter?: string;
+                /** @description Exporter port; default per exporter. */
+                port?: number | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "labels": {
+                     *           "engine": "edge-1",
+                     *           "se_group": "edge",
+                     *           "tenant": "0192f3a0-0000-7000-8000-000000000001",
+                     *           "tenant_name": "acme",
+                     *           "vs": ",shop,www,"
+                     *         },
+                     *         "targets": [
+                     *           "192.0.2.21:8405"
+                     *         ]
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["DiscoveryGroup"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9159,6 +9598,82 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["PermissionMatrix"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    system_principals_api_v1_principals_get: {
+        parameters: {
+            query?: {
+                /** @description A principal label to resolve (repeat up to 100 times). */
+                actor?: string[] | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "actor": "user:3f9a",
+                     *         "display_name": "Alice Admin",
+                     *         "kind": "user"
+                     *       },
+                     *       {
+                     *         "actor": "token:ci-bot",
+                     *         "display_name": "ci-bot (API token)",
+                     *         "kind": "token"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["PrincipalNameRead"][];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -10792,6 +11307,102 @@ export interface operations {
                 };
             };
             /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    export_audit_events_api_v1_tenants__t__audit_events_export_get: {
+        parameters: {
+            query?: {
+                /** @description `csv` or `jsonl`. */
+                format?: string;
+                /** @description Who acted, for example `user:alice`; end with `*` for a prefix. */
+                actor?: string | null;
+                /** @description Audit action (see `GET /audit-actions`); end with `*` for a prefix. */
+                action?: string | null;
+                /** @description Exact object reference, for example `change_set:<id>`; on revisions, an object id. */
+                object?: string | null;
+                /** @description Only events at or after this time (ISO 8601). */
+                since?: string | null;
+                /** @description Only events before this time (ISO 8601). */
+                until?: string | null;
+                /** @description Free text. */
+                q?: string | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The events as a file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /** @example {"action": "change_set.apply", "actor": "user:alice", "at": "2026-10-11T08:30:00Z", "diff": null, "object": "change_set:1", "request_id": "r-1", "tenant_id": null} */
+                    "application/x-ndjson": unknown;
+                    /**
+                     * @example at,tenant_id,actor,action,object,request_id,diff
+                     *     2026-10-11T08:30:00Z,,user:alice,change_set.apply,change_set:1,r-1,
+                     */
+                    "text/csv": unknown;
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -12820,6 +13431,7 @@ export interface operations {
                      *         "agent_cert_serial": "3f2a9c",
                      *         "agent_enrolled": true,
                      *         "agent_url": "192.0.2.21:7443",
+                     *         "host_online": true,
                      *         "id": "0192f3a0-0000-7000-8000-000000000022",
                      *         "mgmt_ip": "192.0.2.21",
                      *         "name": "edge-1",
@@ -12900,6 +13512,7 @@ export interface operations {
                      *       "agent_cert_serial": "3f2a9c",
                      *       "agent_enrolled": true,
                      *       "agent_url": "192.0.2.21:7443",
+                     *       "host_online": true,
                      *       "id": "0192f3a0-0000-7000-8000-000000000022",
                      *       "mgmt_ip": "192.0.2.21",
                      *       "name": "edge-1",
@@ -16574,6 +17187,85 @@ export interface operations {
             };
         };
     };
+    tenant_principals_api_v1_tenants__t__principals_get: {
+        parameters: {
+            query?: {
+                /** @description A principal label to resolve (repeat up to 100 times). */
+                actor?: string[] | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "actor": "user:3f9a",
+                     *         "display_name": "Alice Admin",
+                     *         "kind": "user"
+                     *       },
+                     *       {
+                     *         "actor": "token:ci-bot",
+                     *         "display_name": "ci-bot (API token)",
+                     *         "kind": "token"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["PrincipalNameRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     revisions_api_v1_tenants__t__revisions_get: {
         parameters: {
             query?: {
@@ -18080,6 +18772,7 @@ export interface operations {
                      *         "agent_cert_serial": "3f2a9c",
                      *         "agent_enrolled": true,
                      *         "agent_url": "192.0.2.21:7443",
+                     *         "host_online": true,
                      *         "id": "0192f3a0-0000-7000-8000-000000000022",
                      *         "mgmt_ip": "192.0.2.21",
                      *         "name": "edge-1",
@@ -18173,6 +18866,7 @@ export interface operations {
                      *       "agent_cert_serial": "3f2a9c",
                      *       "agent_enrolled": true,
                      *       "agent_url": "192.0.2.21:7443",
+                     *       "host_online": true,
                      *       "id": "0192f3a0-0000-7000-8000-000000000022",
                      *       "mgmt_ip": "192.0.2.21",
                      *       "name": "edge-1",
@@ -18223,6 +18917,114 @@ export interface operations {
                 };
             };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    se_group_placement_api_v1_tenants__t__se_groups__group__placement_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description SE group id. */
+                group: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "available": true,
+                     *       "nodes": [
+                     *         {
+                     *           "cpu": 0.12,
+                     *           "engines": [
+                     *             {
+                     *               "id": "0192f3a0-0000-7000-8000-000000000022",
+                     *               "name": "edge-1",
+                     *               "state": "enabled",
+                     *               "vmid": 9101
+                     *             }
+                     *           ],
+                     *           "max_cpu": 32,
+                     *           "mem_total": 274877906944,
+                     *           "mem_used": 68719476736,
+                     *           "name": "pve1",
+                     *           "online": true,
+                     *           "storage": [
+                     *             {
+                     *               "active": true,
+                     *               "available": 879609302221,
+                     *               "content": [
+                     *                 "images",
+                     *                 "rootdir"
+                     *               ],
+                     *               "kind": "lvmthin",
+                     *               "name": "local-lvm",
+                     *               "total": 1099511627776,
+                     *               "used": 219902325555
+                     *             }
+                     *           ],
+                     *           "uptime_s": 1209600
+                     *         },
+                     *         {
+                     *           "engines": [],
+                     *           "name": "pve2",
+                     *           "online": false,
+                     *           "storage": []
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PlacementRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
