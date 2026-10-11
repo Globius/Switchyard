@@ -50,6 +50,8 @@ from switchyard.render.escape import RenderError
 ROOT_DIR = "/etc/switchyard"
 BASE_DIR = "/etc/switchyard/haproxy"
 CONFIG_PATH = "haproxy/haproxy.cfg"
+#: Port of the Prometheus exporter listener (8404 is the local health endpoint).
+EXPORTER_PORT = 8405
 CERT_DIR = "/etc/switchyard/certs"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 
@@ -264,6 +266,7 @@ class _Renderer:
                 maxconn=self.group.maxconn,
                 frontends=frontends,
                 backends=backends,
+                exporter=self._exporter(),
                 fingerprint=fingerprint,
             )
 
@@ -278,6 +281,31 @@ class _Renderer:
         )
 
     # -- helpers ---------------------------------------------------------------------------------
+
+    def _exporter(self) -> dict[str, Any] | None:
+        """Where the Prometheus exporter listens: port 8405, only for the management networks.
+
+        The configuration is the same on every engine of the group, so it cannot name one
+        engine's management address. The listener binds the wildcard and refuses any request whose
+        destination address is outside the group's ``mgmt`` networks. A group without a
+        management network gets no exporter listener.
+        """
+        networks = {n.id: n for n in self.snap.networks}
+        cidrs = sorted(
+            {
+                networks[gn.network_id].cidr
+                for gn in self.group.networks
+                if gn.role is dm.NetworkRole.MGMT and gn.network_id in networks
+            },
+            key=lambda c: (c.version, str(c)),
+        )
+        if not cidrs:
+            return None
+        return {
+            "port": EXPORTER_PORT,
+            "cidrs": [str(c) for c in cidrs],
+            "v6": any(c.version == 6 for c in cidrs),
+        }
 
     @staticmethod
     def _pool_ids(svc: dm.VirtualService) -> list[UUID]:

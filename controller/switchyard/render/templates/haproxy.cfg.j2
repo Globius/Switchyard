@@ -27,6 +27,20 @@ frontend sy_local_health
     bind 127.0.0.1:8404
     monitor-uri /healthz
     no log
+{% if exporter %}
+
+# Prometheus exporter, answered only for the management network(s) of the group.
+frontend sy_prometheus
+    mode http
+    bind :{{ exporter.port }}
+{% if exporter.v6 %}
+    bind [::]:{{ exporter.port }} v6only
+{% endif %}
+    http-request deny deny_status 403 unless { dst {{ exporter.cidrs | join(" ") }} }
+    http-request use-service prometheus-exporter if { path /metrics }
+    http-request deny deny_status 404
+    no log
+{% endif %}
 {% for f in frontends %}
 
 {% include "frontend.j2" %}

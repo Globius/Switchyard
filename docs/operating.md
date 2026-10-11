@@ -121,7 +121,7 @@ scrape_configs:
         authorization: { credentials_file: /etc/prometheus/switchyard-token }
 ```
 
-The SE image must serve the exporters on those ports; that is part of the SE image recipe, not the controller (ADR 0061).
+The node exporter (9100) is part of the SE image. The HAProxy exporter (8405) is rendered into `haproxy.cfg` for SE groups with a `mgmt` network (ADR 0063).
 
 ## Audit log
 
