@@ -148,3 +148,14 @@ manual review.
 3. S4: key the shell outlet by tenant.
 4. S2: harden `safeNext` and add a test.
 5. S6: add `pnpm audit` to CI.
+
+## Status after the fixes
+
+| Finding | Status |
+| --- | --- |
+| S1 CSP and headers | Dev and preview servers send the suggested policy and `nosniff` / `Referrer-Policy` headers (`ui/src/lib/security.ts`); a Playwright check confirms no violations and that Monaco still loads. **Open:** a production reverse-proxy snippet in `deploy/prod/` and a runbook line (operations) |
+| S2 `safeNext` | Fixed: rejects `/\`, `//`, encoded slashes, control characters and anything that is not same-origin; tests cover `/\x`, `//x`, `javascript:`, `/%5Cx`, tabs |
+| S3 secrets in the mutation cache | Fixed: token and break-glass mutations use `gcTime: 0` and are reset when the dialog closes or the value has moved to component state; a test checks the cache |
+| S4 tenant switch | Fixed: the shell outlet is keyed by tenant, so page state resets on a switch |
+| S5 QR `dangerouslySetInnerHTML` | No change (safe as written) |
+| S6 dependencies | `pnpm audit --audit-level high` is part of `make ui-check` |
