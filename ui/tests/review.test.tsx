@@ -480,4 +480,42 @@ describe("review screen", () => {
     await userEvent.click(btn);
     expect(await screen.findByText("Approval is required.")).toBeInTheDocument();
   });
+
+  it("refreshes the header and the review when an apply finishes", async () => {
+    cs = base({ state: "applying" });
+    job = {
+      id: "j1",
+      kind: "apply_change_set",
+      state: "running",
+      retrying: false,
+      attempts: 1,
+      max_attempts: 3,
+      created_at: "x",
+      change_set_id: "cs1",
+      stages: STAGES(["succeeded", "running"]),
+    };
+    renderAt();
+    expect(await screen.findByText(/nothing left to review/)).toBeInTheDocument();
+    expect((await screen.findAllByText("Applying")).length).toBeGreaterThan(0);
+    cs = base({ state: "failed", error: "boom" });
+    job = {
+      id: "j1",
+      kind: "apply_change_set",
+      state: "succeeded",
+      ok: false,
+      retrying: false,
+      attempts: 1,
+      max_attempts: 3,
+      created_at: "x",
+      change_set_id: "cs1",
+      error: "boom",
+      stages: STAGES(["succeeded", "failed"]),
+    };
+    await waitFor(
+      () => expect(screen.queryByText(/nothing left to review/)).not.toBeInTheDocument(),
+      { timeout: 8000 },
+    );
+    expect(screen.getAllByText("Failed").length).toBeGreaterThan(0);
+    expect(await screen.findByRole("tab", { name: /Objects/ })).toBeInTheDocument();
+  });
 });

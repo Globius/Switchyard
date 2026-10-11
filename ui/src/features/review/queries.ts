@@ -6,6 +6,8 @@ import { TYPE_PATH } from "./model";
 export function useChangeSetRead(tenant: string, cs: string) {
   return useQuery({
     queryKey: ["t", tenant, "change-sets", cs],
+    // While an apply runs the state changes underneath us (applying, then failed or applied).
+    refetchInterval: (q) => (q.state.data?.state === "applying" ? 1500 : false),
     queryFn: async () =>
       unwrap(
         await api.GET("/api/v1/tenants/{t}/change-sets/{cs}", {
