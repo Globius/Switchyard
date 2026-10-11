@@ -26,7 +26,9 @@ separate resource.
 `viewer < operator < tenant-admin < system-admin`. They nest: each role can do everything the weaker
 ones can. A person has a role **per tenant**; one `system-admin` grant makes them system administrator
 everywhere. Several groups combine as a union, which within a tenant is the highest role; `GET /me`
-says which groups produced each grant (`tenants[].via`).
+says which groups produced each grant (`tenants[].via`). `principal` is the author string the API
+stores for your writes, such as a draft's `author`: `user:<provider>:<subject>` (for example
+`user:local:breakglass`). Compare it to `author` to tell which drafts are yours.
 
 ## What a role may do: `GET /permissions`
 

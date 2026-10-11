@@ -401,6 +401,7 @@ AUTH_PROVIDERS = {
 }
 ME = {
     "id": "0192f3a0-0000-7000-8000-000000000031",
+    "principal": "user:authentik:alice",
     "name": "Alice Example",
     "email": "alice@example.test",
     "is_system": False,

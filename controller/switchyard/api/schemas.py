@@ -390,6 +390,10 @@ class Me(ApiModel):
     """The authenticated caller."""
 
     id: str | None = Field(description="Session id; null for API tokens.")
+    principal: str = Field(
+        description="Author string the API stores for this caller's writes (a draft's `author`), "
+        "such as `user:local:breakglass`; generally `user:<provider>:<subject>`."
+    )
     name: str
     email: str | None = None
     is_system: bool
