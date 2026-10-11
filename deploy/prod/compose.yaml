@@ -32,6 +32,8 @@ x-controller: &controller
   environment: &controller-env
     SWITCHYARD_DATABASE_URL: postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write
     SWITCHYARD_PUBLIC_URL: ${PUBLIC_URL}
+    # Bearer token for /metrics and the Prometheus service-discovery endpoint (backend !67).
+    SWITCHYARD_METRICS_TOKEN: ${METRICS_TOKEN}
     SWITCHYARD_OPENBAO_ADDR: ${OPENBAO_ADDR:-}
     SWITCHYARD_OPENBAO_ROLE_ID: ${OPENBAO_ROLE_ID:-}
     SWITCHYARD_OPENBAO_SECRET_ID: ${OPENBAO_SECRET_ID:-}
