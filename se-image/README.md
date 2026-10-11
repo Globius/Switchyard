@@ -27,5 +27,10 @@ Enrollment is https only (the agent refuses an `http://` controller URL). The ag
 (client CA revocation lists) beside the certificates in `/etc/switchyard/certs`; that directory is inside the
 agent's `ReadWritePaths` and is the Data Plane API's `ssl_certs_dir`, so no extra path is needed.
 
+Boot behaviour: HAProxy, Keepalived and FRR are all enabled. Keepalived and FRR skip themselves until the controller has written their
+config under `/etc/switchyard/`, and the agent starts them when a config appears (and stops them when it goes). An SE that reboots
+therefore comes back with its VIP and BGP sessions with the controller down. `frr-pythontools` is installed because
+`systemctl reload frr` needs it.
+
 Test: `docker build -f se-image/test/Dockerfile -t sy-se-image-test .` from the repository root.
 Procedure: `docs/runbooks/build-se-template.md`. Decision: ADR 0050.

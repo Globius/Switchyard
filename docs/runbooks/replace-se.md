@@ -6,7 +6,7 @@ between each.
 
 1. Check the group is otherwise healthy and the VIP is held by a different engine
    (`status/engines`: `reachable`, VRRP state or BGP session per engine).
-2. Deploy the new engine first: `POST /tenants/{t}/se-groups/{group}/deploy` (or the UI wizard). It clones
+2. Deploy the new engine first (pass `nic_pools` so its VIP and backend NICs get addresses from pools on those networks, ADR 0057): `POST /tenants/{t}/se-groups/{group}/deploy` (or the UI wizard). It clones
    the template named by `template_vmid` and registers the engine.
 3. Give the new engine an enrollment token: `POST /tenants/{t}/engines/{id}/enrollment-token` (shown once,
    valid one hour). Proxmox cannot upload cloud-init snippets through its API (ADR 0011), so put the token on
