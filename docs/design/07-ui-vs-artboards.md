@@ -80,7 +80,7 @@ Biggest gaps, in the order I would close them:
 | ChipInput (keyboard, empty, error) | matches | | `components/sy/ChipInput.tsx` has tests. |
 | StreamIndicator (live / connecting / down) | matches | | Top bar; icon and label each state. |
 | MemberStateList | differs | not built | Inline in `VsOverview` and `Pools`; admin state only, per README. No shared component. |
-| IpUsageBar | missing | overlooked | Networks shows "n of m used" text, not a bar. |
+| IpUsageBar | differs | not built | Built inline in Networks (bar plus n of m used); not a shared component. |
 | BgpSessionChip, VrrpStateChip | differs | no API (check) | BGP chip exists in SeGroups; VRRP state chip does not (no per-engine VRRP state found in the schema). |
 | Permissions: `can(verb, object)` from `GET /permissions` | matches | | `lib/permissions.ts`; disabled controls with tooltip. |
 | Session: cookie, CSRF, 4 h / 30 min, Refresh access | matches | | `auth/session.ts`, `UserMenu`. |
@@ -119,7 +119,7 @@ Biggest gaps, in the order I would close them:
 | **Networks** (`Networks`) | differs | Built: networks list, create/attach, VIP pools with range editing, usage "n of m", allocations table, Find IP or service, Apply SDN as a job, draft markers ("Freed by draft", "In a draft · not reserved"). Missing: "Edit service" link on an address row (VIP freed only through the service); an IpUsageBar; per-network "SDN apply running" chip and "Proxmox SDN job started with revision #41" line. | overlooked | Add link, bar and chip; small. |
 | **SE groups** (`SeGroups`) | differs | Built: list, engines table, status (In sync / Drifted), deploy sheet (nodes, template ID, SSH keys, mgmt pool, count), enrollment token (once), register existing, retire and remove with distinct warnings, runtime-action permission note. Missing: **Placement on Proxmox** card (host spread, "Host state not reported", single-host warnings); **HA mode** field and routing-profile summary chip (`edge-bgp · BGP · AS 65040`); agent version per engine; "Waiting for agent / not enrolled" state per engine; **drift banner with "Re-apply revision #N" and "View running config"** (only a "Drifted" chip and "Reported only; nothing is changed automatically."); BGP session chips partly built. | no API (host state, agent version; check) / overlooked (re-apply, HA mode) | The drift re-apply is a README requirement ("the one offer"); do it first. Placement needs the Proxmox endpoints (see 05). |
 | **Routing profiles** (`RoutingProfiles`) | matches | BGP and VRRP kinds, priorities, VRID, BFD, static routes empty state. The "se-core-01 starts at priority 150" per-engine hint was not found. | | Copy the per-engine priority hint. |
-| **Tenant access and settings** (`TenantAccess`) | differs | Built: members, role mappings, tokens (create, revoke, copy once), approval switch, quotas. Missing: member "last sign-in" and provider/group column format; "On since Oct 6, by …" attribution on the approval switch; tokens use "Copy it now" without "I stored it". Tab layout: single page with sections (design shows tabs: confirm). | overlooked / design question (tabs) | Shared ShowOnceSecret; the attribution needs `approval_changed_by/at` in the tenant (check API). |
+| **Tenant access and settings** (`TenantAccess`) | differs | Built: members, role mappings, tokens (create, revoke, copy once), approval switch, quotas. Missing: member "last sign-in" and provider/group column format; "On since Oct 6, by …" attribution on the approval switch; tokens use "Copy it now" without "I stored it". Tabs (Members, Role mappings, API tokens, Settings) match the artboard. | overlooked | Shared ShowOnceSecret; the attribution needs `approval_changed_by/at` in the tenant (check API). |
 | **Admin: tenants** (`AdminTenants`) | matches | Create/edit/delete, quotas, approval toggle, links to users and mappings. "Turned on by … on …" attribution not found. | no API (check) | As above. |
 | **Admin: users** (`Users`) | matches | List with filters, user details panel, "What {name} can do now", disable/enable/end sessions/delete with confirm. | | |
 | **Admin: identity providers and break-glass** (`IdentityProviders`) | differs | Built: list, add/edit, test sign-in, SP metadata, break-glass: turn on/off with reason and duration, set up administrator (password and TOTP). Missing: OIDC "Discovery document found" check and "From URL / Paste XML" for SAML; "Replace secret" as write-only field on edit; claims view ("Show all claims", mapped roles preview); QR code from the otpauth URI and "I stored it" check in break-glass setup (no QR library); "forced by the deployment" state is built. | overlooked (QR, stored check); no API (check) for discovery/XML parse | Add QR and ShowOnceSecret; add SAML XML paste and discovery if the API supports them. |
@@ -176,3 +176,62 @@ Ports, Certificates and policies, Routes and no "Policies and access" section, n
 SE group page has Settings, Networks and an empty engines list but no placement, HA mode or drift panel (drift
 needs an engine to show); top bar shows "Stream live"; the shell nav matches the handoff map. Pixel-level spacing
 and colour were not compared.
+
+## Visual differences (Playwright, built vs artboard, 1280 px)
+
+Side-by-side comparison of 21 screens: artboard on the left, build on the right. The artboards show a populated
+tenant (`globius-prod`) and often an open dialog or draft; the dev tenant (`demo`) is nearly empty. Items below are
+differences in layout, styling or formatting, not data differences. States the dev tenant cannot show (draft,
+drift, findings, dialogs) are covered by the code-based tables above.
+
+| # | Screen | Difference | Severity |
+| --- | --- | --- | --- |
+| V1 | VS Settings | Single narrow column of native inputs. Artboard: cards (General, Listener, Routes, Policies and access), two columns, Switch for Enabled, Protocol toggle group, Fixed/Suggest VIP radios, ports summary table, routes as a table (Host, Path match, Path, Action, Target, remove icon), footer with Revert all / Save to draft | High |
+| V2 | VS Rendered config | Built stacks every rendered file in small type. Artboard: one file with engine select, path, fingerprint, Copy, Live / With my draft toggle, line numbers from context, highlighted range | High |
+| V3 | VS History | Two flat lists. Artboard: timeline with segmented filter, include-objects switch, inline diffs, status chips (In draft, Live, Approval), Compare buttons | High |
+| V4 | Policies, Routing profiles | Built is a list that opens a sheet. Artboard is master-detail (list left, editor right with rule cards, inline validation, Revert / Save to draft) | High |
+| V5 | Audit log | Older rows show only `HH:MM:SS` (artboard `Oct 6 14:02`); actor shows `user:local:breakglass` (artboard a name); object shows raw ids (`change_set:01a1285d-…`) where the artboard has readable names; request id is a long hash (artboard short `req_8d21…a0f`); Break-glass pill sits under the action; rows are tall | Medium |
+| V6 | Revisions | Author is raw `user:authentik:dana`; timestamps absolute locale (`10/10/2026, 8:52:04 PM`) instead of `today 08:12`; no git hash; Roll back button on every row (artboard has it in the compare panel) | Medium |
+| V7 | Home, Revisions, others | Raw principal strings wherever an author is listed; artboard shows display names. Needs a principal-to-name lookup | Medium |
+| V8 | Certificates | Expires cell wraps (`4099 days` pill plus `12/31/2037`); artboard shows a status pill (`12 days`) plus `Oct 22, 2026` on one line; US numeric dates; Name column wraps; extra Actions and Used by columns | Medium |
+| V9 | Networks | `Apply SDN` sits in the Networks card header, not in the artboard. Draft rows (Freed by draft, In a draft), `Edit service` button and `SDN apply running` chip not present | Medium |
+| V10 | SE groups | Empty group shows a centred empty state and a long hint. Artboard: engines table (State, Reachable, BGP sessions, Config, Observed, Disable / More), Placement card, drift banner | Medium |
+| V11 | Create wizard | Header has no logo (artboard: logo plus tenant); step rail check marks for completed steps not verified beyond step 1; `So far` card and `Adds to your draft` panel only partly seen | Low |
+| V12 | Admin tenants | List lacks Members and Quotas columns; detail lacks "4 people through 5 role mappings" and "Turned on by …" | Low |
+| V13 | Role mappings | Matrix lists every permission (31 rows); artboard groups them into 8 rows. Add-mapping controls are a separate card above the table, not a footer row | Low (design question) |
+| V14 | VS list | Matches, except health shows `Unknown`. Draft markers, `Modified` / `New` / `Deleted` pills and `Restore` need a draft to compare | Low |
+| V15 | VS Overview | No per-route kebab menu; unavailable states are plain text, not the dashed centred card; Certificates chip lacks a status icon; `Open in Grafana` missing | Low |
+| V16 | Top bar | Divider after the logo missing; avatar shows one initial where the artboard shows two | Low |
+| V17 | Identity providers | Close; break-glass header lacks remaining-time text when timed; forced-on message is small plain text | Low |
+| V18 | System tokens | List close. The shown-once dialog needs the "I have stored this token" check | Medium |
+| V19 | Tenant home | Matches; `Jump to problems` is disabled when nothing fails (artboard shows it enabled) | Low |
+| V20 | Login | Matches; logo glyph differs | Low |
+
+## Backlog (numbered, for tackling)
+
+Effort: S = under a day, M = a few days, L = a week or more. "Code" refers to the tables above, "V" to the visual table.
+
+| ID | Item | Source | Effort | Depends on |
+| --- | --- | --- | --- | --- |
+| B1 | Adopt shadcn primitives (Dialog, Select, Switch, Tabs, Table, Toggle Group, Sonner), replace native controls, set up the `@switchyard` registry | Foundations, V1 | L | none |
+| B2 | Monaco: rendered config view with range highlight and engine picker; Review Config diff | Foundations, V2, Review | M | none |
+| B3 | VS Settings rebuild: cards, two columns, Policies and access, VIP radios, Revert all, saved-at, routes table | VS Settings, V1 | M | B1 |
+| B4 | VS History timeline | VS History, V3 | M | none |
+| B5 | Policies and Routing profiles as master-detail | V4 | M | none |
+| B6 | SSE cache patching, stale banner, reconnect refetch | Foundations | M | none |
+| B7 | Session-expired modal | Foundations | S | none |
+| B8 | ShowOnceSecret component (tokens, enrollment, break-glass, QR) | Foundations, V18, IdPs | S | B1 |
+| B9 | Display-name lookup and a shared date / relative-time formatter used everywhere | V5-V8 | S | API check for principal names |
+| B10 | SE groups: placement, HA mode, engines table columns, drift Re-apply and View running config | SE groups, V10 | M | Proxmox endpoints |
+| B11 | Networks: Edit service, draft rows, SDN chip, shared IpUsageBar | Networks, V9 | S | none |
+| B12 | Review: Open job link, viewer copy, impact lines | Review | S | B2 |
+| B13 | Jobs: change set link, durations, SSE | Jobs | S | B6 |
+| B14 | Revisions: git hash, objects-changed count, rollback note, Roll back in the compare panel | V6 | S | API check |
+| B15 | Audit log: date, names, readable object, short request id, actor filter, custom range | V5 | S | B9 |
+| B16 | Certificates: layout and approval note | V8 | S | B9 |
+| B17 | Admin tenants: Members and Quotas columns, attribution | V12 | S | API check |
+| B18 | Wizard explainers and header | V11 | S | none |
+| B19 | Polish: kebab menus, dashed unavailable card, top-bar divider, avatar initials, Jump to problems | V15, V16, V19 | S | B1 |
+| B20 | Add axe to CI; decide on RHF/Zod and TanStack Table | Foundations | S | none |
+
+Suggested sequence: B1 first (everything else restyles on top of it), then B6, B7, B8, B9 in parallel, then B2, B3, B4, B5, B10.
