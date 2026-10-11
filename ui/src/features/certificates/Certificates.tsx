@@ -385,6 +385,7 @@ function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }
       open
       onOpenChange={(o) => !o && onClose()}
       title={t("Issue certificate")}
+      centered
       footer={
         <>
           <Button variant="ghost" className="ml-auto" onClick={onClose}>
