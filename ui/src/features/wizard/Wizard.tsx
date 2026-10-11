@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Combobox } from "@/components/ui/combobox";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Signpost } from "lucide-react";
 import { useState } from "react";
@@ -266,19 +267,15 @@ export function Wizard({ tenant }: { tenant: string }) {
                 ))}
               </fieldset>
               <Field label={t("SE group")} error={errors.se_group_id}>
-                <select
+                <Combobox
                   aria-label={t("SE group")}
-                  className={INPUT}
                   value={s.se_group_id}
-                  onChange={(e) => set({ se_group_id: e.target.value })}
-                >
-                  <option value="">{t("Choose…")}</option>
-                  {groups.data?.items.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.name} · {g.ha_mode.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => set({ se_group_id: v })}
+                  options={(groups.data?.items ?? []).map((g) => ({
+                    value: g.id,
+                    label: `${g.name} · ${g.ha_mode.toUpperCase()}`,
+                  }))}
+                />
               </Field>
             </section>
           )}
@@ -299,23 +296,19 @@ export function Wizard({ tenant }: { tenant: string }) {
                 />
                 <span className="flex-1 space-y-2">
                   <span className="font-medium">{t("Allocate from a VIP pool")}</span>
-                  <select
+                  <Combobox
                     aria-label={t("VIP pool")}
-                    className={INPUT}
                     value={s.vip_pool_id}
-                    onChange={(e) => {
-                      set({ vip_pool_id: e.target.value, vip: "" });
+                    onChange={(v) => {
+                      set({ vip_pool_id: v, vip: "" });
                       setSuggested(null);
-                      if (e.target.value) void suggest(e.target.value);
+                      if (v) void suggest(v);
                     }}
-                  >
-                    <option value="">{t("Choose…")}</option>
-                    {vipPools.data?.items.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    options={(vipPools.data?.items ?? []).map((p) => ({
+                      value: p.id,
+                      label: p.name,
+                    }))}
+                  />
                   {errors.vip_pool_id && (
                     <span role="alert" className="block text-xs text-status-down">
                       {errors.vip_pool_id}
@@ -638,19 +631,15 @@ export function Wizard({ tenant }: { tenant: string }) {
                 </div>
               )}
               <Field label={http ? t("Default pool") : t("Pool")} error={errors.pool_choice}>
-                <select
+                <Combobox
                   aria-label={t("Pool choice")}
-                  className={INPUT}
                   value={s.pool_choice}
-                  onChange={(e) => set({ pool_choice: e.target.value })}
-                >
-                  <option value="new">{t("New pool in this wizard")}</option>
-                  {pools.data?.items.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => set({ pool_choice: v })}
+                  options={[
+                    { value: "new", label: t("New pool in this wizard") },
+                    ...(pools.data?.items ?? []).map((p) => ({ value: p.id, label: p.name })),
+                  ]}
+                />
               </Field>
               {s.pool_choice === "new" && (
                 <div className="space-y-4 rounded-lg border bg-card p-4">
@@ -785,22 +774,22 @@ export function Wizard({ tenant }: { tenant: string }) {
               ) : (
                 <>
                   <Field label={t("Monitor")}>
-                    <select
+                    <Combobox
                       aria-label={t("Monitor choice")}
-                      className={INPUT}
                       value={s.monitor_choice}
-                      onChange={(e) => set({ monitor_choice: e.target.value })}
-                    >
-                      <option value="new">
-                        {udp ? t("Create a UDP monitor") : t("Create a monitor")}
-                      </option>
-                      <option value="">{t("No health check")}</option>
-                      {monitorOptions.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} · {m.type.toUpperCase()} · {m.interval_s} s
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => set({ monitor_choice: v })}
+                      options={[
+                        {
+                          value: "new",
+                          label: udp ? t("Create a UDP monitor") : t("Create a monitor"),
+                        },
+                        { value: "", label: t("No health check") },
+                        ...monitorOptions.map((m) => ({
+                          value: m.id,
+                          label: `${m.name} · ${m.type.toUpperCase()} · ${m.interval_s} s`,
+                        })),
+                      ]}
+                    />
                   </Field>
                   {udp && (
                     <p className="text-xs text-muted-foreground">

@@ -1,4 +1,5 @@
 /** SE groups: engines with live state and actions, Proxmox deploy, and the group's settings. */
+import { Combobox } from "@/components/ui/combobox";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
@@ -829,20 +830,16 @@ function Settings({ tenant, group }: { tenant: string; group: Group }) {
       <div className="grid gap-3 sm:grid-cols-[1fr_12rem_12rem]">
         <label className="space-y-1.5 text-sm font-medium">
           {t("Routing profile")}
-          <select
+          <Combobox
             aria-label={t("Routing profile")}
-            className={INPUT}
             disabled={!write.allowed}
             value={f.routing_profile_id}
-            onChange={(e) => setF({ ...f, routing_profile_id: e.target.value })}
-          >
-            <option value="">{t("None")}</option>
-            {profiles.data?.items.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setF({ ...f, routing_profile_id: v })}
+            options={[
+              { value: "", label: t("None") },
+              ...(profiles.data?.items ?? []).map((p) => ({ value: p.id, label: p.name })),
+            ]}
+          />
         </label>
         <label className="space-y-1.5 text-sm font-medium">
           {t("Max connections")}

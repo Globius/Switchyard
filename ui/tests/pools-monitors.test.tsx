@@ -1,4 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import { pick } from "./pick";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -290,7 +291,7 @@ describe("pools", () => {
     await waitFor(() => expect(n).toBeEnabled());
     await userEvent.click(n);
     await userEvent.type(await screen.findByLabelText("Name"), "docs-web");
-    await userEvent.selectOptions(screen.getByLabelText("Health monitor"), "m2");
+    await pick(screen.getByLabelText("Health monitor"), "m2");
     await userEvent.click(screen.getByLabelText("Backend TLS"));
     await userEvent.click(screen.getByLabelText("TLS verify"));
     await userEvent.selectOptions(screen.getByLabelText("Persistence type"), "source_ip");

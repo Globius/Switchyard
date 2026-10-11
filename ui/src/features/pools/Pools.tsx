@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Combobox } from "@/components/ui/combobox";
 import { useNavigate } from "@tanstack/react-router";
 import { Info, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -235,20 +236,19 @@ function PoolSheet({
           </label>
           <label className="block space-y-1.5 text-sm font-medium">
             {t("Health monitor")}
-            <select
+            <Combobox
               aria-label={t("Health monitor")}
-              className={INPUT}
               disabled={!write.allowed}
               value={f.health_monitor_id ?? ""}
-              onChange={(e) => set({ health_monitor_id: e.target.value || null })}
-            >
-              <option value="">{t("None")}</option>
-              {monitors.data?.items.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} · {m.type.toUpperCase()}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => set({ health_monitor_id: v || null })}
+              options={[
+                { value: "", label: t("None") },
+                ...(monitors.data?.items ?? []).map((m) => ({
+                  value: m.id,
+                  label: `${m.name} · ${m.type.toUpperCase()}`,
+                })),
+              ]}
+            />
           </label>
           <div className="space-y-1.5">
             <div className="text-sm font-medium">{t("Backend TLS")}</div>

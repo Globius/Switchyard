@@ -1,4 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import { pick } from "./pick";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -292,10 +293,7 @@ describe("create wizard", () => {
   it("walks all six steps and adds the ops to a new draft", async () => {
     const router = renderAt("/t/acme/new");
     await userEvent.type(await screen.findByLabelText("Name"), "taken");
-    await userEvent.selectOptions(await screen.findByLabelText("SE group"), "g1");
-    await waitFor(() =>
-      expect(screen.getByRole("option", { name: /se-edge-a/ })).toBeInTheDocument(),
-    );
+    await pick(await screen.findByLabelText("SE group"), "g1");
     await next();
     expect(
       await screen.findByText("A virtual service with this name already exists."),
@@ -304,7 +302,7 @@ describe("create wizard", () => {
     await userEvent.type(screen.getByLabelText("Name"), "docs-site");
     await next();
 
-    await userEvent.selectOptions(await screen.findByLabelText("VIP pool"), "vp1");
+    await pick(await screen.findByLabelText("VIP pool"), "vp1");
     await next();
     await screen.findByRole("heading", { name: "Ports and TLS" });
     expect(screen.getByText(/suggested/)).toHaveTextContent("192.0.2.77");
@@ -342,7 +340,7 @@ describe("create wizard", () => {
     renderAt("/t/acme/new");
     await userEvent.click(await screen.findByRole("radio", { name: "UDP" }));
     await userEvent.type(screen.getByLabelText("Name"), "wg");
-    await userEvent.selectOptions(screen.getByLabelText("SE group"), "g1");
+    await pick(screen.getByLabelText("SE group"), "g1");
     await next();
     await userEvent.click(await screen.findByRole("radio", { name: "Fixed address" }));
     await userEvent.type(screen.getByLabelText("VIP address"), "192.0.2.9");
@@ -357,8 +355,10 @@ describe("create wizard", () => {
     await userEvent.type(screen.getByLabelText("Member 1 address"), "10.2.0.1");
     await next();
     await screen.findByRole("heading", { name: "Health check" });
+    await userEvent.click(screen.getByRole("combobox", { name: "Monitor choice" }));
     expect(screen.getByRole("option", { name: /wg-udp/ })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /http-healthz/ })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
     expect(screen.queryByLabelText("Rise")).not.toBeInTheDocument();
   });
 
@@ -366,7 +366,7 @@ describe("create wizard", () => {
     role = "viewer";
     renderAt("/t/acme/new");
     await userEvent.type(await screen.findByLabelText("Name"), "x1");
-    await userEvent.selectOptions(await screen.findByLabelText("SE group"), "g1");
+    await pick(await screen.findByLabelText("SE group"), "g1");
     await next();
     await userEvent.click(await screen.findByRole("radio", { name: "Fixed address" }));
     await userEvent.type(screen.getByLabelText("VIP address"), "192.0.2.9");
@@ -401,7 +401,7 @@ describe("create wizard", () => {
     );
     renderAt("/t/acme/new");
     await userEvent.type(await screen.findByLabelText("Name"), "x1");
-    await userEvent.selectOptions(await screen.findByLabelText("SE group"), "g1");
+    await pick(await screen.findByLabelText("SE group"), "g1");
     await next();
     await userEvent.click(await screen.findByRole("radio", { name: "Fixed address" }));
     await userEvent.type(screen.getByLabelText("VIP address"), "192.0.2.9");
@@ -422,7 +422,7 @@ describe("create wizard", () => {
   it("exercises the port, route, member and monitor controls", async () => {
     renderAt("/t/acme/new");
     await userEvent.type(await screen.findByLabelText("Name"), "x1");
-    await userEvent.selectOptions(await screen.findByLabelText("SE group"), "g1");
+    await pick(await screen.findByLabelText("SE group"), "g1");
     await userEvent.click(screen.getByRole("radio", { name: "TCP" }));
     await userEvent.click(screen.getByRole("radio", { name: "HTTP" }));
     await next();
@@ -453,13 +453,13 @@ describe("create wizard", () => {
     await userEvent.type(screen.getByLabelText("Member 2 weight"), "3");
     await userEvent.type(screen.getByLabelText("Member 2 port"), "9000");
     await userEvent.click(screen.getAllByRole("button", { name: "Remove" }).at(-1)!);
-    await userEvent.selectOptions(screen.getByLabelText("Pool choice"), "new");
+    await pick(screen.getByLabelText("Pool choice"), "new");
     await next();
-    await userEvent.selectOptions(await screen.findByLabelText("Monitor choice"), "m1");
+    await pick(await screen.findByLabelText("Monitor choice"), "m1");
     expect(
       screen.getByText("Checks every 5 s. Up after 2 passing, down after 3 failing."),
     ).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText("Monitor choice"), "new");
+    await pick(screen.getByLabelText("Monitor choice"), "new");
     await userEvent.selectOptions(screen.getByLabelText("Monitor type"), "http");
     await userEvent.clear(screen.getByLabelText("Monitor path"));
     await userEvent.type(screen.getByLabelText("Monitor path"), "/up");
@@ -485,14 +485,14 @@ describe("create wizard", () => {
     );
     renderAt("/t/acme/new");
     await userEvent.type(await screen.findByLabelText("Name"), "x1");
-    await userEvent.selectOptions(await screen.findByLabelText("SE group"), "g1");
+    await pick(await screen.findByLabelText("SE group"), "g1");
     await next();
     await userEvent.click(await screen.findByRole("radio", { name: "Fixed address" }));
     await userEvent.type(screen.getByLabelText("VIP address"), "192.0.2.9");
     await next();
     await pickCertificate();
     await next();
-    await userEvent.selectOptions(await screen.findByLabelText("Pool choice"), "p1");
+    await pick(await screen.findByLabelText("Pool choice"), "p1");
     await next();
     expect(await screen.findByText(/keeps its own health check/)).toBeInTheDocument();
   });

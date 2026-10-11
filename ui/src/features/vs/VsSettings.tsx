@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Combobox } from "@/components/ui/combobox";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DropdownMenu } from "radix-ui";
 import { ApiError, api, unwrap } from "@/api/client";
@@ -251,26 +252,19 @@ function PortsSheet({
             <>
               <label className="flex items-center gap-1.5">
                 {t("Client CA")}
-                <select
+                <Combobox
                   aria-label={t("Port {n} client CA", { n: i + 1 })}
-                  className={cn(INPUT, "w-44")}
+                  className="w-44"
                   disabled={disabled}
                   value={p.client_ca_id ?? ""}
-                  onChange={(e) =>
-                    onChange(
-                      ports.map((x, j) =>
-                        j === i ? { ...x, client_ca_id: e.target.value || null } : x,
-                      ),
-                    )
+                  onChange={(v) =>
+                    onChange(ports.map((x, j) => (j === i ? { ...x, client_ca_id: v || null } : x)))
                   }
-                >
-                  <option value="">{t("None")}</option>
-                  {clientCas.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: t("None") },
+                    ...clientCas.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                />
               </label>
               {p.client_ca_id && (
                 <label className="flex items-center gap-1.5">
@@ -593,19 +587,16 @@ function SettingsForm({
             onRevert={revert("se_group_id")}
             errors={er("se_group_id")}
           >
-            <select
+            <Combobox
               aria-label={t("SE group")}
-              className={INPUT}
               disabled={disabled}
               value={form.se_group_id}
-              onChange={(e) => set("se_group_id", e.target.value)}
-            >
-              {groups.data?.items.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {groupLabel(g)}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => set("se_group_id", v)}
+              options={(groups.data?.items ?? []).map((g) => ({
+                value: g.id,
+                label: groupLabel(g),
+              }))}
+            />
           </Field>
           <Field
             label={t("Enabled")}
@@ -690,19 +681,17 @@ function SettingsForm({
                 />
                 <div className="flex-1">
                   <div className="font-medium">{t("Suggest from a VIP pool")}</div>
-                  <select
+                  <Combobox
                     aria-label={t("VIP pool")}
-                    className={cn(INPUT, "mt-1.5")}
+                    className="mt-1.5"
                     disabled={disabled || vipMode !== "pool"}
                     value={form.vip_pool_id ?? ""}
-                    onChange={(e) => set("vip_pool_id", e.target.value || null)}
-                  >
-                    {vipPools.data?.items.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => set("vip_pool_id", v || null)}
+                    options={(vipPools.data?.items ?? []).map((p) => ({
+                      value: p.id,
+                      label: p.name,
+                    }))}
+                  />
                   <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                     {t("fills in the lowest free address now; it isn't reserved")}
                     <Button
@@ -967,20 +956,14 @@ function SettingsForm({
                                 }
                               />
                             ) : (
-                              <select
+                              <Combobox
                                 aria-label={t("Route {n} pool", { n: i + 1 })}
-                                className={INPUT}
+                                placeholder={t("Pool")}
                                 disabled={disabled}
                                 value={r.pool_id ?? ""}
-                                onChange={(e) => upd({ pool_id: e.target.value || null })}
-                              >
-                                <option value="">{t("Pool")}</option>
-                                {poolOptions.map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                  </option>
-                                ))}
-                              </select>
+                                onChange={(v) => upd({ pool_id: v || null })}
+                                options={poolOptions.map((p) => ({ value: p.id, label: p.name }))}
+                              />
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -1059,20 +1042,17 @@ function SettingsForm({
               onRevert={revert("default_pool_id")}
               errors={er("default_pool_id")}
             >
-              <select
+              <Combobox
                 aria-label={t("Default pool")}
-                className={cn(INPUT, "max-w-md")}
+                className="max-w-md"
                 disabled={disabled}
                 value={form.default_pool_id ?? ""}
-                onChange={(e) => set("default_pool_id", e.target.value || null)}
-              >
-                <option value="">{t("None")}</option>
-                {poolOptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => set("default_pool_id", v || null)}
+                options={[
+                  { value: "", label: t("None") },
+                  ...poolOptions.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
               <p className="text-xs text-muted-foreground">{t("Used when no route matches.")}</p>
             </Field>
           </div>
@@ -1109,20 +1089,16 @@ function SettingsForm({
             onRevert={revert("allow_list_id")}
             errors={er("allow_list_id")}
           >
-            <select
+            <Combobox
               aria-label={t("Source allow list")}
-              className={INPUT}
               disabled={disabled}
               value={form.allow_list_id ?? ""}
-              onChange={(e) => set("allow_list_id", e.target.value || null)}
-            >
-              <option value="">{t("None")}</option>
-              {allowLists.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.name}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => set("allow_list_id", v || null)}
+              options={[
+                { value: "", label: t("None") },
+                ...allowLists.map((x) => ({ value: x.id, label: x.name })),
+              ]}
+            />
           </Field>
           <Field
             label={t("Enforce allow list")}
