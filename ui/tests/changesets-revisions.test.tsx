@@ -240,27 +240,26 @@ describe("revisions", () => {
 
   it("rolls back after confirming and opens the review", async () => {
     const router = renderAt("/t/acme/revisions");
-    const row = (await screen.findByText("Add member")).closest("li")!;
-    await waitFor(() =>
-      expect(within(row).getByRole("button", { name: "Roll back" })).toBeEnabled(),
-    );
-    await userEvent.click(within(row).getByRole("button", { name: "Roll back" }));
+    await screen.findByText("Add member");
+    await userEvent.click(screen.getByLabelText("Compare #40"));
+    await userEvent.click(screen.getByLabelText("Compare #41"));
+    const rb = await screen.findByRole("button", { name: "Roll back to #40" });
+    await waitFor(() => expect(rb).toBeEnabled());
+    await userEvent.click(rb);
     expect(await screen.findByText(/Nothing changes until you apply it/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Create rollback draft" }));
     await waitFor(() => expect(rollbackCalled).toBe(40));
     await waitFor(() => expect(router.state.location.pathname).toBe("/t/acme/review/cs-rb"));
   });
 
-  it("operators cannot roll back; the first revision has no button", async () => {
+  it("operators cannot roll back", async () => {
     role = "operator";
     renderAt("/t/acme/revisions");
-    const row = (await screen.findByText("Add member")).closest("li")!;
-    await waitFor(() =>
-      expect(within(row).getByRole("button", { name: "Roll back" })).toBeDisabled(),
-    );
-    expect(
-      within(screen.getByText("Move billing-db").closest("li")!).queryByRole("button"),
-    ).not.toBeInTheDocument();
+    await screen.findByText("Add member");
+    await userEvent.click(screen.getByLabelText("Compare #40"));
+    await userEvent.click(screen.getByLabelText("Compare #41"));
+    const rb = await screen.findByRole("button", { name: "Roll back to #40" });
+    await waitFor(() => expect(rb).toBeDisabled());
   });
 
   it("shows an empty state and a problem on failed rollback", async () => {
@@ -279,11 +278,12 @@ describe("revisions", () => {
       ),
     );
     renderAt("/t/acme/revisions");
-    const row = (await screen.findByText("Add member")).closest("li")!;
-    await waitFor(() =>
-      expect(within(row).getByRole("button", { name: "Roll back" })).toBeEnabled(),
-    );
-    await userEvent.click(within(row).getByRole("button", { name: "Roll back" }));
+    await screen.findByText("Add member");
+    await userEvent.click(screen.getByLabelText("Compare #40"));
+    await userEvent.click(screen.getByLabelText("Compare #41"));
+    const rb = await screen.findByRole("button", { name: "Roll back to #40" });
+    await waitFor(() => expect(rb).toBeEnabled());
+    await userEvent.click(rb);
     await userEvent.click(await screen.findByRole("button", { name: "Create rollback draft" }));
     expect(await screen.findByText("A rollback is already open.")).toBeInTheDocument();
   });
