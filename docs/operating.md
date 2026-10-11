@@ -18,7 +18,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_DATABASE_URL` | PostgreSQL URL |
 | `SWITCHYARD_PUBLIC_URL` | External URL; builds login redirect URIs and makes cookies `Secure` |
 | `SWITCHYARD_OPENBAO_ADDR`, `_ROLE_ID`, `_SECRET_ID`, `_CA` | OpenBao KV v2 with AppRole; without it secrets come from `SWITCHYARD_SECRET_*` variables (read-only, so no certificate storage) |
-| `SWITCHYARD_DATAPLANE_CA`, `_CERT`, `_KEY` | mTLS from the controller to Data Plane APIs and agents |
+| `SWITCHYARD_DATAPLANE_CA`, `_CERT`, `_KEY` | mTLS from the controller to Data Plane APIs and agents. With a bundle signing key the CA is required: the worker and API refuse to start without it unless `SWITCHYARD_INSECURE_AGENT=1` (lab only) |
 | `SWITCHYARD_BUNDLE_KEY_FILE` | Ed25519 key (PKCS#8 PEM) that signs agent bundles |
 | `SWITCHYARD_PKI_MOUNT`, `SWITCHYARD_PKI_ROLE` | OpenBao PKI role that signs agent certificates (defaults `pki`, `agents`) |
 | `SWITCHYARD_PVE_URL`, `_PVE_TOKEN_ID`, `_PVE_CA` | Proxmox API (token secret at reference `kv/proxmox/token`) |

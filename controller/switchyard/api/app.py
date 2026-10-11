@@ -633,6 +633,18 @@ EXPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
 CSV_COLUMNS = ("at", "tenant_id", "actor", "action", "object", "request_id", "diff")
 
 
+def _csv_safe(value: str) -> str:
+    r"""Defuse spreadsheet formulas: a cell starting with = + - @ or a control character is quoted.
+
+    Example:
+        >>> _csv_safe("=HYPERLINK(\"http://x\")")
+        '\'=HYPERLINK("http://x")'
+        >>> _csv_safe("user:alice")
+        'user:alice'
+    """
+    return "'" + value if value[:1] in {"=", "+", "-", "@", "\t", "\r"} else value
+
+
 async def _audit_export(
     open_session: Callable[[], Any], f: AuditFilters, fmt: str
 ) -> AsyncIterator[str]:
@@ -660,7 +672,9 @@ async def _audit_export(
             data = event.model_dump(mode="json")
             if fmt == "csv":
                 data["diff"] = json.dumps(data["diff"], sort_keys=True) if data["diff"] else ""
-                writer.writerow(["" if data[c] is None else data[c] for c in CSV_COLUMNS])
+                writer.writerow(
+                    ["" if data[c] is None else _csv_safe(str(data[c])) for c in CSV_COLUMNS]
+                )
             else:
                 out.write(json.dumps(data, sort_keys=True) + "\n")
         if out.tell():

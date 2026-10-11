@@ -244,6 +244,33 @@ def validate_secret_ref(value: str) -> str:
     return value
 
 
+#: Secret namespaces that belong to the platform; no tenant object may point into them.
+RESERVED_SECRET_PREFIXES = ("kv/proxmox/", "kv/platform/", "kv/system/", "kv/controller/")
+
+
+def check_secret_ref_scope(ref: str, tenant_name: str) -> str | None:
+    """Say why a tenant may not use ``ref``, or return ``None`` if it may.
+
+    A tenant's objects may point at its own namespace (``kv/tenants/<tenant>/...``) or at paths
+    outside the platform and tenant namespaces; never at another tenant's secrets or at the
+    platform's own (the controller would read them and hand them to the tenant's engines).
+
+    Example:
+        >>> check_secret_ref_scope("kv/tenants/acme/certs/x/01", "acme") is None
+        True
+        >>> check_secret_ref_scope("kv/tenants/globex/certs/x/01", "acme")
+        'kv/tenants/globex/certs/x/01 belongs to another tenant'
+        >>> check_secret_ref_scope("kv/proxmox/token", "acme")
+        'kv/proxmox/token is a platform secret'
+    """
+    if ref.startswith(RESERVED_SECRET_PREFIXES):
+        return f"{ref} is a platform secret"
+    parts = ref.split("/")
+    if ref.startswith("kv/tenants/") and (len(parts) < 3 or parts[2] != tenant_name):
+        return f"{ref} belongs to another tenant"
+    return None
+
+
 def validate_vip_in_network(vip: IPAddress, network: IPNetwork) -> None:
     """Raise ``ValueError`` unless ``vip`` is a usable host address inside ``network``.
 

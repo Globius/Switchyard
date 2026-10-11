@@ -179,7 +179,13 @@ def safe_return_to(value: str | None) -> str:
         >>> safe_return_to("https://evil.example") , safe_return_to("//evil.example")
         ('/', '/')
     """
-    if value and value.startswith("/") and not value.startswith("//") and "\\" not in value:
+    if (
+        value
+        and value.startswith("/")
+        and not value.startswith("//")
+        and "\\" not in value
+        and value.isprintable()  # browsers drop tabs and newlines inside URLs: "/\t/host"
+    ):
         return value
     return "/"
 

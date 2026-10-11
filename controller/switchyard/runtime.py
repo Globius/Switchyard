@@ -66,6 +66,16 @@ def directory(db: Databases) -> DbEngineDirectory:
     ca = os.environ.get("SWITCHYARD_DATAPLANE_CA")
     cert = os.environ.get("SWITCHYARD_DATAPLANE_CERT")
     key = os.environ.get("SWITCHYARD_DATAPLANE_KEY")
+    if (
+        bundle_signer() is not None
+        and not ca
+        and os.environ.get("SWITCHYARD_INSECURE_AGENT") != "1"
+    ):
+        raise RuntimeError(
+            "SWITCHYARD_BUNDLE_KEY_FILE is set but SWITCHYARD_DATAPLANE_CA is not: agent bundles "
+            "(which carry private keys) would travel without TLS. Set the CA, or "
+            "SWITCHYARD_INSECURE_AGENT=1 for a throwaway lab."
+        )
     tls = DataPlaneTls(
         ca_file=Path(ca) if ca else None,
         client_cert=(Path(cert), Path(key)) if cert and key else None,
