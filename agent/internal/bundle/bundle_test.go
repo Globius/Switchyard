@@ -38,7 +38,7 @@ func setup(t *testing.T) (*Applier, ed25519.PrivateKey, *fakeRunner) {
 	t.Helper()
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	r := &fakeRunner{fail: map[string]bool{}}
-	return &Applier{Root: t.TempDir(), PubKey: pub, Runner: r}, priv, r
+	return &Applier{Root: t.TempDir(), PubKey: pub, Runner: r, AllowUnbound: true}, priv, r
 }
 
 func request(t *testing.T, priv ed25519.PrivateKey, id string, files map[string]string) *pb.ApplyBundleRequest {
@@ -313,4 +313,62 @@ func contains(list []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func boundRequest(t *testing.T, priv ed25519.PrivateKey, id, engine string, seq uint64, files map[string]string) *pb.ApplyBundleRequest {
+	t.Helper()
+	b := &pb.Bundle{Id: id, Engine: engine, Sequence: seq}
+	for p, c := range files {
+		b.Files = append(b.Files, &pb.File{Path: p, Content: []byte(c)})
+	}
+	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &pb.ApplyBundleRequest{Bundle: raw, Signature: ed25519.Sign(priv, raw)}
+}
+
+func TestBundlesAreBoundToTheEngineAndMustBeNewer(t *testing.T) {
+	a, priv, _ := setup(t)
+	a.AllowUnbound = false
+	a.Engine = "se-a"
+	files := map[string]string{"frr/frr.conf": "one"}
+	ctx := context.Background()
+
+	if resp := a.Apply(ctx, boundRequest(t, priv, "b1", "se-a", 100, files)); !resp.Ok {
+		t.Fatalf("a bound bundle was refused: %s", resp.Error)
+	}
+	// The same bundle again, and an older one, are replays.
+	for _, seq := range []uint64{100, 99, 1} {
+		resp := a.Apply(ctx, boundRequest(t, priv, "old", "se-a", seq, map[string]string{"frr/frr.conf": "old"}))
+		if resp.Ok || !strings.Contains(resp.Error, "not newer") {
+			t.Errorf("sequence %d: replay accepted or wrong error: %+v", seq, resp)
+		}
+	}
+	if got := read(t, a, "frr/frr.conf"); got != "one" {
+		t.Errorf("a refused bundle changed the files: %q", got)
+	}
+	// A bundle for another engine is refused even with a fresh sequence.
+	resp := a.Apply(ctx, boundRequest(t, priv, "b2", "se-b", 200, files))
+	if resp.Ok || !strings.Contains(resp.Error, "for engine") {
+		t.Errorf("a bundle for another engine was accepted: %+v", resp)
+	}
+	// Unbound bundles are refused unless explicitly allowed.
+	for _, req := range []*pb.ApplyBundleRequest{
+		boundRequest(t, priv, "b3", "", 300, files),
+		boundRequest(t, priv, "b4", "se-a", 0, files),
+		request(t, priv, "b5", files),
+	} {
+		if resp := a.Apply(ctx, req); resp.Ok {
+			t.Errorf("an unbound bundle was accepted: %+v", resp)
+		}
+	}
+	// A newer sequence works, and the sequence survives a restart (it is on disk).
+	if resp := a.Apply(ctx, boundRequest(t, priv, "b6", "se-a", 101, map[string]string{"frr/frr.conf": "two"})); !resp.Ok {
+		t.Fatalf("a newer bundle was refused: %s", resp.Error)
+	}
+	restarted := &Applier{Root: a.Root, PubKey: a.PubKey, Runner: a.Runner, Engine: "se-a"}
+	if resp := restarted.Apply(ctx, boundRequest(t, priv, "b7", "se-a", 101, files)); resp.Ok {
+		t.Error("a replay after a restart was accepted")
+	}
 }

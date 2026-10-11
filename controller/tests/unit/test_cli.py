@@ -73,3 +73,21 @@ def test_backoff_grows_and_is_capped() -> None:
         240,
         900,
     ]
+
+
+def test_signed_bundles_name_the_engine_and_count_up() -> None:
+    from switchyard.adapters.agent import BundleSigner
+    from switchyard.adapters.agentpb import agent_pb2
+
+    signer = BundleSigner.generate()
+    first, _ = signer.sign("b", {"frr/frr.conf": "x"}, "se-a")
+    second, _ = signer.sign("b", {"frr/frr.conf": "x"}, "se-a")
+    one, two = agent_pb2.Bundle(), agent_pb2.Bundle()
+    one.ParseFromString(first)
+    two.ParseFromString(second)
+    assert one.engine == two.engine == "se-a"
+    assert 0 < one.sequence < two.sequence
+    fixed, _ = signer.sign("b", {}, "se-a", sequence=7)
+    three = agent_pb2.Bundle()
+    three.ParseFromString(fixed)
+    assert three.sequence == 7

@@ -5,8 +5,8 @@ uses it, the render templates, and dependencies. Method: reading the code agains
 construction, subprocess, deserialisation, outbound URLs, logging), and the existing test suites. The Go agent source and the UI were
 not reviewed here, and no live system was attacked. Severity: **High** (cross-tenant or credential exposure), **Medium**, **Low**.
 
-Summary: 1 High and 6 Medium findings, all fixed with tests; 2 Low fixed; 8 Low or informational findings stay open (the agent bundle
-sequence, agent client-certificate names, and deployment settings). No known vulnerable dependency (`pip-audit`, 2026-10-11). The Go agent and
+Summary: 1 High and 6 Medium findings, all fixed with tests; 4 Low fixed; 6 Low or informational findings stay open (deployment settings and
+by-design behavior). No known vulnerable dependency (`pip-audit`, 2026-10-11). The Go agent and
 the SAML and OIDC validation were reviewed in a second pass (see below).
 
 ## Fixed in this review (tests in `tests/unit/test_security_fixes.py` and `tests/integration/test_api.py`)
@@ -27,13 +27,13 @@ the SAML and OIDC validation were reviewed in a second pass (see below).
 | O3 | Medium | **Secret namespaces were a convention.** | Tenant objects may name `kv/tenants/<own>/` or `SWITCHYARD_SHARED_SECRET_PREFIXES` only (`open` policy for labs), enforced in the validator and at engine registration. `syctl openbao-policy` prints the matching OpenBao policy for the controller token. |
 | A1 | Medium | **Agent enrolment accepted `http://`.** The answer carries the CA, the bundle signing key and the renewal token, so anyone on the path could take over the agent's trust. | `sy-agent enroll/renew` and `enroll.Run` require https; `--insecure-plain-http` exists for throwaway labs. |
 | A2 | Medium | **Client CA revocation lists were refused by the agent** (a bug in my mTLS feature, found in this review): only `*.pem` files were manageable under `certs/`. | `certs/` now manages `*.pem` and `*.crl` (Go test added). |
+| A3 | Low | **Bundles were not bound to an engine or a sequence**: a captured, correctly signed older bundle could be sent again (rollback), or sent to another engine. | The signed bundle names the engine and carries an increasing sequence; the agent refuses other engines and sequences at or below the last applied one (kept on disk). Unbound bundles need `-allow-unbound-bundles` (ADR 0074). |
+| A4 | Low | **Any certificate from the agents' CA could call the agent API** (`GetStatus`, `ProbeMember`). | `sy-agent -controller-cn <name>` limits callers to the controller's client certificate name; unset keeps the old behavior and logs a warning. |
 
 ## Open findings
 
 | # | Sev | Finding | Recommendation |
 | --- | --- | --- | --- |
-| A3 | Low | **Bundles are not bound to an engine or a sequence.** A captured, correctly signed older bundle can be sent again (rollback) by anyone who holds a client certificate the agent accepts, and a bundle signed for one engine applies on another. | Put the engine name and a monotonically increasing sequence in the signed bundle; the agent refuses lower sequences. Needs a proto change (`switchyard/agent/v1`). |
-| A4 | Low | **Any certificate from the agents' CA can call the agent API.** `GetStatus` and `ProbeMember` (limited to configured members) do not need the bundle signature, and agents' own certificates come from the same CA. | Verify the client certificate's name (the controller's) or use a separate CA for the controller's client certificate. |
 | O4 | Low | **Unauthenticated API documentation and OpenAPI** (`/api/v1/docs`, `/openapi.json`). | Acceptable internally; restrict at the proxy otherwise. |
 | O5 | Low | **`/metrics` and service discovery expose management addresses, tenant ids and names** to the holder of `SWITCHYARD_METRICS_TOKEN` (constant-time compare; it opens nothing else). | Rotate it with Prometheus' credentials; one token per scraper if needed. |
 | O6 | Low | **A system administrator can act in any tenant.** By design; audited under their name. | Alert on `system-admin` writes inside tenants. |

@@ -9,6 +9,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
+	"errors"
 	"flag"
 	"log"
 	"net"
@@ -45,6 +47,8 @@ func main() {
 	pubFile := flag.String("bundle-key", "/etc/switchyard/agent/bundle.pub", "base64 Ed25519 public key that signs bundles")
 	stateDir := flag.String("state-dir", "/run/switchyard", "directory with vrrp-<name>.state files")
 	healthURL := flag.String("health-url", "http://127.0.0.1:8404/healthz", "local HAProxy health endpoint")
+	allowUnbound := flag.Bool("allow-unbound-bundles", false, "accept bundles without an engine name and sequence (controllers older than ADR 0074; they can be replayed)")
+	controllerCN := flag.String("controller-cn", "", "comma-separated certificate names allowed to call the agent (the controller's client certificate); empty allows any certificate the CA signed")
 	failures := flag.Int("withdraw-after", 3, "consecutive failed health checks before BGP prefixes are withdrawn")
 	flag.Parse()
 
@@ -52,13 +56,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("bundle key: %v", err)
 	}
-	tlsConfig, err := serverTLS(*certFile, *keyFile, *caFile)
+	tlsConfig, err := serverTLS(*certFile, *keyFile, *caFile, splitNames(*controllerCN))
 	if err != nil {
 		log.Fatalf("tls: %v", err)
 	}
+	if *controllerCN == "" {
+		log.Printf("warning: -controller-cn is not set; any certificate signed by the CA may call this agent")
+	}
+	engineName := certCommonName(*certFile)
 
 	run := runner.Default()
-	applier := &bundle.Applier{Root: *root, PubKey: pub, Runner: run}
+	applier := &bundle.Applier{Root: *root, PubKey: pub, Runner: run, Engine: engineName, AllowUnbound: *allowUnbound}
 	client := &http.Client{Timeout: 2 * time.Second}
 	wd := &watchdog.Watchdog{
 		Runner:    run,
@@ -131,7 +139,57 @@ func loadPublicKey(path string) (ed25519.PublicKey, error) {
 	return ed25519.PublicKey(key), nil
 }
 
-func serverTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
+// splitNames turns "a, b" into ["a", "b"] and "" into nil.
+func splitNames(list string) []string {
+	var out []string
+	for _, part := range strings.Split(list, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+// certCommonName returns the common name of the first certificate in a PEM file, or "" (the engine
+// name the controller put in this agent's certificate).
+func certCommonName(path string) string {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	block, _ := pem.Decode(raw)
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	return cert.Subject.CommonName
+}
+
+// allowedClient checks the verified client certificate against the allowed names (CN or DNS SAN).
+func allowedClient(allowed []string) func([][]byte, [][]*x509.Certificate) error {
+	return func(_ [][]byte, chains [][]*x509.Certificate) error {
+		if len(allowed) == 0 {
+			return nil
+		}
+		for _, chain := range chains {
+			leaf := chain[0]
+			names := append([]string{leaf.Subject.CommonName}, leaf.DNSNames...)
+			for _, name := range names {
+				for _, ok := range allowed {
+					if name == ok {
+						return nil
+					}
+				}
+			}
+		}
+		return errors.New("client certificate name is not allowed to call this agent")
+	}
+}
+
+func serverTLS(certFile, keyFile, caFile string, allowed []string) (*tls.Config, error) {
 	reloader := &enroll.Reloader{CertPath: certFile, KeyPath: keyFile}
 	if _, err := reloader.GetCertificate(nil); err != nil {
 		return nil, err
@@ -149,6 +207,8 @@ func serverTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
 		ClientCAs:      pool,
 		ClientAuth:     tls.RequireAndVerifyClientCert,
 		MinVersion:     tls.VersionTLS13,
+		// Runs after the chain was verified against the CA: only the named certificates may call.
+		VerifyPeerCertificate: allowedClient(allowed),
 	}, nil
 }
 

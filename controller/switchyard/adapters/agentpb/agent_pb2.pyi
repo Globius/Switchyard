@@ -51,12 +51,16 @@ class File(_message.Message):
     def __init__(self, path: _Optional[str] = ..., content: _Optional[bytes] = ...) -> None: ...
 
 class Bundle(_message.Message):
-    __slots__ = ("id", "files")
+    __slots__ = ("id", "files", "engine", "sequence")
     ID_FIELD_NUMBER: _ClassVar[int]
     FILES_FIELD_NUMBER: _ClassVar[int]
+    ENGINE_FIELD_NUMBER: _ClassVar[int]
+    SEQUENCE_FIELD_NUMBER: _ClassVar[int]
     id: str
     files: _containers.RepeatedCompositeFieldContainer[File]
-    def __init__(self, id: _Optional[str] = ..., files: _Optional[_Iterable[_Union[File, _Mapping]]] = ...) -> None: ...
+    engine: str
+    sequence: int
+    def __init__(self, id: _Optional[str] = ..., files: _Optional[_Iterable[_Union[File, _Mapping]]] = ..., engine: _Optional[str] = ..., sequence: _Optional[int] = ...) -> None: ...
 
 class ApplyBundleRequest(_message.Message):
     __slots__ = ("bundle", "signature")

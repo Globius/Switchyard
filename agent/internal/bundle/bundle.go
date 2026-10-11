@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -90,6 +91,46 @@ type Applier struct {
 	Root   string
 	PubKey ed25519.PublicKey
 	Runner runner.Runner
+	// Engine is the name this agent serves (its certificate name). When set, a bundle signed for
+	// another engine is refused.
+	Engine string
+	// AllowUnbound accepts bundles without an engine or a sequence, from controllers older than
+	// those fields. Off by default: an unbound bundle can be replayed or sent to another engine.
+	AllowUnbound bool
+}
+
+const seqFile = "agent/bundle-seq"
+
+// lastSequence returns the sequence of the last applied bundle, or 0.
+func (a *Applier) lastSequence() uint64 {
+	data, ok := a.read(seqFile)
+	if !ok {
+		return 0
+	}
+	n, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+// checkBinding refuses a bundle that is for another engine or not newer than the last one applied.
+func (a *Applier) checkBinding(b *pb.Bundle) error {
+	if !a.AllowUnbound {
+		if a.Engine != "" && b.Engine == "" {
+			return errors.New("bundle is not bound to an engine")
+		}
+		if b.Sequence == 0 {
+			return errors.New("bundle has no sequence number")
+		}
+	}
+	if a.Engine != "" && b.Engine != "" && b.Engine != a.Engine {
+		return fmt.Errorf("bundle is for engine %q, not %q", b.Engine, a.Engine)
+	}
+	if b.Sequence != 0 && b.Sequence <= a.lastSequence() {
+		return fmt.Errorf("bundle sequence %d is not newer than the last applied (%d)", b.Sequence, a.lastSequence())
+	}
+	return nil
 }
 
 // Hash returns the hex SHA-256 of data.
@@ -241,6 +282,9 @@ func (a *Applier) Apply(ctx context.Context, req *pb.ApplyBundleRequest) *pb.App
 	if err := proto.Unmarshal(req.Bundle, &b); err != nil {
 		return fail("malformed bundle: %v", err)
 	}
+	if err := a.checkBinding(&b); err != nil {
+		return fail("%v", err)
+	}
 	if len(b.Files) > maxFiles {
 		return fail("too many files (%d)", len(b.Files))
 	}
@@ -324,6 +368,11 @@ func (a *Applier) Apply(ctx context.Context, req *pb.ApplyBundleRequest) *pb.App
 	}
 	if err := a.write("agent/bundle-id", []byte(b.Id)); err != nil {
 		resp.Error = fmt.Sprintf("bundle applied but its id was not saved: %v", err)
+	}
+	if b.Sequence != 0 {
+		if err := a.write(seqFile, []byte(strconv.FormatUint(b.Sequence, 10))); err != nil && resp.Error == "" {
+			resp.Error = fmt.Sprintf("bundle applied but its sequence was not saved: %v", err)
+		}
 	}
 	return resp
 }
