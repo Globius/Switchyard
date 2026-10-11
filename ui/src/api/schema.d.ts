@@ -2211,6 +2211,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/se-groups/{group}/reapply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-apply the desired state to an SE group (drift repair)
+         * @description Pushes the tenant's current desired state to every engine of the group again, canary first, to put engines that drifted back to what the database says. It makes no revision and changes no desired state. Drift is never corrected on its own; this is the explicit action. Returns the job (`reapply_se_group`); its result has `ok`, `revision_number` (the revision that was pushed) and `error`. Requires `tenant-admin`, because it overwrites what the engines run now. `404` if the group does not exist.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["reapply_group_api_v1_tenants__t__se_groups__group__reapply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/se-groups/{object_id}": {
         parameters: {
             query?: never;
@@ -4773,6 +4795,9 @@ export interface components {
          *     Attributes:
          *         APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,
          *             commit). Result: `ApplyJobResult`.
+         *         REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift
+         *             (stages lock, render, validate, canary, rollout; no revision). Result:
+         *             `{ok, se_group_id, se_group, revision_number, error, details}`.
          *         DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.
          *         RETIRE_ENGINE: Destroys an engine's VM and removes its record.
          *         APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.
@@ -4785,7 +4810,7 @@ export interface components {
          *         GC: Scheduled housekeeping.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -19299,6 +19324,84 @@ export interface operations {
             };
             /** @description The tenant or object does not exist. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    reapply_group_api_v1_tenants__t__se_groups__group__reapply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description SE group id. */
+                group: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job_id": "0192f3a0-0000-7000-8000-000000000021"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

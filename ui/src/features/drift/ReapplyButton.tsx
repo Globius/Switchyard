@@ -1,6 +1,9 @@
-/** "Re-apply revision #N": opens a rollback draft to the live revision so a drifted engine can be put back through review. */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+/**
+ * "Re-apply": pushes the desired state to a drifted SE group again. It runs as a job
+ * (`reapply_se_group`), creates no revision and no draft, and needs tenant-admin.
+ */
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
@@ -10,40 +13,28 @@ import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
 import { t } from "@/lib/i18n";
 
-/** The newest revision number, or undefined while loading or when there is none. */
-export function useLiveRevision(tenant: string): number | undefined {
-  const q = useQuery({
-    queryKey: ["t", tenant, "revisions", { live: true }],
-    queryFn: async () =>
-      unwrap(
-        await api.GET("/api/v1/tenants/{t}/revisions", {
-          params: { path: { t: tenant }, query: { limit: 1 } },
-        }),
-      ),
-  });
-  return q.data?.items[0]?.number;
-}
-
-export function ReapplyButton({ tenant, engine }: { tenant: string; engine?: string }) {
-  const rev = useLiveRevision(tenant);
+export function ReapplyButton({
+  tenant,
+  groupId,
+  engine,
+}: {
+  tenant: string;
+  groupId: string;
+  engine?: string;
+}) {
   const can = useCan(tenant);
-  const allowed = can("rollback", "revision");
-  const navigate = useNavigate();
+  const allowed = can("manage", "engine");
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const go = useMutation({
     mutationFn: async () =>
       unwrap(
-        await api.POST("/api/v1/tenants/{t}/revisions/{n}/rollback", {
-          params: { path: { t: tenant, n: rev! } },
+        await api.POST("/api/v1/tenants/{t}/se-groups/{group}/reapply", {
+          params: { path: { t: tenant, group: groupId } },
         }),
       ),
-    onSuccess: async (cs) => {
-      await qc.invalidateQueries({ queryKey: ["t", tenant] });
-      void navigate({ to: "/t/$tenant/review/$cs", params: { tenant, cs: cs.id } });
-    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["t", tenant] }),
   });
-  if (rev === undefined) return null;
   return (
     <>
       <Tip label={allowed.reason}>
@@ -53,14 +44,22 @@ export function ReapplyButton({ tenant, engine }: { tenant: string; engine?: str
           disabled={!allowed.allowed || go.isPending}
           onClick={() => setConfirm(true)}
         >
-          {t("Re-apply revision #{n}", { n: rev })}
+          {t("Re-apply desired state")}
         </Button>
       </Tip>
+      {go.isSuccess && (
+        <p role="status" className="text-xs">
+          {t("Re-apply started.")}{" "}
+          <Link to="/t/$tenant/jobs" params={{ tenant }} className="text-primary hover:underline">
+            {t("Open job")}
+          </Link>
+        </p>
+      )}
       <ConfirmDialog
         open={confirm}
         onOpenChange={setConfirm}
-        title={t("Re-apply revision #{n}?", { n: rev })}
-        confirmLabel={t("Open draft")}
+        title={t("Re-apply the desired state?")}
+        confirmLabel={t("Re-apply")}
         busy={go.isPending}
         onConfirm={() => {
           setConfirm(false);
@@ -70,16 +69,15 @@ export function ReapplyButton({ tenant, engine }: { tenant: string; engine?: str
         <p>
           {engine
             ? t(
-                "Opens a draft that puts {engine} and every other engine back to what revision #{n} rendered.",
+                "Pushes the current desired state to {engine} and the rest of its SE group again.",
                 {
                   engine,
-                  n: rev,
                 },
               )
-            : t("Opens a draft at revision #{n} so engines that drifted can be put back.", {
-                n: rev,
-              })}{" "}
-          {t("Nothing changes until you apply it, with the usual canary and approval steps.")}
+            : t("Pushes the current desired state to every engine of the SE group again.")}{" "}
+          {t(
+            "It runs as a job and creates no revision and no draft. Drift is only reported until you do this.",
+          )}
         </p>
       </ConfirmDialog>
       {go.error && <ErrorState error={go.error} />}

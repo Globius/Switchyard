@@ -364,7 +364,7 @@ function EnginesCard({
           <p className="mt-1 mb-2 text-xs text-muted-foreground">
             {t("Reported only; nothing is changed automatically.")}
           </p>
-          <ReapplyButton tenant={tenant} engine={e.name} />
+          <ReapplyButton tenant={tenant} groupId={group.id} engine={e.name} />
         </div>
       ))}
       {act.error && <ErrorState error={act.error} />}

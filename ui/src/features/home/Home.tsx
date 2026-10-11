@@ -269,7 +269,7 @@ export function Home({ tenant }: { tenant: string }) {
                         "Running config differs from the last revision. Reported only; nothing is changed automatically.",
                       )}
                     </p>
-                    <ReapplyButton tenant={tenant} engine={e.engine} />
+                    <ReapplyButton tenant={tenant} groupId={e.se_group_id} engine={e.engine} />
                   </li>
                 ))}
               </ul>
