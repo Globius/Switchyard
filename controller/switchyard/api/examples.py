@@ -281,6 +281,45 @@ ENGINE_READ = {
     "vmid": 9101,
     "agent_enrolled": True,
     "agent_cert_serial": "3f2a9c",
+    "host_online": True,
+}
+PLACEMENT = {
+    "available": True,
+    "reason": None,
+    "nodes": [
+        {
+            "name": "pve1",
+            "online": True,
+            "cpu": 0.12,
+            "max_cpu": 32,
+            "mem_used": 68719476736,
+            "mem_total": 274877906944,
+            "uptime_s": 1209600,
+            "storage": [
+                {
+                    "name": "local-lvm",
+                    "kind": "lvmthin",
+                    "active": True,
+                    "content": ["images", "rootdir"],
+                    "total": 1099511627776,
+                    "used": 219902325555,
+                    "available": 879609302221,
+                }
+            ],
+            "engines": [{"id": ENGINE, "name": "edge-1", "vmid": 9101, "state": "enabled"}],
+        },
+        {
+            "name": "pve2",
+            "online": False,
+            "cpu": None,
+            "max_cpu": None,
+            "mem_used": None,
+            "mem_total": None,
+            "uptime_s": None,
+            "storage": [],
+            "engines": [],
+        },
+    ],
 }
 VIRTUAL_SERVICE_STATUS = {
     "id": "00000000-0000-0000-0000-0000000000d1",

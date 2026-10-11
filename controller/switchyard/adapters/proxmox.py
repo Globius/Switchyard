@@ -66,6 +66,43 @@ class VmInfo:
 
 
 @dataclass(frozen=True)
+class NodeInfo:
+    """A Proxmox cluster node.
+
+    Attributes:
+        name: Node name.
+        online: True when the cluster reports the node ``online``.
+        cpu: CPU load as a fraction (0 to 1), when the node is online.
+        max_cpu: Number of CPUs.
+        mem_used: Memory in use, bytes.
+        mem_total: Memory installed, bytes.
+        uptime_s: Seconds since boot.
+    """
+
+    name: str
+    online: bool
+    cpu: float | None = None
+    max_cpu: int | None = None
+    mem_used: int | None = None
+    mem_total: int | None = None
+    uptime_s: int | None = None
+
+
+@dataclass(frozen=True)
+class StorageInfo:
+    """A storage as one node sees it (bytes)."""
+
+    node: str
+    name: str
+    kind: str
+    active: bool
+    content: tuple[str, ...]
+    total: int | None = None
+    used: int | None = None
+    available: int | None = None
+
+
+@dataclass(frozen=True)
 class SdnSubnet:
     """A subnet of a VNet."""
 
@@ -124,6 +161,14 @@ class Proxmox(Protocol):
 
     async def get_vm(self, node: str, vmid: int) -> VmInfo | None:
         """Return the VM, or ``None`` if it does not exist."""
+        ...
+
+    async def list_nodes(self) -> list[NodeInfo]:
+        """Return the cluster nodes with their state and load."""
+        ...
+
+    async def list_storage(self, node: str) -> list[StorageInfo]:
+        """Return the storages of one node."""
         ...
 
     async def close(self) -> None:
@@ -314,6 +359,47 @@ class HttpProxmox:
             return None
         return VmInfo(vmid, node, str(data.get("name", "")), str(data.get("status", "unknown")))
 
+    async def list_nodes(self) -> list[NodeInfo]:
+        """Return the cluster nodes (``GET /nodes``), sorted by name."""
+        data = await self._call("GET", "/nodes") or []
+        return sorted(
+            (
+                NodeInfo(
+                    name=str(n["node"]),
+                    online=n.get("status") == "online",
+                    cpu=float(n["cpu"]) if n.get("cpu") is not None else None,
+                    max_cpu=int(n["maxcpu"]) if n.get("maxcpu") is not None else None,
+                    mem_used=int(n["mem"]) if n.get("mem") is not None else None,
+                    mem_total=int(n["maxmem"]) if n.get("maxmem") is not None else None,
+                    uptime_s=int(n["uptime"]) if n.get("uptime") is not None else None,
+                )
+                for n in data
+            ),
+            key=lambda n: n.name,
+        )
+
+    async def list_storage(self, node: str) -> list[StorageInfo]:
+        """Return one node's storages (``GET /nodes/{node}/storage``), sorted by name."""
+        data = await self._call("GET", f"/nodes/{node}/storage") or []
+        return sorted(
+            (
+                StorageInfo(
+                    node=node,
+                    name=str(s["storage"]),
+                    kind=str(s.get("type", "")),
+                    active=bool(s.get("active", 0)),
+                    content=tuple(sorted(str(s.get("content", "")).split(",")))
+                    if s.get("content")
+                    else (),
+                    total=int(s["total"]) if s.get("total") is not None else None,
+                    used=int(s["used"]) if s.get("used") is not None else None,
+                    available=int(s["avail"]) if s.get("avail") is not None else None,
+                )
+                for s in data
+            ),
+            key=lambda s: s.name,
+        )
+
     async def close(self) -> None:
         """Close the HTTP client."""
         await self._http.aclose()
@@ -336,6 +422,8 @@ class FakeProxmox:
     calls: list[tuple[str, str]] = field(default_factory=list)
     fail_on: set[str] = field(default_factory=set)
     sdn_applied: int = 0
+    nodes: list[NodeInfo] = field(default_factory=list)
+    storages: dict[str, list[StorageInfo]] = field(default_factory=dict)
     _next: int = 100
 
     def _do(self, op: str, arg: str = "") -> None:
@@ -420,6 +508,16 @@ class FakeProxmox:
         """Remove the VM."""
         self._do("destroy_vm", str(vmid))
         self.vms.pop(vmid, None)
+
+    async def list_nodes(self) -> list[NodeInfo]:
+        """Return the configured nodes."""
+        self._do("list_nodes")
+        return sorted(self.nodes, key=lambda n: n.name)
+
+    async def list_storage(self, node: str) -> list[StorageInfo]:
+        """Return the configured storages of ``node``."""
+        self._do("list_storage", node)
+        return sorted(self.storages.get(node, []), key=lambda s: s.name)
 
     async def get_vm(self, node: str, vmid: int) -> VmInfo | None:
         """Return the VM if it exists."""

@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from switchyard.adapters.agent import AgentError
 from switchyard.adapters.pki import PkiError
+from switchyard.adapters.proxmox import Proxmox
 from switchyard.adapters.secrets import SecretsReader, SecretsWriter
 from switchyard.adapters.telemetry import Telemetry, TelemetryError
 from switchyard.api import docs_meta, job_models, overview
@@ -82,6 +83,7 @@ from switchyard.api.schemas import (
     OpsIn,
     Page,
     PermissionMatrix,
+    PlacementRead,
     ProblemOut,
     ProtocolRulesRead,
     ReasonIn,
@@ -138,6 +140,7 @@ from switchyard.services.changesets import (
 from switchyard.services.context import Databases, Principal
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
+from switchyard.services.hosts import HostService
 from switchyard.services.identity_providers import (
     IdentityProviderRecord,
     IdentityProviderService,
@@ -190,6 +193,7 @@ class ApiServices:
     sessions: SessionService | None = None
     identity_providers: IdentityProviderService | None = None
     break_glass: BreakGlassService | None = None
+    hosts: HostService | None = None
 
 
 def build_services(
@@ -203,6 +207,7 @@ def build_services(
     *,
     identity_providers: IdentityProviderService | None = None,
     break_glass: BreakGlassService | None = None,
+    proxmox: Proxmox | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles.
 
@@ -224,12 +229,13 @@ def build_services(
             writer,
             forced=sessions.break_glass_enabled,
         )
+    engines = EngineService(db)
     return ApiServices(
         db=db,
         tenants=TenantService(db),
         tokens=TokenService(db),
         change_sets=ChangeSetService(db),
-        engines=EngineService(db),
+        engines=engines,
         members=MemberService(db, directory),
         status=StatusService(db, directory, secrets),
         infra=InfraJobs(db),
@@ -244,6 +250,7 @@ def build_services(
         monitor_tests=MonitorTestService(db, directory),
         identity_providers=identity_providers,
         break_glass=break_glass,
+        hosts=HostService(db, engines, proxmox),
     )
 
 
@@ -433,7 +440,7 @@ def _ok(
     return out | (extra or {})
 
 
-def _engine_json(d: EngineDetail) -> dict[str, Any]:
+def _engine_json(d: EngineDetail, online: dict[str, bool]) -> dict[str, Any]:
     e = d.record
     return {
         "id": str(e.id),
@@ -447,6 +454,7 @@ def _engine_json(d: EngineDetail) -> dict[str, Any]:
         "vmid": d.vmid,
         "agent_enrolled": d.agent_cert_serial is not None,
         "agent_cert_serial": d.agent_cert_serial,
+        "host_online": online.get(d.pve_node) if d.pve_node else None,
     }
 
 
@@ -2115,9 +2123,44 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
     async def list_engines(
         group: UUID, tenant: Tenant, who: Who, svc: Services
     ) -> list[dict[str, Any]]:
+        online = await svc.hosts.online_by_node() if svc.hosts else {}
         return [
-            _engine_json(d) for d in await svc.engines.describe(who, tenant.id, se_group_id=group)
+            _engine_json(d, online)
+            for d in await svc.engines.describe(who, tenant.id, se_group_id=group)
         ]
+
+    @router.get(
+        "/tenants/{t}/se-groups/{group}/placement",
+        tags=["engines"],
+        summary="Where an SE group's engines run on Proxmox",
+        description=(
+            "The Proxmox cluster nodes with online state, load, memory and storage, and the "
+            "group's engines on each: the data of the Placement card. Read from Proxmox and "
+            "cached for 15 seconds. When Proxmox is not configured or not reachable the answer is "
+            "`available: false` with the nodes the engines claim to run on and `online: null`. "
+            "Requires any role in the tenant."
+        ),
+        response_model=PlacementRead,
+        responses=_ok(ex.PLACEMENT),
+    )
+    async def se_group_placement(
+        group: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        if svc.hosts is None:
+            raise ApiError(503, "host information is not available in this deployment")
+        p = await svc.hosts.placement(who, tenant.id, group)
+        return {
+            "available": p.available,
+            "reason": p.reason,
+            "nodes": [
+                n.__dict__
+                | {
+                    "storage": [s.__dict__ | {"content": list(s.content)} for s in n.storage],
+                    "engines": [e.__dict__ for e in n.engines],
+                }
+                for n in p.nodes
+            ],
+        }
 
     @router.get(
         "/tenants/{t}/engines",
@@ -2138,8 +2181,9 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         se_group: UUID | None = None,
         state: EngineState | None = None,
     ) -> list[dict[str, Any]]:
+        online = await svc.hosts.online_by_node() if svc.hosts else {}
         return [
-            _engine_json(d)
+            _engine_json(d, online)
             for d in await svc.engines.describe(who, tenant.id, se_group_id=se_group, state=state)
         ]
 
@@ -2155,7 +2199,8 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         found = await svc.engines.describe(who, tenant.id, engine_id=engine)
         if not found:
             raise ApiError(404, f"engine {engine} not found")
-        return _engine_json(found[0])
+        online = await svc.hosts.online_by_node() if svc.hosts else {}
+        return _engine_json(found[0], online)
 
     @router.post(
         "/tenants/{t}/se-groups/{group}/engines",
@@ -2179,7 +2224,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
             agent_url=body.agent_url,
             request_id=_rid(),
         )
-        return _engine_json(EngineDetail(e))
+        return _engine_json(EngineDetail(e), {})
 
     @router.put(
         "/tenants/{t}/engines/{engine}/state",
