@@ -37,7 +37,22 @@ answers again within 5 to 9 seconds on the other engine and the old MASTER takes
 stopped (they come back serving), and a BGP group with one engine peering with an upstream FRR container (route announced,
 reachable through BGP, withdrawn when HAProxy stops, restored when it starts).
 
+## VM engines, ECMP, unprivileged containers (third step)
+The same scenario runs with `GUEST_KIND=qemu` (KVM VMs from a cloud-init template: the Docker-hosted Proxmox has working
+KVM) and passes: data-NIC addresses through cloud-init `ipconfig`, enrollment through the guest agent
+(`qm guest exec --pass-stdin`), canary order, VRRP failover (5 to 8 seconds), and a controller-less reboot. It found a bug that
+only hits VMs: `sy-agent-enroll.service` was ordered after `cloud-final.service`, which itself runs after `multi-user.target`,
+so systemd broke an ordering cycle by deleting the start jobs of the agent and the Data Plane API at every boot. It now orders
+after `cloud-config.service`. The BGP group grows to three engines and the upstream shows three equal-cost paths, two when
+one engine's HAProxy stops, three again after it restarts. A trial with an unprivileged container (template built with
+`UNPRIVILEGED=1`) enrolled, applied a VRRP service and answered the VIP; BGP/FRR, IPVS and failover between unprivileged
+engines were not tried, so they stay unsupported. The lab also creates extra loop devices (`/dev/loop8` to `63`) because each
+directory-storage container uses one.
+
+Two more things came from the quickstart (ADR 0058): the controller's OpenBao policy lacked the break-glass secret path (the
+API got 403 creating the break-glass administrator), and the UI proxy kept the API's old address after the API container was
+recreated (now it re-resolves).
+
 ## Not covered
-Real KVM VMs and cloud-init, IPVS/UDP (the lab kernel has none), unprivileged containers, ECMP across several BGP engines,
-the UI, certificates for virtual services, and the multi-node controller. VRRP between engines on different Proxmox hosts
+IPVS/UDP (the lab kernel has none), BGP or failover with unprivileged containers, the UI, certificates for virtual services, and the multi-node controller. VRRP between engines on different Proxmox hosts
 and multicast across a real switch are not exercised (all containers share one bridge).

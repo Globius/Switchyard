@@ -23,7 +23,7 @@ ENVS="-e SWITCHYARD_DATABASE_URL=postgresql+psycopg://postgres:postgres@host.doc
  -e SWITCHYARD_DATAPLANE_CA=/e2e/ca.pem -e SWITCHYARD_DATAPLANE_CERT=/e2e/client.crt -e SWITCHYARD_DATAPLANE_KEY=/e2e/client.key
  -e SWITCHYARD_PVE_URL=https://127.0.0.1:8006 -e SWITCHYARD_PVE_TOKEN_ID=$SWITCHYARD_TEST_PVE_TOKEN_ID
  -e SWITCHYARD_PVE_CA=/e2e/pve-ca.pem -e $VAR=$SWITCHYARD_TEST_PVE_SECRET
- -e SWITCHYARD_ENGINE_CIDRS=172.30.0.0/24 -e SWITCHYARD_SECRET_POLICY=open"
+ -e SWITCHYARD_ALLOW_LXC=1 -e SWITCHYARD_ENGINE_CIDRS=172.30.0.0/24 -e SWITCHYARD_SECRET_POLICY=open"
 for n in sy-e2e-api sy-e2e-worker sy-e2e-tls; do docker rm -f $n >/dev/null 2>&1 || true; done
 # shellcheck disable=SC2086
 docker run -d --name sy-e2e-api --network container:$PVE -v "$WORK:/e2e:ro" $ENVS $IMG serve --host 0.0.0.0 --port 8000 >/dev/null

@@ -1,6 +1,6 @@
 [Unit]
-Description=Switchyard agent enrollment (one-time token from cloud-init)
-After=network-online.target cloud-final.service
+Description=Switchyard agent enrollment (one-time token, delivered by cloud-init or by hand)
+After=network-online.target cloud-config.service
 Wants=network-online.target
 ConditionPathExists=/etc/switchyard/agent/enroll.token
 ConditionPathExists=!/etc/switchyard/agent/tls.crt

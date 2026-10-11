@@ -12,5 +12,5 @@ FROM nginx:1.27-alpine
 COPY --from=ui /ui/dist /usr/share/nginx/html
 COPY deploy/proxy/nginx.conf /etc/nginx/templates/default.conf.template
 COPY deploy/proxy/sy-proxy.conf /etc/nginx/sy-proxy.conf
-ENV CONTROLLER_UPSTREAM=api:8000
+ENV CONTROLLER_UPSTREAM=api:8000 NGINX_RESOLVER=127.0.0.11
 EXPOSE 8080

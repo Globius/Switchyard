@@ -1,0 +1,82 @@
+# A complete single-host Switchyard test instance: PostgreSQL, OpenBao (with PKI), controller (api + worker), the UI
+# proxy and a TLS front. Not highly available. Start it with `sh bootstrap.sh` (docs/quickstart.md), not directly.
+name: switchyard-qs
+x-controller-env: &controller-env
+  SWITCHYARD_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/switchyard
+  SWITCHYARD_PUBLIC_URL: https://${HOST_ADDR}:${HTTPS_PORT:-8443}
+  SWITCHYARD_TRUST_FORWARDED: "1"
+  SWITCHYARD_METRICS_TOKEN: ${METRICS_TOKEN}
+  SWITCHYARD_OPENBAO_ADDR: http://openbao:8200
+  SWITCHYARD_OPENBAO_ROLE_ID: ${OPENBAO_ROLE_ID:-}
+  SWITCHYARD_OPENBAO_SECRET_ID: ${OPENBAO_SECRET_ID:-}
+  SWITCHYARD_PKI_MOUNT: pki
+  SWITCHYARD_PKI_ROLE: agents
+  SWITCHYARD_BUNDLE_KEY_FILE: /secrets/bundle.key
+  SWITCHYARD_DATAPLANE_CA: /secrets/ca.pem
+  SWITCHYARD_DATAPLANE_CERT: /secrets/client.crt
+  SWITCHYARD_DATAPLANE_KEY: /secrets/client.key
+  SWITCHYARD_PVE_URL: ${PVE_URL:-}
+  SWITCHYARD_PVE_TOKEN_ID: ${PVE_TOKEN_ID:-}
+  SWITCHYARD_PVE_CA: ${PVE_CA_FILE:-}
+  SWITCHYARD_SECRET_KV_PROXMOX_TOKEN: ${PVE_TOKEN_SECRET:-}
+  SWITCHYARD_ENGINE_CIDRS: ${ENGINE_CIDRS:-}
+  SWITCHYARD_SHARED_SECRET_PREFIXES: kv/se/
+  SWITCHYARD_BREAK_GLASS: ${BREAK_GLASS:-0}
+  # Deploying LXC guests is a system setting that is off by default (ADR 0076); 1 forces it on for this instance.
+  SWITCHYARD_ALLOW_LXC: ${ALLOW_LXC:-0}
+x-controller: &controller
+  image: ${CONTROLLER_IMAGE:-switchyard-controller:latest}
+  restart: unless-stopped
+  environment: *controller-env
+  volumes: ["./secrets:/secrets:ro"]
+  depends_on: {postgres: {condition: service_healthy}, openbao: {condition: service_started}}
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment: {POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}", POSTGRES_DB: switchyard}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U postgres -d switchyard"], interval: 3s, timeout: 3s, retries: 30}
+  openbao:
+    image: openbao/openbao:latest
+    restart: unless-stopped
+    command: ["server", "-config=/openbao/config/openbao.hcl"]
+    cap_add: [IPC_LOCK]
+    volumes: ["./openbao.hcl:/openbao/config/openbao.hcl:ro", "openbao-data:/openbao/file"]
+  # Test instance only: unseals OpenBao again after a restart from the key saved by bootstrap.sh. A production OpenBao
+  # is unsealed by people or an auto-unseal backend, never by a sidecar that holds the key (docs/production.md).
+  openbao-unseal:
+    image: openbao/openbao:latest
+    restart: unless-stopped
+    environment: {BAO_ADDR: "http://openbao:8200"}
+    volumes: ["./secrets/unseal.key:/unseal.key:ro"]
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["while true; do if [ -s /unseal.key ] && bao status 2>/dev/null | grep -q 'Sealed *true'; then bao operator unseal \"$$(cat /unseal.key)\" >/dev/null 2>&1; fi; sleep 5; done"]
+    depends_on: [openbao]
+  migrate:
+    <<: *controller
+    restart: "no"
+    command: ["db", "upgrade"]
+  api:
+    <<: *controller
+    command: ["serve", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  worker:
+    <<: *controller
+    command: ["worker", "--name", "qs-worker"]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  # The UI and /api behind security headers (deploy/proxy), plain HTTP inside the compose network.
+  proxy:
+    build: {context: ../.., dockerfile: deploy/proxy/Dockerfile}
+    image: ${PROXY_IMAGE:-switchyard-proxy:latest}
+    restart: unless-stopped
+    environment: {CONTROLLER_UPSTREAM: "api:8000"}
+    depends_on: [api]
+  # TLS in front of the proxy: engines enroll over https only, and browsers need it for the secure session cookie.
+  tls:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports: ["${HTTPS_BIND:-0.0.0.0}:${HTTPS_PORT:-8443}:8443"]
+    volumes: ["./tls.conf:/etc/nginx/conf.d/default.conf:ro", "./secrets:/secrets:ro"]
+    depends_on: [proxy]
+volumes: {pgdata: {}, openbao-data: {}}

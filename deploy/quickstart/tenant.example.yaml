@@ -1,0 +1,29 @@
+# A first tenant for a test cluster: ONE flat network that plays management, VIP and backend, a VRRP group and a pool.
+# Edit the addresses to match a network your Proxmox bridge really carries (bridge name in `vnet`). Production
+# separates the three roles onto their own networks (docs/production.md).
+tenants:
+  - id: lab
+    name: lab
+networks:
+  - {id: net, tenant_id: lab, name: flat, cidr: 192.168.50.0/24, gateway: 192.168.50.1, vnet: vmbr0}
+vip_pools:
+  - {id: pool-mgmt, tenant_id: lab, name: engine-addresses, network_id: net, ranges: [{start: 192.168.50.100, end: 192.168.50.119}]}
+  - {id: pool-vips, tenant_id: lab, name: vips, network_id: net, ranges: [{start: 192.168.50.120, end: 192.168.50.139}]}
+routing_profiles:
+  - {id: rp, tenant_id: lab, name: vrrp, kind: vrrp, vrid: 51, interface: eth0}
+se_groups:
+  - id: sg
+    tenant_id: lab
+    name: edge
+    ha_mode: vrrp
+    routing_profile_id: rp
+    canary_seconds: 10
+    networks: [{network_id: net, role: mgmt}, {network_id: net, role: vip}, {network_id: net, role: backend}]
+health_monitors:
+  - {id: hm, tenant_id: lab, name: http-up, type: http, http: {path: /, expect_status: [200]}}
+pools:
+  - id: pool-web
+    tenant_id: lab
+    name: web
+    health_monitor_id: hm
+    members: [{address: 192.168.50.10, port: 80}]   # replace with a web server you have

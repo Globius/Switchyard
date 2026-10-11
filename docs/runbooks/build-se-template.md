@@ -14,6 +14,11 @@ Existing SEs are not touched; replace them one at a time (`replace-se.md`).
 6. Set the vmid as `template_vmid` on the SE group (or the Proxmox settings) and deploy one SE as a canary.
 7. Check on the new SE: `sy-agent`, `dataplaneapi`, `prometheus-node-exporter` active; it shows up in the group.
 
+**KVM VM template.** On the Proxmox node run `NODE_URL=http://<node address the VM can reach> sh se-image/kvm/build-template.sh <vmid>
+<sy-agent> <dataplaneapi> [storage] [bridge]`. It imports the Debian 13 cloud image, boots it once with a cloud-init snippet that
+downloads `se-image/` and the two binaries from a throwaway web server on the node, provisions, powers off and converts the VM
+to a template. It needs `/dev/kvm` and DHCP on the bridge. `se-image/fetch-binaries.sh` produces the binaries with Docker.
+
 **LXC instead of a VM.** On the Proxmox node run `se-image/lxc/build-template.sh <vmid> <sy-agent> <dataplaneapi>`
 (copy `se-image/` and the two binaries to the node first). It creates a privileged Debian 13 container with nesting,
 runs `provision.sh` inside, and converts it to a template. Deploy requests use it with `guest_kind: "lxc"`. The host

@@ -15,6 +15,7 @@ vip_pools:
   - {id: pool-vips, tenant_id: lab, name: vips, network_id: net-vip, ranges: [{start: 10.99.0.230, end: 10.99.0.250}]}
 routing_profiles:
   - {id: rp-vrrp, tenant_id: lab, name: vrrp, kind: vrrp, vrid: 51, interface: eth1}
+  - {id: rp-vrrp2, tenant_id: lab, name: vrrp-unpriv, kind: vrrp, vrid: 52, interface: eth1}
   - id: rp-bgp
     tenant_id: lab
     name: bgp
@@ -28,6 +29,13 @@ se_groups:
     name: edge
     ha_mode: vrrp
     routing_profile_id: rp-vrrp
+    canary_seconds: 5
+    networks: [{network_id: net-mgmt, role: mgmt}, {network_id: net-vip, role: vip}, {network_id: net-be, role: backend}]
+  - id: sg-unpriv
+    tenant_id: lab
+    name: edge-unpriv
+    ha_mode: vrrp
+    routing_profile_id: rp-vrrp2
     canary_seconds: 5
     networks: [{network_id: net-mgmt, role: mgmt}, {network_id: net-vip, role: vip}, {network_id: net-be, role: backend}]
   - id: sg-bgp
