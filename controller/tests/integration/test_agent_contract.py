@@ -226,7 +226,10 @@ async def test_apply_status_and_selective_reload(agent_container: tuple[Rig, int
             "rev-2", {"frr/frr.conf": "router bgp 65011\n", "keepalived/keepalived.conf": "vrrp\n"}
         )
         assert second.ok and second.reloaded_units == ("frr",)
-        assert sh(container, "cat /tmp/systemctl.log").strip() == "reload frr"
+        assert sh(container, "cat /tmp/systemctl.log").splitlines() == [
+            "is-active --quiet frr",  # frr is started if stopped (ADR 0056), reloaded otherwise
+            "reload frr",
+        ]
 
         status = await agent.status()
         assert status.bundle_id == "rev-2"
