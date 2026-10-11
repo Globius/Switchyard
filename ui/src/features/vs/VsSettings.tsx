@@ -219,6 +219,31 @@ function PortsSheet({
               {k === "tls" ? "TLS" : k === "http2" ? "HTTP/2" : "PROXY"}
             </label>
           ))}
+          {p.tls && (
+            <label className="flex items-center gap-1.5">
+              {t("TLS profile")}
+              <select
+                aria-label={t("Port {n} TLS profile", { n: i + 1 })}
+                className={cn(INPUT, "w-36")}
+                disabled={disabled}
+                value={p.tls_profile ?? ""}
+                onChange={(e) =>
+                  onChange(
+                    ports.map((x, j) =>
+                      j === i
+                        ? { ...x, tls_profile: (e.target.value || null) as PortRow["tls_profile"] }
+                        : x,
+                    ),
+                  )
+                }
+              >
+                <option value="">{t("Default")}</option>
+                <option value="modern">{t("Modern")}</option>
+                <option value="intermediate">{t("Intermediate")}</option>
+                <option value="legacy">{t("Legacy")}</option>
+              </select>
+            </label>
+          )}
           <label className="flex items-center gap-1.5">
             {t("HTTPS redirect to")}
             <input
@@ -662,7 +687,13 @@ function SettingsForm({
                 {form.ports.map((p, i) => (
                   <tr key={i} data-field={`ports.${i}`}>
                     <td className="px-3 py-2 font-mono">{p.port}</td>
-                    <td className="px-3 py-2">{p.tls ? t("On") : t("Off")}</td>
+                    <td className="px-3 py-2">
+                      {p.tls
+                        ? p.tls_profile
+                          ? `${t("On")} · ${p.tls_profile}`
+                          : t("On")
+                        : t("Off")}
+                    </td>
                     <td className="px-3 py-2">{p.http2 ? t("On") : t("Off")}</td>
                     <td className="px-3 py-2">{p.proxy_protocol ? t("On") : t("Off")}</td>
                     <td className="px-3 py-2">{p.https_redirect_port ?? "—"}</td>

@@ -326,6 +326,25 @@ describe("virtual service settings", () => {
     expect(screen.getByRole("button", { name: "Save to draft" })).toBeDisabled();
   });
 
+  it("sets a TLS profile on a TLS port and sends it with the ports", async () => {
+    vsBody = {
+      ...VS,
+      ports: [
+        { port: 443, tls: true, http2: true, proxy_protocol: false, https_redirect_port: null },
+      ],
+    };
+    renderAt("/t/acme/virtual-services/v1/settings");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit ports" }));
+    await userEvent.selectOptions(await screen.findByLabelText("Port 1 TLS profile"), "modern");
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect((seen.body as { ports: { tls_profile: string }[] }).ports[0]!.tls_profile).toBe(
+        "modern",
+      ),
+    );
+  });
+
   it("changes SE group, VIP, enabled and default pool", async () => {
     renderAt("/t/acme/virtual-services/v1/settings");
     await userEvent.selectOptions(await enabled("SE group"), "g1");
