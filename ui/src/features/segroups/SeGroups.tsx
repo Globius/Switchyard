@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, MenuContent, MenuTrigger } from "@/components/ui/popover-menu";
 import { Sheet } from "@/components/ui/sheet";
 import { Tip } from "@/components/ui/tooltip";
+import { ReapplyButton } from "@/features/drift/ReapplyButton";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
@@ -360,9 +361,10 @@ function EnginesCard({
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 mb-2 text-xs text-muted-foreground">
             {t("Reported only; nothing is changed automatically.")}
           </p>
+          <ReapplyButton tenant={tenant} engine={e.name} />
         </div>
       ))}
       {act.error && <ErrorState error={act.error} />}

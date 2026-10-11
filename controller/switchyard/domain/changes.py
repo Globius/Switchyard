@@ -334,7 +334,40 @@ def apply_ops(base: Snapshot, ops: Sequence[ChangeOp], *, tenant_id: UUID) -> Dr
         }
     )
     summary = _summarise(base, after, created, modified, deleted)
-    return Draft(snapshot=after, objects=summary, problems=tuple(validate_snapshot(after)))
+    problems = [*validate_snapshot(after), *quota_problems(base, after)]
+    return Draft(snapshot=after, objects=summary, problems=tuple(sorted(problems)))
+
+
+def quota_problems(base: Snapshot, after: Snapshot) -> list[Problem]:
+    """Report object types that grow past a tenant quota (``quota_exceeded``).
+
+    Quota keys are object type names (``virtual_service``, ``pool``, ...). Only types that gained
+    objects are checked, so a tenant already over a lowered quota can still delete and edit.
+
+    Example:
+        >>> quota_problems(Snapshot(), Snapshot())
+        []
+    """
+    before, now = _collections(base), _collections(after)
+    problems: list[Problem] = []
+    for tenant in after.tenants:
+        for key, limit in sorted(tenant.quotas.items()):
+            try:
+                object_type = ObjectType(key)
+            except ValueError:
+                continue
+            used = sum(1 for o in now[object_type].values() if o.tenant_id == tenant.id)
+            was = sum(1 for o in before[object_type].values() if o.tenant_id == tenant.id)
+            if used > was and used > limit:
+                problems.append(
+                    Problem(
+                        f"quota.{key}",
+                        "quota_exceeded",
+                        f"tenant {tenant.name!r} may have {limit} {key} objects; "
+                        f"this change would make {used}",
+                    )
+                )
+    return problems
 
 
 def _summarise(
