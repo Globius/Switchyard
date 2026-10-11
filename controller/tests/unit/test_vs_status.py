@@ -68,3 +68,59 @@ def test_health_follows_member_check_results() -> None:
     assert (got.members_up, got.members_total) == (1, 2)
     off = snap.model_copy(update={"virtual_services": [vs.model_copy(update={"enabled": False})]})
     assert virtual_service_states(off)[0].health == "disabled"
+
+
+def test_members_list_the_reported_rows_with_their_last_check() -> None:
+    from switchyard.render.escape import ident
+
+    snap = example_snapshot()
+    vs = next(v for v in snap.virtual_services if v.name == "k8s-api")
+    pool = next(p for p in snap.pools if p.id == vs.default_pool_id)
+    member = pool.members[0]
+    row = {
+        "backend": "pool_" + ident(pool.name),
+        "server": member.server_name,
+        "status": "DOWN",
+        "check_status": "L4TOUT",
+        "last_check": "Layer4 timeout",
+        "last_change_s": "42",
+    }
+    other = {"backend": "pool_elsewhere", "server": "x", "status": "UP"}
+    engine = _engine(vs.se_group_id, [row, other])
+    got = {v.name: v for v in virtual_service_states(snap, [engine])}[vs.name]
+    assert len(got.members) == 1
+    m = got.members[0]
+    assert (m.pool, m.member_id, m.address, m.status) == (
+        pool.name,
+        member.id,
+        str(member.address),
+        "DOWN",
+    )
+    assert (m.check_status, m.last_check, m.last_change_s) == ("L4TOUT", "Layer4 timeout", 42)
+    assert m.last_checked_at == engine.observed_at
+    silent = _engine(vs.se_group_id, [row], reachable=False)
+    assert {v.name: v for v in virtual_service_states(snap, [silent])}[vs.name].members == ()
+
+
+def test_dataplane_stats_rows_carry_the_last_check() -> None:
+    from switchyard.adapters.dataplane import _server_status
+
+    got = _server_status(
+        {
+            "backend_name": "pool_web",
+            "name": "web-1",
+            "stats": {
+                "status": "DOWN",
+                "check_status": "L7STS",
+                "last_chk": "Layer7 wrong status",
+                "lastchg": 12,
+            },
+        }
+    )
+    assert (got.check_status, got.last_check, got.last_change_s) == (
+        "L7STS",
+        "Layer7 wrong status",
+        12,
+    )
+    bare = _server_status({"backend_name": "b", "name": "s", "stats": {"status": "UP"}})
+    assert (bare.check_status, bare.last_check, bare.last_change_s) == (None, None, None)
