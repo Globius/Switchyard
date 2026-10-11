@@ -262,6 +262,27 @@ describe("pools", () => {
     );
   });
 
+  it("sets a passive check and slow start on a pool that has a health monitor", async () => {
+    renderAt("/t/acme/pools");
+    await userEvent.click(await screen.findByRole("button", { name: "api-v2" }));
+    const box = await screen.findByLabelText("Judge members by their real traffic");
+    await waitFor(() => expect(box).toBeEnabled());
+    await userEvent.click(box);
+    await userEvent.selectOptions(screen.getByLabelText("Observe"), "layer4");
+    const limit = screen.getByLabelText("Error limit");
+    await userEvent.clear(limit);
+    await userEvent.type(limit, "5");
+    await userEvent.selectOptions(screen.getByLabelText("On error"), "sudden-death");
+    await userEvent.type(screen.getByLabelText("Slow start"), "60");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect(posted?.ops[0]?.body).toEqual({
+        passive_check: { observe: "layer4", error_limit: 5, on_error: "sudden-death" },
+        slow_start_s: 60,
+      }),
+    );
+  });
+
   it("creates a pool with members and persistence", async () => {
     hasDraft = false;
     renderAt("/t/acme/pools");
