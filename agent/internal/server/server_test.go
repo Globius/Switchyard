@@ -34,7 +34,7 @@ func start(t *testing.T) (pb.AgentClient, ed25519.PrivateKey, string) {
 	state := t.TempDir()
 	os.WriteFile(filepath.Join(state, "vrrp-edge.state"), []byte("master\n"), 0o600)
 	run := okRunner{bgp: `{"ipv4Unicast":{"peers":{"10.0.0.2":{"remoteAs":65001,"state":"Established"}}}}`}
-	applier := &bundle.Applier{Root: root, PubKey: pub, Runner: run}
+	applier := &bundle.Applier{Root: root, PubKey: pub, Runner: run, AllowUnbound: true}
 	collector := &status.Collector{
 		Runner: run, StateDir: state, Hashes: applier.Hashes, BundleID: applier.LastBundleID,
 		Health: func() (bool, bool) { return true, false }, Now: time.Now,

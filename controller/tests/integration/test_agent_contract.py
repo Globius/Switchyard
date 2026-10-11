@@ -111,8 +111,11 @@ class Rig:
         (tmp / "ca.crt").write_bytes(self.ca_pem)
         (tmp / "client.crt").write_bytes(_pem(_issue("controller", client_key, ca, server=False)))
         (tmp / "client.key").write_bytes(_key_pem(client_key))
+        peer_key = ec.generate_private_key(ec.SECP256R1())  # another agent: same CA, other name
+        (tmp / "peer.crt").write_bytes(_pem(_issue("se-2", peer_key, ca, server=False)))
+        (tmp / "peer.key").write_bytes(_key_pem(peer_key))
         self.server_files = {
-            "etc/switchyard/agent/tls.crt": _pem(_issue("agent", server_key, ca, server=True)),
+            "etc/switchyard/agent/tls.crt": _pem(_issue("se-1", server_key, ca, server=True)),
             "etc/switchyard/agent/tls.key": _key_pem(server_key),
             "etc/switchyard/agent/ca.crt": self.ca_pem,
             "etc/switchyard/agent/bundle.pub": self.signer.public_b64().encode(),
@@ -144,7 +147,15 @@ def agent_container(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[
     client = docker.from_env()
     container = client.containers.create(
         IMAGE,
-        command=["/sy-agent", "-listen", ":7443", "-health-url", "http://127.0.0.1:1/none"],
+        command=[
+            "/sy-agent",
+            "-listen",
+            ":7443",
+            "-health-url",
+            "http://127.0.0.1:1/none",
+            "-controller-cn",
+            "controller",
+        ],
         ports={"7443/tcp": ("127.0.0.1", None)},
     )
     try:
@@ -176,12 +187,18 @@ def agent_container(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[
 
 
 def connect(
-    rig: Rig, port: int, *, evil: bool = False, signer: BundleSigner | None = None
+    rig: Rig,
+    port: int,
+    *,
+    evil: bool = False,
+    peer: bool = False,
+    signer: BundleSigner | None = None,
+    name: str = "se-1",
 ) -> GrpcAgent:
-    prefix = "evil" if evil else "client"
+    prefix = "evil" if evil else "peer" if peer else "client"
     return GrpcAgent(
         f"localhost:{port}",
-        name="se-1",
+        name=name,
         signer=signer or rig.signer,
         ca_file=rig.tmp / "ca.crt",
         client_cert=(rig.tmp / f"{prefix}.crt", rig.tmp / f"{prefix}.key"),
@@ -268,3 +285,40 @@ async def test_clients_without_a_certificate_from_the_controller_ca_are_refused(
     finally:
         await intruder.close()
     assert grpc is not None
+
+
+async def test_another_agents_certificate_cannot_call_the_agent(
+    agent_container: tuple[Rig, int, object],
+) -> None:
+    rig, port, _ = agent_container
+    peer = connect(rig, port, peer=True)
+    try:
+        with pytest.raises(AgentUnreachableError):
+            await peer.status()
+    finally:
+        await peer.close()
+
+
+async def test_bundles_for_another_engine_and_replays_are_refused(
+    agent_container: tuple[Rig, int, object],
+) -> None:
+    rig, port, container = agent_container
+    wrong = connect(rig, port, name="se-2")
+    honest = connect(rig, port)
+
+    class Fixed(BundleSigner):
+        def next_sequence(self) -> int:
+            return 1
+
+    replayer = connect(rig, port, signer=Fixed(rig.signer._key))
+    try:
+        refused = await wrong.apply_bundle("w", {"frr/frr.conf": "other engine\n"})
+        assert not refused.ok and "for engine" in refused.error
+        assert (await honest.apply_bundle("b1", {"frr/frr.conf": "one\n"})).ok
+        stale = await replayer.apply_bundle("old", {"frr/frr.conf": "replayed\n"})
+        assert not stale.ok and "not newer" in stale.error
+        assert sh(container, "cat /etc/switchyard/frr/frr.conf") == "one\n"
+    finally:
+        await wrong.close()
+        await honest.close()
+        await replayer.close()

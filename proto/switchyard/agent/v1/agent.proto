@@ -48,6 +48,13 @@ message File {
 message Bundle {
   string id = 1;
   repeated File files = 2;
+  // The engine this bundle is for (the agent's certificate name). A bundle signed for another
+  // engine is refused. Empty only from controllers older than this field.
+  string engine = 3;
+  // Strictly increasing per engine (milliseconds since the Unix epoch). The agent refuses a
+  // sequence at or below the last one it applied, so an old signed bundle cannot be replayed.
+  // Zero only from controllers older than this field.
+  uint64 sequence = 4;
 }
 
 message ApplyBundleRequest {
