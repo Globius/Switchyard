@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { api, unwrap } from "@/api/client";
+import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { DraftMarker, expiryStatus, StatusPill } from "@/components/sy/StatusPill";
@@ -46,14 +48,76 @@ function useServices(tenant: string, cs?: string) {
   });
 }
 
+/** A PEM field with its own file picker; the text never leaves the browser until Add to draft. */
+function PemField({
+  label,
+  hint,
+  value,
+  onChange,
+  ok,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (v: string) => void;
+  ok?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <label htmlFor={`pem-${label}`}>{label}</label>
+        {value.trim() && <span aria-hidden>{ok ? "✓" : "○"}</span>}
+        <label className="ml-auto cursor-pointer text-xs font-normal text-primary hover:underline">
+          {t("Choose file")}
+          <input
+            type="file"
+            aria-label={t("{label} file", { label })}
+            accept=".pem,.crt,.cer,.key,text/plain"
+            className="sr-only"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (f) onChange(await f.text());
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </div>
+      <textarea
+        id={`pem-${label}`}
+        aria-label={label}
+        className="h-28 w-full rounded-md border bg-card p-3 font-mono text-xs"
+        spellCheck={false}
+        autoComplete="off"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/** Join the three fields into the single PEM bundle the API takes: leaf, chain, then the key. */
+export function buildBundle(cert: string, chain: string, key: string): string {
+  return (
+    [cert, chain, key]
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .join("\n") + "\n"
+  );
+}
+
 function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void }) {
   const ensure = useEnsureDraft(tenant);
   const qc = useQueryClient();
   const [name, setName] = useState("");
-  const [pem, setPem] = useState("");
+  const [cert, setCert] = useState("");
+  const [chain, setChain] = useState("");
+  const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<unknown>(null);
-  const seen = looksLikePem(pem);
+  const certOk = looksLikePem(cert).cert;
+  const chainOk = !chain.trim() || looksLikePem(chain).cert;
+  const keyOk = looksLikePem(key).key;
   async function submit() {
     setBusy(true);
     setProblem(null);
@@ -62,10 +126,10 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
       unwrap(
         await api.POST("/api/v1/tenants/{t}/certificates/import", {
           params: { path: { t: tenant }, query: { change_set: cs } },
-          body: { name, pem },
+          body: { name, pem: buildBundle(cert, chain, key) },
         }),
       );
-      setPem("");
+      setKey("");
       await qc.invalidateQueries({ queryKey: ["t", tenant] });
       onClose();
     } catch (e) {
@@ -84,7 +148,10 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
           <Button variant="ghost" className="ml-auto" onClick={onClose}>
             {t("Cancel")}
           </Button>
-          <Button disabled={busy || !name || !seen.cert || !seen.key} onClick={() => void submit()}>
+          <Button
+            disabled={busy || !name || !certOk || !chainOk || !keyOk}
+            onClick={() => void submit()}
+          >
             {t("Add to draft")}
           </Button>
         </>
@@ -100,35 +167,114 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
           onChange={(e) => setName(e.target.value)}
         />
       </label>
-      <label className="block space-y-1.5 text-sm font-medium">
-        {t("Certificate chain and private key (PEM)")}
-        <textarea
-          aria-label={t("Certificate and key PEM")}
-          className="h-56 w-full rounded-md border bg-card p-3 font-mono text-xs"
-          spellCheck={false}
-          autoComplete="off"
-          value={pem}
-          onChange={(e) => setPem(e.target.value)}
-        />
-      </label>
-      <p className="text-xs text-muted-foreground">
-        {t(
-          "Leaf first, then intermediates, then an unencrypted key. Sent once, stored in OpenBao, never shown again.",
-        )}
-      </p>
-      <ul className="space-y-1 text-sm">
-        <li>
-          {seen.cert ? "✓" : "○"} {t("Certificate found")}
-        </li>
-        <li>
-          {seen.key ? "✓" : "○"} {t("Private key found")}
-        </li>
-      </ul>
+      <PemField
+        label={t("Certificate")}
+        value={cert}
+        onChange={setCert}
+        ok={certOk}
+        hint={t("The leaf certificate (PEM).")}
+      />
+      <PemField
+        label={t("Chain (optional)")}
+        value={chain}
+        onChange={setChain}
+        ok={chainOk}
+        hint={t("Intermediate certificates, in order.")}
+      />
+      <PemField
+        label={t("Private key")}
+        value={key}
+        onChange={setKey}
+        ok={keyOk}
+        hint={t("Unencrypted PEM. Sent once, stored in OpenBao, never shown again.")}
+      />
       <p className="text-xs text-muted-foreground">
         {t(
           "SANs and expiry are read from the certificate. Importing adds the certificate to your draft.",
         )}
       </p>
+    </Sheet>
+  );
+}
+
+type CertRow = components["schemas"]["CertificateRead"];
+type ServiceRow = components["schemas"]["VirtualServiceRead"];
+
+/** A certificate's details and every virtual service that uses it (live or in your draft). */
+function UsageSheet({
+  tenant,
+  cert,
+  services,
+  onClose,
+}: {
+  tenant: string;
+  cert: CertRow | undefined;
+  services: ServiceRow[];
+  onClose: () => void;
+}) {
+  if (!cert) return null;
+  const ex = expiryStatus(cert.not_after);
+  return (
+    <Sheet
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={cert.name}
+      badge={
+        cert.draft_status !== "unchanged" ? <DraftMarker status={cert.draft_status} /> : undefined
+      }
+      footer={
+        <Button variant="ghost" className="ml-auto" onClick={onClose}>
+          {t("Close")}
+        </Button>
+      }
+    >
+      <dl className="grid grid-cols-[7rem_1fr] gap-y-2 text-sm">
+        <dt className="text-muted-foreground">{t("Source")}</dt>
+        <dd>{t(SOURCE[cert.source] ?? cert.source)}</dd>
+        <dt className="text-muted-foreground">{t("Names")}</dt>
+        <dd className="font-mono text-xs">{cert.sans.join(", ")}</dd>
+        <dt className="text-muted-foreground">{t("Expires")}</dt>
+        <dd className="flex items-center gap-2">
+          <StatusPill status={ex.status}>{ex.label}</StatusPill>
+          {new Date(cert.not_after).toLocaleDateString()}
+        </dd>
+        <dt className="text-muted-foreground">{t("Renewal")}</dt>
+        <dd>{cert.renew_policy === "auto" ? t("Auto") : t("Manual")}</dd>
+        <dt className="text-muted-foreground">{t("Key")}</dt>
+        <dd className="font-mono text-xs">{cert.secret_ref}</dd>
+      </dl>
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">
+          {t("Used by {n} virtual services", { n: services.length })}
+        </h3>
+        {services.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {t("No virtual service uses this certificate, so it can be deleted.")}
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border">
+            {services.map((v) => (
+              <li key={v.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                <Link
+                  to="/t/$tenant/virtual-services/$id"
+                  params={{ tenant, id: v.id }}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {v.name}
+                </Link>
+                {v.draft_status !== "unchanged" && <DraftMarker status={v.draft_status} />}
+                <span className="ml-auto font-mono text-xs text-muted-foreground">
+                  {v.vip ?? "—"} ·{" "}
+                  {v.ports
+                    .filter((p) => p.tls)
+                    .map((p) => p.port)
+                    .join(", ") || "—"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </Sheet>
   );
 }
@@ -258,6 +404,7 @@ export function Certificates({ tenant }: { tenant: string }) {
   const del = useSaveOp(tenant, "certificate");
   const qc = useQueryClient();
   const [sheet, setSheet] = useState<"import" | "issue" | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string; version: number } | null>(
     null,
   );
@@ -351,14 +498,17 @@ export function Certificates({ tenant }: { tenant: string }) {
                     <td className="px-4 py-3">
                       <span className="flex items-center gap-2">
                         {c.draft_status !== "unchanged" && <DraftMarker status={c.draft_status} />}
-                        <span
+                        <button
+                          type="button"
+                          aria-label={t("Where {name} is used", { name: c.name })}
                           className={cn(
-                            "font-medium",
+                            "font-medium text-primary hover:underline",
                             c.draft_status === "deleted" && "line-through",
                           )}
+                          onClick={() => setDetail(c.id)}
                         >
                           {c.name}
-                        </span>
+                        </button>
                       </span>
                     </td>
                     <td className="px-4 py-3">{t(SOURCE[c.source] ?? c.source)}</td>
@@ -425,6 +575,14 @@ export function Certificates({ tenant }: { tenant: string }) {
       </p>
       {sheet === "import" && <ImportSheet tenant={tenant} onClose={() => setSheet(null)} />}
       {sheet === "issue" && <IssueSheet tenant={tenant} onClose={() => setSheet(null)} />}
+      {detail && (
+        <UsageSheet
+          tenant={tenant}
+          cert={rows.find((c) => c.id === detail)}
+          services={(services.data?.items ?? []).filter((v) => v.certificate_ids.includes(detail))}
+          onClose={() => setDetail(null)}
+        />
+      )}
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
