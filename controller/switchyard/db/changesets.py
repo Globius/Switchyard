@@ -27,6 +27,7 @@ class ChangeSetRecord:
     version: int
     author: str
     summary: str
+    message: str
     state: ChangeSetState
     base_revision: int
     requested_by: str | None
@@ -50,6 +51,7 @@ class RevisionRecord:
     change_set_id: UUID | None
     author: str
     summary: str
+    message: str
     snapshot: dict[str, Any]
     git_sha: str | None
     created_at: datetime
@@ -80,6 +82,7 @@ def _record(row: ChangeSetRow) -> ChangeSetRecord:
         version=row.version,
         author=row.author,
         summary=row.summary,
+        message=row.message,
         state=ChangeSetState(row.state),
         base_revision=row.base_revision,
         requested_by=row.requested_by,
@@ -239,6 +242,7 @@ async def insert_revision(
     author: str,
     summary: str,
     snapshot: dict[str, Any],
+    message: str = "",
 ) -> RevisionRecord:
     """Append a revision. A duplicate ``(tenant, number)`` raises ``IntegrityError``."""
     row = RevisionRow(
@@ -248,6 +252,7 @@ async def insert_revision(
         change_set_id=change_set_id,
         author=author,
         summary=summary,
+        message=message,
         snapshot=snapshot,
     )
     session.add(row)
@@ -264,6 +269,7 @@ def _revision(row: RevisionRow) -> RevisionRecord:
         change_set_id=row.change_set_id,
         author=row.author,
         summary=row.summary,
+        message=row.message,
         snapshot=row.snapshot,
         git_sha=row.git_sha,
         created_at=row.created_at,

@@ -560,6 +560,19 @@
               }
             ],
             "title": "Break Glass Reason"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Revision message, kept on the revision and in the Git mirror commit.",
+            "title": "Message"
           }
         },
         "title": "ApplyIn",
@@ -2880,6 +2893,18 @@
             "title": "Backend",
             "type": "string"
           },
+          "check_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Short code of the last health check, for example `L7STS`.",
+            "title": "Check Status"
+          },
           "engine": {
             "title": "Engine",
             "type": "string"
@@ -2887,6 +2912,36 @@
           "engine_id": {
             "format": "uuid",
             "title": "Engine Id",
+            "type": "string"
+          },
+          "last_change_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds since the member status last changed.",
+            "title": "Last Change S"
+          },
+          "last_check": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HAProxy description of the last health check.",
+            "title": "Last Check"
+          },
+          "last_checked_at": {
+            "description": "When the controller last read this engine's check results.",
+            "format": "date-time",
+            "title": "Last Checked At",
             "type": "string"
           },
           "server": {
@@ -2903,7 +2958,8 @@
           "engine_id",
           "backend",
           "server",
-          "status"
+          "status",
+          "last_checked_at"
         ],
         "title": "FailingMember",
         "type": "object"
@@ -7071,6 +7127,12 @@
             ],
             "title": "Git Sha"
           },
+          "message": {
+            "default": "",
+            "description": "The message given when it was applied.",
+            "title": "Message",
+            "type": "string"
+          },
           "number": {
             "title": "Number",
             "type": "integer"
@@ -7116,6 +7178,12 @@
               }
             ],
             "title": "Git Sha"
+          },
+          "message": {
+            "default": "",
+            "description": "The message given when it was applied.",
+            "title": "Message",
+            "type": "string"
           },
           "number": {
             "title": "Number",
@@ -9875,6 +9943,109 @@
         "title": "VirtualServiceHealth",
         "type": "string"
       },
+      "VirtualServiceMemberRead": {
+        "additionalProperties": false,
+        "description": "One pool member of a virtual service as one engine reports it.",
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "check_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Short code of the last health check, for example `L7STS`.",
+            "title": "Check Status"
+          },
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "engine_id": {
+            "format": "uuid",
+            "title": "Engine Id",
+            "type": "string"
+          },
+          "last_change_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds since the member status last changed.",
+            "title": "Last Change S"
+          },
+          "last_check": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HAProxy description of the last health check.",
+            "title": "Last Check"
+          },
+          "last_checked_at": {
+            "description": "When the controller last read this engine's check results.",
+            "format": "date-time",
+            "title": "Last Checked At",
+            "type": "string"
+          },
+          "member_id": {
+            "format": "uuid",
+            "title": "Member Id",
+            "type": "string"
+          },
+          "pool": {
+            "title": "Pool",
+            "type": "string"
+          },
+          "pool_id": {
+            "format": "uuid",
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "status": {
+            "description": "HAProxy status, for example `UP`, `DOWN`, `DRAIN`.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pool",
+          "pool_id",
+          "member_id",
+          "address",
+          "engine",
+          "engine_id",
+          "status",
+          "last_checked_at"
+        ],
+        "title": "VirtualServiceMemberRead",
+        "type": "object"
+      },
       "VirtualServicePatch": {
         "additionalProperties": false,
         "properties": {
@@ -10242,6 +10413,14 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "members": {
+            "description": "The reported rows behind the counts, one per engine and pool member.",
+            "items": {
+              "$ref": "#/components/schemas/VirtualServiceMemberRead"
+            },
+            "title": "Members",
+            "type": "array"
           },
           "members_total": {
             "description": "Reported member rows of the service's pools.",
@@ -25516,6 +25695,7 @@
                       "author": "user:alice",
                       "created_at": "2026-10-10T08:30:00Z",
                       "git_sha": "3f9c2ab",
+                      "message": "Ticket OPS-412: leastconn evens out the long uploads.",
                       "number": 12,
                       "summary": "Switch web-pool to leastconn"
                     }
@@ -25637,6 +25817,7 @@
                   "author": "user:alice",
                   "created_at": "2026-10-10T08:30:00Z",
                   "git_sha": "3f9c2ab",
+                  "message": "Ticket OPS-412: leastconn evens out the long uploads.",
                   "number": 12,
                   "snapshot": {
                     "pools": [
@@ -29338,6 +29519,22 @@
                   {
                     "health": "degraded",
                     "id": "00000000-0000-0000-0000-0000000000d1",
+                    "members": [
+                      {
+                        "address": "10.20.0.53",
+                        "check_status": "L4TOUT",
+                        "engine": "edge-1",
+                        "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                        "last_change_s": 95,
+                        "last_check": "Layer4 timeout",
+                        "last_checked_at": "2026-10-10T08:30:00Z",
+                        "member_id": "00000000-0000-0000-0000-0000000000d3",
+                        "pool": "dns-pool",
+                        "pool_id": "00000000-0000-0000-0000-0000000000d2",
+                        "port": 53,
+                        "status": "DOWN"
+                      }
+                    ],
                     "members_total": 4,
                     "members_up": 3,
                     "name": "dns",
@@ -29463,8 +29660,12 @@
                   "failing_members": [
                     {
                       "backend": "pool_web",
+                      "check_status": "L7STS",
                       "engine": "edge-1",
                       "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                      "last_change_s": 95,
+                      "last_check": "Layer7 wrong status",
+                      "last_checked_at": "2026-10-10T08:30:00Z",
                       "server": "web-2",
                       "status": "DOWN"
                     }

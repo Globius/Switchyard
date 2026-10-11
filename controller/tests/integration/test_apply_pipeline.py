@@ -190,6 +190,16 @@ async def test_running_a_change_set_that_is_not_applying_is_refused(pg_url: str)
             await w.pipeline.run(TENANT, detail.record.id)
 
 
+async def test_the_apply_message_lands_on_the_revision(pg_url: str) -> None:
+    async with world(pg_url) as w:
+        assert (
+            await w.run_change([add_host_route("one.example.test")], message="  OPS-1 why  ")
+        ).ok
+        assert (await w.run_change([add_host_route("two.example.test", expected=2)])).ok
+        revisions = {r.number: r.message for r in await w.service.revisions(principal(), TENANT)}
+        assert revisions == {1: "OPS-1 why", 2: ""}
+
+
 async def test_rollback_restores_an_earlier_revision_through_the_same_pipeline(pg_url: str) -> None:
     async with world(pg_url) as w:
         assert (await w.run_change([add_host_route("one.example.test")])).ok
