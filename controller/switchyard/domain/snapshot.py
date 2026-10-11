@@ -22,6 +22,7 @@ from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDD
 from switchyard.domain.models import (
     Algorithm,
     AllowListPolicySet,
+    BgpProfile,
     Certificate,
     Entity,
     HealthMonitor,
@@ -95,6 +96,7 @@ class Snapshot(Model):
                 pool_ids.add(s.default_pool_id)
             pool_ids.update(r.pool_id for r in s.routes if r.pool_id)
             cert_ids.update(s.certificate_ids)
+            cert_ids.update(p.client_ca_id for p in s.ports if p.client_ca_id)
             policy_ids.update(s.policy_set_ids)
             if s.allow_list_id:
                 policy_ids.add(s.allow_list_id)
@@ -146,6 +148,12 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       a SAN of the service's certificates (wildcards cover exactly one label).
     - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
+    - ``secret_ref_not_allowed``: certificate and BGP secret references stay in the tenant's own
+      namespace and out of the platform's (ADR 0071).
+    - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
+      ``client_ca_id`` a client CA.
+    - ``needs_health_monitor`` and ``passive_check_layer7_needs_http``: passive checks and slow
+      start build on a health monitor, and ``layer7`` observation needs an HTTP-only pool.
 
     Returns:
         Findings sorted by path; empty when the snapshot is valid.
@@ -179,6 +187,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         return target
 
     _check_names(snapshot, problems)
+    _check_secret_scopes(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -267,7 +276,33 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
             if check_ref(path, s.tenant_id, "pool", pid, pools_by_id) is not None:
                 pool_protocols[pid].add(s.protocol)
         for i, cid in enumerate(s.certificate_ids):
-            check_ref(f"{base}.certificate_ids[{i}]", s.tenant_id, "certificate", cid, certs)
+            cert = check_ref(f"{base}.certificate_ids[{i}]", s.tenant_id, "certificate", cid, certs)
+            if cert is not None and cert.purpose != "server":
+                problems.append(
+                    Problem(
+                        f"{base}.certificate_ids[{i}]",
+                        "wrong_certificate_purpose",
+                        f"certificate {cert.name} is a client CA, not a server certificate",
+                    )
+                )
+        for i, port in enumerate(s.ports):
+            if port.client_ca_id is None:
+                continue
+            ca = check_ref(
+                f"{base}.ports[{i}].client_ca_id",
+                s.tenant_id,
+                "certificate",
+                port.client_ca_id,
+                certs,
+            )
+            if ca is not None and ca.purpose != "client_ca":
+                problems.append(
+                    Problem(
+                        f"{base}.ports[{i}].client_ca_id",
+                        "wrong_certificate_purpose",
+                        f"certificate {ca.name} is a server certificate, not a client CA",
+                    )
+                )
         for i, pid in enumerate(s.policy_set_ids):
             ps = check_ref(f"{base}.policy_set_ids[{i}]", s.tenant_id, "policy set", pid, policies)
             if ps is not None and not isinstance(ps, RedirectPolicySet):
@@ -321,6 +356,25 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 )
             )
     return sorted(problems)
+
+
+def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """Secret references stay inside the owning tenant's namespace (``secret_ref_not_allowed``)."""
+    names = {t.id: t.name for t in snapshot.tenants}
+    refs: list[tuple[str, UUID, str]] = []
+    for c in snapshot.certificates:
+        refs.append((f"certificates.{c.name}.secret_ref", c.tenant_id, c.secret_ref))
+        if c.crl_secret_ref:
+            refs.append((f"certificates.{c.name}.crl_secret_ref", c.tenant_id, c.crl_secret_ref))
+    for profile in snapshot.routing_profiles:
+        if isinstance(profile, BgpProfile):
+            for i, peer in enumerate(profile.peers):
+                if peer.md5_ref:
+                    path = f"routing_profiles.{profile.name}.peers[{i}].md5_ref"
+                    refs.append((path, profile.tenant_id, peer.md5_ref))
+    for path, tenant_id, ref in refs:
+        if tenant_id in names and (why := v.check_secret_ref_scope(ref, names[tenant_id])):
+            problems.append(Problem(path, "secret_ref_not_allowed", why))
 
 
 def _tenant_owned(snapshot: Snapshot) -> dict[str, Iterable[Any]]:
@@ -433,6 +487,15 @@ def _check_udp_pools(
                         "persistence is not valid on a udp pool; use the source algorithm",
                     )
                 )
+            for field in ("passive_check", "slow_start_s"):
+                if getattr(pool, field) is not None:
+                    problems.append(
+                        Problem(
+                            f"{base}.{field}",
+                            "udp_field_not_allowed",
+                            f"{field} is not valid on a udp pool",
+                        )
+                    )
             if pool.algorithm is Algorithm.RANDOM:
                 problems.append(
                     Problem(
@@ -458,7 +521,11 @@ def _check_udp_pools(
                         f"a {monitor.type} monitor cannot check a udp pool; use a udp monitor",
                     )
                 )
-        elif monitor is not None and monitor.type is MonitorType.UDP and protocols:
+        else:
+            _check_live_traffic(pool, protocols, monitor, base, problems)
+        if protocols != {Protocol.UDP} and (
+            monitor is not None and monitor.type is MonitorType.UDP and protocols
+        ):
             problems.append(
                 Problem(
                     f"{base}.health_monitor_id",
@@ -466,6 +533,41 @@ def _check_udp_pools(
                     "a udp monitor can only check a pool used by udp services",
                 )
             )
+
+
+def _check_live_traffic(
+    pool: Pool,
+    protocols: set[Protocol],
+    monitor: HealthMonitor | None,
+    base: str,
+    problems: list[Problem],
+) -> None:
+    """Passive checks and slow start build on the health monitor; ``layer7`` needs HTTP.
+
+    Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``) and
+    ``passive_check_layer7_needs_http``.
+    """
+    for field in ("passive_check", "slow_start_s"):
+        if getattr(pool, field) is not None and monitor is None:
+            problems.append(
+                Problem(
+                    f"{base}.{field}",
+                    "needs_health_monitor",
+                    f"{field} needs a health monitor on the pool",
+                )
+            )
+    if (
+        pool.passive_check is not None
+        and pool.passive_check.observe == "layer7"
+        and Protocol.TCP in protocols
+    ):
+        problems.append(
+            Problem(
+                f"{base}.passive_check.observe",
+                "passive_check_layer7_needs_http",
+                "layer7 observation needs a pool used only by http services; use layer4 for tcp",
+            )
+        )
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:

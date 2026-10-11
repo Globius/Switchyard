@@ -7,7 +7,7 @@ from switchyard.services.certificates import (
     RENEW_CERTS_JOB,
     SYNC_CLOUDFLARE_IPS_JOB,
 )
-from switchyard.services.changesets import APPLY_JOB
+from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.gc import GC_JOB
 from switchyard.services.infra import APPLY_SDN_JOB, DEPLOY_SE_GROUP_JOB, RETIRE_ENGINE_JOB
 
@@ -15,6 +15,7 @@ from switchyard.services.infra import APPLY_SDN_JOB, DEPLOY_SE_GROUP_JOB, RETIRE
 def test_every_job_kind_is_published() -> None:
     kinds = {
         APPLY_JOB,
+        REAPPLY_JOB,
         ISSUE_CERT_JOB,
         RENEW_CERTS_JOB,
         SYNC_CLOUDFLARE_IPS_JOB,

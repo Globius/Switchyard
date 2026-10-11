@@ -44,10 +44,35 @@ class Permission:
     row: int
     description: str
 
+    @property
+    def group(self) -> str:
+        """The permission group the matrix screen shows this entry under (eight groups).
+
+        Example:
+            >>> min_perm = next(p for p in MATRIX if p.verb == "rollback")
+            >>> min_perm.group
+            'Change sets'
+        """
+        return GROUP_OF_ROW[self.row]
+
 
 def _p(row: int, verb: str, obj: str, role: Role, description: str) -> Permission:
     return Permission(verb, obj, role, row, description)
 
+
+#: The eight groups of the role matrix screen, by row of the matrix table in 02.
+GROUP_OF_ROW: dict[int, str] = {
+    1: "Read",
+    2: "Applications",
+    3: "Infrastructure",
+    **dict.fromkeys(range(4, 10), "Change sets"),
+    **dict.fromkeys(range(10, 13), "Runtime"),
+    13: "Infrastructure",
+    14: "Tenant settings",
+    15: "Tenant settings",
+    **dict.fromkeys(range(16, 20), "Access"),
+    20: "System",
+}
 
 V, OP, T, S = Role.VIEWER, Role.OPERATOR, Role.TENANT_ADMIN, Role.SYSTEM_ADMIN
 
@@ -176,6 +201,7 @@ def stronger_or_equal(role: Role, other: Role) -> bool:
 
 
 __all__ = [
+    "GROUP_OF_ROW",
     "MATRIX",
     "ROLES",
     "ROLE_RANK",

@@ -52,7 +52,7 @@ from switchyard.domain.models import SeGroup
 from switchyard.domain.snapshot import Snapshot
 from switchyard.domain.workflow import ChangeSetState, DeploymentState
 from switchyard.jobs import queue
-from switchyard.jobs.progress import APPLY_STAGES, JobProgress
+from switchyard.jobs.progress import APPLY_STAGES, REAPPLY_STAGES, JobProgress
 from switchyard.pipeline.bundles import BundleError, engine_files
 from switchyard.pipeline.canary import (
     AgentRoutingProbe,
@@ -69,6 +69,38 @@ from switchyard.render.routing import EngineSlot
 from switchyard.services.context import Clock, Databases, utcnow
 
 log = logging.getLogger("switchyard.pipeline")
+
+
+@dataclass(frozen=True)
+class ReapplyReport:
+    """Result of pushing the current desired state to one SE group again.
+
+    Attributes:
+        ok: True if every engine of the group now runs the desired configuration.
+        se_group_id: The group.
+        se_group: Its name.
+        revision_number: The revision whose state was pushed (the tenant's latest).
+        error: Why it failed.
+        details: Per-engine notes (canary, bundles, what was reverted).
+    """
+
+    ok: bool
+    se_group_id: UUID
+    se_group: str
+    revision_number: int
+    error: str | None = None
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def as_dict(self) -> dict[str, Any]:
+        """JSON form stored as the job result."""
+        return {
+            "ok": self.ok,
+            "se_group_id": str(self.se_group_id),
+            "se_group": self.se_group,
+            "revision_number": self.revision_number,
+            "error": self.error,
+            "details": self.details,
+        }
 
 
 class PipelineStateError(RuntimeError):
@@ -262,6 +294,159 @@ class ApplyPipeline:
             for engine in opened:
                 await engine.close()
             await rec.skip_pending()
+
+    async def reapply(
+        self,
+        tenant_id: UUID,
+        se_group_id: UUID,
+        *,
+        request_id: str | None = None,
+        progress: JobProgress | None = None,
+    ) -> ReapplyReport:
+        """Push the tenant's current desired state to one SE group again (drift repair).
+
+        Drift is reported, never corrected on its own (CLAUDE.md); this runs only when a person asks
+        for it. It goes through the same stages as an apply, canary first, but makes no revision:
+        the state in the database does not change. What the engines held before is unknown (it
+        drifted), so there is nothing to revert to: a rejected push leaves an engine on what it ran.
+
+        Raises:
+            PipelineStateError: If the SE group does not exist.
+        """
+        started = self._clock()
+        rec = progress or JobProgress(None, None)
+        await rec.plan(REAPPLY_STAGES)
+        opened: list[HaproxyEngine | AgentEngine] = []
+        try:
+            for _attempt in range(3):
+                base = await self._load_base(tenant_id)
+                group = next((g for g in base.se_groups if g.id == se_group_id), None)
+                if group is None:
+                    raise PipelineStateError(f"SE group {se_group_id} does not exist")
+                async with tenant_session(self._db.app, [tenant_id]) as session:
+                    revision_number = await store.current_revision(session, tenant_id)
+                try:
+                    async with rec.stage("render"):
+                        plan = await self._plan_reapply(tenant_id, base, group, opened)
+                except (RenderError, _PlanError) as exc:
+                    return await self._reapply_done(
+                        tenant_id, group, revision_number, started, request_id, error=str(exc)
+                    )
+                async with AsyncExitStack() as stack:
+                    async with rec.stage("lock"):
+                        await stack.enter_async_context(self._locks.hold([group.id]))
+                    if await self._load_base(tenant_id) != base:
+                        continue
+                    pushed: list[tuple[HaproxyEngine, _Plan]] = []
+                    try:
+                        await self._rollout(plan, pushed, rec)
+                    except _RolloutFailedError as exc:
+                        await self._revert(pushed)
+                        return await self._reapply_done(
+                            tenant_id,
+                            group,
+                            revision_number,
+                            started,
+                            request_id,
+                            error=str(exc),
+                            plan=plan,
+                        )
+                    except Exception as exc:
+                        log.exception("unexpected error while re-applying group %s", group.name)
+                        return await self._reapply_done(
+                            tenant_id,
+                            group,
+                            revision_number,
+                            started,
+                            request_id,
+                            error=f"unexpected {type(exc).__name__}: {exc}",
+                            plan=plan,
+                        )
+                    return await self._reapply_done(
+                        tenant_id, group, revision_number, started, request_id, plan=plan
+                    )
+            raise PipelineStateError("the tenant's state kept changing while locks were acquired")
+        finally:
+            for engine in opened:
+                await engine.close()
+            await rec.skip_pending()
+
+    async def _plan_reapply(
+        self,
+        tenant_id: UUID,
+        base: Snapshot,
+        group: SeGroup,
+        opened: list[HaproxyEngine | AgentEngine],
+    ) -> _Plan:
+        target = render_haproxy(base, group.id)
+        plan = _Plan(group=group, target=target, previous=None)
+        records = [
+            r
+            for r in await self._directory.list_engines(tenant_id, group.id)
+            if r.state.value == "enabled"
+        ]
+        if not records:
+            raise _PlanError(f"SE group {group.name} has no enabled engines")
+        for record in records:
+            engine = await self._directory.connect(record)
+            opened.append(engine)
+            plan.engines.append((record, engine))
+            agent = await self._directory.connect_agent(record)
+            if agent is not None:
+                opened.append(agent)
+                plan.agents[record.name] = agent
+        await self._plan_bundles(plan, base, base, records)
+        return plan
+
+    async def _reapply_done(
+        self,
+        tenant_id: UUID,
+        group: SeGroup,
+        revision_number: int,
+        started: datetime,
+        request_id: str | None,
+        *,
+        error: str | None = None,
+        plan: _Plan | None = None,
+    ) -> ReapplyReport:
+        """Record the outcome as a deployment and an audit event, and build the report."""
+        state = DeploymentState.FAILED if error else DeploymentState.SUCCEEDED
+        details = dict(plan.notes) if plan is not None else {}
+        details["reapply"] = True
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            revision = await store.get_revision(session, tenant_id, revision_number)
+            await store.insert_deployment(
+                session,
+                tenant_id=tenant_id,
+                change_set_id=None,
+                revision_id=revision.id if revision else None,
+                se_group_id=group.id,
+                state=state,
+                rendered_hash=plan.target.content_hash if plan else None,
+                fingerprint=plan.target.fingerprint if plan else None,
+                error=error,
+                details=details,
+                started_at=started,
+            )
+            await audit_log.record(
+                session,
+                tenant_id=tenant_id,
+                actor="system:reapply",
+                action="se_group.reapply_failed" if error else "se_group.reapplied",
+                object_ref=f"se_group:{group.name}",
+                diff={"revision": revision_number, "error": error}
+                if error
+                else {"revision": revision_number},
+                request_id=request_id,
+            )
+        return ReapplyReport(
+            ok=error is None,
+            se_group_id=group.id,
+            se_group=group.name,
+            revision_number=revision_number,
+            error=error,
+            details=details,
+        )
 
     # -- planning --------------------------------------------------------------------------------
 

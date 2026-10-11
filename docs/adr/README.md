@@ -54,3 +54,9 @@ Date: YYYY-MM-DD
 | [0063](0063-haproxy-exporter-listener.md) | HAProxy Prometheus exporter listener on the management network | Accepted |
 | [0064](0064-certificate-renew-before-days.md) | Certificate renewal window (`renew_before_days`) | Accepted |
 | [0065](0065-bgp-prefix-limits.md) | BGP prefix limits | Accepted |
+| [0066](0066-pool-passive-checks-and-slow-start.md) | Pool passive checks and slow start | Accepted |
+| [0067](0067-tls-profiles-and-ocsp.md) | TLS profiles and OCSP stapling | Accepted |
+| [0068](0068-ui-support-fields.md) | Small fields the UI asked for | Accepted |
+| [0069](0069-drift-reapply.md) | Re-apply the desired state to an SE group | Accepted |
+| [0070](0070-client-mtls.md) | Client certificate verification (mutual TLS) | Accepted |
+| [0071](0071-secret-reference-scope.md) | Secret references stay inside the tenant | Accepted |

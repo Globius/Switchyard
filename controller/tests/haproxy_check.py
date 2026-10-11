@@ -27,6 +27,26 @@ for list in /etc/switchyard/certs/*.crtlist; do
   [ -e "$list" ] || continue
   while read -r path _; do cp /tmp/bundle.pem "$path"; done < "$list"
 done
+# Client CAs and their revocation lists: a throwaway CA certificate and an empty CRL.
+if grep -qE 'ca-file|crl-file' /etc/switchyard/haproxy/haproxy.cfg; then
+  mkdir -p /tmp/ca && touch /tmp/ca/index.txt && echo 01 > /tmp/ca/crlnumber
+  printf '[ca]
+default_ca=x
+[x]
+database=/tmp/ca/index.txt
+crlnumber=/tmp/ca/crlnumber
+'     > /tmp/ca/ca.cnf
+  printf 'default_md=sha256
+default_crl_days=1
+private_key=/tmp/key.pem
+certificate=/tmp/crt.pem
+'     >> /tmp/ca/ca.cnf
+  openssl ca -gencrl -config /tmp/ca/ca.cnf -out /tmp/crl.pem 2>/dev/null
+  grep -oE '(ca-file|crl-file) [^ ]+' /etc/switchyard/haproxy/haproxy.cfg | sort -u |
+  while read -r kind path; do
+    if [ "$kind" = ca-file ]; then cp /tmp/crt.pem "$path"; else cp /tmp/crl.pem "$path"; fi
+  done
+fi
 haproxy -c -f /etc/switchyard/haproxy/haproxy.cfg
 """
 

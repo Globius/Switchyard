@@ -181,6 +181,66 @@ def inspect_pem(pem: str, *, now: datetime | None = None) -> CertInfo:
     return CertInfo(sans, not_before, not_after, format(leaf.serial_number, "x"), normalized)
 
 
+@dataclass(frozen=True)
+class CaInfo:
+    """What the controller records about a client CA bundle.
+
+    Attributes:
+        not_after: The earliest expiry of the CA certificates (UTC).
+        serial: Serial of the first certificate in hex, used in the secret reference.
+        pem: Normalized PEM: the certificates only.
+        crl_pem: Normalized PEM of the revocation list, if one was given.
+    """
+
+    not_after: datetime
+    serial: str
+    pem: str
+    crl_pem: str | None
+
+
+def inspect_ca_pem(pem: str, crl_pem: str | None = None, *, now: datetime | None = None) -> CaInfo:
+    """Check a client CA bundle: CA certificates only, no key, none expired; optional PEM CRL.
+
+    Raises:
+        CertificateError: On any problem, with a message safe to show to the user.
+    """
+    now = now or datetime.now(UTC)
+    if "PRIVATE KEY" in pem:
+        raise CertificateError("a client CA bundle must not contain a private key")
+    certs: list[x509.Certificate] = []
+    for block in pem.split("-----BEGIN ")[1:]:
+        if not block.startswith("CERTIFICATE-----"):
+            raise CertificateError("only certificates are allowed in a client CA bundle")
+        try:
+            certs.append(x509.load_pem_x509_certificate(("-----BEGIN " + block).encode()))
+        except ValueError as exc:
+            raise CertificateError("a certificate in the bundle is malformed") from exc
+    if not certs:
+        raise CertificateError("the bundle holds no certificate")
+    for cert in certs:
+        try:
+            basic = cert.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except x509.ExtensionNotFound:
+            basic = None
+        if basic is None or not basic.ca:
+            raise CertificateError("every certificate in a client CA bundle must be a CA")
+        if _utc(cert.not_valid_after_utc) <= now:
+            raise CertificateError("a CA certificate in the bundle has expired")
+    normalized_crl: str | None = None
+    if crl_pem:
+        try:
+            crl = x509.load_pem_x509_crl(crl_pem.encode())
+        except ValueError as exc:
+            raise CertificateError("the revocation list is not a PEM CRL") from exc
+        normalized_crl = crl.public_bytes(serialization.Encoding.PEM).decode()
+    return CaInfo(
+        not_after=min(_utc(c.not_valid_after_utc) for c in certs),
+        serial=format(certs[0].serial_number, "x"),
+        pem="".join(c.public_bytes(serialization.Encoding.PEM).decode() for c in certs),
+        crl_pem=normalized_crl,
+    )
+
+
 def generate_key_and_csr(sans: tuple[str, ...]) -> tuple[str, str]:
     """Create an ECDSA P-256 key and a CSR for ``sans``. Returns ``(key_pem, csr_pem)``.
 

@@ -320,6 +320,8 @@ class TestApproval:
         data = world_data()
         data["tenants"][0]["name"] = "management"
         data["virtual_services"][0]["name"] = "controller"
+        for cert in data.get("certificates", []):
+            cert["secret_ref"] = cert["secret_ref"].replace("tenants/acme/", "tenants/management/")
         async with world(pg_url, data) as w:
             delete = ChangeOp(
                 object_type=ObjectType.VIRTUAL_SERVICE,

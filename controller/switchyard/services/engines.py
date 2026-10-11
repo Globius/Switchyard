@@ -12,10 +12,14 @@ from uuid import UUID
 from sqlalchemy import delete, select
 
 from switchyard.db import audit_log
-from switchyard.db.models import SeGroupRow
+from switchyard.db.models import SeGroupRow, TenantRow
 from switchyard.db.ops_models import ServiceEngineRow
 from switchyard.db.tenancy import tenant_session
-from switchyard.domain.validators import validate_name, validate_secret_ref
+from switchyard.domain.validators import (
+    check_secret_ref_scope,
+    validate_name,
+    validate_secret_ref,
+)
 from switchyard.domain.workflow import EngineState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineRecord
@@ -118,6 +122,12 @@ class EngineService:
         if credentials_ref is not None:
             validate_secret_ref(credentials_ref)
         async with tenant_session(self._db.app, [tenant_id]) as session:
+            if credentials_ref is not None:
+                tenant_name = (
+                    await session.execute(select(TenantRow.name).where(TenantRow.id == tenant_id))
+                ).scalar_one()
+                if why := check_secret_ref_scope(credentials_ref, tenant_name):
+                    raise ValueError(f"credentials_ref: {why}")
             group = (
                 await session.execute(
                     select(ServiceEngineRow.id).where(

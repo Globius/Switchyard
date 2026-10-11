@@ -46,25 +46,28 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Engine host online state | done | `host_online` on `GET /engines` (ADR 0049) | |
 | Proxmox host layout and capacity (Placement) | done | `GET /se-groups/{group}/placement` (ADR 0049) | |
 | Certificates: import, PKCS#12 (ADR 0043), replace (ADR 0044), ACME DNS-01 (incl. step-ca), Origin CA, renew job (M5) | done | | |
-| OCSP stapling, cipher and TLS-version profiles, mTLS to client and backend | missing | *not started*: in the 01 mapping, no model field or template output | Model fields, template, golden tests, ADR |
+| OCSP stapling, cipher and TLS-version profiles | done | `tls_profile` on ports, `ocsp_stapling` on certificates (ADR 0067) | |
+| mTLS: client certificate verification | done | `client_ca` certificates and `client_ca_id` on ports (ADR 0070) | |
+| mTLS to the backend members | missing | *not built*: client certificate on server lines (ADR 0070) | Pool field, bundle, golden case |
 | Cloudflare-only allow list sync job | done | | |
 | Cloudflare DNS record created from a virtual service | partial | Adapter has DNS calls; no service flow uses them (01 phase 2) | A job or change-set hook plus a model flag |
 | Login: OIDC, SAML, break-glass, sessions, refresh (T1, G1-2, G1-4, G1-7) | done | | |
 | Permission matrix, `/permissions`, 403 `code` (G1-1) | done | | |
 | Identity providers, test sign-in, role mappings, users (G1-3, 5, 6) | done | | |
 | Audit log filters, cursor, `/audit-actions` (A1) | done | | |
-| Audit events to syslog | partial | JSON line from logger `switchyard.audit`; no syslog handler in `config.py` or `runtime.py` | Handler option and a docs line |
+| Audit events to syslog | done | `SWITCHYARD_AUDIT_SYSLOG` adds a syslog handler to the `switchyard.audit` logger (`syctl serve` and `worker`) | |
 | Tenant quotas | done | Enforced as problem `quota_exceeded`; `usage` on the tenant read (ADR 0045) | |
 | Search, summary, VIP allocations, next-free, monitor test, engines list (A2 to A6) | done | | |
 | UDP via IPVS, `udp` monitor, field rules, schema endpoint (M6, T6, T7) | done | | |
 | Metrics and logs endpoints (A9) | partial | API done and answers `available: false`; the pipeline (HAProxy exporter, Prometheus, Vector, Loki) is not built, `HttpTelemetry` never run against a real stack | Deploy and document the pipeline; test against it |
 | Prometheus HTTP service-discovery endpoint for SEs | done | `GET /discovery/prometheus` (ADR 0061); the SE image must serve the exporters | |
 | Controller own `/metrics` | done | Database-derived, text format (ADR 0061) | |
-| Grafana embed or proxy (01, 03) | partial | VS Overview has a text hint only; no proxy | Proxy or link (*design question*) |
+| Grafana embed or proxy (01, 03) | partial | `links.grafana` on `GET /me` (`SWITCHYARD_GRAFANA_URL`, ADR 0068); no proxy or embed | Link in the UI; proxy if wanted (*design question*) |
 | `waf_policy`, Coraza SPOA | missing | *deferred*: phase 2 | Table, renderer, agent bundle, UI |
 | Rate limits, IP groups | missing | *deferred*: phase 2 | |
 | CrowdSec, oauth2-proxy SSO, caching, compression, Lua | missing | *deferred* or out of scope in 01 | |
-| Passive checks (`observe layer7`), `external-check`, slow-start | missing | *not started*: in the 01 mapping, not in the model | Model fields and render rules |
+| Passive checks (`observe`) and slow-start | done | `passive_check` and `slow_start_s` on the pool (ADR 0066) | |
+| `external-check` | missing | *not built on purpose*: runs a command on the SE (ADR 0066) | Fixed named checks in the SE image, own ADR |
 | Pool discovery by Proxmox tags | missing | *deferred*: phase 2 | |
 | Kubernetes connector | missing | *deferred*: phase 2 | |
 | Avi config importer | missing | *deferred*: phase 2 | |
@@ -115,9 +118,9 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Routing profiles | done | | | |
 | Tenant access and settings | partial | Quota limits only, no usage counts | *no API* | Counts per object type on the tenant read |
 | Admin: tenants, users, identity providers, break-glass, mappings, system tokens | done | | | |
-| Admin role matrix | partial | Lists every server permission, not the artboard's eight grouped rows | *design question* | Group in the UI or add a `group` field to `/permissions` |
+| Admin role matrix | partial | Lists every server permission, not the artboard's eight grouped rows | *UI to wire* (`group` on `/permissions`, ADR 0068) | Group by `group` in the UI |
 | Admin audit log | partial | Export covers loaded events only | *UI to wire* (export endpoint done, ADR 0060) | Use `GET /audit-events/export` |
-| Drift: "Re-apply revision #N" offer | missing | Drift is shown; the one explicit action is not | *not started* | Button opening a rollback draft to the live revision |
+| Drift: "Re-apply revision #N" offer | partial | `POST /se-groups/{group}/reapply` exists (ADR 0069); the UI button is not wired | *UI to wire* | Button calling the endpoint (not a rollback draft: the state is unchanged) |
 | Handoff components (ShowOnceSecret, LiveBadge, IpUsageBar, BgpSessionChip, VrrpStateChip, WizardStepper, ApprovalBanner, MemberStateList, JobProgress) | partial | Built inside features, not as shared `@switchyard` components; only ChipInput, StatusPill, states, RenderedConfigView, ConfirmDialog are shared (JobProgress is in `features/review`) | *not started* | Extract when reused |
 | Viewer (read-only) states | partial | Tests only; no viewer user in the demo data | *not started* | Seed a viewer in `syctl seed --example` |
 

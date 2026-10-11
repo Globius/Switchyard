@@ -372,6 +372,11 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n"
         "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n",
     },
+    "POST /tenants/{t}/certificates/import-ca": {
+        "name": "partners",
+        "pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n",
+        "crl_pem": "-----BEGIN X509 CRL-----\nMIIB...\n-----END X509 CRL-----\n",
+    },
     "POST /tenants/{t}/certificates/{certificate}/replace": {
         "pkcs12_b64": "MIIJ...",
         "password": "export-password",
@@ -463,6 +468,7 @@ def request_example(method: str, path: str) -> Any | None:
 #: Operations that answer 503 when an optional backend is not configured.
 UNAVAILABLE: dict[str, str] = {
     "POST /tenants/{t}/certificates/import": "No secrets backend (OpenBao) is configured.",
+    "POST /tenants/{t}/certificates/import-ca": "No secrets backend (OpenBao) is configured.",
     "POST /enroll": "Agent enrollment is not configured.",
     "POST /tenants/{t}/engines/{engine}/enrollment-token": "Agent enrollment is not configured.",
 }

@@ -47,6 +47,7 @@ from switchyard.api.schemas import (
     BreakGlassIn,
     BreakGlassRead,
     BreakGlassSwitchIn,
+    CaImportIn,
     CertImportIn,
     CertIssueIn,
     CertReplaceIn,
@@ -94,6 +95,7 @@ from switchyard.api.schemas import (
     RoleMappingIn,
     RoleMappingPatch,
     RoleMappingRead,
+    SdnApplyRead,
     SessionsRevoked,
     StateOut,
     SystemRoleMappingIn,
@@ -631,6 +633,18 @@ EXPORT_RESPONSES: dict[int | str, dict[str, Any]] = {
 CSV_COLUMNS = ("at", "tenant_id", "actor", "action", "object", "request_id", "diff")
 
 
+def _csv_safe(value: str) -> str:
+    r"""Defuse spreadsheet formulas: a cell starting with = + - @ or a control character is quoted.
+
+    Example:
+        >>> _csv_safe("=HYPERLINK(\"http://x\")")
+        '\'=HYPERLINK("http://x")'
+        >>> _csv_safe("user:alice")
+        'user:alice'
+    """
+    return "'" + value if value[:1] in {"=", "+", "-", "@", "\t", "\r"} else value
+
+
 async def _audit_export(
     open_session: Callable[[], Any], f: AuditFilters, fmt: str
 ) -> AsyncIterator[str]:
@@ -658,7 +672,9 @@ async def _audit_export(
             data = event.model_dump(mode="json")
             if fmt == "csv":
                 data["diff"] = json.dumps(data["diff"], sort_keys=True) if data["diff"] else ""
-                writer.writerow(["" if data[c] is None else data[c] for c in CSV_COLUMNS])
+                writer.writerow(
+                    ["" if data[c] is None else _csv_safe(str(data[c])) for c in CSV_COLUMNS]
+                )
             else:
                 out.write(json.dumps(data, sort_keys=True) + "\n")
         if out.tell():
@@ -1155,7 +1171,11 @@ def _int_cursor(cursor: str | None) -> int | None:
 
 
 def create_app(
-    services: ApiServices, *, public_url: str | None = None, metrics_token: str | None = None
+    services: ApiServices,
+    *,
+    public_url: str | None = None,
+    metrics_token: str | None = None,
+    grafana_url: str | None = None,
 ) -> FastAPI:
     """Build the application over ready-made services.
 
@@ -1163,6 +1183,7 @@ def create_app(
         services: The wired services.
         public_url: External base URL (``https://switchyard.example.test``), used to build login
             redirect URIs and to decide whether cookies are ``Secure``.
+        grafana_url: Base URL of Grafana, shown to the UI as ``links.grafana`` on ``GET /me``.
         metrics_token: Bearer token that may read ``/metrics`` and the Prometheus
             service-discovery list; without it only system administrators can.
     """
@@ -1495,6 +1516,7 @@ def create_app(
                 }
                 for t in tenants
             ],
+            "links": {"grafana": grafana_url},
         }
 
     @router.post(
@@ -1541,6 +1563,7 @@ def create_app(
                     "object": p.object,
                     "min_role": p.min_role.value,
                     "description": p.description,
+                    "group": p.group,
                 }
                 for p in permissions.MATRIX
             ],
@@ -2121,6 +2144,27 @@ def create_app(
             message=body.message if body else None,
             request_id=_rid(),
         )
+        return {"job_id": str(job)}
+
+    @router.post(
+        "/tenants/{t}/se-groups/{group}/reapply",
+        status_code=202,
+        tags=["se-groups"],
+        summary="Re-apply the desired state to an SE group (drift repair)",
+        description=(
+            "Pushes the tenant's current desired state to every engine of the group again, canary "
+            "first, to put engines that drifted back to what the database says. It makes no "
+            "revision and changes no desired state. Drift is never corrected on its own; this is "
+            "the explicit action. Returns the job (`reapply_se_group`); its result has `ok`, "
+            "`revision_number` (the revision that was pushed) and `error`. Requires "
+            "`tenant-admin`, because it overwrites what the engines run now. `404` if the group "
+            "does not exist."
+        ),
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202),
+    )
+    async def reapply_group(group: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
+        job = await svc.change_sets.reapply_group(who, tenant.id, group, request_id=_rid())
         return {"job_id": str(job)}
 
     @router.post(
@@ -3155,6 +3199,38 @@ def create_app(
         )
 
     @router.post(
+        "/tenants/{t}/certificates/import-ca",
+        status_code=202,
+        tags=["certificates"],
+        summary="Import a client CA for mutual TLS",
+        description=(
+            "Stores CA certificates (no key) and an optional revocation list, and adds a "
+            "`certificate` with `purpose: client_ca` to a change set. Reference it from a TLS "
+            "port as `client_ca_id` (with `client_verify` `required` or `optional`) to check "
+            "client certificates. It cannot be used as a server certificate."
+        ),
+        response_model=Accepted,
+        responses=_ok(ex.ACCEPTED, 202) | VALIDATION_RESPONSE,
+    )
+    async def import_client_ca(
+        body: CaImportIn,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+        apply: bool = False,
+    ) -> Accepted:
+        if svc.certs is None:
+            raise ApiError(503, "no secrets backend is configured for certificates")
+        data = await svc.certs.import_client_ca(who, tenant.id, body.name, body.pem, body.crl_pem)
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE, object_id=uuid7(), action=Action.CREATE, body=data
+        )
+        return await _write(
+            svc, who, tenant, op, change_set, apply, f"import client CA {body.name}"
+        )
+
+    @router.post(
         "/tenants/{t}/certificates/issue",
         status_code=202,
         tags=["certificates"],
@@ -3229,6 +3305,22 @@ def create_app(
         return {"job_id": str(job)}
 
     # infrastructure jobs
+    @router.get(
+        "/tenants/{t}/sdn/status",
+        tags=["infrastructure"],
+        summary="SDN apply state of every managed network",
+        description=(
+            "For the 'SDN apply running' chip: per managed network, whether a tenant-wide "
+            "`apply_sdn` job is `queued` or `running`, or how the latest finished one ended "
+            "(`succeeded`, `failed`, or `never` for a network it did not include). Requires any "
+            "role in the tenant."
+        ),
+        response_model=list[SdnApplyRead],
+        responses=_ok(ex.SDN_STATUS),
+    )
+    async def sdn_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [s.__dict__ for s in await svc.infra.sdn_status(who, tenant.id)]
+
     @router.post(
         "/tenants/{t}/networks/apply-sdn",
         status_code=202,

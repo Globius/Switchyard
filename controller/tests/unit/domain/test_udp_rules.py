@@ -152,3 +152,11 @@ def _ids() -> dict[str, Any]:
     import uuid
 
     return {"id": uuid.UUID(int=1), "tenant_id": uuid.UUID(int=2)}
+
+
+@pytest.mark.parametrize("field", ["passive_check", "slow_start_s"])
+def test_passive_checks_and_slow_start_are_not_valid_on_a_udp_pool(field: str) -> None:
+    data = data_with_udp()
+    value = {"observe": "layer4"} if field == "passive_check" else 30
+    data["pools"][-1][field] = value
+    assert (f"pools.wg.{field}", "udp_field_not_allowed") in problems(data)

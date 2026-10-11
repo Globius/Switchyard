@@ -174,6 +174,7 @@ def serve(
     from switchyard import runtime
     from switchyard.api.app import build_services, create_app
 
+    runtime.setup_audit_syslog()
     db = runtime.databases()
     secrets = runtime.secrets_backend()
     services = build_services(
@@ -188,7 +189,10 @@ def serve(
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
     app = create_app(
-        services, public_url=public_url, metrics_token=os.environ.get("SWITCHYARD_METRICS_TOKEN")
+        services,
+        public_url=public_url,
+        metrics_token=os.environ.get("SWITCHYARD_METRICS_TOKEN"),
+        grafana_url=runtime.grafana_url(),
     )
     config = uvicorn.Config(app, host=host, port=port)
     # uvicorn's own loop is Proactor on Windows, which psycopg rejects; run() uses the selector.
@@ -227,6 +231,8 @@ def run_worker(
 ) -> None:
     """Run a job worker until interrupted."""
     from switchyard import runtime
+
+    runtime.setup_audit_syslog()
 
     async def go() -> None:
         db = runtime.databases()

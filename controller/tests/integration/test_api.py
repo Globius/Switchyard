@@ -974,3 +974,39 @@ async def test_tenant_read_reports_usage_and_quotas_block_growth(api: Api) -> No
     )
     assert refused.status_code == 422
     assert "quota_exceeded" in refused.text
+
+
+async def test_reapply_endpoint_queues_a_job_the_worker_runs(api: Api) -> None:
+    h = await api.token()
+    wanted = api.w.engines["se-a"].files["haproxy/haproxy.cfg"]
+    api.w.engines["se-a"].files["haproxy/haproxy.cfg"] = "# drifted\n" + wanted
+    viewer = await api.token(Role.OPERATOR)
+    assert (
+        await api.client.post(f"{V1}/tenants/acme/se-groups/{GROUP}/reapply", headers=viewer)
+    ).status_code == 403
+    missing = await api.client.post(
+        f"{V1}/tenants/acme/se-groups/{uuid.uuid4()}/reapply", headers=h
+    )
+    assert missing.status_code == 404
+    queued = await api.client.post(f"{V1}/tenants/acme/se-groups/{GROUP}/reapply", headers=h)
+    assert queued.status_code == 202
+    await api.run_jobs()
+    job = (
+        await api.client.get(f"{V1}/tenants/acme/jobs/{queued.json()['job_id']}", headers=h)
+    ).json()
+    assert job["kind"] == "reapply_se_group" and job["state"] == "succeeded"
+    assert job["ok"] is True and job["result"]["revision_number"] == 0
+    assert api.w.engines["se-a"].files["haproxy/haproxy.cfg"] == wanted
+
+
+async def test_engine_credentials_cannot_point_at_another_tenants_secret(api: Api) -> None:
+    h = await api.token()
+    body = {"name": "e9", "dataplane_url": "https://192.0.2.9:5555", "mgmt_ip": "192.0.2.9"}
+    url = f"{V1}/tenants/acme/se-groups/{GROUP}/engines"
+    for ref in ("kv/tenants/globex/engines/dataplane", "kv/proxmox/token"):
+        r = await api.client.post(url, json=body | {"credentials_ref": ref}, headers=h)
+        assert r.status_code == 422, r.text
+    own = await api.client.post(
+        url, json=body | {"credentials_ref": "kv/tenants/acme/engines/dataplane"}, headers=h
+    )
+    assert own.status_code == 201

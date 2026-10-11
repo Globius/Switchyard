@@ -1469,6 +1469,41 @@
         "title": "BreakGlassSwitchIn",
         "type": "object"
       },
+      "CaImportIn": {
+        "additionalProperties": false,
+        "description": "Body of `POST /certificates/import-ca`: a client CA bundle for mutual TLS.",
+        "properties": {
+          "crl_pem": {
+            "anyOf": [
+              {
+                "maxLength": 1048576,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional certificate revocation list (PEM).",
+            "title": "Crl Pem"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pem": {
+            "description": "The CA certificates (PEM), no private key.",
+            "maxLength": 65536,
+            "title": "Pem",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "pem"
+        ],
+        "title": "CaImportIn",
+        "type": "object"
+      },
       "CertImportIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /certificates/import``.",
@@ -1621,8 +1656,19 @@
       },
       "Certificate": {
         "additionalProperties": false,
-        "description": "Certificate metadata. Key material lives in OpenBao; only ``secret_ref`` is stored.\n\nAttributes:\n    source: Where it came from.\n    sans: Subject alternative names; wildcards cover one label.\n    not_after: Expiry (timezone-aware).\n    secret_ref: OpenBao path of the PEM bundle.\n    renew_policy: Whether the controller renews it.\n    renew_before_days: How many days before ``not_after`` an ``auto`` certificate is\n        renewed (the artboard's \"Auto, 30 days before\").",
+        "description": "Certificate metadata. Key material lives in OpenBao; only ``secret_ref`` is stored.\n\nAttributes:\n    source: Where it came from.\n    sans: Subject alternative names; wildcards cover one label.\n    not_after: Expiry (timezone-aware).\n    secret_ref: OpenBao path of the PEM bundle.\n    renew_policy: Whether the controller renews it.\n    renew_before_days: How many days before ``not_after`` an ``auto`` certificate is\n        renewed (the artboard's \"Auto, 30 days before\").\n    ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate\n        (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not\n        ``cloudflare_origin``.\n    purpose: ``server`` (a certificate with a key that a port presents) or ``client_ca``\n        (trusted CA certificates, no key, that a port uses to check client certificates).\n    crl_secret_ref: OpenBao path of a PEM certificate revocation list (``client_ca`` only).",
         "properties": {
+          "crl_secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crl Secret Ref"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1637,6 +1683,20 @@
             "title": "Not After",
             "type": "string"
           },
+          "ocsp_stapling": {
+            "default": false,
+            "title": "Ocsp Stapling",
+            "type": "boolean"
+          },
+          "purpose": {
+            "default": "server",
+            "enum": [
+              "server",
+              "client_ca"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
           "renew_before_days": {
             "default": 30,
             "maximum": 365.0,
@@ -1649,10 +1709,10 @@
             "default": "manual"
           },
           "sans": {
+            "default": [],
             "items": {
               "type": "string"
             },
-            "minItems": 1,
             "title": "Sans",
             "type": "array"
           },
@@ -1680,7 +1740,6 @@
           "tenant_id",
           "name",
           "source",
-          "sans",
           "not_after",
           "secret_ref"
         ],
@@ -1690,6 +1749,17 @@
       "CertificateCreate": {
         "additionalProperties": false,
         "properties": {
+          "crl_secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crl Secret Ref"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1697,6 +1767,20 @@
           "not_after": {
             "format": "date-time",
             "title": "Not After",
+            "type": "string"
+          },
+          "ocsp_stapling": {
+            "default": false,
+            "title": "Ocsp Stapling",
+            "type": "boolean"
+          },
+          "purpose": {
+            "default": "server",
+            "enum": [
+              "server",
+              "client_ca"
+            ],
+            "title": "Purpose",
             "type": "string"
           },
           "renew_before_days": {
@@ -1711,10 +1795,10 @@
             "default": "manual"
           },
           "sans": {
+            "default": [],
             "items": {
               "type": "string"
             },
-            "minItems": 1,
             "title": "Sans",
             "type": "array"
           },
@@ -1729,7 +1813,6 @@
         "required": [
           "name",
           "source",
-          "sans",
           "not_after",
           "secret_ref"
         ],
@@ -1739,6 +1822,17 @@
       "CertificatePatch": {
         "additionalProperties": false,
         "properties": {
+          "crl_secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crl Secret Ref"
+          },
           "name": {
             "anyOf": [
               {
@@ -1761,6 +1855,32 @@
               }
             ],
             "title": "Not After"
+          },
+          "ocsp_stapling": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ocsp Stapling"
+          },
+          "purpose": {
+            "anyOf": [
+              {
+                "enum": [
+                  "server",
+                  "client_ca"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose"
           },
           "renew_before_days": {
             "anyOf": [
@@ -1834,6 +1954,17 @@
             "title": "Changed Fields",
             "type": "array"
           },
+          "crl_secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crl Secret Ref"
+          },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
             "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
@@ -1852,6 +1983,20 @@
             "title": "Not After",
             "type": "string"
           },
+          "ocsp_stapling": {
+            "default": false,
+            "title": "Ocsp Stapling",
+            "type": "boolean"
+          },
+          "purpose": {
+            "default": "server",
+            "enum": [
+              "server",
+              "client_ca"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
           "renew_before_days": {
             "default": 30,
             "maximum": 365.0,
@@ -1864,10 +2009,10 @@
             "default": "manual"
           },
           "sans": {
+            "default": [],
             "items": {
               "type": "string"
             },
-            "minItems": 1,
             "title": "Sans",
             "type": "array"
           },
@@ -1895,7 +2040,6 @@
           "tenant_id",
           "name",
           "source",
-          "sans",
           "not_after",
           "secret_ref",
           "draft_status",
@@ -4351,9 +4495,10 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.",
         "enum": [
           "apply_change_set",
+          "reapply_se_group",
           "deploy_se_group",
           "retire_engine",
           "apply_sdn",
@@ -4629,6 +4774,9 @@
             "title": "Is System",
             "type": "boolean"
           },
+          "links": {
+            "$ref": "#/components/schemas/MeLinks"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -4669,6 +4817,26 @@
           "tenants"
         ],
         "title": "Me",
+        "type": "object"
+      },
+      "MeLinks": {
+        "additionalProperties": false,
+        "description": "Where the UI may link to, set by the operator of the controller.",
+        "properties": {
+          "grafana": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base URL of Grafana (`SWITCHYARD_GRAFANA_URL`), or null when none is set.",
+            "title": "Grafana"
+          }
+        },
+        "title": "MeLinks",
         "type": "object"
       },
       "MeSession": {
@@ -6413,6 +6581,41 @@
         "title": "Page[VirtualServiceRead]",
         "type": "object"
       },
+      "PassiveCheck": {
+        "additionalProperties": false,
+        "description": "Judge members by their real traffic as well as by the health monitor (HAProxy ``observe``).\n\nAttributes:\n    observe: ``layer4`` watches connection failures; ``layer7`` also watches HTTP responses\n        (``http`` pools only).\n    error_limit: Consecutive errors that trigger ``on_error``.\n    on_error: What to do at the limit: ``mark-down``, ``fastinter`` (check faster),\n        ``fail-check`` (count one failed check) or ``sudden-death`` (fail and mark down).\n\nExample:\n    >>> PassiveCheck().on_error\n    'mark-down'",
+        "properties": {
+          "error_limit": {
+            "default": 10,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Error Limit",
+            "type": "integer"
+          },
+          "observe": {
+            "default": "layer7",
+            "enum": [
+              "layer4",
+              "layer7"
+            ],
+            "title": "Observe",
+            "type": "string"
+          },
+          "on_error": {
+            "default": "mark-down",
+            "enum": [
+              "mark-down",
+              "fastinter",
+              "fail-check",
+              "sudden-death"
+            ],
+            "title": "On Error",
+            "type": "string"
+          }
+        },
+        "title": "PassiveCheck",
+        "type": "object"
+      },
       "PermissionMatrix": {
         "additionalProperties": false,
         "description": "The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.",
@@ -6447,6 +6650,11 @@
           "description": {
             "description": "One sentence for tooltips.",
             "title": "Description",
+            "type": "string"
+          },
+          "group": {
+            "description": "The group the role matrix screen shows it under: `Read`, `Applications`, `Infrastructure`, `Change sets`, `Runtime`, `Tenant settings`, `Access` or `System`.",
+            "title": "Group",
             "type": "string"
           },
           "min_role": {
@@ -6514,7 +6722,8 @@
           "verb",
           "object",
           "min_role",
-          "description"
+          "description",
+          "group"
         ],
         "title": "PermissionRead",
         "type": "object"
@@ -6583,7 +6792,7 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    members: Backend servers, unique by name.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    members: Backend servers, unique by name.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
@@ -6618,6 +6827,16 @@
             "title": "Name",
             "type": "string"
           },
+          "passive_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassiveCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persistence": {
             "anyOf": [
               {
@@ -6627,6 +6846,19 @@
                 "type": "null"
               }
             ]
+          },
+          "slow_start_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Start S"
           },
           "tenant_id": {
             "format": "uuid",
@@ -6689,6 +6921,16 @@
             "title": "Name",
             "type": "string"
           },
+          "passive_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassiveCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persistence": {
             "anyOf": [
               {
@@ -6698,6 +6940,19 @@
                 "type": "null"
               }
             ]
+          },
+          "slow_start_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Start S"
           },
           "tls": {
             "default": false,
@@ -6829,6 +7084,16 @@
             ],
             "title": "Name"
           },
+          "passive_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassiveCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persistence": {
             "anyOf": [
               {
@@ -6838,6 +7103,17 @@
                 "type": "null"
               }
             ]
+          },
+          "slow_start_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Start S"
           },
           "tls": {
             "anyOf": [
@@ -6914,6 +7190,16 @@
             "title": "Name",
             "type": "string"
           },
+          "passive_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassiveCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "persistence": {
             "anyOf": [
               {
@@ -6923,6 +7209,19 @@
                 "type": "null"
               }
             ]
+          },
+          "slow_start_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Start S"
           },
           "tenant_id": {
             "format": "uuid",
@@ -8322,6 +8621,86 @@
         "title": "SamlProviderRead",
         "type": "object"
       },
+      "SdnApplyRead": {
+        "additionalProperties": false,
+        "description": "Where the Proxmox SDN apply stands for one managed network.\n\nAn apply is tenant-wide: while one is `queued` or `running` it counts for every managed\nnetwork. After it, `succeeded` and `failed` come from the latest finished apply, and `never`\nmarks a network that no finished apply has included yet.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "network": {
+            "title": "Network",
+            "type": "string"
+          },
+          "network_id": {
+            "format": "uuid",
+            "title": "Network Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "never"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "network_id",
+          "network",
+          "state"
+        ],
+        "title": "SdnApplyRead",
+        "type": "object"
+      },
       "SeGroup": {
         "additionalProperties": false,
         "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).",
@@ -9307,6 +9686,12 @@
             "title": "Id",
             "type": "string"
           },
+          "members": {
+            "default": 0,
+            "description": "People with a grant in the tenant: signed-in users whose provider groups match one of the tenant's role mappings.",
+            "title": "Members",
+            "type": "integer"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -9417,6 +9802,16 @@
         ],
         "title": "TenantSummary",
         "type": "object"
+      },
+      "TlsProfile": {
+        "description": "Protocol versions and ciphers a TLS port offers (Mozilla's server-side TLS guidelines).\n\n``modern``: TLS 1.3 only. ``intermediate``: TLS 1.2 and 1.3 with forward-secret AEAD ciphers.\n``legacy``: TLS 1.0 to 1.3 for old clients; use it only while such clients exist. A port\nwithout a profile keeps the engine default: TLS 1.2 or later with HAProxy's own cipher list.",
+        "enum": [
+          "modern",
+          "intermediate",
+          "legacy"
+        ],
+        "title": "TlsProfile",
+        "type": "string"
       },
       "TokenCreated": {
         "additionalProperties": false,
@@ -11214,8 +11609,29 @@
       },
       "VsPort": {
         "additionalProperties": false,
-        "description": "One listening port on a virtual service's VIP.\n\nAttributes:\n    port: Listening port.\n    tls: Terminate TLS on this port using the service's certificates.\n    http2: Offer HTTP/2 via ALPN (requires ``tls``).\n    proxy_protocol: Accept the PROXY protocol header from the client side.\n    https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port\n        (which must be a TLS port of the same service).",
+        "description": "One listening port on a virtual service's VIP.\n\nAttributes:\n    port: Listening port.\n    tls: Terminate TLS on this port using the service's certificates.\n    http2: Offer HTTP/2 via ALPN (requires ``tls``).\n    proxy_protocol: Accept the PROXY protocol header from the client side.\n    https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port\n        (which must be a TLS port of the same service).\n    tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine\n        default (TLS 1.2 or later, HAProxy's default ciphers).\n    client_ca_id: A ``client_ca`` certificate: clients must present a certificate it signed\n        (mutual TLS). Needs ``tls``.\n    client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid\n        certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.",
         "properties": {
+          "client_ca_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Ca Id"
+          },
+          "client_verify": {
+            "default": "required",
+            "enum": [
+              "required",
+              "optional"
+            ],
+            "title": "Client Verify",
+            "type": "string"
+          },
           "http2": {
             "default": false,
             "title": "Http2",
@@ -11245,6 +11661,16 @@
             "default": false,
             "title": "Tls",
             "type": "boolean"
+          },
+          "tls_profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TlsProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -11982,6 +12408,9 @@
                   "email": "alice@example.test",
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
+                  "links": {
+                    "grafana": "https://grafana.example.test"
+                  },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
                   "session": {
@@ -12459,6 +12888,9 @@
                   "email": "alice@example.test",
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
+                  "links": {
+                    "grafana": "https://grafana.example.test"
+                  },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
                   "session": {
@@ -13960,6 +14392,9 @@
                   "email": "alice@example.test",
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
+                  "links": {
+                    "grafana": "https://grafana.example.test"
+                  },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
                   "session": {
@@ -14067,18 +14502,21 @@
                   "permissions": [
                     {
                       "description": "Read everything in the tenant.",
+                      "group": "Read",
                       "min_role": "viewer",
                       "object": "tenant_data",
                       "verb": "read"
                     },
                     {
                       "description": "Apply a change set when the tenant does not require approval.",
+                      "group": "Change sets",
                       "min_role": "operator",
                       "object": "change_set",
                       "verb": "apply"
                     },
                     {
                       "description": "Register, enable, disable, retire or remove service engines.",
+                      "group": "Infrastructure",
                       "min_role": "tenant-admin",
                       "object": "engine",
                       "verb": "manage"
@@ -15792,6 +16230,7 @@
                 "example": [
                   {
                     "id": "0192f3a0-0000-7000-8000-000000000001",
+                    "members": 7,
                     "name": "acme",
                     "quotas": {
                       "virtual_service": 50
@@ -15908,6 +16347,7 @@
               "application/json": {
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
+                  "members": 7,
                   "name": "acme",
                   "quotas": {
                     "virtual_service": 50
@@ -16107,6 +16547,7 @@
               "application/json": {
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
+                  "members": 7,
                   "name": "acme",
                   "quotas": {
                     "virtual_service": 50
@@ -16249,6 +16690,7 @@
               "application/json": {
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
+                  "members": 7,
                   "name": "acme",
                   "quotas": {
                     "virtual_service": 50
@@ -17433,6 +17875,167 @@
           }
         },
         "summary": "Import a certificate and key",
+        "tags": [
+          "certificates"
+        ],
+        "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/certificates/import-ca": {
+      "post": {
+        "description": "Stores CA certificates (no key) and an optional revocation list, and adds a `certificate` with `purpose: client_ca` to a change set. Reference it from a TLS port as `client_ca_id` (with `client_verify` `required` or `optional`) to check client certificates. It cannot be used as a server certificate.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "import_client_ca_api_v1_tenants__t__certificates_import_ca_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read the state as this open change set would leave it (draft view).",
+            "in": "query",
+            "name": "change_set",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Change Set"
+            }
+          },
+          {
+            "description": "`true` applies the change immediately as a one-operation change set.",
+            "in": "query",
+            "name": "apply",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Apply",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "crl_pem": "-----BEGIN X509 CRL-----\nMIIB...\n-----END X509 CRL-----\n",
+                "name": "partners",
+                "pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CaImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                  "object_id": "0192f3a0-0000-7000-8000-000000000014",
+                  "op_index": 0
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "No secrets backend (OpenBao) is configured."
+          }
+        },
+        "summary": "Import a client CA for mutual TLS",
         "tags": [
           "certificates"
         ],
@@ -28353,6 +28956,111 @@
         "x-required-role": "tenant-admin"
       }
     },
+    "/api/v1/tenants/{t}/sdn/status": {
+      "get": {
+        "description": "For the 'SDN apply running' chip: per managed network, whether a tenant-wide `apply_sdn` job is `queued` or `running`, or how the latest finished one ended (`succeeded`, `failed`, or `never` for a network it did not include). Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "sdn_status_api_v1_tenants__t__sdn_status_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "job_id": "0192f3a0-0000-7000-8000-000000000021",
+                    "network": "lb",
+                    "network_id": "0192f3a0-0000-7000-8000-000000000061",
+                    "started_at": "2026-10-11T08:30:00Z",
+                    "state": "running"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SdnApplyRead"
+                  },
+                  "title": "Response Sdn Status Api V1 Tenants  T  Sdn Status Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "SDN apply state of every managed network",
+        "tags": [
+          "infrastructure"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
     "/api/v1/tenants/{t}/se-groups": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
@@ -29317,6 +30025,122 @@
           "engines"
         ],
         "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/se-groups/{group}/reapply": {
+      "post": {
+        "description": "Pushes the tenant's current desired state to every engine of the group again, canary first, to put engines that drifted back to what the database says. It makes no revision and changes no desired state. Drift is never corrected on its own; this is the explicit action. Returns the job (`reapply_se_group`); its result has `ok`, `revision_number` (the revision that was pushed) and `error`. Requires `tenant-admin`, because it overwrites what the engines run now. `404` if the group does not exist.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "reapply_group_api_v1_tenants__t__se_groups__group__reapply_post",
+        "parameters": [
+          {
+            "description": "SE group id.",
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Group",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "job_id": "0192f3a0-0000-7000-8000-000000000021"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/JobAccepted"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Re-apply the desired state to an SE group (drift repair)",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "operator"
       }
     },
     "/api/v1/tenants/{t}/se-groups/{object_id}": {

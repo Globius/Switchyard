@@ -68,6 +68,8 @@ def full_data() -> dict:  # type: ignore[type-arg]
         persistence={"type": "source_ip", "timeout_s": 600},
         tls=True,
         algorithm="leastconn",
+        passive_check={"observe": "layer7", "error_limit": 4, "on_error": "fastinter"},
+        slow_start_s=45,
     )
     pool["members"].append(
         {"address": "10.20.0.12", "port": 80, "weight": 50, "admin_state": "drain", "name": "b"}
@@ -80,7 +82,9 @@ def full_data() -> dict:  # type: ignore[type-arg]
             "members": [{"address": "10.20.0.30", "port": 6443}],
         }
     )
+    data["certificates"][0].update(source="acme", ocsp_stapling=True, renew_before_days=14)
     vs = data["virtual_services"][0]
+    vs["ports"][0]["tls_profile"] = "modern"
     vs.update(
         policy_set_ids=["ps-redir"],
         allow_list_id="ps-cf",

@@ -26,7 +26,7 @@ from sqlalchemy import func, select
 
 from switchyard.db import audit_log
 from switchyard.db import changesets as store
-from switchyard.db.models import TenantRow
+from switchyard.db.models import SeGroupRow, TenantRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import tenant_session
 from switchyard.domain import management, permissions
@@ -54,6 +54,7 @@ INFRASTRUCTURE = frozenset(
 )
 
 APPLY_JOB = "apply_change_set"
+REAPPLY_JOB = "reapply_se_group"
 
 
 class ValidationFailedError(ValueError):
@@ -584,6 +585,48 @@ class ChangeSetService:
                 {"tenant_id": str(tenant_id), "change_set_id": str(change_set_id)},
                 tenant_id=tenant_id,
                 max_attempts=3,
+                request_id=request_id,
+            )
+
+    async def reapply_group(
+        self,
+        principal: Principal,
+        tenant_id: UUID,
+        se_group_id: UUID,
+        *,
+        request_id: str | None = None,
+    ) -> UUID:
+        """Queue a re-apply of the current desired state to one SE group. Returns the job id.
+
+        This is the one explicit way to repair drift: it pushes what the database says to every
+        engine of the group, canary first, without making a revision. It needs the role that may
+        roll back (``tenant-admin``), because it overwrites whatever the engines run now.
+
+        Raises:
+            NotFoundError: If the SE group does not exist.
+        """
+        _require_tenant(principal, tenant_id)
+        require(principal, "rollback", "revision")
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            group = (
+                await session.execute(select(SeGroupRow.name).where(SeGroupRow.id == se_group_id))
+            ).scalar_one_or_none()
+            if group is None:
+                raise NotFoundError(f"SE group {se_group_id} not found")
+            await audit_log.record(
+                session,
+                tenant_id=tenant_id,
+                actor=principal.actor,
+                action="se_group.reapply_requested",
+                object_ref=f"se_group:{group}",
+                request_id=request_id,
+            )
+            return await queue.enqueue(
+                session,
+                REAPPLY_JOB,
+                {"tenant_id": str(tenant_id), "se_group_id": str(se_group_id)},
+                tenant_id=tenant_id,
+                max_attempts=1,
                 request_id=request_id,
             )
 

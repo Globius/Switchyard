@@ -269,6 +269,11 @@ class TenantRead(ApiModel):
         default_factory=dict,
         description="Objects the tenant owns now, by object type name (zeros included).",
     )
+    members: int = Field(
+        default=0,
+        description="People with a grant in the tenant: signed-in users whose provider groups "
+        "match one of the tenant's role mappings.",
+    )
 
 
 class TokenRead(ApiModel):
@@ -397,6 +402,15 @@ class MeSession(ApiModel):
     )
 
 
+class MeLinks(ApiModel):
+    """Where the UI may link to, set by the operator of the controller."""
+
+    grafana: str | None = Field(
+        default=None,
+        description="Base URL of Grafana (`SWITCHYARD_GRAFANA_URL`), or null when none is set.",
+    )
+
+
 class Me(ApiModel):
     """The authenticated caller."""
 
@@ -415,6 +429,7 @@ class Me(ApiModel):
     )
     session: MeSession | None = Field(description="Null for API tokens.")
     tenants: list[MeTenant]
+    links: MeLinks = Field(default_factory=MeLinks)
 
 
 PermissionVerb = Literal[
@@ -467,6 +482,23 @@ PermissionObject = Literal[
 ]
 
 
+class SdnApplyRead(ApiModel):
+    """Where the Proxmox SDN apply stands for one managed network.
+
+    An apply is tenant-wide: while one is `queued` or `running` it counts for every managed
+    network. After it, `succeeded` and `failed` come from the latest finished apply, and `never`
+    marks a network that no finished apply has included yet.
+    """
+
+    network_id: UUID
+    network: str
+    state: Literal["queued", "running", "succeeded", "failed", "never"]
+    job_id: UUID | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    error: str | None = None
+
+
 class PermissionRead(ApiModel):
     """One cell of the permission matrix. `verb` and `object` are published as enums."""
 
@@ -474,6 +506,10 @@ class PermissionRead(ApiModel):
     object: PermissionObject
     min_role: Role = Field(description="The weakest role that may do this.")
     description: str = Field(description="One sentence for tooltips.")
+    group: str = Field(
+        description="The group the role matrix screen shows it under: `Read`, `Applications`, "
+        "`Infrastructure`, `Change sets`, `Runtime`, `Tenant settings`, `Access` or `System`."
+    )
 
 
 class PermissionMatrix(ApiModel):
@@ -1409,6 +1445,16 @@ class CertImportIn(CertMaterialIn):
     """Body of ``POST /certificates/import``."""
 
     name: str
+
+
+class CaImportIn(ApiModel):
+    """Body of `POST /certificates/import-ca`: a client CA bundle for mutual TLS."""
+
+    name: str
+    pem: str = Field(max_length=65536, description="The CA certificates (PEM), no private key.")
+    crl_pem: str | None = Field(
+        default=None, max_length=1048576, description="Optional certificate revocation list (PEM)."
+    )
 
 
 class CertReplaceIn(CertMaterialIn):

@@ -1,5 +1,6 @@
 """``/metrics`` and the Prometheus service-discovery list, over a real database."""
 
+import json
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
@@ -47,7 +48,7 @@ async def setup(pg_url: str) -> AsyncIterator[Setup]:
         )
         services = build_services(w.db, directory)
         admin, _ = await services.tokens.create(ROOT, None, "root", Role.SYSTEM_ADMIN)
-        app = create_app(services, metrics_token=SCRAPE)
+        app = create_app(services, metrics_token=SCRAPE, grafana_url="https://grafana.example.test")
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://api"
         ) as client:
@@ -136,3 +137,80 @@ def test_exposition_escapes_labels_and_formats_numbers() -> None:
     escaped = "q" + bs + '"' + bs + bs + bs + "n"
     assert f'x_total{{a="{escaped}"}} 1.5' in out
     assert out.endswith("x_total 2" + nl)
+
+
+async def test_me_shows_the_grafana_link_and_permissions_carry_their_group(setup: Setup) -> None:
+    me = (await setup.client.get("/api/v1/me", headers=setup.admin)).json()
+    assert me["links"] == {"grafana": "https://grafana.example.test"}
+    matrix = (await setup.client.get("/api/v1/permissions", headers=setup.admin)).json()
+    groups = {p["group"] for p in matrix["permissions"]}
+    assert len(groups) == 8 and {"Read", "Change sets", "System"} <= groups
+
+
+async def test_tenant_reads_count_the_people_with_a_grant(setup: Setup) -> None:
+    from switchyard.db.auth_models import IdentityProviderRow, IdpRoleMappingRow, UserAccountRow
+
+    async with admin_session(setup.w.db.admin) as s:
+        provider = IdentityProviderRow(
+            id=uuid.uuid4(),
+            name="corp",
+            protocol="oidc",
+            issuer_url="https://idp.example.test",
+            client_id="switchyard",
+        )
+        s.add(provider)
+        await s.flush()
+        s.add(
+            IdpRoleMappingRow(
+                id=uuid.uuid4(),
+                provider_id=provider.id,
+                group_name="acme-ops",
+                scope_tenant_id=TENANT,
+                role="operator",
+            )
+        )
+        for name, groups in (("a", ["acme-ops"]), ("b", ["acme-ops", "x"]), ("c", ["other"])):
+            s.add(
+                UserAccountRow(
+                    id=uuid.uuid4(),
+                    provider_id=provider.id,
+                    subject=f"sub-{name}",
+                    username=name,
+                    groups=groups,
+                )
+            )
+    one = (await setup.client.get("/api/v1/tenants/acme", headers=setup.admin)).json()
+    assert one["members"] == 2
+    listed = (await setup.client.get("/api/v1/tenants", headers=setup.admin)).json()
+    assert [t["members"] for t in listed if t["name"] == "acme"] == [2]
+
+
+async def test_sdn_status_follows_the_apply_job(setup: Setup) -> None:
+    async with admin_session(setup.w.db.admin) as s:
+        await s.execute(text("UPDATE network SET managed = true, sdn_zone = 'z', vnet = 'v1'"))
+    url = "/api/v1/tenants/acme/sdn/status"
+    never = (await setup.client.get(url, headers=setup.admin)).json()
+    assert {n["state"] for n in never} == {"never"} and len(never) >= 1
+    job = await setup.client.post("/api/v1/tenants/acme/networks/apply-sdn", headers=setup.admin)
+    assert job.status_code == 202
+    queued = (await setup.client.get(url, headers=setup.admin)).json()
+    assert {n["state"] for n in queued} == {"queued"}
+    assert {n["job_id"] for n in queued} == {job.json()["job_id"]}
+    names = [n["network"] for n in queued]
+    async with admin_session(setup.w.db.admin) as s:
+        await s.execute(
+            text(
+                "UPDATE job SET state = 'succeeded', started_at = now(), finished_at = now(), "
+                "result = CAST(:r AS jsonb) WHERE kind = 'apply_sdn'"
+            ),
+            {"r": json.dumps({"networks": names[:1], "removed": []})},
+        )
+    done = {
+        n["network"]: n["state"] for n in (await setup.client.get(url, headers=setup.admin)).json()
+    }
+    assert done[names[0]] == "succeeded"
+    assert all(state == "never" for name, state in done.items() if name != names[0])
+    async with admin_session(setup.w.db.admin) as s:
+        await s.execute(text("UPDATE job SET state = 'failed', last_error = 'boom'"))
+    failed = (await setup.client.get(url, headers=setup.admin)).json()
+    assert {n["state"] for n in failed} == {"failed"} and failed[0]["error"] == "boom"

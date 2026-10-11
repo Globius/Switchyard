@@ -95,6 +95,19 @@ class CertSource(enum.StrEnum):
     STEP_CA = "step_ca"
 
 
+class TlsProfile(enum.StrEnum):
+    """Protocol versions and ciphers a TLS port offers (Mozilla's server-side TLS guidelines).
+
+    ``modern``: TLS 1.3 only. ``intermediate``: TLS 1.2 and 1.3 with forward-secret AEAD ciphers.
+    ``legacy``: TLS 1.0 to 1.3 for old clients; use it only while such clients exist. A port
+    without a profile keeps the engine default: TLS 1.2 or later with HAProxy's own cipher list.
+    """
+
+    MODERN = "modern"
+    INTERMEDIATE = "intermediate"
+    LEGACY = "legacy"
+
+
 class RenewPolicy(enum.StrEnum):
     """Whether the controller renews the certificate."""
 
@@ -351,6 +364,12 @@ class VsPort(Model):
         proxy_protocol: Accept the PROXY protocol header from the client side.
         https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port
             (which must be a TLS port of the same service).
+        tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine
+            default (TLS 1.2 or later, HAProxy's default ciphers).
+        client_ca_id: A ``client_ca`` certificate: clients must present a certificate it signed
+            (mutual TLS). Needs ``tls``.
+        client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
+            certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
     """
 
     port: Port
@@ -358,11 +377,18 @@ class VsPort(Model):
     http2: bool = False
     proxy_protocol: bool = False
     https_redirect_port: Port | None = None
+    tls_profile: TlsProfile | None = None
+    client_ca_id: UUID | None = None
+    client_verify: Literal["required", "optional"] = "required"
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
+        if self.client_ca_id is not None and not self.tls:
+            raise ValueError("client_ca_id requires tls")
         if self.http2 and not self.tls:
             raise ValueError("http2 requires tls")
+        if self.tls_profile is not None and not self.tls:
+            raise ValueError("tls_profile requires tls")
         if self.https_redirect_port is not None and self.tls:
             raise ValueError("https_redirect_port is only valid on a plaintext port")
         return self
@@ -445,6 +471,26 @@ class PersistenceSourceIp(Model):
     table_size: int = Field(default=100_000, ge=1_000, le=10_000_000)
 
 
+class PassiveCheck(Model):
+    """Judge members by their real traffic as well as by the health monitor (HAProxy ``observe``).
+
+    Attributes:
+        observe: ``layer4`` watches connection failures; ``layer7`` also watches HTTP responses
+            (``http`` pools only).
+        error_limit: Consecutive errors that trigger ``on_error``.
+        on_error: What to do at the limit: ``mark-down``, ``fastinter`` (check faster),
+            ``fail-check`` (count one failed check) or ``sudden-death`` (fail and mark down).
+
+    Example:
+        >>> PassiveCheck().on_error
+        'mark-down'
+    """
+
+    observe: Literal["layer4", "layer7"] = "layer7"
+    error_limit: int = Field(default=10, ge=1, le=1000)
+    on_error: Literal["mark-down", "fastinter", "fail-check", "sudden-death"] = "mark-down"
+
+
 class PoolMember(Model):
     """One backend server.
 
@@ -489,6 +535,9 @@ class Pool(TenantOwned):
         tls: Connect to members over TLS.
         tls_verify: Verify the member certificate against the system CA store. Off by default to
             match Avi behaviour for internal backends with private certificates.
+        passive_check: Also judge members by their live traffic. Needs a health monitor.
+        slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
+            weight (HAProxy ``slowstart``). Needs a health monitor.
         members: Backend servers, unique by name.
     """
 
@@ -497,6 +546,8 @@ class Pool(TenantOwned):
     health_monitor_id: UUID | None = None
     tls: bool = False
     tls_verify: bool = False
+    passive_check: PassiveCheck | None = None
+    slow_start_s: int | None = Field(default=None, ge=1, le=3600)
     members: tuple[PoolMember, ...] = ()
 
     @model_validator(mode="after")
@@ -589,17 +640,36 @@ class Certificate(TenantOwned):
         renew_policy: Whether the controller renews it.
         renew_before_days: How many days before ``not_after`` an ``auto`` certificate is
             renewed (the artboard's "Auto, 30 days before").
+        ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate
+            (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not
+            ``cloudflare_origin``.
+        purpose: ``server`` (a certificate with a key that a port presents) or ``client_ca``
+            (trusted CA certificates, no key, that a port uses to check client certificates).
+        crl_secret_ref: OpenBao path of a PEM certificate revocation list (``client_ca`` only).
     """
 
     source: CertSource
-    sans: tuple[HostPattern, ...] = Field(min_length=1)
+    sans: tuple[HostPattern, ...] = ()
     not_after: datetime
     secret_ref: SecretRef
     renew_policy: RenewPolicy = RenewPolicy.MANUAL
     renew_before_days: int = Field(default=30, ge=1, le=365)
+    ocsp_stapling: bool = False
+    purpose: Literal["server", "client_ca"] = "server"
+    crl_secret_ref: SecretRef | None = None
 
     @model_validator(mode="after")
     def _checked(self) -> Self:
+        if self.purpose == "server" and not self.sans:
+            raise ValueError("a server certificate needs at least one name")
+        if self.purpose == "client_ca" and (
+            self.sans or self.ocsp_stapling or self.renew_policy is not RenewPolicy.MANUAL
+        ):
+            raise ValueError("a client_ca has no names, no OCSP stapling and no renewal")
+        if self.crl_secret_ref is not None and self.purpose != "client_ca":
+            raise ValueError("crl_secret_ref is only valid on a client_ca")
+        if self.ocsp_stapling and self.source is CertSource.CLOUDFLARE_ORIGIN:
+            raise ValueError("Cloudflare Origin CA certificates have no OCSP responder")
         if self.not_after.tzinfo is None:
             raise ValueError("not_after must be timezone-aware")
         if len(set(self.sans)) != len(self.sans):

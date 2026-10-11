@@ -24,7 +24,7 @@ from switchyard.services.certificates import (
     SYNC_CLOUDFLARE_IPS_JOB,
     CertificateService,
 )
-from switchyard.services.changesets import APPLY_JOB
+from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import (
@@ -76,7 +76,16 @@ def build_handlers(
         )
         return report.as_dict()
 
-    handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set}
+    async def reapply_se_group(job: Job) -> dict[str, Any]:
+        report = await pipeline.reapply(
+            UUID(job.payload["tenant_id"]),
+            UUID(job.payload["se_group_id"]),
+            request_id=job.request_id,
+            progress=JobProgress(db.admin, job.id),
+        )
+        return report.as_dict()
+
+    handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}
     if gc is not None:
 
         async def collect_garbage(job: Job) -> dict[str, Any]:
