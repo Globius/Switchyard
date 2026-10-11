@@ -2305,6 +2305,16 @@
             ],
             "title": "Credentials Ref"
           },
+          "guest_kind": {
+            "default": "qemu",
+            "description": "`qemu` clones a cloud-init VM template; `lxc` clones a container template (lighter, no cloud-init: enrollment material must be delivered out of band).",
+            "enum": [
+              "qemu",
+              "lxc"
+            ],
+            "title": "Guest Kind",
+            "type": "string"
+          },
           "mgmt_pool_id": {
             "format": "uuid",
             "title": "Mgmt Pool Id",
@@ -2894,6 +2904,22 @@
             ],
             "description": "`host:port` of `sy-agent`, if any.",
             "title": "Agent Url"
+          },
+          "guest_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "qemu",
+                  "lxc"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`qemu` (a VM) or `lxc` (a container), as deployed; null for a hand-built engine (show nothing, or a generic icon).",
+            "title": "Guest Kind"
           },
           "host_online": {
             "anyOf": [
@@ -5037,6 +5063,30 @@
           "backend": {
             "title": "Backend",
             "type": "string"
+          },
+          "check_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Short code of the last health check (`L4OK`, `L7OK`, `L7STS`, `L4TOUT`, ...).",
+            "title": "Check Status"
+          },
+          "last_change_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds since the member's status last changed.",
+            "title": "Last Change S"
           },
           "server": {
             "title": "Server",
@@ -20984,6 +21034,7 @@
                     "agent_cert_serial": "3f2a9c",
                     "agent_enrolled": true,
                     "agent_url": "192.0.2.21:7443",
+                    "guest_kind": "qemu",
                     "host_online": true,
                     "id": "0192f3a0-0000-7000-8000-000000000022",
                     "mgmt_ip": "192.0.2.21",
@@ -21210,6 +21261,7 @@
                   "agent_cert_serial": "3f2a9c",
                   "agent_enrolled": true,
                   "agent_url": "192.0.2.21:7443",
+                  "guest_kind": "qemu",
                   "host_online": true,
                   "id": "0192f3a0-0000-7000-8000-000000000022",
                   "mgmt_ip": "192.0.2.21",
@@ -29985,6 +30037,7 @@
               "example": {
                 "count": 2,
                 "credentials_ref": "kv/tenants/acme/engines/dataplane",
+                "guest_kind": "qemu",
                 "mgmt_pool_id": "0192f3a0-0000-7000-8000-000000000011",
                 "nodes": [
                   "pve1",
@@ -30126,6 +30179,7 @@
                     "agent_cert_serial": "3f2a9c",
                     "agent_enrolled": true,
                     "agent_url": "192.0.2.21:7443",
+                    "guest_kind": "qemu",
                     "host_online": true,
                     "id": "0192f3a0-0000-7000-8000-000000000022",
                     "mgmt_ip": "192.0.2.21",
@@ -30263,6 +30317,7 @@
                   "agent_cert_serial": "3f2a9c",
                   "agent_enrolled": true,
                   "agent_url": "192.0.2.21:7443",
+                  "guest_kind": "qemu",
                   "host_online": true,
                   "id": "0192f3a0-0000-7000-8000-000000000022",
                   "mgmt_ip": "192.0.2.21",

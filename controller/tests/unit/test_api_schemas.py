@@ -172,3 +172,23 @@ def test_new_field_level_errors_keep_a_plain_path() -> None:
     )
     assert strip_union_tag(("body", "name")) == "name"
     assert strip_union_tag(("query", "limit")) == "limit"
+
+
+def test_member_status_carries_the_health_check_fields() -> None:
+    """The status service reports these; the response model used to forbid them (500 on a real SE)."""
+    from switchyard.api.schemas import MemberStatus
+
+    member = MemberStatus.model_validate(
+        {
+            "backend": "be",
+            "server": "s1",
+            "status": "UP",
+            "check_status": "L7OK",
+            "last_change_s": 9,
+        }
+    )
+    assert (member.check_status, member.last_change_s) == ("L7OK", 9)
+    assert (
+        MemberStatus.model_validate({"backend": "be", "server": "s1", "status": "UP"}).check_status
+        is None
+    )

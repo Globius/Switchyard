@@ -14,4 +14,10 @@ Existing SEs are not touched; replace them one at a time (`replace-se.md`).
 6. Set the vmid as `template_vmid` on the SE group (or the Proxmox settings) and deploy one SE as a canary.
 7. Check on the new SE: `sy-agent`, `dataplaneapi`, `prometheus-node-exporter` active; it shows up in the group.
 
+**LXC instead of a VM.** On the Proxmox node run `se-image/lxc/build-template.sh <vmid> <sy-agent> <dataplaneapi>`
+(copy `se-image/` and the two binaries to the node first). It creates a privileged Debian 13 container with nesting,
+runs `provision.sh` inside, and converts it to a template. Deploy requests use it with `guest_kind: "lxc"`. The host
+needs `ip_vs`, `ip_vs_rr`, `ip_vs_wrr`, `ip_vs_sh` and `nf_conntrack` loaded; containers have no cloud-init, so push the
+enrollment files in with `pct push` (see `replace-se.md`).
+
 Rollback: keep the previous template vmid; point `template_vmid` back.

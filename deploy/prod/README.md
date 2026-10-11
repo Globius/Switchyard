@@ -7,6 +7,11 @@
    `ETCD_CLUSTER_STATE=new` on all three at once; later joins use `existing`.
 4. `docker compose exec patroni patronictl -c /etc/patroni.yml list` shows leader, sync standby and replica.
 
+OpenBao PKI role for agents (`SWITCHYARD_PKI_ROLE`): set `use_csr_sans=false` and `use_csr_common_name=false`, plus
+`allow_any_name=true`, `allow_ip_sans=true`, `enforce_hostnames=false`, `key_type=any`. Without `use_csr_sans=false` OpenBao
+ignores the SANs the controller sends (the engine's management address never reaches the certificate and the controller
+cannot verify the agent) and the agent could pick its own names.
+
 OpenBao: load the controller's policy before first start, matching your secret layout:
 `syctl openbao-policy --shared kv/se/ --platform kv/proxmox/token | bao policy write switchyard-controller -`
 (drop `--shared` if no shared Data Plane credentials exist), and give the controller's AppRole that policy.

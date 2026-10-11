@@ -485,6 +485,7 @@ def _engine_json(d: EngineDetail, online: dict[str, bool]) -> dict[str, Any]:
         "agent_url": e.agent_url,
         "pve_node": d.pve_node,
         "vmid": d.vmid,
+        "guest_kind": d.guest_kind,
         "agent_enrolled": d.agent_cert_serial is not None,
         "agent_cert_serial": d.agent_cert_serial,
         "host_online": online.get(d.pve_node) if d.pve_node else None,
@@ -3486,6 +3487,7 @@ def create_app(
             pool=body.pool,
             credentials_ref=body.credentials_ref,
             ssh_public_keys=body.ssh_public_keys,
+            guest_kind=body.guest_kind,
         )
         job = await svc.infra.request_deploy(who, tenant.id, request, request_id=_rid())
         return {"job_id": str(job)}

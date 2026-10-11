@@ -112,6 +112,7 @@ class EngineDetail:
         record: The registration (where its Data Plane API and agent are).
         pve_node: Proxmox node the VM runs on (``None`` for a hand-built engine).
         vmid: Proxmox VM id (``None`` for a hand-built engine).
+        guest_kind: ``qemu`` or ``lxc`` for an engine the controller deployed (``None`` otherwise).
         agent_cert_serial: Serial of the agent's client certificate once it has enrolled.
     """
 
@@ -119,6 +120,7 @@ class EngineDetail:
     pve_node: str | None = None
     vmid: int | None = None
     agent_cert_serial: str | None = None
+    guest_kind: str | None = None
 
 
 def _record(row: ServiceEngineRow) -> EngineRecord:
@@ -278,7 +280,7 @@ class EngineService:
             if engine_id:
                 query = query.where(ServiceEngineRow.id == engine_id)
             return [
-                EngineDetail(_record(r), r.pve_node, r.vmid, r.agent_cert_serial)
+                EngineDetail(_record(r), r.pve_node, r.vmid, r.agent_cert_serial, r.guest_kind)
                 for r in (await session.execute(query)).scalars()
             ]
 

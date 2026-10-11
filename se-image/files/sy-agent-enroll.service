@@ -11,6 +11,8 @@ RemainAfterExit=yes
 EnvironmentFile=/etc/switchyard/agent/enroll.env
 ExecStart=/usr/local/bin/sy-agent enroll --controller ${CONTROLLER_URL} --token-file /etc/switchyard/agent/enroll.token --controller-ca /etc/switchyard/agent/controller-ca.crt
 ExecStartPost=/bin/rm -f /etc/switchyard/agent/enroll.token
+# The services below skip themselves at boot until the certificate exists; start them now.
+ExecStartPost=/bin/systemctl start --no-block dataplaneapi.service sy-agent.service
 Restart=on-failure
 RestartSec=10
 

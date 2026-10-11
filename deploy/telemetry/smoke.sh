@@ -22,7 +22,7 @@ wait_for "discovery answers (empty list is fine)" "curl -sf -H 'Authorization: B
 wait_for "prometheus config valid" "docker compose exec -T prometheus promtool check config /tmp/prometheus.yml"
 wait_for "prometheus scrapes the controller" "curl -sf 'localhost:9090/api/v1/query?query=up%7Bjob%3D%22switchyard%22%7D' | grep -q '\"value\":\[[0-9.]*,\"1\"\]'"
 wait_for "loki ready" "curl -sf localhost:3100/ready"
-wait_for "grafana has 3 dashboards" "[ \"\$(curl -sf -u admin:smoke 'localhost:3000/api/search?tag=switchyard' | grep -o '\"uid\"' | wc -l)\" = 3 ]"
+wait_for "grafana has 4 dashboards" "[ \"\$(curl -sf -u admin:smoke 'localhost:3000/api/search?tag=switchyard' | grep -o '\"uid\"' | wc -l)\" = 4 ]"
 wait_for "grafana prometheus datasource healthy" "curl -sf -u admin:smoke localhost:3000/api/datasources/uid/prometheus/health | grep -q OK"
 wait_for "grafana loki datasource healthy" "curl -sf -u admin:smoke localhost:3000/api/datasources/uid/loki/health | grep -q OK"
 # The controller's own client reads back what a SE's Vector would push (HttpTelemetry against real Loki).

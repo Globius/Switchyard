@@ -4,6 +4,7 @@ After=haproxy.service sy-agent-enroll.service
 ConditionPathExists=/etc/switchyard/agent/tls.crt
 
 [Service]
+ExecStartPre=/usr/local/sbin/sy-render-dataplane
 ExecStart=/usr/bin/dataplaneapi -f /etc/switchyard/dataplaneapi.yml
 Restart=always
 RestartSec=3

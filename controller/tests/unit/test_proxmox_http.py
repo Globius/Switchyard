@@ -188,3 +188,27 @@ async def test_nodes_and_storage_are_read_and_sorted() -> None:
         60,
     )
     assert (storage[0].active, storage[0].content, storage[0].total) == (False, (), None)
+
+
+async def test_task_with_warnings_is_a_success() -> None:
+    api = Api()
+    api.task_exit = "WARNINGS: 1"
+    info = await client(api).create_vm(VmSpec("x", "pve1", 9000, "10.0.0.2/24"))
+    assert info.vmid == 101
+
+
+async def test_lxc_clone_uses_container_endpoints_and_net_syntax() -> None:
+    api = Api()
+    spec = VmSpec(
+        "se-1",
+        "pve1",
+        9901,
+        "10.30.0.11/24",
+        gateway="10.30.0.1",
+        kind="lxc",
+        nics=(("vnet1", 120),),
+    )
+    await client(api).create_vm(spec)
+    paths = [(m, p) for m, p, *_ in api.requests]
+    assert ("POST", "/nodes/pve1/lxc/9901/clone") in paths
+    assert ("PUT", "/nodes/pve1/lxc/101/config") in paths

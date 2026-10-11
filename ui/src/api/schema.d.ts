@@ -3951,6 +3951,13 @@ export interface components {
             /** Credentials Ref */
             credentials_ref?: string | null;
             /**
+             * Guest Kind
+             * @description `qemu` clones a cloud-init VM template; `lxc` clones a container template (lighter, no cloud-init: enrollment material must be delivered out of band).
+             * @default qemu
+             * @enum {string}
+             */
+            guest_kind: "qemu" | "lxc";
+            /**
              * Mgmt Pool Id
              * Format: uuid
              */
@@ -4223,6 +4230,11 @@ export interface components {
              * @description `host:port` of `sy-agent`, if any.
              */
             agent_url?: string | null;
+            /**
+             * Guest Kind
+             * @description `qemu` (a VM) or `lxc` (a container), as deployed; null for a hand-built engine (show nothing, or a generic icon).
+             */
+            guest_kind?: ("qemu" | "lxc") | null;
             /**
              * Host Online
              * @description Whether Proxmox reports the engine's node online; null when the engine has no node or Proxmox is not configured or not reachable.
@@ -5230,6 +5242,16 @@ export interface components {
         MemberStatus: {
             /** Backend */
             backend: string;
+            /**
+             * Check Status
+             * @description Short code of the last health check (`L4OK`, `L7OK`, `L7STS`, `L4TOUT`, ...).
+             */
+            check_status?: string | null;
+            /**
+             * Last Change S
+             * @description Seconds since the member's status last changed.
+             */
+            last_change_s?: number | null;
             /** Server */
             server: string;
             /**
@@ -14085,6 +14107,7 @@ export interface operations {
                      *         "agent_cert_serial": "3f2a9c",
                      *         "agent_enrolled": true,
                      *         "agent_url": "192.0.2.21:7443",
+                     *         "guest_kind": "qemu",
                      *         "host_online": true,
                      *         "id": "0192f3a0-0000-7000-8000-000000000022",
                      *         "mgmt_ip": "192.0.2.21",
@@ -14166,6 +14189,7 @@ export interface operations {
                      *       "agent_cert_serial": "3f2a9c",
                      *       "agent_enrolled": true,
                      *       "agent_url": "192.0.2.21:7443",
+                     *       "guest_kind": "qemu",
                      *       "host_online": true,
                      *       "id": "0192f3a0-0000-7000-8000-000000000022",
                      *       "mgmt_ip": "192.0.2.21",
@@ -19487,6 +19511,7 @@ export interface operations {
                  * @example {
                  *       "count": 2,
                  *       "credentials_ref": "kv/tenants/acme/engines/dataplane",
+                 *       "guest_kind": "qemu",
                  *       "mgmt_pool_id": "0192f3a0-0000-7000-8000-000000000011",
                  *       "nodes": [
                  *         "pve1",
@@ -19591,6 +19616,7 @@ export interface operations {
                      *         "agent_cert_serial": "3f2a9c",
                      *         "agent_enrolled": true,
                      *         "agent_url": "192.0.2.21:7443",
+                     *         "guest_kind": "qemu",
                      *         "host_online": true,
                      *         "id": "0192f3a0-0000-7000-8000-000000000022",
                      *         "mgmt_ip": "192.0.2.21",
@@ -19685,6 +19711,7 @@ export interface operations {
                      *       "agent_cert_serial": "3f2a9c",
                      *       "agent_enrolled": true,
                      *       "agent_url": "192.0.2.21:7443",
+                     *       "guest_kind": "qemu",
                      *       "host_online": true,
                      *       "id": "0192f3a0-0000-7000-8000-000000000022",
                      *       "mgmt_ip": "192.0.2.21",

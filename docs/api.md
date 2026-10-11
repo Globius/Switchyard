@@ -142,7 +142,7 @@ group's `engines[]` on each, for the Placement card; `available: false` when Pro
 `GET /tenants/{t}/engines` (filters `se_group`, `state`) and `GET …/engines/{id}` return placement (`pve_node`,
 `vmid`) and agent enrollment. **Retire** (`POST …/retire`, a job) destroys the VM and removes the record. **Remove**
 (`DELETE`) deletes the record only. `deploy` clones VMs and registers engines but does not create enrollment tokens;
-create one per engine (`POST …/enrollment-token`). `ssh_public_keys` on deploy is for human access to the VM
+create one per engine (`POST …/enrollment-token`). `guest_kind` on deploy is `qemu` (default) or `lxc` (container template; no cloud-init, ADR 0055). `ssh_public_keys` on deploy is for human access to the VM
 (cloud-init); the controller never uses SSH.
 
 ## Certificate import

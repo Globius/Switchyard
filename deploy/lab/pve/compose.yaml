@@ -1,0 +1,13 @@
+# A real Proxmox VE API for adapter tests (github.com/dockur/proxmox). Privileged; needs about 4 GB RAM.
+# Without /dev/kvm (Docker Desktop on Windows 10, most CI) VMs run under TCG: create templates with kvm=0.
+#   docker compose -f deploy/lab/pve/compose.yaml up -d && sh deploy/lab/pve/bootstrap.sh
+name: switchyard-pve-lab
+services:
+  pve:
+    image: dockurr/proxmox
+    hostname: pve
+    privileged: true
+    environment:
+      PASSWORD: lab-root-password   # lab only
+    ports: ["127.0.0.1:18006:8006"]
+    stop_grace_period: 2m

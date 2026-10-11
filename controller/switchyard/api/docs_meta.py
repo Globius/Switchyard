@@ -410,6 +410,7 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "pool": "edge",
         "credentials_ref": "kv/tenants/acme/engines/dataplane",
         "ssh_public_keys": "ssh-ed25519 AAAA... ops@example.test",
+        "guest_kind": "qemu",
     },
     "POST /tenants/{t}/se-groups/{group}/engines": {
         "name": "edge-1",

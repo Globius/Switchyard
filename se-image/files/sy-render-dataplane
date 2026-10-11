@@ -1,0 +1,8 @@
+#!/bin/sh
+# Renders /etc/switchyard/dataplaneapi.yml from the template and the per-SE credentials in enroll.env.
+set -eu
+. /etc/switchyard/agent/enroll.env
+: "${DP_USER:?DP_USER missing in enroll.env}" "${DP_PASSWORD:?DP_PASSWORD missing in enroll.env}"
+umask 077
+sed -e "s#@DP_USER@#${DP_USER}#" -e "s#@DP_PASSWORD@#${DP_PASSWORD}#"   /etc/switchyard/dataplaneapi.yml.tmpl > /etc/switchyard/dataplaneapi.yml.new
+mv /etc/switchyard/dataplaneapi.yml.new /etc/switchyard/dataplaneapi.yml

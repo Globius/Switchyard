@@ -20,9 +20,20 @@ services:
     volumes:
       - ./prometheus/prometheus.yml.tmpl:/etc/prometheus/prometheus.yml.tmpl:ro
       - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - ./prometheus/scrape.d:/etc/prometheus/scrape.d:ro
       - ${METRICS_TOKEN_FILE:-./secrets/metrics.token}:/etc/prometheus/switchyard-token:ro
       - prometheus-data:/prometheus
     ports: ["${BIND:-127.0.0.1}:9090:9090"]
+  # Proxmox host and guest metrics (profile `pve`). Credentials: a read-only token (PVEAuditor role).
+  pve-exporter:
+    image: prompve/prometheus-pve-exporter:3.5.1
+    profiles: [pve]
+    restart: unless-stopped
+    environment:
+      PVE_USER: ${PVE_USER:-}              # for example monitor@pve
+      PVE_TOKEN_NAME: ${PVE_TOKEN_NAME:-}
+      PVE_TOKEN_VALUE: ${PVE_TOKEN_VALUE:-}
+      PVE_VERIFY_SSL: ${PVE_VERIFY_SSL:-true}
   loki:
     image: grafana/loki:3.3.2
     restart: unless-stopped

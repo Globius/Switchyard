@@ -313,6 +313,11 @@ class EngineRead(ApiModel):
     vmid: int | None = Field(
         default=None, description="Proxmox VM id; null for a hand-built engine."
     )
+    guest_kind: Literal["qemu", "lxc"] | None = Field(
+        default=None,
+        description="`qemu` (a VM) or `lxc` (a container), as deployed; null for a hand-built "
+        "engine (show nothing, or a generic icon).",
+    )
     agent_enrolled: bool = Field(
         description="True once `sy-agent enroll` has traded a token for a client certificate."
     )
@@ -1115,6 +1120,13 @@ class MemberStatus(ApiModel):
     backend: str
     server: str
     status: str = Field(description="HAProxy status, for example `UP`, `DOWN`, `MAINT`.")
+    check_status: str | None = Field(
+        default=None,
+        description="Short code of the last health check (`L4OK`, `L7OK`, `L7STS`, `L4TOUT`, ...).",
+    )
+    last_change_s: int | None = Field(
+        default=None, description="Seconds since the member's status last changed."
+    )
 
 
 class BgpSessionStatus(ApiModel):
@@ -1560,6 +1572,11 @@ class DeployIn(ApiModel):
     pool: str | None = Field(default=None, max_length=64)
     credentials_ref: str | None = None
     ssh_public_keys: str | None = Field(default=None, max_length=8192)
+    guest_kind: Literal["qemu", "lxc"] = Field(
+        default="qemu",
+        description="`qemu` clones a cloud-init VM template; `lxc` clones a container template "
+        "(lighter, no cloud-init: enrollment material must be delivered out of band).",
+    )
 
 
 class OpIn(ApiModel):
