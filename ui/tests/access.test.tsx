@@ -147,7 +147,8 @@ const server = setupServer(
       name: "acme",
       version: 4,
       require_approval: false,
-      quotas: { virtual_services: 20 },
+      quotas: { virtual_service: 20 },
+      usage: { virtual_service: 7 },
     }),
   ),
   http.patch("*/api/v1/tenants/acme", async ({ request }) => {
@@ -252,7 +253,8 @@ describe("tenant access and settings", () => {
   it("turns require-approval on with If-Match; only a system-admin can turn it off", async () => {
     renderAt("/t/acme/access");
     await userEvent.click(await screen.findByRole("tab", { name: "Settings" }));
-    expect(await screen.findByText("virtual services")).toBeInTheDocument();
+    expect(await screen.findByText("virtual service")).toBeInTheDocument();
+    expect(screen.getByText("7 of 20")).toBeInTheDocument();
     const sw = await screen.findByRole("switch", { name: "Require approval" });
     await waitFor(() => expect(sw).toBeEnabled());
     await userEvent.click(sw);
