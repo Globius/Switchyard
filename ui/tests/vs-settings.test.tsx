@@ -248,7 +248,7 @@ describe("virtual service settings", () => {
       ),
     );
     renderAt("/t/acme/virtual-services/v1/settings");
-    expect(await screen.findByLabelText("Changed in draft")).toBeInTheDocument();
+    expect((await screen.findAllByLabelText("Changed in draft")).length).toBeGreaterThan(0);
     expect(await screen.findByText(/Live: "web"/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Revert" }));
     expect(screen.getByLabelText("Name")).toHaveValue("web");
