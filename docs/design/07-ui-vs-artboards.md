@@ -262,7 +262,7 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | V18 System tokens | done | ShowOnceSecret (!64) |
 | V19 Tenant home | open | "Jump to problems" enabled (UI) |
 | V20 Login | deviation | logo glyph differs |
-| B1 shadcn primitives, `@switchyard` registry | deferred | decision with the coordinator; native controls match visually |
+| B1 shadcn primitives, `@switchyard` registry | deviation | No artboard or the Foundations page shows an opened select or combobox other than the ChipInput list (built); the design source itself uses native `<select>` elements. Selects stay native; dialogs, sheets, switches, menus and the chip input are Radix-based. The `@switchyard` registry is not set up |
 | B2 Monaco | done | !58 |
 | B3 VS Settings | done | !57 |
 | B4 VS History | done | !61 |
