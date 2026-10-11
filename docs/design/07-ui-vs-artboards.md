@@ -235,3 +235,49 @@ Effort: S = under a day, M = a few days, L = a week or more. "Code" refers to th
 | B20 | Add axe to CI; decide on RHF/Zod and TanStack Table | Foundations | S | none |
 
 Suggested sequence: B1 first (everything else restyles on top of it), then B6, B7, B8, B9 in parallel, then B2, B3, B4, B5, B10.
+
+## Status after the build threads (completeness sweep, 2026-10-11)
+
+Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 thread, **backend** = blocked on an API.
+
+| Item | Status | Owner / note |
+| --- | --- | --- |
+| V1 VS Settings | done | UI, cards, two columns, VIP radios, routes table, footer (!57) |
+| V2 Rendered config | partly done | Monaco, HAProxy highlighting, range (!58). Open: Copy button, Live / With my draft toggle (UI). Deviation: engine select (no per-engine render endpoint) |
+| V3 VS History | done | UI (!61) |
+| V4 Policies, Routing profiles | done | Policies by part 2 (!63); Routing profiles were master-detail already |
+| V5 Audit log | part 2 | formatters in !60, remaining columns with part 2 |
+| V6 Revisions | part 2 | !60 |
+| V7 Names and dates | part 2 | !60 |
+| V8 Certificates | part 2 | |
+| V9 Networks | part 2 | |
+| V10 SE groups | mostly done | engines table, placement (!74), re-apply (!51), agent version. Open: "View running config" (UI) |
+| V11 Create wizard | open | header logo and explainers (UI) |
+| V12 Admin tenants | part 2 | |
+| V13 Role matrix grouping | deviation | every server permission is listed with its description; grouping needs a design decision or a `group` field in `/permissions` |
+| V14 VS list | done | |
+| V15 VS Overview | open | per-route menu, dashed unavailable card, certificate status icon (UI); "Open in Grafana" needs a configured URL (backend) |
+| V16 Top bar | open | divider and avatar initials (UI) |
+| V17 Identity providers | done | remaining-time text shipped; forced-on text styling is minor (UI) |
+| V18 System tokens | done | ShowOnceSecret (!64) |
+| V19 Tenant home | open | "Jump to problems" enabled (UI) |
+| V20 Login | deviation | logo glyph differs |
+| B1 shadcn primitives, `@switchyard` registry | deferred | decision with the coordinator; native controls match visually |
+| B2 Monaco | done | !58 |
+| B3 VS Settings | done | !57 |
+| B4 VS History | done | !61 |
+| B5 Master-detail | done | |
+| B6 SSE patching, stale banner, refetch | done | !53 |
+| B7 Session-expired modal | done | !65 |
+| B8 ShowOnceSecret | done | !64 |
+| B9 Names and dates | part 2 | |
+| B10 SE groups | mostly done | see V10 |
+| B11 Networks | part 2 | |
+| B12 Review links and copy | open | "Open job" link, viewer approve copy (UI) |
+| B13 Jobs | open | change set link, durations (UI) |
+| B14-B17 | part 2 | revisions, audit, certificates, admin tenants |
+| B18 Wizard explainers | open | UI |
+| B19 Polish | open | kebab menus, dashed cards, top bar (UI) |
+| B20 axe, RHF/Zod, TanStack Table | partly done | axe and keyboard and phone checks via Playwright (!69); RHF, Zod and TanStack Table not adopted (deviation, record an ADR if kept) |
+| Backend-fed items | done | quota usage, revision message, per-member health and last check, host placement, audit export, BGP max prefixes |
+| Pool passive checks, slow start | backend | wire when !78 merges |
