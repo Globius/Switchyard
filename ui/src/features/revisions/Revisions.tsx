@@ -12,7 +12,8 @@ import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { collectionLabel, diffSnapshots, show, type Collections } from "@/lib/snapshot-diff";
 import { cn } from "@/lib/utils";
-import { principalName, shortWhen } from "@/lib/format";
+import { shortWhen } from "@/lib/format";
+import { usePrincipalNames } from "@/lib/principals";
 
 function useRevisions(tenant: string) {
   return useInfiniteQuery({
@@ -140,6 +141,10 @@ export function Revisions({ tenant }: { tenant: string }) {
   const [problem, setProblem] = useState<unknown>(null);
 
   const rows = q.data?.pages.flatMap((p) => p.items) ?? [];
+  const name = usePrincipalNames(
+    tenant,
+    rows.map((r) => r.author),
+  );
   const toggle = (n: number) =>
     setPicked((p) => (p.includes(n) ? p.filter((x) => x !== n) : [...p, n].slice(-2)));
   const [lo, hi] = [...picked].sort((x, y) => x - y);
@@ -212,7 +217,7 @@ export function Revisions({ tenant }: { tenant: string }) {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {principalName(r.author)} ·{" "}
+                        {name(r.author)} ·{" "}
                         <time dateTime={r.created_at}>{shortWhen(r.created_at)}</time>
                         {r.git_sha && (
                           <>

@@ -7,7 +7,7 @@ import { StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { useDraft } from "@/features/shell/draft";
-import { principalName, shortWhen } from "@/lib/format";
+import { shortWhen } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { diffObject } from "@/lib/snapshot-diff";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ import {
   type Entry,
   type Filter,
 } from "./history-model";
+import { PrincipalName } from "@/lib/principals";
 
 type Json = Record<string, unknown>;
 
@@ -273,7 +274,7 @@ function EntryBody({
             <StatusPill status="draft">{t("In draft")}</StatusPill>
             <span className="font-medium">{e.title}</span>
             <span className="text-muted-foreground">
-              {principalName(e.author)} · {t("not live yet")}
+              <PrincipalName tenant={tenant} actor={e.author} /> · {t("not live yet")}
             </span>
           </div>
           <DiffBlock lines={fieldLines(e.fields)} />
@@ -296,7 +297,7 @@ function EntryBody({
             <span className="font-medium">{e.summary}</span>
           </div>
           <div className="text-xs text-muted-foreground">
-            {principalName(e.author)} · {stamp(e.at)}
+            <PrincipalName tenant={tenant} actor={e.author} /> · {stamp(e.at)}
           </div>
           {showDiff && <RevisionDiff tenant={tenant} n={e.number} id={id} />}
         </div>
@@ -319,7 +320,7 @@ function EntryBody({
         {e.object && <span className="text-muted-foreground">{e.object}</span>}
       </div>
       <div className="text-xs text-muted-foreground">
-        {principalName(e.actor)} · {stamp(e.at)}
+        <PrincipalName tenant={tenant} actor={e.actor} /> · {stamp(e.at)}
         {e.kind === "runtime" ? ` · ${t("runtime action, not a revision")}` : ""}
       </div>
     </div>

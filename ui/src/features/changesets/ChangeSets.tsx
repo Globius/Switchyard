@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { pickOwnDraft, type ChangeSetSummary } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { principalName, shortWhen } from "@/lib/format";
+import { shortWhen } from "@/lib/format";
+import { usePrincipalNames } from "@/lib/principals";
 
 type Tab = "open" | "history";
 const OPEN = ["draft", "pending_approval", "applying", "failed"] as const;
@@ -69,6 +70,7 @@ export function StatePill({ state }: { state: string }) {
 
 function Detail({ tenant, id, mine }: { tenant: string; id: string; mine: boolean }) {
   const cs = useChangeSet(tenant, id);
+  const name = usePrincipalNames(tenant, [cs.data?.author]);
   if (cs.isPending) return <TableSkeleton rows={2} cols={2} />;
   if (cs.isError) return <ErrorState error={cs.error} onRetry={() => void cs.refetch()} />;
   const c = cs.data;
@@ -85,7 +87,7 @@ function Detail({ tenant, id, mine }: { tenant: string; id: string; mine: boolea
       </h2>
       <div className="space-y-4 p-4 text-sm">
         <dl className="grid grid-cols-[8rem_1fr] gap-y-2">
-          {row(t("Author"), principalName(c.author))}
+          {row(t("Author"), name(c.author))}
           {row(t("State"), <StatePill state={c.state} />)}
           {row(t("Base revision"), `#${c.base_revision}`)}
           {row(t("Created"), shortWhen(c.created_at))}
@@ -141,6 +143,10 @@ export function ChangeSets({ tenant }: { tenant: string }) {
   const open = useChangeSets(tenant, OPEN);
   const history = useChangeSets(tenant, HISTORY);
   const q = tab === "open" ? open : history;
+  const name = usePrincipalNames(
+    tenant,
+    (q.data ?? []).map((c) => c.author),
+  );
   const selected = q.data?.find((c) => c.id === openId) ?? q.data?.[0];
 
   return (
@@ -206,9 +212,7 @@ export function ChangeSets({ tenant }: { tenant: string }) {
                           </span>
                         )}
                       </button>
-                      <span className="w-44 truncate text-muted-foreground">
-                        {principalName(c.author)}
-                      </span>
+                      <span className="w-44 truncate text-muted-foreground">{name(c.author)}</span>
                       <StatePill state={c.state} />
                       <span className="w-10 text-right text-muted-foreground">{c.op_count}</span>
                       <span className="w-28 text-right font-mono text-xs text-muted-foreground">
