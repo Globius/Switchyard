@@ -33,7 +33,7 @@ def _open_engine_policy(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("SWITCHYARD_ENGINE_POLICY", "open")
     configure_secret_policy((), open=True)
     yield
-    configure_secret_policy()
+    configure_secret_policy((), open=True)  # never back to strict: module fixtures render too
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -73,7 +73,8 @@ async def owner_engine(pg_url: str) -> AsyncIterator[AsyncEngine]:
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE tenant, identity_provider, user_session, local_admin, break_glass_setting CASCADE"
+                "TRUNCATE tenant, identity_provider, user_session, local_admin, break_glass_setting, "
+                "login_throttle CASCADE"
             )
         )
     await engine.dispose()
