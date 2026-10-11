@@ -279,6 +279,17 @@ describe("review screen", () => {
     expect((await panel()).getByText("validate")).toBeInTheDocument();
   });
 
+  it("sends an edited revision message with the apply", async () => {
+    renderAt();
+    const box = await (await panel()).findByLabelText("Revision message");
+    await userEvent.clear(box);
+    await userEvent.type(box, "Open 8443 for the lab");
+    const btn = (await panel()).getByRole("button", { name: "Apply" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    await userEvent.click(btn);
+    await waitFor(() => expect(applyBody).toEqual({ message: "Open 8443 for the lab" }));
+  });
+
   it("blocks on validator problems and requires acknowledging warnings", async () => {
     diff = {
       ...DIFF,

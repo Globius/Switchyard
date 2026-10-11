@@ -221,6 +221,9 @@ export function Revisions({ tenant }: { tenant: string }) {
                           </>
                         )}
                       </div>
+                      {r.message && r.message !== r.summary && (
+                        <p className="text-xs whitespace-pre-line">{r.message}</p>
+                      )}
                     </div>
                     <label className="flex shrink-0 items-center gap-1.5">
                       <input
