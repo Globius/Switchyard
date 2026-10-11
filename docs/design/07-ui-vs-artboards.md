@@ -304,4 +304,4 @@ Checked on 2026-10-11 against a local controller, signed in as the break-glass s
 | Pool picker per row (Combobox, only pools on that network, "<pool> · N free", first option "Not addressed (set up by hand)") | Done. A network with exactly one pool is preselected; only rows with a pool are sent in `nic_pools`. |
 | Inline amber warning on an empty row, by role | Done; it does not block. A network with no pools shows a disabled picker, "No pools on this network" and a link to Networks. |
 | 422 field errors on the row (`nic_pools.<network>`) | Done. |
-| Addresses on the engine row ("edge-vip 10.40.12.6 · backend —") | Not built: the engine read has no `addresses` yet. Needs an API change (`addresses[{network_id, address}]` on the engine read). |
+| Addresses on the engine row ("edge-vip 10.40.12.6 · backend —") | Done, from `addresses` on the engine read: a second sub-line per engine, one entry per VIP or backend network of the group, "—" where unaddressed; nothing for an engine without deploy-time addresses. |
