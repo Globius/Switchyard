@@ -1312,6 +1312,7 @@ def create_app(services: ApiServices, *, public_url: str | None = None) -> FastA
         via = await svc.sessions.explain(session) if session and svc.sessions else []
         return {
             "id": str(session.id) if session else None,
+            "principal": who.actor,
             "name": session.name if session else who.actor,
             "email": session.email if session else None,
             "is_system": who.is_system,

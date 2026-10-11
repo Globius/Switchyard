@@ -179,6 +179,7 @@ async def test_login_round_trip_gives_a_hardened_cookie_and_per_tenant_roles(rig
     roles = {t["name"]: t["role"] for t in me["tenants"]}
     assert roles == {"acme": "tenant-admin", "globex": "viewer"}
     assert me["csrf_token"]
+    assert me["principal"] == "user:authentik:u-1"
     assert await count(rig, "SELECT count(*) FROM audit_event WHERE action='auth.login'") == 1
 
 
@@ -213,6 +214,7 @@ async def test_system_admin_group_and_bearer_tokens_keep_working(rig: Rig) -> No
     )
     bearer = (await rig.client.get(f"{V1}/me", headers={"Authorization": f"Bearer {token}"})).json()
     assert bearer["auth"] == "token" and bearer["csrf_token"] is None
+    assert bearer["principal"], "tokens get a principal too"
     assert bearer["tenants"][0]["role"] == "viewer"
 
 
@@ -306,7 +308,8 @@ async def test_break_glass_is_off_by_default_then_works_with_totp_and_locks_out(
     ok = await rig.client.post(f"{V1}/auth/break-glass", json=good)
     assert ok.status_code == 200, ok.text
     assert ok.json()["is_system"] and ok.json()["break_glass"]
-    assert (await rig.client.get(f"{V1}/me")).json()["name"] == "root"
+    me = (await rig.client.get(f"{V1}/me")).json()
+    assert me["name"] == "root" and me["principal"] == "user:local:root"
     assert (
         await count(rig, "SELECT count(*) FROM audit_event WHERE action='auth.break_glass_login'")
         == 1

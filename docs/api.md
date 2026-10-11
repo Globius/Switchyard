@@ -15,6 +15,7 @@ responses it can produce and its **access** rule (`x-required-role`: `public`, `
 - **Bearer token** (`Authorization: Bearer sy_...`): for machines. Create with `POST /tenants/{t}/tokens`.
 - **Session cookie** (`sy_session`) from the login flow (OIDC, SAML, break-glass): for the browser. Requests that
   change something must also send `X-CSRF-Token` with the `csrf_token` from `GET /me`.
+  `GET /me` also returns `principal`, the author string stored on your drafts (`user:<provider>:<subject>`).
 - Public: `GET /healthz`, `GET /auth/providers`, the login redirects and callbacks, SAML metadata,
   `POST /auth/break-glass`, `POST /enroll` (the enrollment token is the credential).
 
