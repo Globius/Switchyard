@@ -71,18 +71,23 @@ export function useObjectChange(
 ) {
   return useQuery({
     queryKey: ["t", tenant, "review", cs, type, id],
-    queryFn: async (): Promise<{ fields: FieldChange[]; draft?: Record<string, unknown> }> => {
+    queryFn: async (): Promise<{
+      fields: FieldChange[];
+      draft?: Record<string, unknown>;
+      live?: Record<string, unknown>;
+    }> => {
       const base = `/api/v1/tenants/${encodeURIComponent(tenant)}/${TYPE_PATH[type]}/${id}`;
       if (status === "created") {
         const draft = await rawGet<Record<string, unknown>>(`${base}?change_set=${cs}`);
         return { fields: diffObject(undefined, draft), draft };
       }
-      if (status === "deleted") return { fields: [] };
+      if (status === "deleted")
+        return { fields: [], live: await rawGet<Record<string, unknown>>(base) };
       const [live, draft] = await Promise.all([
         rawGet<Record<string, unknown>>(base),
         rawGet<Record<string, unknown>>(`${base}?change_set=${cs}`),
       ]);
-      return { fields: diffObject(live, draft), draft };
+      return { fields: diffObject(live, draft), draft, live };
     },
   });
 }
@@ -125,7 +130,7 @@ export function useChangeSetActions(tenant: string, cs: string) {
   };
 }
 
-/** id to name for the things lists refer to (pools, certificates, policy sets), as the draft sees them. */
+/** id to name for the things lists refer to (pools, certificates, policy sets, VIP pools, SE groups), as the draft sees them. */
 export function useLabels(tenant: string, cs: string): Record<string, string> {
   const get = (path: string) => async () =>
     (
@@ -133,16 +138,9 @@ export function useLabels(tenant: string, cs: string): Record<string, string> {
         `/api/v1/tenants/${encodeURIComponent(tenant)}/${path}?limit=200&change_set=${cs}`,
       )
     ).items;
-  const pools = useQuery({ queryKey: ["t", tenant, "labels", cs, "pools"], queryFn: get("pools") });
-  const certs = useQuery({
-    queryKey: ["t", tenant, "labels", cs, "certificates"],
-    queryFn: get("certificates"),
-  });
-  const sets = useQuery({
-    queryKey: ["t", tenant, "labels", cs, "policy-sets"],
-    queryFn: get("policy-sets"),
-  });
-  return Object.fromEntries(
-    [...(pools.data ?? []), ...(certs.data ?? []), ...(sets.data ?? [])].map((x) => [x.id, x.name]),
+  const results = ["pools", "certificates", "policy-sets", "vip-pools", "se-groups"].map((path) =>
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- a fixed list, so the order never changes
+    useQuery({ queryKey: ["t", tenant, "labels", cs, path], queryFn: get(path) }),
   );
+  return Object.fromEntries(results.flatMap((r) => r.data ?? []).map((x) => [x.id, x.name]));
 }

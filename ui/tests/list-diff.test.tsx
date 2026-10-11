@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { describeRoute, isListField, ListDiff } from "@/features/review/ListDiff";
 import { diffKeyed, diffOrdered, mergeAdds, memberKey, onlyAdds, routeKey } from "@/lib/list-diff";
@@ -73,10 +74,11 @@ describe("ListDiff", () => {
     expect(isListField("name", "a", "b")).toBe(false);
     expect(isListField("routes", null, undefined)).toBe(false);
   });
-  it("renders routes numbered with markers and readable targets", () => {
+  it("renders routes as a summary and a numbered Live/Draft table", () => {
     render(
       <ListDiff
         field="routes"
+        revision={41}
         before={[r("a.test", "p1"), r("b.test", "p1")]}
         after={[
           r("b.test", "p1"),
@@ -86,15 +88,19 @@ describe("ListDiff", () => {
         labels={labels}
       />,
     );
-    const items = screen.getAllByRole("listitem");
-    expect(items.map((i) => i.getAttribute("data-marker"))).toEqual(["↕", "~", "+"]);
-    expect(within(items[0]!).getByText("1")).toBeInTheDocument();
-    expect(within(items[1]!).getByText(/a.test → pool api-v2/)).toBeInTheDocument();
-    expect(within(items[1]!).getByText(/a.test → pool api-v1/)).toHaveClass("line-through");
-    expect(within(items[2]!).getByText(/redirect 301 https:\/\/new.test/)).toBeInTheDocument();
-    expect(within(items[0]!).getByText("moved")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 routes → 3 routes · 1 added · 1 changed · 1 moved"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Live (rev #41)")).toBeInTheDocument();
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((x) => x.getAttribute("data-marker"))).toEqual(["↕", "~", "+"]);
+    expect(within(rows[0]!).getByText("↕ moved")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText(/a.test → api-v1/)).toHaveClass("line-through");
+    expect(within(rows[1]!).getByText(/a.test → api-v2/)).toBeInTheDocument();
+    expect(within(rows[2]!).getByText(/redirect 301 https:\/\/new.test/)).toBeInTheDocument();
+    expect(screen.getByText(/Matched by host, path and match type/)).toBeInTheDocument();
   });
-  it("renders members, ports and certificates keyed, with unchanged rows counted", () => {
+  it("renders members and ports keyed, hiding unchanged rows behind a toggle", async () => {
     const { unmount } = render(
       <ListDiff
         field="members"
@@ -109,8 +115,14 @@ describe("ListDiff", () => {
         labels={labels}
       />,
     );
-    expect(screen.getByText("1 unchanged")).toBeInTheDocument();
-    expect(screen.getByText(/c 10.0.0.3:80 w1/)).toBeInTheDocument();
+    expect(
+      screen.getByText("2 members → 2 members · 1 added · 1 removed · 1 unchanged (hidden)"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/10.0.0.3:80 · weight 1 · enabled/)).toBeInTheDocument();
+    expect(screen.getByText("+ added")).toBeInTheDocument();
+    expect(screen.getByText("− removed")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Show 1 unchanged" }));
+    expect(screen.getByRole("button", { name: "Hide unchanged" })).toBeInTheDocument();
     unmount();
     const p = render(
       <ListDiff
@@ -125,13 +137,13 @@ describe("ListDiff", () => {
     render(
       <ListDiff field="certificate_ids" before={["c1"]} after={["c1", "c2"]} labels={labels} />,
     );
-    expect(screen.getByText("portal")).toBeInTheDocument();
-    expect(screen.getByText("1 unchanged")).toBeInTheDocument();
+    expect(screen.getAllByText("portal").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Show 1 unchanged" })).toBeInTheDocument();
   });
   it("describes a route without a host", () => {
     expect(describeRoute({ match: { path_exact: "/x" }, pool_id: "p1" }, labels)).toBe(
-      "= /x → pool api-v1",
+      "exact /x → api-v1",
     );
-    expect(describeRoute({ match: {} }, {})).toBe("any request → pool —");
+    expect(describeRoute({ match: {} }, {})).toBe("any request → —");
   });
 });
