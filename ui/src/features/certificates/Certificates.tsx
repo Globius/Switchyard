@@ -10,6 +10,7 @@ import { DraftMarker, expiryStatus, StatusPill } from "@/components/sy/StatusPil
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
@@ -383,6 +384,48 @@ function RenewalEditor({ tenant, cert }: { tenant: string; cert: CertRow }) {
   );
 }
 
+/** OCSP stapling: engines attach the CA's revocation answer. Not offered for Cloudflare Origin CA certificates. */
+function OcspEditor({ tenant, cert }: { tenant: string; cert: CertRow }) {
+  const save = useSaveOp(tenant, "certificate");
+  const can = useCan(tenant);
+  const write = can("write", "application");
+  const [problem, setProblem] = useState<unknown>(null);
+  if (cert.source === "cloudflare_origin") return null;
+  return (
+    <section className="space-y-2">
+      <div className="flex items-center gap-3">
+        <h3 className="text-sm font-semibold">{t("OCSP stapling")}</h3>
+        <Tip label={write.reason}>
+          <span>
+            <Switch
+              aria-label={t("OCSP stapling")}
+              checked={cert.ocsp_stapling}
+              disabled={!write.allowed || save.isPending}
+              onCheckedChange={async (on) => {
+                setProblem(null);
+                try {
+                  await save.mutateAsync({
+                    action: "update",
+                    id: cert.id,
+                    version: cert.version,
+                    body: { ocsp_stapling: on },
+                  });
+                } catch (e) {
+                  setProblem(e);
+                }
+              }}
+            />
+          </span>
+        </Tip>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {t("Engines fetch the CA's revocation answer and send it with the certificate.")}
+      </p>
+      {problem != null && <ErrorState error={problem} />}
+    </section>
+  );
+}
+
 function UsageSheet({
   tenant,
   cert,
@@ -435,6 +478,7 @@ function UsageSheet({
         <dd className="font-mono text-xs">{cert.secret_ref}</dd>
       </dl>
       <RenewalEditor key={`${cert.id}-${cert.version}`} tenant={tenant} cert={cert} />
+      <OcspEditor key={`o-${cert.id}-${cert.version}`} tenant={tenant} cert={cert} />
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">
           {t("Used by {n} virtual services", { n: services.length })}

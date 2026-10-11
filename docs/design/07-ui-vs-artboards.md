@@ -250,13 +250,13 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | V6 Revisions | part 2 | !60 |
 | V7 Names and dates | part 2 | !60 |
 | V8 Certificates | part 2 | |
-| V9 Networks | part 2 | |
+| V9 Networks | done | Edit service by part 2; per-network SDN chip from `/sdn/status` (!76) |
 | V10 SE groups | mostly done | engines table, placement (!74), re-apply (!51), agent version. Open: "View running config" (UI) |
 | V11 Create wizard | open | header logo and explainers (UI) |
-| V12 Admin tenants | part 2 | |
-| V13 Role matrix grouping | deviation | every server permission is listed with its description; grouping needs a design decision or a `group` field in `/permissions` |
+| V12 Admin tenants | done | Members column and "N people have access" (!76) |
+| V13 Role matrix grouping | done | grouped by the `group` the server sends; open a group to see each permission (!76) |
 | V14 VS list | done | |
-| V15 VS Overview | open | per-route menu, dashed unavailable card, certificate status icon (UI); "Open in Grafana" needs a configured URL (backend) |
+| V15 VS Overview | partly done | "Open in Grafana" shows when `/me` has a Grafana URL (!76). Open: per-route menu, dashed unavailable card, certificate status icon (UI) |
 | V16 Top bar | open | divider and avatar initials (UI) |
 | V17 Identity providers | done | remaining-time text shipped; forced-on text styling is minor (UI) |
 | V18 System tokens | done | ShowOnceSecret (!64) |
@@ -280,4 +280,4 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | B19 Polish | open | kebab menus, dashed cards, top bar (UI) |
 | B20 axe, RHF/Zod, TanStack Table | partly done | axe and keyboard and phone checks via Playwright (!69); RHF, Zod and TanStack Table not adopted (deviation, record an ADR if kept) |
 | Backend-fed items | done | quota usage, revision message, per-member health and last check, host placement, audit export, BGP max prefixes |
-| Pool passive checks, slow start | backend | wire when !78 merges |
+| Pool passive checks, slow start, TLS profile per port, OCSP stapling | done | pool sheet, Edit ports sheet, certificate sheet (!76) |

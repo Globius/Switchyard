@@ -411,6 +411,17 @@ ${KEY_ONLY}
     expect(replaced[0]?.query).toBe("?change_set=cs1");
   });
 
+  it("toggles OCSP stapling into the draft, and does not offer it for Cloudflare Origin CA", async () => {
+    renderAt("/t/acme/certificates");
+    await userEvent.click(await screen.findByRole("button", { name: "Where wildcard is used" }));
+    const sw = await screen.findByRole("switch", { name: "OCSP stapling" });
+    await waitFor(() => expect(sw).toBeEnabled());
+    await userEvent.click(sw);
+    await waitFor(() =>
+      expect(posted?.ops[0]).toMatchObject({ action: "update", body: { ocsp_stapling: true } }),
+    );
+  });
+
   it("a certificate nobody uses says it can be deleted", async () => {
     renderAt("/t/acme/certificates");
     await userEvent.click(await screen.findByRole("button", { name: "Where mqtt is used" }));
