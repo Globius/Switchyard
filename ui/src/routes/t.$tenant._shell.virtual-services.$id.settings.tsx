@@ -1,7 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NotBuilt } from "@/components/sy/NotBuilt";
+import { VsSettings } from "@/features/vs/VsSettings";
 
-// Replaced by the Settings tab in the next MR.
+function Page() {
+  const { tenant, id } = Route.useParams();
+  return <VsSettings tenant={tenant} id={id} />;
+}
+
 export const Route = createFileRoute("/t/$tenant/_shell/virtual-services/$id/settings")({
-  component: () => <NotBuilt name="Settings" />,
+  component: Page,
 });

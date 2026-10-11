@@ -20,7 +20,9 @@ Run from the repo root (Node 22+, pnpm):
 | `make ui-gen-api` | Regenerate `ui/src/api/schema.d.ts` from `docs/api/openapi.json` |
 | `make ui-check` | All of the above plus a check that the generated client is current |
 
-`pnpm dev` (in `ui/`) proxies `/api` to `localhost:8000`.
+`pnpm dev` (in `ui/`) proxies `/api` to `SY_API` (default `http://localhost:8000`). Until the login screen
+exists, put `SY_API=...` and `SY_DEV_TOKEN=<system-admin token from syctl token>` in `ui/.env.local`
+(git-ignored); the dev proxy then sends the token as a bearer header. Dev only.
 
 ## Typed client
 
