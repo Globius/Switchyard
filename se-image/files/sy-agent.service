@@ -1,0 +1,20 @@
+[Unit]
+Description=Switchyard SE agent
+After=network-online.target sy-agent-enroll.service
+Wants=network-online.target
+Requires=sy-agent-enroll.service
+ConditionPathExists=/etc/switchyard/agent/tls.crt
+
+[Service]
+ExecStart=/usr/local/bin/sy-agent
+Restart=always
+RestartSec=3
+# Writes only under /etc/switchyard and /run/switchyard (02 "Agent").
+ProtectSystem=strict
+ReadWritePaths=/etc/switchyard /run/switchyard
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=false
+
+[Install]
+WantedBy=multi-user.target

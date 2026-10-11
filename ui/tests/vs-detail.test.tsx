@@ -210,6 +210,62 @@ describe("virtual service detail", () => {
     expect(describeMatch({})).toBe("any request");
   });
 
+  it("shows per-member health from engine status with the failed-check reason", async () => {
+    const row = (
+      pool_id: string,
+      member_id: string,
+      status: string,
+      engine: string,
+      extra = {},
+    ) => ({
+      pool: "p",
+      pool_id,
+      member_id,
+      address: "10.1.0.1",
+      port: 80,
+      engine,
+      engine_id: engine,
+      status,
+      check_status: null,
+      last_check: null,
+      last_change_s: null,
+      last_checked_at: "2026-10-11T10:00:00Z",
+      ...extra,
+    });
+    server.use(
+      http.get("*/api/v1/tenants/acme/status/virtual-services", () =>
+        HttpResponse.json([
+          {
+            id: "v1",
+            name: "web",
+            protocol: "http",
+            state: "serving",
+            health: "degraded",
+            members_total: 3,
+            members_up: 2,
+            members: [
+              row("p1", "m1", "UP", "se-a"),
+              row("p1", "m1", "DOWN", "se-b", {
+                check_status: "L4TOUT",
+                last_check: "connection timed out",
+                last_change_s: 180,
+              }),
+              row("p1", "m2", "DRAIN", "se-a"),
+            ],
+          },
+        ]),
+      ),
+    );
+    renderAt("/t/acme/virtual-services/v1");
+    const first = (await screen.findByText("10.1.0.1", { selector: "td" })).closest("tr")!;
+    expect(await within(first).findByText("Down")).toBeInTheDocument();
+    expect(
+      within(first).getByText(/L4TOUT · connection timed out · 3 min ago · 2 engines/),
+    ).toBeInTheDocument();
+    const second = (await screen.findByText("10.1.0.2", { selector: "td" })).closest("tr")!;
+    expect(within(second).getAllByText("Draining").length).toBeGreaterThan(0);
+  });
+
   it("overview shows the header, tabs, routes and pools", async () => {
     renderAt("/t/acme/virtual-services/v1");
     expect(await screen.findByRole("heading", { name: "web" })).toBeInTheDocument();
@@ -254,10 +310,86 @@ describe("virtual service detail", () => {
     expect(await screen.findByText("Nothing is rendered")).toBeInTheDocument();
   });
 
-  it("history lists revisions and audit events", async () => {
+  it("history is one timeline: revisions with their field diff, runtime actions and approvals, with filters", async () => {
+    server.use(
+      http.get("*/api/v1/audit-actions", () =>
+        HttpResponse.json([
+          { action: "member.state", category: "pool_member", description: "d" },
+          { action: "change_set.reject", category: "change_set", description: "d" },
+          { action: "tenant.update", category: "tenant", description: "d" },
+        ]),
+      ),
+      http.get("*/api/v1/tenants/acme/audit-events", () =>
+        HttpResponse.json({
+          items: [
+            {
+              action: "member.state",
+              actor: "miguel",
+              at: "2026-10-10T11:00:00Z",
+              object: "pool api",
+              diff: null,
+              request_id: null,
+              tenant_id: "t1",
+            },
+            {
+              action: "change_set.reject",
+              actor: "miguel",
+              at: "2026-10-09T11:00:00Z",
+              object: "change_set:x",
+              diff: null,
+              request_id: null,
+              tenant_id: "t1",
+            },
+            {
+              action: "tenant.update",
+              actor: "miguel",
+              at: "2026-10-08T11:00:00Z",
+              object: "t",
+              diff: null,
+              request_id: null,
+              tenant_id: "t1",
+            },
+          ],
+          next_cursor: null,
+        }),
+      ),
+      http.get("*/api/v1/tenants/acme/revisions/42", () =>
+        HttpResponse.json({
+          number: 42,
+          summary: "Raise maxconn",
+          author: "dana",
+          created_at: "2026-10-10T10:00:00Z",
+          git_sha: null,
+          snapshot: { virtual_services: [{ id: "v1", name: "web", maxconn: 200 }] },
+        }),
+      ),
+      http.get("*/api/v1/tenants/acme/revisions/41", () =>
+        HttpResponse.json({
+          number: 41,
+          summary: "old",
+          author: "dana",
+          created_at: "2026-10-09T10:00:00Z",
+          git_sha: null,
+          snapshot: { virtual_services: [{ id: "v1", name: "web", maxconn: 100 }] },
+        }),
+      ),
+    );
     renderAt("/t/acme/virtual-services/v1/history");
     expect(await screen.findByText("Raise maxconn")).toBeInTheDocument();
     expect(screen.getByText("member.state")).toBeInTheDocument();
+    expect(screen.getByText("change_set.reject")).toBeInTheDocument();
+    expect(screen.queryByText("tenant.update")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("runtime action, not a revision", { exact: false }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("maxconn: 100")).toBeInTheDocument();
+    expect(screen.getByText("maxconn: 200")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Runtime actions" }));
+    expect(screen.queryByText("Raise maxconn")).not.toBeInTheDocument();
+    expect(screen.getByText("member.state")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("radio", { name: "Approvals" }));
+    expect(screen.queryByText("member.state")).not.toBeInTheDocument();
+    expect(screen.getByText("change_set.reject")).toBeInTheDocument();
   });
 
   it("history is empty for a new service", async () => {

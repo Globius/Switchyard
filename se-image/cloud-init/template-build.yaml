@@ -1,0 +1,14 @@
+#cloud-config
+# User-data for the one-off build VM that becomes the template. Clone the repository (or copy
+# se-image/ and the built sy-agent) onto the VM, then run provision.sh. See docs/runbooks/build-se-template.md.
+package_update: true
+write_files:
+  - path: /opt/switchyard-build/run.sh
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      cd /opt/switchyard-build/se-image
+      AGENT_BIN=/opt/switchyard-build/sy-agent ./provision.sh
+runcmd:
+  - [sh, -c, "[ -x /opt/switchyard-build/sy-agent ] && /opt/switchyard-build/run.sh && poweroff"]

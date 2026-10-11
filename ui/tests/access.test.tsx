@@ -147,7 +147,8 @@ const server = setupServer(
       name: "acme",
       version: 4,
       require_approval: false,
-      quotas: { virtual_services: 20 },
+      quotas: { virtual_service: 20 },
+      usage: { virtual_service: 7 },
     }),
   ),
   http.patch("*/api/v1/tenants/acme", async ({ request }) => {
@@ -242,7 +243,10 @@ describe("tenant access and settings", () => {
     await userEvent.click(dlg.getByRole("button", { name: "Create token" }));
     expect(await screen.findByText("sy_secret")).toBeInTheDocument();
     await waitFor(() => expect(calls.token).toEqual({ name: "ci2", role: "viewer", ttl_days: 90 }));
-    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    const done = screen.getByRole("button", { name: "Done" });
+    expect(done).toBeDisabled();
+    await userEvent.click(screen.getByLabelText("I have stored it"));
+    await userEvent.click(done);
     const row = screen.getByText("gitlab-ci").closest("tr")!;
     await userEvent.click(within(row).getByRole("button", { name: "Revoke" }));
     await userEvent.click(await screen.findByRole("button", { name: "Revoke token" }));
@@ -252,7 +256,8 @@ describe("tenant access and settings", () => {
   it("turns require-approval on with If-Match; only a system-admin can turn it off", async () => {
     renderAt("/t/acme/access");
     await userEvent.click(await screen.findByRole("tab", { name: "Settings" }));
-    expect(await screen.findByText("virtual services")).toBeInTheDocument();
+    expect(await screen.findByText("virtual service")).toBeInTheDocument();
+    expect(screen.getByText("7 of 20")).toBeInTheDocument();
     const sw = await screen.findByRole("switch", { name: "Require approval" });
     await waitFor(() => expect(sw).toBeEnabled());
     await userEvent.click(sw);

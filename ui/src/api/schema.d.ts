@@ -2885,6 +2885,11 @@ export interface components {
         ApplyIn: {
             /** Break Glass Reason */
             break_glass_reason?: string | null;
+            /**
+             * Message
+             * @description Revision message, kept on the revision and in the Git mirror commit.
+             */
+            message?: string | null;
         };
         /**
          * ApplyJobResult
@@ -3955,6 +3960,11 @@ export interface components {
         FailingMember: {
             /** Backend */
             backend: string;
+            /**
+             * Check Status
+             * @description Short code of the last health check, for example `L7STS`.
+             */
+            check_status?: string | null;
             /** Engine */
             engine: string;
             /**
@@ -3962,6 +3972,22 @@ export interface components {
              * Format: uuid
              */
             engine_id: string;
+            /**
+             * Last Change S
+             * @description Seconds since the member status last changed.
+             */
+            last_change_s?: number | null;
+            /**
+             * Last Check
+             * @description HAProxy description of the last health check.
+             */
+            last_check?: string | null;
+            /**
+             * Last Checked At
+             * Format: date-time
+             * @description When the controller last read this engine's check results.
+             */
+            last_checked_at: string;
             /** Server */
             server: string;
             /** Status */
@@ -5771,6 +5797,12 @@ export interface components {
             created_at: string;
             /** Git Sha */
             git_sha?: string | null;
+            /**
+             * Message
+             * @description The message given when it was applied.
+             * @default
+             */
+            message: string;
             /** Number */
             number: number;
             snapshot: components["schemas"]["Snapshot"];
@@ -5791,6 +5823,12 @@ export interface components {
             created_at: string;
             /** Git Sha */
             git_sha?: string | null;
+            /**
+             * Message
+             * @description The message given when it was applied.
+             * @default
+             */
+            message: string;
             /** Number */
             number: number;
             /** Summary */
@@ -6550,13 +6588,20 @@ export interface components {
             name: string;
             /**
              * Quotas
-             * @description Object-count limits by object type.
+             * @description Object-count limits by object type name (`virtual_service`, `pool`, ...).
              */
             quotas: {
                 [key: string]: number;
             };
             /** Require Approval */
             require_approval: boolean;
+            /**
+             * Usage
+             * @description Objects the tenant owns now, by object type name (zeros included).
+             */
+            usage?: {
+                [key: string]: number;
+            };
             /** Version */
             version: number;
         };
@@ -7053,6 +7098,61 @@ export interface components {
          * @enum {string}
          */
         VirtualServiceHealth: "healthy" | "degraded" | "down" | "unknown" | "disabled";
+        /**
+         * VirtualServiceMemberRead
+         * @description One pool member of a virtual service as one engine reports it.
+         */
+        VirtualServiceMemberRead: {
+            /** Address */
+            address: string;
+            /**
+             * Check Status
+             * @description Short code of the last health check, for example `L7STS`.
+             */
+            check_status?: string | null;
+            /** Engine */
+            engine: string;
+            /**
+             * Engine Id
+             * Format: uuid
+             */
+            engine_id: string;
+            /**
+             * Last Change S
+             * @description Seconds since the member status last changed.
+             */
+            last_change_s?: number | null;
+            /**
+             * Last Check
+             * @description HAProxy description of the last health check.
+             */
+            last_check?: string | null;
+            /**
+             * Last Checked At
+             * Format: date-time
+             * @description When the controller last read this engine's check results.
+             */
+            last_checked_at: string;
+            /**
+             * Member Id
+             * Format: uuid
+             */
+            member_id: string;
+            /** Pool */
+            pool: string;
+            /**
+             * Pool Id
+             * Format: uuid
+             */
+            pool_id: string;
+            /** Port */
+            port?: number | null;
+            /**
+             * Status
+             * @description HAProxy status, for example `UP`, `DOWN`, `DRAIN`.
+             */
+            status: string;
+        };
         /** VirtualServicePatch */
         VirtualServicePatch: {
             /** Allow List Id */
@@ -7181,6 +7281,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Members
+             * @description The reported rows behind the counts, one per engine and pool member.
+             */
+            members?: components["schemas"]["VirtualServiceMemberRead"][];
             /**
              * Members Total
              * @description Reported member rows of the service's pools.
@@ -10198,9 +10303,14 @@ export interface operations {
                      *         "id": "0192f3a0-0000-7000-8000-000000000001",
                      *         "name": "acme",
                      *         "quotas": {
-                     *           "virtual_services": 50
+                     *           "virtual_service": 50
                      *         },
                      *         "require_approval": true,
+                     *         "usage": {
+                     *           "network": 2,
+                     *           "pool": 20,
+                     *           "virtual_service": 12
+                     *         },
                      *         "version": 2
                      *       }
                      *     ]
@@ -10282,9 +10392,14 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
                      *       "quotas": {
-                     *         "virtual_services": 50
+                     *         "virtual_service": 50
                      *       },
                      *       "require_approval": true,
+                     *       "usage": {
+                     *         "network": 2,
+                     *         "pool": 20,
+                     *         "virtual_service": 12
+                     *       },
                      *       "version": 2
                      *     }
                      */
@@ -10357,9 +10472,14 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
                      *       "quotas": {
-                     *         "virtual_services": 50
+                     *         "virtual_service": 50
                      *       },
                      *       "require_approval": true,
+                     *       "usage": {
+                     *         "network": 2,
+                     *         "pool": 20,
+                     *         "virtual_service": 12
+                     *       },
                      *       "version": 2
                      *     }
                      */
@@ -10510,9 +10630,14 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
                      *       "name": "acme",
                      *       "quotas": {
-                     *         "virtual_services": 50
+                     *         "virtual_service": 50
                      *       },
                      *       "require_approval": true,
+                     *       "usage": {
+                     *         "network": 2,
+                     *         "pool": 20,
+                     *         "virtual_service": 12
+                     *       },
                      *       "version": 2
                      *     }
                      */
@@ -16484,6 +16609,7 @@ export interface operations {
                      *           "author": "user:alice",
                      *           "created_at": "2026-10-10T08:30:00Z",
                      *           "git_sha": "3f9c2ab",
+                     *           "message": "Ticket OPS-412: leastconn evens out the long uploads.",
                      *           "number": 12,
                      *           "summary": "Switch web-pool to leastconn"
                      *         }
@@ -16568,6 +16694,7 @@ export interface operations {
                      *       "author": "user:alice",
                      *       "created_at": "2026-10-10T08:30:00Z",
                      *       "git_sha": "3f9c2ab",
+                     *       "message": "Ticket OPS-412: leastconn evens out the long uploads.",
                      *       "number": 12,
                      *       "snapshot": {
                      *         "pools": [
@@ -18781,6 +18908,22 @@ export interface operations {
                      *       {
                      *         "health": "degraded",
                      *         "id": "00000000-0000-0000-0000-0000000000d1",
+                     *         "members": [
+                     *           {
+                     *             "address": "10.20.0.53",
+                     *             "check_status": "L4TOUT",
+                     *             "engine": "edge-1",
+                     *             "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                     *             "last_change_s": 95,
+                     *             "last_check": "Layer4 timeout",
+                     *             "last_checked_at": "2026-10-10T08:30:00Z",
+                     *             "member_id": "00000000-0000-0000-0000-0000000000d3",
+                     *             "pool": "dns-pool",
+                     *             "pool_id": "00000000-0000-0000-0000-0000000000d2",
+                     *             "port": 53,
+                     *             "status": "DOWN"
+                     *           }
+                     *         ],
                      *         "members_total": 4,
                      *         "members_up": 3,
                      *         "name": "dns",
@@ -18874,8 +19017,12 @@ export interface operations {
                      *       "failing_members": [
                      *         {
                      *           "backend": "pool_web",
+                     *           "check_status": "L7STS",
                      *           "engine": "edge-1",
                      *           "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                     *           "last_change_s": 95,
+                     *           "last_check": "Layer7 wrong status",
+                     *           "last_checked_at": "2026-10-10T08:30:00Z",
                      *           "server": "web-2",
                      *           "status": "DOWN"
                      *         }

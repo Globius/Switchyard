@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ApiError } from "@/api/client";
 import { useCan, useMe } from "@/auth/session";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
+import { ConfigEditor } from "@/components/sy/ConfigEditor";
 import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import {
   describeCreated,
   describeDeleted,
   parseUnified,
+  problemHint,
   phaseOf,
   TYPE_LABEL,
   TYPE_PATH,
@@ -177,27 +179,34 @@ function ConfigTab({ diff }: { diff: Diff }) {
                 <span>{f.path}</span>
                 <span className="text-muted-foreground">{f.status}</span>
               </div>
-              <pre className="overflow-x-auto py-1 font-mono text-[12px] leading-5">
-                {parseUnified(f.diff).map((l, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex px-4",
-                      l.kind === "add" && "bg-diff-add",
-                      l.kind === "del" && "bg-diff-del",
-                      l.kind === "hunk" && "bg-muted/60 text-muted-foreground",
-                    )}
-                  >
-                    <span aria-hidden className="w-4 shrink-0">
-                      {l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}
-                    </span>
-                    <span className="sr-only">
-                      {l.kind === "add" ? t("added") : l.kind === "del" ? t("removed") : ""}
-                    </span>
-                    <code>{l.text || " "}</code>
-                  </div>
-                ))}
-              </pre>
+              <ConfigEditor
+                content={f.diff}
+                language="sy-diff"
+                label={f.path}
+                fallback={
+                  <pre className="overflow-x-auto py-1 font-mono text-[12px] leading-5">
+                    {parseUnified(f.diff).map((l, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "flex px-4",
+                          l.kind === "add" && "bg-diff-add",
+                          l.kind === "del" && "bg-diff-del",
+                          l.kind === "hunk" && "bg-muted/60 text-muted-foreground",
+                        )}
+                      >
+                        <span aria-hidden className="w-4 shrink-0">
+                          {l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}
+                        </span>
+                        <span className="sr-only">
+                          {l.kind === "add" ? t("added") : l.kind === "del" ? t("removed") : ""}
+                        </span>
+                        <code>{l.text || " "}</code>
+                      </div>
+                    ))}
+                  </pre>
+                }
+              />
             </div>
           ))}
         </section>
@@ -232,6 +241,7 @@ function ImpactTab({ diff }: { diff: Diff }) {
             <div className="font-mono text-xs text-muted-foreground">
               {p.path} · {p.code}
             </div>
+            {problemHint(p) && <p className="mt-1">{problemHint(p)}</p>}
           </div>
         ))}
         {diff.warnings.map((w, i) => (
@@ -272,6 +282,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
   const [rejecting, setRejecting] = useState(false);
   const [comment, setComment] = useState("");
   const [bypass, setBypass] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [problem, setProblem] = useState<unknown>(null);
@@ -325,7 +336,9 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
     }
   }
   const startApply = async (r: string | null) => {
-    const res = await run(() => actions.apply.mutateAsync(r));
+    const res = await run(() =>
+      actions.apply.mutateAsync({ reason: r, message: message ?? undefined }),
+    );
     if (res?.job_id) setJobId(res.job_id);
   };
   const conflict =
@@ -389,12 +402,13 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
                       <li key={`${p.path}-${i}`}>
                         {p.message}{" "}
                         <span className="font-mono text-xs text-muted-foreground">{p.path}</span>
+                        {problemHint(p) && <span className="block">{problemHint(p)}</span>}
                       </li>
                     ))}
                   </ul>
                 </section>
               )}
-              <div role="tablist" className="flex gap-1 border-b">
+              <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
                 {(["objects", "config", "impact"] as const).map((k) => (
                   <button
                     key={k}
@@ -483,8 +497,20 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
           {phase === "ready" && (
             <>
               <div className="space-y-1">
-                <div className="text-sm font-medium">{t("Revision message")}</div>
-                <p className="rounded-md border bg-muted/40 p-2 text-sm">{c.summary}</p>
+                <label className="text-sm font-medium" htmlFor="revision-message">
+                  {t("Revision message")}
+                </label>
+                <textarea
+                  id="revision-message"
+                  rows={3}
+                  maxLength={2000}
+                  className="w-full rounded-md border border-input bg-card p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={message ?? c.summary}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("Kept on the revision and in the Git mirror commit.")}
+                </p>
               </div>
               {warnings > 0 && (
                 <label className="flex items-center gap-2 text-sm">

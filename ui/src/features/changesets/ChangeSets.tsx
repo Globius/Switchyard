@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { pickOwnDraft, type ChangeSetSummary } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { principalName, shortWhen } from "@/lib/format";
 
 type Tab = "open" | "history";
 const OPEN = ["draft", "pending_approval", "applying", "failed"] as const;
@@ -84,10 +85,10 @@ function Detail({ tenant, id, mine }: { tenant: string; id: string; mine: boolea
       </h2>
       <div className="space-y-4 p-4 text-sm">
         <dl className="grid grid-cols-[8rem_1fr] gap-y-2">
-          {row(t("Author"), c.author)}
+          {row(t("Author"), principalName(c.author))}
           {row(t("State"), <StatePill state={c.state} />)}
           {row(t("Base revision"), `#${c.base_revision}`)}
-          {row(t("Created"), new Date(c.created_at).toLocaleString())}
+          {row(t("Created"), shortWhen(c.created_at))}
           {c.approver && row(t("Approver"), c.approver)}
           {c.error && row(t("Error"), <span className="text-status-down">{c.error}</span>)}
         </dl>
@@ -153,7 +154,7 @@ export function ChangeSets({ tenant }: { tenant: string }) {
           )}
         </p>
       </div>
-      <div role="tablist" className="flex gap-1 border-b">
+      <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
         {(["open", "history"] as const).map((k) => (
           <button
             key={k}
@@ -205,7 +206,9 @@ export function ChangeSets({ tenant }: { tenant: string }) {
                           </span>
                         )}
                       </button>
-                      <span className="w-44 truncate text-muted-foreground">{c.author}</span>
+                      <span className="w-44 truncate text-muted-foreground">
+                        {principalName(c.author)}
+                      </span>
                       <StatePill state={c.state} />
                       <span className="w-10 text-right text-muted-foreground">{c.op_count}</span>
                       <span className="w-28 text-right font-mono text-xs text-muted-foreground">

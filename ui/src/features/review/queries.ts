@@ -99,11 +99,14 @@ export function useChangeSetActions(tenant: string, cs: string) {
   const path = { params: { path: { t: tenant, cs } } };
   return {
     apply: useMutation({
-      mutationFn: async (reason: string | null) =>
+      mutationFn: async (o: { reason: string | null; message?: string }) =>
         unwrap(
           await api.POST("/api/v1/tenants/{t}/change-sets/{cs}/apply", {
             ...path,
-            body: reason ? { break_glass_reason: reason } : {},
+            body: {
+              ...(o.reason ? { break_glass_reason: o.reason } : {}),
+              ...(o.message?.trim() ? { message: o.message.trim() } : {}),
+            },
           }),
         ),
       onSuccess: refresh,

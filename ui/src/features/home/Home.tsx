@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ReapplyButton } from "@/features/drift/ReapplyButton";
 import { useDraft } from "@/features/shell/draft";
+import { ago } from "@/features/vs/member-health";
 import { t } from "@/lib/i18n";
+import { principalName } from "@/lib/format";
 
 function useSummary(tenant: string) {
   return useQuery({
@@ -178,7 +180,7 @@ export function Home({ tenant }: { tenant: string }) {
                 <table className="w-full text-[13px]">
                   <thead className="text-left text-xs text-muted-foreground">
                     <tr>
-                      {["Member", "Pool", "State", "Engine"].map((h) => (
+                      {["Member", "Pool", "State", "Last check"].map((h) => (
                         <th key={h} className="px-4 py-2 font-medium">
                           {t(h)}
                         </th>
@@ -191,9 +193,20 @@ export function Home({ tenant }: { tenant: string }) {
                         <td className="px-4 py-2.5 font-mono text-xs">{m.server}</td>
                         <td className="px-4 py-2.5">{m.backend}</td>
                         <td className="px-4 py-2.5">
-                          <StatusPill status="down">{t("Down")}</StatusPill>
+                          <StatusPill status="down">
+                            {m.status.toUpperCase().startsWith("DOWN") ? t("Down") : m.status}
+                          </StatusPill>
                         </td>
-                        <td className="px-4 py-2.5 text-muted-foreground">{m.engine}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground">
+                          <span className="font-mono text-xs">
+                            {m.check_status ?? m.last_check ?? "—"}
+                          </span>
+                          {m.last_change_s != null && (
+                            <span className="block text-xs">
+                              {ago(m.last_change_s)} · {m.engine}
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -302,7 +315,7 @@ export function Home({ tenant }: { tenant: string }) {
                   <li key={r.number} className="flex items-center gap-3 px-4 py-2.5">
                     <span className="font-mono text-xs text-muted-foreground">#{r.number}</span>
                     <span className="min-w-0 flex-1 truncate">{r.summary}</span>
-                    <span className="text-muted-foreground">{r.author}</span>
+                    <span className="text-muted-foreground">{principalName(r.author)}</span>
                   </li>
                 ))}
               </ul>

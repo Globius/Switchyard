@@ -56,6 +56,7 @@ const rev = (number: number, summary: string) => ({
   author: "dana",
   created_at: "2026-10-10T10:00:00Z",
   git_sha: "abcdef123",
+  message: number === 41 ? "Move billing-db after the maintenance window" : "",
 });
 const CS = (id: string, state: string, summary: string, author = "Miguel Rodriguez") => ({
   id,
@@ -203,6 +204,13 @@ describe("change sets", () => {
     expect(screen.queryByText("Raise maxconn")).not.toBeInTheDocument();
   });
 
+  it("revisions show their message under the summary when it adds something", async () => {
+    renderAt("/t/acme/revisions");
+    expect(
+      await screen.findByText("Move billing-db after the maintenance window"),
+    ).toBeInTheDocument();
+  });
+
   it("expands a change set to show ops and the rejection comment", async () => {
     renderAt("/t/acme/change-sets");
     await userEvent.click(await screen.findByText("Raise maxconn"));
@@ -240,27 +248,26 @@ describe("revisions", () => {
 
   it("rolls back after confirming and opens the review", async () => {
     const router = renderAt("/t/acme/revisions");
-    const row = (await screen.findByText("Add member")).closest("li")!;
-    await waitFor(() =>
-      expect(within(row).getByRole("button", { name: "Roll back" })).toBeEnabled(),
-    );
-    await userEvent.click(within(row).getByRole("button", { name: "Roll back" }));
+    await screen.findByText("Add member");
+    await userEvent.click(screen.getByLabelText("Compare #40"));
+    await userEvent.click(screen.getByLabelText("Compare #41"));
+    const rb = await screen.findByRole("button", { name: "Roll back to #40" });
+    await waitFor(() => expect(rb).toBeEnabled());
+    await userEvent.click(rb);
     expect(await screen.findByText(/Nothing changes until you apply it/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Create rollback draft" }));
     await waitFor(() => expect(rollbackCalled).toBe(40));
     await waitFor(() => expect(router.state.location.pathname).toBe("/t/acme/review/cs-rb"));
   });
 
-  it("operators cannot roll back; the first revision has no button", async () => {
+  it("operators cannot roll back", async () => {
     role = "operator";
     renderAt("/t/acme/revisions");
-    const row = (await screen.findByText("Add member")).closest("li")!;
-    await waitFor(() =>
-      expect(within(row).getByRole("button", { name: "Roll back" })).toBeDisabled(),
-    );
-    expect(
-      within(screen.getByText("Move billing-db").closest("li")!).queryByRole("button"),
-    ).not.toBeInTheDocument();
+    await screen.findByText("Add member");
+    await userEvent.click(screen.getByLabelText("Compare #40"));
+    await userEvent.click(screen.getByLabelText("Compare #41"));
+    const rb = await screen.findByRole("button", { name: "Roll back to #40" });
+    await waitFor(() => expect(rb).toBeDisabled());
   });
 
   it("shows an empty state and a problem on failed rollback", async () => {
@@ -279,11 +286,12 @@ describe("revisions", () => {
       ),
     );
     renderAt("/t/acme/revisions");
-    const row = (await screen.findByText("Add member")).closest("li")!;
-    await waitFor(() =>
-      expect(within(row).getByRole("button", { name: "Roll back" })).toBeEnabled(),
-    );
-    await userEvent.click(within(row).getByRole("button", { name: "Roll back" }));
+    await screen.findByText("Add member");
+    await userEvent.click(screen.getByLabelText("Compare #40"));
+    await userEvent.click(screen.getByLabelText("Compare #41"));
+    const rb = await screen.findByRole("button", { name: "Roll back to #40" });
+    await waitFor(() => expect(rb).toBeEnabled());
+    await userEvent.click(rb);
     await userEvent.click(await screen.findByRole("button", { name: "Create rollback draft" }));
     expect(await screen.findByText("A rollback is already open.")).toBeInTheDocument();
   });
@@ -302,6 +310,10 @@ describe("tenant home", () => {
               engine: "se-a",
               engine_id: "e1",
               status: "DOWN",
+              check_status: "L4TOUT",
+              last_check: null,
+              last_change_s: 120,
+              last_checked_at: "2026-10-11T10:00:00Z",
             },
           ],
           drifted_engines: [
@@ -340,6 +352,8 @@ describe("tenant home", () => {
     expect(screen.getByText("1 within 7 days")).toBeInTheDocument();
     const failing = screen.getByText("Failing members").closest("section")!;
     expect(within(failing).getByText("api-v1-01")).toBeInTheDocument();
+    expect(within(failing).getByText("L4TOUT")).toBeInTheDocument();
+    expect(within(failing).getByText(/2 min ago/)).toBeInTheDocument();
     expect(screen.getByText("se-edge-a-02", { selector: "span" })).toBeInTheDocument();
     expect(await screen.findByText("Move billing-db")).toBeInTheDocument();
   });

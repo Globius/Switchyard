@@ -44,3 +44,5 @@ Thumbs.db
 agent/sy-agent
 agent/sy-agent.exe
 ui/coverage/
+ui/test-results/
+ui/playwright-report/
