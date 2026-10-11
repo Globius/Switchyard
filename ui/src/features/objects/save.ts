@@ -37,7 +37,8 @@ export function useSaveOp(tenant: string, type: ObjectType) {
           },
         }),
       );
-      await qc.invalidateQueries({ queryKey: ["t", tenant] });
+      // Do not wait for the refetch: a slow or failing unrelated query must not hold the save.
+      void qc.invalidateQueries({ queryKey: ["t", tenant] });
       return id;
     },
   });

@@ -250,7 +250,7 @@ describe("review screen", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("− roundrobin")).toBeInTheDocument();
     expect(screen.getByText("+ leastconn")).toBeInTheDocument();
-    expect(screen.getByText(/This object is removed/)).toBeInTheDocument();
+    expect(await screen.findByText(/Removed when the change set is applied/)).toBeInTheDocument();
     expect(screen.getByText("old")).toHaveClass("line-through");
   });
 
@@ -573,10 +573,12 @@ describe("review screen", () => {
       ),
     );
     renderAt();
-    const marks = await screen.findAllByRole("listitem");
-    await waitFor(() => expect(screen.getByText(/a.test → pool api-v2/)).toBeInTheDocument());
-    expect(marks.length).toBeGreaterThan(0);
-    expect(screen.getByText("portal")).toBeInTheDocument();
-    expect(screen.getByText("1 unchanged")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/a.test → api-v2/)).toBeInTheDocument());
+    expect(screen.getAllByText("portal").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/1 certificates → 2 certificates · 1 added · 1 unchanged \(hidden\)/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show 1 unchanged" })).toBeInTheDocument();
+    expect(screen.getAllByText("Live (rev #41)").length).toBeGreaterThan(0);
   });
 });

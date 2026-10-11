@@ -214,7 +214,7 @@ describe("virtual service detail", () => {
     renderAt("/t/acme/virtual-services/v1");
     expect(await screen.findByRole("heading", { name: "web" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Rendered config" })).toBeInTheDocument();
-    const routes = await screen.findByText("api.example.test /v2*");
+    const routes = await screen.findByText("api.example.test");
     expect(within(routes.closest("tr")!).getByText("api-v2")).toBeInTheDocument();
     expect(screen.getByText("Redirect 301 to https://new.example.test")).toBeInTheDocument();
     expect(screen.getByText("Draining")).toBeInTheDocument();
@@ -224,7 +224,7 @@ describe("virtual service detail", () => {
   it("drains a member after confirming, and shows partial failure", async () => {
     stateResult = { state: "drain", applied: ["se-a"], failed: { "se-b": "agent unreachable" } };
     renderAt("/t/acme/virtual-services/v1");
-    const row = (await screen.findByText("10.1.0.1:8080")).closest("li")!;
+    const row = (await screen.findByText("10.1.0.1:8080")).closest("tr")!;
     await waitFor(() => expect(within(row).getByRole("button", { name: "Drain" })).toBeEnabled());
     await userEvent.click(within(row).getByRole("button", { name: "Drain" }));
     expect(await screen.findByText(/skips the change set/)).toBeInTheDocument();
@@ -236,7 +236,7 @@ describe("virtual service detail", () => {
   it("viewers see disabled member actions", async () => {
     role = "viewer";
     renderAt("/t/acme/virtual-services/v1");
-    const row = (await screen.findByText("10.1.0.1:8080")).closest("li")!;
+    const row = (await screen.findByText("10.1.0.1:8080")).closest("tr")!;
     await waitFor(() => expect(within(row).getByRole("button", { name: "Drain" })).toBeDisabled());
   });
 
@@ -290,7 +290,7 @@ describe("virtual service detail", () => {
     renderAt("/t/acme/virtual-services/v1");
     expect(await screen.findByText(/TCP services have no routes/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "web" })).toHaveClass("line-through");
-    expect(screen.getByText("Deleted")).toBeInTheDocument();
+    expect(screen.getByText("Deleted in draft")).toBeInTheDocument();
     expect(screen.getByText("This service sends traffic to no pool yet.")).toBeInTheDocument();
   });
 

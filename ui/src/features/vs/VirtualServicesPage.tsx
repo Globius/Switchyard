@@ -6,6 +6,11 @@ import { DraftMarker, expiryStatus, HealthPill, StatusPill } from "@/components/
 import { EmptyState, ErrorState, TableSkeleton, UnavailableState } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
+import { useQueryClient } from "@tanstack/react-query";
+import { api, unwrap } from "@/api/client";
+import { useSaveOp } from "@/features/objects/save";
+import { useChangeSetRead } from "@/features/review/queries";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -33,6 +38,21 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
   const create = can("write", "application");
   const { draft } = useDraft(tenant);
   const list = useVirtualServices(tenant, filters, draft?.id);
+  const save = useSaveOp(tenant, "virtual_service");
+  const draftSet = useChangeSetRead(tenant, draft?.id ?? "", !!draft);
+  const qc = useQueryClient();
+  /** Take a service back out of a deletion by removing the draft's delete op. */
+  async function restore(id: string) {
+    const index =
+      draftSet.data?.ops.findIndex((o) => o.object_id === id && o.action === "delete") ?? -1;
+    if (!draft || index < 0) return;
+    unwrap(
+      await api.DELETE("/api/v1/tenants/{t}/change-sets/{cs}/ops/{index}", {
+        params: { path: { t: tenant, cs: draft.id, index } },
+      }),
+    );
+    await qc.invalidateQueries({ queryKey: ["t", tenant] });
+  }
   const status = useVsStatus(tenant);
   const metrics = useVsMetrics(tenant);
   const groups = useSeGroups(tenant);
@@ -133,6 +153,10 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
         </Tip>
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        {t("Filters and sort are kept in the URL, so a view can be bookmarked or shared.")}
+      </p>
+
       <div className="overflow-x-auto rounded-lg border bg-card">
         {list.isPending ? (
           <TableSkeleton cols={9} />
@@ -181,6 +205,7 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
                   "p95",
                   "5xx",
                   "Cert expiry",
+                  "Enabled",
                 ].map((h) => (
                   <th key={h} className="px-4 py-2.5 font-medium">
                     {t(h)}
@@ -247,6 +272,36 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
                         "—"
                       )}
                     </td>
+                    <td className="px-4 py-3">
+                      {deleted ? (
+                        <Tip label={create.reason}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={!create.allowed}
+                            onClick={() => void restore(v.id)}
+                          >
+                            {t("Restore")}
+                          </Button>
+                        </Tip>
+                      ) : (
+                        <Tip label={create.reason}>
+                          <Switch
+                            aria-label={t("Enable {name}", { name: v.name })}
+                            checked={v.enabled}
+                            disabled={!create.allowed}
+                            onCheckedChange={(on) =>
+                              void save.mutateAsync({
+                                action: "update",
+                                id: v.id,
+                                version: v.version,
+                                body: { enabled: on },
+                              })
+                            }
+                          />
+                        </Tip>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -269,6 +324,7 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
         <p className="text-xs text-muted-foreground">
           {t("Health and member counts from engine status.")}
         </p>
+        <p className="text-xs text-muted-foreground">{t("Sort by name · pages of 50")}</p>
         {metrics.data && !metrics.data.available && (
           <UnavailableState
             title={t("Metrics unavailable")}

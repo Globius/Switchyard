@@ -126,6 +126,15 @@ const server = setupServer(
   http.get("*/api/v1/tenants/acme/certificates", () =>
     HttpResponse.json({ items: [], next_cursor: null }),
   ),
+  http.get("*/api/v1/tenants/acme/policy-sets", () =>
+    HttpResponse.json({ items: [], next_cursor: null }),
+  ),
+  http.get("*/api/v1/tenants/acme/virtual-services/v1/logs", () =>
+    HttpResponse.json({ available: false, reason: "no log backend", entries: [] }),
+  ),
+  http.get("*/api/v1/tenants/acme/virtual-services/v1/rendered", () =>
+    HttpResponse.json({ items: [] }),
+  ),
   http.get("*/api/v1/tenants/acme/health-monitors", () =>
     HttpResponse.json({ items: [], next_cursor: null }),
   ),
@@ -270,18 +279,78 @@ describe("virtual service overview", () => {
   it("numbers routes from 1, shows members up and Not applied, and quotes the metrics reason", async () => {
     authorOfDraft = "user:x:1";
     renderAt("/t/acme/virtual-services/v1");
-    expect(await screen.findByText("2 of 3 members up")).toBeInTheDocument();
+    expect(await screen.findByText("Degraded · 2 of 3 members up")).toBeInTheDocument();
     const row = (await screen.findByText("a.test")).closest("tr")!;
     expect(within(row).getAllByRole("cell")[0]).toHaveTextContent("1");
     expect(
       within(screen.getByText("b.test").closest("tr")!).getAllByRole("cell")[0],
     ).toHaveTextContent("2");
     expect(await screen.findByText(/Prometheus is not configured/)).toBeInTheDocument();
-    const two = (await screen.findByText("10.1.0.2:80")).closest("li")!;
+    const two = (await screen.findByText("10.1.0.2:80")).closest("tr")!;
     await waitFor(() => expect(within(two).getByText("Not applied")).toBeInTheDocument());
     expect(
-      within(screen.getByText("10.1.0.1:80").closest("li")!).queryByText("Not applied"),
+      within(screen.getByText("10.1.0.1:80").closest("tr")!).queryByText("Not applied"),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("virtual service header actions", () => {
+  it("Disable and Delete add ops to the draft; the Settings tab carries the draft dot", async () => {
+    authorOfDraft = "user:x:1";
+    const posted: {
+      ops: { action: string; object_id: string; body?: unknown; expected_version: number }[];
+    }[] = [];
+    server.use(
+      http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", async ({ request }) => {
+        posted.push((await request.json()) as (typeof posted)[number]);
+        return HttpResponse.json({ id: "cs1" });
+      }),
+      http.get("*/api/v1/tenants/acme/virtual-services/v1", () =>
+        HttpResponse.json({
+          id: "v1",
+          name: "web",
+          protocol: "http",
+          vip: "10.0.0.1",
+          ports: [{ port: 80 }],
+          enabled: true,
+          certificate_ids: [],
+          routes: [],
+          policy_set_ids: [],
+          default_pool_id: null,
+          se_group_id: "g1abcdefgh",
+          version: 3,
+          draft_status: "modified",
+          changed_fields: ["name", "vip"],
+        }),
+      ),
+    );
+    const router = renderAt("/t/acme/virtual-services/v1");
+    expect(await screen.findByText("Modified in draft · 2 fields")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Settings/ })).toContainElement(
+      screen.getAllByLabelText("Changed in draft")[0]!,
+    );
+    const disable = await screen.findByRole("button", { name: "Disable" });
+    await waitFor(() => expect(disable).toBeEnabled());
+    await userEvent.click(disable);
+    await waitFor(() =>
+      expect(posted[0]?.ops[0]).toMatchObject({
+        action: "update",
+        object_id: "v1",
+        expected_version: 3,
+        body: { enabled: false },
+      }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add delete to draft" }));
+
+    await waitFor(() =>
+      expect(posted[1]?.ops[0]).toMatchObject({
+        action: "delete",
+        object_id: "v1",
+        expected_version: 3,
+      }),
+    );
+    await waitFor(() => expect(router.state.location.pathname).toBe("/t/acme/virtual-services"));
   });
 });
 

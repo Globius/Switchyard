@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Info, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
@@ -9,6 +9,7 @@ import { DraftMarker, StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
@@ -189,129 +190,137 @@ function PoolSheet({
         }
       >
         {problem != null && <ErrorState error={problem} />}
-        <label className="block space-y-1.5 text-sm font-medium">
-          {t("Name")}
-          <input
-            aria-label={t("Name")}
-            className={INPUT}
-            disabled={!write.allowed}
-            value={f.name}
-            onChange={(e) => set({ name: e.target.value })}
-          />
-          {errors.name && (
-            <span role="alert" className="block text-xs font-normal text-status-down">
-              {errors.name}
-            </span>
-          )}
-        </label>
-        <label className="block space-y-1.5 text-sm font-medium">
-          {t("Algorithm")}
-          <select
-            aria-label={t("Algorithm")}
-            className={INPUT}
-            disabled={!write.allowed}
-            value={f.algorithm}
-            onChange={(e) => set({ algorithm: e.target.value as PoolForm["algorithm"] })}
-          >
-            {Object.entries(ALGO).map(([k, v]) => (
-              <option key={k} value={k}>
-                {t(v)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block space-y-1.5 text-sm font-medium">
-          {t("Health monitor")}
-          <select
-            aria-label={t("Health monitor")}
-            className={INPUT}
-            disabled={!write.allowed}
-            value={f.health_monitor_id ?? ""}
-            onChange={(e) => set({ health_monitor_id: e.target.value || null })}
-          >
-            <option value="">{t("None")}</option>
-            {monitors.data?.items.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} · {m.type.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="flex gap-6 text-sm">
-          <label className="flex items-center gap-2">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("Name")}
             <input
-              type="checkbox"
+              aria-label={t("Name")}
+              className={INPUT}
               disabled={!write.allowed}
-              checked={f.tls}
-              onChange={(e) =>
-                set({ tls: e.target.checked, tls_verify: e.target.checked ? f.tls_verify : false })
-              }
+              value={f.name}
+              onChange={(e) => set({ name: e.target.value })}
             />
-            {t("Backend TLS")}
+            {errors.name && (
+              <span role="alert" className="block text-xs font-normal text-status-down">
+                {errors.name}
+              </span>
+            )}
           </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              disabled={!write.allowed || !f.tls}
-              checked={f.tls_verify}
-              onChange={(e) => set({ tls_verify: e.target.checked })}
-            />
-            {t("TLS verify")}
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("Algorithm")}
+            <select
+              aria-label={t("Algorithm")}
+              className={INPUT}
+              disabled={!write.allowed}
+              value={f.algorithm}
+              onChange={(e) => set({ algorithm: e.target.value as PoolForm["algorithm"] })}
+            >
+              {Object.entries(ALGO).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {t(v)}
+                </option>
+              ))}
+            </select>
           </label>
-        </div>
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">{t("Persistence")}</legend>
-          <select
-            aria-label={t("Persistence type")}
-            className={INPUT}
-            disabled={!write.allowed}
-            value={f.persistence ? "source_ip" : "none"}
-            onChange={(e) =>
-              set({
-                persistence:
-                  e.target.value === "none"
-                    ? null
-                    : { type: "source_ip", table_size: 100000, timeout_s: 1800 },
-              })
-            }
-          >
-            <option value="none">{t("None")}</option>
-            <option value="source_ip">{t("Source IP")}</option>
-          </select>
-          {f.persistence && (
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm">
-                {t("Table size")}
-                <input
-                  aria-label={t("Table size")}
-                  type="number"
-                  className={INPUT}
-                  value={f.persistence.table_size}
-                  onChange={(e) =>
-                    set({ persistence: { ...f.persistence!, table_size: Number(e.target.value) } })
-                  }
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("Health monitor")}
+            <select
+              aria-label={t("Health monitor")}
+              className={INPUT}
+              disabled={!write.allowed}
+              value={f.health_monitor_id ?? ""}
+              onChange={(e) => set({ health_monitor_id: e.target.value || null })}
+            >
+              <option value="">{t("None")}</option>
+              {monitors.data?.items.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} · {m.type.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">{t("Backend TLS")}</div>
+            <div className="flex h-9 items-center gap-5 text-sm">
+              <label className="flex items-center gap-2">
+                <Switch
+                  aria-label={t("Backend TLS")}
+                  checked={f.tls}
+                  disabled={!write.allowed}
+                  onCheckedChange={(on) => set({ tls: on, tls_verify: on ? f.tls_verify : false })}
                 />
+                TLS
               </label>
-              <label className="text-sm">
-                {t("Timeout (s)")}
-                <input
-                  aria-label={t("Persistence timeout")}
-                  type="number"
-                  className={INPUT}
-                  value={f.persistence.timeout_s}
-                  onChange={(e) =>
-                    set({ persistence: { ...f.persistence!, timeout_s: Number(e.target.value) } })
-                  }
+              <label className="flex items-center gap-2">
+                <Switch
+                  aria-label={t("TLS verify")}
+                  checked={f.tls_verify}
+                  disabled={!write.allowed || !f.tls}
+                  onCheckedChange={(on) => set({ tls_verify: on })}
                 />
+                {t("Verify")}
               </label>
             </div>
-          )}
+          </div>
+        </div>
+        <fieldset className="space-y-3 rounded-lg border p-4">
+          <legend className="px-1 text-sm font-medium">{t("Persistence")}</legend>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="block space-y-1.5 text-sm font-medium">
+              {t("Type")}
+              <select
+                aria-label={t("Persistence type")}
+                className={INPUT}
+                disabled={!write.allowed}
+                value={f.persistence ? "source_ip" : "none"}
+                onChange={(e) =>
+                  set({
+                    persistence:
+                      e.target.value === "none"
+                        ? null
+                        : { type: "source_ip", table_size: 100000, timeout_s: 1800 },
+                  })
+                }
+              >
+                <option value="none">{t("None")}</option>
+                <option value="source_ip">{t("Source IP")}</option>
+              </select>
+            </label>
+            <label className="block space-y-1.5 text-sm font-medium">
+              {t("Table size")}
+              <input
+                aria-label={t("Table size")}
+                type="number"
+                className={INPUT}
+                disabled={!write.allowed || !f.persistence}
+                value={f.persistence?.table_size ?? ""}
+                onChange={(e) =>
+                  f.persistence &&
+                  set({ persistence: { ...f.persistence, table_size: Number(e.target.value) } })
+                }
+              />
+            </label>
+            <label className="block space-y-1.5 text-sm font-medium">
+              {t("Timeout (s)")}
+              <input
+                aria-label={t("Persistence timeout")}
+                type="number"
+                className={INPUT}
+                disabled={!write.allowed || !f.persistence}
+                value={f.persistence?.timeout_s ?? ""}
+                onChange={(e) =>
+                  f.persistence &&
+                  set({ persistence: { ...f.persistence, timeout_s: Number(e.target.value) } })
+                }
+              />
+            </label>
+          </div>
           <p className="text-xs text-muted-foreground">
             {t("Source IP is the only persistence type in phase 1.")}
           </p>
         </fieldset>
         <section className="space-y-2">
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium">{t("Members")}</h3>
             <Button
               type="button"
@@ -343,74 +352,98 @@ function PoolSheet({
               {errors.members}
             </p>
           )}
-          {f.members.map((m, i) => (
-            <div
-              key={m.id}
-              className="grid grid-cols-[1fr_1.2fr_5rem_5rem_6.5rem_auto] items-center gap-2"
-            >
-              <input
-                aria-label={t("Member {n} name", { n: i + 1 })}
-                className={INPUT}
-                disabled={!write.allowed}
-                value={m.name ?? ""}
-                onChange={(e) => setMember(i, { name: e.target.value })}
-              />
-              <input
-                aria-label={t("Member {n} address", { n: i + 1 })}
-                className={cn(INPUT, "font-mono")}
-                disabled={!write.allowed}
-                value={m.address}
-                onChange={(e) => setMember(i, { address: e.target.value })}
-              />
-              <input
-                aria-label={t("Member {n} port", { n: i + 1 })}
-                type="number"
-                className={cn(INPUT, "font-mono")}
-                disabled={!write.allowed}
-                value={m.port ?? ""}
-                onChange={(e) =>
-                  setMember(i, { port: e.target.value ? Number(e.target.value) : null })
-                }
-              />
-              <input
-                aria-label={t("Member {n} weight", { n: i + 1 })}
-                type="number"
-                className={INPUT}
-                disabled={!write.allowed}
-                value={m.weight}
-                onChange={(e) => setMember(i, { weight: Number(e.target.value) })}
-              />
-              <select
-                aria-label={t("Member {n} state", { n: i + 1 })}
-                className={INPUT}
-                disabled={!write.allowed}
-                value={m.admin_state}
-                onChange={(e) =>
-                  setMember(i, { admin_state: e.target.value as Member["admin_state"] })
-                }
-              >
-                <option value="enabled">{t("Enabled")}</option>
-                <option value="disabled">{t("Disabled")}</option>
-                <option value="drain">{t("Drain")}</option>
-              </select>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={!write.allowed}
-                onClick={() => set({ members: f.members.filter((_, j) => j !== i) })}
-              >
-                {t("Remove")}
-              </Button>
-              {Object.entries(errors)
-                .filter(([p]) => p.startsWith(`members.${i}`))
-                .map(([p, msg]) => (
-                  <span key={p} role="alert" className="col-span-6 text-xs text-status-down">
-                    {msg}
-                  </span>
-                ))}
+          <div className="rounded-lg border">
+            <div className="grid grid-cols-[1fr_1.2fr_5rem_5rem_6.5rem_auto] gap-2 border-b bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+              <span>{t("Name")}</span>
+              <span>{t("Address")}</span>
+              <span>{t("Port")}</span>
+              <span>{t("Weight")}</span>
+              <span>{t("Admin state")}</span>
+              <span />
             </div>
-          ))}
+            {f.members.map((m, i) => {
+              const isNew = pool !== "new" && !pool.members.some((x) => x.id === m.id);
+              return (
+                <div
+                  key={m.id}
+                  className={cn(
+                    "grid grid-cols-[1fr_1.2fr_5rem_5rem_6.5rem_auto] items-center gap-2 border-b px-3 py-2 last:border-b-0",
+                    isNew && "bg-draft-bg",
+                  )}
+                >
+                  <input
+                    aria-label={t("Member {n} name", { n: i + 1 })}
+                    className={INPUT}
+                    disabled={!write.allowed}
+                    value={m.name ?? ""}
+                    onChange={(e) => setMember(i, { name: e.target.value })}
+                  />
+                  <input
+                    aria-label={t("Member {n} address", { n: i + 1 })}
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    value={m.address}
+                    onChange={(e) => setMember(i, { address: e.target.value })}
+                  />
+                  <input
+                    aria-label={t("Member {n} port", { n: i + 1 })}
+                    type="number"
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    value={m.port ?? ""}
+                    onChange={(e) =>
+                      setMember(i, { port: e.target.value ? Number(e.target.value) : null })
+                    }
+                  />
+                  <input
+                    aria-label={t("Member {n} weight", { n: i + 1 })}
+                    type="number"
+                    className={INPUT}
+                    disabled={!write.allowed}
+                    value={m.weight}
+                    onChange={(e) => setMember(i, { weight: Number(e.target.value) })}
+                  />
+                  <select
+                    aria-label={t("Member {n} state", { n: i + 1 })}
+                    className={INPUT}
+                    disabled={!write.allowed}
+                    value={m.admin_state}
+                    onChange={(e) =>
+                      setMember(i, { admin_state: e.target.value as Member["admin_state"] })
+                    }
+                  >
+                    <option value="enabled">{t("Enabled")}</option>
+                    <option value="disabled">{t("Disabled")}</option>
+                    <option value="drain">{t("Drain")}</option>
+                  </select>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={!write.allowed}
+                    onClick={() => set({ members: f.members.filter((_, j) => j !== i) })}
+                  >
+                    {t("Remove")}
+                  </Button>
+                  {Object.entries(errors)
+                    .filter(([p]) => p.startsWith(`members.${i}`))
+                    .map(([p, msg]) => (
+                      <span key={p} role="alert" className="col-span-6 text-xs text-status-down">
+                        {msg}
+                      </span>
+                    ))}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p>
+              {t(
+                "Admin state here is desired config and goes through the change set. To drain or enable a member right now, use the Live buttons on the virtual service.",
+              )}
+            </p>
+          </div>
         </section>
       </Sheet>
       <ConfirmDialog
