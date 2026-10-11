@@ -104,7 +104,7 @@ holds the secret, and the `MutationCache` keeps a finished mutation for `gcTime`
   changes to a server-supplied SVG, sanitize it or switch to a `<canvas>` or `<img src="data:...">`.
 - No `innerHTML`, `eval`, `new Function`, `document.write`, or markdown renderer in `src` (no `marked`,
   `remark`, `react-markdown` in `package.json`).
-- Monaco shows rendered config and diffs as editor text, not HTML; content is set with `setValue` and tokenised by
+- Monaco shows rendered config and diffs as editor text, not HTML; content is passed as the `value` of a read-only editor (`ConfigEditor.tsx`) and tokenised by
   the Monarch grammars in `lib/haproxy-language.ts`. Config text is user-influenced (names, hosts) but renders as
   text. Monaco's own hover/link providers could turn URLs in config into clickable links; link opening in Monaco
   is user-initiated and goes through the browser, so no action needed beyond S1's CSP.
