@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NotBuilt } from "@/components/sy/NotBuilt";
+import { Review } from "@/features/review/Review";
 
 // Full-screen review and apply (no shell).
-export const Route = createFileRoute("/t/$tenant/review/$cs")({
-  component: () => <NotBuilt name="Review and apply" />,
-});
+function Page() {
+  const { tenant, cs } = Route.useParams();
+  return <Review tenant={tenant} cs={cs} />;
+}
+
+export const Route = createFileRoute("/t/$tenant/review/$cs")({ component: Page });
