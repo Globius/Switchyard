@@ -12,6 +12,7 @@ import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { collectionLabel, diffSnapshots, show, type Collections } from "@/lib/snapshot-diff";
 import { cn } from "@/lib/utils";
+import { principalName, shortWhen } from "@/lib/format";
 
 function useRevisions(tenant: string) {
   return useInfiniteQuery({
@@ -184,10 +185,8 @@ export function Revisions({ tenant }: { tenant: string }) {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {r.author} ·{" "}
-                        <time dateTime={r.created_at}>
-                          {new Date(r.created_at).toLocaleString()}
-                        </time>
+                        {principalName(r.author)} ·{" "}
+                        <time dateTime={r.created_at}>{shortWhen(r.created_at)}</time>
                         {r.git_sha && (
                           <>
                             {" "}

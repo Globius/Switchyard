@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { objectLabel, principalName, shortRequestId, shortWhen } from "@/lib/format";
 
 type Event = components["schemas"]["AuditEventRead"];
 
@@ -35,18 +36,6 @@ export function toCsv(events: Event[]): string {
       [e.at, e.actor, e.action, e.object, e.request_id, e.diff].map(esc).join(","),
     ),
   ].join("\n");
-}
-
-function when(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date().toDateString() === d.toDateString();
-  const time = d.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  return today ? time : `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
 }
 
 function DiffView({ diff }: { diff: Record<string, unknown> }) {
@@ -99,7 +88,8 @@ export function AuditLog() {
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
   const events = list.data?.pages.flatMap((p) => p.items) ?? [];
-  const tenantName = (id: string | null | undefined) => tenants.data?.find((x) => x.id === id)?.name;
+  const tenantName = (id: string | null | undefined) =>
+    tenants.data?.find((x) => x.id === id)?.name;
   function exportCsv() {
     const url = URL.createObjectURL(new Blob([toCsv(events)], { type: "text/csv" }));
     const a = document.createElement("a");
@@ -223,8 +213,8 @@ export function AuditLog() {
                           )}
                         </button>
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-xs">{when(e.at)}</td>
-                      <td className="px-3 py-2.5">{e.actor}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{shortWhen(e.at)}</td>
+                      <td className="px-3 py-2.5">{principalName(e.actor)}</td>
                       <td className="px-3 py-2.5">
                         <span className="font-mono text-xs">{e.action}</span>
                         {live && (
@@ -239,10 +229,14 @@ export function AuditLog() {
                         )}
                       </td>
                       <td className="px-3 py-2.5">
-                        {[tenantName(e.tenant_id), e.object].filter(Boolean).join(" · ") || "—"}
+                        {[tenantName(e.tenant_id), objectLabel(e.object)]
+                          .filter(Boolean)
+                          .join(" · ") || "—"}
                       </td>
                       <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">
-                        {e.request_id ?? "—"}
+                        <span title={e.request_id ?? undefined}>
+                          {shortRequestId(e.request_id)}
+                        </span>
                       </td>
                     </tr>
                     {expanded && (
