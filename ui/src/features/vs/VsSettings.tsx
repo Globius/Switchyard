@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
+import { FindingsSummary, focusField } from "@/components/sy/Findings";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -96,7 +97,7 @@ function Field({
 }
 
 /** Edit every field of a virtual service; Save adds an update op to your draft. */
-export function VsSettings({ tenant, id }: { tenant: string; id: string }) {
+export function VsSettings({ tenant, id, focus }: { tenant: string; id: string; focus?: string }) {
   const { draft } = useDraft(tenant);
   const vs = useVs(tenant, id, draft?.id);
   const live = useVs(tenant, id);
@@ -113,6 +114,7 @@ export function VsSettings({ tenant, id }: { tenant: string; id: string }) {
       draftState={draft?.state}
       draftId={draft?.id}
       onReload={() => setGeneration((g) => g + 1)}
+      focus={focus}
     />
   );
 }
@@ -125,6 +127,7 @@ function SettingsForm({
   draftState,
   draftId,
   onReload,
+  focus,
 }: {
   tenant: string;
   id: string;
@@ -133,6 +136,7 @@ function SettingsForm({
   draftState: string | undefined;
   draftId: string | undefined;
   onReload: () => void;
+  focus?: string;
 }) {
   const pools = usePools(tenant);
   const certs = useCertificates(tenant, draftId);
@@ -150,6 +154,10 @@ function SettingsForm({
   const [stale, setStale] = useState(false);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (focus) focusField(focus);
+  }, [focus]);
 
   const patch = useMemo(() => buildPatch(base, form), [form, base]);
   const dirty = Object.keys(patch).length > 0;
@@ -201,6 +209,7 @@ function SettingsForm({
         void save();
       }}
     >
+      <FindingsSummary findings={flatFindings(errors)} />
       {draftState === "pending_approval" && (
         <div
           role="status"
@@ -333,6 +342,7 @@ function SettingsForm({
         {form.ports.map((p, i) => (
           <div
             key={i}
+            data-field={`ports.${i}`}
             className="flex flex-wrap items-center gap-4 rounded-lg border bg-card p-3 text-sm"
           >
             <input
@@ -510,6 +520,7 @@ function SettingsForm({
             return (
               <div
                 key={i}
+                data-field={`routes.${i}`}
                 className="grid gap-3 rounded-lg border bg-card p-3 text-sm md:grid-cols-4"
               >
                 <input
@@ -659,4 +670,11 @@ function swap<T extends { order: number }>(a: T[], i: number, j: number): T[] {
 
 function renumber<T extends { order: number }>(a: T[]): T[] {
   return a.map((r, i) => ({ ...r, order: i + 1 }) as T);
+}
+
+/** Server findings keyed by path, flattened for the summary alert. */
+function flatFindings(errors: Record<string, string[]>) {
+  return Object.entries(errors).flatMap(([path, msgs]) =>
+    msgs.map((message) => ({ path, message })),
+  );
 }

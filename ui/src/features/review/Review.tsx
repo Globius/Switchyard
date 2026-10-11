@@ -234,6 +234,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
   const requireApproval = settings.data?.require_approval ?? false;
   const mine = me?.principal !== undefined && c.author === me.principal;
   const warnings = diff.data?.warnings.length ?? 0;
+  const invalid = phase === "ready" && (diff.data?.problems.length ?? 0) > 0;
   const noGo = blocked(diff.data) || (warnings > 0 && !ack);
   const canApply = can("apply", "change_set");
   const canRequest = can("request_approval", "change_set");
@@ -292,6 +293,24 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
             </p>
           ) : (
             <>
+              {invalid && diff.data && (
+                <section
+                  role="alert"
+                  aria-label={t("Your draft is invalid")}
+                  className="space-y-2 rounded-lg border border-status-down/30 bg-status-down-bg p-4 text-sm"
+                >
+                  <div className="font-semibold text-status-down">{t("Your draft is invalid")}</div>
+                  <p>{t("It cannot be applied until these findings are fixed.")}</p>
+                  <ul className="space-y-1">
+                    {diff.data.problems.map((p, i) => (
+                      <li key={`${p.path}-${i}`}>
+                        {p.message}{" "}
+                        <span className="font-mono text-xs text-muted-foreground">{p.path}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               <div role="tablist" className="flex gap-1 border-b">
                 {(["objects", "config", "impact"] as const).map((k) => (
                   <button
@@ -330,7 +349,13 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
                   </p>
                 </div>
               ) : tab === "config" ? (
-                <ConfigTab diff={diff.data} />
+                invalid ? (
+                  <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+                    {t("The configuration can't be rendered while the draft is invalid.")}
+                  </p>
+                ) : (
+                  <ConfigTab diff={diff.data} />
+                )
               ) : (
                 <ImpactTab diff={diff.data} />
               )}

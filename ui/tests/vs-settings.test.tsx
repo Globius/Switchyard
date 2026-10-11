@@ -224,7 +224,7 @@ describe("virtual service settings", () => {
     await userEvent.clear(port);
     await userEvent.type(port, "80");
     await userEvent.click(screen.getByRole("button", { name: "Add to change set" }));
-    expect(await screen.findByText("Port 443 is already used on this VIP.")).toBeInTheDocument();
+    expect((await screen.findAllByText("Port 443 is already used on this VIP.")).length).toBe(2);
   });
 
   it("shows the changed-by-someone-else banner on 412", async () => {
