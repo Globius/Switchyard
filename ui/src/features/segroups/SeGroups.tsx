@@ -27,6 +27,15 @@ type Group = components["schemas"]["SeGroupRead"];
 type Engine = components["schemas"]["EngineRead"];
 type EngineStatus = components["schemas"]["EngineStatusRead"];
 
+/** "VM 201 · pve-atl-01 · " from the engine read; nothing for a hand-built engine without a guest type. */
+function guestPrefix(e: Engine): string {
+  if (!e.guest_kind) return "";
+  const kind = e.guest_kind === "lxc" ? "CT" : "VM";
+  return (
+    [e.vmid != null ? `${kind} ${e.vmid}` : kind, e.pve_node].filter(Boolean).join(" · ") + " · "
+  );
+}
+
 const INPUT =
   "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -214,12 +223,12 @@ function EnginesCard({
         <div className="ml-auto flex gap-2">
           <Tip label={manage.reason}>
             <Button variant="outline" disabled={!manage.allowed} onClick={onRegister}>
-              {t("Register existing VM")}
+              {t("Register existing engine")}
             </Button>
           </Tip>
           <Tip label={manage.reason}>
             <Button disabled={!manage.allowed} onClick={onDeploy}>
-              {t("Deploy VMs")}
+              {t("Deploy engines")}
             </Button>
           </Tip>
         </div>
@@ -231,7 +240,7 @@ function EnginesCard({
       ) : rows.length === 0 ? (
         <EmptyState
           title={t("No engines in this group")}
-          body={t("Deploy VMs on Proxmox, or register a VM you already run.")}
+          body={t("Deploy engines on Proxmox, or register one you already run.")}
         />
       ) : (
         <div className="overflow-x-auto">
@@ -256,6 +265,7 @@ function EnginesCard({
                     <td className="px-4 py-3">
                       <div className="font-mono text-sm">{e.name}</div>
                       <div className="font-mono text-xs text-muted-foreground">
+                        {guestPrefix(e)}
                         {e.mgmt_ip ?? "—"}
                         {st?.agent?.version ? ` · agent ${st.agent.version}` : ""}
                       </div>
@@ -376,7 +386,7 @@ function EnginesCard({
       {act.error && <ErrorState error={act.error} />}
       <p className="border-t px-4 py-3 text-xs text-muted-foreground">
         {t(
-          "More holds the enrollment token for the agent, retire (destroys the VM) and remove record (the VM keeps running). If an engine's VIP routes are withdrawn, the other engines keep serving.",
+          "More holds the enrollment token for the agent, retire (destroys the VM or container and its record) and remove record (deletes only the record; the guest keeps running). The line under each name shows its guest type (VM or CT), Proxmox ID and node. If an engine's VIP routes are withdrawn, the other engines keep serving.",
         )}
       </p>
       <ConfirmDialog
@@ -401,10 +411,10 @@ function EnginesCard({
         <p>
           {confirm?.kind === "retire"
             ? t(
-                "Runs as a job: the engine is drained and its VM is destroyed on Proxmox. This acts immediately, outside the change set.",
+                "Runs as a job: the engine is drained and its guest is destroyed on Proxmox. This acts immediately, outside the change set.",
               )
             : t(
-                "Only the controller's record is removed; the VM keeps running. This acts immediately, outside the change set.",
+                "Only the controller's record is removed; the guest keeps running. This acts immediately, outside the change set.",
               )}
         </p>
       </ConfirmDialog>
@@ -448,6 +458,8 @@ function DeploySheet({
   const pools = useVipPools(tenant);
   const qc = useQueryClient();
   const [total, setTotal] = useState(current + 1);
+  const [guest, setGuest] = useState<"qemu" | "lxc">("qemu");
+  const [ack, setAck] = useState(false);
   const [template, setTemplate] = useState("");
   const [nodes, setNodes] = useState<string[]>([]);
   const [pool, setPool] = useState("");
@@ -463,6 +475,7 @@ function DeploySheet({
           params: { path: { t: tenant, group: group.id } },
           body: {
             count: total - current,
+            guest_kind: guest,
             template_vmid: Number(template),
             nodes,
             mgmt_pool_id: mgmt,
@@ -478,21 +491,32 @@ function DeploySheet({
     },
     onError: setProblem,
   });
-  const valid = total > current && Number(template) > 0 && nodes.length > 0 && mgmt !== "";
+  const lxc = guest === "lxc";
+  const valid =
+    total > current && Number(template) > 0 && nodes.length > 0 && mgmt !== "" && (!lxc || ack);
   return (
     <Sheet
       open
       centered
       onOpenChange={(o) => !o && onClose()}
-      title={t("Deploy VMs for {name}", { name: group.name })}
+      title={t("Deploy engines for {name}", { name: group.name })}
       badge={<Live />}
       footer={
         <>
           <Button variant="ghost" className="ml-auto" onClick={onClose}>
             {done ? t("Close") : t("Cancel")}
           </Button>
+          {!done && lxc && !ack && (
+            <span id="deploy-why" className="text-xs text-muted-foreground">
+              {t("Confirm the container risks above to deploy.")}
+            </span>
+          )}
           {!done && (
-            <Button disabled={!valid || run.isPending} onClick={() => run.mutate()}>
+            <Button
+              disabled={!valid || run.isPending}
+              aria-describedby={lxc && !ack ? "deploy-why" : undefined}
+              onClick={() => run.mutate()}
+            >
               {t("Start deploy")}
             </Button>
           )}
@@ -508,9 +532,106 @@ function DeploySheet({
         <>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Clones SE VMs from the template on Proxmox and registers them. Runs as a job; if a step fails, the VMs it created are removed and existing engines are untouched.",
+              "Clones engines from a template on Proxmox and registers them. Runs as a job; if a step fails, the guests it created are removed and existing engines are untouched.",
             )}
           </p>
+          <fieldset className="space-y-1.5">
+            <legend className="mb-1.5 text-sm font-medium">{t("Guest type")}</legend>
+            <div role="radiogroup" className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  [
+                    "qemu",
+                    "Virtual machine",
+                    "Own kernel. The tested option for HTTP, TCP, UDP, VRRP failover and BGP.",
+                  ],
+                  [
+                    "lxc",
+                    "Container (LXC)",
+                    "Lighter and faster to start. Privileged, and VRRP failover and BGP are untested.",
+                  ],
+                ] as const
+              ).map(([k, label, text]) => (
+                <label
+                  key={k}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-2.5 rounded-lg border bg-card px-3 py-2.5",
+                    guest === k && "border-primary ring-1 ring-primary",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="guest-kind"
+                    value={k}
+                    checked={guest === k}
+                    className="mt-1"
+                    onChange={() => {
+                      setGuest(k);
+                      setAck(false);
+                    }}
+                  />
+                  <span className="flex flex-col gap-0.5 text-sm">
+                    <span className="font-medium">
+                      {t(label)}
+                      {k === "qemu" && (
+                        <span className="font-normal text-muted-foreground">
+                          {" "}
+                          {t("(recommended)")}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{t(text)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {lxc && (
+            <div
+              role="note"
+              className="space-y-2 rounded-lg border border-status-degraded/40 bg-status-degraded-bg p-3 text-xs"
+            >
+              <strong className="block text-sm font-semibold">
+                {t("Containers are privileged and partly untested")}
+              </strong>
+              <ul className="list-disc space-y-0.5 pl-4">
+                <li>
+                  {t(
+                    "Engines run as privileged containers with nesting on. Root in the container is root on the Proxmox host. Unprivileged containers aren't supported.",
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "VRRP has only been tested with one engine, so failover between engines is untested.",
+                  )}
+                </li>
+                <li>{t("BGP is untested.")}</li>
+                <li>
+                  {t(
+                    "UDP services need the ip_vs modules loaded on each Proxmox host in the list.",
+                  )}
+                </li>
+                <li>
+                  {t(
+                    "No cloud-init: enrollment isn't automatic. After the job, open each container's console and run sy-agent enroll with its token.",
+                  )}
+                </li>
+              </ul>
+              <label className="flex items-start gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={ack}
+                  onChange={(e) => setAck(e.target.checked)}
+                />
+                <span>
+                  {t(
+                    "I understand the risks of a privileged container and that failover and BGP are untested.",
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1.5 text-sm font-medium">
               {t("Engines in the group")}
@@ -530,9 +651,9 @@ function DeploySheet({
               </span>
             </label>
             <label className="space-y-1.5 text-sm font-medium">
-              {t("Template VM ID")}
+              {lxc ? t("Container template") : t("Template VM ID")}
               <input
-                aria-label={t("Template VM ID")}
+                aria-label={lxc ? t("Container template") : t("Template VM ID")}
                 type="number"
                 className={INPUT}
                 value={template}
@@ -552,7 +673,7 @@ function DeploySheet({
               placeholder="pve-01"
             />
             <span className="block text-xs text-muted-foreground">
-              {t("New VMs are spread round-robin over these.")}
+              {t("New engines are spread round-robin over these.")}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -593,15 +714,15 @@ function DeploySheet({
             />
           </label>
           <label className="block space-y-1.5 text-sm font-medium">
-            {t("SSH public keys for the VMs")}
+            {t("SSH public keys for the engines")}
             <textarea
-              aria-label={t("SSH public keys for the VMs")}
+              aria-label={t("SSH public keys for the engines")}
               className={cn(INPUT, "h-20 py-2 font-mono text-xs")}
               value={keys}
               onChange={(e) => setKeys(e.target.value)}
             />
             <span className="block text-xs font-normal text-muted-foreground">
-              {t("For people to log in to the VM. The controller itself never uses SSH.")}
+              {t("For people to log in to the engine. The controller itself never uses SSH.")}
             </span>
           </label>
           <p className="rounded-md bg-muted p-3 text-sm">
@@ -660,7 +781,7 @@ function RegisterSheet({
       open
       centered
       onOpenChange={(o) => !o && onClose()}
-      title={t("Register a VM in {name}", { name: group.name })}
+      title={t("Register an existing engine in {name}", { name: group.name })}
       badge={<Live />}
       footer={
         <>
@@ -702,6 +823,7 @@ const GIB = 1024 ** 3;
 /** Where the group's engines run on Proxmox, with a warning when one host carries them all. */
 function PlacementCard({ tenant, group }: { tenant: string; group: Group }) {
   const q = usePlacement(tenant, group.id);
+  const kindOf = new Map(useEngines(tenant).data?.map((e) => [e.id, e.guest_kind]));
   const nodes = q.data?.nodes ?? [];
   const withEngines = nodes.filter((n) => n.engines.length > 0);
   return (
@@ -754,7 +876,9 @@ function PlacementCard({ tenant, group }: { tenant: string; group: Group }) {
                     {n.engines.map((e) => (
                       <li key={e.id} className="rounded-md bg-muted px-2 py-1 font-mono text-xs">
                         {e.name}
-                        {e.vmid != null ? ` · VM ${e.vmid}` : ""}
+                        {e.vmid != null
+                          ? ` · ${kindOf.get(e.id) === "lxc" ? "CT" : "VM"} ${e.vmid}`
+                          : ""}
                         {e.state === "disabled" ? ` · ${t("disabled")}` : ""}
                       </li>
                     ))}
