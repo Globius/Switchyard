@@ -14,7 +14,7 @@ Date: 2026-10-10. Scope: `ui/` at `origin/main` (34f8af2 and later) against the 
 - **Not done:** a side-by-side visual comparison. The app answers at `localhost:5173` and the controller is up,
   but every screen except `/login` needs a session and I had no break-glass login. The one screen I could see,
   Login, matches the screenshot (card, wording, warning banner, buttons). Visual status below is therefore
-  "from code"; spacing, colour and layout differences are not covered. Say if you want a visual pass once I have a login.
+  "from code"; spacing, colour and layout differences are not covered. A later live check against `localhost:5173` (tenant `demo`, text only, no pixel comparison, see "Live check") confirmed the items it covered.
 - **Status words:** **matches** = the designed content, controls and states are built. **differs** = built, but
   something designed is missing or done another way (listed). **missing** = not built.
 - **Why** codes: *no API* (backend does not offer it), *design question* (artboard and README or API disagree,
@@ -159,3 +159,12 @@ Biggest gaps, in the order I would close them:
 
 Open design questions found: editing while approval is pending (frozen vs withdraws the request); protocol
 changeable in Settings; Grafana link source; whether Access and settings is tabs or sections.
+
+## Live check (text only)
+
+Signed in as break-glass on a dev controller (tenant `demo`, 2 services, 1 SE group, no engines). The browser pane
+would not render screenshots, so this compared page text, not pixels. Confirmed: VS Settings has Basics, Addressing,
+Ports, Certificates and policies, Routes and no "Policies and access" section, no VIP suggestion, no Revert all;
+SE group page has Settings, Networks and an empty engines list but no placement, HA mode or drift panel (drift
+needs an engine to show); top bar shows "Stream live"; the shell nav matches the handoff map. Pixel-level spacing
+and colour were not compared.
