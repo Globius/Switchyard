@@ -52,3 +52,4 @@ Date: YYYY-MM-DD
 | [0062](0062-principal-display-names.md) | Display names for principal labels | Accepted |
 | [0061](0061-controller-metrics-and-sd.md) | Controller metrics and Prometheus service discovery | Accepted |
 | [0063](0063-haproxy-exporter-listener.md) | HAProxy Prometheus exporter listener on the management network | Accepted |
+| [0064](0064-certificate-renew-before-days.md) | Certificate renewal window (`renew_before_days`) | Accepted |

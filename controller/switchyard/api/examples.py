@@ -120,6 +120,7 @@ OBJECTS: dict[str, dict[str, Any]] = {
         "not_after": "2027-01-08T00:00:00Z",
         "secret_ref": "kv/tenants/acme/certs/web-example",
         "renew_policy": "auto",
+        "renew_before_days": 30,
         **_OWNED,
         **_DRAFT,
     },

@@ -156,6 +156,9 @@ updates the existing certificate object in a change set (`?apply=true` or `?chan
 name, so every virtual service using it is unchanged; the secret reference, names and expiry change, `source` becomes
 `upload` and `renew_policy` `manual`. Unknown id: 404. See ADR 0044.
 
+Certificates carry `renew_before_days` (1 to 365, default 30): an `auto` certificate is renewed that many days before it
+expires. Read it with the certificate, change it with a normal update operation. See ADR 0064.
+
 ## Jobs
 
 `kind` is an enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert` (result
