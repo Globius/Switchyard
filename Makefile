@@ -1,4 +1,4 @@
-.PHONY: ui-install ui-lint ui-typecheck ui-test ui-build ui-gen-api ui-check
+.PHONY: ui-e2e ui-install ui-lint ui-typecheck ui-test ui-build ui-gen-api ui-check
 
 # Frontend (ui/). Requires Node 22+ and pnpm. See docs/ui/README.md.
 ui-install:
@@ -15,6 +15,11 @@ ui-test:
 
 ui-build:
 	cd ui && pnpm build
+
+# Browser checks (axe, keyboard, phone width) against a mocked API. Needs Chrome: PW_CHANNEL=chrome, or
+# `pnpm exec playwright install chromium` once.
+ui-e2e:
+	cd ui && pnpm e2e
 
 # Regenerate the typed client from docs/api/openapi.json.
 ui-gen-api:

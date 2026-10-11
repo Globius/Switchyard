@@ -185,3 +185,8 @@
     @apply bg-background text-foreground font-sans antialiased;
   }
 }
+
+/* Highlighted line range in the Monaco config view. */
+.sy-range-highlight {
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+}

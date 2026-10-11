@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 /** Pure helpers of the Review and apply screen. */
 import type { components } from "@/api/schema";
 
@@ -168,4 +169,14 @@ export function describeDeleted(
   if (type === "virtual_service" && o?.vip)
     return `Frees ${o.vip}${typeof o.vip_pool_id === "string" ? ` back to ${labels[o.vip_pool_id] ?? "its VIP pool"}` : ""}`;
   return "Removed when the change set is applied.";
+}
+
+/** What to do about a validator problem, when there is a standard answer (currently quotas). */
+export function problemHint(p: { code?: string | null; path: string }): string | null {
+  if (p.code !== "quota_exceeded") return null;
+  const type = p.path.replace(/^quota\./, "").replace(/_/g, " ");
+  return t(
+    "The tenant is at its limit for {type}. Delete something you no longer need, or ask a system-admin to raise the quota.",
+    { type },
+  );
 }

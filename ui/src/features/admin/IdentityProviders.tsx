@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
+import { ShowOnceSecret } from "@/components/sy/ShowOnceSecret";
 import { StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
@@ -312,6 +313,7 @@ function BreakGlass() {
   const [ttl, setTtl] = useState("240");
   const [enrol, setEnrol] = useState<components["schemas"]["BreakGlassEnrollment"] | null>(null);
   const [totp, setTotp] = useState("");
+  const [stored, setStored] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -343,6 +345,7 @@ function BreakGlass() {
       unwrap(await api.POST("/api/v1/system/break-glass/admin/confirm", { body: { totp } })),
     onSuccess: () => {
       setEnrol(null);
+      setStored(false);
       setTotp("");
       refresh();
     },
@@ -473,7 +476,7 @@ function BreakGlass() {
                 {t("Cancel")}
               </Button>
               <Button
-                disabled={totp.length < 6 || confirm.isPending}
+                disabled={!stored || totp.length < 6 || confirm.isPending}
                 onClick={() => confirm.mutate()}
               >
                 {t("Confirm")}
@@ -481,19 +484,19 @@ function BreakGlass() {
             </>
           }
         >
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "Shown once. Store the password and add the secret to an authenticator app, then enter a code.",
+          <ShowOnceSecret
+            secrets={[
+              { label: t("Username"), value: enrol.username },
+              { label: t("Password"), value: enrol.password },
+              { label: t("TOTP secret"), value: enrol.totp_secret },
+            ]}
+            qrUri={enrol.otpauth_uri}
+            stored={stored}
+            onStoredChange={setStored}
+            note={t(
+              "Shown once. Store the password and add the secret to an authenticator app (scan the code), then enter a code below.",
             )}
-          </p>
-          <dl className="grid grid-cols-[8rem_1fr] gap-y-1 font-mono text-xs">
-            <dt>{t("Username")}</dt>
-            <dd>{enrol.username}</dd>
-            <dt>{t("Password")}</dt>
-            <dd className="break-all">{enrol.password}</dd>
-            <dt>{t("TOTP secret")}</dt>
-            <dd className="break-all">{enrol.totp_secret}</dd>
-          </dl>
+          />
           {confirm.error && <ErrorState error={confirm.error} />}
           <label className="block space-y-1.5 text-sm font-medium">
             {t("Authenticator code")}
