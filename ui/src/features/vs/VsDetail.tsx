@@ -11,7 +11,7 @@ import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { useVs } from "./detail-queries";
-import { useVsStatus } from "./queries";
+import { useSeGroups, useVsStatus } from "./queries";
 
 const TABS = [
   { label: "Overview", to: "/t/$tenant/virtual-services/$id" },
@@ -25,6 +25,7 @@ export function VsDetailLayout({ tenant, id }: { tenant: string; id: string }) {
   const { draft } = useDraft(tenant);
   const vs = useVs(tenant, id, draft?.id);
   const status = useVsStatus(tenant);
+  const groups = useSeGroups(tenant);
   const can = useCan(tenant);
   const write = can("write", "application");
   const save = useSaveOp(tenant, "virtual_service");
@@ -34,6 +35,7 @@ export function VsDetailLayout({ tenant, id }: { tenant: string; id: string }) {
   if (vs.isError) return <ErrorState error={vs.error} onRetry={() => void vs.refetch()} />;
   const v = vs.data;
   const st = status.data?.find((s) => s.id === id);
+  const groupName = groups.data?.items.find((g) => g.id === v.se_group_id)?.name;
   const deleted = v.draft_status === "deleted";
   const changed = v.draft_status !== "unchanged";
   return (
@@ -84,7 +86,7 @@ export function VsDetailLayout({ tenant, id }: { tenant: string; id: string }) {
           </div>
           <p className="font-mono text-sm text-muted-foreground">
             {v.vip ?? t("VIP allocated on apply")} · {v.ports.map((p) => p.port).join(", ")} ·{" "}
-            {v.protocol.toUpperCase()} · {v.se_group_id.slice(0, 8)}
+            {v.protocol.toUpperCase()} · {groupName ?? "—"}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
