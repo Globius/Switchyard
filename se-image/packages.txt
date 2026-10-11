@@ -1,0 +1,14 @@
+# Debian 13 (trixie). HAProxy 3.2 comes from haproxy.debian.net (trixie ships 3.0), see provision.sh.
+frr
+keepalived
+ipvsadm
+nftables
+iproute2
+curl
+openssl
+ca-certificates
+gnupg
+prometheus-node-exporter
+chrony
+qemu-guest-agent
+cloud-init

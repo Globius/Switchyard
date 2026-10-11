@@ -1,0 +1,32 @@
+#!/bin/sh
+# Assertions on a provisioned SE filesystem (run inside the test image).
+set -eu
+fail() { echo "FAIL: $*" >&2; exit 1; }
+haproxy -v | head -1 | grep -q 'version 3\.2' || fail "haproxy is not 3.2"
+for b in sy-agent; do [ -x /usr/local/bin/$b ] || fail "$b missing"; done
+[ -x /usr/bin/dataplaneapi ] || fail "dataplaneapi missing"
+for b in keepalived ipvsadm nft vtysh; do command -v $b >/dev/null || fail "$b missing"; done
+keepalived --version 2>&1 | grep -q 'v2\.[3-9]' || fail "keepalived < 2.3"
+[ -x /usr/bin/prometheus-node-exporter ] || fail "node exporter missing"
+grep -q ':9100' /etc/default/prometheus-node-exporter || fail "node exporter port"
+for u in sy-agent sy-agent-enroll sy-agent-renew dataplaneapi; do
+  [ -f /etc/systemd/system/$u.service ] || fail "$u unit"
+done
+systemd-analyze verify /etc/systemd/system/sy-agent.service /etc/systemd/system/sy-agent-enroll.service \
+  /etc/systemd/system/sy-agent-renew.service /etc/systemd/system/sy-agent-renew.timer 2>&1 | grep -v -E 'not executable|/usr/local/bin/sy-agent' || true
+[ ! -s /etc/machine-id ] || fail "machine-id not cleared"
+echo "se-image checks passed"
+# Data Plane API answers over mTLS with the agent's certificate, and rejects clients without one.
+cd /tmp
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=sy-test -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+  -keyout /etc/switchyard/agent/tls.key -out /etc/switchyard/agent/tls.crt 2>/dev/null
+cp /etc/switchyard/agent/tls.crt /etc/switchyard/agent/ca.crt
+mkdir -p /run/haproxy
+haproxy -c -f /etc/switchyard/haproxy/haproxy.cfg >/dev/null || fail "bootstrap haproxy.cfg invalid"
+haproxy -D -f /etc/switchyard/haproxy/haproxy.cfg -p /run/haproxy.pid
+dataplaneapi -f /etc/switchyard/dataplaneapi.yml >/tmp/dp.log 2>&1 &
+i=0; until curl -sk --cert /etc/switchyard/agent/tls.crt --key /etc/switchyard/agent/tls.key https://127.0.0.1:5555/v3/info | grep -q api; do
+  i=$((i+1)); [ $i -lt 20 ] || { cat /tmp/dp.log; fail "dataplaneapi did not answer over mTLS"; }; sleep 0.5; done
+code=$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1:5555/v3/info || true)
+[ "$code" = 000 ] || [ "$code" = 401 ] || fail "dataplaneapi answered without a client certificate ($code)"
+echo "dataplaneapi mTLS ok"
