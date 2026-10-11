@@ -105,6 +105,8 @@ tenant administrator and not the author or requester.
   controller read the engine, see ADR 0047.
 - `GET /tenants/{t}/summary`: the tenant home in one call (services by health, failing members, drifted and
   unreachable engines, certificates expiring within 30 days, job counts, open drafts, latest revision).
+- `POST /tenants/{t}/se-groups/{group}/reapply` (`tenant-admin`, 202 with a job) is the one explicit drift repair: it pushes the current
+desired state to the group's engines again, canary first, without a revision (job `reapply_se_group`, ADR 0069).
 - `GET /tenants/{t}/status/stream` (server-sent events): `status` (array), `vs_state` (array), `job_progress` (one
   job), `revision_applied` (one revision summary). Every event has an `id`; a reconnect restarts from a snapshot.
   Payload models are under `x-sse-events` of the operation.

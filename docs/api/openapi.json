@@ -4377,9 +4377,10 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.",
         "enum": [
           "apply_change_set",
+          "reapply_se_group",
           "deploy_se_group",
           "retire_engine",
           "apply_sdn",
@@ -29724,6 +29725,122 @@
           "engines"
         ],
         "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/se-groups/{group}/reapply": {
+      "post": {
+        "description": "Pushes the tenant's current desired state to every engine of the group again, canary first, to put engines that drifted back to what the database says. It makes no revision and changes no desired state. Drift is never corrected on its own; this is the explicit action. Returns the job (`reapply_se_group`); its result has `ok`, `revision_number` (the revision that was pushed) and `error`. Requires `tenant-admin`, because it overwrites what the engines run now. `404` if the group does not exist.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "reapply_group_api_v1_tenants__t__se_groups__group__reapply_post",
+        "parameters": [
+          {
+            "description": "SE group id.",
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Group",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "job_id": "0192f3a0-0000-7000-8000-000000000021"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/JobAccepted"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Re-apply the desired state to an SE group (drift repair)",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "operator"
       }
     },
     "/api/v1/tenants/{t}/se-groups/{object_id}": {

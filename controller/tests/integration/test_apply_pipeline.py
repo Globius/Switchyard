@@ -286,3 +286,60 @@ async def test_tenant_scope_hides_other_tenants_change_sets(
             rows = (await s.execute(text("SELECT count(*) FROM change_set"))).scalar_one()
         assert rows == 0
         assert detail.record.tenant_id == TENANT
+
+
+async def test_reapply_repairs_drifted_engines_without_a_revision(pg_url: str) -> None:
+    async with world(pg_url) as w:
+        assert (await w.run_change([add_host_route("one.example.test")])).ok
+        wanted = w.engines["se-a"].files["haproxy/haproxy.cfg"]
+        # Someone hand-edits both engines.
+        for engine in w.engines.values():
+            engine.files["haproxy/haproxy.cfg"] = "# hotfix by hand\n" + wanted
+        revisions = await scalar(w, "SELECT count(*) FROM revision")
+
+        assert await w.service.reapply_group(principal(), TENANT, GROUP)
+        report = await w.pipeline.reapply(TENANT, GROUP)
+
+        assert report.ok, report.error
+        assert report.revision_number == 1 and report.se_group
+        assert all(e.files["haproxy/haproxy.cfg"] == wanted for e in w.engines.values())
+        assert await scalar(w, "SELECT count(*) FROM revision") == revisions, "no new revision"
+        deployments = await scalar(
+            w, "SELECT count(*) FROM deployment WHERE change_set_id IS NULL AND state = 'succeeded'"
+        )
+        assert deployments == 1
+        actions = await scalar(
+            w, "SELECT count(*) FROM audit_event WHERE action LIKE 'se_group.reappl%'"
+        )
+        assert actions == 2, "requested and done"
+        assert await scalar(w, "SELECT count(*) FROM job WHERE kind = 'reapply_se_group'") == 1
+
+
+async def test_reapply_reports_a_failed_push_and_asks_for_the_right_role(pg_url: str) -> None:
+    from switchyard.domain.workflow import Role
+    from switchyard.services.errors import PermissionDeniedError
+
+    async with world(pg_url) as w:
+        assert (await w.run_change([add_host_route("one.example.test")])).ok
+        with pytest.raises(PermissionDeniedError):
+            await w.service.reapply_group(principal(Role.OPERATOR), TENANT, GROUP)
+        with pytest.raises(NotFoundError):
+            await w.service.reapply_group(principal(), TENANT, uuid.uuid4())
+
+        from switchyard.adapters.haproxy import HaproxyError
+
+        async def reject(engine: FakeHaproxy) -> None:
+            raise HaproxyError("rejected")
+
+        w.engines["se-a"].on_push = reject
+        report = await w.pipeline.reapply(TENANT, GROUP)
+        assert not report.ok and "rejected" in (report.error or "")
+        assert await scalar(w, "SELECT count(*) FROM deployment WHERE state = 'failed'") == 1
+        assert (
+            await scalar(
+                w, "SELECT count(*) FROM audit_event WHERE action = 'se_group.reapply_failed'"
+            )
+            == 1
+        )
+        with pytest.raises(PipelineStateError):
+            await w.pipeline.reapply(TENANT, uuid.uuid4())
