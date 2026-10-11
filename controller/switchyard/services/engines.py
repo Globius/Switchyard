@@ -113,7 +113,8 @@ class EngineDetail:
         pve_node: Proxmox node the VM runs on (``None`` for a hand-built engine).
         vmid: Proxmox VM id (``None`` for a hand-built engine).
         guest_kind: ``qemu`` or ``lxc`` for an engine the controller deployed (``None`` otherwise).
-        data_ips: Addresses the deploy job gave the VIP and backend NICs (``network_id``, ``address``).
+        data_ips: Addresses the deploy job gave the VIP and backend NICs, as pairs of network id
+            and address.
         agent_cert_serial: Serial of the agent's client certificate once it has enrolled.
     """
 
