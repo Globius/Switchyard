@@ -183,9 +183,13 @@ def serve(
         runtime.enrollment(db, secrets),
         runtime.sessions(db, secrets),
         runtime.telemetry(),
+        proxmox=runtime.proxmox_client(),
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
-    config = uvicorn.Config(create_app(services, public_url=public_url), host=host, port=port)
+    app = create_app(
+        services, public_url=public_url, metrics_token=os.environ.get("SWITCHYARD_METRICS_TOKEN")
+    )
+    config = uvicorn.Config(app, host=host, port=port)
     # uvicorn's own loop is Proactor on Windows, which psycopg rejects; run() uses the selector.
     run(uvicorn.Server(config).serve())
 

@@ -40,6 +40,7 @@ COLLECTIONS_INFRA = ["networks", "vip-pools", "se-groups", "routing-profiles"]
 
 ROUTES: dict[tuple[str, str], Any] = {
     ("GET", "/healthz"): PUBLIC,
+    ("GET", "/discovery/prometheus"): ("manage", "tenant"),
     ("GET", "/schema/virtual-service"): ANY,
     ("GET", "/auth/providers"): PUBLIC,
     ("GET", "/auth/login/{provider}"): PUBLIC,
@@ -60,6 +61,7 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("DELETE", "/tenants/{t}"): ("manage", "tenant"),
     ("GET", "/tenants/{t}/audit-events"): READ,
     ("GET", "/tenants/{t}/principals"): READ,
+    ("GET", "/tenants/{t}/audit-events/export"): READ,
     ("GET", "/tenants/{t}/change-sets"): READ,
     ("POST", "/tenants/{t}/change-sets"): DRAFT,
     ("GET", "/tenants/{t}/change-sets/{cs}"): READ,
@@ -76,6 +78,7 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/revisions/{n}/rollback"): ("rollback", "revision"),
     ("PUT", "/tenants/{t}/pools/{pool}/members/{member}/state"): ("set_state", "member"),
     ("GET", "/tenants/{t}/se-groups/{group}/engines"): READ,
+    ("GET", "/tenants/{t}/se-groups/{group}/placement"): READ,
     ("POST", "/tenants/{t}/se-groups/{group}/engines"): ("manage", "engine"),
     ("PUT", "/tenants/{t}/engines/{engine}/state"): ("manage", "engine"),
     ("DELETE", "/tenants/{t}/engines/{engine}"): ("manage", "engine"),
@@ -154,6 +157,7 @@ ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
 ROUTES[("GET", "/audit-actions")] = ANY
 ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
 ROUTES[("GET", "/principals")] = ("manage", "tenant")
+ROUTES[("GET", "/audit-events/export")] = ("manage", "tenant")
 ROUTES.pop(("GET", "/tenants/{t}/networks/{object_id}/rendered"), None)
 ROUTES.pop(("GET", "/tenants/{t}/vip-pools/{object_id}/rendered"), None)
 ROUTES.pop(("GET", "/tenants/{t}/routing-profiles/{object_id}/rendered"), None)

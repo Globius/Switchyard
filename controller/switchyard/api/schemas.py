@@ -314,6 +314,11 @@ class EngineRead(ApiModel):
     agent_cert_serial: str | None = Field(
         default=None, description="Serial of the agent's client certificate."
     )
+    host_online: bool | None = Field(
+        default=None,
+        description="Whether Proxmox reports the engine's node online; null when the engine has "
+        "no node or Proxmox is not configured or not reachable.",
+    )
 
 
 class EnrollmentToken(ApiModel):
@@ -1073,6 +1078,65 @@ class PrincipalNameRead(ApiModel):
     actor: str = Field(description="The label as given, for example `user:3f9a`, `token:ci-bot`.")
     kind: str = Field(description="`user`, `token`, `local`, `login`, `system` or `unknown`.")
     display_name: str = Field(description="Never empty; users get the name their provider gave.")
+
+
+class DiscoveryGroup(ApiModel):
+    """One Prometheus HTTP service-discovery target group (the format Prometheus reads)."""
+
+    targets: list[str] = Field(description="`host:port` of the exporter.")
+    labels: dict[str, str] = Field(
+        description="`tenant` (id), `tenant_name`, `se_group`, `engine` and `vs` (the group's "
+        "service names between commas, for example `,shop,www,`)."
+    )
+
+
+class HostStorageRead(ApiModel):
+    """A storage of a Proxmox node. Sizes are bytes."""
+
+    name: str
+    kind: str = Field(description="Storage type, for example `lvmthin`, `zfspool`, `nfs`.")
+    active: bool
+    content: list[str] = Field(description="What the storage holds, for example `images`.")
+    total: int | None = None
+    used: int | None = None
+    available: int | None = None
+
+
+class HostEngineRead(ApiModel):
+    """An engine of the SE group on a node."""
+
+    id: UUID
+    name: str
+    vmid: int | None = None
+    state: EngineState
+
+
+class HostNodeRead(ApiModel):
+    """A Proxmox node and the SE group's engines on it."""
+
+    name: str
+    online: bool | None = Field(
+        description="As the cluster reports it; null when Proxmox could not be asked."
+    )
+    cpu: float | None = Field(default=None, description="CPU load, 0 to 1.")
+    max_cpu: int | None = None
+    mem_used: int | None = Field(default=None, description="Bytes.")
+    mem_total: int | None = Field(default=None, description="Bytes.")
+    uptime_s: int | None = None
+    storage: list[HostStorageRead]
+    engines: list[HostEngineRead]
+
+
+class PlacementRead(ApiModel):
+    """Where an SE group's engines run on the Proxmox cluster.
+
+    With `available: false` (Proxmox not configured or not reachable) `nodes` lists only the nodes
+    the group's engines are placed on, with `online: null` and no capacity.
+    """
+
+    available: bool
+    reason: str | None = None
+    nodes: list[HostNodeRead]
 
 
 class VirtualServiceMemberRead(ApiModel):

@@ -130,6 +130,12 @@ service in a change set.
 
 ## Engines
 
+Engines also return `host_online`: whether Proxmox reports their node online (`null` without a node or without Proxmox).
+`GET /tenants/{t}/se-groups/{group}/placement` returns the cluster nodes (`online`, `cpu`, `mem_used`/`mem_total`, `storage[]`) and the
+group's `engines[]` on each, for the Placement card; `available: false` when Proxmox is not configured or not reachable
+(set `SWITCHYARD_PVE_URL`, `SWITCHYARD_PVE_TOKEN_ID` and the token secret for `syctl serve` as for the worker; the token needs
+`Sys.Audit` and `Datastore.Audit`). Answers are cached for 15 seconds. See ADR 0049.
+
 `GET /tenants/{t}/engines` (filters `se_group`, `state`) and `GET …/engines/{id}` return placement (`pve_node`,
 `vmid`) and agent enrollment. **Retire** (`POST …/retire`, a job) destroys the VM and removes the record. **Remove**
 (`DELETE`) deletes the record only. `deploy` clones VMs and registers engines but does not create enrollment tokens;
@@ -157,11 +163,19 @@ name, so every virtual service using it is unchanged; the secret reference, name
 `sync_cloudflare_ips`, `poll_status`, `git_mirror`, `gc`. States: `queued`, `running`, `succeeded`, `failed`, `dead`,
 `cancelled`.
 
+## Controller metrics and discovery
+
+`GET /metrics` (outside `/api/v1`) and `GET /api/v1/discovery/prometheus?exporter=haproxy|node&port=` are for Prometheus: the
+controller's own metrics and `http_sd_configs` targets for the SEs, labelled `tenant`, `tenant_name`, `se_group`, `engine`, `vs`.
+System administrators or the `SWITCHYARD_METRICS_TOKEN` bearer token only. See `docs/operating.md` and ADR 0061.
+
 ## Audit
 
 `GET /tenants/{t}/audit-events` and, for system administrators, `GET /audit-events?tenant=` filter by `actor`,
 `action` (a trailing `*` means prefix), `object`, `since`, `until` and `q`, newest first, with a cursor.
 `GET /audit-actions` lists every action name with a category and description.
+`GET /tenants/{t}/audit-events/export` and `GET /audit-events/export` take the same filters and stream every matching event
+as a file (`format=csv|jsonl`, no paging, default `csv`). Each export is audited as `audit.export`. See ADR 0060.
 
 `GET /tenants/{t}/principals?actor=user:…&actor=token:…` (and `GET /principals` for system administrators) turns the
 labels audit events, change sets and revisions carry into `display_name`s (`kind`: `user`, `token`, `local`, `login`,
