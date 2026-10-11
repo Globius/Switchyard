@@ -140,7 +140,7 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
             </div>
           ))}
         </nav>
-        <main className={draft ? "flex-1 p-8 pb-24" : "flex-1 p-8"}>
+        <main className={draft ? "min-w-0 flex-1 p-8 pb-24" : "min-w-0 flex-1 p-8"}>
           <Outlet />
         </main>
       </div>
