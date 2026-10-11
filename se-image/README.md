@@ -18,6 +18,11 @@ HAProxy exporter 8405 (a rendered listener, not part of the bootstrap config), l
 Container variant: `lxc/build-template.sh VMID AGENT DATAPLANE` (run on a Proxmox node) builds the same image as a privileged
 LXC template, for deploy requests with `guest_kind: "lxc"` (ADR 0055). Load the IPVS and conntrack modules on the host.
 
+The agent refuses bundles that are not bound to its engine name and a rising sequence (ADR 0074); the sequence is kept in
+`/etc/switchyard/agent/bundle-seq`, inside the agent's writable `/etc/switchyard`. `CONTROLLER_CN` in `enroll.env` is the
+common name of the controller's client certificate; the unit passes it as `-controller-cn`, so only that certificate may call the
+agent. Leave it empty only in throwaway labs (the agent then logs a warning and accepts any certificate the CA signed).
+
 Enrollment is https only (the agent refuses an `http://` controller URL). The agent also writes `certs/*.crl`
 (client CA revocation lists) beside the certificates in `/etc/switchyard/certs`; that directory is inside the
 agent's `ReadWritePaths` and is the Data Plane API's `ssl_certs_dir`, so no extra path is needed.

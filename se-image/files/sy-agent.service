@@ -6,7 +6,9 @@ Requires=sy-agent-enroll.service
 ConditionPathExists=/etc/switchyard/agent/tls.crt
 
 [Service]
-ExecStart=/usr/local/bin/sy-agent
+# CONTROLLER_CN (enroll.env) limits callers to the controller's client certificate name (ADR 0074).
+EnvironmentFile=-/etc/switchyard/agent/enroll.env
+ExecStart=/usr/local/bin/sy-agent -controller-cn=${CONTROLLER_CN}
 Restart=always
 RestartSec=3
 # Writes only under /etc/switchyard and /run/switchyard (02 "Agent").
