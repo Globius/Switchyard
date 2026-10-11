@@ -176,6 +176,12 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     Also needs ``SWITCHYARD_PVE_TOKEN_ID`` and the token secret under the secret reference
     ``SWITCHYARD_PVE_TOKEN_REF`` (default ``kv/proxmox/token``); ``SWITCHYARD_PVE_CA`` is optional.
     """
+    client = proxmox_client()
+    return InfraService(db, client) if client else None
+
+
+def proxmox_client() -> HttpProxmox | None:
+    """The Proxmox client, if ``SWITCHYARD_PVE_URL``, the token id and its secret are set."""
     url = os.environ.get("SWITCHYARD_PVE_URL")
     token_id = os.environ.get("SWITCHYARD_PVE_TOKEN_ID")
     if not url or not token_id:
@@ -185,7 +191,7 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     if not secret:
         return None
     ca = os.environ.get("SWITCHYARD_PVE_CA")
-    return InfraService(db, HttpProxmox(url, token_id, secret, verify=ca or True))
+    return HttpProxmox(url, token_id, secret, verify=ca or True)
 
 
 def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:

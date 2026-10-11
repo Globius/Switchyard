@@ -899,6 +899,58 @@ async def test_monitor_test_runs_from_an_engine_through_the_agent(api: Api) -> N
     assert (await api.client.post(url, json=body, headers=viewer)).status_code == 403
 
 
+async def test_audit_export_streams_every_event_as_csv_or_jsonl(api: Api) -> None:
+    import csv
+    import io
+    import json
+
+    h = await api.token()
+    root = await api.token(Role.SYSTEM_ADMIN)
+    page = (await api.client.get(f"{V1}/tenants/acme/audit-events?limit=500", headers=h)).json()
+    assert page["items"]
+    csv_text = (await api.client.get(f"{V1}/tenants/acme/audit-events/export", headers=h)).text
+    rows = list(csv.DictReader(io.StringIO(csv_text)))
+    assert list(rows[0]) == ["at", "tenant_id", "actor", "action", "object", "request_id", "diff"]
+    assert len(rows) >= len(page["items"])
+    lines = (
+        await api.client.get(f"{V1}/tenants/acme/audit-events/export?format=jsonl", headers=h)
+    ).text.splitlines()
+    assert {json.loads(line)["action"] for line in lines} >= {"audit.export"}
+    filtered = await api.client.get(
+        f"{V1}/tenants/acme/audit-events/export?format=jsonl&action=audit.*", headers=h
+    )
+    assert {json.loads(x)["action"] for x in filtered.text.splitlines()} == {"audit.export"}
+    assert filtered.headers["content-disposition"] == 'attachment; filename="audit-acme.jsonl"'
+    bad = await api.client.get(f"{V1}/tenants/acme/audit-events/export?format=xml", headers=h)
+    assert bad.status_code == 422
+    assert (await api.client.get(f"{V1}/audit-events/export", headers=h)).status_code == 403
+    everything = await api.client.get(f"{V1}/audit-events/export?format=jsonl", headers=root)
+    assert everything.status_code == 200 and everything.text.strip()
+
+
+async def test_audit_export_pages_through_more_than_one_page(api: Api) -> None:
+    import json
+
+    from switchyard.api import app as api_app
+
+    h = await api.token()
+    for _ in range(5):
+        await api.client.get(f"{V1}/tenants/acme/audit-events/export", headers=h)  # 5 export events
+    original = api_app.EXPORT_PAGE
+    api_app.EXPORT_PAGE = 2
+    try:
+        text = (
+            await api.client.get(f"{V1}/tenants/acme/audit-events/export?format=jsonl", headers=h)
+        ).text
+    finally:
+        api_app.EXPORT_PAGE = original
+    events = [json.loads(x) for x in text.splitlines()]
+    total = (await api.client.get(f"{V1}/tenants/acme/audit-events?limit=500", headers=h)).json()
+    assert len(events) >= 5 and len({(e["at"], e["request_id"], e["action"]) for e in events}) > 2
+    assert [e["at"] for e in events] == sorted((e["at"] for e in events), reverse=True)
+    assert len(events) <= len(total["items"]) + 1
+
+
 async def test_tenant_read_reports_usage_and_quotas_block_growth(api: Api) -> None:
     root = await api.token(Role.SYSTEM_ADMIN)
     before = (await api.client.get(f"{V1}/tenants/acme", headers=root)).json()

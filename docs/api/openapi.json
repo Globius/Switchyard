@@ -2616,6 +2616,18 @@
             "description": "`host:port` of `sy-agent`, if any.",
             "title": "Agent Url"
           },
+          "host_online": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether Proxmox reports the engine's node online; null when the engine has no node or Proxmox is not configured or not reachable.",
+            "title": "Host Online"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -3485,6 +3497,212 @@
           "changed_fields"
         ],
         "title": "HealthMonitorRead",
+        "type": "object"
+      },
+      "HostEngineRead": {
+        "additionalProperties": false,
+        "description": "An engine of the SE group on a node.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EngineState"
+          },
+          "vmid": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vmid"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "state"
+        ],
+        "title": "HostEngineRead",
+        "type": "object"
+      },
+      "HostNodeRead": {
+        "additionalProperties": false,
+        "description": "A Proxmox node and the SE group's engines on it.",
+        "properties": {
+          "cpu": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "CPU load, 0 to 1.",
+            "title": "Cpu"
+          },
+          "engines": {
+            "items": {
+              "$ref": "#/components/schemas/HostEngineRead"
+            },
+            "title": "Engines",
+            "type": "array"
+          },
+          "max_cpu": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cpu"
+          },
+          "mem_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bytes.",
+            "title": "Mem Total"
+          },
+          "mem_used": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bytes.",
+            "title": "Mem Used"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "online": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As the cluster reports it; null when Proxmox could not be asked.",
+            "title": "Online"
+          },
+          "storage": {
+            "items": {
+              "$ref": "#/components/schemas/HostStorageRead"
+            },
+            "title": "Storage",
+            "type": "array"
+          },
+          "uptime_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uptime S"
+          }
+        },
+        "required": [
+          "name",
+          "online",
+          "storage",
+          "engines"
+        ],
+        "title": "HostNodeRead",
+        "type": "object"
+      },
+      "HostStorageRead": {
+        "additionalProperties": false,
+        "description": "A storage of a Proxmox node. Sizes are bytes.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "available": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          },
+          "content": {
+            "description": "What the storage holds, for example `images`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Content",
+            "type": "array"
+          },
+          "kind": {
+            "description": "Storage type, for example `lvmthin`, `zfspool`, `nfs`.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "used": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "active",
+          "content"
+        ],
+        "title": "HostStorageRead",
         "type": "object"
       },
       "HttpCheck": {
@@ -6232,6 +6450,40 @@
           }
         },
         "title": "PersistenceSourceIp",
+        "type": "object"
+      },
+      "PlacementRead": {
+        "additionalProperties": false,
+        "description": "Where an SE group's engines run on the Proxmox cluster.\n\nWith `available: false` (Proxmox not configured or not reachable) `nodes` lists only the nodes\nthe group's engines are placed on, with `online: null` and no capacity.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/HostNodeRead"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "available",
+          "nodes"
+        ],
+        "title": "PlacementRead",
         "type": "object"
       },
       "Pool": {
@@ -11329,6 +11581,254 @@
         "x-required-role": "system-admin"
       }
     },
+    "/api/v1/audit-events/export": {
+      "get": {
+        "description": "As `GET /tenants/{t}/audit-events/export` over every tenant and the system-level events; narrow it with `tenant` (id or name). Requires `system-admin`.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
+        "operationId": "export_system_audit_events_api_v1_audit_events_export_get",
+        "parameters": [
+          {
+            "description": "Tenant id or name.",
+            "in": "query",
+            "name": "tenant",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tenant id or name.",
+              "title": "Tenant"
+            }
+          },
+          {
+            "description": "`csv` or `jsonl`.",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "csv",
+              "description": "`csv` or `jsonl`.",
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Who acted, for example `user:alice`; end with `*` for a prefix.",
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "description": "Audit action (see `GET /audit-actions`); end with `*` for a prefix.",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "description": "Exact object reference, for example `change_set:<id>`; on revisions, an object id.",
+            "in": "query",
+            "name": "object",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Object"
+            }
+          },
+          {
+            "description": "Only events at or after this time (ISO 8601).",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Only events before this time (ISO 8601).",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "description": "Free text.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "description": "`next_cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {
+                "example": "{\"action\": \"change_set.apply\", \"actor\": \"user:alice\", \"at\": \"2026-10-11T08:30:00Z\", \"diff\": null, \"object\": \"change_set:1\", \"request_id\": \"r-1\", \"tenant_id\": null}\n"
+              },
+              "text/csv": {
+                "example": "at,tenant_id,actor,action,object,request_id,diff\n2026-10-11T08:30:00Z,,user:alice,change_set.apply,change_set:1,r-1,\n"
+              }
+            },
+            "description": "The events as a file."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`cursor` is not a value this endpoint returned."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download audit events across tenants (system-admin)",
+        "tags": [
+          "audit"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
     "/api/v1/auth/break-glass": {
       "post": {
         "description": "Log in the local administrator (password + TOTP). Off unless enabled.\n\n**Access:** Public: no credentials needed.",
@@ -15852,6 +16352,256 @@
         "x-required-role": "viewer"
       }
     },
+    "/api/v1/tenants/{t}/audit-events/export": {
+      "get": {
+        "description": "The same filters as the list (`actor`, `action`, `object`, `since`, `until`, `q`; `cursor` and `limit` are ignored) but every matching event, newest first, streamed as a file. `format` is `csv` (default) or `jsonl`. The export itself is audited as `audit.export`. Requires any role in the tenant, like the list.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
+        "operationId": "export_audit_events_api_v1_tenants__t__audit_events_export_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`csv` or `jsonl`.",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "csv",
+              "description": "`csv` or `jsonl`.",
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Who acted, for example `user:alice`; end with `*` for a prefix.",
+            "in": "query",
+            "name": "actor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor"
+            }
+          },
+          {
+            "description": "Audit action (see `GET /audit-actions`); end with `*` for a prefix.",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "description": "Exact object reference, for example `change_set:<id>`; on revisions, an object id.",
+            "in": "query",
+            "name": "object",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Object"
+            }
+          },
+          {
+            "description": "Only events at or after this time (ISO 8601).",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Only events before this time (ISO 8601).",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "description": "Free text.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "description": "`next_cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-ndjson": {
+                "example": "{\"action\": \"change_set.apply\", \"actor\": \"user:alice\", \"at\": \"2026-10-11T08:30:00Z\", \"diff\": null, \"object\": \"change_set:1\", \"request_id\": \"r-1\", \"tenant_id\": null}\n"
+              },
+              "text/csv": {
+                "example": "at,tenant_id,actor,action,object,request_id,diff\n2026-10-11T08:30:00Z,,user:alice,change_set.apply,change_set:1,r-1,\n"
+              }
+            },
+            "description": "The events as a file."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`cursor` is not a value this endpoint returned."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download audit events as CSV or JSON Lines",
+        "tags": [
+          "audit"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
     "/api/v1/tenants/{t}/certificates": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
@@ -19058,6 +19808,7 @@
                     "agent_cert_serial": "3f2a9c",
                     "agent_enrolled": true,
                     "agent_url": "192.0.2.21:7443",
+                    "host_online": true,
                     "id": "0192f3a0-0000-7000-8000-000000000022",
                     "mgmt_ip": "192.0.2.21",
                     "name": "edge-1",
@@ -19283,6 +20034,7 @@
                   "agent_cert_serial": "3f2a9c",
                   "agent_enrolled": true,
                   "agent_url": "192.0.2.21:7443",
+                  "host_online": true,
                   "id": "0192f3a0-0000-7000-8000-000000000022",
                   "mgmt_ip": "192.0.2.21",
                   "name": "edge-1",
@@ -27834,6 +28586,7 @@
                     "agent_cert_serial": "3f2a9c",
                     "agent_enrolled": true,
                     "agent_url": "192.0.2.21:7443",
+                    "host_online": true,
                     "id": "0192f3a0-0000-7000-8000-000000000022",
                     "mgmt_ip": "192.0.2.21",
                     "name": "edge-1",
@@ -27970,6 +28723,7 @@
                   "agent_cert_serial": "3f2a9c",
                   "agent_enrolled": true,
                   "agent_url": "192.0.2.21:7443",
+                  "host_online": true,
                   "id": "0192f3a0-0000-7000-8000-000000000022",
                   "mgmt_ip": "192.0.2.21",
                   "name": "edge-1",
@@ -28042,6 +28796,151 @@
           "engines"
         ],
         "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/se-groups/{group}/placement": {
+      "get": {
+        "description": "The Proxmox cluster nodes with online state, load, memory and storage, and the group's engines on each: the data of the Placement card. Read from Proxmox and cached for 15 seconds. When Proxmox is not configured or not reachable the answer is `available: false` with the nodes the engines claim to run on and `online: null`. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "se_group_placement_api_v1_tenants__t__se_groups__group__placement_get",
+        "parameters": [
+          {
+            "description": "SE group id.",
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Group",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "available": true,
+                  "nodes": [
+                    {
+                      "cpu": 0.12,
+                      "engines": [
+                        {
+                          "id": "0192f3a0-0000-7000-8000-000000000022",
+                          "name": "edge-1",
+                          "state": "enabled",
+                          "vmid": 9101
+                        }
+                      ],
+                      "max_cpu": 32,
+                      "mem_total": 274877906944,
+                      "mem_used": 68719476736,
+                      "name": "pve1",
+                      "online": true,
+                      "storage": [
+                        {
+                          "active": true,
+                          "available": 879609302221,
+                          "content": [
+                            "images",
+                            "rootdir"
+                          ],
+                          "kind": "lvmthin",
+                          "name": "local-lvm",
+                          "total": 1099511627776,
+                          "used": 219902325555
+                        }
+                      ],
+                      "uptime_s": 1209600
+                    },
+                    {
+                      "engines": [],
+                      "name": "pve2",
+                      "online": false,
+                      "storage": []
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/PlacementRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Where an SE group's engines run on Proxmox",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/se-groups/{object_id}": {
