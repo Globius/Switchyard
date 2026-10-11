@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
+import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
@@ -114,24 +115,29 @@ export function Wizard({ tenant }: { tenant: string }) {
     udp ? m.type === "udp" : m.type !== "udp",
   );
 
+  /** Ask the pool for its next free address. It is a suggestion: nothing is reserved. */
+  async function suggest(poolId: string): Promise<boolean> {
+    try {
+      const r = unwrap(
+        await api.POST("/api/v1/tenants/{t}/vip-pools/{pool_id}/next-free", {
+          params: { path: { t: tenant, pool_id: poolId } },
+        }),
+      );
+      set({ vip: r.address });
+      setSuggested(r.address);
+      setProblem(null);
+      return true;
+    } catch (err) {
+      setProblem(err);
+      return false;
+    }
+  }
+
   async function next() {
     const e = validateStep(step, s, names);
     setErrors(e);
     if (Object.keys(e).length > 0) return;
-    if (step === 2 && s.vipMode === "pool" && !s.vip) {
-      try {
-        const r = unwrap(
-          await api.POST("/api/v1/tenants/{t}/vip-pools/{pool_id}/next-free", {
-            params: { path: { t: tenant, pool_id: s.vip_pool_id } },
-          }),
-        );
-        set({ vip: r.address });
-        setSuggested(r.address);
-      } catch (err) {
-        setProblem(err);
-        return;
-      }
-    }
+    if (step === 2 && s.vipMode === "pool" && !s.vip && !(await suggest(s.vip_pool_id))) return;
     setProblem(null);
     setStep(step + 1);
   }
@@ -282,7 +288,11 @@ export function Wizard({ tenant }: { tenant: string }) {
                     aria-label={t("VIP pool")}
                     className={INPUT}
                     value={s.vip_pool_id}
-                    onChange={(e) => set({ vip_pool_id: e.target.value, vip: "" })}
+                    onChange={(e) => {
+                      set({ vip_pool_id: e.target.value, vip: "" });
+                      setSuggested(null);
+                      if (e.target.value) void suggest(e.target.value);
+                    }}
                   >
                     <option value="">{t("Choose…")}</option>
                     {vipPools.data?.items.map((p) => (
@@ -301,9 +311,28 @@ export function Wizard({ tenant }: { tenant: string }) {
                       {t("No VIP pools yet. Create one under Networks and VIP pools.")}
                     </span>
                   )}
+                  {s.vipMode === "pool" && s.vip && (
+                    <span className="flex flex-wrap items-center gap-2">
+                      <input
+                        readOnly
+                        aria-label={t("Suggested address")}
+                        className={cn(INPUT, "w-44 font-mono")}
+                        value={s.vip}
+                      />
+                      <StatusPill status="neutral">{t("Suggested, not reserved")}</StatusPill>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void suggest(s.vip_pool_id)}
+                      >
+                        {t("Suggest again")}
+                      </Button>
+                    </span>
+                  )}
                   <span className="block text-xs text-muted-foreground">
                     {t(
-                      "The next free address is suggested now and checked again when the change set is applied.",
+                      "Nothing is reserved. If another draft takes the same address, Review blocks the change set that is applied second; your other fields are kept.",
                     )}
                   </span>
                 </span>
@@ -921,7 +950,7 @@ export function Wizard({ tenant }: { tenant: string }) {
               </ul>
               <p className="text-xs text-muted-foreground">
                 {t(
-                  "Rules the validator checks (VIP inside the SE group's network, port collisions, certificate coverage) are shown when you review the draft; nothing goes live until it is applied.",
+                  "Nothing is checked until the ops are saved. After you add them, validator findings appear as a problem count in the change-set bar, on the Impact tab of Review and apply, and on this service's tabs if the draft is invalid. Nothing goes live until it is applied.",
                 )}
               </p>
             </section>

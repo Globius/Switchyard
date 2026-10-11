@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
@@ -441,14 +442,14 @@ function PoolSheet({
 }
 
 /** Pools: members' admin state, algorithm, monitor, persistence, and which services use each. */
-export function Pools({ tenant }: { tenant: string }) {
+export function Pools({ tenant, q = "" }: { tenant: string; q?: string }) {
   const { draft } = useDraft(tenant);
   const pools = usePools(tenant, draft?.id);
   const monitors = useMonitors(tenant, draft?.id);
   const services = useServices(tenant, draft?.id);
   const can = useCan(tenant);
   const write = can("write", "application");
-  const [q, setQ] = useState("");
+  const navigate = useNavigate();
   const [editing, setEditing] = useState<PoolRead | "new" | null>(null);
 
   const monitorName = new Map(monitors.data?.items.map((m) => [m.id, m.name]));
@@ -481,8 +482,15 @@ export function Pools({ tenant }: { tenant: string }) {
         aria-label={t("Filter by name")}
         placeholder={t("Filter by name")}
         className={cn(INPUT, "w-64")}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
+        defaultValue={q}
+        onChange={(e) =>
+          void navigate({
+            to: "/t/$tenant/pools",
+            params: { tenant },
+            search: { q: e.target.value || undefined },
+            replace: true,
+          })
+        }
       />
       <div className="overflow-x-auto rounded-lg border bg-card">
         {pools.isPending ? (

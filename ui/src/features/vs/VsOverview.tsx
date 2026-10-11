@@ -32,6 +32,18 @@ export function describeMatch(m: {
   return parts.filter(Boolean).join(" ") || t("any request");
 }
 
+/** A member that exists only in the draft: its pool is new, or the live pool does not list it. */
+export function notApplied(
+  pool: { id: string; draft_status: string },
+  memberId: string,
+  live: { id: string; members: { id: string }[] }[] | undefined,
+): boolean {
+  if (pool.draft_status === "created") return true;
+  if (pool.draft_status !== "modified" || !live) return false;
+  const lp = live.find((x) => x.id === pool.id);
+  return lp ? !lp.members.some((m) => m.id === memberId) : false;
+}
+
 const STATE_PILL = {
   enabled: <StatusPill status="healthy">{t("Enabled")}</StatusPill>,
   disabled: <StatusPill status="neutral">{t("Disabled")}</StatusPill>,
@@ -43,6 +55,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
   const { draft } = useDraft(tenant);
   const vs = useVs(tenant, id, draft?.id);
   const pools = usePools(tenant, draft?.id);
+  const livePools = usePools(tenant);
   const metrics = useVsMetrics(tenant);
   const can = useCan(tenant);
   const setState = useSetMemberState(tenant);
@@ -86,9 +99,9 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
             <tbody className="divide-y">
               {[...v.routes]
                 .sort((a, b) => a.order - b.order)
-                .map((r) => (
-                  <tr key={r.order}>
-                    <td className="px-4 py-3">{r.order}</td>
+                .map((r, i) => (
+                  <tr key={`${r.order}-${i}`}>
+                    <td className="px-4 py-3">{i + 1}</td>
                     <td className="px-4 py-3 font-mono">{describeMatch(r.match)}</td>
                     <td className="px-4 py-3">
                       {r.redirect
@@ -152,7 +165,12 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                       {m.address}
                       {m.port ? `:${m.port}` : ""}
                     </span>
-                    <span className="ml-auto">{STATE_PILL[m.admin_state]}</span>
+                    <span className="ml-auto flex items-center gap-2">
+                      {notApplied(p, m.id, livePools.data?.items) && (
+                        <StatusPill status="draft">{t("Not applied")}</StatusPill>
+                      )}
+                      {STATE_PILL[m.admin_state]}
+                    </span>
                     {(["enabled", "drain", "disabled"] as const)
                       .filter((s) => s !== m.admin_state)
                       .map((s) => (

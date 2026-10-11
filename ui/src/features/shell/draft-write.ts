@@ -2,14 +2,18 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/api/client";
 import { useMe } from "@/auth/session";
+import { draftOwnerName } from "./author";
 import { useDraft } from "./draft";
 
-/** "Draft by <first name>, <HH:MM>" (handoff copy). */
-export function defaultDraftName(fullName: string, at: Date = new Date()): string {
-  const first = fullName.trim().split(/\s+/)[0] || fullName;
+/** "Draft by <name>, <HH:MM>" (handoff copy); a string is treated as a person's full name. */
+export function defaultDraftName(
+  who: string | { name: string; auth?: string; break_glass?: boolean },
+  at: Date = new Date(),
+): string {
+  const name = draftOwnerName(typeof who === "string" ? { name: who } : who);
   const hh = String(at.getHours()).padStart(2, "0");
   const mm = String(at.getMinutes()).padStart(2, "0");
-  return `Draft by ${first}, ${hh}:${mm}`;
+  return `Draft by ${name}, ${hh}:${mm}`;
 }
 
 /**
@@ -27,7 +31,7 @@ export function useEnsureDraft(tenant: string) {
       const created = unwrap(
         await api.POST("/api/v1/tenants/{t}/change-sets", {
           params: { path: { t: tenant } },
-          body: { summary: defaultDraftName(me?.name ?? "") },
+          body: { summary: defaultDraftName(me ?? "") },
         }),
       );
       return created.id;

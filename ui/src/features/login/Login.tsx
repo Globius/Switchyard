@@ -23,7 +23,7 @@ export function errorCopy(code: LoginError, provider?: string, next?: string) {
       };
     case "provider_error":
       return {
-        title: t("Sign-in with {p} didn't complete.", { p: provider ?? t("your provider") }),
+        title: t("Sign-in didn't complete."),
         body: t(
           "The provider returned an error or the sign-in took too long. Try again, or use another provider.",
         ),
