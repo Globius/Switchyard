@@ -10,7 +10,7 @@ that run are destroyed and their rows removed; engines that already existed are 
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from itertools import cycle
 from typing import Any
@@ -65,6 +65,8 @@ class DeployRequest:
         dataplane_port: Data Plane API port.
         agent_port: ``sy-agent`` gRPC port.
         ssh_public_keys: Operator keys for cloud-init (or the container's authorized keys).
+        nic_pools: Pool to take each VIP or backend NIC's address from, keyed by network id (a
+            network without an entry leaves its NIC unaddressed). One address per engine per NIC.
         guest_kind: ``qemu`` (cloud-init VMs, the default) or ``lxc`` (containers: lighter, no
             cloud-init, so enrollment material is delivered out of band; ADR 0054).
     """
@@ -81,6 +83,7 @@ class DeployRequest:
     agent_port: int = 7443
     ssh_public_keys: str | None = None
     guest_kind: str = "qemu"
+    nic_pools: dict[UUID, UUID] = field(default_factory=dict)
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "DeployRequest":
@@ -98,6 +101,7 @@ class DeployRequest:
             agent_port=int(payload.get("agent_port", 7443)),
             ssh_public_keys=payload.get("ssh_public_keys"),
             guest_kind=str(payload.get("guest_kind", "qemu")),
+            nic_pools={UUID(k): UUID(v) for k, v in (payload.get("nic_pools") or {}).items()},
         )
 
     def as_payload(self) -> dict[str, Any]:
@@ -112,6 +116,7 @@ class DeployRequest:
             "dataplane_port": self.dataplane_port,
             "agent_port": self.agent_port,
             "guest_kind": self.guest_kind,
+            "nic_pools": {str(k): str(v) for k, v in self.nic_pools.items()},
         }
         for key in ("pool", "credentials_ref", "ssh_public_keys"):
             if getattr(self, key) is not None:
@@ -375,6 +380,7 @@ class InfraService:
         if pool is None or pool.network_id != mgmt.id:
             raise DeployError("mgmt_pool_id must be a pool on the group's mgmt network")
         extra: list[tuple[str, int | None]] = []
+        extra_nets: list[dm.Network] = []  # parallel to ``extra``
         for link in group.networks:
             if link.role is dm.NetworkRole.MGMT:
                 continue
@@ -382,6 +388,15 @@ class InfraService:
             if not net.vnet:
                 raise DeployError(f"network {net.name} has no VNet to attach VMs to")
             extra.append((net.vnet, None))
+            extra_nets.append(net)
+        nic_pools: dict[UUID, dm.VipPool] = {}
+        for network_id, pool_id in request.nic_pools.items():
+            found = next((p for p in snapshot.vip_pools if p.id == pool_id), None)
+            if found is None or found.network_id != network_id:
+                raise DeployError("each nic_pools entry must name a pool on that network")
+            if network_id not in {n.id for n in extra_nets}:
+                raise DeployError("nic_pools names a network that is not a VIP or backend network")
+            nic_pools[network_id] = found
         if not mgmt.vnet:
             raise DeployError(f"management network {mgmt.name} has no VNet")
 
@@ -403,6 +418,12 @@ class InfraService:
                         .all()
                     )
                     used = [ipam_address(r.mgmt_ip) for r in rows if r.mgmt_ip]
+                    used_data: dict[UUID, list[dm.IPAddress]] = {}
+                    for r in rows:
+                        for entry in r.data_ips:
+                            used_data.setdefault(UUID(entry["network_id"]), []).append(
+                                ipam_address(entry["address"])
+                            )
                     existing = sorted(r.name for r in rows)
                     taken_names = set(existing)
                 nodes = cycle(request.nodes)
@@ -414,6 +435,18 @@ class InfraService:
                         continue
                     address = ipam.allocate(pool, mgmt, used)
                     used.append(address)
+                    nic_cidrs: list[str | None] = []
+                    data_ips: list[dict[str, str]] = []
+                    for net in extra_nets:
+                        data_pool = nic_pools.get(net.id)
+                        if data_pool is None:
+                            nic_cidrs.append(None)
+                            continue
+                        taken = used_data.setdefault(net.id, [])
+                        data_address = ipam.allocate(data_pool, net, taken)
+                        taken.append(data_address)
+                        nic_cidrs.append(f"{data_address}/{net.cidr.prefixlen}")
+                        data_ips.append({"network_id": str(net.id), "address": str(data_address)})
                     spec = VmSpec(
                         name=name,
                         node=next(nodes),
@@ -423,13 +456,16 @@ class InfraService:
                         pool=request.pool,
                         mgmt_bridge=mgmt.vnet,
                         nics=tuple(extra),
+                        nic_addresses=tuple(nic_cidrs),
                         ssh_public_keys=request.ssh_public_keys,
                         kind=request.guest_kind,
                     )
                     info = await self._pve.create_vm(spec)
                     created.append((info.node, info.vmid, UUID(int=0)))
                     await self._pve.start_vm(info.node, info.vmid)
-                    row_id = await self._register(request, name, str(address), info.node, info.vmid)
+                    row_id = await self._register(
+                        request, name, str(address), info.node, info.vmid, data_ips
+                    )
                     created[-1] = (info.node, info.vmid, row_id)
                     names.append(name)
         except (ProxmoxError, ipam.PoolExhaustedError) as exc:
@@ -498,7 +534,13 @@ class InfraService:
         return {"retired": name, "vm_destroyed": bool(node and vmid)}
 
     async def _register(
-        self, request: DeployRequest, name: str, address: str, node: str, vmid: int
+        self,
+        request: DeployRequest,
+        name: str,
+        address: str,
+        node: str,
+        vmid: int,
+        data_ips: list[dict[str, str]],
     ) -> UUID:
         async with tenant_session(self._db.app, [request.tenant_id]) as session:
             row = ServiceEngineRow(
@@ -513,6 +555,7 @@ class InfraService:
                 pve_node=node,
                 vmid=vmid,
                 guest_kind=request.guest_kind,
+                data_ips=data_ips,
             )
             session.add(row)
             await session.flush()

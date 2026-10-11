@@ -212,3 +212,20 @@ async def test_lxc_clone_uses_container_endpoints_and_net_syntax() -> None:
     paths = [(m, p) for m, p, *_ in api.requests]
     assert ("POST", "/nodes/pve1/lxc/9901/clone") in paths
     assert ("PUT", "/nodes/pve1/lxc/101/config") in paths
+
+
+async def test_data_nic_addresses_reach_the_config() -> None:
+    qemu, lxc = Api(), Api()
+    nics = (("vnet1", None), ("vnet2", 120))
+    addresses: tuple[str | None, ...] = ("10.1.0.5/24", None)
+    await client(qemu).create_vm(
+        VmSpec("x", "pve1", 9000, "10.30.0.11/24", nics=nics, nic_addresses=addresses)
+    )
+    await client(lxc).create_vm(
+        VmSpec("x", "pve1", 9901, "10.30.0.11/24", kind="lxc", nics=nics, nic_addresses=addresses)
+    )
+    q = next(b for m, p, b in qemu.requests if m == "PUT" and p.endswith("/config"))
+    c = next(b for m, p, b in lxc.requests if m == "PUT" and p.endswith("/config"))
+    assert q["ipconfig1"] == ["ip=10.1.0.5/24"] and "ipconfig2" not in q
+    assert c["net1"] == ["name=eth1,bridge=vnet1,ip=10.1.0.5/24"]
+    assert c["net2"] == ["name=eth2,bridge=vnet2,tag=120"]
