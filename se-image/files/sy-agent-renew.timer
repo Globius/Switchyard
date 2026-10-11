@@ -1,0 +1,10 @@
+[Unit]
+Description=Renew the Switchyard agent certificate every 8 hours (certificates last 24 h)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=8h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

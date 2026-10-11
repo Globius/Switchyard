@@ -1,0 +1,32 @@
+# Data Plane API v3 on the SE. mTLS with the agent's certificate; the controller is the only client.
+config_version: 2
+name: switchyard-se
+dataplaneapi:
+  host: 0.0.0.0
+  port: 5555            # plain listener disabled below; only the TLS listener answers
+  scheme: [https]
+  tls:
+    tls_host: 0.0.0.0
+    tls_port: 5555
+    tls_certificate: /etc/switchyard/agent/tls.crt
+    tls_key: /etc/switchyard/agent/tls.key
+    tls_ca: /etc/switchyard/agent/ca.crt
+  user:
+    - name: switchyard
+      insecure: false
+      password: "$5$disabled"   # unused: mTLS authenticates; replace per SE if basic auth is ever enabled
+  transaction:
+    transaction_dir: /var/lib/dataplaneapi/transactions
+  resources:
+    maps_dir: /etc/switchyard/haproxy/maps
+    ssl_certs_dir: /etc/switchyard/certs
+    general_storage_dir: /etc/switchyard/haproxy/lists
+    spoe_dir: /etc/haproxy/spoe
+haproxy:
+  config_file: /etc/switchyard/haproxy/haproxy.cfg
+  haproxy_bin: /usr/sbin/haproxy
+  reload:
+    reload_delay: 1
+    reload_cmd: systemctl reload haproxy
+    restart_cmd: systemctl restart haproxy
+    reload_strategy: custom
