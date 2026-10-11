@@ -38,7 +38,9 @@ class VmSpec:
         memory_mb: RAM.
         ssh_public_keys: Keys for the cloud-init user (operator access only; the controller never
             uses SSH).
-        user_data_snippet: Optional cloud-init snippet volume id.
+        user_data_snippet: Optional cloud-init snippet volume id (QEMU only).
+        kind: ``qemu`` (production: cloud-init VMs) or ``lxc`` (labs without KVM: the template is a
+            container template; there is no cloud-init, so enrollment is delivered out of band).
     """
 
     name: str
@@ -53,6 +55,7 @@ class VmSpec:
     memory_mb: int = 2048
     ssh_public_keys: str | None = None
     user_data_snippet: str | None = None
+    kind: str = "qemu"
 
 
 @dataclass(frozen=True)
@@ -264,8 +267,10 @@ class HttpProxmox:
         while True:
             status = await self._call("GET", f"/nodes/{node}/tasks/{upid}/status")
             if status and status.get("status") == "stopped":
-                if status.get("exitstatus") != "OK":
-                    raise ProxmoxError(f"task {upid} failed: {status.get('exitstatus')}")
+                # "WARNINGS: n" is a finished task that logged warnings (seen on a real PVE 9).
+                exit_status = str(status.get("exitstatus"))
+                if exit_status != "OK" and not exit_status.startswith("WARNINGS"):
+                    raise ProxmoxError(f"task {upid} failed: {exit_status}")
                 return
             if waited >= self._timeout:
                 raise ProxmoxError(f"task {upid} did not finish within {self._timeout:.0f}s")
@@ -330,52 +335,82 @@ class HttpProxmox:
             await self._task(upid.split(":")[1], upid)
 
     async def create_vm(self, spec: VmSpec) -> VmInfo:
-        """Clone ``spec.template_vmid`` and configure the clone."""
+        """Clone ``spec.template_vmid`` and configure the clone (a container for ``lxc``)."""
+        lxc = spec.kind == "lxc"
+        kind = "lxc" if lxc else "qemu"
         vmid = int(await self._call("GET", "/cluster/nextid"))
-        clone: dict[str, Any] = {"newid": vmid, "name": spec.name, "target": spec.node, "full": 1}
+        clone: dict[str, Any] = {"newid": vmid, "target": spec.node, "full": 1}
+        clone["hostname" if lxc else "name"] = spec.name
         if spec.pool:
             clone["pool"] = spec.pool
-        path = f"/nodes/{spec.node}/qemu/{spec.template_vmid}/clone"
+        path = f"/nodes/{spec.node}/{kind}/{spec.template_vmid}/clone"
         await self._task(spec.node, await self._call("POST", path, clone))
         gateway = f",gw={spec.gateway}" if spec.gateway else ""
-        config: dict[str, Any] = {
-            "cores": spec.cores,
-            "memory": spec.memory_mb,
-            "ipconfig0": f"ip={spec.mgmt_ip_cidr}{gateway}",
-        }
-        if spec.mgmt_bridge:
-            config["net0"] = f"virtio,bridge={spec.mgmt_bridge}"
-        for index, (bridge, tag) in enumerate(spec.nics, start=1):
-            config[f"net{index}"] = f"virtio,bridge={bridge}" + (f",tag={tag}" if tag else "")
-        if spec.ssh_public_keys:
-            config["sshkeys"] = spec.ssh_public_keys
-        if spec.user_data_snippet:
-            config["cicustom"] = f"user={spec.user_data_snippet}"
-        await self._call("PUT", f"/nodes/{spec.node}/qemu/{vmid}/config", config)
+        config: dict[str, Any] = {"cores": spec.cores, "memory": spec.memory_mb}
+        if lxc:
+            bridge = spec.mgmt_bridge or "vmbr0"
+            config["net0"] = f"name=eth0,bridge={bridge},ip={spec.mgmt_ip_cidr}{gateway}"
+            for index, (nic, tag) in enumerate(spec.nics, start=1):
+                config[f"net{index}"] = f"name=eth{index},bridge={nic}" + (
+                    f",tag={tag}" if tag else ""
+                )
+            if spec.ssh_public_keys:
+                config["ssh-public-keys"] = spec.ssh_public_keys
+        else:
+            config["ipconfig0"] = f"ip={spec.mgmt_ip_cidr}{gateway}"
+            if spec.mgmt_bridge:
+                config["net0"] = f"virtio,bridge={spec.mgmt_bridge}"
+            for index, (nic, tag) in enumerate(spec.nics, start=1):
+                config[f"net{index}"] = f"virtio,bridge={nic}" + (f",tag={tag}" if tag else "")
+            if spec.ssh_public_keys:
+                config["sshkeys"] = spec.ssh_public_keys
+            if spec.user_data_snippet:
+                config["cicustom"] = f"user={spec.user_data_snippet}"
+        await self._call("PUT", f"/nodes/{spec.node}/{kind}/{vmid}/config", config)
         return VmInfo(vmid, spec.node, spec.name, "stopped")
+
+    async def _kind(self, node: str, vmid: int) -> str | None:
+        """``lxc`` or ``qemu`` for an existing guest, ``None`` if neither exists."""
+        for kind in ("qemu", "lxc"):
+            if await self._call(
+                "GET", f"/nodes/{node}/{kind}/{vmid}/status/current", ok_missing=True
+            ):
+                return kind
+        return None
 
     async def start_vm(self, node: str, vmid: int) -> None:
         """Start a VM and wait for the task."""
-        await self._task(node, await self._call("POST", f"/nodes/{node}/qemu/{vmid}/status/start"))
+        kind = await self._kind(node, vmid) or "qemu"
+        await self._task(
+            node, await self._call("POST", f"/nodes/{node}/{kind}/{vmid}/status/start")
+        )
 
     async def stop_vm(self, node: str, vmid: int) -> None:
         """Stop a VM; a VM that is already gone or stopped is fine."""
         info = await self.get_vm(node, vmid)
         if info is None or info.status == "stopped":
             return
-        await self._task(node, await self._call("POST", f"/nodes/{node}/qemu/{vmid}/status/stop"))
+        kind = await self._kind(node, vmid) or "qemu"
+        await self._task(node, await self._call("POST", f"/nodes/{node}/{kind}/{vmid}/status/stop"))
 
     async def destroy_vm(self, node: str, vmid: int) -> None:
         """Stop and destroy a VM; one that does not exist is fine."""
         if await self.get_vm(node, vmid) is None:
             return
         await self.stop_vm(node, vmid)
-        path = f"/nodes/{node}/qemu/{vmid}?purge=1&destroy-unreferenced-disks=1"
+        kind = await self._kind(node, vmid) or "qemu"
+        path = f"/nodes/{node}/{kind}/{vmid}?purge=1&destroy-unreferenced-disks=1"
         await self._task(node, await self._call("DELETE", path))
 
     async def get_vm(self, node: str, vmid: int) -> VmInfo | None:
         """Return the VM or ``None``."""
-        data = await self._call("GET", f"/nodes/{node}/qemu/{vmid}/status/current", ok_missing=True)
+        data = None
+        for kind in ("qemu", "lxc"):
+            data = await self._call(
+                "GET", f"/nodes/{node}/{kind}/{vmid}/status/current", ok_missing=True
+            )
+            if data is not None:
+                break
         if data is None:
             return None
         return VmInfo(vmid, node, str(data.get("name", "")), str(data.get("status", "unknown")))

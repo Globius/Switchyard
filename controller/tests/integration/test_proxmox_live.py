@@ -93,3 +93,53 @@ async def test_clone_configure_start_stop_destroy(pve: HttpProxmox) -> None:
     finally:
         await pve.destroy_vm(node, info.vmid)
     assert await pve.get_vm(node, info.vmid) is None
+
+
+LXC_TEMPLATE = 9901
+LXC_IMAGE = "local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
+
+
+async def test_lxc_clone_start_stop_destroy(pve: HttpProxmox) -> None:
+    """Instances as containers: the lab route when the host has no KVM."""
+    node = (await pve.list_nodes())[0].name
+    if await pve.get_vm(node, LXC_TEMPLATE) is None:
+        content = await pve._call("GET", f"/nodes/{node}/storage/local/content") or []
+        if not any(t.get("volid") == LXC_IMAGE for t in content):
+            pytest.skip("container template not downloaded: run deploy/lab/pve/bootstrap.sh")
+        create = await pve._call(
+            "POST",
+            f"/nodes/{node}/lxc",
+            {
+                "vmid": LXC_TEMPLATE,
+                "ostemplate": LXC_IMAGE,
+                "hostname": "sy-lxc-template",
+                "memory": 256,
+                "cores": 1,
+                "rootfs": "local:2",
+                "unprivileged": 0,
+                "net0": "name=eth0,bridge=vmbr0,ip=dhcp",
+            },
+        )
+        await pve._task(node, create)
+        await pve._call("POST", f"/nodes/{node}/lxc/{LXC_TEMPLATE}/template")
+    info = await pve.create_vm(
+        VmSpec(
+            name="sy-lxc-se",
+            node=node,
+            template_vmid=LXC_TEMPLATE,
+            kind="lxc",
+            mgmt_ip_cidr="172.30.0.220/24",
+            gateway="172.30.0.1",
+            cores=1,
+            memory_mb=256,
+        )
+    )
+    try:
+        assert (await pve.get_vm(node, info.vmid)).status == "stopped"  # type: ignore[union-attr]
+        await pve.start_vm(node, info.vmid)
+        assert (await pve.get_vm(node, info.vmid)).status == "running"  # type: ignore[union-attr]
+        await pve.stop_vm(node, info.vmid)
+        assert (await pve.get_vm(node, info.vmid)).status == "stopped"  # type: ignore[union-attr]
+    finally:
+        await pve.destroy_vm(node, info.vmid)
+    assert await pve.get_vm(node, info.vmid) is None

@@ -15,3 +15,9 @@ SECRET=$(echo "$R" | sed 's/.*"value":"\([^"]*\)".*/\1/')
 echo "export SWITCHYARD_TEST_PVE_URL=$URL"
 echo "export SWITCHYARD_TEST_PVE_TOKEN_ID=root@pam!$NAME"
 echo "export SWITCHYARD_TEST_PVE_SECRET=$SECRET"
+# The Debian 13 container template the LXC test clones (downloaded by Proxmox itself).
+IMG=debian-13-standard_13.6-1_amd64.tar.zst
+curl -sk -b "PVEAuthCookie=$TICKET" -H "CSRFPreventionToken: $CSRF" -X POST "$URL/api2/json/nodes/pve/aplinfo" \
+  -d storage=local -d template=$IMG >/dev/null
+n=0; until curl -sk -b "PVEAuthCookie=$TICKET" "$URL/api2/json/nodes/pve/storage/local/content" | grep -q "$IMG"; do
+  n=$((n+1)); [ $n -lt 60 ] || { echo "template download did not finish" >&2; break; }; sleep 5; done
