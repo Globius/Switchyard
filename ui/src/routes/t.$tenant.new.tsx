@@ -1,7 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NotBuilt } from "@/components/sy/NotBuilt";
+import { Wizard } from "@/features/wizard/Wizard";
 
 // Full-screen create wizard (no shell).
-export const Route = createFileRoute("/t/$tenant/new")({
-  component: () => <NotBuilt name="New virtual service" />,
-});
+function Page() {
+  const { tenant } = Route.useParams();
+  return <Wizard tenant={tenant} />;
+}
+
+export const Route = createFileRoute("/t/$tenant/new")({ component: Page });
