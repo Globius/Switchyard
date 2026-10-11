@@ -41,6 +41,19 @@ API = "/v3/services/haproxy"
 _STORAGE = {"map": "maps", "general": "general", "crt_list": "ssl_crt_lists"}
 
 
+def _server_status(row: dict[str, Any]) -> ServerStatus:
+    stats = row["stats"]
+    last_change = stats.get("lastchg")
+    return ServerStatus(
+        row["backend_name"],
+        row["name"],
+        str(stats.get("status", "")),
+        check_status=str(stats["check_status"]) if stats.get("check_status") else None,
+        last_check=str(stats["last_chk"]) if stats.get("last_chk") else None,
+        last_change_s=int(last_change) if isinstance(last_change, int | float) else None,
+    )
+
+
 class DataPlaneEngine:
     """A :class:`~switchyard.adapters.haproxy.HaproxyEngine` backed by the Data Plane API."""
 
@@ -291,10 +304,7 @@ class DataPlaneEngine:
             raise self._unexpected("reading statistics", response)
         rows = response.json().get("stats", [])
         return sorted(
-            (
-                ServerStatus(r["backend_name"], r["name"], str(r["stats"].get("status", "")))
-                for r in rows
-            ),
+            (_server_status(r) for r in rows),
             key=lambda s: (s.backend, s.server),
         )
 
