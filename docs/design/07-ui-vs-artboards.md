@@ -160,6 +160,14 @@ Biggest gaps, in the order I would close them:
 Open design questions found: editing while approval is pending (frozen vs withdraws the request); protocol
 changeable in Settings; Grafana link source; whether Access and settings is tabs or sections.
 
+## Visual pass (Playwright, 1280 px, light)
+
+Screenshots of 24 routes were taken with Playwright against the dev controller (tenant `demo`) and 3 pairs were compared with the artboards (Tenant home, VS Overview, VS Settings). The rest are captured but not yet compared. The dev tenant has no draft, engines, drift or findings, so those states cannot be seen live.
+
+- **Tenant home:** layout, tiles, cards and nav match; differences are data only (empty chips, no failing members) plus the top-bar divider after the logo, and the avatar shows `B` instead of two initials.
+- **VS Overview:** layout matches (header, routes, members, listener, certificates, access log, rendered frontend, latency). Differences: no per-route row menu (`⋮`) in the Routes table; unavailable states (logs, metrics) are plain lines, not the dashed centred card; health shows `Unknown` (no engines); the Certificates chip shows `4099 days` as a neutral pill, no status icon.
+- **VS Settings: differs a lot.** Built is a single narrow column of native inputs (native checkboxes, `<select>`, no Switch, no section cards). The artboard has cards (General, Listener, Routes, Policies and access), a two-column layout, a Fixed/Suggest VIP radio, a ports summary table with `Edit ports`, a routes table with columns (Host, Path match, Path, Action, Target) and a footer with `Revert all fields` / `Save to draft`. The built Routes block has no Path match column. The built sticky `Add to change set` bar overlaps the Ports section at 1280x900 (may be a full-page-capture artefact; worth a check at a normal scroll). Closing it is a restyle plus the missing sections listed above.
+
 ## Live check (text only)
 
 Signed in as break-glass on a dev controller (tenant `demo`, 2 services, 1 SE group, no engines). The browser pane
