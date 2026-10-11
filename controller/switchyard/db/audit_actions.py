@@ -36,6 +36,7 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("auth.login_denied", "A sign-in was refused because the user has no access."),
     _a("auth.login_failed", "A sign-in failed (provider error, bad assertion or expired state)."),
     _a("auth.logout", "A user signed out."),
+    _a("certificate.client_ca_imported", "A client CA bundle was imported."),
     _a("certificate.imported", "A certificate and its key were imported."),
     _a("certificate.renewal_failed", "Renewing a certificate failed."),
     _a("change_set.add_ops", "Operations were added to a draft change set."),

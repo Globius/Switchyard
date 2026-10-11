@@ -58,3 +58,4 @@ Date: YYYY-MM-DD
 | [0067](0067-tls-profiles-and-ocsp.md) | TLS profiles and OCSP stapling | Accepted |
 | [0068](0068-ui-support-fields.md) | Small fields the UI asked for | Accepted |
 | [0069](0069-drift-reapply.md) | Re-apply the desired state to an SE group | Accepted |
+| [0070](0070-client-mtls.md) | Client certificate verification (mutual TLS) | Accepted |

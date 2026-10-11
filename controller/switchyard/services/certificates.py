@@ -38,6 +38,7 @@ from switchyard.services.certs import (
     CertInfo,
     Pkcs12Error,
     generate_key_and_csr,
+    inspect_ca_pem,
     inspect_pem,
     pkcs12_to_pem,
     secret_ref_for,
@@ -203,6 +204,55 @@ class CertificateService:
                 diff={"sans": list(issued.info.sans), "secret_ref": issued.secret_ref},
             )
         return {"name": name} | self._body(issued, dm.CertSource.UPLOAD, dm.RenewPolicy.MANUAL)
+
+    async def import_client_ca(
+        self,
+        principal: Principal,
+        tenant_id: UUID,
+        name: str,
+        pem: str,
+        crl_pem: str | None = None,
+    ) -> dict[str, Any]:
+        """Check and store a client CA bundle; return the ``certificate`` body for a change set.
+
+        The bundle holds certificates only, so it is public; it still goes to the secrets backend
+        like every certificate bundle so the engines get it the same way. The optional revocation
+        list is stored beside it.
+
+        Raises:
+            CertificateError: If the bundle or the list is unusable.
+        """
+        if not principal.can_access(tenant_id):
+            raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
+        require(principal, "manage", "certificate")
+        info = inspect_ca_pem(pem, crl_pem)
+        ref = secret_ref_for(await self._tenant_name(tenant_id), name, info.serial)
+        crl_ref = f"{ref}-crl" if info.crl_pem else None
+        try:
+            await self._secrets.put(ref, info.pem)
+            if crl_ref and info.crl_pem:
+                await self._secrets.put(crl_ref, info.crl_pem)
+        except SecretBackendError as exc:
+            raise CertificateError(f"could not store the CA material: {exc}") from exc
+        async with admin_session(self._db.admin) as session:
+            await audit_log.record(
+                session,
+                tenant_id=tenant_id,
+                actor=principal.actor,
+                action="certificate.client_ca_imported",
+                object_ref=f"certificate:{name}",
+                diff={"secret_ref": ref, "crl": bool(crl_ref)},
+            )
+        return {
+            "name": name,
+            "source": dm.CertSource.UPLOAD.value,
+            "purpose": "client_ca",
+            "sans": [],
+            "not_after": info.not_after.isoformat(),
+            "secret_ref": ref,
+            "crl_secret_ref": crl_ref,
+            "renew_policy": dm.RenewPolicy.MANUAL.value,
+        }
 
     async def import_pkcs12(
         self,

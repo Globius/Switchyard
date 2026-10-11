@@ -47,14 +47,15 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Proxmox host layout and capacity (Placement) | done | `GET /se-groups/{group}/placement` (ADR 0049) | |
 | Certificates: import, PKCS#12 (ADR 0043), replace (ADR 0044), ACME DNS-01 (incl. step-ca), Origin CA, renew job (M5) | done | | |
 | OCSP stapling, cipher and TLS-version profiles | done | `tls_profile` on ports, `ocsp_stapling` on certificates (ADR 0067) | |
-| mTLS to client and backend | missing | *not started*: needs a CA bundle object and agent bundle support (ADR 0067) | CA object, bundle, ADR |
+| mTLS: client certificate verification | done | `client_ca` certificates and `client_ca_id` on ports (ADR 0070) | |
+| mTLS to the backend members | missing | *not built*: client certificate on server lines (ADR 0070) | Pool field, bundle, golden case |
 | Cloudflare-only allow list sync job | done | | |
 | Cloudflare DNS record created from a virtual service | partial | Adapter has DNS calls; no service flow uses them (01 phase 2) | A job or change-set hook plus a model flag |
 | Login: OIDC, SAML, break-glass, sessions, refresh (T1, G1-2, G1-4, G1-7) | done | | |
 | Permission matrix, `/permissions`, 403 `code` (G1-1) | done | | |
 | Identity providers, test sign-in, role mappings, users (G1-3, 5, 6) | done | | |
 | Audit log filters, cursor, `/audit-actions` (A1) | done | | |
-| Audit events to syslog | partial | JSON line from logger `switchyard.audit`; no syslog handler in `config.py` or `runtime.py` | Handler option and a docs line |
+| Audit events to syslog | done | `SWITCHYARD_AUDIT_SYSLOG` adds a syslog handler to the `switchyard.audit` logger (`syctl serve` and `worker`) | |
 | Tenant quotas | done | Enforced as problem `quota_exceeded`; `usage` on the tenant read (ADR 0045) | |
 | Search, summary, VIP allocations, next-free, monitor test, engines list (A2 to A6) | done | | |
 | UDP via IPVS, `udp` monitor, field rules, schema endpoint (M6, T6, T7) | done | | |

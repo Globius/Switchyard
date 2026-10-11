@@ -375,11 +375,16 @@ class _Renderer:
             ),
         }
 
-    @staticmethod
-    def _bind(svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> str:
+    def _bind(self, svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> str:
         parts = [f"bind {esc.bind_address(svc.vip, port.port)}"]
         if port.tls:
             parts.append(f"ssl crt-list {CERT_DIR}/{name}.crtlist")
+            if port.client_ca_id is not None:
+                ca = self.certs[port.client_ca_id]
+                ca_name = esc.ident(ca.name)
+                parts.append(f"ca-file {CERT_DIR}/ca-{ca_name}.pem verify {port.client_verify}")
+                if ca.crl_secret_ref:
+                    parts.append(f"crl-file {CERT_DIR}/ca-{ca_name}.crl")
             if port.tls_profile is not None:
                 minimum, ciphers, suites = TLS_PROFILES[port.tls_profile]
                 parts.append(f"ssl-min-ver {minimum}")

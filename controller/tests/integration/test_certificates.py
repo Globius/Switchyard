@@ -1,6 +1,7 @@
 """Certificate import, issuance, renewal and the Cloudflare IP sync, through real change sets."""
 
 import copy
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -78,6 +79,34 @@ async def test_import_checks_the_bundle_and_stores_the_key_under_a_new_reference
             await svc.import_pem(principal(), TENANT, "bad", make_pem(other_key=True))
         with pytest.raises(PermissionDeniedError):
             await svc.import_pem(principal(Role.VIEWER), TENANT, "x", make_pem())
+
+
+async def test_import_client_ca_stores_public_material_and_builds_a_valid_object(
+    pg_url: str,
+) -> None:
+    from tests.certs_support import make_ca_pem
+
+    async with world(pg_url) as w:
+        secrets = MemorySecrets(CERT_SECRETS)
+        svc = service(w, secrets, FakeCloudflare())
+        pem, crl = make_ca_pem()
+        body = await svc.import_client_ca(principal(), TENANT, "partners", pem, crl)
+        assert body["purpose"] == "client_ca" and body["sans"] == []
+        assert await secrets.get(body["secret_ref"]) == pem
+        assert "X509 CRL" in await secrets.get(body["crl_secret_ref"])
+        change = ChangeOp(
+            object_type=ObjectType.CERTIFICATE,
+            object_id=uuid.uuid4(),
+            action=Action.CREATE,
+            body=body,
+        )
+        assert (await w.run_change([change])).ok
+        stored = next(c for c in (await w.snapshot()).certificates if c.name == "partners")
+        assert stored.purpose == "client_ca" and stored.crl_secret_ref == body["crl_secret_ref"]
+        with pytest.raises(CertificateError, match="private key"):
+            await svc.import_client_ca(principal(), TENANT, "bad", make_pem())
+        with pytest.raises(PermissionDeniedError):
+            await svc.import_client_ca(principal(Role.VIEWER), TENANT, "x", pem)
 
 
 async def test_issue_from_cloudflare_origin_ca_creates_the_certificate(pg_url: str) -> None:

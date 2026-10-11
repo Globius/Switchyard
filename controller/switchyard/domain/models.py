@@ -366,6 +366,10 @@ class VsPort(Model):
             (which must be a TLS port of the same service).
         tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine
             default (TLS 1.2 or later, HAProxy's default ciphers).
+        client_ca_id: A ``client_ca`` certificate: clients must present a certificate it signed
+            (mutual TLS). Needs ``tls``.
+        client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
+            certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
     """
 
     port: Port
@@ -374,9 +378,13 @@ class VsPort(Model):
     proxy_protocol: bool = False
     https_redirect_port: Port | None = None
     tls_profile: TlsProfile | None = None
+    client_ca_id: UUID | None = None
+    client_verify: Literal["required", "optional"] = "required"
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
+        if self.client_ca_id is not None and not self.tls:
+            raise ValueError("client_ca_id requires tls")
         if self.http2 and not self.tls:
             raise ValueError("http2 requires tls")
         if self.tls_profile is not None and not self.tls:
@@ -635,18 +643,31 @@ class Certificate(TenantOwned):
         ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate
             (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not
             ``cloudflare_origin``.
+        purpose: ``server`` (a certificate with a key that a port presents) or ``client_ca``
+            (trusted CA certificates, no key, that a port uses to check client certificates).
+        crl_secret_ref: OpenBao path of a PEM certificate revocation list (``client_ca`` only).
     """
 
     source: CertSource
-    sans: tuple[HostPattern, ...] = Field(min_length=1)
+    sans: tuple[HostPattern, ...] = ()
     not_after: datetime
     secret_ref: SecretRef
     renew_policy: RenewPolicy = RenewPolicy.MANUAL
     renew_before_days: int = Field(default=30, ge=1, le=365)
     ocsp_stapling: bool = False
+    purpose: Literal["server", "client_ca"] = "server"
+    crl_secret_ref: SecretRef | None = None
 
     @model_validator(mode="after")
     def _checked(self) -> Self:
+        if self.purpose == "server" and not self.sans:
+            raise ValueError("a server certificate needs at least one name")
+        if self.purpose == "client_ca" and (
+            self.sans or self.ocsp_stapling or self.renew_policy is not RenewPolicy.MANUAL
+        ):
+            raise ValueError("a client_ca has no names, no OCSP stapling and no renewal")
+        if self.crl_secret_ref is not None and self.purpose != "client_ca":
+            raise ValueError("crl_secret_ref is only valid on a client_ca")
         if self.ocsp_stapling and self.source is CertSource.CLOUDFLARE_ORIGIN:
             raise ValueError("Cloudflare Origin CA certificates have no OCSP responder")
         if self.not_after.tzinfo is None:
