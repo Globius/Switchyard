@@ -48,14 +48,20 @@ def data() -> dict[str, Any]:
 
     return {
         "tenants": [{"id": "t", "name": "acme"}],
-        "networks": [{"id": "n", "tenant_id": "t", "name": "lab", "cidr": SUBNET}],
+        "networks": [
+            {"id": "n", "tenant_id": "t", "name": "lab", "cidr": SUBNET},
+            {"id": "m", "tenant_id": "t", "name": "mgmt", "cidr": "192.0.2.0/25"},
+        ],
         "se_groups": [
             {
                 "id": "g",
                 "tenant_id": "t",
                 "name": "edge",
                 "ha_mode": "vrrp",
-                "networks": [{"network_id": "n", "role": "vip"}],
+                "networks": [
+                    {"network_id": "n", "role": "vip"},
+                    {"network_id": "m", "role": "mgmt"},
+                ],
             }
         ],
         "certificates": [
@@ -216,6 +222,19 @@ class TestMainService:
         self, main_results: dict[str, str]
     ) -> None:
         assert " xff=192.0.2.99 proto=https " in main_results["spoof"]
+
+
+class TestPrometheusExporter:
+    def test_metrics_are_served_on_the_management_address_and_nothing_else(self, lab: Lab) -> None:
+        script = "\n".join(
+            [
+                f"req metrics -o /dev/null http://{EDGE}:8405/metrics",
+                f"req other -o /dev/null http://{EDGE}:8405/",
+            ]
+        )
+        got = curl(lab, "192.0.2.98", script)
+        assert got["metrics"] == "|200|"
+        assert got["other"] == "|404|"
 
 
 @pytest.fixture(scope="module")

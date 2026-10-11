@@ -51,3 +51,4 @@ Date: YYYY-MM-DD
 | [0045](0045-tenant-quota-enforcement.md) | Tenant quota enforcement and usage counts | Accepted |
 | [0062](0062-principal-display-names.md) | Display names for principal labels | Accepted |
 | [0061](0061-controller-metrics-and-sd.md) | Controller metrics and Prometheus service discovery | Accepted |
+| [0063](0063-haproxy-exporter-listener.md) | HAProxy Prometheus exporter listener on the management network | Accepted |

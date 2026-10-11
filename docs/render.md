@@ -17,6 +17,12 @@ uv run syctl render --tenant demo --se-group edge            # print everything
 uv run syctl render --tenant demo --se-group edge --out out  # write the files (out/haproxy/..., out/certs/...)
 ```
 
+## Prometheus exporter
+
+An SE group with a `mgmt` network gets `frontend sy_prometheus` on port 8405: HAProxy's built-in exporter at `/metrics`,
+answered only for requests addressed to the management network(s) (`403` otherwise, `404` for other paths). It is the target
+`GET /discovery/prometheus` hands to Prometheus. See ADR 0063.
+
 ## Files
 
 Paths are relative to `/etc/switchyard/` on the SE, the only directory the agent and the Data Plane
