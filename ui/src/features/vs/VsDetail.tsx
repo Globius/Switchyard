@@ -23,7 +23,8 @@ export function VsDetailLayout({ tenant, id }: { tenant: string; id: string }) {
   if (vs.isPending) return <Skeleton className="h-16 w-full max-w-xl" />;
   if (vs.isError) return <ErrorState error={vs.error} onRetry={() => void vs.refetch()} />;
   const v = vs.data;
-  const health = status.data?.find((s) => s.id === id)?.health;
+  const st = status.data?.find((s) => s.id === id);
+  const health = st?.health;
   return (
     <div className="space-y-4">
       <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
@@ -44,6 +45,11 @@ export function VsDetailLayout({ tenant, id }: { tenant: string; id: string }) {
         </h1>
         {v.draft_status !== "unchanged" && <DraftMarker status={v.draft_status} />}
         {v.enabled ? <HealthPill health={health} /> : <HealthPill health="disabled" />}
+        {st && v.enabled && (
+          <span className="text-sm text-muted-foreground">
+            {t("{up} of {total} members up", { up: st.members_up, total: st.members_total })}
+          </span>
+        )}
         <Badge>{v.protocol.toUpperCase()}</Badge>
         <span className="font-mono text-sm text-muted-foreground">
           {v.vip ?? t("VIP allocated on apply")} · {v.ports.map((p) => p.port).join(", ")}

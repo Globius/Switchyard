@@ -106,7 +106,7 @@ describe("login helpers", () => {
     ] as const)
       expect(errorCopy(c, "Authentik", "/x").title.length).toBeGreaterThan(5);
     expect(errorCopy("session_ended", undefined, "/t/a").body).toContain("/t/a");
-    expect(errorCopy("provider_error").title).toContain("your provider");
+    expect(errorCopy("provider_error").title).toBe("Sign-in didn't complete.");
   });
 });
 
@@ -123,7 +123,7 @@ describe("login screen", () => {
     ["no_access", "You don't have access yet."],
     ["disabled", "This account is disabled."],
     ["expired", "That sign-in attempt expired."],
-    ["provider_error", "Sign-in with your provider didn't complete."],
+    ["provider_error", "Sign-in didn't complete."],
     ["session_ended", "Your session ended."],
   ])("shows the %s state", async (code, title) => {
     renderAt(`/login?error=${code}`);
