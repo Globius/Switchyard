@@ -22,7 +22,7 @@ export interface ObjectChange {
 }
 
 /** Server bookkeeping that is not part of what a person changed. */
-const IGNORED = new Set(["version", "tenant_id", "changed_fields", "draft_status"]);
+const IGNORED = new Set(["id", "version", "tenant_id", "changed_fields", "draft_status"]);
 
 const same = (a: Json, b: Json) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 

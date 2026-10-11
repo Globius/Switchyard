@@ -79,3 +79,11 @@ export function unwrap<T>(r: { data?: T; error?: unknown; response: Response }):
   if (r.error !== undefined) throw new ApiError(r.response.status, r.error as Problem | undefined);
   return r.data as T;
 }
+
+/** GET a path that is not in the typed client (for example one of nine object types by name). */
+export async function rawGet<T>(path: string): Promise<T> {
+  const r = await fetch(path, { credentials: "same-origin" });
+  const body = (await r.json().catch(() => undefined)) as unknown;
+  if (!r.ok) throw new ApiError(r.status, body as Problem | undefined);
+  return body as T;
+}
