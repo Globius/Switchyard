@@ -7,4 +7,4 @@
 4. `docker compose exec patroni patronictl -c /etc/patroni.yml list` shows leader, sync standby and replica.
 
 Try failover and restore locally first: `docker compose -f compose.lab.yaml up -d --build --wait`.
-Design: ADR 0045. Runbooks: `docs/runbooks/`.
+Design: ADR 0048. Runbooks: `docs/runbooks/`.

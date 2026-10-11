@@ -1,6 +1,6 @@
 # One controller node (run on each of the three controller VMs). Copy node.env.example to node.env.
 #   docker compose --env-file node.env up -d
-# etcd, Patroni/PostgreSQL 17, pgBackRest, then the API and worker. See docs/runbooks/ and ADR 0045.
+# etcd, Patroni/PostgreSQL 17, pgBackRest, then the API and worker. See docs/runbooks/ and ADR 0048.
 name: switchyard
 x-patroni-env: &patroni-env
   PATRONI_NAME: ${NODE_NAME}

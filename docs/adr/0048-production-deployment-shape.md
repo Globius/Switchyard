@@ -1,4 +1,4 @@
-# 0045. Production deployment shape: controller image, Patroni, pgBackRest
+# 0048. Production deployment shape: controller image, Patroni, pgBackRest
 
 Status: Accepted
 Date: 2026-10-11
