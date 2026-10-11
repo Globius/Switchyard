@@ -52,6 +52,13 @@ def controller_policy(
             '  capabilities = ["read"]',
             "}",
         ]
+    for path in ("break-glass", "switchyard/break-glass"):
+        lines += [
+            f"# Break-glass administrator TOTP secret ({mount}/{path}/*): API and local-admin.",
+            f'path "{mount}/data/{path}/*" {{',
+            '  capabilities = ["create", "read", "update", "delete"]',
+            "}",
+        ]
     lines += [
         "# Everything else is denied by default: no other path, no delete, no destroy.",
         f'path "{mount}/delete/*" {{',

@@ -11,3 +11,5 @@ $B policy delete e2e-controller >/dev/null 2>&1
 $B kv metadata delete kv/se/e2e-dpapi >/dev/null 2>&1
 docker exec switchyard-dev-postgres-1 psql -U postgres -c "drop database if exists e2e" >/dev/null 2>&1
 echo "e2e lab removed"
+# Do not leave credentials behind in the (git-ignored) work directory.
+rm -f work/token work/role_id work/secret_id work/dp_password work/*.key work/*.json work/enroll.* work/policy.hcl

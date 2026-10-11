@@ -7,12 +7,13 @@
 # The host must provide what a container cannot: load `ip_vs ip_vs_rr ip_vs_wrr ip_vs_sh nf_conntrack` on the
 # Proxmox node (/etc/modules-load.d/), and keep the container privileged with nesting (set below).
 set -eu
+UNPRIVILEGED=${UNPRIVILEGED:-0}   # 1 builds an unprivileged container (FRR/Keepalived/IPVS limits apply: docs/production.md)
 VMID=${1:?template vmid}; AGENT=${2:?path to sy-agent}; DP=${3:?path to dataplaneapi}; STORAGE=${4:-local}
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 IMG=debian-13-standard_13.6-1_amd64.tar.zst
 pveam list "$STORAGE" | grep -q "$IMG" || { pveam update >/dev/null; pveam download "$STORAGE" "$IMG"; }
 pct create "$VMID" "$STORAGE:vztmpl/$IMG" --hostname sy-se-template --memory 1024 --cores 2 \
-  --unprivileged 0 --features nesting=1 --net0 name=eth0,bridge=vmbr0,ip=dhcp --rootfs "$STORAGE:4"
+  --unprivileged "$UNPRIVILEGED" --features nesting=1 --net0 name=eth0,bridge=vmbr0,ip=dhcp --rootfs "$STORAGE:4"
 pct start "$VMID"
 n=0; until pct exec "$VMID" -- sh -c 'getent hosts deb.debian.org >/dev/null 2>&1'; do
   n=$((n+1)); [ $n -lt 30 ] || { echo "container has no network" >&2; exit 1; }; sleep 2; done

@@ -1,0 +1,53 @@
+# The tenant for the hosts lab: three networks on SDN VNets (labmgmt, labvip, labbe: prep-host.sh --sdn), a helper guest
+# at .250 on each (client, web and UDP backend, BGP upstream), two groups: `edge` (VRRP) and `edge-bgp` (BGP, ECMP).
+# Same addressing as the Docker-hosted lab (deploy/lab/e2e/tenant.yaml), so the scenarios read alike.
+tenants:
+  - {id: lab, name: lab}
+networks:
+  - {id: net-mgmt, tenant_id: lab, name: mgmt, cidr: 172.30.0.0/24, gateway: 172.30.0.1, vnet: labmgmt}
+  - {id: net-vip, tenant_id: lab, name: vip, cidr: 10.99.0.0/24, gateway: 10.99.0.1, vnet: labvip}
+  - {id: net-be, tenant_id: lab, name: backend, cidr: 10.98.0.0/24, gateway: 10.98.0.1, vnet: labbe}
+vip_pools:
+  - {id: pool-mgmt, tenant_id: lab, name: mgmt-addrs, network_id: net-mgmt, ranges: [{start: 172.30.0.100, end: 172.30.0.139}]}
+  - {id: pool-se-vip, tenant_id: lab, name: se-vip-addrs, network_id: net-vip, ranges: [{start: 10.99.0.100, end: 10.99.0.139}]}
+  - {id: pool-se-be, tenant_id: lab, name: se-be-addrs, network_id: net-be, ranges: [{start: 10.98.0.100, end: 10.98.0.139}]}
+  - {id: pool-vips, tenant_id: lab, name: vips, network_id: net-vip, ranges: [{start: 10.99.0.200, end: 10.99.0.249}]}
+routing_profiles:
+  - {id: rp-vrrp, tenant_id: lab, name: vrrp, kind: vrrp, vrid: 51, interface: eth1}
+  - {id: rp-vrrp2, tenant_id: lab, name: vrrp-unpriv, kind: vrrp, vrid: 52, interface: eth1}
+  - id: rp-bgp
+    tenant_id: lab
+    name: bgp
+    kind: bgp
+    asn: 65100
+    bfd: true
+    max_paths: 4
+    peers: [{peer_ip: 172.30.0.250, remote_asn: 65000}]
+se_groups:
+  - id: sg-vrrp
+    tenant_id: lab
+    name: edge
+    ha_mode: vrrp
+    routing_profile_id: rp-vrrp
+    canary_seconds: 5
+    networks: [{network_id: net-mgmt, role: mgmt}, {network_id: net-vip, role: vip}, {network_id: net-be, role: backend}]
+  - id: sg-unpriv
+    tenant_id: lab
+    name: edge-unpriv
+    ha_mode: vrrp
+    routing_profile_id: rp-vrrp2
+    canary_seconds: 5
+    networks: [{network_id: net-mgmt, role: mgmt}, {network_id: net-vip, role: vip}, {network_id: net-be, role: backend}]
+  - id: sg-bgp
+    tenant_id: lab
+    name: edge-bgp
+    ha_mode: bgp
+    routing_profile_id: rp-bgp
+    canary_seconds: 5
+    networks: [{network_id: net-mgmt, role: mgmt}, {network_id: net-vip, role: vip}, {network_id: net-be, role: backend}]
+health_monitors:
+  - {id: hm, tenant_id: lab, name: web-up, type: http, http: {path: /, expect_status: [200]}}
+  - {id: hm-udp, tenant_id: lab, name: echo-udp, type: udp}
+pools:
+  - {id: pool-web, tenant_id: lab, name: web, health_monitor_id: hm, members: [{address: 10.98.0.250, port: 8001}]}
+  - {id: pool-echo, tenant_id: lab, name: echo, health_monitor_id: hm-udp, members: [{address: 10.98.0.250, port: 5301}]}

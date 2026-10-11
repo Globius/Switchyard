@@ -122,6 +122,8 @@ def test_the_openbao_policy_matches_the_path_rules() -> None:
     for denied in ('path "kv/delete/*"', 'path "kv/destroy/*"'):
         assert denied in policy
     assert 'path "kv/data/*"' not in policy, "no blanket access"
+    # The API stores the break-glass TOTP secret at kv/break-glass/<user>-totp (found by the quickstart: 403 without it).
+    assert 'path "kv/data/break-glass/*"' in policy
 
 
 def test_the_cli_prints_the_policy() -> None:

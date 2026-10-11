@@ -13,6 +13,9 @@ deterministic `haproxy.cfg` from PostgreSQL. M2 (change sets, API, jobs) and M3 
 | [Replacement plan](docs/design/01-replacement-plan.md) | Avi → open-source feature mapping, architecture, migration |
 | [Backend design](docs/design/02-backend-design.md) | Data model, API, change pipeline, agent, jobs, security, milestones |
 | [Frontend design](docs/design/03-frontend-design.md) | Screens, change-set UX, frontend stack, Claude Design handoff |
+| [Quickstart](docs/quickstart.md) | Stand up a test instance on its own machine, connect Proxmox, deploy a first engine |
+| [Production guide](docs/production.md) | Sizing, HA, security checklist, OpenBao, TLS and CA, backups, monitoring, upgrades, what is proven |
+| [Runbooks](docs/runbooks/README.md) | Restore the database, rotate the CA, replace an engine, roll back, set up lab hosts |
 | [Render guide](docs/render.md) | How each object maps to HAProxy configuration |
 | [Operating guide](docs/operating.md) | Processes, configuration, login, `syctl api`, agents, housekeeping |
 | [API conventions](docs/api.md) | Auth, errors, filters, pagination, health, live events, metrics; live docs at `/api/v1/docs` and `/api/v1/redoc` |

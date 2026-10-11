@@ -23,11 +23,14 @@ step "Proxmox lab and the container template"
 docker compose -f ../pve/compose.yaml down -v >/dev/null 2>&1 || true
 docker compose -f ../pve/compose.yaml up -d >/dev/null
 n=0; until docker exec $PVE pvesh get /version >/dev/null 2>&1; do n=$((n+1)); [ $n -lt 60 ] || fail "Proxmox did not start"; sleep 5; done
+# Each directory-storage container uses a loop device and the container starts with 8: make room for more guests.
+docker exec $PVE sh -c 'for i in $(seq 8 63); do [ -e /dev/loop$i ] || mknod /dev/loop$i b 7 $i; done'
 docker exec $PVE mkdir -p /root/build
 docker cp ../../../se-image/. $PVE:/root/build/se-image/
 docker cp work/sy-agent $PVE:/root/build/sy-agent
 docker cp work/dataplaneapi $PVE:/root/build/dataplaneapi
-docker exec $PVE sh /root/build/se-image/lxc/build-template.sh $TEMPLATE /root/build/sy-agent /root/build/dataplaneapi >work/template-build.log 2>&1 \
+if [ "$GUEST_KIND" = lxc ]; then BUILD="sh /root/build/se-image/lxc/build-template.sh $TEMPLATE"; else BUILD="env NODE_URL=http://172.30.0.1 sh /root/build/se-image/kvm/build-template.sh $TEMPLATE"; fi
+docker exec $PVE $BUILD /root/build/sy-agent /root/build/dataplaneapi >work/template-build.log 2>&1 \
   || { tail -20 work/template-build.log; fail "template build"; }
 
 step "OpenBao, certificates, database, controller"

@@ -1,9 +1,9 @@
 """API steps of the end-to-end lab. Runs inside the controller container: python - <command> [args] < drive.py
 
 Commands:
-  deploy GROUP COUNT      grow the group to COUNT LXC engines (data NICs addressed from pools); print the group's
+  deploy GROUP COUNT [NODES [TEMPLATE [KIND]]]   grow the group to COUNT engines (KIND lxc or qemu) (data NICs addressed from pools); print the group's
                           engines, with a fresh enrollment token for every engine that has not enrolled
-  vs NAME GROUP VIP       create an HTTP virtual service on the pool `controller-api` and wait for the rollout
+  vs NAME GROUP VIP [PROTOCOL [PORT [POOL]]]   create a virtual service (default http, port 80, pool `controller-api`)
   status                  engine status (reachability, members, VRRP, BGP, drift)
   reapply                 apply the newest failed change set again
   lastapply               log and result of the newest apply job
@@ -25,8 +25,8 @@ TENANT = "lab"
 
 class Lab(ApiClient):
     def __init__(self) -> None:
-        super().__init__(Profile("https://127.0.0.1:8443", os.environ["SY_TOKEN"]))
-        ctx = ssl.create_default_context(cafile="/e2e/ca.pem")
+        super().__init__(Profile(os.environ.get("LAB_URL", "https://127.0.0.1:8443"), os.environ["SY_TOKEN"]))
+        ctx = ssl.create_default_context(cafile=os.environ.get("LAB_CA", "/e2e/ca.pem"))
         self._http._transport = httpx.AsyncHTTPTransport(verify=ctx)  # noqa: SLF001
 
     async def get(self, path: str) -> object:
@@ -40,7 +40,9 @@ class Lab(ApiClient):
         return next(i for i in await self.items(f"/{collection}?limit=200") if i["name"] == name)
 
 
-async def deploy(lab: Lab, group_name: str, count: str) -> dict:
+async def deploy(
+    lab: Lab, group_name: str, count: str, nodes: str = "", template: str = "", kind: str = ""
+) -> dict:
     group = await lab.find("se-groups", group_name)
     pool = lambda name: lab.find("vip-pools", name)  # noqa: E731
     net = lambda name: lab.find("networks", name)  # noqa: E731
@@ -49,15 +51,15 @@ async def deploy(lab: Lab, group_name: str, count: str) -> dict:
         f"/tenants/{TENANT}/se-groups/{group['id']}/deploy",
         json_body={
             "count": int(count),
-            "nodes": ["pve"],
-            "template_vmid": int(os.environ["TEMPLATE_VMID"]),
+            "nodes": (nodes or os.environ.get("LAB_NODES", "pve")).split(","),
+            "template_vmid": int(template or os.environ["TEMPLATE_VMID"]),
             "mgmt_pool_id": (await pool("mgmt-addrs"))["id"],
             "nic_pools": {
                 (await net("vip"))["id"]: (await pool("se-vip-addrs"))["id"],
                 (await net("backend"))["id"]: (await pool("se-be-addrs"))["id"],
             },
-            "credentials_ref": "kv/se/e2e-dpapi",
-            "guest_kind": "lxc",
+            "credentials_ref": os.environ.get("CRED_REF", "kv/se/e2e-dpapi"),
+            "guest_kind": kind or os.environ.get("GUEST_KIND", "lxc"),
         },
     )
     await lab.wait_job(accepted["job_id"], timeout_s=900)
@@ -70,17 +72,19 @@ async def deploy(lab: Lab, group_name: str, count: str) -> dict:
     return {"engines": engines}
 
 
-async def vs(lab: Lab, name: str, group_name: str, vip: str) -> dict:
-    pool = await lab.find("pools", "controller-api")
+async def vs(
+    lab: Lab, name: str, group_name: str, vip: str, protocol: str = "http", port: str = "80", pool_name: str = "controller-api"
+) -> dict:
+    pool = await lab.find("pools", pool_name)
     group = await lab.find("se-groups", group_name)
     vips = await lab.find("vip-pools", "vips")
     body = {
         "name": name,
-        "protocol": "http",
+        "protocol": protocol,
         "se_group_id": group["id"],
         "vip": vip,
         "vip_pool_id": vips["id"],
-        "ports": [{"port": 80}],
+        "ports": [{"port": int(port)}],
         "default_pool_id": pool["id"],
     }
     accepted = await lab.request(

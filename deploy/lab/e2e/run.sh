@@ -5,3 +5,4 @@ set -eu
 cd "$(dirname "$0")"
 sh base.sh
 sh scenario.sh
+[ "${GUEST_KIND:-lxc}" != lxc ] || sh unpriv.sh
