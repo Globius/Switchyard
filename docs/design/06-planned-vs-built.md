@@ -97,9 +97,9 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Shell, tenant switcher, command palette, user menu, theme, stream indicator | done | | | |
 | Login, four error states, break-glass | done | | | |
 | Session-expired re-login modal | partial | Handler is registered in `api/client.ts`; whether the modal keeps form input was not verified | *not verified* | Check and add a test |
-| Tenant home | partial | No "last check" column on failing members | *no API* | `last_checked_at` on the `summary` members |
+| Tenant home | partial | "Last check" now in the API (`last_checked_at`, `last_check`) on failing members (ADR 0047) | *UI to wire* | Column in the UI |
 | VS list | partial | Label filter is a disabled control ("Labels aren't supported yet"), as designed; RPS and 5xx show the unavailable state | *no API* (labels), *no pipeline* (metrics) | See section 1 |
-| VS Overview | partial | No per-member health; metrics and logs unavailable | *no API* (members only on engine status), *no pipeline* | Members per service on `status/virtual-services` |
+| VS Overview | partial | Per-member health now on `status/virtual-services` `members` (ADR 0047); metrics and logs unavailable | *UI to wire*, *no pipeline* | Members table in the UI |
 | VS Settings and History | done | | | |
 | VS Rendered config | partial | Plain view; no Monaco, no range highlight | *deferred* in the build | Read-only Monaco |
 | Create wizard (HTTP, TCP, UDP) | done | | | |

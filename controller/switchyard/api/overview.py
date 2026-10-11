@@ -60,6 +60,18 @@ class FailingMember(ApiModel):
     backend: str
     server: str
     status: str
+    check_status: str | None = Field(
+        default=None, description="Short code of the last health check, for example `L7STS`."
+    )
+    last_check: str | None = Field(
+        default=None, description="HAProxy description of the last health check."
+    )
+    last_change_s: int | None = Field(
+        default=None, description="Seconds since the member status last changed."
+    )
+    last_checked_at: datetime = Field(
+        description="When the controller last read this engine's check results."
+    )
 
 
 class DriftedEngine(ApiModel):
@@ -197,6 +209,10 @@ def summarize(
             backend=m["backend"],
             server=m["server"],
             status=m["status"],
+            check_status=m.get("check_status"),
+            last_check=m.get("last_check"),
+            last_change_s=int(m["last_change_s"]) if "last_change_s" in m else None,
+            last_checked_at=e.observed_at,
         )
         for e in statuses
         if e.reachable
