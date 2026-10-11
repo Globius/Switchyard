@@ -20,10 +20,12 @@ export default defineConfig({
     { name: "desktop", use: { viewport: { width: 1280, height: 900 } }, testIgnore: /responsive/ },
     { name: "phone", use: { viewport: { width: 375, height: 812 } }, testMatch: /responsive/ },
   ],
-  webServer: process.env.PW_BASE_URL ? undefined : {
-    command: "pnpm exec vite --port 5199 --strictPort",
-    url: "http://localhost:5199",
-    reuseExistingServer: true,
-    env: { SY_API: "http://127.0.0.1:9" },
-  },
+  webServer: process.env.PW_BASE_URL
+    ? undefined
+    : {
+        command: "pnpm exec vite --port 5199 --strictPort",
+        url: "http://localhost:5199",
+        reuseExistingServer: true,
+        env: { SY_API: "http://127.0.0.1:9" },
+      },
 });
