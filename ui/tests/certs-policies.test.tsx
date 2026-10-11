@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
-import { looksLikePem } from "@/features/certificates/Certificates";
+import { buildBundle, looksLikePem } from "@/features/certificates/Certificates";
 import { parseCidrs } from "@/features/policies/Policies";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
@@ -26,6 +26,14 @@ const CERT = (id: string, name: string, extra: object = {}) => ({
   tenant_id: "t1",
   ...extra,
 });
+const CERT_ONLY = "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----";
+const KEY_ONLY = "-----BEGIN PRIVATE KEY-----\ndef\n-----END PRIVATE KEY-----";
+async function fillPem() {
+  await userEvent.click(screen.getByLabelText("Certificate"));
+  await userEvent.paste(CERT_ONLY);
+  await userEvent.click(screen.getByLabelText("Private key"));
+  await userEvent.paste(KEY_ONLY);
+}
 const PEM =
   "-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\ndef\n-----END PRIVATE KEY-----";
 
@@ -134,6 +142,9 @@ const server = setupServer(
         {
           id: "v1",
           name: "api-gateway",
+          vip: "10.0.0.1",
+          ports: [{ port: 443, tls: true }],
+          draft_status: "unchanged",
           certificate_ids: ["c2"],
           policy_set_ids: ["pol1"],
           allow_list_id: "pol2",
@@ -279,11 +290,12 @@ describe("certificates", () => {
     const add = await screen.findByRole("button", { name: "Add to draft" });
     expect(add).toBeDisabled();
     await userEvent.type(screen.getByLabelText("Name"), "status");
-    await userEvent.click(screen.getByLabelText("Certificate and key PEM"));
-    await userEvent.paste(PEM);
+    await fillPem();
     await waitFor(() => expect(add).toBeEnabled());
     await userEvent.click(add);
-    await waitFor(() => expect(imported?.body).toEqual({ name: "status", pem: PEM }));
+    await waitFor(() =>
+      expect(imported?.body).toEqual({ name: "status", pem: `${CERT_ONLY}\n${KEY_ONLY}\n` }),
+    );
     expect(imported?.query).toBe("?change_set=cs1");
   });
 
@@ -314,11 +326,67 @@ describe("certificates", () => {
     await waitFor(() => expect(imp).toBeEnabled());
     await userEvent.click(imp);
     await userEvent.type(await screen.findByLabelText("Name"), "status");
-    await userEvent.click(screen.getByLabelText("Certificate and key PEM"));
-    await userEvent.paste(PEM);
+    await fillPem();
     await userEvent.click(screen.getByRole("button", { name: "Add to draft" }));
     await waitFor(() => expect(imported?.query).toBe("?change_set=cs9"));
     expect(opened).toBe(true);
+  });
+
+  it("joins certificate, chain and key into one bundle in order; the chain is optional", async () => {
+    expect(buildBundle(" A ", " B ", " C ")).toBe("A\nB\nC\n");
+    expect(buildBundle("A", "", "C")).toBe("A\nC\n");
+    renderAt("/t/acme/certificates");
+    const imp = await screen.findByRole("button", { name: "Import" });
+    await waitFor(() => expect(imp).toBeEnabled());
+    await userEvent.click(imp);
+    await userEvent.type(await screen.findByLabelText("Name"), "status");
+    const add = screen.getByRole("button", { name: "Add to draft" });
+    await userEvent.click(screen.getByLabelText("Certificate"));
+    await userEvent.paste(CERT_ONLY);
+    expect(add).toBeDisabled();
+    await userEvent.click(screen.getByLabelText("Private key"));
+    await userEvent.paste("not a key");
+    expect(add).toBeDisabled();
+    await userEvent.clear(screen.getByLabelText("Private key"));
+    await userEvent.click(screen.getByLabelText("Private key"));
+    await userEvent.paste(KEY_ONLY);
+    await userEvent.click(screen.getByLabelText("Chain (optional)"));
+    await userEvent.paste("junk");
+    expect(add).toBeDisabled();
+    await userEvent.clear(screen.getByLabelText("Chain (optional)"));
+    await userEvent.click(screen.getByLabelText("Chain (optional)"));
+    const CHAIN = CERT_ONLY.replace("abc", "chain");
+    await userEvent.paste(CHAIN);
+    await waitFor(() => expect(add).toBeEnabled());
+    await userEvent.click(add);
+    await waitFor(() =>
+      expect((imported?.body as { pem: string }).pem).toBe(`${CERT_ONLY}\n${CHAIN}\n${KEY_ONLY}\n`),
+    );
+  });
+
+  it("fills a field from a chosen file", async () => {
+    renderAt("/t/acme/certificates");
+    const imp = await screen.findByRole("button", { name: "Import" });
+    await waitFor(() => expect(imp).toBeEnabled());
+    await userEvent.click(imp);
+    const input = (await screen.findByLabelText("Private key file")) as HTMLInputElement;
+    await userEvent.upload(input, new File([KEY_ONLY], "k.pem", { type: "text/plain" }));
+    await waitFor(() => expect(screen.getByLabelText("Private key")).toHaveValue(KEY_ONLY));
+  });
+
+  it("clicking a certificate shows where it is used, with links to the services", async () => {
+    renderAt("/t/acme/certificates");
+    await userEvent.click(await screen.findByRole("button", { name: "Where wildcard is used" }));
+    expect(await screen.findByText("Used by 1 virtual services")).toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: "api-gateway" });
+    expect(link).toHaveAttribute("href", "/t/acme/virtual-services/v1");
+    expect(screen.getByText("kv/x")).toBeInTheDocument();
+  });
+
+  it("a certificate nobody uses says it can be deleted", async () => {
+    renderAt("/t/acme/certificates");
+    await userEvent.click(await screen.findByRole("button", { name: "Where mqtt is used" }));
+    expect(await screen.findByText(/can be deleted/)).toBeInTheDocument();
   });
 
   it("shows why an import failed", async () => {
@@ -328,8 +396,7 @@ describe("certificates", () => {
     await waitFor(() => expect(imp).toBeEnabled());
     await userEvent.click(imp);
     await userEvent.type(await screen.findByLabelText("Name"), "x");
-    await userEvent.click(screen.getByLabelText("Certificate and key PEM"));
-    await userEvent.paste(PEM);
+    await fillPem();
     await userEvent.click(screen.getByRole("button", { name: "Add to draft" }));
     expect(await screen.findByText("OpenBao is not configured.")).toBeInTheDocument();
   });
