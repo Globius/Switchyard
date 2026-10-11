@@ -9,10 +9,11 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, select
 
 from switchyard.db import audit_log
 from switchyard.db import models as m
+from switchyard.db.auth_models import IdpRoleMappingRow, UserAccountRow
 from switchyard.db.models import TenantRow
 from switchyard.db.tenancy import admin_session
 from switchyard.domain.changes import ObjectType
@@ -67,9 +68,10 @@ class TenantRecord:
     quotas: dict[str, int]
     require_approval: bool
     usage: dict[str, int] = field(default_factory=dict)
+    members: int = 0
 
 
-def _record(row: TenantRow, usage: dict[str, int] | None = None) -> TenantRecord:
+def _record(row: TenantRow, usage: dict[str, int] | None = None, members: int = 0) -> TenantRecord:
     return TenantRecord(
         id=row.id,
         name=row.name,
@@ -77,7 +79,33 @@ def _record(row: TenantRow, usage: dict[str, int] | None = None) -> TenantRecord
         quotas=dict(row.quotas),
         require_approval=row.require_approval,
         usage=usage if usage is not None else {t.value: 0 for t in _USAGE_TABLES},
+        members=members,
     )
+
+
+async def _members(session: Any, tenant_ids: list[UUID]) -> dict[UUID, int]:
+    """Count the people with a grant in each tenant.
+
+    A person counts once per tenant when one of their stored groups matches a role mapping of that
+    tenant at their provider, the same rule as ``GET /tenants/{t}/users``. Disabled accounts are
+    counted too, because their grants are still there.
+    """
+    rows = await session.execute(
+        select(
+            IdpRoleMappingRow.scope_tenant_id,
+            func.count(UserAccountRow.id.distinct()),
+        )
+        .join(
+            UserAccountRow,
+            and_(
+                UserAccountRow.provider_id == IdpRoleMappingRow.provider_id,
+                UserAccountRow.groups.has_key(IdpRoleMappingRow.group_name),
+            ),
+        )
+        .where(IdpRoleMappingRow.scope_tenant_id.in_(tenant_ids))
+        .group_by(IdpRoleMappingRow.scope_tenant_id)
+    )
+    return dict(rows.all())
 
 
 async def _usage(session: Any, tenant_ids: list[UUID]) -> dict[UUID, dict[str, int]]:
@@ -118,7 +146,11 @@ class TenantService:
                     await session.execute(select(TenantRow).where(TenantRow.name == ref))
                 ).scalar_one_or_none()
             if row is not None and principal.can_access(row.id):
-                return _record(row, (await _usage(session, [row.id]))[row.id])
+                return _record(
+                    row,
+                    (await _usage(session, [row.id]))[row.id],
+                    (await _members(session, [row.id])).get(row.id, 0),
+                )
         raise NotFoundError(f"tenant {ref!r} not found")
 
     async def list_tenants(self, principal: Principal) -> list[TenantRecord]:
@@ -129,7 +161,8 @@ class TenantService:
                 query = query.where(TenantRow.id.in_(sorted(principal.tenant_ids)))
             rows = list((await session.execute(query)).scalars())
             usage = await _usage(session, [r.id for r in rows])
-            return [_record(r, usage[r.id]) for r in rows]
+            members = await _members(session, [r.id for r in rows])
+            return [_record(r, usage[r.id], members.get(r.id, 0)) for r in rows]
 
     async def create(
         self,
@@ -215,7 +248,11 @@ class TenantService:
                 diff=dict(changes),
                 request_id=request_id,
             )
-            return _record(row, (await _usage(session, [row.id]))[row.id])
+            return _record(
+                row,
+                (await _usage(session, [row.id]))[row.id],
+                (await _members(session, [row.id])).get(row.id, 0),
+            )
 
     async def delete(
         self, principal: Principal, tenant_id: UUID, *, request_id: str | None = None

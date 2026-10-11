@@ -11,6 +11,7 @@ that run are destroyed and their rows removed; engines that already existed are 
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from itertools import cycle
 from typing import Any
 from uuid import UUID
@@ -19,7 +20,7 @@ from sqlalchemy import delete, select
 
 from switchyard.adapters.proxmox import Proxmox, ProxmoxError, SdnSubnet, VmSpec
 from switchyard.db import audit_log
-from switchyard.db.ops_models import SdnObjectRow, ServiceEngineRow
+from switchyard.db.ops_models import JobRow, SdnObjectRow, ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import ipam
@@ -111,12 +112,91 @@ class DeployRequest:
         return out
 
 
+@dataclass(frozen=True)
+class SdnApplyState:
+    """Where the Proxmox SDN apply stands for one managed network.
+
+    Attributes:
+        network_id: The network.
+        network: Its name.
+        state: ``queued`` or ``running`` (a tenant-wide apply is in flight and will touch it),
+            ``succeeded`` (the latest finished apply included it), ``failed`` (the latest
+            finished apply failed) or ``never`` (no apply has included it yet).
+        job_id: The job the state comes from.
+        started_at: When that job started.
+        finished_at: When that job finished.
+        error: Error of a failed job.
+    """
+
+    network_id: UUID
+    network: str
+    state: str
+    job_id: UUID | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    error: str | None = None
+
+
 class InfraJobs:
     """Queues infrastructure jobs for a tenant administrator (the API side)."""
 
     def __init__(self, db: Databases) -> None:
         """Create the service."""
         self._db = db
+
+    async def sdn_status(self, principal: Principal, tenant_id: UUID) -> list[SdnApplyState]:
+        """The SDN apply state of every managed network, by name.
+
+        An apply is tenant-wide, so a queued or running job counts for every managed network. Once
+        it has finished the answer is the latest finished job: ``failed`` for all, or ``succeeded``
+        for the networks the job reported and ``never`` for networks created after it.
+        """
+        if not principal.can_access(tenant_id):
+            raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            networks = sorted(
+                (n for n in (await load_snapshot(session)).networks if n.managed),
+                key=lambda n: n.name,
+            )
+        async with admin_session(self._db.admin) as session:
+            jobs = (
+                (
+                    await session.execute(
+                        select(JobRow)
+                        .where(JobRow.tenant_id == tenant_id, JobRow.kind == APPLY_SDN_JOB)
+                        .order_by(JobRow.created_at.desc())
+                        .limit(10)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        in_flight = next((j for j in jobs if j.state in {"queued", "running"}), None)
+        finished = next((j for j in jobs if j.state in {"succeeded", "failed", "dead"}), None)
+        out: list[SdnApplyState] = []
+        for net in networks:
+            job, state, error = in_flight, in_flight.state if in_flight else "never", None
+            if in_flight is None and finished is not None:
+                job, error = finished, finished.last_error
+                if finished.state == "succeeded":
+                    done = (finished.result or {}).get("networks", [])
+                    state = "succeeded" if net.name in done else "never"
+                else:
+                    state = "failed"
+                if state == "never":
+                    job, error = None, None
+            out.append(
+                SdnApplyState(
+                    network_id=net.id,
+                    network=net.name,
+                    state=state,
+                    job_id=job.id if job else None,
+                    started_at=job.started_at if job else None,
+                    finished_at=job.finished_at if job else None,
+                    error=error,
+                )
+            )
+        return out
 
     async def request_sdn_apply(
         self, principal: Principal, tenant_id: UUID, *, request_id: str | None = None

@@ -1,0 +1,112 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+pools:
+- id: p-billing
+  tenant_id: t-acme
+  name: billing
+  members:
+  - address: 10.20.4.2
+    port: 443
+    weight: 100
+  - address: 10.20.4.3
+    port: 443
+    weight: 50
+  - address: 10.20.4.4
+    port: 443
+    weight: 100
+    admin_state: drain
+  - address: 10.20.4.5
+    port: 443
+    admin_state: disabled
+    name: spare
+  persistence:
+    type: source_ip
+    timeout_s: 3600
+    table_size: 50000
+  health_monitor_id: hm-http
+  tls: true
+  algorithm: leastconn
+  passive_check:
+    observe: layer7
+    error_limit: 5
+    on_error: fastinter
+  slow_start_s: 60
+- id: p-plain
+  tenant_id: t-acme
+  name: plain
+  members:
+  - address: 10.20.4.10
+    port: 80
+  health_monitor_id: hm-tcp
+  algorithm: random
+  passive_check:
+    observe: layer4
+- id: p-src
+  tenant_id: t-acme
+  name: sticky-hash
+  members:
+  - address: 10.20.4.11
+    port: 80
+  - address: 10.20.4.12
+    port: 80
+  algorithm: source
+health_monitors:
+- id: hm-http
+  tenant_id: t-acme
+  name: http-200-204
+  type: http
+  interval_s: 10
+  timeout_s: 4
+  rise: 3
+  fall: 2
+  http:
+    method: GET
+    path: /healthz
+    host: billing.example.test
+    expect_status:
+    - 204
+    - 200
+- id: hm-tcp
+  tenant_id: t-acme
+  name: tcp-connect
+  type: tcp
+virtual_services:
+- id: v-bill
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: billing
+  protocol: http
+  vip: 192.0.2.24
+  ports:
+  - port: 80
+  routes:
+  - match:
+      host: billing.example.test
+    pool_id: p-billing
+  - match:
+      host: plain.example.test
+    pool_id: p-plain
+  default_pool_id: p-src

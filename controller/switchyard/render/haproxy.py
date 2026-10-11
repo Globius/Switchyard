@@ -55,6 +55,29 @@ EXPORTER_PORT = 8405
 CERT_DIR = "/etc/switchyard/certs"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 
+#: TLS 1.3 cipher suites (Mozilla server-side TLS, 5.7).
+_TLS13_SUITES = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+#: TLS 1.2 ciphers of the ``intermediate`` profile (forward secrecy, AEAD).
+_INTERMEDIATE_CIPHERS = (
+    "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
+    "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
+    "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:"
+    "DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384:DHE-RSA-CHACHA20-POLY1305"
+)
+#: Extra ciphers of the ``legacy`` profile, for clients without AEAD support.
+_LEGACY_CIPHERS = (
+    _INTERMEDIATE_CIPHERS + ":ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA256:"
+    "ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES256-SHA384:"
+    "ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-RSA-AES256-SHA:"
+    "AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA"
+)
+#: Bind options per profile: minimum version, TLS 1.2 ciphers, TLS 1.3 suites.
+TLS_PROFILES: dict[dm.TlsProfile, tuple[str, str | None, str]] = {
+    dm.TlsProfile.MODERN: ("TLSv1.3", None, _TLS13_SUITES),
+    dm.TlsProfile.INTERMEDIATE: ("TLSv1.2", _INTERMEDIATE_CIPHERS, _TLS13_SUITES),
+    dm.TlsProfile.LEGACY: ("TLSv1.0", _LEGACY_CIPHERS, _TLS13_SUITES),
+}
+
 # The output is configuration text, not HTML, so HTML autoescaping would corrupt it. Safety comes
 # from the strict validators and from ``switchyard.render.escape``, applied before any value is
 # interpolated.
@@ -357,6 +380,12 @@ class _Renderer:
         parts = [f"bind {esc.bind_address(svc.vip, port.port)}"]
         if port.tls:
             parts.append(f"ssl crt-list {CERT_DIR}/{name}.crtlist")
+            if port.tls_profile is not None:
+                minimum, ciphers, suites = TLS_PROFILES[port.tls_profile]
+                parts.append(f"ssl-min-ver {minimum}")
+                if ciphers is not None:
+                    parts.append(f"ciphers {ciphers}")
+                parts.append(f"ciphersuites {suites}")
             if mode == "http":
                 parts.append("alpn h2,http/1.1" if port.http2 else "alpn http/1.1")
         if port.proxy_protocol:
@@ -368,7 +397,8 @@ class _Renderer:
         for cid in svc.certificate_ids:  # the first certificate is the default for unknown SNI
             cert = self.certs[cid]
             snis = " ".join(esc.arg(san) for san in sorted(cert.sans))
-            lines.append(f"{CERT_DIR}/{esc.ident(cert.name)}.pem {snis}")
+            options = " [ocsp-update on]" if cert.ocsp_stapling else ""
+            lines.append(f"{CERT_DIR}/{esc.ident(cert.name)}.pem{options} {snis}")
         self.files[f"certs/{name}.crtlist"] = "\n".join(lines) + "\n"
 
     @staticmethod
@@ -515,6 +545,14 @@ class _Renderer:
                 parts.append(f"port {monitor.port}")
             if pool.tls:
                 parts.append("check-ssl")
+            if pool.passive_check is not None:
+                passive = pool.passive_check
+                parts.append(
+                    f"observe {passive.observe} error-limit {passive.error_limit} "
+                    f"on-error {passive.on_error}"
+                )
+            if pool.slow_start_s is not None:
+                parts.append(f"slowstart {pool.slow_start_s}s")
         if pool.tls:
             parts.append(
                 f"ssl verify required ca-file {CA_BUNDLE}" if pool.tls_verify else "ssl verify none"

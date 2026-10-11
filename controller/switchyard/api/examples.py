@@ -172,6 +172,7 @@ TENANT_READ = {
     "quotas": {"virtual_service": 50},
     "require_approval": True,
     "usage": {"virtual_service": 12, "pool": 20, "network": 2},
+    "members": 7,
 }
 OP = {
     "object_type": "pool",
@@ -495,6 +496,7 @@ ME = {
             "via": [{"provider": "authentik", "group": "acme-admins"}],
         }
     ],
+    "links": {"grafana": "https://grafana.example.test"},
 }
 PERMISSIONS = {
     "roles": ["viewer", "operator", "tenant-admin", "system-admin"],
@@ -504,21 +506,35 @@ PERMISSIONS = {
             "object": "tenant_data",
             "min_role": "viewer",
             "description": "Read everything in the tenant.",
+            "group": "Read",
         },
         {
             "verb": "apply",
             "object": "change_set",
             "min_role": "operator",
             "description": "Apply a change set when the tenant does not require approval.",
+            "group": "Change sets",
         },
         {
             "verb": "manage",
             "object": "engine",
             "min_role": "tenant-admin",
             "description": "Register, enable, disable, retire or remove service engines.",
+            "group": "Infrastructure",
         },
     ],
 }
+SDN_STATUS = [
+    {
+        "network_id": "0192f3a0-0000-7000-8000-000000000061",
+        "network": "lb",
+        "state": "running",
+        "job_id": JOB,
+        "started_at": "2026-10-11T08:30:00Z",
+        "finished_at": None,
+        "error": None,
+    }
+]
 ROLE_MAPPING = {
     "id": "0192f3a0-0000-7000-8000-000000000041",
     "provider_id": "0192f3a0-0000-7000-8000-000000000042",
