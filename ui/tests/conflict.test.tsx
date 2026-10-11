@@ -195,9 +195,6 @@ function renderAt() {
 describe("conflict resolver in Review", () => {
   it("shows base, theirs and yours per conflicting field and rewrites only that object's op", async () => {
     renderAt();
-    const apply = await (
-      await screen.findByRole("complementary", { name: "Apply" })
-    ).querySelector("button");
     await waitFor(() =>
       expect(
         within(screen.getByRole("complementary", { name: "Apply" })).getByRole("button", {
