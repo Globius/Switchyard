@@ -1,4 +1,5 @@
 /** Networks and VIP pools: the subnets engines attach to, the ranges VIPs come from, and who holds each address. */
+import { Combobox } from "@/components/ui/combobox";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -364,19 +365,12 @@ function PoolSheet({
         />
       </Field>
       <Field label={t("Network")} error={errors.network_id}>
-        <select
+        <Combobox
           aria-label={t("Network")}
-          className={INPUT}
           value={network}
-          onChange={(e) => setNetwork(e.target.value)}
-        >
-          <option value="">{t("Choose…")}</option>
-          {networks.map((n) => (
-            <option key={n.id} value={n.id}>
-              {n.name} · {n.cidr}
-            </option>
-          ))}
-        </select>
+          onChange={setNetwork}
+          options={networks.map((n) => ({ value: n.id, label: `${n.name} · ${n.cidr}` }))}
+        />
       </Field>
       <section className="space-y-2">
         <div className="flex items-center justify-between">

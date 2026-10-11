@@ -1,4 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import { pick } from "./pick";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -367,9 +368,9 @@ describe("pools filter in the URL and wizard VIP suggestion", () => {
   it("suggests an address when the pool is chosen, labels it, and suggests again", async () => {
     renderAt("/t/acme/new");
     await userEvent.type(await screen.findByLabelText("Name"), "x1");
-    await userEvent.selectOptions(await screen.findByLabelText("SE group"), "g1");
+    await pick(await screen.findByLabelText("SE group"), "g1");
     await userEvent.click(screen.getByRole("button", { name: /^Next/ }));
-    await userEvent.selectOptions(await screen.findByLabelText("VIP pool"), "vp1");
+    await pick(await screen.findByLabelText("VIP pool"), "vp1");
     expect(await screen.findByDisplayValue("192.0.2.10")).toHaveAttribute("readonly");
     expect(screen.getByText("Suggested, not reserved")).toBeInTheDocument();
     expect(

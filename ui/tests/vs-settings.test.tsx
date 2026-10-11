@@ -1,4 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
+import { pick } from "./pick";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -373,7 +374,7 @@ describe("virtual service settings", () => {
     renderAt("/t/acme/virtual-services/v1/settings");
     await userEvent.click(await screen.findByRole("button", { name: "Edit ports" }));
     const ca = await screen.findByLabelText("Port 1 client CA");
-    await userEvent.selectOptions(ca, await screen.findByRole("option", { name: "office-ca" }));
+    await pick(ca, "ca1");
     await userEvent.selectOptions(screen.getByLabelText("Port 1 client verification"), "optional");
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
@@ -386,10 +387,10 @@ describe("virtual service settings", () => {
 
   it("changes SE group, VIP, enabled and default pool", async () => {
     renderAt("/t/acme/virtual-services/v1/settings");
-    await userEvent.selectOptions(await enabled("SE group"), "g1");
+    await pick(await enabled("SE group"), "g1");
     await userEvent.type(screen.getByLabelText("VIP"), "1");
     await userEvent.click(screen.getByRole("switch", { name: "Enabled" }));
-    await userEvent.selectOptions(screen.getByLabelText("Default pool"), "p1");
+    await pick(screen.getByLabelText("Default pool"), "p1");
     expect(screen.getByText("3 unsaved fields")).toBeInTheDocument();
   });
 });

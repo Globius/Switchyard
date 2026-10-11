@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
+import { Combobox } from "@/components/ui/combobox";
 import { Plus } from "lucide-react";
 import { useMemo } from "react";
 import { useCan } from "@/auth/session";
@@ -108,19 +109,17 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
           onChange={(e) => setFilter({ q: e.target.value || undefined })}
           className={cn(SELECT, "w-64")}
         />
-        <select
+        <Combobox
           aria-label={t("SE group")}
-          className={SELECT}
+          className="w-48"
+          placeholder={t("All SE groups")}
           value={filters.se_group ?? ""}
-          onChange={(e) => setFilter({ se_group: e.target.value || undefined })}
-        >
-          <option value="">{t("All SE groups")}</option>
-          {groups.data?.items.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setFilter({ se_group: v || undefined })}
+          options={[
+            { value: "", label: t("All SE groups") },
+            ...(groups.data?.items ?? []).map((g) => ({ value: g.id, label: g.name })),
+          ]}
+        />
         <select
           aria-label={t("Protocol")}
           className={SELECT}
