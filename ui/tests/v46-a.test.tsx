@@ -368,7 +368,7 @@ describe("pools filter in the URL and wizard VIP suggestion", () => {
     renderAt("/t/acme/new");
     await userEvent.type(await screen.findByLabelText("Name"), "x1");
     await userEvent.selectOptions(await screen.findByLabelText("SE group"), "g1");
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Next/ }));
     await userEvent.selectOptions(await screen.findByLabelText("VIP pool"), "vp1");
     expect(await screen.findByDisplayValue("192.0.2.10")).toHaveAttribute("readonly");
     expect(screen.getByText("Suggested, not reserved")).toBeInTheDocument();

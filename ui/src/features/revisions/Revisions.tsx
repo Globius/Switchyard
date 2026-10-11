@@ -145,85 +145,108 @@ export function Revisions({ tenant }: { tenant: string }) {
         </p>
       </div>
       {problem != null && <ErrorState error={problem} />}
-      <div className="rounded-lg border bg-card">
-        {q.isPending ? (
-          <TableSkeleton cols={4} />
-        ) : q.isError ? (
-          <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-        ) : rows.length === 0 ? (
-          <EmptyState
-            title={t("No revisions yet")}
-            body={t("The first applied change set creates revision #1.")}
-          />
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <div className="rounded-lg border bg-card">
+            {q.isPending ? (
+              <TableSkeleton cols={4} />
+            ) : q.isError ? (
+              <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+            ) : rows.length === 0 ? (
+              <EmptyState
+                title={t("No revisions yet")}
+                body={t("The first applied change set creates revision #1.")}
+              />
+            ) : (
+              <ul className="divide-y">
+                {rows.map((r, i) => (
+                  <li
+                    key={r.number}
+                    className={cn(
+                      "flex items-start gap-3 px-4 py-3 text-[13px]",
+                      picked.includes(r.number) && "bg-accent/40",
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "mt-1.5 size-2 shrink-0 rounded-full",
+                        i === 0 ? "bg-primary" : "bg-muted-foreground/40",
+                      )}
+                    />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div>
+                        <span className="font-mono font-semibold">#{r.number}</span> {r.summary}
+                        {i === 0 && (
+                          <span className="ml-2">
+                            <StatusPill status="healthy">{t("current")}</StatusPill>
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {r.author} ·{" "}
+                        <time dateTime={r.created_at}>
+                          {new Date(r.created_at).toLocaleString()}
+                        </time>
+                        {r.git_sha && (
+                          <>
+                            {" "}
+                            · git <span className="font-mono">{r.git_sha.slice(0, 7)}</span>
+                          </>
+                        )}
+                      </div>
+                      {i > 0 && (
+                        <Tip label={rollback.reason}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={!rollback.allowed}
+                            onClick={() => setTarget(r.number)}
+                          >
+                            {t("Roll back")}
+                          </Button>
+                        </Tip>
+                      )}
+                    </div>
+                    <label className="flex shrink-0 items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        aria-label={t("Compare #{n}", { n: r.number })}
+                        checked={picked.includes(r.number)}
+                        onChange={() => toggle(r.number)}
+                      />
+                      {t("Compare")}
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {q.hasNextPage && (
+            <Button
+              variant="outline"
+              disabled={q.isFetchingNextPage}
+              onClick={() => void q.fetchNextPage()}
+            >
+              {t("Load more")}
+            </Button>
+          )}
+        </div>
+        {lo !== undefined && hi !== undefined ? (
+          <section className="space-y-3 rounded-lg border bg-card p-4">
+            <h2 className="text-lg font-semibold">
+              #{lo} → #{hi}
+            </h2>
+            <Compare tenant={tenant} from={lo} to={hi} />
+          </section>
         ) : (
-          <ul className="divide-y">
-            {rows.map((r, i) => (
-              <li
-                key={r.number}
-                className={cn(
-                  "flex items-center gap-4 px-4 py-3 text-[13px]",
-                  picked.includes(r.number) && "bg-accent",
-                )}
-              >
-                <input
-                  type="checkbox"
-                  aria-label={t("Compare #{n}", { n: r.number })}
-                  checked={picked.includes(r.number)}
-                  onChange={() => toggle(r.number)}
-                />
-                <span className="w-12 font-mono">#{r.number}</span>
-                <span className="flex-1">
-                  {r.summary}
-                  {i === 0 && (
-                    <span className="ml-2">
-                      <StatusPill status="healthy">{t("current")}</StatusPill>
-                    </span>
-                  )}
-                </span>
-                <span className="text-muted-foreground">{r.author}</span>
-                <time className="w-40 text-muted-foreground" dateTime={r.created_at}>
-                  {new Date(r.created_at).toLocaleString()}
-                </time>
-                <span className="w-20 font-mono text-xs text-muted-foreground">
-                  {r.git_sha?.slice(0, 7) ?? "—"}
-                </span>
-                {i > 0 && (
-                  <Tip label={rollback.reason}>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!rollback.allowed}
-                      onClick={() => setTarget(r.number)}
-                    >
-                      {t("Roll back")}
-                    </Button>
-                  </Tip>
-                )}
-              </li>
-            ))}
-          </ul>
+          <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+            {picked.length === 1
+              ? t("Pick one more revision to compare.")
+              : t("Pick two revisions to compare them.")}
+          </p>
         )}
       </div>
-      {q.hasNextPage && (
-        <Button
-          variant="outline"
-          disabled={q.isFetchingNextPage}
-          onClick={() => void q.fetchNextPage()}
-        >
-          {t("Load more")}
-        </Button>
-      )}
-      {lo !== undefined && hi !== undefined && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">
-            #{lo} → #{hi}
-          </h2>
-          <Compare tenant={tenant} from={lo} to={hi} />
-        </section>
-      )}
-      {picked.length === 1 && (
-        <p className="text-sm text-muted-foreground">{t("Pick one more revision to compare.")}</p>
-      )}
       <ConfirmDialog
         open={target !== null}
         onOpenChange={(o) => !o && setTarget(null)}

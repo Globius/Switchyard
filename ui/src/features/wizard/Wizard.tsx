@@ -193,7 +193,13 @@ export function Wizard({ tenant }: { tenant: string }) {
                 step > i + 1 && "text-muted-foreground",
               )}
             >
-              <span className="grid size-5 place-items-center rounded-full border text-xs">
+              <span
+                className={cn(
+                  "grid size-6 place-items-center rounded-full border text-xs",
+                  step === i + 1 && "border-primary bg-primary text-primary-foreground",
+                  step > i + 1 && "border-transparent bg-status-healthy/15 text-status-healthy",
+                )}
+              >
                 {step > i + 1 ? "✓" : i + 1}
               </span>
               {t(title)}
@@ -967,7 +973,7 @@ export function Wizard({ tenant }: { tenant: string }) {
             </Button>
             {step < 6 ? (
               <Button type="button" onClick={() => void next()}>
-                {t("Next")}
+                {t("Next: {step}", { step: t(titles[step] ?? "") })}
               </Button>
             ) : (
               <Tip label={create.reason}>

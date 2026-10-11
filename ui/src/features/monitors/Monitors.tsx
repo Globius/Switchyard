@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
+import { ChipInput } from "@/components/sy/ChipInput";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
-import { DraftMarker, StatusPill } from "@/components/sy/StatusPill";
+import { DraftMarker } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -160,18 +161,23 @@ function TestBox({ tenant, monitor }: { tenant: string; monitor: Monitor }) {
         {t("Run test")}
       </Button>
       {run.data && (
-        <p role="status" className="text-sm">
-          {run.data.ok ? (
-            <StatusPill status="healthy">{t("Passed")}</StatusPill>
-          ) : (
-            <StatusPill status="down">{t("Failed")}</StatusPill>
-          )}{" "}
-          {run.data.detail} ·{" "}
-          <span className="font-mono text-xs">
+        <div
+          role="status"
+          className={cn(
+            "rounded-md border p-3 text-sm",
+            run.data.ok
+              ? "border-status-healthy/40 bg-status-healthy/10"
+              : "border-status-down/40 bg-status-down/10",
+          )}
+        >
+          <p className="font-medium">
+            {run.data.ok ? t("Passed") : t("Failed")} · {run.data.detail}
+          </p>
+          <p className="font-mono text-xs text-muted-foreground">
             {run.data.target} · {run.data.protocol} · {t("from {e}", { e: run.data.engine })} ·{" "}
             {run.data.latency_ms} ms
-          </span>
-        </p>
+          </p>
+        </div>
       )}
       {run.error && <ErrorState error={run.error} />}
       <p className="text-xs text-muted-foreground">
@@ -319,21 +325,41 @@ function MonitorSheet({
             </span>
           )}
         </label>
-        <label className="block space-y-1.5 text-sm font-medium">
-          {t("Type")}
-          <select
-            aria-label={t("Type")}
-            className={INPUT}
-            disabled={!write.allowed || monitor !== "new"}
-            value={f.type}
-            onChange={(e) => set({ type: e.target.value as MonitorForm["type"] })}
+        <div className="space-y-1.5">
+          <span id="monitor-type" className="text-sm font-medium">
+            {t("Type")}
+          </span>
+          <div
+            role="radiogroup"
+            aria-labelledby="monitor-type"
+            className="inline-flex rounded-md border"
           >
-            <option value="tcp">TCP</option>
-            <option value="http">HTTP</option>
-            <option value="udp">UDP</option>
-          </select>
-        </label>
-        <div className="grid grid-cols-2 gap-3">
+            {(["tcp", "http", "udp"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={f.type === k}
+                disabled={!write.allowed || monitor !== "new"}
+                onClick={() => set({ type: k })}
+                className={cn(
+                  "px-4 py-1.5 text-sm first:rounded-l-md last:rounded-r-md disabled:cursor-not-allowed",
+                  f.type === k
+                    ? "bg-accent font-medium"
+                    : "text-muted-foreground hover:bg-accent/50",
+                )}
+              >
+                {k.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "TCP and HTTP monitors check TCP and HTTP pools; UDP monitors check UDP pools only.",
+            )}
+          </p>
+        </div>
+        <div className="grid grid-cols-4 gap-3">
           {num("interval_s", t("Interval"))}
           {num("timeout_s", t("Timeout"))}
           {!udp && num("rise", t("Rise"))}
@@ -349,7 +375,8 @@ function MonitorSheet({
           <input
             aria-label={t("Port")}
             type="number"
-            className={INPUT}
+            placeholder={t("Member's port")}
+            className={cn(INPUT, "max-w-40")}
             disabled={!write.allowed}
             value={f.port ?? ""}
             onChange={(e) => set({ port: e.target.value ? Number(e.target.value) : null })}
@@ -366,45 +393,53 @@ function MonitorSheet({
               const sh = (p: Partial<typeof h>) => set({ http: { ...h, ...p } });
               return (
                 <>
-                  <select
-                    aria-label={t("Method")}
-                    className={INPUT}
+                  <div className="grid grid-cols-[8rem_1fr] gap-3">
+                    <label className="space-y-1.5 text-sm font-medium">
+                      {t("Method")}
+                      <select
+                        aria-label={t("Method")}
+                        className={INPUT}
+                        disabled={!write.allowed}
+                        value={h.method}
+                        onChange={(e) => sh({ method: e.target.value })}
+                      >
+                        <option>GET</option>
+                        <option>HEAD</option>
+                        <option>OPTIONS</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1.5 text-sm font-medium">
+                      {t("Path")}
+                      <input
+                        aria-label={t("Path")}
+                        className={cn(INPUT, "font-mono")}
+                        disabled={!write.allowed}
+                        value={h.path}
+                        onChange={(e) => sh({ path: e.target.value })}
+                      />
+                    </label>
+                  </div>
+                  <label className="block space-y-1.5 text-sm font-medium">
+                    {t("Host header")}
+                    <input
+                      aria-label={t("Host header")}
+                      placeholder={t("Optional, e.g. api.example.com")}
+                      className={cn(INPUT, "font-mono")}
+                      disabled={!write.allowed}
+                      value={h.host ?? ""}
+                      onChange={(e) => sh({ host: e.target.value || null })}
+                    />
+                  </label>
+                  <ChipInput
+                    label={t("Expected status codes")}
+                    value={h.expect_status.map(String)}
+                    onChange={(v) => sh({ expect_status: v.map(Number) })}
+                    freeText={{
+                      validate: (x) =>
+                        /^[1-5]\d\d$/.test(x.trim()) ? null : t("Use a status code, 100 to 599."),
+                    }}
+                    placeholder={t("Add code")}
                     disabled={!write.allowed}
-                    value={h.method}
-                    onChange={(e) => sh({ method: e.target.value })}
-                  >
-                    <option>GET</option>
-                    <option>HEAD</option>
-                    <option>OPTIONS</option>
-                  </select>
-                  <input
-                    aria-label={t("Path")}
-                    className={cn(INPUT, "font-mono")}
-                    disabled={!write.allowed}
-                    value={h.path}
-                    onChange={(e) => sh({ path: e.target.value })}
-                  />
-                  <input
-                    aria-label={t("Host header")}
-                    placeholder={t("Host header")}
-                    className={cn(INPUT, "font-mono")}
-                    disabled={!write.allowed}
-                    value={h.host ?? ""}
-                    onChange={(e) => sh({ host: e.target.value || null })}
-                  />
-                  <input
-                    aria-label={t("Expected status codes")}
-                    className={cn(INPUT, "font-mono")}
-                    disabled={!write.allowed}
-                    value={h.expect_status.join(", ")}
-                    onChange={(e) =>
-                      sh({
-                        expect_status: e.target.value
-                          .split(",")
-                          .map((x) => Number(x.trim()))
-                          .filter(Boolean),
-                      })
-                    }
                   />
                 </>
               );

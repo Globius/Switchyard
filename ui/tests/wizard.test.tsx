@@ -286,7 +286,7 @@ async function pickCertificate() {
   await userEvent.click(await screen.findByRole("option", { name: /wildcard/ }));
 }
 
-const next = () => userEvent.click(screen.getByRole("button", { name: "Next" }));
+const next = () => userEvent.click(screen.getByRole("button", { name: /^Next/ }));
 
 describe("create wizard", () => {
   it("walks all six steps and adds the ops to a new draft", async () => {
