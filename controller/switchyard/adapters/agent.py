@@ -6,6 +6,7 @@ coraza}/`` and reloads an allowlisted set of units. The transport is gRPC over m
 """
 
 import base64
+import time
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -187,6 +188,7 @@ class BundleSigner:
     def __init__(self, private_key: Ed25519PrivateKey) -> None:
         """Wrap a private key."""
         self._key = private_key
+        self._last_sequence = 0
 
     @classmethod
     def generate(cls) -> "BundleSigner":
@@ -216,11 +218,33 @@ class BundleSigner:
         )
         return base64.b64encode(raw).decode()
 
-    def sign(self, bundle_id: str, files: Mapping[str, str]) -> tuple[bytes, bytes]:
-        """Return ``(serialised bundle, signature)``; files are sorted for determinism."""
+    def next_sequence(self) -> int:
+        """A bundle sequence that grows with every call: wall-clock milliseconds, never repeated.
+
+        Agents refuse a sequence at or below the last one they applied, so an old signed bundle
+        cannot be sent again. Controllers sharing a signing key need clocks that agree to within
+        the time between two applies (NTP).
+        """
+        self._last_sequence = max(self._last_sequence + 1, time.time_ns() // 1_000_000)
+        return self._last_sequence
+
+    def sign(
+        self,
+        bundle_id: str,
+        files: Mapping[str, str],
+        engine: str = "",
+        sequence: int | None = None,
+    ) -> tuple[bytes, bytes]:
+        """Return ``(serialised bundle, signature)``; files are sorted for determinism.
+
+        The bundle names the ``engine`` it is for and carries a ``sequence`` (a fresh one when not
+        given), both under the signature (ADR 0074).
+        """
         bundle = agent_pb2.Bundle(
             id=bundle_id,
             files=[agent_pb2.File(path=p, content=files[p].encode()) for p in sorted(files)],
+            engine=engine,
+            sequence=self.next_sequence() if sequence is None else sequence,
         )
         raw = bundle.SerializeToString(deterministic=True)
         return raw, self._key.sign(raw)
@@ -296,7 +320,7 @@ class GrpcAgent:
 
     async def apply_bundle(self, bundle_id: str, files: Mapping[str, str]) -> ApplyResult:
         """Sign and send ``files``."""
-        raw, signature = self._signer.sign(bundle_id, files)
+        raw, signature = self._signer.sign(bundle_id, files, self._name)
         try:
             response = await self._stub.ApplyBundle(
                 agent_pb2.ApplyBundleRequest(bundle=raw, signature=signature),
