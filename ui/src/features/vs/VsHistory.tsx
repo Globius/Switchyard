@@ -6,7 +6,7 @@ import { useObjectAudit, useObjectRevisions, useVs } from "./detail-queries";
 export function VsHistory({ tenant, id }: { tenant: string; id: string }) {
   const vs = useVs(tenant, id);
   const ref = `virtual_service:${id}`;
-  const revisions = useObjectRevisions(tenant, ref);
+  const revisions = useObjectRevisions(tenant, id);
   const audit = useObjectAudit(tenant, ref);
   if (revisions.isPending || audit.isPending || vs.isPending)
     return <TableSkeleton rows={5} cols={3} />;

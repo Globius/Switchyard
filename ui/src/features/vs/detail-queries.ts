@@ -47,14 +47,14 @@ export function useObjectAudit(tenant: string, objectRef: string) {
   });
 }
 
-/** Revisions that touched one object (History tab). */
-export function useObjectRevisions(tenant: string, objectRef: string) {
+/** Revisions that touched one object (History tab); this filter takes the bare object id. */
+export function useObjectRevisions(tenant: string, objectId: string) {
   return useQuery({
-    queryKey: ["t", tenant, "revisions", { object: objectRef }],
+    queryKey: ["t", tenant, "revisions", { object: objectId }],
     queryFn: async () =>
       unwrap(
         await api.GET("/api/v1/tenants/{t}/revisions", {
-          params: { path: { t: tenant }, query: { object: objectRef, limit: 50 } },
+          params: { path: { t: tenant }, query: { object: objectId, limit: 50 } },
         }),
       ),
   });
