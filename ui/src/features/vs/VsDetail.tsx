@@ -126,7 +126,7 @@ export function VsDetailLayout({ tenant, id }: { tenant: string; id: string }) {
           </Tip>
         </div>
       </div>
-      <div role="tablist" className="flex gap-1 border-b">
+      <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
         {TABS.map((tab) => (
           <Link
             key={tab.label}

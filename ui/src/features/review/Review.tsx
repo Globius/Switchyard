@@ -402,7 +402,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
                   </ul>
                 </section>
               )}
-              <div role="tablist" className="flex gap-1 border-b">
+              <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
                 {(["objects", "config", "impact"] as const).map((k) => (
                   <button
                     key={k}

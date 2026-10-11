@@ -918,7 +918,7 @@ export function SeGroups({ tenant }: { tenant: string }) {
         />
       ) : (
         <>
-          <div role="tablist" className="flex gap-1 border-b">
+          <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
             {items.map((g) => {
               const s = summary(g);
               return (
