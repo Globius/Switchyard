@@ -268,6 +268,99 @@ describe("SE groups", () => {
     expect(screen.getByText(/^10\.40\.0\.21 · agent|^10\.40\.0\.21$/)).toBeInTheDocument();
   });
 
+  async function openDeploy() {
+    renderAt("/t/acme/se-groups");
+    const open = await screen.findByRole("button", { name: "Deploy engines" });
+    await waitFor(() => expect(open).toBeEnabled());
+    await userEvent.click(open);
+    return within(await screen.findByRole("dialog"));
+  }
+  async function fillDeploy(dlg: ReturnType<typeof within>) {
+    await userEvent.type(dlg.getByLabelText("Template VM ID"), "9001");
+    await userEvent.type(dlg.getByLabelText("Proxmox nodes"), "pve-01,");
+    await userEvent.selectOptions(await dlg.findByLabelText("Management addresses from"), "mp");
+  }
+  const POOLS = (items: unknown[]) =>
+    http.get("*/api/v1/tenants/acme/vip-pools", () =>
+      HttpResponse.json({ items, next_cursor: null }),
+    );
+
+  it("preselects the only pool on a network and sends it as nic_pools", async () => {
+    let body: unknown = null;
+    server.use(
+      POOLS([
+        { id: "mp", name: "se-mgmt", network_id: "nm" },
+        { id: "vp", name: "vip-edge", network_id: "n1" },
+      ]),
+      http.get("*/api/v1/tenants/acme/vip-pools/:id/allocations", () =>
+        HttpResponse.json({
+          allocations: [],
+          free: 58,
+          total: 100,
+          used: 42,
+          next_free: null,
+          pool_id: "vp",
+        }),
+      ),
+      http.post("*/api/v1/tenants/acme/se-groups/g1/deploy", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ job_id: "j" }, { status: 202 });
+      }),
+    );
+    const dlg = await openDeploy();
+    const picker = await dlg.findByRole("combobox", { name: "Addresses on edge-vip" });
+    await waitFor(() => expect(picker).toHaveTextContent("vip-edge · 58 free"));
+    expect(dlg.queryByText(/can't serve VIPs on edge-vip/)).toBeNull();
+    await fillDeploy(dlg);
+    await userEvent.click(dlg.getByRole("button", { name: "Start deploy" }));
+    await waitFor(() => expect(body).toMatchObject({ nic_pools: { n1: "vp" } }));
+  });
+
+  it("warns on an unaddressed NIC, and omits it from the request", async () => {
+    let body: Record<string, unknown> | null = null;
+    server.use(
+      POOLS([{ id: "mp", name: "se-mgmt", network_id: "nm" }]),
+      http.post("*/api/v1/tenants/acme/se-groups/g1/deploy", async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ job_id: "j" }, { status: 202 });
+      }),
+    );
+    const dlg = await openDeploy();
+    expect(await dlg.findByText(/can't serve VIPs on edge-vip until someone/)).toBeInTheDocument();
+    expect(dlg.getByText("No pools on this network.")).toBeInTheDocument();
+    expect(dlg.getByRole("combobox", { name: "Addresses on edge-vip" })).toBeDisabled();
+    await fillDeploy(dlg);
+    await userEvent.click(dlg.getByRole("button", { name: "Start deploy" }));
+    await waitFor(() => expect(body).not.toBeNull());
+    expect(body).not.toHaveProperty("nic_pools");
+  });
+
+  it("puts a pool-capacity error on the network's row", async () => {
+    server.use(
+      POOLS([
+        { id: "mp", name: "se-mgmt", network_id: "nm" },
+        { id: "vp", name: "vip-edge", network_id: "n1" },
+      ]),
+      http.post("*/api/v1/tenants/acme/se-groups/g1/deploy", () =>
+        HttpResponse.json(
+          {
+            title: "Unprocessable",
+            status: 422,
+            errors: [
+              { path: "nic_pools.n1", code: "pool_exhausted", message: "Only 1 free address" },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    const dlg = await openDeploy();
+    await fillDeploy(dlg);
+    await userEvent.click(dlg.getByRole("button", { name: "Start deploy" }));
+    expect(await dlg.findByText("Only 1 free address")).toBeInTheDocument();
+    expect(dlg.queryByText("Unprocessable")).toBeNull();
+  });
+
   it("registers an existing VM", async () => {
     let body: unknown = null;
     server.use(

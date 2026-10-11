@@ -295,3 +295,13 @@ Checked on 2026-10-11 against a local controller, signed in as the break-glass s
 | LXC inline warning with required acknowledgement; Start deploy disabled with the reason | Done. The checkbox is UI-only and clears when the guest type changes. |
 | Engine sub-line "VM 201 · pve-atl-01 · ip · agent" / "CT 203 ..." | Done from `guest_kind`, `vmid` and `pve_node` on the engine read; left out when the engine has no guest type. Placement cards use the same VM/CT label. |
 | Header buttons, sheet titles, Retire/Remove help text | Renamed to "engine", "VM or container" and "guest". |
+
+## Design v51: nic_pools in the deploy sheet
+
+| Item | Status |
+| --- | --- |
+| "Network addresses" section after "Management addresses from", one row per VIP or backend network of the group | Done (`NicAddresses.tsx`). Management is excluded. |
+| Pool picker per row (Combobox, only pools on that network, "<pool> · N free", first option "Not addressed (set up by hand)") | Done. A network with exactly one pool is preselected; only rows with a pool are sent in `nic_pools`. |
+| Inline amber warning on an empty row, by role | Done; it does not block. A network with no pools shows a disabled picker, "No pools on this network" and a link to Networks. |
+| 422 field errors on the row (`nic_pools.<network>`) | Done. |
+| Addresses on the engine row ("edge-vip 10.40.12.6 · backend —") | Not built: the engine read has no `addresses` yet. Needs an API change (`addresses[{network_id, address}]` on the engine read). |
