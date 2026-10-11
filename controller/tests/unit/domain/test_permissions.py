@@ -66,3 +66,23 @@ def test_roles_nest() -> None:
     assert permissions.allows(Role.TENANT_ADMIN, "apply", "change_set")
     assert not permissions.allows(Role.OPERATOR, "approve", "change_set")
     assert not permissions.allows(Role.TENANT_ADMIN, "apply_bypass", "change_set")
+
+
+def test_every_entry_has_one_of_the_eight_groups() -> None:
+    from switchyard.domain.permissions import GROUP_OF_ROW, MATRIX
+
+    assert {p.group for p in MATRIX} == {
+        "Read",
+        "Applications",
+        "Infrastructure",
+        "Change sets",
+        "Runtime",
+        "Tenant settings",
+        "Access",
+        "System",
+    }
+    assert {p.row for p in MATRIX} <= set(GROUP_OF_ROW), "a new row needs a group"
+    by_verb = {(p.verb, p.object): p.group for p in MATRIX}
+    assert by_verb[("manage", "engine")] == "Infrastructure"
+    assert by_verb[("rollback", "revision")] == "Change sets"
+    assert by_verb[("set_state", "member")] == "Runtime"

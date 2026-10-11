@@ -56,3 +56,4 @@ Date: YYYY-MM-DD
 | [0065](0065-bgp-prefix-limits.md) | BGP prefix limits | Accepted |
 | [0066](0066-pool-passive-checks-and-slow-start.md) | Pool passive checks and slow start | Accepted |
 | [0067](0067-tls-profiles-and-ocsp.md) | TLS profiles and OCSP stapling | Accepted |
+| [0068](0068-ui-support-fields.md) | Small fields the UI asked for | Accepted |

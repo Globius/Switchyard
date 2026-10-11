@@ -187,7 +187,10 @@ def serve(
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
     app = create_app(
-        services, public_url=public_url, metrics_token=os.environ.get("SWITCHYARD_METRICS_TOKEN")
+        services,
+        public_url=public_url,
+        metrics_token=os.environ.get("SWITCHYARD_METRICS_TOKEN"),
+        grafana_url=runtime.grafana_url(),
     )
     config = uvicorn.Config(app, host=host, port=port)
     # uvicorn's own loop is Proactor on Windows, which psycopg rejects; run() uses the selector.

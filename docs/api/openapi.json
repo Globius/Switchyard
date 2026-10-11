@@ -4655,6 +4655,9 @@
             "title": "Is System",
             "type": "boolean"
           },
+          "links": {
+            "$ref": "#/components/schemas/MeLinks"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -4695,6 +4698,26 @@
           "tenants"
         ],
         "title": "Me",
+        "type": "object"
+      },
+      "MeLinks": {
+        "additionalProperties": false,
+        "description": "Where the UI may link to, set by the operator of the controller.",
+        "properties": {
+          "grafana": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base URL of Grafana (`SWITCHYARD_GRAFANA_URL`), or null when none is set.",
+            "title": "Grafana"
+          }
+        },
+        "title": "MeLinks",
         "type": "object"
       },
       "MeSession": {
@@ -6510,6 +6533,11 @@
             "title": "Description",
             "type": "string"
           },
+          "group": {
+            "description": "The group the role matrix screen shows it under: `Read`, `Applications`, `Infrastructure`, `Change sets`, `Runtime`, `Tenant settings`, `Access` or `System`.",
+            "title": "Group",
+            "type": "string"
+          },
           "min_role": {
             "$ref": "#/components/schemas/Role",
             "description": "The weakest role that may do this."
@@ -6575,7 +6603,8 @@
           "verb",
           "object",
           "min_role",
-          "description"
+          "description",
+          "group"
         ],
         "title": "PermissionRead",
         "type": "object"
@@ -8473,6 +8502,86 @@
         "title": "SamlProviderRead",
         "type": "object"
       },
+      "SdnApplyRead": {
+        "additionalProperties": false,
+        "description": "Where the Proxmox SDN apply stands for one managed network.\n\nAn apply is tenant-wide: while one is `queued` or `running` it counts for every managed\nnetwork. After it, `succeeded` and `failed` come from the latest finished apply, and `never`\nmarks a network that no finished apply has included yet.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "network": {
+            "title": "Network",
+            "type": "string"
+          },
+          "network_id": {
+            "format": "uuid",
+            "title": "Network Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "never"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "network_id",
+          "network",
+          "state"
+        ],
+        "title": "SdnApplyRead",
+        "type": "object"
+      },
       "SeGroup": {
         "additionalProperties": false,
         "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).",
@@ -9457,6 +9566,12 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "members": {
+            "default": 0,
+            "description": "People with a grant in the tenant: signed-in users whose provider groups match one of the tenant's role mappings.",
+            "title": "Members",
+            "type": "integer"
           },
           "name": {
             "title": "Name",
@@ -12153,6 +12268,9 @@
                   "email": "alice@example.test",
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
+                  "links": {
+                    "grafana": "https://grafana.example.test"
+                  },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
                   "session": {
@@ -12630,6 +12748,9 @@
                   "email": "alice@example.test",
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
+                  "links": {
+                    "grafana": "https://grafana.example.test"
+                  },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
                   "session": {
@@ -14131,6 +14252,9 @@
                   "email": "alice@example.test",
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
+                  "links": {
+                    "grafana": "https://grafana.example.test"
+                  },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
                   "session": {
@@ -14238,18 +14362,21 @@
                   "permissions": [
                     {
                       "description": "Read everything in the tenant.",
+                      "group": "Read",
                       "min_role": "viewer",
                       "object": "tenant_data",
                       "verb": "read"
                     },
                     {
                       "description": "Apply a change set when the tenant does not require approval.",
+                      "group": "Change sets",
                       "min_role": "operator",
                       "object": "change_set",
                       "verb": "apply"
                     },
                     {
                       "description": "Register, enable, disable, retire or remove service engines.",
+                      "group": "Infrastructure",
                       "min_role": "tenant-admin",
                       "object": "engine",
                       "verb": "manage"
@@ -15963,6 +16090,7 @@
                 "example": [
                   {
                     "id": "0192f3a0-0000-7000-8000-000000000001",
+                    "members": 7,
                     "name": "acme",
                     "quotas": {
                       "virtual_service": 50
@@ -16079,6 +16207,7 @@
               "application/json": {
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
+                  "members": 7,
                   "name": "acme",
                   "quotas": {
                     "virtual_service": 50
@@ -16278,6 +16407,7 @@
               "application/json": {
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
+                  "members": 7,
                   "name": "acme",
                   "quotas": {
                     "virtual_service": 50
@@ -16420,6 +16550,7 @@
               "application/json": {
                 "example": {
                   "id": "0192f3a0-0000-7000-8000-000000000001",
+                  "members": 7,
                   "name": "acme",
                   "quotas": {
                     "virtual_service": 50
@@ -28522,6 +28653,111 @@
           "routing-profiles"
         ],
         "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/sdn/status": {
+      "get": {
+        "description": "For the 'SDN apply running' chip: per managed network, whether a tenant-wide `apply_sdn` job is `queued` or `running`, or how the latest finished one ended (`succeeded`, `failed`, or `never` for a network it did not include). Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "sdn_status_api_v1_tenants__t__sdn_status_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "job_id": "0192f3a0-0000-7000-8000-000000000021",
+                    "network": "lb",
+                    "network_id": "0192f3a0-0000-7000-8000-000000000061",
+                    "started_at": "2026-10-11T08:30:00Z",
+                    "state": "running"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SdnApplyRead"
+                  },
+                  "title": "Response Sdn Status Api V1 Tenants  T  Sdn Status Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "SDN apply state of every managed network",
+        "tags": [
+          "infrastructure"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/se-groups": {

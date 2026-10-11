@@ -94,6 +94,7 @@ from switchyard.api.schemas import (
     RoleMappingIn,
     RoleMappingPatch,
     RoleMappingRead,
+    SdnApplyRead,
     SessionsRevoked,
     StateOut,
     SystemRoleMappingIn,
@@ -1155,7 +1156,11 @@ def _int_cursor(cursor: str | None) -> int | None:
 
 
 def create_app(
-    services: ApiServices, *, public_url: str | None = None, metrics_token: str | None = None
+    services: ApiServices,
+    *,
+    public_url: str | None = None,
+    metrics_token: str | None = None,
+    grafana_url: str | None = None,
 ) -> FastAPI:
     """Build the application over ready-made services.
 
@@ -1163,6 +1168,7 @@ def create_app(
         services: The wired services.
         public_url: External base URL (``https://switchyard.example.test``), used to build login
             redirect URIs and to decide whether cookies are ``Secure``.
+        grafana_url: Base URL of Grafana, shown to the UI as ``links.grafana`` on ``GET /me``.
         metrics_token: Bearer token that may read ``/metrics`` and the Prometheus
             service-discovery list; without it only system administrators can.
     """
@@ -1495,6 +1501,7 @@ def create_app(
                 }
                 for t in tenants
             ],
+            "links": {"grafana": grafana_url},
         }
 
     @router.post(
@@ -1541,6 +1548,7 @@ def create_app(
                     "object": p.object,
                     "min_role": p.min_role.value,
                     "description": p.description,
+                    "group": p.group,
                 }
                 for p in permissions.MATRIX
             ],
@@ -3229,6 +3237,22 @@ def create_app(
         return {"job_id": str(job)}
 
     # infrastructure jobs
+    @router.get(
+        "/tenants/{t}/sdn/status",
+        tags=["infrastructure"],
+        summary="SDN apply state of every managed network",
+        description=(
+            "For the 'SDN apply running' chip: per managed network, whether a tenant-wide "
+            "`apply_sdn` job is `queued` or `running`, or how the latest finished one ended "
+            "(`succeeded`, `failed`, or `never` for a network it did not include). Requires any "
+            "role in the tenant."
+        ),
+        response_model=list[SdnApplyRead],
+        responses=_ok(ex.SDN_STATUS),
+    )
+    async def sdn_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return [s.__dict__ for s in await svc.infra.sdn_status(who, tenant.id)]
+
     @router.post(
         "/tenants/{t}/networks/apply-sdn",
         status_code=202,

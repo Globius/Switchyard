@@ -19,6 +19,7 @@ Login: ``SWITCHYARD_PUBLIC_URL`` (external base URL, for redirect URIs and Secur
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 from switchyard.adapters.acme import AcmeIssuer, new_account_key
 from switchyard.adapters.agent import BundleSigner
@@ -178,6 +179,28 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     """
     client = proxmox_client()
     return InfraService(db, client) if client else None
+
+
+def grafana_url() -> str | None:
+    """The Grafana base URL from ``SWITCHYARD_GRAFANA_URL``, if it is an http(s) URL.
+
+    The UI links to it, so anything else (a ``javascript:`` URL, a path) is ignored.
+
+    Example:
+        >>> import os
+        >>> os.environ["SWITCHYARD_GRAFANA_URL"] = "https://grafana.example.test/"
+        >>> grafana_url()
+        'https://grafana.example.test'
+        >>> os.environ["SWITCHYARD_GRAFANA_URL"] = "javascript:alert(1)"
+        >>> grafana_url() is None
+        True
+        >>> del os.environ["SWITCHYARD_GRAFANA_URL"]
+    """
+    value = os.environ.get("SWITCHYARD_GRAFANA_URL", "").strip()
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username:
+        return None
+    return value.rstrip("/")
 
 
 def proxmox_client() -> HttpProxmox | None:
