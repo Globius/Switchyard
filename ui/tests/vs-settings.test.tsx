@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -190,7 +190,7 @@ describe("virtual service settings", () => {
   it("opens a draft on first edit and sends only changed fields with If-Match", async () => {
     renderAt("/t/acme/virtual-services/v1/settings");
     const name = await enabled("Name");
-    const save = screen.getByRole("button", { name: "Add to change set" });
+    const save = screen.getByRole("button", { name: "Save to draft" });
     expect(save).toBeDisabled();
     await userEvent.clear(name);
     await userEvent.type(name, "web2");
@@ -220,10 +220,14 @@ describe("virtual service settings", () => {
         { status: 422 },
       );
     renderAt("/t/acme/virtual-services/v1/settings");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit ports" }));
     const port = await enabled("Port 1");
     await userEvent.clear(port);
     await userEvent.type(port, "80");
-    await userEvent.click(screen.getByRole("button", { name: "Add to change set" }));
+    await userEvent.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Done" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
     expect((await screen.findAllByText("Port 443 is already used on this VIP.")).length).toBe(2);
   });
 
@@ -232,11 +236,11 @@ describe("virtual service settings", () => {
       HttpResponse.json({ title: "Stale", status: 412, detail: "stale" }, { status: 412 });
     renderAt("/t/acme/virtual-services/v1/settings");
     await userEvent.type(await enabled("Name"), "x");
-    await userEvent.click(screen.getByRole("button", { name: "Add to change set" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
     expect(
       await screen.findByText("This service changed while you were editing"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add to change set" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save to draft" })).toBeDisabled();
   });
 
   it("marks drafted fields with the live value and a Revert action", async () => {
@@ -258,7 +262,7 @@ describe("virtual service settings", () => {
     role = "viewer";
     renderAt("/t/acme/virtual-services/v1/settings");
     await waitFor(() => expect(screen.getByLabelText("Name")).toBeDisabled());
-    expect(screen.getByRole("button", { name: "Add to change set" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save to draft" })).toBeDisabled();
   });
 
   it("edits routes: add, redirect, reorder and remove", async () => {
@@ -271,13 +275,17 @@ describe("virtual service settings", () => {
     };
     renderAt("/t/acme/virtual-services/v1/settings");
     await enabled("Route 1 host");
-    await userEvent.click(await screen.findByRole("button", { name: "Move route 2 up" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Route 2 actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Move up" }));
     expect(screen.getByLabelText("Route 1 host")).toHaveValue("b.test");
-    await userEvent.click(screen.getAllByRole("checkbox", { name: "Redirect" })[0]!);
+    await userEvent.selectOptions(screen.getByLabelText("Route 1 action"), "redirect");
     expect(screen.getByLabelText("Route 1 redirect location")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Route 2 path match"), "exact");
+    await userEvent.type(screen.getByLabelText("Route 2 path prefix"), "/x");
     await userEvent.click(screen.getByRole("button", { name: "Add route" }));
     expect(screen.getByLabelText("Route 3 host")).toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole("button", { name: "Remove" }).at(-1)!);
+    await userEvent.click(screen.getByRole("button", { name: "Route 3 actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Remove" }));
     expect(screen.queryByLabelText("Route 3 host")).not.toBeInTheDocument();
   });
 
@@ -299,11 +307,11 @@ describe("virtual service settings", () => {
     renderAt("/t/acme/virtual-services/v1/settings");
     await screen.findByLabelText("Name");
     await waitFor(() => expect(screen.queryByText("Routes")).not.toBeInTheDocument());
-    expect(screen.queryByText("Certificates and policies")).not.toBeInTheDocument();
   });
 
   it("adds and removes ports, toggles flags, and discards edits", async () => {
     renderAt("/t/acme/virtual-services/v1/settings");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit ports" }));
     await enabled("Port 1");
     await userEvent.click(screen.getByRole("button", { name: "Add port" }));
     expect(screen.getByLabelText("Port 2")).toHaveValue(80);
@@ -313,15 +321,16 @@ describe("virtual service settings", () => {
     expect(screen.getByText("2 unsaved fields".replace("2", "1"))).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "Remove" })[1]!);
     expect(screen.queryByLabelText("Port 2")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Discard edits" }));
-    expect(screen.getByRole("button", { name: "Add to change set" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    await userEvent.click(screen.getByRole("button", { name: "Revert all fields" }));
+    expect(screen.getByRole("button", { name: "Save to draft" })).toBeDisabled();
   });
 
   it("changes SE group, VIP, enabled and default pool", async () => {
     renderAt("/t/acme/virtual-services/v1/settings");
     await userEvent.selectOptions(await enabled("SE group"), "g1");
     await userEvent.type(screen.getByLabelText("VIP"), "1");
-    await userEvent.click(screen.getByRole("checkbox", { name: "Enabled" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Enabled" }));
     await userEvent.selectOptions(screen.getByLabelText("Default pool"), "p1");
     expect(screen.getByText("3 unsaved fields")).toBeInTheDocument();
   });

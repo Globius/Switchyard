@@ -562,6 +562,7 @@ class ApplyPipeline:
                     change_set_id=change_set_id,
                     author=change_set.author,
                     summary=change_set.summary,
+                    message=change_set.message,
                     snapshot=draft.snapshot.model_dump(mode="json"),
                 )
             for outcome in outcomes:

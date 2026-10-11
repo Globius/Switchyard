@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { useDraft } from "@/features/shell/draft";
+import { principalName, shortWhen } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { diffObject } from "@/lib/snapshot-diff";
 import { cn } from "@/lib/utils";
@@ -22,16 +23,8 @@ import {
 
 type Json = Record<string, unknown>;
 
-/** `today 10:49`, `yesterday 16:40` or `Oct 7 15:20`. */
-export function stamp(iso: string, now = new Date()): string {
-  const d = new Date(iso);
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-  const day = (x: Date) => new Date(x).setHours(0, 0, 0, 0);
-  const diff = Math.round((day(now) - day(d)) / 86_400_000);
-  if (diff === 0) return `${t("today")} ${time}`;
-  if (diff === 1) return `${t("yesterday")} ${time}`;
-  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
-}
+/** Timeline times use the shared short-date formatter. */
+export const stamp = shortWhen;
 
 function DiffBlock({ lines }: { lines: { sign: "+" | "-"; text: string }[] }) {
   if (lines.length === 0) return null;
@@ -280,7 +273,7 @@ function EntryBody({
             <StatusPill status="draft">{t("In draft")}</StatusPill>
             <span className="font-medium">{e.title}</span>
             <span className="text-muted-foreground">
-              {e.author} · {t("not live yet")}
+              {principalName(e.author)} · {t("not live yet")}
             </span>
           </div>
           <DiffBlock lines={fieldLines(e.fields)} />
@@ -303,7 +296,7 @@ function EntryBody({
             <span className="font-medium">{e.summary}</span>
           </div>
           <div className="text-xs text-muted-foreground">
-            {e.author} · {stamp(e.at)}
+            {principalName(e.author)} · {stamp(e.at)}
           </div>
           {showDiff && <RevisionDiff tenant={tenant} n={e.number} id={id} />}
         </div>
@@ -326,7 +319,7 @@ function EntryBody({
         {e.object && <span className="text-muted-foreground">{e.object}</span>}
       </div>
       <div className="text-xs text-muted-foreground">
-        {e.actor} · {stamp(e.at)}
+        {principalName(e.actor)} · {stamp(e.at)}
         {e.kind === "runtime" ? ` · ${t("runtime action, not a revision")}` : ""}
       </div>
     </div>

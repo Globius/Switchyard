@@ -20,6 +20,7 @@ const TENANTS = [
     version: 3,
     require_approval: true,
     quotas: { virtual_services: 20, service_engines: 4 },
+    usage: { virtual_services: 7, service_engines: 4 },
   },
   { id: "t2", name: "globius-lab", version: 1, require_approval: false, quotas: {} },
 ];
@@ -210,6 +211,7 @@ describe("admin area", () => {
     renderAt("/admin/tenants");
     expect(await screen.findByText("20 VS · 4 SE")).toBeInTheDocument();
     expect(screen.getByText("Required")).toBeInTheDocument();
+    expect(await screen.findByText("Used")).toBeInTheDocument();
     const q1 = await screen.findByLabelText("Limit 1");
     await userEvent.clear(q1);
     await userEvent.type(q1, "25");
@@ -265,6 +267,7 @@ describe("admin area", () => {
     await userEvent.click(dlg.getByRole("button", { name: "Create token" }));
     expect(await screen.findByText("sy_sys_secret")).toBeInTheDocument();
     expect(calls.token).toEqual({ name: "ci", ttl_days: 90 });
+    await userEvent.click(screen.getByLabelText("I have stored it"));
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
     await userEvent.click(await screen.findByRole("button", { name: "Revoke token" }));
@@ -576,7 +579,10 @@ describe("admin area", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Create administrator" }));
     expect(await screen.findByText("pw-once")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Authenticator code"), "123456");
-    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    const confirmBtn = screen.getByRole("button", { name: "Confirm" });
+    expect(confirmBtn).toBeDisabled();
+    await userEvent.click(screen.getByLabelText("I have stored it"));
+    await userEvent.click(confirmBtn);
     await waitFor(() => expect(confirmed).toEqual({ totp: "123456" }));
   });
 

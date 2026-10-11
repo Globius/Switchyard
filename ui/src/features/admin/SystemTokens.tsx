@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ShowOnceSecret } from "@/components/sy/ShowOnceSecret";
 import { Sheet } from "@/components/ui/sheet";
 import { t } from "@/lib/i18n";
 
@@ -19,6 +20,7 @@ export function SystemTokens() {
   const [name, setName] = useState("");
   const [ttl, setTtl] = useState("90");
   const [shown, setShown] = useState<string | null>(null);
+  const [stored, setStored] = useState(false);
   const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
   const list = useQuery({
     queryKey: ["admin", "tokens"],
@@ -47,6 +49,7 @@ export function SystemTokens() {
   const close = () => {
     setCreating(false);
     setShown(null);
+    setStored(false);
   };
   return (
     <div className="space-y-4">
@@ -126,11 +129,16 @@ export function SystemTokens() {
         <Sheet
           open
           centered
-          onOpenChange={(o) => !o && close()}
+          onOpenChange={(o) => !o && !(shown && !stored) && close()}
           title={t("Create system token")}
           footer={
             <>
-              <Button variant="ghost" className="ml-auto" onClick={close}>
+              <Button
+                variant="ghost"
+                className="ml-auto"
+                disabled={!!shown && !stored}
+                onClick={close}
+              >
                 {shown ? t("Done") : t("Cancel")}
               </Button>
               {!shown && (
@@ -143,12 +151,11 @@ export function SystemTokens() {
         >
           {create.error && <ErrorState error={create.error} />}
           {shown ? (
-            <div className="space-y-2" role="status">
-              <p className="text-sm">{t("Copy it now. It is not shown again.")}</p>
-              <code className="block break-all rounded bg-muted p-2 font-mono text-xs">
-                {shown}
-              </code>
-            </div>
+            <ShowOnceSecret
+              secrets={[{ label: t("Token"), value: shown }]}
+              stored={stored}
+              onStoredChange={setStored}
+            />
           ) : (
             <>
               <label className="block space-y-1.5 text-sm font-medium">
