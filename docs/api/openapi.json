@@ -2320,6 +2320,25 @@
             "title": "Mgmt Pool Id",
             "type": "string"
           },
+          "nic_pools": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "propertyNames": {
+                  "format": "uuid"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Address pool for each VIP or backend network the group attaches, keyed by network id (each pool must be on that network). Every new engine gets one address per entry on that NIC; a network without an entry leaves its NIC unaddressed (set it up by hand).",
+            "title": "Nic Pools"
+          },
           "nodes": {
             "description": "Proxmox nodes to spread new VMs over.",
             "items": {

@@ -171,10 +171,11 @@ func hasFiles(unit string, target map[string][]byte) bool {
 }
 
 // activate makes a unit pick up its files, which are now those of target: it reloads the unit (or
-// restarts it, for units that cannot reload). Keepalived is the exception because it only runs
-// when it has something to do: it is started when its files appear and stopped when they are gone.
+// restarts it, for units that cannot reload). Keepalived and FRR are the exception because they only
+// run when they have something to do (the SE image skips them at boot until their config exists):
+// they are started when their files appear and stopped when they are gone.
 func (a *Applier) activate(ctx context.Context, unit string, target map[string][]byte) error {
-	if unit == "keepalived" {
+	if unit == "keepalived" || unit == "frr" {
 		if !hasFiles(unit, target) {
 			_, err := a.Runner.Run(ctx, "systemctl", "stop", unit)
 			return err

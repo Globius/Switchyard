@@ -12,3 +12,4 @@ prometheus-node-exporter
 chrony
 qemu-guest-agent
 cloud-init
+frr-pythontools

@@ -61,7 +61,7 @@ a render error.
 | Group mode | Files |
 | --- | --- |
 | VRRP | `keepalived.conf` holds the `vrrp_instance` and the virtual servers |
-| BGP | `max_prefixes` (profile default, per neighbour override) renders `neighbor <ip> maximum-prefix <n> restart 5` (ADR 0065); `keepalived.conf` holds the virtual servers only (no `vrrp_instance`), written only while the group has an enabled UDP service; `frr/vips.json` gains `udp_prefixes` and `udp_only_prefixes` |
+| BGP | each VIP is also an address on `lo` (`interface lo` in `frr.conf`): the kernel accepts traffic for it and `network` finds the prefix in the routing table, so it is announced (found by the lab, ADR 0056); `max_prefixes` (profile default, per neighbour override) renders `neighbor <ip> maximum-prefix <n> restart 5` (ADR 0065); `keepalived.conf` holds the virtual servers only (no `vrrp_instance`), written only while the group has an enabled UDP service; `frr/vips.json` gains `udp_prefixes` and `udp_only_prefixes` |
 | Either, with UDP | `nftables/switchyard-udp.nft` (masquerade for the real servers) and `sysctl/switchyard-udp.conf` (`ip_forward`, `vs.conntrack`) |
 
 The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.conf` and link

@@ -75,6 +75,9 @@ class ServiceEngineRow(TenantOwnedMixin, Base):
     pve_node: Mapped[str | None] = mapped_column(Text)
     vmid: Mapped[int | None] = mapped_column(Integer)
     guest_kind: Mapped[str | None] = mapped_column(Text)
+    data_ips: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
     agent_cert_serial: Mapped[str | None] = mapped_column(Text)
 
 

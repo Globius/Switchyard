@@ -1,54 +1,47 @@
-# The tenant the end-to-end lab adopts: one network that plays management, VIP and backend (the lab Proxmox
-# bridge vmbr0 is 172.30.0.0/24, gateway 172.30.0.1 = the Proxmox container itself).
+# The tenant the end-to-end lab adopts. Three networks on the lab Proxmox bridge vmbr0 (each engine gets one NIC per
+# network: eth0 management, eth1 VIP, eth2 backend); the Proxmox container itself has .1 on each, so it is the
+# client and the pool member. Two groups: `edge` (VRRP, two engines) and `edge-bgp` (BGP, one engine, one peer).
 tenants:
   - id: lab
     name: lab
 networks:
-  - id: net
-    tenant_id: lab
-    name: lab
-    cidr: 172.30.0.0/24
-    gateway: 172.30.0.1
-    vnet: vmbr0
+  - {id: net-mgmt, tenant_id: lab, name: mgmt, cidr: 172.30.0.0/24, gateway: 172.30.0.1, vnet: vmbr0}
+  - {id: net-vip, tenant_id: lab, name: vip, cidr: 10.99.0.0/24, gateway: 10.99.0.1, vnet: vmbr0}
+  - {id: net-be, tenant_id: lab, name: backend, cidr: 10.98.0.0/24, gateway: 10.98.0.1, vnet: vmbr0}
 vip_pools:
-  - id: pool-mgmt
-    tenant_id: lab
-    name: mgmt
-    network_id: net
-    ranges: [{start: 172.30.0.100, end: 172.30.0.110}]
-  - id: pool-vips
-    tenant_id: lab
-    name: vips
-    network_id: net
-    ranges: [{start: 172.30.0.240, end: 172.30.0.250}]
+  - {id: pool-mgmt, tenant_id: lab, name: mgmt-addrs, network_id: net-mgmt, ranges: [{start: 172.30.0.100, end: 172.30.0.119}]}
+  - {id: pool-se-vip, tenant_id: lab, name: se-vip-addrs, network_id: net-vip, ranges: [{start: 10.99.0.100, end: 10.99.0.119}]}
+  - {id: pool-se-be, tenant_id: lab, name: se-be-addrs, network_id: net-be, ranges: [{start: 10.98.0.100, end: 10.98.0.119}]}
+  - {id: pool-vips, tenant_id: lab, name: vips, network_id: net-vip, ranges: [{start: 10.99.0.230, end: 10.99.0.250}]}
 routing_profiles:
-  - id: rp
+  - {id: rp-vrrp, tenant_id: lab, name: vrrp, kind: vrrp, vrid: 51, interface: eth1}
+  - id: rp-bgp
     tenant_id: lab
-    name: vrrp
-    kind: vrrp
-    vrid: 51
-    interface: eth0
+    name: bgp
+    kind: bgp
+    asn: 65100
+    bfd: true
+    peers: [{peer_ip: 172.30.0.250, remote_asn: 65000}]
 se_groups:
-  - id: sg
+  - id: sg-vrrp
     tenant_id: lab
     name: edge
     ha_mode: vrrp
-    routing_profile_id: rp
-    canary_seconds: 0
-    networks:
-      - {network_id: net, role: mgmt}
-      - {network_id: net, role: vip}
-      - {network_id: net, role: backend}
-health_monitors:
-  - id: hm
+    routing_profile_id: rp-vrrp
+    canary_seconds: 5
+    networks: [{network_id: net-mgmt, role: mgmt}, {network_id: net-vip, role: vip}, {network_id: net-be, role: backend}]
+  - id: sg-bgp
     tenant_id: lab
-    name: api-up
-    type: http
-    http: {path: /api/v1/healthz, expect_status: [200]}
+    name: edge-bgp
+    ha_mode: bgp
+    routing_profile_id: rp-bgp
+    canary_seconds: 5
+    networks: [{network_id: net-mgmt, role: mgmt}, {network_id: net-vip, role: vip}, {network_id: net-be, role: backend}]
+health_monitors:
+  - {id: hm, tenant_id: lab, name: api-up, type: http, http: {path: /api/v1/healthz, expect_status: [200]}}
 pools:
   - id: pool-api
     tenant_id: lab
     name: controller-api
     health_monitor_id: hm
-    members:
-      - {address: 172.30.0.1, port: 8000}
+    members: [{address: 10.98.0.1, port: 8001}]

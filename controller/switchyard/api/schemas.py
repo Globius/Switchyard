@@ -1572,6 +1572,13 @@ class DeployIn(ApiModel):
     pool: str | None = Field(default=None, max_length=64)
     credentials_ref: str | None = None
     ssh_public_keys: str | None = Field(default=None, max_length=8192)
+    nic_pools: dict[UUID, UUID] | None = Field(
+        default=None,
+        description="Address pool for each VIP or backend network the group attaches, keyed by "
+        "network id (each pool must be on that network). Every new engine gets one address per "
+        "entry on that NIC; a network without an entry leaves its NIC unaddressed (set it up by "
+        "hand).",
+    )
     guest_kind: Literal["qemu", "lxc"] = Field(
         default="qemu",
         description="`qemu` clones a cloud-init VM template; `lxc` clones a container template "

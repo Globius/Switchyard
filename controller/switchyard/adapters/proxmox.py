@@ -34,6 +34,8 @@ class VmSpec:
         pool: Proxmox resource pool, if any.
         mgmt_bridge: Bridge or VNet for the management NIC (``net0``); the template's if ``None``.
         nics: Extra NICs as ``(bridge_or_vnet, vlan_tag or None)``, in order (net1, net2, ...).
+        nic_addresses: Address in CIDR form for each extra NIC, parallel to ``nics`` (``None`` or a
+            shorter tuple leaves a NIC unaddressed). No gateway: only the management NIC has one.
         cores: vCPUs.
         memory_mb: RAM.
         ssh_public_keys: Keys for the cloud-init user (operator access only; the controller never
@@ -51,6 +53,7 @@ class VmSpec:
     pool: str | None = None
     mgmt_bridge: str | None = None
     nics: tuple[tuple[str, int | None], ...] = ()
+    nic_addresses: tuple[str | None, ...] = ()
     cores: int = 2
     memory_mb: int = 2048
     ssh_public_keys: str | None = None
@@ -180,6 +183,12 @@ class Proxmox(Protocol):
 
 
 Sleep = Callable[[float], Awaitable[None]]
+
+
+def _nic_address(spec: VmSpec, index: int) -> str | None:
+    """The CIDR address for extra NIC number ``index`` (1-based), if one was allocated."""
+    position = index - 1
+    return spec.nic_addresses[position] if position < len(spec.nic_addresses) else None
 
 
 def _is_missing(response: httpx.Response) -> bool:
@@ -351,8 +360,11 @@ class HttpProxmox:
             bridge = spec.mgmt_bridge or "vmbr0"
             config["net0"] = f"name=eth0,bridge={bridge},ip={spec.mgmt_ip_cidr}{gateway}"
             for index, (nic, tag) in enumerate(spec.nics, start=1):
-                config[f"net{index}"] = f"name=eth{index},bridge={nic}" + (
-                    f",tag={tag}" if tag else ""
+                address = _nic_address(spec, index)
+                config[f"net{index}"] = (
+                    f"name=eth{index},bridge={nic}"
+                    + (f",tag={tag}" if tag else "")
+                    + (f",ip={address}" if address else "")
                 )
             if spec.ssh_public_keys:
                 config["ssh-public-keys"] = spec.ssh_public_keys
@@ -362,6 +374,8 @@ class HttpProxmox:
                 config["net0"] = f"virtio,bridge={spec.mgmt_bridge}"
             for index, (nic, tag) in enumerate(spec.nics, start=1):
                 config[f"net{index}"] = f"virtio,bridge={nic}" + (f",tag={tag}" if tag else "")
+                if address := _nic_address(spec, index):
+                    config[f"ipconfig{index}"] = f"ip={address}"
             if spec.ssh_public_keys:
                 config["sshkeys"] = spec.ssh_public_keys
             if spec.user_data_snippet:

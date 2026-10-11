@@ -56,6 +56,20 @@ def infra_data() -> dict[str, Any]:
     return d
 
 
+def with_nic_pools(d: dict[str, Any]) -> dict[str, Any]:
+    """Add an engine address pool on the group's backend network (the VIP pool is for VIPs)."""
+    d["vip_pools"].append(
+        {
+            "id": "vp-backend-se",
+            "tenant_id": "t-acme",
+            "name": "backend-se",
+            "network_id": d["networks"][1]["id"],
+            "ranges": [{"start": "10.20.0.200", "end": "10.20.0.210"}],
+        }
+    )
+    return d
+
+
 def request(count: int = 2, **kw: Any) -> DeployRequest:
     args: dict[str, Any] = {
         "tenant_id": TENANT,
@@ -312,3 +326,45 @@ async def test_retire_job_is_queued_by_tenant_admins(pg_url: str) -> None:
         while await worker.run_once():
             pass
         assert len(pve.vms) == 1
+
+
+async def test_deploy_addresses_the_data_nics_without_reusing_addresses(pg_url: str) -> None:
+    async with world(pg_url, with_nic_pools(infra_data())) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        backend = uuid.UUID(symbolic_uuid("net-be"))
+        pools = {backend: uuid.UUID(symbolic_uuid("vp-backend-se"))}
+        await infra.deploy_se_group(request(2, nic_pools=pools))
+        specs = [s for s, _ in pve.vms.values()]
+        assert [s.nic_addresses for s in specs] == [
+            (None, "10.20.0.200/24"),
+            (None, "10.20.0.201/24"),
+        ]
+        assert (
+            await count(w, "SELECT count(*) FROM service_engine WHERE data_ips <> '[]'::jsonb") == 2
+        )
+        await infra.deploy_se_group(
+            request(3, nic_pools=pools)
+        )  # one more engine continues the range
+        assert [s.nic_addresses for s, _ in pve.vms.values()][-1] == (None, "10.20.0.202/24")
+
+
+async def test_deploy_rejects_a_nic_pool_on_the_wrong_network(pg_url: str) -> None:
+    async with world(pg_url, with_nic_pools(infra_data())) as w:
+        wrong = {uuid.UUID(symbolic_uuid("net-lb")): uuid.UUID(symbolic_uuid("vp-backend-se"))}
+        with pytest.raises(DeployError):
+            await InfraService(w.db, FakeProxmox()).deploy_se_group(request(1, nic_pools=wrong))
+
+
+async def test_two_groups_on_one_network_never_share_an_address(pg_url: str) -> None:
+    d = infra_data()
+    second = copy.deepcopy(d["se_groups"][0])
+    second.update(id="sg-second", name="second")
+    d["se_groups"].append(second)
+    async with world(pg_url, d) as w:
+        pve = FakeProxmox()
+        infra = InfraService(w.db, pve)
+        await infra.deploy_se_group(request(1))
+        await infra.deploy_se_group(request(1, se_group_id=uuid.UUID(symbolic_uuid("sg-second"))))
+        addresses = [s.mgmt_ip_cidr for s, _ in pve.vms.values()]
+        assert len(addresses) == 2 and len(set(addresses)) == 2, addresses

@@ -85,7 +85,7 @@ func TestApplyWritesFilesAndReloadsOnlyChangedUnits(t *testing.T) {
 	if !resp.Ok || !reflect.DeepEqual(resp.ReloadedUnits, []string{"frr"}) {
 		t.Fatalf("only frr changed: %+v", resp)
 	}
-	if !reflect.DeepEqual(r.calls, []string{"systemctl reload frr"}) {
+	if !reflect.DeepEqual(r.calls, []string{"systemctl is-active --quiet frr", "systemctl reload frr"}) {
 		t.Fatalf("calls: %v", r.calls)
 	}
 }
@@ -179,7 +179,10 @@ func TestFailedReloadRestoresThePreviousFiles(t *testing.T) {
 	if a.LastBundleID() != "b1" {
 		t.Fatalf("bundle id must stay b1, got %s", a.LastBundleID())
 	}
-	if !reflect.DeepEqual(r.calls, []string{"systemctl reload frr", "systemctl reload frr"}) {
+	if !reflect.DeepEqual(r.calls, []string{
+		"systemctl is-active --quiet frr", "systemctl reload frr",
+		"systemctl is-active --quiet frr", "systemctl reload frr",
+	}) {
 		t.Fatalf("expected a reload to apply and one to restore: %v", r.calls)
 	}
 }
@@ -370,5 +373,22 @@ func TestBundlesAreBoundToTheEngineAndMustBeNewer(t *testing.T) {
 	restarted := &Applier{Root: a.Root, PubKey: a.PubKey, Runner: a.Runner, Engine: "se-a"}
 	if resp := restarted.Apply(ctx, boundRequest(t, priv, "b7", "se-a", 101, files)); resp.Ok {
 		t.Error("a replay after a restart was accepted")
+	}
+}
+
+func TestStoppedFRRIsStartedNotReloaded(t *testing.T) {
+	a, priv, r := setup(t)
+	r.fail["systemctl is-active --quiet frr"] = true // not running yet: the image skips it until it has a config
+	resp := a.Apply(context.Background(), request(t, priv, "b1", map[string]string{"frr/frr.conf": "router bgp 1\n"}))
+	if !resp.Ok {
+		t.Fatal(resp.Error)
+	}
+	if !contains(r.calls, "systemctl start frr") || contains(r.calls, "systemctl reload frr") {
+		t.Fatalf("a stopped frr must be started, not reloaded: %v", r.calls)
+	}
+	r.calls = nil
+	resp = a.Apply(context.Background(), request(t, priv, "b2", map[string]string{"keepalived/keepalived.conf": "v\n"}))
+	if !resp.Ok || !contains(r.calls, "systemctl stop frr") {
+		t.Fatalf("removing the last frr file stops it: %v %v", resp, r.calls)
 	}
 }

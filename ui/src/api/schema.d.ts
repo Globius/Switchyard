@@ -3963,6 +3963,13 @@ export interface components {
              */
             mgmt_pool_id: string;
             /**
+             * Nic Pools
+             * @description Address pool for each VIP or backend network the group attaches, keyed by network id (each pool must be on that network). Every new engine gets one address per entry on that NIC; a network without an entry leaves its NIC unaddressed (set it up by hand).
+             */
+            nic_pools?: {
+                [key: string]: string;
+            } | null;
+            /**
              * Nodes
              * @description Proxmox nodes to spread new VMs over.
              */
