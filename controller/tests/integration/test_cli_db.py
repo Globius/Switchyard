@@ -78,3 +78,18 @@ def test_db_upgrade_is_idempotent(pg_url: str) -> None:
         code, out, _ = syctl(pg_url, "db", "upgrade")
         assert code == 0
         assert "revision head" in out
+
+
+def test_adopt_management_example_then_refuses_second_run(
+    pg_url: str, owner_engine: object
+) -> None:
+    example = Path(__file__).parents[3] / "deploy/prod/adopt/management.example.yaml"
+    code, out, err = syctl(pg_url, "adopt", str(example))
+    assert code == 0, err
+    assert "adopted tenant 'management': 1 SE groups, 1 virtual services, 2 engines" in out
+    code, _, err = syctl(pg_url, "adopt", str(example))
+    assert code == 1
+    assert "already exists" in err
+    code, out, err = syctl(pg_url, "render", "--tenant", "management", "--se-group", "management")
+    assert code == 0, err
+    assert "frontend vs_controller" in out

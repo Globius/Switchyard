@@ -29,7 +29,7 @@ from switchyard.db import changesets as store
 from switchyard.db.models import TenantRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import tenant_session
-from switchyard.domain import permissions
+from switchyard.domain import management, permissions
 from switchyard.domain.changes import (
     ChangeOp,
     Draft,
@@ -331,6 +331,8 @@ class ChangeSetService:
             existing = await store.load_ops(session, change_set_id)
             base = await load_snapshot(session)
             apply_ops(base, [*existing, *new_ops], tenant_id=tenant_id)  # raises ChangeError
+            if protected := management.protected_problems(base, [*existing, *new_ops]):
+                raise ValidationFailedError(protected)
             await store.replace_ops(session, tenant_id, change_set_id, [*existing, *new_ops])
             await audit_log.record(
                 session,
@@ -541,12 +543,17 @@ class ChangeSetService:
             record = await self._locked(session, change_set_id)
             if record.state not in {ChangeSetState.DRAFT, ChangeSetState.FAILED}:
                 raise ConflictError(f"a {record.state} change set cannot be applied")
-            tenant_requires = bool(
-                (
-                    await session.execute(
-                        select(TenantRow.require_approval).where(TenantRow.id == tenant_id)
+            tenant_row = (
+                await session.execute(
+                    select(TenantRow.name, TenantRow.require_approval).where(
+                        TenantRow.id == tenant_id
                     )
-                ).scalar_one()
+                )
+            ).one()
+            # The management tenant behaves as if approval were required: only a system
+            # administrator with a reason may apply (ADR 0051).
+            tenant_requires = bool(tenant_row.require_approval) or management.is_locked(
+                tenant_row.name
             )
             if tenant_requires and (not principal.is_system or not break_glass_reason):
                 raise PermissionDeniedError(
@@ -696,6 +703,8 @@ class ChangeSetService:
         draft = apply_ops(base, ops, tenant_id=tenant_id)
         if draft.problems:
             raise ValidationFailedError(draft.problems)
+        if protected := management.protected_problems(base, ops):
+            raise ValidationFailedError(protected)
 
     @staticmethod
     def _require_other_user(record: store.ChangeSetRecord, principal: Principal) -> None:

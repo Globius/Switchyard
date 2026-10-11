@@ -1,0 +1,76 @@
+# Adoption file for the management tenant: `syctl adopt deploy/prod/adopt/management.yaml`.
+# Copy to management.yaml and edit: addresses below are examples (RFC 5737 / RFC 1918).
+# The controller VMs are the pool members; the SE VMs were built from the SE template by OpenTofu.
+tenants:
+  - id: mgmt
+    name: management            # this exact name locks the tenant (ADR 0051)
+networks:
+  - id: net-vip
+    tenant_id: mgmt
+    name: controller-vip
+    cidr: 192.0.2.0/24
+    gateway: 192.0.2.1
+  - id: net-ctl
+    tenant_id: mgmt
+    name: controller-vms
+    cidr: 10.0.0.0/24
+vip_pools:
+  - id: pool-vips
+    tenant_id: mgmt
+    name: vips
+    network_id: net-vip
+    ranges:
+      - start: 192.0.2.10
+        end: 192.0.2.20
+se_groups:
+  - id: sg-mgmt
+    tenant_id: mgmt
+    name: management
+    ha_mode: vrrp
+    networks:
+      - network_id: net-vip
+        role: vip
+      - network_id: net-ctl
+        role: backend
+health_monitors:
+  - id: hm-api
+    tenant_id: mgmt
+    name: api-up
+    type: http
+    http:
+      path: /api/v1/healthz
+      expect_status: [200]
+pools:
+  - id: pool-controllers
+    tenant_id: mgmt
+    name: controllers
+    health_monitor_id: hm-api
+    members:
+      - {address: 10.0.0.11, port: 8000}
+      - {address: 10.0.0.12, port: 8000}
+virtual_services:
+  - id: vs-controller
+    tenant_id: mgmt
+    se_group_id: sg-mgmt
+    name: controller            # protected: the pipeline refuses to delete or disable it
+    protocol: tcp
+    vip: 192.0.2.10
+    vip_pool_id: pool-vips
+    ports:
+      - port: 8000
+    default_pool_id: pool-controllers
+engines:
+  - se_group: management
+    name: se-mgmt-1
+    mgmt_ip: 10.0.0.21
+    dataplane_url: https://10.0.0.21:5555
+    agent_url: https://10.0.0.21:7443
+    pve_node: pve1
+    vmid: 9101
+  - se_group: management
+    name: se-mgmt-2
+    mgmt_ip: 10.0.0.22
+    dataplane_url: https://10.0.0.22:5555
+    agent_url: https://10.0.0.22:7443
+    pve_node: pve2
+    vmid: 9102

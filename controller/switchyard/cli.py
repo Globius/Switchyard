@@ -23,6 +23,7 @@ from switchyard.db import migrate
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
 from switchyard.domain.errors import DomainValidationError
 from switchyard.render.escape import RenderError
+from switchyard.services.adopt import adopt
 from switchyard.services.errors import AlreadyExistsError, NotFoundError
 from switchyard.services.render import render_se_group
 from switchyard.services.seed import seed_example
@@ -192,6 +193,32 @@ def serve(
     config = uvicorn.Config(app, host=host, port=port)
     # uvicorn's own loop is Proactor on Windows, which psycopg rejects; run() uses the selector.
     run(uvicorn.Server(config).serve())
+
+
+@app.command("adopt")
+def adopt_command(
+    file: Annotated[Path, typer.Argument(help="Adoption file (snapshot YAML plus `engines`).")],
+    url: DatabaseUrl = DEFAULT_DATABASE_URL,
+) -> None:
+    """Adopt infrastructure built outside the controller, such as the management tenant."""
+
+    async def go() -> str:
+        engine = make_engine(url, role=ADMIN_ROLE)
+        try:
+            snapshot, engines = await adopt(engine, file)
+        finally:
+            await engine.dispose()
+        return (
+            f"adopted tenant {snapshot.tenants[0].name!r}: {len(snapshot.se_groups)} SE groups, "
+            f"{len(snapshot.virtual_services)} virtual services, {engines} engines"
+        )
+
+    try:
+        typer.echo(run(go()))
+    except AlreadyExistsError as exc:
+        raise fail(str(exc), 1) from exc
+    except (ValueError, DomainValidationError, OSError) as exc:
+        raise fail(str(exc), 2) from exc
 
 
 @app.command("worker")

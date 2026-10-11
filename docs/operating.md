@@ -7,6 +7,7 @@
 | `syctl db upgrade` | Apply database migrations |
 | `syctl serve` | HTTP API (`/api/v1`; Swagger UI `/api/v1/docs`, ReDoc `/api/v1/redoc`, OpenAPI `/api/v1/openapi.json`) |
 | `syctl worker` | Job worker and scheduler (apply, Git mirror, status polling, certificates, housekeeping) |
+| `syctl adopt FILE` | Adopt infrastructure built outside the controller (the `management` tenant bootstrap; ADR 0051) |
 | `syctl token` | Create a system-admin API token directly in the database (bootstrap and recovery) |
 
 Run any number of workers; one of them (whoever holds the advisory lock) schedules the recurring jobs.
