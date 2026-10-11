@@ -36,7 +36,8 @@ export function focusField(path: string, root: ParentNode = document): boolean {
     if (!el) continue;
     const input = el.matches("input,select,textarea,button")
       ? el
-      : el.querySelector<HTMLElement>("input,select,textarea,button");
+      : (el.querySelector<HTMLElement>("[data-focus]") ??
+        el.querySelector<HTMLElement>("input,select,textarea,button"));
     (input ?? el).focus();
     el.scrollIntoView?.({ block: "center" });
     return true;
