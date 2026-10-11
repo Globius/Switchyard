@@ -116,7 +116,7 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Tenant access and settings | partial | Quota limits only, no usage counts | *no API* | Counts per object type on the tenant read |
 | Admin: tenants, users, identity providers, break-glass, mappings, system tokens | done | | | |
 | Admin role matrix | partial | Lists every server permission, not the artboard's eight grouped rows | *design question* | Group in the UI or add a `group` field to `/permissions` |
-| Admin audit log | partial | Export covers loaded events only | *no API* (no export endpoint) | Server-side export or full paging |
+| Admin audit log | partial | Export covers loaded events only | *UI to wire* (export endpoint done, ADR 0060) | Use `GET /audit-events/export` |
 | Drift: "Re-apply revision #N" offer | missing | Drift is shown; the one explicit action is not | *not started* | Button opening a rollback draft to the live revision |
 | Handoff components (ShowOnceSecret, LiveBadge, IpUsageBar, BgpSessionChip, VrrpStateChip, WizardStepper, ApprovalBanner, MemberStateList, JobProgress) | partial | Built inside features, not as shared `@switchyard` components; only ChipInput, StatusPill, states, RenderedConfigView, ConfirmDialog are shared (JobProgress is in `features/review`) | *not started* | Extract when reused |
 | Viewer (read-only) states | partial | Tests only; no viewer user in the demo data | *not started* | Seed a viewer in `syctl seed --example` |
