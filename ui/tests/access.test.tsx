@@ -22,7 +22,14 @@ const USERS = [
     last_login_at: new Date().toISOString(),
     last_seen_at: "2026-10-11T08:00:00Z",
     disabled_at: null,
-    grants: [{ role: "tenant-admin", tenant: "acme", tenant_id: "t1", via: ["sy-acme-admins"] }],
+    grants: [
+      {
+        role: "tenant-admin",
+        tenant: "acme",
+        tenant_id: "t1",
+        via: [{ provider: "Authentik", group: "sy-acme-admins" }],
+      },
+    ],
   },
 ];
 const MAPPINGS = [
@@ -192,7 +199,7 @@ describe("tenant access and settings", () => {
     expect(
       await screen.findByText("mrodriguez", { selector: "div.font-medium" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("sy-acme-admins")).toBeInTheDocument();
+    expect(screen.getByText("Authentik · sy-acme-admins")).toBeInTheDocument();
   });
 
   it("adds and removes viewer and operator mappings; tenant-admin mappings are locked", async () => {

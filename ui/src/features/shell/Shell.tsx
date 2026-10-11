@@ -119,8 +119,7 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
                 i.to.startsWith("..") ? (
                   <Link
                     key={i.label}
-                    to="/admin/$"
-                    params={{ _splat: "tenants" }}
+                    to="/admin/tenants"
                     className="block rounded-md px-3 py-2 hover:bg-sidebar-accent"
                   >
                     {t(i.label)}
