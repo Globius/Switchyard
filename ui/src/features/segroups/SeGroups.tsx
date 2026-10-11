@@ -4,9 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
 import { useMemo, useState } from "react";
-import { api, unwrap } from "@/api/client";
+import { api, ApiError, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
+import { NicAddresses, nicPoolsBody } from "./NicAddresses";
 import { ChipInput } from "@/components/sy/ChipInput";
 import { ShowOnceSecret } from "@/components/sy/ShowOnceSecret";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
@@ -456,6 +457,16 @@ function DeploySheet({
   onClose: () => void;
 }) {
   const pools = useVipPools(tenant);
+  const nets = useQuery({
+    queryKey: ["t", tenant, "networks", { changeSet: undefined }],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/v1/tenants/{t}/networks", {
+          params: { path: { t: tenant }, query: { limit: 200 } },
+        }),
+      ),
+  });
+  const [nicChoice, setNicChoice] = useState<Record<string, string | undefined>>({});
   const qc = useQueryClient();
   const [total, setTotal] = useState(current + 1);
   const [guest, setGuest] = useState<"qemu" | "lxc">("qemu");
@@ -476,6 +487,7 @@ function DeploySheet({
           body: {
             count: total - current,
             guest_kind: guest,
+            nic_pools: nicPoolsBody(group.networks, nicChoice, pools.data?.items ?? []),
             template_vmid: Number(template),
             nodes,
             mgmt_pool_id: mgmt,
@@ -491,6 +503,19 @@ function DeploySheet({
     },
     onError: setProblem,
   });
+  const nicErrors: Record<string, string> = {};
+  const otherErrors: string[] = [];
+  if (problem instanceof ApiError && problem.status === 422)
+    for (const e of problem.problem?.errors ?? []) {
+      const m = /^nic_pools\.(.+)$/.exec(e.path);
+      if (m?.[1]) nicErrors[m[1]] = e.message;
+      else otherErrors.push(e.message);
+    }
+  const nicOnly =
+    problem instanceof ApiError &&
+    problem.status === 422 &&
+    Object.keys(nicErrors).length > 0 &&
+    otherErrors.length === 0;
   const lxc = guest === "lxc";
   const valid =
     total > current && Number(template) > 0 && nodes.length > 0 && mgmt !== "" && (!lxc || ack);
@@ -523,7 +548,7 @@ function DeploySheet({
         </>
       }
     >
-      {problem != null && <ErrorState error={problem} />}
+      {problem != null && !nicOnly && <ErrorState error={problem} />}
       {done ? (
         <p role="status" className="text-sm">
           {t("Deploying as a job. Follow it on the Jobs screen.")}
@@ -715,6 +740,15 @@ function DeploySheet({
               </select>
             </label>
           </div>
+          <NicAddresses
+            tenant={tenant}
+            networks={nets.data?.items ?? []}
+            groupNetworks={group.networks}
+            pools={pools.data?.items ?? []}
+            choices={nicChoice}
+            onChoice={(n, p) => setNicChoice({ ...nicChoice, [n]: p })}
+            errors={nicErrors}
+          />
           <label className="block space-y-1.5 text-sm font-medium">
             {t("Data Plane API credentials reference")}
             <input
