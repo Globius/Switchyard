@@ -783,8 +783,21 @@
       },
       "BgpPeer": {
         "additionalProperties": false,
-        "description": "An upstream BGP neighbour (for example a tenant's FortiGate VDOM).\n\nAttributes:\n    peer_ip: Neighbour address.\n    remote_asn: Neighbour AS number.\n    md5_ref: OpenBao reference of the session password; the password itself is never stored.",
+        "description": "An upstream BGP neighbour (for example a tenant's FortiGate VDOM).\n\nAttributes:\n    peer_ip: Neighbour address.\n    remote_asn: Neighbour AS number.\n    md5_ref: OpenBao reference of the session password; the password itself is never stored.\n    max_prefixes: Prefix limit for this neighbour; overrides the profile's ``max_prefixes``.",
         "properties": {
+          "max_prefixes": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Prefixes"
+          },
           "md5_ref": {
             "anyOf": [
               {
@@ -825,7 +838,7 @@
       },
       "BgpProfile": {
         "additionalProperties": false,
-        "description": "FRR BGP settings for an SE group (route health injection, ECMP).\n\nAttributes:\n    asn: The engines' AS number.\n    bfd: Run BFD with the peers for sub-second failure detection.\n    peers: Upstream neighbours (at least one).\n    max_paths: ECMP width.\n    static_routes: Routes installed on every engine.",
+        "description": "FRR BGP settings for an SE group (route health injection, ECMP).\n\nAttributes:\n    asn: The engines' AS number.\n    bfd: Run BFD with the peers for sub-second failure detection.\n    peers: Upstream neighbours (at least one).\n    max_prefixes: Default prefix limit per neighbour (``maximum-prefix``): FRR resets the\n        session when a neighbour announces more, and tries again after five minutes.\n        ``None`` sets no limit.\n    max_paths: ECMP width.\n    static_routes: Routes installed on every engine.",
         "properties": {
           "asn": {
             "maximum": 4294967295.0,
@@ -855,6 +868,19 @@
             "minimum": 1.0,
             "title": "Max Paths",
             "type": "integer"
+          },
+          "max_prefixes": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Prefixes"
           },
           "name": {
             "title": "Name",
@@ -924,6 +950,19 @@
             "minimum": 1.0,
             "title": "Max Paths",
             "type": "integer"
+          },
+          "max_prefixes": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Prefixes"
           },
           "name": {
             "title": "Name",
@@ -996,6 +1035,17 @@
               }
             ],
             "title": "Max Paths"
+          },
+          "max_prefixes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Prefixes"
           },
           "name": {
             "anyOf": [
@@ -1087,6 +1137,19 @@
             "minimum": 1.0,
             "title": "Max Paths",
             "type": "integer"
+          },
+          "max_prefixes": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Prefixes"
           },
           "name": {
             "title": "Name",
