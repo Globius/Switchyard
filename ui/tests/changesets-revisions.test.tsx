@@ -366,10 +366,10 @@ describe("tenant home", () => {
           roles: ["viewer", "operator", "tenant-admin", "system-admin"],
           permissions: [
             {
-              verb: "manage",
-              object: "engine",
+              verb: "rollback",
+              object: "revision",
               min_role: "tenant-admin",
-              description: "Engines.",
+              description: "Roll back.",
               group: "Infrastructure",
             },
           ],

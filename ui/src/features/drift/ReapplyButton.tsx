@@ -23,7 +23,7 @@ export function ReapplyButton({
   engine?: string;
 }) {
   const can = useCan(tenant);
-  const allowed = can("manage", "engine");
+  const allowed = can("rollback", "revision");
   const qc = useQueryClient();
   const [confirm, setConfirm] = useState(false);
   const go = useMutation({
