@@ -51,7 +51,7 @@ export type Phase =
  */
 export function phaseOf(
   state: string,
-  job: Pick<Job, "state" | "retrying" | "result" | "ok"> | undefined,
+  job: (Pick<Job, "state" | "retrying" | "result" | "ok"> & { stages?: Job["stages"] }) | undefined,
 ): Phase {
   if (state === "applied") return "applied";
   if (state === "discarded") return "discarded";
@@ -61,7 +61,11 @@ export function phaseOf(
     if (job.state === "queued" && job.retrying) return "retrying";
     if (job.state === "queued" || job.state === "running") return "applying";
     const ok = job.ok ?? (job.result as { ok?: boolean } | null | undefined)?.ok;
-    if (job.state === "succeeded" && ok === false) return "reverted";
+    if (job.state === "succeeded" && ok === false) {
+      // Only a failure after the config reached an engine is a revert; earlier stages just failed.
+      const failed = job.stages?.find((x) => x.state === "failed")?.name;
+      return failed && !/^(canary|rollout|commit)/.test(failed) ? "failed" : "reverted";
+    }
     if (job.state === "failed") return "failed";
   }
   if (state === "applying") return "applying";

@@ -69,13 +69,13 @@ export function JobPill({ job }: { job: Job }) {
   if (phase === "gave_up") return <StatusPill status="down">{t("Dead · gave up")}</StatusPill>;
   if (phase === "retrying")
     return <StatusPill status="degraded">{t("Retrying after error")}</StatusPill>;
-  if (phase === "reverted") {
-    // Only a failure after the config reached an engine is a revert; earlier stages just failed.
-    const failed = (job.stages ?? []).find((x) => x.state === "failed")?.name ?? "";
-    return /^(canary|rollout|commit)/.test(failed) ? (
-      <StatusPill status="down">{t("Reverted at canary")}</StatusPill>
-    ) : (
-      <StatusPill status="down">{t("Failed at {stage}", { stage: failed || "apply" })}</StatusPill>
+  if (phase === "reverted") return <StatusPill status="down">{t("Reverted at canary")}</StatusPill>;
+  if (phase === "failed") {
+    const stage = (job.stages ?? []).find((x) => x.state === "failed")?.name;
+    return (
+      <StatusPill status="down">
+        {stage ? t("Failed at {stage}", { stage }) : t("Failed")}
+      </StatusPill>
     );
   }
   switch (job.state) {
