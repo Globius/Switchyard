@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -7,7 +8,6 @@ import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { DraftMarker, StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
-import { Sheet } from "@/components/ui/sheet";
 import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
@@ -18,6 +18,13 @@ type Policy =
   components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"];
 type Rule = components["schemas"]["RedirectRule"];
 const CODES = [301, 302, 303, 307, 308] as const;
+const CODE_NAMES: Record<(typeof CODES)[number], string> = {
+  301: "Moved permanently",
+  302: "Found",
+  303: "See other",
+  307: "Temporary",
+  308: "Permanent",
+};
 const INPUT =
   "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -157,87 +164,41 @@ function PolicySheet({
     }
   }
   const dis = !write.allowed || managed;
+  function reset() {
+    setErrors({});
+    setProblem(null);
+    setName(policy?.name ?? "");
+    setRules(
+      policy?.kind === "redirect"
+        ? structuredClone(policy.rules)
+        : [{ match: {}, redirect: { location: "", code: 301 } }],
+    );
+    setCidrText(policy?.kind === "allow_list" ? policy.cidrs.join("\n") : "");
+  }
 
   return (
     <>
-      <Sheet
-        inline
-        open
-        onOpenChange={(o) => !o && onClose()}
-        title={
-          policy
-            ? policy.name
-            : kind === "redirect"
-              ? t("New redirect policy")
-              : t("New allow list")
-        }
-        badge={
-          managed ? (
-            <StatusPill status="neutral">{t("Managed by Cloudflare sync")}</StatusPill>
-          ) : policy && policy.draft_status !== "unchanged" ? (
-            <DraftMarker status={policy.draft_status} />
-          ) : undefined
-        }
-        footer={
-          managed ? (
-            <Button variant="ghost" className="ml-auto" onClick={onClose}>
-              {t("Close")}
-            </Button>
-          ) : (
-            <>
-              {policy && (
-                <Tip label={write.reason}>
-                  <Button
-                    variant="outline"
-                    disabled={!write.allowed}
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    {t("Delete")}
-                  </Button>
-                </Tip>
-              )}
-              <Button variant="ghost" className="ml-auto" onClick={onClose}>
-                {t("Cancel")}
-              </Button>
-              <Tip label={write.reason}>
-                <Button
-                  disabled={!write.allowed || !dirty || save.isPending}
-                  onClick={() => void submit()}
-                >
-                  {t("Save to draft")}
-                </Button>
-              </Tip>
-            </>
-          )
-        }
-      >
-        {problem != null && <ErrorState error={problem} />}
-        {managed && (
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "This list is kept in sync with Cloudflare's published ranges, so it is read-only here. Attach it to a virtual service to accept traffic only through Cloudflare.",
+      <div className="space-y-4">
+        <section
+          aria-label={policy ? policy.name : t("New policy")}
+          className="rounded-lg border bg-card"
+        >
+          <div className="flex items-center gap-3 border-b px-5 py-3">
+            <h2 className="text-base font-semibold">
+              {policy
+                ? policy.name
+                : kind === "redirect"
+                  ? t("New redirect policy")
+                  : t("New allow list")}
+            </h2>
+            <StatusPill status="neutral">
+              {kind === "redirect" ? t("Redirect") : t("Allow list")}
+            </StatusPill>
+            {managed && <StatusPill status="neutral">{t("Managed by Cloudflare sync")}</StatusPill>}
+            {policy && policy.draft_status !== "unchanged" && (
+              <DraftMarker status={policy.draft_status} />
             )}
-          </p>
-        )}
-        <label className="block space-y-1.5 text-sm font-medium">
-          {t("Name")}
-          <input
-            aria-label={t("Name")}
-            className={INPUT}
-            disabled={dis}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          {errors.name && (
-            <span role="alert" className="block text-xs font-normal text-status-down">
-              {errors.name}
-            </span>
-          )}
-        </label>
-        {kind === "redirect" ? (
-          <section className="space-y-3">
-            <div className="flex items-center">
-              <h3 className="text-sm font-medium">{t("Rules")}</h3>
+            {kind === "redirect" && (
               <Button
                 size="sm"
                 variant="outline"
@@ -249,162 +210,255 @@ function PolicySheet({
               >
                 {t("Add rule")}
               </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                "Rules run in order, before the virtual service's routes. The first match redirects.",
-              )}
-            </p>
-            {rules.map((r, i) => {
-              const mode = r.match.path_exact ? "exact" : r.match.path_prefix ? "prefix" : "any";
-              return (
-                <div key={i} className="space-y-2 rounded-lg border p-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{t("Rule {n}", { n: i + 1 })}</span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={dis || i === 0}
-                      aria-label={t("Move rule {n} up", { n: i + 1 })}
-                      onClick={() => setRules(swap(rules, i, i - 1))}
-                    >
-                      ↑
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={dis || i === rules.length - 1}
-                      aria-label={t("Move rule {n} down", { n: i + 1 })}
-                      onClick={() => setRules(swap(rules, i, i + 1))}
-                    >
-                      ↓
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="ml-auto"
-                      disabled={dis || rules.length === 1}
-                      onClick={() => setRules(rules.filter((_, j) => j !== i))}
-                    >
-                      {t("Remove")}
-                    </Button>
-                  </div>
-                  <input
-                    aria-label={t("Rule {n} host", { n: i + 1 })}
-                    placeholder={t("When host is")}
-                    className={INPUT}
-                    disabled={dis}
-                    value={r.match.host ?? ""}
-                    onChange={(e) =>
-                      setRule(i, { match: { ...r.match, host: e.target.value || null } })
-                    }
-                  />
-                  <div className="grid grid-cols-[9rem_1fr] gap-2">
-                    <select
-                      aria-label={t("Rule {n} path match", { n: i + 1 })}
-                      className={INPUT}
-                      disabled={dis}
-                      value={mode}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        const p = r.match.path_exact ?? r.match.path_prefix ?? "";
-                        setRule(i, {
-                          match: {
-                            ...r.match,
-                            path_exact: v === "exact" ? p || "/" : null,
-                            path_prefix: v === "prefix" ? p || "/" : null,
-                          },
-                        });
-                      }}
-                    >
-                      <option value="any">{t("Any path")}</option>
-                      <option value="prefix">{t("Starts with")}</option>
-                      <option value="exact">{t("Is exactly")}</option>
-                    </select>
-                    <input
-                      aria-label={t("Rule {n} path", { n: i + 1 })}
-                      className={cn(INPUT, "font-mono")}
-                      disabled={dis || mode === "any"}
-                      value={r.match.path_exact ?? r.match.path_prefix ?? ""}
-                      onChange={(e) =>
-                        setRule(i, {
-                          match: {
-                            ...r.match,
-                            [mode === "exact" ? "path_exact" : "path_prefix"]: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </div>
-                  <input
-                    aria-label={t("Rule {n} redirect to", { n: i + 1 })}
-                    placeholder={t("Redirect to")}
-                    className={cn(INPUT, "font-mono")}
-                    disabled={dis}
-                    value={r.redirect.location}
-                    onChange={(e) =>
-                      setRule(i, { redirect: { ...r.redirect, location: e.target.value } })
-                    }
-                  />
-                  {Object.entries(errors)
-                    .filter(([p]) => p.startsWith(`rules.${i}`) || p.startsWith(`rules[${i}]`))
-                    .map(([p, m]) => (
-                      <p key={p} role="alert" className="text-xs text-status-down">
-                        {m} · {p}
-                      </p>
-                    ))}
-                  <select
-                    aria-label={t("Rule {n} code", { n: i + 1 })}
-                    className={INPUT}
-                    disabled={dis}
-                    value={r.redirect.code}
-                    onChange={(e) =>
-                      setRule(i, {
-                        redirect: {
-                          ...r.redirect,
-                          code: Number(e.target.value) as Rule["redirect"]["code"],
-                        },
-                      })
-                    }
-                  >
-                    {CODES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })}
-          </section>
-        ) : (
-          <label className="block space-y-1.5 text-sm font-medium">
-            {t("Allowed source ranges")}
-            <textarea
-              aria-label={t("Allowed source ranges")}
-              className="h-40 w-full rounded-md border bg-card p-3 font-mono text-xs disabled:opacity-60"
-              disabled={dis}
-              value={cidrText}
-              onChange={(e) => setCidrText(e.target.value)}
-            />
-            {(errors.cidrs || (cidrText && cidr.error)) && (
-              <span role="alert" className="block text-xs font-normal text-status-down">
-                {errors.cidrs ?? `Line ${cidr.error!.line}: ${cidr.error!.message}`}
-              </span>
             )}
-            <span className="block text-xs font-normal text-muted-foreground">
-              {t("One CIDR per line. IPv4 and IPv6. At least one range.")}
-            </span>
-          </label>
+          </div>
+          <div className="space-y-5 p-5">
+            {problem != null && <ErrorState error={problem} />}
+            {managed && (
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  "This list is kept in sync with Cloudflare's published ranges, so it is read-only here. Attach it to a virtual service to accept traffic only through Cloudflare.",
+                )}
+              </p>
+            )}
+            {!policy && (
+              <label className="block max-w-sm space-y-1.5 text-sm font-medium">
+                {t("Name")}
+                <input
+                  aria-label={t("Name")}
+                  className={INPUT}
+                  disabled={dis}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                {errors.name && (
+                  <span role="alert" className="block text-xs font-normal text-status-down">
+                    {errors.name}
+                  </span>
+                )}
+              </label>
+            )}
+            {kind === "redirect" ? (
+              <section className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "Rules run in order, before the virtual service's routes. The first match redirects.",
+                  )}
+                </p>
+                {rules.map((r, i) => {
+                  const mode = r.match.path_exact
+                    ? "exact"
+                    : r.match.path_prefix
+                      ? "prefix"
+                      : "any";
+                  const label = "mb-1.5 block text-sm font-medium";
+                  const ruleErrors = Object.entries(errors).filter(
+                    ([p]) => p.startsWith(`rules.${i}`) || p.startsWith(`rules[${i}]`),
+                  );
+                  return (
+                    <div key={i} className="space-y-3 rounded-lg border p-4 text-sm">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                          {t("Rule {n}", { n: i + 1 })}
+                        </span>
+                        <span className="ml-auto" />
+                        {i > 0 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={dis}
+                            aria-label={t("Move rule {n} up", { n: i + 1 })}
+                            onClick={() => setRules(swap(rules, i, i - 1))}
+                          >
+                            <ArrowUp className="size-4" />
+                          </Button>
+                        )}
+                        {i < rules.length - 1 && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={dis}
+                            aria-label={t("Move rule {n} down", { n: i + 1 })}
+                            onClick={() => setRules(swap(rules, i, i + 1))}
+                          >
+                            <ArrowDown className="size-4" />
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={dis || rules.length === 1}
+                          aria-label={t("Remove rule {n}", { n: i + 1 })}
+                          onClick={() => setRules(rules.filter((_, j) => j !== i))}
+                        >
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-[1fr_0.9fr_1.2fr]">
+                        <label>
+                          <span className={label}>{t("When host is")}</span>
+                          <input
+                            aria-label={t("Rule {n} host", { n: i + 1 })}
+                            className={INPUT}
+                            disabled={dis}
+                            value={r.match.host ?? ""}
+                            onChange={(e) =>
+                              setRule(i, { match: { ...r.match, host: e.target.value || null } })
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span className={label}>{t("and path")}</span>
+                          <select
+                            aria-label={t("Rule {n} path match", { n: i + 1 })}
+                            className={INPUT}
+                            disabled={dis}
+                            value={mode}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              const p = r.match.path_exact ?? r.match.path_prefix ?? "";
+                              setRule(i, {
+                                match: {
+                                  ...r.match,
+                                  path_exact: v === "exact" ? p || "/" : null,
+                                  path_prefix: v === "prefix" ? p || "/" : null,
+                                },
+                              });
+                            }}
+                          >
+                            <option value="any">{t("Any path")}</option>
+                            <option value="prefix">{t("Starts with")}</option>
+                            <option value="exact">{t("Is exactly")}</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span className={label}>{t("Path")}</span>
+                          <input
+                            aria-label={t("Rule {n} path", { n: i + 1 })}
+                            className={cn(INPUT, "font-mono")}
+                            disabled={dis || mode === "any"}
+                            placeholder={mode === "any" ? "—" : undefined}
+                            value={r.match.path_exact ?? r.match.path_prefix ?? ""}
+                            onChange={(e) =>
+                              setRule(i, {
+                                match: {
+                                  ...r.match,
+                                  [mode === "exact" ? "path_exact" : "path_prefix"]: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-[1.6fr_1.1fr]">
+                        <label>
+                          <span className={label}>{t("Redirect to")}</span>
+                          <input
+                            aria-label={t("Rule {n} redirect to", { n: i + 1 })}
+                            className={cn(
+                              INPUT,
+                              "font-mono",
+                              ruleErrors.length > 0 && "border-status-down",
+                            )}
+                            disabled={dis}
+                            value={r.redirect.location}
+                            onChange={(e) =>
+                              setRule(i, {
+                                redirect: { ...r.redirect, location: e.target.value },
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          <span className={label}>{t("Code")}</span>
+                          <select
+                            aria-label={t("Rule {n} code", { n: i + 1 })}
+                            className={INPUT}
+                            disabled={dis}
+                            value={r.redirect.code}
+                            onChange={(e) =>
+                              setRule(i, {
+                                redirect: {
+                                  ...r.redirect,
+                                  code: Number(e.target.value) as Rule["redirect"]["code"],
+                                },
+                              })
+                            }
+                          >
+                            {CODES.map((c) => (
+                              <option key={c} value={c}>
+                                {c} {t(CODE_NAMES[c])}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      {ruleErrors.map(([p, m]) => (
+                        <p key={p} role="alert" className="text-xs text-status-down">
+                          {m} · <span className="font-mono">{p}</span>
+                        </p>
+                      ))}
+                    </div>
+                  );
+                })}
+              </section>
+            ) : (
+              <label className="block space-y-1.5 text-sm font-medium">
+                {t("Allowed source ranges")}
+                <textarea
+                  aria-label={t("Allowed source ranges")}
+                  className="h-40 w-full rounded-md border bg-card p-3 font-mono text-xs disabled:opacity-60"
+                  disabled={dis}
+                  value={cidrText}
+                  onChange={(e) => setCidrText(e.target.value)}
+                />
+                {(errors.cidrs || (cidrText && cidr.error)) && (
+                  <span role="alert" className="block text-xs font-normal text-status-down">
+                    {errors.cidrs ?? `Line ${cidr.error!.line}: ${cidr.error!.message}`}
+                  </span>
+                )}
+                <span className="block text-xs font-normal text-muted-foreground">
+                  {t("One CIDR per line. IPv4 and IPv6. At least one range.")}
+                </span>
+              </label>
+            )}
+            {policy && (
+              <p className="text-xs text-muted-foreground">
+                {usedBy.length
+                  ? t("Used by {names}", { names: usedBy.join(", ") })
+                  : t("Not used by any virtual service.")}
+              </p>
+            )}
+          </div>
+        </section>
+        {!managed && (
+          <div className="flex items-center justify-end gap-2">
+            {policy && (
+              <Tip label={write.reason}>
+                <Button
+                  variant="outline"
+                  className="mr-auto"
+                  disabled={!write.allowed}
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  {t("Delete")}
+                </Button>
+              </Tip>
+            )}
+            <Button variant="ghost" onClick={policy ? reset : onClose}>
+              {policy ? t("Revert") : t("Cancel")}
+            </Button>
+            <Tip label={write.reason}>
+              <Button
+                disabled={!write.allowed || !dirty || save.isPending}
+                onClick={() => void submit()}
+              >
+                {t("Save to draft")}
+              </Button>
+            </Tip>
+          </div>
         )}
-        {policy && (
-          <p className="text-xs text-muted-foreground">
-            {usedBy.length
-              ? t("Used by {names}", { names: usedBy.join(", ") })
-              : t("Not used by any virtual service.")}
-          </p>
-        )}
-      </Sheet>
+      </div>
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
@@ -458,6 +512,10 @@ export function Policies({ tenant }: { tenant: string }) {
       .filter((v) => v.policy_set_ids.includes(id) || v.allow_list_id === id)
       .map((v) => v.name);
   const rows = (list.data?.items ?? []).filter((p) => filter === "all" || p.kind === filter);
+  const first = rows[0];
+  const picked =
+    editing ??
+    (first && list.data ? { policy: first, kind: first.kind as "redirect" | "allow_list" } : null);
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -487,27 +545,27 @@ export function Policies({ tenant }: { tenant: string }) {
           </Tip>
         </div>
       </div>
-      <div
-        role="group"
-        aria-label={t("Kind")}
-        className="inline-flex overflow-hidden rounded-md border"
-      >
-        {(["all", "redirect", "allow_list"] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={filter === k}
-            onClick={() => setFilter(k)}
-            className="px-3 py-1.5 text-sm aria-pressed:bg-accent"
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,19rem)_1fr]">
+        <div className="space-y-3 rounded-lg border bg-card p-2">
+          <div
+            role="group"
+            aria-label={t("Kind")}
+            className="inline-flex overflow-hidden rounded-md border"
           >
-            {{ all: t("All"), redirect: t("Redirect"), allow_list: t("Allow list") }[k]}
-          </button>
-        ))}
-      </div>
-      <div className={cn("grid gap-4", editing && "lg:grid-cols-[minmax(0,22rem)_1fr]")}>
-        <div className="self-start rounded-lg border bg-card">
+            {(["all", "redirect", "allow_list"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={filter === k}
+                onClick={() => setFilter(k)}
+                className="px-3 py-1.5 text-sm aria-pressed:bg-accent"
+              >
+                {{ all: t("All"), redirect: t("Redirect"), allow_list: t("Allow list") }[k]}
+              </button>
+            ))}
+          </div>
           {list.isPending ? (
-            <TableSkeleton cols={3} />
+            <TableSkeleton cols={1} />
           ) : list.isError ? (
             <ErrorState error={list.error} onRetry={() => void list.refetch()} />
           ) : rows.length === 0 ? (
@@ -518,57 +576,64 @@ export function Policies({ tenant }: { tenant: string }) {
               )}
             />
           ) : (
-            <ul className="divide-y">
-              {rows.map((p) => (
-                <li
-                  key={p.id}
-                  className={cn(
-                    "flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px]",
-                    editing?.policy?.id === p.id && "bg-accent/50",
-                  )}
-                >
-                  {p.draft_status !== "unchanged" && <DraftMarker status={p.draft_status} />}
-                  <button
-                    type="button"
-                    className={cn(
-                      "font-medium text-primary hover:underline",
-                      p.draft_status === "deleted" && "line-through",
-                    )}
-                    onClick={() =>
-                      setEditing({ policy: p, kind: p.kind as "redirect" | "allow_list" })
-                    }
-                  >
-                    {p.name}
-                  </button>
-                  <span className="text-muted-foreground">
-                    {p.kind === "redirect"
-                      ? t("Redirect · {n} rules", { n: p.rules.length })
-                      : p.managed_by
-                        ? t("Allow list · managed")
-                        : t("Allow list · {n} CIDRs", { n: p.cidrs.length })}
-                  </span>
-                  {p.kind === "allow_list" && p.managed_by && (
-                    <StatusPill status="neutral">{t("Managed")}</StatusPill>
-                  )}
-                  <span className={cn("text-muted-foreground", !editing && "ml-auto")}>
-                    {usedBy(p.id).join(", ")}
-                  </span>
-                </li>
-              ))}
+            <ul className="space-y-1">
+              {rows.map((p) => {
+                const active = picked?.policy?.id === p.id;
+                const users = usedBy(p.id).join(", ");
+                const summary =
+                  p.kind === "redirect"
+                    ? t("Redirect · {n} rules", { n: p.rules.length })
+                    : p.managed_by
+                      ? t("Allow list · managed")
+                      : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
+                return (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      aria-label={p.name}
+                      aria-current={active}
+                      onClick={() =>
+                        setEditing({ policy: p, kind: p.kind as "redirect" | "allow_list" })
+                      }
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-accent/50",
+                        active && "bg-accent",
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2 text-sm font-medium">
+                          {p.draft_status !== "unchanged" && (
+                            <DraftMarker status={p.draft_status} />
+                          )}
+                          <span className={cn(p.draft_status === "deleted" && "line-through")}>
+                            {p.name}
+                          </span>
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {users ? `${summary} · ${users}` : summary}
+                        </span>
+                      </span>
+                      {p.kind === "allow_list" && p.managed_by && (
+                        <StatusPill status="neutral">{t("Managed")}</StatusPill>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
-        {editing && (
+        {picked && (
           <PolicySheet
             key={
-              editing.policy
-                ? `${editing.policy.id}-${editing.policy.version}-${editing.policy.draft_status}`
-                : editing.kind
+              picked.policy
+                ? `${picked.policy.id}-${picked.policy.version}-${picked.policy.draft_status}`
+                : picked.kind
             }
             tenant={tenant}
-            policy={editing.policy}
-            kind={editing.kind}
-            usedBy={editing.policy ? usedBy(editing.policy.id) : []}
+            policy={picked.policy}
+            kind={picked.kind}
+            usedBy={picked.policy ? usedBy(picked.policy.id) : []}
             onClose={() => setEditing(null)}
           />
         )}
