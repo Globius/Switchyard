@@ -409,36 +409,38 @@ function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }
         <>
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">{t("Issuer")}</legend>
-            {(
-              [
-                ["acme", "ACME", "Publicly trusted. DNS-01 through Cloudflare."],
+            <div className="grid grid-cols-2 gap-3">
+              {(
                 [
-                  "cloudflare_origin",
-                  "Cloudflare Origin CA",
-                  "Trusted by Cloudflare only, for proxied hosts.",
-                ],
-              ] as const
-            ).map(([k, label, help]) => (
-              <label
-                key={k}
-                className={cn(
-                  "flex cursor-pointer gap-3 rounded-lg border p-3",
-                  source === k && "border-primary",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="issuer"
-                  aria-label={label}
-                  checked={source === k}
-                  onChange={() => setSource(k)}
-                />
-                <span>
-                  <span className="font-medium">{label}</span>
-                  <span className="block text-sm text-muted-foreground">{t(help)}</span>
-                </span>
-              </label>
-            ))}
+                  ["acme", "ACME", "Publicly trusted. DNS-01 through Cloudflare."],
+                  [
+                    "cloudflare_origin",
+                    "Cloudflare Origin CA",
+                    "Trusted by Cloudflare only, for proxied hosts.",
+                  ],
+                ] as const
+              ).map(([k, label, help]) => (
+                <label
+                  key={k}
+                  className={cn(
+                    "flex cursor-pointer gap-3 rounded-lg border p-3",
+                    source === k && "border-primary bg-primary/10",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="issuer"
+                    aria-label={label}
+                    checked={source === k}
+                    onChange={() => setSource(k)}
+                  />
+                  <span>
+                    <span className="font-medium">{label}</span>
+                    <span className="block text-sm text-muted-foreground">{t(help)}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </fieldset>
           <label className="block space-y-1.5 text-sm font-medium">
             {t("Name")}
@@ -464,6 +466,11 @@ function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }
               )}
             </span>
           </div>
+          <p className="rounded-md bg-muted p-3 text-sm">
+            {t(
+              "Runs as a job. The key is generated on the controller and stored in OpenBao. When the certificate is ready, a change set adds it; it waits for approval like any other.",
+            )}
+          </p>
         </>
       )}
     </Sheet>
