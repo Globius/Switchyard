@@ -897,3 +897,28 @@ async def test_monitor_test_runs_from_an_engine_through_the_agent(api: Api) -> N
     assert (await api.client.post(url, json=body, headers=h)).status_code == 409
     viewer = await api.token(Role.VIEWER)
     assert (await api.client.post(url, json=body, headers=viewer)).status_code == 403
+
+
+async def test_tenant_read_reports_usage_and_quotas_block_growth(api: Api) -> None:
+    root = await api.token(Role.SYSTEM_ADMIN)
+    before = (await api.client.get(f"{V1}/tenants/acme", headers=root)).json()
+    pools = before["usage"]["pool"]
+    assert pools >= 1 and before["usage"]["virtual_service"] >= 1
+    bad = await api.client.patch(
+        f"{V1}/tenants/acme", json={"quotas": {"nope": 1}}, headers={**root, "If-Match": '"1"'}
+    )
+    assert bad.status_code == 422
+    ok = await api.client.patch(
+        f"{V1}/tenants/acme",
+        json={"quotas": {"pool": pools}},
+        headers={**root, "If-Match": f'"{before["version"]}"'},
+    )
+    assert ok.status_code == 200 and ok.json()["usage"]["pool"] == pools
+    h = await api.token()
+    refused = await api.client.post(
+        f"{V1}/tenants/acme/pools?apply=true",
+        json={"name": "one-too-many", "members": []},
+        headers=h,
+    )
+    assert refused.status_code == 422
+    assert "quota_exceeded" in refused.text

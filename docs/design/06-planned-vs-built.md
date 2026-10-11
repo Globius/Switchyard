@@ -54,7 +54,7 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Identity providers, test sign-in, role mappings, users (G1-3, 5, 6) | done | | |
 | Audit log filters, cursor, `/audit-actions` (A1) | done | | |
 | Audit events to syslog | partial | JSON line from logger `switchyard.audit`; no syslog handler in `config.py` or `runtime.py` | Handler option and a docs line |
-| Tenant quotas | partial | Stored and editable by system-admin; nothing enforces them when objects are created | Enforce in the validator with a problem code; counts query for the UI |
+| Tenant quotas | done | Enforced as problem `quota_exceeded`; `usage` on the tenant read (ADR 0045) | |
 | Search, summary, VIP allocations, next-free, monitor test, engines list (A2 to A6) | done | | |
 | UDP via IPVS, `udp` monitor, field rules, schema endpoint (M6, T6, T7) | done | | |
 | Metrics and logs endpoints (A9) | partial | API done and answers `available: false`; the pipeline (HAProxy exporter, Prometheus, Vector, Loki) is not built, `HttpTelemetry` never run against a real stack | Deploy and document the pipeline; test against it |
@@ -107,7 +107,7 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Approval, apply progress | done | | | |
 | Conflict resolver | partial | Built and unit-tested; never run live against a controller | *not started* (live check) | Provoke a 412 against a real stack |
 | Change sets list, Jobs | done | | | |
-| Revisions: compare, rollback | partial | Revision "message" is read-only; apply takes no message | *no API* | `message` on apply and on the revision |
+| Revisions: compare, rollback | partial | Revision "message" is read-only in the UI; the API now takes `message` on apply (ADR 0046) | *UI to wire* | Message field on the apply dialog |
 | Pools, health monitors (with test), policies | done | | | |
 | Certificates: PEM, PKCS#12, issue, renew, replace | partial | `.p12` upload never run live | *not started* (live check) | Upload a real `.p12` against OpenBao |
 | Networks, VIP pools, allocations, apply SDN | done | | | |
