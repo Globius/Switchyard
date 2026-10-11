@@ -124,6 +124,7 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
           </span>
           <span className="hidden sm:inline">Switchyard</span>
         </Link>
+        <span aria-hidden className="hidden h-6 w-px bg-border sm:block" />
         <TenantSwitcher tenant={tenant} />
         <button
           type="button"

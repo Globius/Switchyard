@@ -102,7 +102,6 @@ export function Home({ tenant }: { tenant: string }) {
   const unreachable = s.unreachable_engines.length;
   const soon = s.expiring_certificates.length;
   const week = s.expiring_certificates.filter((c) => c.days_left <= 7).length;
-  const problems = s.failing_members.length + unreachable + s.drifted_engines.length + soon;
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
@@ -116,7 +115,6 @@ export function Home({ tenant }: { tenant: string }) {
         </div>
         <Button
           variant="outline"
-          disabled={problems === 0}
           onClick={() =>
             document.getElementById("failing-members")?.scrollIntoView({ behavior: "smooth" })
           }

@@ -99,6 +99,21 @@ export function JobPill({ job }: { job: Job }) {
   }
 }
 
+/** `4 s`, `1 min 4 s` or `12 min` from when the job started to when it ended (or now). */
+export function duration(j: Pick<Job, "started_at" | "finished_at">, now = Date.now()): string {
+  if (!j.started_at) return "—";
+  const secs = Math.max(
+    0,
+    Math.round(
+      ((j.finished_at ? Date.parse(j.finished_at) : now) - Date.parse(j.started_at)) / 1000,
+    ),
+  );
+  if (secs < 60) return `${secs} s`;
+  const m = Math.floor(secs / 60);
+  const r = secs % 60;
+  return m >= 10 || r === 0 ? `${m} min` : `${m} min ${r} s`;
+}
+
 function jobTitle(j: Job): string {
   return t(KINDS[j.kind] ?? j.kind);
 }
@@ -285,7 +300,7 @@ export function Jobs({ tenant }: { tenant: string }) {
             <table className="w-full text-[13px]">
               <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
                 <tr>
-                  {["Job", "State", "Attempts"].map((h) => (
+                  {["Job", "State", "Attempts", "Duration"].map((h) => (
                     <th key={h} className="px-4 py-2.5 font-medium">
                       {t(h)}
                     </th>
@@ -305,9 +320,13 @@ export function Jobs({ tenant }: { tenant: string }) {
                         {jobTitle(j)}
                       </button>
                       {j.change_set_id && (
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <Link
+                          to="/t/$tenant/review/$cs"
+                          params={{ tenant, cs: j.change_set_id }}
+                          className="font-mono text-xs text-primary hover:underline"
+                        >
                           {t("change set {id}", { id: `${j.change_set_id.slice(0, 8)}…` })}
-                        </div>
+                        </Link>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -316,6 +335,7 @@ export function Jobs({ tenant }: { tenant: string }) {
                     <td className="px-4 py-3">
                       {t("{n} of {max}", { n: j.attempts, max: j.max_attempts })}
                     </td>
+                    <td className="px-4 py-3 text-muted-foreground">{duration(j)}</td>
                   </tr>
                 ))}
               </tbody>
