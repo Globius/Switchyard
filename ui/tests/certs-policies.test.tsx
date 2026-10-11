@@ -383,6 +383,32 @@ describe("certificates", () => {
     expect(screen.getByText("kv/x")).toBeInTheDocument();
   });
 
+  it("replaces an uploaded certificate's material in the draft, keeping its id", async () => {
+    const replaced: { body: unknown; query: string }[] = [];
+    server.use(
+      http.post("*/api/v1/tenants/acme/certificates/:id/replace", async ({ request }) => {
+        replaced.push({ body: await request.json(), query: new URL(request.url).search });
+        return HttpResponse.json({ change_set_id: "cs1", object_id: "c1" }, { status: 202 });
+      }),
+    );
+    renderAt("/t/acme/certificates");
+    await userEvent.click(await screen.findByRole("button", { name: "Where wildcard is used" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Replace" }));
+    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
+    await fillPem();
+    const go = await screen.findByRole("button", { name: "Replace in draft" });
+    await waitFor(() => expect(go).toBeEnabled());
+    await userEvent.click(go);
+    await waitFor(() =>
+      expect(replaced[0]?.body).toEqual({
+        pem: `${CERT_ONLY}
+${KEY_ONLY}
+`,
+      }),
+    );
+    expect(replaced[0]?.query).toBe("?change_set=cs1");
+  });
+
   it("a certificate nobody uses says it can be deleted", async () => {
     renderAt("/t/acme/certificates");
     await userEvent.click(await screen.findByRole("button", { name: "Where mqtt is used" }));

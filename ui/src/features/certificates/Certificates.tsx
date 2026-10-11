@@ -115,10 +115,19 @@ export function toBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void }) {
+/** Import a new certificate, or with `replace` swap the material of an existing one (same id and usages). */
+function ImportSheet({
+  tenant,
+  onClose,
+  replace,
+}: {
+  tenant: string;
+  onClose: () => void;
+  replace?: { id: string; name: string };
+}) {
   const ensure = useEnsureDraft(tenant);
   const qc = useQueryClient();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(replace?.name ?? "");
   const [cert, setCert] = useState("");
   const [chain, setChain] = useState("");
   const [key, setKey] = useState("");
@@ -135,15 +144,24 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
     setProblem(null);
     try {
       const cs = await ensure.mutateAsync();
-      unwrap(
-        await api.POST("/api/v1/tenants/{t}/certificates/import", {
-          params: { path: { t: tenant }, query: { change_set: cs } },
-          body:
-            mode === "pem"
-              ? { name, pem: buildBundle(cert, chain, key) }
-              : { name, pkcs12_b64: pfx!.b64, password },
-        }),
-      );
+      const material =
+        mode === "pem"
+          ? { pem: buildBundle(cert, chain, key) }
+          : { pkcs12_b64: pfx!.b64, password };
+      if (replace)
+        unwrap(
+          await api.POST("/api/v1/tenants/{t}/certificates/{certificate}/replace", {
+            params: { path: { t: tenant, certificate: replace.id }, query: { change_set: cs } },
+            body: material,
+          }),
+        );
+      else
+        unwrap(
+          await api.POST("/api/v1/tenants/{t}/certificates/import", {
+            params: { path: { t: tenant }, query: { change_set: cs } },
+            body: { name, ...material },
+          }),
+        );
       setKey("");
       setPassword("");
       await qc.invalidateQueries({ queryKey: ["t", tenant] });
@@ -158,7 +176,7 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
     <Sheet
       open
       onOpenChange={(o) => !o && onClose()}
-      title={t("Import certificate")}
+      title={replace ? t("Replace {name}", { name: replace.name }) : t("Import certificate")}
       footer={
         <>
           <Button variant="ghost" className="ml-auto" onClick={onClose}>
@@ -168,21 +186,30 @@ function ImportSheet({ tenant, onClose }: { tenant: string; onClose: () => void 
             disabled={busy || !name || (mode === "pem" ? !certOk || !chainOk || !keyOk : !pfx)}
             onClick={() => void submit()}
           >
-            {t("Add to draft")}
+            {replace ? t("Replace in draft") : t("Add to draft")}
           </Button>
         </>
       }
     >
       {problem != null && <ErrorState error={problem} />}
-      <label className="block space-y-1.5 text-sm font-medium">
-        {t("Name")}
-        <input
-          aria-label={t("Name")}
-          className={INPUT}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-      </label>
+      {replace ? (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            "The new certificate and key take over {name}. Its id and the virtual services using it stay; the swap goes into your draft.",
+            { name: replace.name },
+          )}
+        </p>
+      ) : (
+        <label className="block space-y-1.5 text-sm font-medium">
+          {t("Name")}
+          <input
+            aria-label={t("Name")}
+            className={INPUT}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+      )}
       <div
         role="group"
         aria-label={t("Import format")}
@@ -281,11 +308,13 @@ function UsageSheet({
   cert,
   services,
   onClose,
+  onReplace,
 }: {
   tenant: string;
   cert: CertRow | undefined;
   services: ServiceRow[];
   onClose: () => void;
+  onReplace?: () => void;
 }) {
   if (!cert) return null;
   const ex = expiryStatus(cert.not_after);
@@ -298,9 +327,16 @@ function UsageSheet({
         cert.draft_status !== "unchanged" ? <DraftMarker status={cert.draft_status} /> : undefined
       }
       footer={
-        <Button variant="ghost" className="ml-auto" onClick={onClose}>
-          {t("Close")}
-        </Button>
+        <>
+          {onReplace && cert.source === "upload" && (
+            <Button variant="outline" onClick={onReplace}>
+              {t("Replace")}
+            </Button>
+          )}
+          <Button variant="ghost" className="ml-auto" onClick={onClose}>
+            {t("Close")}
+          </Button>
+        </>
       }
     >
       <dl className="grid grid-cols-[7rem_1fr] gap-y-2 text-sm">
@@ -489,6 +525,7 @@ export function Certificates({ tenant }: { tenant: string }) {
   const del = useSaveOp(tenant, "certificate");
   const qc = useQueryClient();
   const [sheet, setSheet] = useState<"import" | "issue" | null>(null);
+  const [replacing, setReplacing] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; name: string; version: number } | null>(
     null,
@@ -666,7 +703,14 @@ export function Certificates({ tenant }: { tenant: string }) {
           cert={rows.find((c) => c.id === detail)}
           services={(services.data?.items ?? []).filter((v) => v.certificate_ids.includes(detail))}
           onClose={() => setDetail(null)}
+          onReplace={() => {
+            const c = rows.find((x) => x.id === detail);
+            if (c) setReplacing({ id: c.id, name: c.name });
+          }}
         />
+      )}
+      {replacing && (
+        <ImportSheet tenant={tenant} replace={replacing} onClose={() => setReplacing(null)} />
       )}
       <ConfirmDialog
         open={deleting !== null}

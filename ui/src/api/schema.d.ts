@@ -845,6 +845,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/certificates/{certificate}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a certificate's material, keeping its id and usages
+         * @description Store new certificate and key (PEM or PKCS#12) and update the object in a change set.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["replace_certificate_api_v1_tenants__t__certificates__certificate__replace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/certificates/{object_id}": {
         parameters: {
             query?: never;
@@ -3256,7 +3278,7 @@ export interface components {
         };
         /**
          * CertImportIn
-         * @description Body of ``POST /certificates/import``: send ``pem`` or ``pkcs12_b64`` with ``password``.
+         * @description Body of ``POST /certificates/import``.
          */
         CertImportIn: {
             /** Name */
@@ -3291,6 +3313,27 @@ export interface components {
              * @enum {string}
              */
             source: "acme" | "cloudflare_origin";
+        };
+        /**
+         * CertReplaceIn
+         * @description Body of ``POST /certificates/{id}/replace``: new material for an existing certificate.
+         */
+        CertReplaceIn: {
+            /**
+             * Password
+             * @description Password of the PKCS#12 file; never logged or stored. Empty if none.
+             */
+            password?: string | null;
+            /**
+             * Pem
+             * @description Certificate chain followed by the private key (PEM).
+             */
+            pem?: string | null;
+            /**
+             * Pkcs12 B64
+             * @description Base64 of a PKCS#12/PFX file holding the leaf, chain and key.
+             */
+            pkcs12_b64?: string | null;
         };
         /**
          * CertSource
@@ -11112,6 +11155,101 @@ export interface operations {
                 };
             };
             /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    replace_certificate_api_v1_tenants__t__certificates__certificate__replace_post: {
+        parameters: {
+            query?: {
+                /** @description Read the state as this open change set would leave it (draft view). */
+                change_set?: string | null;
+                /** @description `true` applies the change immediately as a one-operation change set. */
+                apply?: boolean;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Certificate id. */
+                certificate: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "password": "export-password",
+                 *       "pkcs12_b64": "MIIJ..."
+                 *     }
+                 */
+                "application/json": components["schemas"]["CertReplaceIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "change_set_id": "0192f3a0-0000-7000-8000-000000000020",
+                     *       "object_id": "0192f3a0-0000-7000-8000-000000000014",
+                     *       "op_index": 0
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Accepted"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
                     [name: string]: unknown;
