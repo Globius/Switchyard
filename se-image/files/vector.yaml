@@ -1,0 +1,30 @@
+# Ships HAProxy access logs to Loki. Labels match controller/switchyard/adapters/telemetry.py:
+# `tenant` (id) and `frontend` (vs_<service>); tenant_name, se_group and engine are for dashboards.
+# Values come from /etc/switchyard/vector.env, written by cloud-init (se-instance.yaml.tpl).
+sources:
+  haproxy:
+    type: journald
+    include_units: [haproxy.service]
+    current_boot_only: true
+transforms:
+  parse:
+    type: remap
+    inputs: [haproxy]
+    source: |
+      msg = string!(.message)
+      parsed, err = parse_regex(msg, r'(?P<client>\S+):\d+ \[[^\]]+\] (?P<frontend>\S+) (?P<backend>[^/\s]+)/\S+ ')
+      if err != null { abort }
+      .frontend = parsed.frontend
+      .message = msg
+sinks:
+  loki:
+    type: loki
+    inputs: [parse]
+    endpoint: "${LOKI_URL}"
+    encoding: { codec: text }
+    labels:
+      tenant: "${TENANT_ID}"
+      tenant_name: "${TENANT_NAME}"
+      se_group: "${SE_GROUP}"
+      engine: "${ENGINE}"
+      frontend: "{{ frontend }}"

@@ -6,5 +6,7 @@
    `ETCD_CLUSTER_STATE=new` on all three at once; later joins use `existing`.
 4. `docker compose exec patroni patronictl -c /etc/patroni.yml list` shows leader, sync standby and replica.
 
+Monitoring (Prometheus, Loki, Grafana) runs separately from `deploy/telemetry/`; the scrape token is `METRICS_TOKEN` in `node.env`.
+
 Try failover and restore locally first: `docker compose -f compose.lab.yaml up -d --build --wait`.
 Design: ADR 0048. Runbooks: `docs/runbooks/`.

@@ -13,5 +13,14 @@ write_files:
     permissions: "0644"
     content: |
       ${controller_ca_indented}
+  - path: /etc/switchyard/vector.env
+    permissions: "0644"
+    content: |
+      LOKI_URL=${loki_url}
+      TENANT_ID=${tenant_id}
+      TENANT_NAME=${tenant_name}
+      SE_GROUP=${se_group}
+      ENGINE=${engine}
 runcmd:
   - [systemctl, restart, sy-agent-enroll.service]
+  - [systemctl, restart, vector.service]

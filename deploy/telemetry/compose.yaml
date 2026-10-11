@@ -1,0 +1,47 @@
+# Metrics, logs and dashboards: Prometheus, Loki, Grafana. Run on one VM (not part of the controller HA set).
+#   cp telemetry.env.example telemetry.env ; put the scrape token in secrets/metrics.token
+#   docker compose --env-file telemetry.env up -d
+# Point the controller at them: SWITCHYARD_PROMETHEUS_URL=http://<host>:9090, SWITCHYARD_LOKI_URL=http://<host>:3100.
+name: switchyard-telemetry
+services:
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        sed -e "s#@SCHEME@#$${CONTROLLER_SCHEME}#g" -e "s#@HOSTPORT@#$${CONTROLLER_HOSTPORT}#g"
+        /etc/prometheus/prometheus.yml.tmpl > /tmp/prometheus.yml &&
+        exec /bin/prometheus --config.file=/tmp/prometheus.yml --storage.tsdb.path=/prometheus
+        --storage.tsdb.retention.time=${PROM_RETENTION:-30d}
+    environment:
+      CONTROLLER_SCHEME: ${CONTROLLER_SCHEME:-https}
+      CONTROLLER_HOSTPORT: ${CONTROLLER_HOSTPORT}
+    volumes:
+      - ./prometheus/prometheus.yml.tmpl:/etc/prometheus/prometheus.yml.tmpl:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+      - ${METRICS_TOKEN_FILE:-./secrets/metrics.token}:/etc/prometheus/switchyard-token:ro
+      - prometheus-data:/prometheus
+    ports: ["${BIND:-127.0.0.1}:9090:9090"]
+  loki:
+    image: grafana/loki:3.3.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    ports: ["${BIND:-127.0.0.1}:3100:3100"]
+  grafana:
+    image: grafana/grafana:11.4.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["${BIND:-127.0.0.1}:3000:3000"]
+    depends_on: [prometheus, loki]
+volumes: {prometheus-data: {}, loki-data: {}, grafana-data: {}}

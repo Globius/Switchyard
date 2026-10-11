@@ -72,7 +72,7 @@ services:
   migrate:
     <<: *controller
     restart: "no"
-    command: ["db", "upgrade", "--url", "postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write"]
+    command: ["db", "upgrade"]   # reads SWITCHYARD_DATABASE_URL
   api:
     <<: *controller
     ports: ["${API_BIND:-0.0.0.0}:8000:8000"]

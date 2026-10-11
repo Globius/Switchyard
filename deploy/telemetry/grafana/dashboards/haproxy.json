@@ -1,0 +1,263 @@
+{
+ "uid": "sy-haproxy",
+ "title": "SE HAProxy",
+ "tags": [
+  "switchyard"
+ ],
+ "schemaVersion": 39,
+ "version": 1,
+ "refresh": "30s",
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "timeseries",
+   "title": "Requests per second by service",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (proxy) (rate(haproxy_frontend_http_requests_total{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"}[1m]))",
+     "legendFormat": "{{proxy}}"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "type": "timeseries",
+   "title": "5xx ratio by service",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (proxy) (rate(haproxy_frontend_http_responses_total{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\",code=\"5xx\"}[1m])) / clamp_min(sum by (proxy) (rate(haproxy_frontend_http_responses_total{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"}[1m])), 1e-9)",
+     "legendFormat": "{{proxy}}"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "type": "timeseries",
+   "title": "Current sessions",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (proxy) (haproxy_frontend_current_sessions{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"})",
+     "legendFormat": "{{proxy}}"
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "type": "timeseries",
+   "title": "Backend response time",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 8,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "avg by (proxy) (haproxy_backend_response_time_average_seconds{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"})",
+     "legendFormat": "{{proxy}}"
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "timeseries",
+   "title": "Servers up",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 16,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (proxy) (haproxy_backend_active_servers{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"})",
+     "legendFormat": "{{proxy}} active"
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "timeseries",
+   "title": "Queue length",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 16,
+    "w": 12,
+    "h": 8
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short"
+    },
+    "overrides": []
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (proxy) (haproxy_backend_current_queue{tenant_name=~\"$tenant\",se_group=~\"$se_group\",engine=~\"$engine\"})",
+     "legendFormat": "{{proxy}}"
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "logs",
+   "title": "Access log",
+   "datasource": {
+    "type": "loki",
+    "uid": "loki"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 24,
+    "w": 24,
+    "h": 10
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "{tenant_name=~\"$tenant\",engine=~\"$engine\"}"
+    }
+   ]
+  }
+ ],
+ "templating": {
+  "list": [
+   {
+    "name": "tenant",
+    "label": "tenant",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(up{job=\"se-haproxy\"}, tenant_name)",
+     "refId": "v"
+    },
+    "refresh": 2,
+    "includeAll": true,
+    "multi": true,
+    "allValue": ".*",
+    "current": {}
+   },
+   {
+    "name": "se_group",
+    "label": "se_group",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(up{job=\"se-haproxy\",tenant_name=~\"$tenant\"}, se_group)",
+     "refId": "v"
+    },
+    "refresh": 2,
+    "includeAll": true,
+    "multi": true,
+    "allValue": ".*",
+    "current": {}
+   },
+   {
+    "name": "engine",
+    "label": "engine",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": {
+     "query": "label_values(up{job=\"se-haproxy\",se_group=~\"$se_group\"}, engine)",
+     "refId": "v"
+    },
+    "refresh": 2,
+    "includeAll": true,
+    "multi": true,
+    "allValue": ".*",
+    "current": {}
+   }
+  ]
+ }
+}
