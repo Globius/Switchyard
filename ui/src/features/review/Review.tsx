@@ -14,19 +14,31 @@ import { t } from "@/lib/i18n";
 import { show } from "@/lib/snapshot-diff";
 import { cn } from "@/lib/utils";
 import { JobProgress } from "./JobProgress";
+import { isListField, ListDiff } from "./ListDiff";
 import { blocked, countsLine, parseUnified, phaseOf, TYPE_LABEL, type Diff } from "./model";
 import {
   useApplyJob,
   useChangeSetActions,
   useChangeSetRead,
   useDiff,
+  useLabels,
   useObjectChange,
   useTenantSettings,
 } from "./queries";
 
 type Tab = "objects" | "config" | "impact";
 
-function ObjectCard({ tenant, cs, o }: { tenant: string; cs: string; o: Diff["objects"][number] }) {
+function ObjectCard({
+  tenant,
+  cs,
+  o,
+  labels,
+}: {
+  tenant: string;
+  cs: string;
+  o: Diff["objects"][number];
+  labels: Record<string, string>;
+}) {
   const q = useObjectChange(tenant, o.type, o.id, cs, o.status);
   const deleted = o.status === "deleted";
   return (
@@ -59,19 +71,30 @@ function ObjectCard({ tenant, cs, o }: { tenant: string; cs: string; o: Diff["ob
             </tr>
           </thead>
           <tbody className="divide-y font-mono text-xs">
-            {q.data.fields.map((f) => (
-              <tr key={f.field}>
-                <td className="px-4 py-2">{f.field}</td>
-                {o.status === "modified" && (
-                  <td className="px-4 py-2">
-                    <span className="bg-diff-del px-1">− {show(f.before)}</span>
+            {q.data.fields.map((f) =>
+              isListField(f.field, f.before, f.after) ? (
+                <tr key={f.field}>
+                  <td colSpan={o.status === "modified" ? 3 : 2} className="p-0">
+                    <div className="px-4 py-2 font-sans text-xs font-medium text-muted-foreground">
+                      {f.field}
+                    </div>
+                    <ListDiff field={f.field} before={f.before} after={f.after} labels={labels} />
                   </td>
-                )}
-                <td className="px-4 py-2">
-                  <span className="bg-diff-add px-1">+ {show(f.after)}</span>
-                </td>
-              </tr>
-            ))}
+                </tr>
+              ) : (
+                <tr key={f.field}>
+                  <td className="px-4 py-2">{f.field}</td>
+                  {o.status === "modified" && (
+                    <td className="px-4 py-2">
+                      <span className="bg-diff-del px-1">− {show(f.before)}</span>
+                    </td>
+                  )}
+                  <td className="px-4 py-2">
+                    <span className="bg-diff-add px-1">+ {show(f.after)}</span>
+                  </td>
+                </tr>
+              ),
+            )}
           </tbody>
         </table>
       )}
@@ -216,6 +239,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
   const diff = useDiff(tenant, cs, diffEnabled);
   const job = useApplyJob(tenant, cs, jobId, true);
   const actions = useChangeSetActions(tenant, cs);
+  const labels = useLabels(tenant, cs);
 
   if (set.isPending)
     return (
@@ -340,7 +364,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
               ) : tab === "objects" ? (
                 <div className="space-y-3">
                   {diff.data.objects.map((o) => (
-                    <ObjectCard key={o.id} tenant={tenant} cs={cs} o={o} />
+                    <ObjectCard key={o.id} tenant={tenant} cs={cs} o={o} labels={labels} />
                   ))}
                   <p className="text-xs text-muted-foreground">
                     {t(

@@ -518,4 +518,65 @@ describe("review screen", () => {
     expect(screen.getAllByText("Failed").length).toBeGreaterThan(0);
     expect(await screen.findByRole("tab", { name: /Objects/ })).toBeInTheDocument();
   });
+
+  it("shows list fields as numbered, keyed diffs with readable names", async () => {
+    const route = (host: string, pool: string) => ({
+      order: 1,
+      match: { host },
+      pool_id: pool,
+      redirect: null,
+    });
+    diff = {
+      ...DIFF,
+      objects: [
+        {
+          type: "virtual_service",
+          id: "v1",
+          name: "docs",
+          status: "modified",
+          changed_fields: ["routes", "certificate_ids"],
+        },
+      ],
+    };
+    server.use(
+      http.get("*/api/v1/tenants/acme/virtual-services/v1", ({ request }) => {
+        const draft = new URL(request.url).searchParams.has("change_set");
+        return HttpResponse.json({
+          id: "v1",
+          name: "docs",
+          routes: draft
+            ? [route("b.test", "p1"), route("a.test", "p2")]
+            : [route("a.test", "p1"), route("b.test", "p1")],
+          certificate_ids: draft ? ["c1", "c2"] : ["c1"],
+        });
+      }),
+      http.get("*/api/v1/tenants/acme/pools", () =>
+        HttpResponse.json({
+          items: [
+            { id: "p1", name: "api-v1" },
+            { id: "p2", name: "api-v2" },
+          ],
+          next_cursor: null,
+        }),
+      ),
+      http.get("*/api/v1/tenants/acme/certificates", () =>
+        HttpResponse.json({
+          items: [
+            { id: "c1", name: "wildcard" },
+            { id: "c2", name: "portal" },
+          ],
+          next_cursor: null,
+        }),
+      ),
+      http.get("*/api/v1/tenants/acme/policy-sets", () =>
+        HttpResponse.json({ items: [], next_cursor: null }),
+      ),
+    );
+    renderAt();
+    const marks = await screen.findAllByRole("listitem");
+    await waitFor(() => expect(screen.getByText(/a.test → pool api-v2/)).toBeInTheDocument());
+    expect(marks.length).toBeGreaterThan(0);
+    expect(screen.getByText("portal")).toBeInTheDocument();
+    expect(screen.getByText("1 unchanged")).toBeInTheDocument();
+  });
 });

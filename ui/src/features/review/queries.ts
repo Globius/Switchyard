@@ -124,3 +124,25 @@ export function useChangeSetActions(tenant: string, cs: string) {
     }),
   };
 }
+
+/** id to name for the things lists refer to (pools, certificates, policy sets), as the draft sees them. */
+export function useLabels(tenant: string, cs: string): Record<string, string> {
+  const get = (path: string) => async () =>
+    (
+      await rawGet<{ items: { id: string; name: string }[] }>(
+        `/api/v1/tenants/${encodeURIComponent(tenant)}/${path}?limit=200&change_set=${cs}`,
+      )
+    ).items;
+  const pools = useQuery({ queryKey: ["t", tenant, "labels", cs, "pools"], queryFn: get("pools") });
+  const certs = useQuery({
+    queryKey: ["t", tenant, "labels", cs, "certificates"],
+    queryFn: get("certificates"),
+  });
+  const sets = useQuery({
+    queryKey: ["t", tenant, "labels", cs, "policy-sets"],
+    queryFn: get("policy-sets"),
+  });
+  return Object.fromEntries(
+    [...(pools.data ?? []), ...(certs.data ?? []), ...(sets.data ?? [])].map((x) => [x.id, x.name]),
+  );
+}
