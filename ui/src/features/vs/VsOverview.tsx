@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useCan } from "@/auth/session";
+import { InvalidDraftCard } from "@/components/sy/Findings";
+import { useServiceFindings } from "./findings";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton, UnavailableState } from "@/components/sy/states";
@@ -53,9 +55,12 @@ const STATE_PILL = {
 /** Routes, pools with members (runtime drain/enable/disable), and the metrics note. */
 export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
   const { draft } = useDraft(tenant);
-  const vs = useVs(tenant, id, draft?.id);
-  const pools = usePools(tenant, draft?.id);
+  const [showLive, setShowLive] = useState(false);
+  const overlay = showLive ? undefined : draft?.id;
+  const vs = useVs(tenant, id, overlay);
+  const pools = usePools(tenant, overlay);
   const livePools = usePools(tenant);
+  const { findings } = useServiceFindings(tenant, vs.data?.name);
   const metrics = useVsMetrics(tenant);
   const can = useCan(tenant);
   const setState = useSetMemberState(tenant);
@@ -69,6 +74,15 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
   if (vs.isPending || pools.isPending) return <TableSkeleton rows={4} cols={3} />;
   if (vs.isError) return <ErrorState error={vs.error} onRetry={() => void vs.refetch()} />;
   if (pools.isError) return <ErrorState error={pools.error} onRetry={() => void pools.refetch()} />;
+  if (findings.length > 0 && !showLive)
+    return (
+      <InvalidDraftCard
+        tenant={tenant}
+        serviceId={id}
+        findings={findings}
+        onShowLive={() => setShowLive(true)}
+      />
+    );
   const v = vs.data;
   const byId = new Map(pools.data.items.map((p) => [p.id, p]));
   const used = new Set(
