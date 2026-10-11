@@ -143,7 +143,8 @@ def build_handlers(
                 f"tenants/{tenant_name}/",
                 revision_files(tenant_name, snapshot),
                 f"{tenant_name} revision {number}: {revision.summary or 'no summary'}\n\n"
-                f"Author: {revision.author}",
+                + (f"{revision.message}\n\n" if revision.message else "")
+                + f"Author: {revision.author}",
             )
             async with admin_session(db.admin) as session:
                 await session.execute(
