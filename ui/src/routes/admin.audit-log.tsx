@@ -1,6 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NotBuilt } from "@/components/sy/NotBuilt";
+import { AuditLog } from "@/features/admin/AuditLog";
 
-export const Route = createFileRoute("/admin/audit-log")({
-  component: () => <NotBuilt name="Audit log" />,
-});
+export const Route = createFileRoute("/admin/audit-log")({ component: AuditLog });

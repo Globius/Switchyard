@@ -7,6 +7,8 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
 import { quotaLine } from "@/features/admin/Tenants";
+import { toCsv } from "@/features/admin/AuditLog";
+import { mappingSummary } from "@/features/admin/IdentityProviders";
 import { accessText } from "@/features/admin/Users";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
@@ -267,5 +269,425 @@ describe("admin area", () => {
     await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
     await userEvent.click(await screen.findByRole("button", { name: "Revoke token" }));
     await waitFor(() => expect(calls.revoked).toBe(true));
+  });
+
+  it("edits role mappings: system-wide and per tenant, with the permission matrix", async () => {
+    const mappings = [
+      {
+        id: "m1",
+        provider_id: "pa",
+        provider: "Authentik",
+        group_name: "sy-platform-admins",
+        label: null,
+        tenant_id: null,
+        tenant: null,
+        role: "system-admin",
+        version: 2,
+        created_by: "Miguel",
+        created_at: "2026-10-02T00:00:00Z",
+      },
+      {
+        id: "m2",
+        provider_id: "pa",
+        provider: "Authentik",
+        group_name: "sy-prod",
+        label: "Prod",
+        tenant_id: "t1",
+        tenant: "globius-prod",
+        role: "viewer",
+        version: 1,
+        created_by: "Miguel",
+        created_at: "2026-10-02T00:00:00Z",
+      },
+    ];
+    server.use(
+      http.get("*/api/v1/role-mappings", () => HttpResponse.json(mappings)),
+      http.get("*/api/v1/permissions", () =>
+        HttpResponse.json({
+          roles: ["viewer", "operator", "tenant-admin", "system-admin"],
+          permissions: [
+            { verb: "read", object: "x", min_role: "viewer", description: "Read everything" },
+            {
+              verb: "manage",
+              object: "tenant",
+              min_role: "system-admin",
+              description: "Create tenants",
+            },
+          ],
+        }),
+      ),
+      http.patch("*/api/v1/role-mappings/m2", async ({ request }) => {
+        calls.rolePatch = { body: await request.json(), ifMatch: request.headers.get("if-match") };
+        return HttpResponse.json(mappings[1]);
+      }),
+      http.post("*/api/v1/role-mappings", async ({ request }) => {
+        calls.mapAdd = await request.json();
+        return HttpResponse.json(mappings[1], { status: 201 });
+      }),
+      http.delete("*/api/v1/role-mappings/m1", () => {
+        calls.mapDel = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    renderAt("/admin/role-mappings");
+    expect(await screen.findByText("sy-platform-admins")).toBeInTheDocument();
+    expect(await screen.findByText("Read everything")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("allowed").length).toBeGreaterThan(4);
+    await userEvent.selectOptions(await screen.findByLabelText("Role of sy-prod"), "operator");
+    await waitFor(() =>
+      expect(calls.rolePatch).toEqual({ body: { role: "operator" }, ifMatch: "1" }),
+    );
+    const tenantArea = screen.getByText("Per tenant").closest("section")!;
+    const add = within(tenantArea);
+    await userEvent.selectOptions(add.getByLabelText("Provider"), "pa");
+    await userEvent.type(add.getByLabelText("Group name or object ID"), "sy-new");
+    await userEvent.click(add.getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(calls.mapAdd).toEqual({
+        provider: "pa",
+        group_name: "sy-new",
+        role: "viewer",
+        label: null,
+        tenant_id: "t1",
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Remove mapping for sy-platform-admins" }),
+    );
+    await waitFor(() => expect(calls.mapDel).toBe(true));
+  });
+
+  it("audit log: filters, expandable diff, break-glass marker and CSV", async () => {
+    const queries: string[] = [];
+    server.use(
+      http.get("*/api/v1/audit-actions", () =>
+        HttpResponse.json([
+          { action: "tenant.update", category: "write", description: "d" },
+          { action: "member.drain", category: "runtime", description: "d" },
+        ]),
+      ),
+      http.get("*/api/v1/audit-events", ({ request }) => {
+        queries.push(new URL(request.url).search);
+        return HttpResponse.json({
+          items: [
+            {
+              at: "2026-10-06T14:02:00Z",
+              actor: "Miguel",
+              action: "tenant.update",
+              object: "globius-prod",
+              tenant_id: "t1",
+              request_id: "req_3b6f",
+              diff: { require_approval: true },
+            },
+            {
+              at: "2026-10-06T14:03:00Z",
+              actor: "Miguel",
+              action: "member.drain",
+              object: "pool api-v2",
+              tenant_id: "t1",
+              request_id: null,
+              diff: null,
+            },
+          ],
+          next_cursor: null,
+        });
+      }),
+    );
+    renderAt("/admin/audit-log");
+    expect(await screen.findByText("tenant.update", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText("Live")).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Show details" })[0]!);
+    expect(await screen.findByText(/"require_approval": true/)).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Show details" })[0]!);
+    expect(await screen.findByText("No details recorded.")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Action"), "member.drain");
+    await waitFor(() => expect(queries.some((q) => q.includes("action=member.drain"))).toBe(true));
+    await userEvent.selectOptions(screen.getByLabelText("Time range"), "all");
+    await waitFor(() => expect(queries.at(-1)).not.toContain("since="));
+    expect(
+      toCsv([
+        {
+          at: "t",
+          actor: "a,b",
+          action: "x",
+          object: null,
+          request_id: null,
+          diff: { k: 1 },
+          tenant_id: null,
+        },
+      ]),
+    ).toBe('time,actor,action,object,request_id,diff\nt,"a,b",x,,,"{""k"":1}"');
+  });
+
+  it("summarises mappings per provider", () => {
+    const rows = [
+      { provider_id: "a", tenant_id: "t1", tenant: "prod" },
+      { provider_id: "a", tenant_id: "t2", tenant: "lab" },
+      { provider_id: "b", tenant_id: "t1", tenant: "prod" },
+    ];
+    expect(mappingSummary(rows, "a")).toBe("2 across 2 tenants");
+    expect(mappingSummary(rows, "b")).toBe("1 in prod");
+    expect(mappingSummary(rows, "c")).toBe("none");
+  });
+
+  it("lists providers, toggles one, edits an OIDC provider, and runs break-glass on and off", async () => {
+    const IDP = [
+      {
+        id: "i1",
+        protocol: "oidc",
+        name: "Authentik",
+        enabled: true,
+        version: 3,
+        created_at: "2026-10-01T00:00:00Z",
+        warnings: ["groups claim missing"],
+        issuer_url: "https://auth.example.com/",
+        client_id: "sy",
+        client_secret_ref: null,
+        client_secret_set: true,
+        scopes: "openid",
+        username_claim: "preferred_username",
+        email_claim: "email",
+        groups_claim: "groups",
+      },
+      {
+        id: "i2",
+        protocol: "saml",
+        name: "Entra ID",
+        enabled: false,
+        version: 1,
+        created_at: "2026-10-01T00:00:00Z",
+        warnings: [],
+        idp_metadata_url: null,
+        idp_entity_id: "https://sts.windows.net/x/",
+        sso_url: "https://login/x",
+        signing_certificates: [],
+        sp_entity_id: "sp",
+        name_id_format: null,
+        sign_requests: false,
+        sp_signing_key_ref: null,
+        sp_signing_certificate: null,
+        attribute_username: "u",
+        attribute_email: "e",
+        attribute_groups: "g",
+        acs_url: "https://sy/acs",
+        sp_metadata_url: "https://sy/meta",
+      },
+    ];
+    let bg = {
+      enabled: false,
+      enabled_until: null as string | null,
+      enabled_by: null as string | null,
+      reason: null as string | null,
+      forced_by_deployment: false,
+      admin: {
+        username: "breakglass",
+        totp_confirmed: true,
+        created_at: "2026-10-02T00:00:00Z",
+        last_login_at: null,
+        locked_until: null,
+      },
+    };
+    server.use(
+      http.get("*/api/v1/identity-providers", () => HttpResponse.json(IDP)),
+      http.get("*/api/v1/role-mappings", () =>
+        HttpResponse.json([{ provider_id: "i1", tenant_id: "t1", tenant: "prod" }]),
+      ),
+      http.patch("*/api/v1/identity-providers/:id", async ({ request, params }) => {
+        calls[`idp-${String(params.id)}`] = {
+          body: await request.json(),
+          ifMatch: request.headers.get("if-match"),
+        };
+        return HttpResponse.json(IDP[0]);
+      }),
+      http.get("*/api/v1/system/break-glass", () => HttpResponse.json(bg)),
+      http.put("*/api/v1/system/break-glass", async ({ request }) => {
+        const b = (await request.json()) as { enabled: boolean; reason?: string };
+        calls.bg = b;
+        bg = {
+          ...bg,
+          enabled: b.enabled,
+          enabled_until: b.enabled ? new Date(Date.now() + 3 * 3_600_000).toISOString() : null,
+          enabled_by: "Miguel",
+          reason: b.reason ?? null,
+        };
+        return HttpResponse.json(bg);
+      }),
+    );
+    renderAt("/admin/identity-providers");
+    expect(await screen.findByText("1 in prod")).toBeInTheDocument();
+    expect(screen.getByText("SAML 2.0")).toBeInTheDocument();
+    const entra = screen.getByText("Entra ID").closest("tr")!;
+    await userEvent.click(within(entra).getByRole("button", { name: "Enable" }));
+    await waitFor(() =>
+      expect(calls["idp-i2"]).toEqual({ body: { protocol: "saml", enabled: true }, ifMatch: "1" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Authentik" }));
+    const dlg = within(await screen.findByRole("dialog"));
+    expect(dlg.getByText("groups claim missing")).toBeInTheDocument();
+    const cid = dlg.getByLabelText("Client ID");
+    await userEvent.clear(cid);
+    await userEvent.type(cid, "sy2");
+    await userEvent.click(dlg.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(calls["idp-i1"]).toEqual({
+        body: { protocol: "oidc", name: "Authentik", client_id: "sy2" },
+        ifMatch: "3",
+      }),
+    );
+    await userEvent.type(await screen.findByLabelText("Reason"), "upgrade window");
+    await userEvent.click(screen.getByRole("button", { name: "Turn on" }));
+    await waitFor(() =>
+      expect(calls.bg).toEqual({ enabled: true, reason: "upgrade window", ttl_minutes: 240 }),
+    );
+    expect(await screen.findByText(/On · [23] h/)).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Turn off now" }));
+    await waitFor(() => expect(calls.bg).toEqual({ enabled: false }));
+  });
+
+  it("enrols a replacement break-glass administrator and confirms the code", async () => {
+    let confirmed: unknown = null;
+    server.use(
+      http.get("*/api/v1/identity-providers", () => HttpResponse.json([])),
+      http.get("*/api/v1/role-mappings", () => HttpResponse.json([])),
+      http.get("*/api/v1/system/break-glass", () =>
+        HttpResponse.json({
+          enabled: false,
+          enabled_until: null,
+          enabled_by: null,
+          reason: null,
+          forced_by_deployment: false,
+          admin: null,
+        }),
+      ),
+      http.post("*/api/v1/system/break-glass/admin", () =>
+        HttpResponse.json({
+          username: "breakglass",
+          password: "pw-once",
+          totp_secret: "SECRET",
+          otpauth_uri: "otpauth://x",
+        }),
+      ),
+      http.post("*/api/v1/system/break-glass/admin/confirm", async ({ request }) => {
+        confirmed = await request.json();
+        return HttpResponse.json({});
+      }),
+    );
+    renderAt("/admin/identity-providers");
+    await userEvent.click(await screen.findByRole("button", { name: "Create administrator" }));
+    expect(await screen.findByText("pw-once")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Authenticator code"), "123456");
+    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(confirmed).toEqual({ totp: "123456" }));
+  });
+
+  it("adds a SAML provider, tests sign-in, and deletes a provider", async () => {
+    const OIDC = {
+      id: "i1",
+      protocol: "oidc",
+      name: "Authentik",
+      enabled: true,
+      version: 3,
+      created_at: "2026-10-01T00:00:00Z",
+      warnings: [],
+      issuer_url: "https://auth/",
+      client_id: "sy",
+      client_secret_ref: null,
+      client_secret_set: true,
+      scopes: "openid",
+      username_claim: "u",
+      email_claim: "e",
+      groups_claim: "g",
+    };
+    let created: unknown = null;
+    let removed = false;
+    const opened: string[] = [];
+    const origOpen = window.open;
+    window.open = ((u: string) => {
+      opened.push(u);
+      return null;
+    }) as typeof window.open;
+    server.use(
+      http.get("*/api/v1/identity-providers", () => HttpResponse.json([OIDC])),
+      http.get("*/api/v1/role-mappings", () => HttpResponse.json([])),
+      http.get("*/api/v1/system/break-glass", () =>
+        HttpResponse.json({
+          enabled: false,
+          enabled_until: null,
+          enabled_by: null,
+          reason: null,
+          forced_by_deployment: true,
+          admin: null,
+        }),
+      ),
+      http.post("*/api/v1/identity-providers", async ({ request }) => {
+        created = await request.json();
+        return HttpResponse.json(OIDC, { status: 201 });
+      }),
+      http.post("*/api/v1/identity-providers/i1/test", () =>
+        HttpResponse.json({ test_id: "tt", authorize_url: "https://auth/authorize?x=1" }),
+      ),
+      http.get("*/api/v1/identity-providers/i1/test/tt", () =>
+        HttpResponse.json({
+          status: "done",
+          username: "sam",
+          groups: ["g1"],
+          would_grant: [{ role: "viewer", tenant: "prod" }],
+          error: null,
+        }),
+      ),
+      http.delete("*/api/v1/identity-providers/i1", () => {
+        removed = true;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    try {
+      renderAt("/admin/identity-providers");
+      expect(await screen.findByText(/forces break-glass on/)).toBeInTheDocument();
+      await userEvent.click(await screen.findByRole("button", { name: "Add provider" }));
+      const dlg = within(await screen.findByRole("dialog"));
+      await userEvent.click(dlg.getByRole("radio", { name: "SAML 2.0" }));
+      await userEvent.type(dlg.getByLabelText("Name"), "Entra");
+      await userEvent.type(dlg.getByLabelText("IdP metadata URL"), "https://m/xml");
+      await userEvent.click(dlg.getByRole("button", { name: "Add provider" }));
+      await waitFor(() =>
+        expect(created).toEqual({
+          protocol: "saml",
+          name: "Entra",
+          idp_metadata_url: "https://m/xml",
+          enabled: true,
+        }),
+      );
+      await userEvent.click(await screen.findByRole("button", { name: "Authentik" }));
+      const edit = within(await screen.findByRole("dialog"));
+      await userEvent.click(edit.getByRole("button", { name: "Start test" }));
+      expect(await edit.findByText("sam")).toBeInTheDocument();
+      expect(opened).toEqual(["https://auth/authorize?x=1"]);
+      await userEvent.click(edit.getByRole("button", { name: "Delete" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Delete provider" }));
+      await waitFor(() => expect(removed).toBe(true));
+    } finally {
+      window.open = origOpen;
+    }
+  });
+
+  it("shows the server's reason when creating a tenant fails", async () => {
+    server.use(
+      http.post("*/api/v1/tenants", () =>
+        HttpResponse.json(
+          {
+            title: "Validation failed",
+            status: 422,
+            errors: [{ path: "name", code: "x", message: "Name already exists." }],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderAt("/admin/tenants");
+    await userEvent.click(await screen.findByRole("button", { name: "Create tenant" }));
+    const dlg = within(await screen.findByRole("dialog"));
+    await userEvent.type(dlg.getByLabelText("Name"), "globius-lab");
+    await userEvent.click(dlg.getByRole("button", { name: "Create tenant" }));
+    expect(await dlg.findByText("Name already exists.")).toBeInTheDocument();
   });
 });

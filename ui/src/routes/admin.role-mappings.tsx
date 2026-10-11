@@ -1,6 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NotBuilt } from "@/components/sy/NotBuilt";
+import { RoleMappings } from "@/features/admin/RoleMappings";
 
-export const Route = createFileRoute("/admin/role-mappings")({
-  component: () => <NotBuilt name="Role mappings" />,
-});
+export const Route = createFileRoute("/admin/role-mappings")({ component: RoleMappings });
