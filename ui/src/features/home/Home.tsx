@@ -8,6 +8,7 @@ import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ReapplyButton } from "@/features/drift/ReapplyButton";
+import { RunningConfigButton } from "@/features/drift/RunningConfig";
 import { useDraft } from "@/features/shell/draft";
 import { ago } from "@/features/vs/member-health";
 import { t } from "@/lib/i18n";
@@ -269,7 +270,13 @@ export function Home({ tenant }: { tenant: string }) {
                         "Running config differs from the last revision. Reported only; nothing is changed automatically.",
                       )}
                     </p>
-                    <ReapplyButton tenant={tenant} groupId={e.se_group_id} engine={e.engine} />
+                    <span className="flex flex-wrap items-center gap-2">
+                      <ReapplyButton tenant={tenant} groupId={e.se_group_id} engine={e.engine} />
+                      <RunningConfigButton
+                        tenant={tenant}
+                        engine={{ id: e.engine_id, name: e.engine }}
+                      />
+                    </span>
                   </li>
                 ))}
               </ul>

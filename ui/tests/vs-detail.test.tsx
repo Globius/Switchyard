@@ -329,6 +329,47 @@ describe("virtual service detail", () => {
     expect(lit).toHaveLength(2);
   });
 
+  it("rendered tab has an engine picker that shows the files one engine gets", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/virtual-services/v1/engines", () =>
+        HttpResponse.json([
+          { id: "e1", name: "se-edge-a-01", mgmt_ip: "10.0.0.21", state: "enabled" },
+        ]),
+      ),
+      http.get("*/api/v1/tenants/acme/virtual-services/v1/engines/e1/rendered", () =>
+        HttpResponse.json({
+          engine: "se-edge-a-01",
+          engine_id: "e1",
+          se_group_id: "g1",
+          fingerprint: "abcdef0123456789",
+          files: [
+            {
+              file: "haproxy/haproxy.cfg",
+              scope: "group",
+              language: "haproxy",
+              content: "global\n",
+            },
+            {
+              file: "keepalived.conf",
+              scope: "engine",
+              language: "plaintext",
+              content: "vrrp_instance X {}\n",
+            },
+          ],
+        }),
+      ),
+    );
+    renderAt("/t/acme/virtual-services/v1/rendered");
+    const pick = await screen.findByLabelText("Engine");
+    await userEvent.selectOptions(
+      pick,
+      await screen.findByRole("option", { name: /se-edge-a-01/ }),
+    );
+    expect(await screen.findByText(/keepalived\.conf · this engine/)).toBeInTheDocument();
+    expect(screen.getByText(/haproxy\/haproxy\.cfg · SE group/)).toBeInTheDocument();
+    expect(screen.getByText(/What se-edge-a-01 runs for this service/)).toBeInTheDocument();
+  });
+
   it("rendered tab explains when nothing is rendered", async () => {
     empty = true;
     renderAt("/t/acme/virtual-services/v1/rendered");

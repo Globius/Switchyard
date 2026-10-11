@@ -243,7 +243,7 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | Item | Status | Owner / note |
 | --- | --- | --- |
 | V1 VS Settings | done | UI, cards, two columns, VIP radios, routes table, footer (!57) |
-| V2 Rendered config | done | Monaco, HAProxy highlighting, range, Copy, With my draft / Live toggle. Deviation: engine select (no per-engine render endpoint) |
+| V2 Rendered config | done | Monaco, HAProxy highlighting, range, Copy, With my draft / Live toggle. Engine picker shows the files one engine gets (group and engine scope, secrets redacted) |
 | V3 VS History | done | UI (!61) |
 | V4 Policies, Routing profiles | done | Policies by part 2 (!63); Routing profiles were master-detail already |
 | V5 Audit log | part 2 | formatters in !60, remaining columns with part 2 |
@@ -251,7 +251,7 @@ Owners: **UI** = the build thread, **part 2** = the artboard parity part-2 threa
 | V7 Names and dates | part 2 | !60 |
 | V8 Certificates | part 2 | |
 | V9 Networks | done | Edit service by part 2; per-network SDN chip from `/sdn/status` (!76) |
-| V10 SE groups | done | engines table, placement, re-apply job, agent version. Deviation: "View running config" (no API returns an engine's running config) |
+| V10 SE groups | done | engines table, placement, re-apply job, agent version. "View running config" on drifted engines: running HAProxy config in Monaco with its fingerprint against the desired one, and agent file hashes (hashes only) |
 | V11 Create wizard | done | header logo and tenant, monitor summary ("Up after 2 passing, down after 3"); the other explainers were already in |
 | V12 Admin tenants | done | Members column and "N people have access" (!76) |
 | V13 Role matrix grouping | done | grouped by the `group` the server sends; open a group to see each permission (!76) |

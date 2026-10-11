@@ -341,4 +341,47 @@ describe("SE groups", () => {
       await screen.findByText("Host state not reported: Proxmox is not configured."),
     ).toBeInTheDocument();
   });
+
+  it("shows an engine's running config next to the desired one, with hashes for agent files", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/engines/e2/running-config", () =>
+        HttpResponse.json({
+          engine: "se-edge-a-02",
+          engine_id: "e2",
+          se_group_id: "g1",
+          reachable: true,
+          error: null,
+          fetched_at: "2026-10-11T10:00:00Z",
+          haproxy: {
+            content: "global\n    maxconn 100\n",
+            fingerprint: "1111111111111111",
+            desired_fingerprint: "2222222222222222",
+            fingerprint_matches: false,
+            matches_desired: false,
+          },
+          agent: {
+            bundle_id: "b1b1b1b1b1b1b1",
+            desired_bundle_id: "b2b2b2b2b2b2b2",
+            files: [
+              {
+                path: "/etc/switchyard/maps/web.map",
+                sha256: "aaaaaaaaaaaaaaaa",
+                desired_sha256: "bbbbbbbbbbbbbbbb",
+                matches_desired: false,
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    renderAt("/t/acme/se-groups");
+    await userEvent.click(await screen.findByRole("button", { name: "View running config" }));
+    const dlg = within(await screen.findByRole("dialog"));
+    expect((await dlg.findAllByText("Differs")).length).toBe(2);
+    expect(dlg.getByText(/maxconn 100/)).toBeInTheDocument();
+    expect(dlg.getByText("/etc/switchyard/maps/web.map")).toBeInTheDocument();
+    expect(
+      dlg.getByText("The agent reports hashes only, never file contents."),
+    ).toBeInTheDocument();
+  });
 });

@@ -32,6 +32,7 @@ export function RenderedConfigView({ fragment }: { fragment: Fragment }) {
       </figcaption>
       <ConfigEditor
         content={fragment.content}
+        language={fragment.language === "plaintext" ? "plaintext" : "haproxy"}
         range={
           fragment.range && fragment.range.length >= 2
             ? [fragment.range[0]!, fragment.range[1]!]

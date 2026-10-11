@@ -16,6 +16,7 @@ import { Menu, MenuContent, MenuTrigger } from "@/components/ui/popover-menu";
 import { Sheet } from "@/components/ui/sheet";
 import { Tip } from "@/components/ui/tooltip";
 import { ReapplyButton } from "@/features/drift/ReapplyButton";
+import { RunningConfigButton } from "@/features/drift/RunningConfig";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
@@ -365,7 +366,10 @@ function EnginesCard({
           <p className="mt-1 mb-2 text-xs text-muted-foreground">
             {t("Reported only; nothing is changed automatically.")}
           </p>
-          <ReapplyButton tenant={tenant} groupId={group.id} engine={e.name} />
+          <span className="flex flex-wrap items-center gap-2">
+            <ReapplyButton tenant={tenant} groupId={group.id} engine={e.name} />
+            <RunningConfigButton tenant={tenant} engine={{ id: e.id, name: e.name }} />
+          </span>
         </div>
       ))}
       {act.error && <ErrorState error={act.error} />}

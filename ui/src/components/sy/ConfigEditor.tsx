@@ -18,7 +18,7 @@ export function ConfigEditor({
   label,
 }: {
   content: string;
-  language?: "haproxy" | "sy-diff";
+  language?: "haproxy" | "sy-diff" | "plaintext";
   /** 1-based inclusive line range to highlight and scroll to. */
   range?: [number, number] | null;
   maxLines?: number;
