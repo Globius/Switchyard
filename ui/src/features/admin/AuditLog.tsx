@@ -19,12 +19,21 @@ const RANGES = [
   { key: "7d", label: "Last 7 days", ms: 7 * 86_400_000 },
   { key: "30d", label: "Last 30 days", ms: 30 * 86_400_000 },
   { key: "all", label: "All time", ms: 0 },
+  { key: "custom", label: "Custom range", ms: 0 },
 ] as const;
 
 /** Download URL for the server-side export with the filters on screen (up to 500 events). */
 export function exportUrl(
   format: "csv" | "jsonl",
-  f: { q?: string; tenant?: string; action?: string; actor?: string; sinceMs?: number },
+  f: {
+    q?: string;
+    tenant?: string;
+    action?: string;
+    actor?: string;
+    sinceMs?: number;
+    since?: string;
+    until?: string;
+  },
   now = Date.now(),
 ): string {
   const p = new URLSearchParams({ format, limit: "500" });
@@ -32,8 +41,15 @@ export function exportUrl(
   if (f.tenant) p.set("tenant", f.tenant);
   if (f.action) p.set("action", f.action);
   if (f.actor) p.set("actor", f.actor);
-  if (f.sinceMs) p.set("since", new Date(now - f.sinceMs).toISOString());
+  if (f.since) p.set("since", f.since);
+  else if (f.sinceMs) p.set("since", new Date(now - f.sinceMs).toISOString());
+  if (f.until) p.set("until", f.until);
   return `/api/v1/audit-events/export?${p}`;
+}
+
+/** ISO start of "the last `span` ms", or nothing for all time. */
+function spanStart(span: number): string | undefined {
+  return span ? new Date(Date.now() - span).toISOString() : undefined;
 }
 
 function DiffView({ diff }: { diff: Record<string, unknown> }) {
@@ -63,9 +79,17 @@ export function AuditLog() {
     staleTime: Infinity,
     queryFn: async () => unwrap(await api.GET("/api/v1/audit-actions")),
   });
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const span = RANGES.find((r) => r.key === range)!.ms;
+  /** Custom range: whole days, `to` inclusive (sent as the start of the next day). */
+  const since = range === "custom" && from ? new Date(`${from}T00:00:00`).toISOString() : undefined;
+  const until =
+    range === "custom" && to
+      ? new Date(new Date(`${to}T00:00:00`).getTime() + 86_400_000).toISOString()
+      : undefined;
   const list = useInfiniteQuery({
-    queryKey: ["admin", "audit", { q, tenant, action, actor, range }],
+    queryKey: ["admin", "audit", { q, tenant, action, actor, range, since, until }],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) =>
       unwrap(
@@ -76,7 +100,8 @@ export function AuditLog() {
               tenant: tenant || undefined,
               action: action || undefined,
               actor: actor || undefined,
-              since: span ? new Date(Date.now() - span).toISOString() : undefined,
+              since: since ?? spanStart(span),
+              until,
               cursor: pageParam,
               limit: 50,
             },
@@ -105,7 +130,7 @@ export function AuditLog() {
           {(["csv", "jsonl"] as const).map((fmt) => (
             <Button key={fmt} asChild variant="outline" aria-disabled={events.length === 0}>
               <a
-                href={exportUrl(fmt, { q, tenant, action, actor, sinceMs: span })}
+                href={exportUrl(fmt, { q, tenant, action, actor, sinceMs: span, since, until })}
                 download
                 onClick={(e) => events.length === 0 && e.preventDefault()}
               >
@@ -168,6 +193,26 @@ export function AuditLog() {
             </option>
           ))}
         </select>
+        {range === "custom" && (
+          <>
+            <input
+              type="date"
+              aria-label={t("From")}
+              className={SELECT}
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+            <input
+              type="date"
+              aria-label={t("To")}
+              className={SELECT}
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </>
+        )}
       </div>
       <div className="overflow-hidden rounded-lg border bg-card">
         {list.isPending ? (

@@ -535,6 +535,7 @@ function Addresses({ tenant, pool, draftId }: { tenant: string; pool: Pool; draf
               <th className="px-4 py-2 font-medium">{t("Address")}</th>
               <th className="px-4 py-2 font-medium">{t("Used by")}</th>
               <th className="px-4 py-2 font-medium">{t("State")}</th>
+              <th className="px-4 py-2" />
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -565,6 +566,17 @@ function Addresses({ tenant, pool, draftId }: { tenant: string; pool: Pool; draf
                     <StatusPill status="neutral">
                       {r.enabled ? t("Live") : t("Live · held")}
                     </StatusPill>
+                  )}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {r.state === "live" && !r.enabled && (
+                    <Link
+                      to="/t/$tenant/virtual-services/$id/settings"
+                      params={{ tenant, id: r.id }}
+                      className="inline-flex h-8 items-center rounded-md border px-3 text-sm hover:bg-accent"
+                    >
+                      {t("Edit service")}
+                    </Link>
                   )}
                 </td>
               </tr>
