@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ReapplyButton } from "@/features/drift/ReapplyButton";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
+import { principalName } from "@/lib/format";
 
 function useSummary(tenant: string) {
   return useQuery({
@@ -302,7 +303,7 @@ export function Home({ tenant }: { tenant: string }) {
                   <li key={r.number} className="flex items-center gap-3 px-4 py-2.5">
                     <span className="font-mono text-xs text-muted-foreground">#{r.number}</span>
                     <span className="min-w-0 flex-1 truncate">{r.summary}</span>
-                    <span className="text-muted-foreground">{r.author}</span>
+                    <span className="text-muted-foreground">{principalName(r.author)}</span>
                   </li>
                 ))}
               </ul>

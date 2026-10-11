@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
@@ -12,6 +12,7 @@ import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { collectionLabel, diffSnapshots, show, type Collections } from "@/lib/snapshot-diff";
 import { cn } from "@/lib/utils";
+import { principalName, shortWhen } from "@/lib/format";
 
 function useRevisions(tenant: string) {
   return useInfiniteQuery({
@@ -41,7 +42,17 @@ function useRevision(tenant: string, n: number | null) {
 }
 
 /** Compared in the browser from the two revisions' snapshots. */
-function Compare({ tenant, from, to }: { tenant: string; from: number; to: number }) {
+function Compare({
+  tenant,
+  from,
+  to,
+  action,
+}: {
+  tenant: string;
+  from: number;
+  to: number;
+  action: ReactNode;
+}) {
   const a = useRevision(tenant, from);
   const b = useRevision(tenant, to);
   if (a.isPending || b.isPending) return <TableSkeleton rows={3} cols={2} />;
@@ -57,44 +68,61 @@ function Compare({ tenant, from, to }: { tenant: string; from: number; to: numbe
       />
     );
   const changes = diffSnapshots(a.data!.snapshot as Collections, b.data!.snapshot as Collections);
+  const head = (
+    <div className="flex items-center gap-3 border-b px-5 py-3">
+      <h2 className="text-lg font-semibold">
+        #{from} → #{to}
+      </h2>
+      <span className="text-sm text-muted-foreground">
+        {t("{n} objects changed", { n: changes.length })}
+      </span>
+      <span className="ml-auto">{action}</span>
+    </div>
+  );
   if (changes.length === 0)
     return (
-      <p className="text-sm text-muted-foreground">
-        {t("No differences between #{a} and #{b}.", { a: from, b: to })}
-      </p>
+      <>
+        {head}
+        <p className="p-5 text-sm text-muted-foreground">
+          {t("No differences between #{a} and #{b}.", { a: from, b: to })}
+        </p>
+      </>
     );
   return (
-    <div className="space-y-3">
-      {changes.map((c) => (
-        <div key={`${c.collection}-${c.id}`} className="rounded-lg border bg-card">
-          <div className="flex items-center gap-2 border-b px-4 py-2 text-sm">
-            <span className="text-muted-foreground">{collectionLabel(c.collection)}</span>
-            <span className="font-medium">{c.name}</span>
-            <StatusPill status={c.status === "deleted" ? "down" : "draft"}>
-              {{ created: t("New"), modified: t("Modified"), deleted: t("Deleted") }[c.status]}
-            </StatusPill>
+    <>
+      {head}
+      <div className="space-y-3 p-5">
+        {changes.map((c) => (
+          <div key={`${c.collection}-${c.id}`} className="rounded-lg border bg-card">
+            <div className="flex items-center gap-2 border-b px-4 py-2 text-sm">
+              <span className="text-muted-foreground">{collectionLabel(c.collection)}</span>
+              <span className="font-medium">{c.name}</span>
+              <StatusPill status={c.status === "deleted" ? "down" : "draft"}>
+                {{ created: t("New"), modified: t("Modified"), deleted: t("Deleted") }[c.status]}
+              </StatusPill>
+            </div>
+            <div className="divide-y font-mono text-xs">
+              {c.fields.map((f) => (
+                <div key={f.field} className="px-4 py-1.5">
+                  <div className="text-muted-foreground">{f.field}</div>
+                  {c.status !== "created" && (
+                    <div className="bg-diff-del px-1 break-all">− {show(f.before)}</div>
+                  )}
+                  {c.status !== "deleted" && (
+                    <div className="bg-diff-add px-1 break-all">+ {show(f.after)}</div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="divide-y font-mono text-xs">
-            {c.fields.map((f) => (
-              <div key={f.field} className="px-4 py-1.5">
-                <div className="text-muted-foreground">{f.field}</div>
-                {c.status !== "created" && (
-                  <div className="bg-diff-del px-1">− {show(f.before)}</div>
-                )}
-                {c.status !== "deleted" && (
-                  <div className="bg-diff-add px-1">+ {show(f.after)}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      <p className="text-xs text-muted-foreground">
-        {t(
-          "Compared in the browser from the two revisions' snapshots. Secrets are references, so none appear here.",
-        )}
-      </p>
-    </div>
+        ))}
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "Compared in the browser from the two revisions' snapshots. Secrets are references, so none appear here.",
+          )}
+        </p>
+      </div>
+    </>
   );
 }
 
@@ -184,10 +212,8 @@ export function Revisions({ tenant }: { tenant: string }) {
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {r.author} ·{" "}
-                        <time dateTime={r.created_at}>
-                          {new Date(r.created_at).toLocaleString()}
-                        </time>
+                        {principalName(r.author)} ·{" "}
+                        <time dateTime={r.created_at}>{shortWhen(r.created_at)}</time>
                         {r.git_sha && (
                           <>
                             {" "}
@@ -195,18 +221,6 @@ export function Revisions({ tenant }: { tenant: string }) {
                           </>
                         )}
                       </div>
-                      {i > 0 && (
-                        <Tip label={rollback.reason}>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={!rollback.allowed}
-                            onClick={() => setTarget(r.number)}
-                          >
-                            {t("Roll back")}
-                          </Button>
-                        </Tip>
-                      )}
                     </div>
                     <label className="flex shrink-0 items-center gap-1.5">
                       <input
@@ -233,11 +247,24 @@ export function Revisions({ tenant }: { tenant: string }) {
           )}
         </div>
         {lo !== undefined && hi !== undefined ? (
-          <section className="space-y-3 rounded-lg border bg-card p-4">
-            <h2 className="text-lg font-semibold">
-              #{lo} → #{hi}
-            </h2>
-            <Compare tenant={tenant} from={lo} to={hi} />
+          <section className="rounded-lg border bg-card">
+            <Compare
+              tenant={tenant}
+              from={lo}
+              to={hi}
+              action={
+                <Tip label={rollback.reason}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!rollback.allowed}
+                    onClick={() => setTarget(lo)}
+                  >
+                    {t("Roll back to #{n}", { n: lo })}
+                  </Button>
+                </Tip>
+              }
+            />
           </section>
         ) : (
           <p className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
