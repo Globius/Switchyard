@@ -248,6 +248,7 @@ describe("SE groups", () => {
     await userEvent.click(more1);
     await userEvent.click(await screen.findByRole("menuitem", { name: "Enrollment token" }));
     expect(await screen.findByText("tok-123")).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText("I have stored it"));
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     const row2 = screen.getByText("se-edge-a-02").closest("tr")!;
     await userEvent.click(within(row2).getByRole("button", { name: "More" }));

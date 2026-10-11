@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ApiError } from "@/api/client";
 import { useCan, useMe } from "@/auth/session";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
+import { ConfigEditor } from "@/components/sy/ConfigEditor";
 import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
@@ -178,27 +179,34 @@ function ConfigTab({ diff }: { diff: Diff }) {
                 <span>{f.path}</span>
                 <span className="text-muted-foreground">{f.status}</span>
               </div>
-              <pre className="overflow-x-auto py-1 font-mono text-[12px] leading-5">
-                {parseUnified(f.diff).map((l, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "flex px-4",
-                      l.kind === "add" && "bg-diff-add",
-                      l.kind === "del" && "bg-diff-del",
-                      l.kind === "hunk" && "bg-muted/60 text-muted-foreground",
-                    )}
-                  >
-                    <span aria-hidden className="w-4 shrink-0">
-                      {l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}
-                    </span>
-                    <span className="sr-only">
-                      {l.kind === "add" ? t("added") : l.kind === "del" ? t("removed") : ""}
-                    </span>
-                    <code>{l.text || " "}</code>
-                  </div>
-                ))}
-              </pre>
+              <ConfigEditor
+                content={f.diff}
+                language="sy-diff"
+                label={f.path}
+                fallback={
+                  <pre className="overflow-x-auto py-1 font-mono text-[12px] leading-5">
+                    {parseUnified(f.diff).map((l, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "flex px-4",
+                          l.kind === "add" && "bg-diff-add",
+                          l.kind === "del" && "bg-diff-del",
+                          l.kind === "hunk" && "bg-muted/60 text-muted-foreground",
+                        )}
+                      >
+                        <span aria-hidden className="w-4 shrink-0">
+                          {l.kind === "add" ? "+" : l.kind === "del" ? "−" : " "}
+                        </span>
+                        <span className="sr-only">
+                          {l.kind === "add" ? t("added") : l.kind === "del" ? t("removed") : ""}
+                        </span>
+                        <code>{l.text || " "}</code>
+                      </div>
+                    ))}
+                  </pre>
+                }
+              />
             </div>
           ))}
         </section>
@@ -397,7 +405,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
                   </ul>
                 </section>
               )}
-              <div role="tablist" className="flex gap-1 border-b">
+              <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
                 {(["objects", "config", "impact"] as const).map((k) => (
                   <button
                     key={k}

@@ -17,6 +17,7 @@ import { useEnsureDraft } from "@/features/shell/draft-write";
 import { useCertificates } from "@/features/vs/queries";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { shortDate } from "@/lib/format";
 
 const INPUT =
   "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -347,7 +348,7 @@ function UsageSheet({
         <dt className="text-muted-foreground">{t("Expires")}</dt>
         <dd className="flex items-center gap-2">
           <StatusPill status={ex.status}>{ex.label}</StatusPill>
-          {new Date(cert.not_after).toLocaleDateString()}
+          {shortDate(cert.not_after)}
         </dd>
         <dt className="text-muted-foreground">{t("Renewal")}</dt>
         <dd>{cert.renew_policy === "auto" ? t("Auto") : t("Manual")}</dd>
@@ -605,7 +606,7 @@ export function Certificates({ tenant }: { tenant: string }) {
             <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
                 {["Name", "Source", "SANs", "Expires", "Renewal", "Used by", "Actions"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 font-medium">
+                  <th key={h} className="px-4 py-2.5 font-medium whitespace-nowrap">
                     {t(h)}
                   </th>
                 ))}
@@ -624,7 +625,7 @@ export function Certificates({ tenant }: { tenant: string }) {
                           type="button"
                           aria-label={t("Where {name} is used", { name: c.name })}
                           className={cn(
-                            "font-medium text-primary hover:underline",
+                            "text-left font-medium whitespace-nowrap text-primary hover:underline",
                             c.draft_status === "deleted" && "line-through",
                           )}
                           onClick={() => setDetail(c.id)}
@@ -636,10 +637,10 @@ export function Certificates({ tenant }: { tenant: string }) {
                     <td className="px-4 py-3">{t(SOURCE[c.source] ?? c.source)}</td>
                     <td className="px-4 py-3 font-mono text-xs">{c.sans.join(", ")}</td>
                     <td className="px-4 py-3">
-                      <span className="flex items-center gap-2">
+                      <span className="flex items-center gap-2 whitespace-nowrap">
                         <StatusPill status={ex.status}>{ex.label}</StatusPill>
-                        <span className="text-muted-foreground">
-                          {new Date(c.not_after).toLocaleDateString()}
+                        <span className="whitespace-nowrap text-muted-foreground">
+                          {shortDate(c.not_after)}
                         </span>
                       </span>
                     </td>

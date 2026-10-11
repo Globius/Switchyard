@@ -267,6 +267,7 @@ describe("admin area", () => {
     await userEvent.click(dlg.getByRole("button", { name: "Create token" }));
     expect(await screen.findByText("sy_sys_secret")).toBeInTheDocument();
     expect(calls.token).toEqual({ name: "ci", ttl_days: 90 });
+    await userEvent.click(screen.getByLabelText("I have stored it"));
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
     await userEvent.click(screen.getByRole("button", { name: "Revoke" }));
     await userEvent.click(await screen.findByRole("button", { name: "Revoke token" }));
@@ -578,7 +579,10 @@ describe("admin area", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Create administrator" }));
     expect(await screen.findByText("pw-once")).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText("Authenticator code"), "123456");
-    await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    const confirmBtn = screen.getByRole("button", { name: "Confirm" });
+    expect(confirmBtn).toBeDisabled();
+    await userEvent.click(screen.getByLabelText("I have stored it"));
+    await userEvent.click(confirmBtn);
     await waitFor(() => expect(confirmed).toEqual({ totp: "123456" }));
   });
 

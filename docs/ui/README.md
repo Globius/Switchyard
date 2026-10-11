@@ -51,6 +51,14 @@ user menu and ChangeSetBar. Routes are file-based (`src/routes`, generated `rout
 committed). Screens that are not built yet render a `NotBuilt` placeholder. Review and the create
 wizard sit outside the shell (full screen), as in the design handoff.
 
+## Browser checks
+
+`make ui-e2e` (Playwright, `ui/e2e/`) runs in a real browser with the API mocked: axe (WCAG 2 A and AA,
+including colour contrast) on the main screens, keyboard flows (Ctrl+K palette, editing the settings
+form, switches, a visible focus ring on every Tab stop) and phone width (375 px, no sideways scroll).
+Set `PW_CHANNEL=chrome` to use an installed Chrome. These are not part of `ui-check` because they need a
+browser; run them before a UI merge request and when CI is back on.
+
 ## Built
 
 Every artboard of Design's v46 handoff has a screen:

@@ -321,7 +321,7 @@ describe("forms with several findings", () => {
     const name = await screen.findByLabelText("Name");
     await waitFor(() => expect(name).toBeEnabled());
     await userEvent.type(name, "x");
-    await userEvent.click(screen.getByRole("button", { name: "Add to change set" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
     const summary = await screen.findByText("3 things need fixing");
     const box = within(summary.closest("[role=alert]") as HTMLElement);
     expect(box.getByRole("button", { name: "VIP is not in the network." })).toBeInTheDocument();
