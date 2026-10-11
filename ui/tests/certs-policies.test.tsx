@@ -256,7 +256,9 @@ describe("certificates", () => {
     const wild = screen.getByText("wildcard").closest("tr")!;
     expect(within(wild).getByText("12 days")).toBeInTheDocument();
     expect(await within(wild).findByText("api-gateway")).toBeInTheDocument();
-    expect(within(screen.getByText("portal").closest("tr")!).getByText("Auto")).toBeInTheDocument();
+    expect(
+      within(screen.getByText("portal").closest("tr")!).getByText("Auto · 30 days before"),
+    ).toBeInTheDocument();
     expect(
       within(screen.getByText("portal").closest("tr")!).getByText("Cloudflare Origin CA"),
     ).toBeInTheDocument();

@@ -304,6 +304,85 @@ type CertRow = components["schemas"]["CertificateRead"];
 type ServiceRow = components["schemas"]["VirtualServiceRead"];
 
 /** A certificate's details and every virtual service that uses it (live or in your draft). */
+/** Table and detail wording for the renewal setting: `Auto · 30 days before` or `Manual`. */
+export function renewalLabel(c: { renew_policy: string; renew_before_days?: number }): string {
+  return c.renew_policy === "auto"
+    ? t("Auto · {n} days before", { n: c.renew_before_days ?? 30 })
+    : t("Manual");
+}
+
+function RenewalEditor({ tenant, cert }: { tenant: string; cert: CertRow }) {
+  const save = useSaveOp(tenant, "certificate");
+  const can = useCan(tenant);
+  const write = can("write", "application");
+  const [policy, setPolicy] = useState<"auto" | "manual">(cert.renew_policy);
+  const [days, setDays] = useState(String(cert.renew_before_days ?? 30));
+  const [problem, setProblem] = useState<unknown>(null);
+  const n = Number(days);
+  const valid = Number.isInteger(n) && n >= 1 && n <= 365;
+  const dirty = policy !== cert.renew_policy || n !== (cert.renew_before_days ?? 30);
+  return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-semibold">{t("Renewal")}</h3>
+      {problem != null && <ErrorState error={problem} />}
+      <div className="flex flex-wrap items-end gap-3 text-sm">
+        <label className="space-y-1">
+          <span className="block font-medium">{t("Renew")}</span>
+          <select
+            aria-label={t("Renew")}
+            className={INPUT}
+            disabled={!write.allowed}
+            value={policy}
+            onChange={(e) => setPolicy(e.target.value as "auto" | "manual")}
+          >
+            <option value="auto">{t("Automatically")}</option>
+            <option value="manual">{t("Manually")}</option>
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="block font-medium">{t("Days before expiry")}</span>
+          <input
+            aria-label={t("Days before expiry")}
+            type="number"
+            min={1}
+            max={365}
+            className={cn(INPUT, "w-28")}
+            disabled={!write.allowed || policy !== "auto"}
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+          />
+        </label>
+        <Tip label={write.reason}>
+          <Button
+            variant="outline"
+            disabled={!write.allowed || !dirty || !valid || save.isPending}
+            onClick={async () => {
+              setProblem(null);
+              try {
+                await save.mutateAsync({
+                  action: "update",
+                  id: cert.id,
+                  version: cert.version,
+                  body: { renew_policy: policy, renew_before_days: n },
+                });
+              } catch (e) {
+                setProblem(e);
+              }
+            }}
+          >
+            {t("Save to draft")}
+          </Button>
+        </Tip>
+      </div>
+      {!valid && (
+        <p role="alert" className="text-xs text-status-down">
+          {t("Enter a whole number of days from 1 to 365.")}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function UsageSheet({
   tenant,
   cert,
@@ -351,10 +430,11 @@ function UsageSheet({
           {shortDate(cert.not_after)}
         </dd>
         <dt className="text-muted-foreground">{t("Renewal")}</dt>
-        <dd>{cert.renew_policy === "auto" ? t("Auto") : t("Manual")}</dd>
+        <dd>{renewalLabel(cert)}</dd>
         <dt className="text-muted-foreground">{t("Key")}</dt>
         <dd className="font-mono text-xs">{cert.secret_ref}</dd>
       </dl>
+      <RenewalEditor key={`${cert.id}-${cert.version}`} tenant={tenant} cert={cert} />
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">
           {t("Used by {n} virtual services", { n: services.length })}
@@ -644,9 +724,7 @@ export function Certificates({ tenant }: { tenant: string }) {
                         </span>
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      {c.renew_policy === "auto" ? t("Auto") : t("Manual")}
-                    </td>
+                    <td className="px-4 py-3">{renewalLabel(c)}</td>
                     <td className="px-4 py-3">{users.length ? users.join(", ") : t("none")}</td>
                     <td className="px-4 py-3">
                       <span className="flex gap-1">

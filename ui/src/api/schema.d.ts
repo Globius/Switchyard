@@ -3492,6 +3492,8 @@ export interface components {
          *         not_after: Expiry (timezone-aware).
          *         secret_ref: OpenBao path of the PEM bundle.
          *         renew_policy: Whether the controller renews it.
+         *         renew_before_days: How many days before ``not_after`` an ``auto`` certificate is
+         *             renewed (the artboard's "Auto, 30 days before").
          */
         Certificate: {
             /**
@@ -3506,6 +3508,11 @@ export interface components {
              * Format: date-time
              */
             not_after: string;
+            /**
+             * Renew Before Days
+             * @default 30
+             */
+            renew_before_days: number;
             /** @default manual */
             renew_policy: components["schemas"]["RenewPolicy"];
             /** Sans */
@@ -3533,6 +3540,11 @@ export interface components {
              * Format: date-time
              */
             not_after: string;
+            /**
+             * Renew Before Days
+             * @default 30
+             */
+            renew_before_days: number;
             /** @default manual */
             renew_policy: components["schemas"]["RenewPolicy"];
             /** Sans */
@@ -3547,6 +3559,8 @@ export interface components {
             name?: string | null;
             /** Not After */
             not_after?: string | null;
+            /** Renew Before Days */
+            renew_before_days?: number | null;
             renew_policy?: components["schemas"]["RenewPolicy"] | null;
             /** Sans */
             sans?: string[] | null;
@@ -3578,6 +3592,11 @@ export interface components {
              * Format: date-time
              */
             not_after: string;
+            /**
+             * Renew Before Days
+             * @default 30
+             */
+            renew_before_days: number;
             /** @default manual */
             renew_policy: components["schemas"]["RenewPolicy"];
             /** Sans */
@@ -11469,6 +11488,7 @@ export interface operations {
                      *           "id": "0192f3a0-0000-7000-8000-000000000016",
                      *           "name": "web-example",
                      *           "not_after": "2027-01-08T00:00:00Z",
+                     *           "renew_before_days": 30,
                      *           "renew_policy": "auto",
                      *           "sans": [
                      *             "www.example.test"
@@ -11557,6 +11577,7 @@ export interface operations {
                  * @example {
                  *       "name": "web-example",
                  *       "not_after": "2027-01-08T00:00:00Z",
+                 *       "renew_before_days": 30,
                  *       "renew_policy": "auto",
                  *       "sans": [
                  *         "www.example.test"
@@ -12031,6 +12052,7 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000016",
                      *       "name": "web-example",
                      *       "not_after": "2027-01-08T00:00:00Z",
+                     *       "renew_before_days": 30,
                      *       "renew_policy": "auto",
                      *       "sans": [
                      *         "www.example.test"
