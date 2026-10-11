@@ -185,7 +185,9 @@ def serve(
         runtime.telemetry(),
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
-    uvicorn.run(create_app(services, public_url=public_url), host=host, port=port)
+    config = uvicorn.Config(create_app(services, public_url=public_url), host=host, port=port)
+    # uvicorn's own loop is Proactor on Windows, which psycopg rejects; run() uses the selector.
+    run(uvicorn.Server(config).serve())
 
 
 @app.command("worker")

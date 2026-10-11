@@ -1269,10 +1269,9 @@ class EnrollIn(ApiModel):
     csr: str = Field(max_length=16384, description="PEM certificate request made by the agent.")
 
 
-class CertImportIn(ApiModel):
-    """Body of ``POST /certificates/import``: send ``pem`` or ``pkcs12_b64`` with ``password``."""
+class CertMaterialIn(ApiModel):
+    """Certificate material: send ``pem`` or ``pkcs12_b64`` with ``password``."""
 
-    name: str
     pem: str | None = Field(
         default=None,
         max_length=65536,
@@ -1290,12 +1289,22 @@ class CertImportIn(ApiModel):
     )
 
     @model_validator(mode="after")
-    def _exactly_one_source(self) -> "CertImportIn":
+    def _exactly_one_source(self) -> "CertMaterialIn":
         if (self.pem is None) == (self.pkcs12_b64 is None):
             raise ValueError("send exactly one of pem or pkcs12_b64")
         if self.pem is not None and self.password is not None:
             raise ValueError("password only applies to pkcs12_b64")
         return self
+
+
+class CertImportIn(CertMaterialIn):
+    """Body of ``POST /certificates/import``."""
+
+    name: str
+
+
+class CertReplaceIn(CertMaterialIn):
+    """Body of ``POST /certificates/{id}/replace``: new material for an existing certificate."""
 
 
 class CertIssueIn(ApiModel):

@@ -272,3 +272,58 @@ async def test_api_import_issue_and_renew_endpoints_and_the_worker_jobs(pg_url: 
                 await s.execute(text("SELECT kind, state FROM job WHERE kind LIKE '%cert%'"))
             ).all()
         assert sorted(states) == [("issue_cert", "succeeded"), ("issue_cert", "succeeded")]
+
+
+async def test_api_replace_keeps_the_object_id_and_name(pg_url: str) -> None:
+    import httpx
+
+    from switchyard.api.app import build_services, create_app
+    from switchyard.jobs.handlers import build_handlers
+    from switchyard.jobs.worker import Worker
+    from switchyard.pipeline.engines import StaticEngineDirectory
+
+    async with world(pg_url, due_data()) as w:
+        secrets = MemorySecrets(CERT_SECRETS)
+        certs = service(w, secrets, origin_ca())
+        services = build_services(w.db, StaticEngineDirectory({}), secrets, certs=certs)
+        token, _ = await services.tokens.create(
+            principal(Role.SYSTEM_ADMIN, "root"), TENANT, "ci", Role.OPERATOR
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+        base = f"/api/v1/tenants/{TENANT}/certificates"
+        worker = Worker(
+            w.db.admin, build_handlers(w.db, w.pipeline, None, certs=certs), worker_id="t"
+        )
+        transport = httpx.ASGITransport(app=create_app(services))
+        async with httpx.AsyncClient(transport=transport, base_url="http://api") as client:
+            body = {"name": "shop", "pem": make_pem(("shop.example.test",))}
+            r = await client.post(f"{base}/import?apply=true", headers=headers, json=body)
+            assert r.status_code == 202, r.text
+            while await worker.run_once():
+                pass
+            old = next(c for c in (await w.snapshot()).certificates if c.name == "shop")
+            from tests.unit.test_certs import _p12
+
+            for payload in (
+                {"pem": make_pem(("shop2.example.test",))},
+                {"pkcs12_b64": _p12(make_pem(("shop3.example.test",)), "pw"), "password": "pw"},
+            ):
+                rep = await client.post(
+                    f"{base}/{old.id}/replace?apply=true", headers=headers, json=payload
+                )
+                assert rep.status_code == 202, rep.text
+                while await worker.run_once():
+                    pass
+            new = next(c for c in (await w.snapshot()).certificates if c.id == old.id)
+            assert new.name == "shop" and list(new.sans) == ["shop3.example.test"]
+            assert new.secret_ref != old.secret_ref
+            gone = await client.post(
+                f"{base}/{UUID(int=9)}/replace?apply=true", headers=headers, json={"pem": "x"}
+            )
+            assert gone.status_code == 404
+            wrong = await client.post(
+                f"{base}/{old.id}/replace",
+                headers=headers,
+                json={"pkcs12_b64": "%%%"},
+            )
+            assert wrong.json()["errors"][0]["path"] == "pkcs12_b64"
