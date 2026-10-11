@@ -314,6 +314,35 @@ class TestApproval:
                 == 1
             )
 
+    async def test_management_tenant_is_locked_and_protects_the_controller_vip(
+        self, pg_url: str
+    ) -> None:
+        data = world_data()
+        data["tenants"][0]["name"] = "management"
+        data["virtual_services"][0]["name"] = "controller"
+        for cert in data.get("certificates", []):
+            cert["secret_ref"] = cert["secret_ref"].replace("tenants/acme/", "tenants/management/")
+        async with world(pg_url, data) as w:
+            delete = ChangeOp(
+                object_type=ObjectType.VIRTUAL_SERVICE,
+                object_id=VS,
+                action=Action.DELETE,
+                expected_version=1,
+            )
+            detail = await w.service.open(principal(Role.TENANT_ADMIN), TENANT)
+            with pytest.raises(ValidationFailedError) as refused:
+                await w.service.add_ops(
+                    principal(Role.TENANT_ADMIN), TENANT, detail.record.id, [delete]
+                )
+            assert refused.value.problems[0].code == "controller_protected"
+            await w.service.add_ops(principal(), TENANT, detail.record.id, [update_pool(tls=True)])
+            with pytest.raises(PermissionDeniedError):  # locked: tenant admins cannot apply
+                await w.service.apply(principal(Role.TENANT_ADMIN), TENANT, detail.record.id)
+            root = principal(Role.SYSTEM_ADMIN, "root")
+            with pytest.raises(PermissionDeniedError):  # a reason is required
+                await w.service.apply(root, TENANT, detail.record.id)
+            await w.service.apply(root, TENANT, detail.record.id, break_glass_reason="rotate pool")
+
     async def test_only_drafts_can_be_submitted(self, pg_url: str) -> None:
         async with world(pg_url, approval_data()) as w:
             detail = await w.service.open(principal(Role.OPERATOR, "olga"), TENANT)
