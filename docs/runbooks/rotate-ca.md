@@ -23,4 +23,4 @@ issuer, and status shows no unreachable engines.
 
 **Back out.** Before step 5 the old CA is still trusted everywhere: point the role back at the old issuer.
 
-_Not rehearsed end to end yet; the lab end-to-end test is where this gets exercised._
+_Rehearsed with `deploy/prod/ca-rotation-drill.sh` against a dev OpenBao: two issuers, a combined bundle that accepts both, then the new CA alone rejects a certificate that was never renewed. That covers the trust logic (steps 1, 2 and 5). The agent renewal in steps 3 and 4 is not rehearsed; it needs a real SE._

@@ -22,8 +22,8 @@ sent, and the controller has no login rate limit.
 The limit is per node, not cluster-wide, so an attacker spreading over three nodes gets three times the
 allowance. Behind the SE, the limit works per real client only if HAProxy sends `X-Forwarded-For`; if it does not,
 all users share one bucket (the SE's address) and 5 a minute could lock people out: verify this on the first
-deploy. The API port stays on loopback by default for recovery access. CSP was tested for headers only, not with
-a browser loading Monaco.
+deploy. The API port stays on loopback by default for recovery access. The CSP was exercised in Chrome through
+`ui/e2e/csp.spec.ts` (login, home, revisions and a rendered-config page with Monaco mounted): no violations.
 
 ## Alternatives considered
 Caddy (automatic TLS is not needed behind the SE); rate limiting in the controller (needs shared state across

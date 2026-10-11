@@ -12,7 +12,7 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [["list"]],
   use: {
-    baseURL: "http://localhost:5199",
+    baseURL: process.env.PW_BASE_URL ?? "http://localhost:5199",
     channel: process.env.PW_CHANNEL || undefined,
     trace: "retain-on-failure",
   },
@@ -20,7 +20,7 @@ export default defineConfig({
     { name: "desktop", use: { viewport: { width: 1280, height: 900 } }, testIgnore: /responsive/ },
     { name: "phone", use: { viewport: { width: 375, height: 812 } }, testMatch: /responsive/ },
   ],
-  webServer: {
+  webServer: process.env.PW_BASE_URL ? undefined : {
     command: "pnpm exec vite --port 5199 --strictPort",
     url: "http://localhost:5199",
     reuseExistingServer: true,
