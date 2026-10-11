@@ -1,0 +1,50 @@
+# Cluster-wide defaults. Per-node values (name, addresses, etcd hosts, passwords) are PATRONI_* variables.
+scope: switchyard
+namespace: /switchyard/
+restapi:
+  listen: 0.0.0.0:8008
+etcd3:
+  protocol: http
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    synchronous_mode: true          # one synchronous standby (02 "Database")
+    synchronous_mode_strict: false
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+        wal_level: replica
+        max_wal_senders: 10
+        max_replication_slots: 10
+        hot_standby: "on"
+        archive_mode: "on"
+        archive_timeout: 60s
+        archive_command: pgbackrest --stanza=switchyard archive-push %p
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+  pg_hba:
+    - local all all trust
+    - host replication replicator 0.0.0.0/0 scram-sha-256
+    - host all all 0.0.0.0/0 scram-sha-256
+  post_bootstrap: /post_bootstrap.sh
+postgresql:
+  data_dir: /data/pgdata
+  bin_dir: /usr/lib/postgresql/17/bin
+  pgpass: /tmp/pgpass
+  authentication:
+    replication: {username: replicator}
+    superuser: {username: postgres}
+  create_replica_methods: [pgbackrest, basebackup]
+  pgbackrest:
+    command: pgbackrest --stanza=switchyard --delta restore
+    keep_data: true
+    no_params: true
+  basebackup:
+    max-rate: 100M
+tags:
+  nofailover: false
+  noloadbalance: false

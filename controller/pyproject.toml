@@ -16,6 +16,7 @@ dependencies = [
   "fastapi>=0.143.0",
   "uvicorn>=0.54.0",
   "grpcio>=1.84.0",
+  "protobuf>=6.0",
   "cryptography>=50.0.2",
   "acme>=5.8.0",
   "joserfc>=1.7.5",

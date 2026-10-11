@@ -1,0 +1,81 @@
+# One controller node (run on each of the three controller VMs). Copy node.env.example to node.env.
+#   docker compose --env-file node.env up -d
+# etcd, Patroni/PostgreSQL 17, pgBackRest, then the API and worker. See docs/runbooks/ and ADR 0048.
+name: switchyard
+x-patroni-env: &patroni-env
+  PATRONI_NAME: ${NODE_NAME}
+  PATRONI_RESTAPI_CONNECT_ADDRESS: ${NODE_IP}:8008
+  PATRONI_POSTGRESQL_LISTEN: 0.0.0.0:5432
+  PATRONI_POSTGRESQL_CONNECT_ADDRESS: ${NODE_IP}:5432
+  PATRONI_ETCD3_HOSTS: ${ETCD_HOSTS}
+  PATRONI_SUPERUSER_PASSWORD: ${PG_SUPERUSER_PASSWORD}
+  PATRONI_REPLICATION_PASSWORD: ${PG_REPLICATION_PASSWORD}
+  PATRONI_TAGS_NOFAILOVER: ${PATRONI_NOFAILOVER:-false}
+  PGBACKREST_STANZA: switchyard
+  PGBACKREST_PG1_PATH: /data/pgdata
+  PGBACKREST_PG1_SOCKET_PATH: /var/run/postgresql
+  PGBACKREST_REPO1_TYPE: ${BACKUP_REPO_TYPE:-s3}
+  PGBACKREST_REPO1_PATH: ${BACKUP_REPO_PATH:-/switchyard}
+  PGBACKREST_REPO1_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+  PGBACKREST_REPO1_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+  PGBACKREST_REPO1_S3_REGION: ${BACKUP_S3_REGION:-us-east-1}
+  PGBACKREST_REPO1_S3_KEY: ${BACKUP_S3_KEY:-}
+  PGBACKREST_REPO1_S3_KEY_SECRET: ${BACKUP_S3_SECRET:-}
+  PGBACKREST_REPO1_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+  PGBACKREST_REPO1_RETENTION_FULL: "4"
+  PGBACKREST_REPO1_CIPHER_TYPE: ${BACKUP_CIPHER_TYPE:-aes-256-cbc}
+  PGBACKREST_REPO1_CIPHER_PASS: ${BACKUP_CIPHER_PASS}
+  PGBACKREST_LOG_PATH: /var/log/pgbackrest
+x-controller: &controller
+  image: ${CONTROLLER_IMAGE:-switchyard-controller:latest}
+  restart: unless-stopped
+  environment: &controller-env
+    SWITCHYARD_DATABASE_URL: postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write
+    SWITCHYARD_PUBLIC_URL: ${PUBLIC_URL}
+    SWITCHYARD_OPENBAO_ADDR: ${OPENBAO_ADDR:-}
+    SWITCHYARD_OPENBAO_ROLE_ID: ${OPENBAO_ROLE_ID:-}
+    SWITCHYARD_OPENBAO_SECRET_ID: ${OPENBAO_SECRET_ID:-}
+    SWITCHYARD_PVE_URL: ${PVE_URL:-}
+    SWITCHYARD_PVE_TOKEN_ID: ${PVE_TOKEN_ID:-}
+    SWITCHYARD_BUNDLE_KEY_FILE: /run/switchyard/bundle.key
+  volumes:
+    - ${BUNDLE_KEY_FILE:-./secrets/bundle.key}:/run/switchyard/bundle.key:ro
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.17
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - etcd
+      - --name=${NODE_NAME}
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://${NODE_IP}:2379,http://127.0.0.1:2379
+      - --advertise-client-urls=http://${NODE_IP}:2379
+      - --listen-peer-urls=http://${NODE_IP}:2380
+      - --initial-advertise-peer-urls=http://${NODE_IP}:2380
+      - --initial-cluster=${ETCD_INITIAL_CLUSTER}
+      - --initial-cluster-state=${ETCD_CLUSTER_STATE:-new}
+      - --initial-cluster-token=switchyard
+    volumes: [etcd-data:/etcd-data]
+  patroni:
+    build: ./patroni
+    image: switchyard-patroni:17
+    restart: unless-stopped
+    network_mode: host
+    environment: *patroni-env
+    volumes: [pgdata:/data, pgbackrest-repo:/var/lib/pgbackrest, pgbackrest-log:/var/log/pgbackrest]
+    stop_grace_period: 60s
+    depends_on: [etcd]
+  migrate:
+    <<: *controller
+    restart: "no"
+    command: ["db", "upgrade", "--url", "postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write"]
+  api:
+    <<: *controller
+    ports: ["${API_BIND:-0.0.0.0}:8000:8000"]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+  worker:
+    <<: *controller
+    command: ["worker", "--name", "${NODE_NAME}"]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+volumes: {etcd-data: {}, pgdata: {}, pgbackrest-repo: {}, pgbackrest-log: {}}
