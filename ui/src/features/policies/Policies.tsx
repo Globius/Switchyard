@@ -161,6 +161,7 @@ function PolicySheet({
   return (
     <>
       <Sheet
+        inline
         open
         onOpenChange={(o) => !o && onClose()}
         title={
@@ -503,65 +504,75 @@ export function Policies({ tenant }: { tenant: string }) {
           </button>
         ))}
       </div>
-      <div className="rounded-lg border bg-card">
-        {list.isPending ? (
-          <TableSkeleton cols={3} />
-        ) : list.isError ? (
-          <ErrorState error={list.error} onRetry={() => void list.refetch()} />
-        ) : rows.length === 0 ? (
-          <EmptyState
-            title={t("No policies yet")}
-            body={t(
-              "A policy redirects requests or limits which source addresses a virtual service accepts.",
-            )}
-          />
-        ) : (
-          <ul className="divide-y">
-            {rows.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 px-4 py-3 text-[13px]">
-                {p.draft_status !== "unchanged" && <DraftMarker status={p.draft_status} />}
-                <button
-                  type="button"
+      <div className={cn("grid gap-4", editing && "lg:grid-cols-[minmax(0,22rem)_1fr]")}>
+        <div className="self-start rounded-lg border bg-card">
+          {list.isPending ? (
+            <TableSkeleton cols={3} />
+          ) : list.isError ? (
+            <ErrorState error={list.error} onRetry={() => void list.refetch()} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              title={t("No policies yet")}
+              body={t(
+                "A policy redirects requests or limits which source addresses a virtual service accepts.",
+              )}
+            />
+          ) : (
+            <ul className="divide-y">
+              {rows.map((p) => (
+                <li
+                  key={p.id}
                   className={cn(
-                    "font-medium text-primary hover:underline",
-                    p.draft_status === "deleted" && "line-through",
+                    "flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px]",
+                    editing?.policy?.id === p.id && "bg-accent/50",
                   )}
-                  onClick={() =>
-                    setEditing({ policy: p, kind: p.kind as "redirect" | "allow_list" })
-                  }
                 >
-                  {p.name}
-                </button>
-                <span className="text-muted-foreground">
-                  {p.kind === "redirect"
-                    ? t("Redirect · {n} rules", { n: p.rules.length })
-                    : p.managed_by
-                      ? t("Allow list · managed")
-                      : t("Allow list · {n} CIDRs", { n: p.cidrs.length })}
-                </span>
-                {p.kind === "allow_list" && p.managed_by && (
-                  <StatusPill status="neutral">{t("Managed")}</StatusPill>
-                )}
-                <span className="ml-auto text-muted-foreground">{usedBy(p.id).join(", ")}</span>
-              </li>
-            ))}
-          </ul>
+                  {p.draft_status !== "unchanged" && <DraftMarker status={p.draft_status} />}
+                  <button
+                    type="button"
+                    className={cn(
+                      "font-medium text-primary hover:underline",
+                      p.draft_status === "deleted" && "line-through",
+                    )}
+                    onClick={() =>
+                      setEditing({ policy: p, kind: p.kind as "redirect" | "allow_list" })
+                    }
+                  >
+                    {p.name}
+                  </button>
+                  <span className="text-muted-foreground">
+                    {p.kind === "redirect"
+                      ? t("Redirect · {n} rules", { n: p.rules.length })
+                      : p.managed_by
+                        ? t("Allow list · managed")
+                        : t("Allow list · {n} CIDRs", { n: p.cidrs.length })}
+                  </span>
+                  {p.kind === "allow_list" && p.managed_by && (
+                    <StatusPill status="neutral">{t("Managed")}</StatusPill>
+                  )}
+                  <span className={cn("text-muted-foreground", !editing && "ml-auto")}>
+                    {usedBy(p.id).join(", ")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {editing && (
+          <PolicySheet
+            key={
+              editing.policy
+                ? `${editing.policy.id}-${editing.policy.version}-${editing.policy.draft_status}`
+                : editing.kind
+            }
+            tenant={tenant}
+            policy={editing.policy}
+            kind={editing.kind}
+            usedBy={editing.policy ? usedBy(editing.policy.id) : []}
+            onClose={() => setEditing(null)}
+          />
         )}
       </div>
-      {editing && (
-        <PolicySheet
-          key={
-            editing.policy
-              ? `${editing.policy.id}-${editing.policy.version}-${editing.policy.draft_status}`
-              : editing.kind
-          }
-          tenant={tenant}
-          policy={editing.policy}
-          kind={editing.kind}
-          usedBy={editing.policy ? usedBy(editing.policy.id) : []}
-          onClose={() => setEditing(null)}
-        />
-      )}
     </div>
   );
 }

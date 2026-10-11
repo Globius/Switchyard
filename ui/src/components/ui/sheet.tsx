@@ -12,6 +12,7 @@ export function Sheet({
   children,
   footer,
   centered,
+  inline,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -21,7 +22,28 @@ export function Sheet({
   footer: ReactNode;
   /** Centred dialog instead of a right-hand sheet (short forms such as issuing a certificate). */
   centered?: boolean;
+  /** Render as a pane in the page (master-detail editors) instead of an overlay. */
+  inline?: boolean;
 }) {
+  if (inline)
+    return (
+      <section aria-label={title} className="flex min-h-[28rem] flex-col rounded-lg border bg-card">
+        <div className="flex items-center gap-3 border-b px-5 py-3">
+          <h2 className="text-base font-semibold">{title}</h2>
+          {badge}
+          <button
+            type="button"
+            className="ml-auto rounded-md p-1 hover:bg-accent"
+            aria-label={t("Close")}
+            onClick={() => onOpenChange(false)}
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="flex-1 space-y-5 p-5">{children}</div>
+        <div className="flex items-center gap-2 border-t px-5 py-3">{footer}</div>
+      </section>
+    );
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
