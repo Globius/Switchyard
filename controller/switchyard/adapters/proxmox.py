@@ -179,6 +179,27 @@ class Proxmox(Protocol):
 Sleep = Callable[[float], Awaitable[None]]
 
 
+def _is_missing(response: httpx.Response) -> bool:
+    """True when Proxmox says the object does not exist.
+
+    A real Proxmox answers ``HTTP 500`` with a message such as ``Configuration file ... does not
+    exist`` or ``sdn zone 'x' does not exist`` instead of ``404`` (found by the live test against
+    deploy/lab/pve), so both are accepted.
+
+    Example:
+        >>> _is_missing(httpx.Response(404))
+        True
+        >>> _is_missing(httpx.Response(500, text="internal error"))
+        False
+    """
+    if response.status_code == 404:
+        return True
+    if response.status_code != 500:
+        return False
+    text = response.text.lower()
+    return "does not exist" in text or "no such" in text
+
+
 class HttpProxmox:
     """Proxmox VE REST client authenticated with an API token.
 
@@ -228,7 +249,7 @@ class HttpProxmox:
             response = await self._http.request(method, path, data=data)
         except httpx.HTTPError as exc:
             raise ProxmoxError(f"{method} {path}: {exc}") from exc
-        if response.status_code == 404 and ok_missing:
+        if ok_missing and _is_missing(response):
             return None
         if response.status_code >= 400:
             raise ProxmoxError(

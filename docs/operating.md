@@ -140,3 +140,8 @@ The node exporter (9100) is part of the SE image. The HAProxy exporter (8405) is
 
 An hourly job expires drafts untouched for 14 days, finished jobs after 30 days, stale engine status and
 expired login or enrollment material. It never touches desired state, revisions or the audit log.
+
+## Testing against a Proxmox API
+
+`docker compose -f deploy/lab/pve/compose.yaml up -d`, then `sh deploy/lab/pve/bootstrap.sh` prints the `SWITCHYARD_TEST_PVE_*`
+variables; with them set, `pytest tests/integration/test_proxmox_live.py` runs the adapter against a real Proxmox VE (ADR 0054).
