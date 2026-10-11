@@ -3,6 +3,7 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { setSessionExpiredHandler } from "@/api/client";
+import { markSessionExpired } from "@/auth/expired";
 import { createQueryClient } from "@/auth/session";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "./routeTree.gen";
@@ -19,15 +20,10 @@ declare module "@tanstack/react-router" {
   }
 }
 
-// Until the re-login modal is built, an expired session goes back to the login page and returns
-// to the page you were on afterwards.
+// A 401 session_expired opens the re-login modal over the page, so unsaved input is kept.
 setSessionExpiredHandler(() => {
-  const l = router.state.location;
-  if (l.pathname === "/login") return;
-  void router.navigate({
-    to: "/login",
-    search: { error: "session_ended", next: l.pathname + (l.searchStr ?? "") },
-  });
+  if (router.state.location.pathname === "/login") return;
+  markSessionExpired();
 });
 
 createRoot(document.getElementById("root")!).render(
