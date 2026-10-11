@@ -651,14 +651,26 @@ function DeploySheet({
               </span>
             </label>
             <label className="space-y-1.5 text-sm font-medium">
-              {lxc ? t("Container template") : t("Template VM ID")}
+              {lxc ? t("Template container ID") : t("Template VM ID")}
               <input
-                aria-label={lxc ? t("Container template") : t("Template VM ID")}
+                aria-label={lxc ? t("Template container ID") : t("Template VM ID")}
+                aria-describedby="deploy-template-help"
                 type="number"
+                inputMode="numeric"
                 className={INPUT}
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
               />
+              <span
+                id="deploy-template-help"
+                className="block text-xs font-normal text-muted-foreground"
+              >
+                {lxc
+                  ? t(
+                      "Proxmox ID of the SE container template (a container converted to a template), not a vztmpl archive.",
+                    )
+                  : t("Proxmox ID of the SE VM template.")}
+              </span>
             </label>
           </div>
           <div className="space-y-1.5">
@@ -781,7 +793,7 @@ function RegisterSheet({
       open
       centered
       onOpenChange={(o) => !o && onClose()}
-      title={t("Register an existing engine in {name}", { name: group.name })}
+      title={t("Register an existing VM")}
       badge={<Live />}
       footer={
         <>
