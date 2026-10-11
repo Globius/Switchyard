@@ -309,12 +309,26 @@ describe("admin area", () => {
         HttpResponse.json({
           roles: ["viewer", "operator", "tenant-admin", "system-admin"],
           permissions: [
-            { verb: "read", object: "x", min_role: "viewer", description: "Read everything" },
+            {
+              verb: "read",
+              object: "x",
+              min_role: "viewer",
+              description: "Read everything",
+              group: "Read",
+            },
+            {
+              verb: "list",
+              object: "y",
+              min_role: "viewer",
+              description: "List things",
+              group: "Read",
+            },
             {
               verb: "manage",
               object: "tenant",
               min_role: "system-admin",
               description: "Create tenants",
+              group: "System",
             },
           ],
         }),
@@ -334,7 +348,11 @@ describe("admin area", () => {
     );
     renderAt("/admin/role-mappings");
     expect(await screen.findByText("sy-platform-admins")).toBeInTheDocument();
-    expect(await screen.findByText("Read everything")).toBeInTheDocument();
+    expect(await screen.findByText("2 permissions")).toBeInTheDocument();
+    expect(screen.getByText("System")).toBeInTheDocument();
+    expect(screen.queryByText("Read everything")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Read" }));
+    expect(screen.getByText("Read everything")).toBeInTheDocument();
     expect(screen.getAllByLabelText("allowed").length).toBeGreaterThan(4);
     await userEvent.selectOptions(await screen.findByLabelText("Role of sy-prod"), "operator");
     await waitFor(() =>

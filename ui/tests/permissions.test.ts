@@ -9,14 +9,27 @@ const ROLES = ["viewer", "operator", "tenant-admin", "system-admin"] as const;
 const MATRIX: PermissionMatrix = {
   roles: [...ROLES],
   permissions: [
-    { verb: "read", object: "tenant_data", min_role: "viewer", description: "Read everything." },
+    {
+      verb: "read",
+      object: "tenant_data",
+      min_role: "viewer",
+      description: "Read everything.",
+      group: "Read",
+    },
     {
       verb: "apply",
       object: "change_set",
       min_role: "operator",
       description: "Apply a change set.",
+      group: "Change sets",
     },
-    { verb: "manage", object: "engine", min_role: "tenant-admin", description: "Manage engines." },
+    {
+      verb: "manage",
+      object: "engine",
+      min_role: "tenant-admin",
+      description: "Manage engines.",
+      group: "Infrastructure",
+    },
   ],
 };
 

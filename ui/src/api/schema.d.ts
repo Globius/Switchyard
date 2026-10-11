@@ -2087,6 +2087,28 @@ export interface paths {
         patch: operations["update_routing_profiles_api_v1_tenants__t__routing_profiles__object_id__patch"];
         trace?: never;
     };
+    "/api/v1/tenants/{t}/sdn/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * SDN apply state of every managed network
+         * @description For the 'SDN apply running' chip: per managed network, whether a tenant-wide `apply_sdn` job is `queued` or `running`, or how the latest finished one ended (`succeeded`, `failed`, or `never` for a network it did not include). Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["sdn_status_api_v1_tenants__t__sdn_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/se-groups": {
         parameters: {
             query?: never;
@@ -3508,6 +3530,9 @@ export interface components {
          *         renew_policy: Whether the controller renews it.
          *         renew_before_days: How many days before ``not_after`` an ``auto`` certificate is
          *             renewed (the artboard's "Auto, 30 days before").
+         *         ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate
+         *             (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not
+         *             ``cloudflare_origin``.
          */
         Certificate: {
             /**
@@ -3522,6 +3547,11 @@ export interface components {
              * Format: date-time
              */
             not_after: string;
+            /**
+             * Ocsp Stapling
+             * @default false
+             */
+            ocsp_stapling: boolean;
             /**
              * Renew Before Days
              * @default 30
@@ -3555,6 +3585,11 @@ export interface components {
              */
             not_after: string;
             /**
+             * Ocsp Stapling
+             * @default false
+             */
+            ocsp_stapling: boolean;
+            /**
              * Renew Before Days
              * @default 30
              */
@@ -3573,6 +3608,8 @@ export interface components {
             name?: string | null;
             /** Not After */
             not_after?: string | null;
+            /** Ocsp Stapling */
+            ocsp_stapling?: boolean | null;
             /** Renew Before Days */
             renew_before_days?: number | null;
             renew_policy?: components["schemas"]["RenewPolicy"] | null;
@@ -3606,6 +3643,11 @@ export interface components {
              * Format: date-time
              */
             not_after: string;
+            /**
+             * Ocsp Stapling
+             * @default false
+             */
+            ocsp_stapling: boolean;
             /**
              * Renew Before Days
              * @default 30
@@ -4867,6 +4909,7 @@ export interface components {
             id: string | null;
             /** Is System */
             is_system: boolean;
+            links?: components["schemas"]["MeLinks"];
             /** Name */
             name: string;
             /**
@@ -4878,6 +4921,17 @@ export interface components {
             session: components["schemas"]["MeSession"] | null;
             /** Tenants */
             tenants: components["schemas"]["MeTenant"][];
+        };
+        /**
+         * MeLinks
+         * @description Where the UI may link to, set by the operator of the controller.
+         */
+        MeLinks: {
+            /**
+             * Grafana
+             * @description Base URL of Grafana (`SWITCHYARD_GRAFANA_URL`), or null when none is set.
+             */
+            grafana?: string | null;
         };
         /**
          * MeSession
@@ -5566,6 +5620,40 @@ export interface components {
             next_cursor?: string | null;
         };
         /**
+         * PassiveCheck
+         * @description Judge members by their real traffic as well as by the health monitor (HAProxy ``observe``).
+         *
+         *     Attributes:
+         *         observe: ``layer4`` watches connection failures; ``layer7`` also watches HTTP responses
+         *             (``http`` pools only).
+         *         error_limit: Consecutive errors that trigger ``on_error``.
+         *         on_error: What to do at the limit: ``mark-down``, ``fastinter`` (check faster),
+         *             ``fail-check`` (count one failed check) or ``sudden-death`` (fail and mark down).
+         *
+         *     Example:
+         *         >>> PassiveCheck().on_error
+         *         'mark-down'
+         */
+        PassiveCheck: {
+            /**
+             * Error Limit
+             * @default 10
+             */
+            error_limit: number;
+            /**
+             * Observe
+             * @default layer7
+             * @enum {string}
+             */
+            observe: "layer4" | "layer7";
+            /**
+             * On Error
+             * @default mark-down
+             * @enum {string}
+             */
+            on_error: "mark-down" | "fastinter" | "fail-check" | "sudden-death";
+        };
+        /**
          * PermissionMatrix
          * @description The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.
          */
@@ -5588,6 +5676,11 @@ export interface components {
              * @description One sentence for tooltips.
              */
             description: string;
+            /**
+             * Group
+             * @description The group the role matrix screen shows it under: `Read`, `Applications`, `Infrastructure`, `Change sets`, `Runtime`, `Tenant settings`, `Access` or `System`.
+             */
+            group: string;
             /** @description The weakest role that may do this. */
             min_role: components["schemas"]["Role"];
             /**
@@ -5649,6 +5742,9 @@ export interface components {
          *         tls: Connect to members over TLS.
          *         tls_verify: Verify the member certificate against the system CA store. Off by default to
          *             match Avi behaviour for internal backends with private certificates.
+         *         passive_check: Also judge members by their live traffic. Needs a health monitor.
+         *         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
+         *             weight (HAProxy ``slowstart``). Needs a health monitor.
          *         members: Backend servers, unique by name.
          */
         Pool: {
@@ -5668,7 +5764,10 @@ export interface components {
             members: components["schemas"]["PoolMember"][];
             /** Name */
             name: string;
+            passive_check?: components["schemas"]["PassiveCheck"] | null;
             persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Slow Start S */
+            slow_start_s?: number | null;
             /**
              * Tenant Id
              * Format: uuid
@@ -5703,7 +5802,10 @@ export interface components {
             members: components["schemas"]["PoolMember"][];
             /** Name */
             name: string;
+            passive_check?: components["schemas"]["PassiveCheck"] | null;
             persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Slow Start S */
+            slow_start_s?: number | null;
             /**
              * Tls
              * @default false
@@ -5756,7 +5858,10 @@ export interface components {
             members?: components["schemas"]["PoolMember"][] | null;
             /** Name */
             name?: string | null;
+            passive_check?: components["schemas"]["PassiveCheck"] | null;
             persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Slow Start S */
+            slow_start_s?: number | null;
             /** Tls */
             tls?: boolean | null;
             /** Tls Verify */
@@ -5790,7 +5895,10 @@ export interface components {
             members: components["schemas"]["PoolMember"][];
             /** Name */
             name: string;
+            passive_check?: components["schemas"]["PassiveCheck"] | null;
             persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Slow Start S */
+            slow_start_s?: number | null;
             /**
              * Tenant Id
              * Format: uuid
@@ -6399,6 +6507,36 @@ export interface components {
             warnings: string[];
         };
         /**
+         * SdnApplyRead
+         * @description Where the Proxmox SDN apply stands for one managed network.
+         *
+         *     An apply is tenant-wide: while one is `queued` or `running` it counts for every managed
+         *     network. After it, `succeeded` and `failed` come from the latest finished apply, and `never`
+         *     marks a network that no finished apply has included yet.
+         */
+        SdnApplyRead: {
+            /** Error */
+            error?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Job Id */
+            job_id?: string | null;
+            /** Network */
+            network: string;
+            /**
+             * Network Id
+             * Format: uuid
+             */
+            network_id: string;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "succeeded" | "failed" | "never";
+        };
+        /**
          * SeGroup
          * @description A set of HAProxy service engines that serve the same virtual services.
          *
@@ -6890,6 +7028,12 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Members
+             * @description People with a grant in the tenant: signed-in users whose provider groups match one of the tenant's role mappings.
+             * @default 0
+             */
+            members: number;
             /** Name */
             name: string;
             /**
@@ -6938,6 +7082,16 @@ export interface components {
             /** Unreachable Engines */
             unreachable_engines: components["schemas"]["UnreachableEngine"][];
         };
+        /**
+         * TlsProfile
+         * @description Protocol versions and ciphers a TLS port offers (Mozilla's server-side TLS guidelines).
+         *
+         *     ``modern``: TLS 1.3 only. ``intermediate``: TLS 1.2 and 1.3 with forward-secret AEAD ciphers.
+         *     ``legacy``: TLS 1.0 to 1.3 for old clients; use it only while such clients exist. A port
+         *     without a profile keeps the engine default: TLS 1.2 or later with HAProxy's own cipher list.
+         * @enum {string}
+         */
+        TlsProfile: "modern" | "intermediate" | "legacy";
         /**
          * TokenCreated
          * @description A new API token; the plaintext is shown once.
@@ -7807,6 +7961,8 @@ export interface components {
          *         proxy_protocol: Accept the PROXY protocol header from the client side.
          *         https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port
          *             (which must be a TLS port of the same service).
+         *         tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine
+         *             default (TLS 1.2 or later, HAProxy's default ciphers).
          */
         VsPort: {
             /**
@@ -7828,6 +7984,7 @@ export interface components {
              * @default false
              */
             tls: boolean;
+            tls_profile?: components["schemas"]["TlsProfile"] | null;
         };
         /**
          * VsRoute
@@ -8162,6 +8319,9 @@ export interface operations {
                      *       "email": "alice@example.test",
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
+                     *       "links": {
+                     *         "grafana": "https://grafana.example.test"
+                     *       },
                      *       "name": "Alice Example",
                      *       "principal": "user:authentik:alice",
                      *       "session": {
@@ -8494,6 +8654,9 @@ export interface operations {
                      *       "email": "alice@example.test",
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
+                     *       "links": {
+                     *         "grafana": "https://grafana.example.test"
+                     *       },
                      *       "name": "Alice Example",
                      *       "principal": "user:authentik:alice",
                      *       "session": {
@@ -9519,6 +9682,9 @@ export interface operations {
                      *       "email": "alice@example.test",
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
+                     *       "links": {
+                     *         "grafana": "https://grafana.example.test"
+                     *       },
                      *       "name": "Alice Example",
                      *       "principal": "user:authentik:alice",
                      *       "session": {
@@ -9605,18 +9771,21 @@ export interface operations {
                      *       "permissions": [
                      *         {
                      *           "description": "Read everything in the tenant.",
+                     *           "group": "Read",
                      *           "min_role": "viewer",
                      *           "object": "tenant_data",
                      *           "verb": "read"
                      *         },
                      *         {
                      *           "description": "Apply a change set when the tenant does not require approval.",
+                     *           "group": "Change sets",
                      *           "min_role": "operator",
                      *           "object": "change_set",
                      *           "verb": "apply"
                      *         },
                      *         {
                      *           "description": "Register, enable, disable, retire or remove service engines.",
+                     *           "group": "Infrastructure",
                      *           "min_role": "tenant-admin",
                      *           "object": "engine",
                      *           "verb": "manage"
@@ -10849,6 +11018,7 @@ export interface operations {
                      * @example [
                      *       {
                      *         "id": "0192f3a0-0000-7000-8000-000000000001",
+                     *         "members": 7,
                      *         "name": "acme",
                      *         "quotas": {
                      *           "virtual_service": 50
@@ -10938,6 +11108,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "members": 7,
                      *       "name": "acme",
                      *       "quotas": {
                      *         "virtual_service": 50
@@ -11018,6 +11189,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "members": 7,
                      *       "name": "acme",
                      *       "quotas": {
                      *         "virtual_service": 50
@@ -11176,6 +11348,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "members": 7,
                      *       "name": "acme",
                      *       "quotas": {
                      *         "virtual_service": 50
@@ -18460,6 +18633,79 @@ export interface operations {
             };
             /** @description `If-Match` is required for this request. */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sdn_status_api_v1_tenants__t__sdn_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "job_id": "0192f3a0-0000-7000-8000-000000000021",
+                     *         "network": "lb",
+                     *         "network_id": "0192f3a0-0000-7000-8000-000000000061",
+                     *         "started_at": "2026-10-11T08:30:00Z",
+                     *         "state": "running"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["SdnApplyRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
