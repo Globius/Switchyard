@@ -650,7 +650,7 @@ describe("admin area", () => {
       http.get("*/api/v1/role-mappings", () => HttpResponse.json([])),
       http.get("*/api/v1/system/break-glass", () =>
         HttpResponse.json({
-          enabled: false,
+          enabled: true,
           enabled_until: null,
           enabled_by: null,
           reason: null,
@@ -682,6 +682,7 @@ describe("admin area", () => {
     try {
       renderAt("/admin/identity-providers");
       expect(await screen.findByText(/forces break-glass on/)).toBeInTheDocument();
+      expect(screen.getByText("Always on (set by the deployment)")).toBeInTheDocument();
       await userEvent.click(await screen.findByRole("button", { name: "Add provider" }));
       const dlg = within(await screen.findByRole("dialog"));
       await userEvent.click(dlg.getByRole("radio", { name: "SAML 2.0" }));
