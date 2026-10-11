@@ -14,13 +14,13 @@ export function defaultDraftName(fullName: string, at: Date = new Date()): strin
 
 /**
  * Returns `ensure()`, which resolves to the id of the open draft, creating one named
- * "Draft by <first name>, <HH:MM>" when there is none. Refreshes the bar and every tenant query
- * afterwards so lists switch to the draft overlay.
+ * "Draft by <first name>, <HH:MM>" when there is none. It does not refresh queries: callers add
+ * their op first and then invalidate (see {@link useAfterDraftWrite}), otherwise a read of the
+ * new draft races the write and shows the state before the edit.
  */
 export function useEnsureDraft(tenant: string) {
   const { draft } = useDraft(tenant);
   const { data: me } = useMe();
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: async () => {
       if (draft) return draft.id;
@@ -30,7 +30,6 @@ export function useEnsureDraft(tenant: string) {
           body: { summary: defaultDraftName(me?.name ?? "") },
         }),
       );
-      await qc.invalidateQueries({ queryKey: ["t", tenant, "change-sets"] });
       return created.id;
     },
   });
