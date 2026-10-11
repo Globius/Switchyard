@@ -21,6 +21,7 @@ const TENANTS = [
     require_approval: true,
     quotas: { virtual_services: 20, service_engines: 4 },
     usage: { virtual_services: 7, service_engines: 4 },
+    members: 4,
   },
   { id: "t2", name: "globius-lab", version: 1, require_approval: false, quotas: {} },
 ];
@@ -210,6 +211,8 @@ describe("admin area", () => {
   it("lists tenants, saves quotas and approval with If-Match, creates and deletes tenants", async () => {
     renderAt("/admin/tenants");
     expect(await screen.findByText("20 VS · 4 SE")).toBeInTheDocument();
+    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
+    expect(screen.getByText(/4 people have access./)).toBeInTheDocument();
     expect(screen.getByText("Required")).toBeInTheDocument();
     expect(await screen.findByText("Used")).toBeInTheDocument();
     const q1 = await screen.findByLabelText("Limit 1");

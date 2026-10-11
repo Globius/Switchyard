@@ -80,6 +80,7 @@ function Detail({ tenant, onDeleted }: { tenant: Tenant; onDeleted: () => void }
         <div>
           <div className="font-medium">{t("Who has access")}</div>
           <p className="text-muted-foreground">
+            {t("{n} people have access.", { n: tenant.members ?? 0 })}{" "}
             <Link to="/admin/role-mappings" className="text-primary hover:underline">
               {t("Edit role mappings")}
             </Link>
@@ -296,7 +297,7 @@ export function Tenants() {
             <table className="w-full text-[13px]">
               <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
                 <tr>
-                  {["Name", "Approval", "Quotas"].map((h) => (
+                  {["Name", "Approval", "Members", "Quotas"].map((h) => (
                     <th key={h} className="px-4 py-2.5 font-medium">
                       {t(h)}
                     </th>
@@ -321,6 +322,7 @@ export function Tenants() {
                         {x.require_approval ? t("Required") : t("Off")}
                       </Badge>
                     </td>
+                    <td className="px-4 py-3">{x.members ?? 0}</td>
                     <td className="px-4 py-3">{quotaLine(x.quotas)}</td>
                   </tr>
                 ))}

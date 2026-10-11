@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Zap } from "lucide-react";
 import { useState } from "react";
-import { useCan } from "@/auth/session";
+import { useCan, useMe } from "@/auth/session";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { fieldOf, InvalidDraftCard } from "@/components/sy/Findings";
 import { expiryStatus, StatusPill } from "@/components/sy/StatusPill";
@@ -106,6 +106,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
   const rendered = useVsRendered(tenant, id, overlay);
   const logs = useVsLogs(tenant, id);
   const status = useVsStatus(tenant);
+  const me = useMe();
   const can = useCan(tenant);
   const setState = useSetMemberState(tenant);
   const [pending, setPending] = useState<{
@@ -377,8 +378,18 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
           </section>
 
           <section className={CARD}>
-            <header className={CARD_HEAD}>
+            <header className={`${CARD_HEAD} flex items-center`}>
               <h2 className="text-base font-semibold">{t("Latency breakdown")}</h2>
+              {me.data?.links?.grafana && (
+                <a
+                  href={me.data.links.grafana}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto text-sm text-primary hover:underline"
+                >
+                  {t("Open in Grafana")}
+                </a>
+              )}
             </header>
             <div className="p-4">
               {metrics.data && !metrics.data.available ? (

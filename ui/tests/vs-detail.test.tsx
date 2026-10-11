@@ -266,6 +266,31 @@ describe("virtual service detail", () => {
     expect(within(second).getAllByText("Draining").length).toBeGreaterThan(0);
   });
 
+  it("links to Grafana only when the server has a Grafana URL", async () => {
+    server.use(
+      http.get("*/api/v1/me", () =>
+        HttpResponse.json({
+          auth: "session",
+          break_glass: false,
+          csrf_token: "tok",
+          email: null,
+          id: "s",
+          is_system: false,
+          name: "Miguel",
+          principal: "Miguel",
+          session: null,
+          tenants: [{ id: "t1", name: "acme", role: "tenant-admin", via: [] }],
+          links: { grafana: "https://grafana.example.test" },
+        }),
+      ),
+    );
+    renderAt("/t/acme/virtual-services/v1");
+    expect(await screen.findByRole("link", { name: "Open in Grafana" })).toHaveAttribute(
+      "href",
+      "https://grafana.example.test",
+    );
+  });
+
   it("overview shows the header, tabs, routes and pools", async () => {
     renderAt("/t/acme/virtual-services/v1");
     expect(await screen.findByRole("heading", { name: "web" })).toBeInTheDocument();
