@@ -149,3 +149,59 @@ async def test_api_reports_host_online_state_and_placement(
     assert body["nodes"][0]["engines"][0]["name"] == "se-a"
     missing = await c.get(f"/api/v1/tenants/acme/se-groups/{uuid.uuid4()}/placement", headers=h)
     assert missing.status_code == 404
+
+
+async def test_engine_addresses_follow_the_policy(
+    client: tuple[httpx.AsyncClient, dict[str, str], World], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c, _, w = client
+    from switchyard.services.engines import EngineService
+
+    monkeypatch.setenv("SWITCHYARD_ENGINE_POLICY", "strict")
+    monkeypatch.delenv("SWITCHYARD_ENGINE_CIDRS", raising=False)
+    svc = EngineService(w.db)
+
+    async def register(url: str, **kw: str) -> None:
+        await svc.register(ROOT, TENANT, se_group_id=GROUP, name="p1", dataplane_url=url, **kw)
+
+    # the test group has no mgmt network and no allow-list: nothing is allowed
+    with pytest.raises(ValueError, match="management network"):
+        await register("https://192.0.2.9:5555")
+    monkeypatch.setenv("SWITCHYARD_ENGINE_CIDRS", "192.0.2.0/24")
+    with pytest.raises(ValueError, match="https"):
+        await register("http://192.0.2.9:5555")
+    with pytest.raises(ValueError, match="IP address"):
+        await register("https://se-1.example.test:5555")
+    with pytest.raises(ValueError, match="management network"):
+        await register("https://169.254.169.254:5555")
+    with pytest.raises(ValueError, match="agent_url"):
+        await register("https://192.0.2.9:5555", agent_url="10.9.9.9:7443")
+    with pytest.raises(ValueError, match="mgmt_ip"):
+        await register("https://192.0.2.9:5555", mgmt_ip="10.9.9.9")
+    await register("https://192.0.2.9:5555", agent_url="192.0.2.9:7443", mgmt_ip="192.0.2.9")
+    assert c is not None
+
+
+async def test_tenants_get_a_fixed_engine_error_and_administrators_the_real_one(
+    client: tuple[httpx.AsyncClient, dict[str, str], World],
+) -> None:
+    from sqlalchemy import text as sql
+
+    c, viewer, w = client
+    root_token, _ = await build_services(w.db, StaticEngineDirectory({})).tokens.create(
+        ROOT, None, "root", Role.SYSTEM_ADMIN
+    )
+    async with admin_session(w.db.admin) as s:
+        await s.execute(
+            sql(
+                "INSERT INTO engine_status (engine_id, tenant_id, se_group_id, name, reachable, "
+                "error, members, drift, observed_at) SELECT id, tenant_id, se_group_id, name, "
+                "false, 'connect to 10.9.9.9:5555 failed: refused', '[]', '[]', now() "
+                "FROM service_engine LIMIT 1"
+            )
+        )
+    url = "/api/v1/tenants/acme/status/engines"
+    seen = (await c.get(url, headers=viewer)).json()
+    assert seen and "10.9.9.9" not in seen[0]["error"] and seen[0]["error"]
+    full = (await c.get(url, headers={"Authorization": f"Bearer {root_token}"})).json()
+    assert "10.9.9.9" in full[0]["error"]

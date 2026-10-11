@@ -22,6 +22,7 @@ from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDD
 from switchyard.domain.models import (
     Algorithm,
     AllowListPolicySet,
+    BgpProfile,
     Certificate,
     Entity,
     HealthMonitor,
@@ -147,6 +148,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       a SAN of the service's certificates (wildcards cover exactly one label).
     - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
+    - ``secret_ref_not_allowed``: certificate and BGP secret references stay in the tenant's own
+      namespace and out of the platform's (ADR 0071).
     - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
       ``client_ca_id`` a client CA.
     - ``needs_health_monitor`` and ``passive_check_layer7_needs_http``: passive checks and slow
@@ -184,6 +187,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         return target
 
     _check_names(snapshot, problems)
+    _check_secret_scopes(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -352,6 +356,25 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 )
             )
     return sorted(problems)
+
+
+def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """Secret references stay inside the owning tenant's namespace (``secret_ref_not_allowed``)."""
+    names = {t.id: t.name for t in snapshot.tenants}
+    refs: list[tuple[str, UUID, str]] = []
+    for c in snapshot.certificates:
+        refs.append((f"certificates.{c.name}.secret_ref", c.tenant_id, c.secret_ref))
+        if c.crl_secret_ref:
+            refs.append((f"certificates.{c.name}.crl_secret_ref", c.tenant_id, c.crl_secret_ref))
+    for profile in snapshot.routing_profiles:
+        if isinstance(profile, BgpProfile):
+            for i, peer in enumerate(profile.peers):
+                if peer.md5_ref:
+                    path = f"routing_profiles.{profile.name}.peers[{i}].md5_ref"
+                    refs.append((path, profile.tenant_id, peer.md5_ref))
+    for path, tenant_id, ref in refs:
+        if tenant_id in names and (why := v.check_secret_ref_scope(ref, names[tenant_id])):
+            problems.append(Problem(path, "secret_ref_not_allowed", why))
 
 
 def _tenant_owned(snapshot: Snapshot) -> dict[str, Iterable[Any]]:

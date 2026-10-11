@@ -20,12 +20,14 @@ from sqlalchemy import delete, select
 
 from switchyard.adapters.proxmox import Proxmox, ProxmoxError, SdnSubnet, VmSpec
 from switchyard.db import audit_log
+from switchyard.db.models import TenantRow
 from switchyard.db.ops_models import JobRow, SdnObjectRow, ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import ipam
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
+from switchyard.domain.validators import check_secret_ref_scope
 from switchyard.ids import uuid7
 from switchyard.jobs import queue
 from switchyard.pipeline.locks import PgGroupLocks
@@ -225,6 +227,13 @@ class InfraJobs:
         self._check(principal, tenant_id, "deploy", "se_group")
         if request.tenant_id != tenant_id:
             raise PermissionDeniedError("request is for another tenant")
+        if request.credentials_ref:
+            async with admin_session(self._db.admin) as session:
+                tenant_name = (
+                    await session.execute(select(TenantRow.name).where(TenantRow.id == tenant_id))
+                ).scalar_one()
+            if why := check_secret_ref_scope(request.credentials_ref, tenant_name):
+                raise ValueError(f"credentials_ref: {why}")
         async with admin_session(self._db.admin) as session:
             return await queue.enqueue(
                 session,

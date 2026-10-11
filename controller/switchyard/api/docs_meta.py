@@ -79,6 +79,7 @@ PARAMS: dict[str, str] = {
     "n": "Revision number.",
     "job_id": "Job id.",
     "engine": "Engine id.",
+    "service": "Virtual service id.",
     "group": "SE group id.",
     "pool": "Pool id.",
     "member": "Pool member id.",

@@ -43,6 +43,7 @@ from switchyard.services.changesets import ROLE_RANK
 from switchyard.services.context import Clock, Databases, Principal, utcnow
 from switchyard.services.identity_providers import clean_claims
 from switchyard.services.oidc import OidcClient, OidcError, ProviderConfig, new_pkce
+from switchyard.services.throttle import LoginThrottle, account_rule, source_rule
 from switchyard.services.tokens import hash_token
 
 SESSION_TTL = timedelta(hours=4)
@@ -55,8 +56,6 @@ GRANTS_MAX_AGE = timedelta(seconds=60)
 USER_SEEN_EVERY = timedelta(minutes=1)
 MAX_STORED_GROUPS = 200
 LOGIN_TTL = timedelta(minutes=10)
-LOCKOUT_AFTER = 5
-LOCKOUT_FOR = timedelta(minutes=15)
 SESSION_PREFIX = "sysess_"
 
 
@@ -179,7 +178,13 @@ def safe_return_to(value: str | None) -> str:
         >>> safe_return_to("https://evil.example") , safe_return_to("//evil.example")
         ('/', '/')
     """
-    if value and value.startswith("/") and not value.startswith("//") and "\\" not in value:
+    if (
+        value
+        and value.startswith("/")
+        and not value.startswith("//")
+        and "\\" not in value
+        and value.isprintable()  # browsers drop tabs and newlines inside URLs: "/\t/host"
+    ):
         return value
     return "/"
 
@@ -234,12 +239,26 @@ def totp_code(secret_b32: str, at: float, *, step: int = 30, digits: int = 6) ->
     return str(value).zfill(digits)
 
 
+def matching_totp_step(secret_b32: str, code: str, at: float, *, window: int = 1) -> int | None:
+    """The time step (unix time // 30) whose code equals ``code``, within ``window`` steps.
+
+    Example:
+        >>> secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        >>> matching_totp_step(secret, totp_code(secret, 90), 90)
+        3
+        >>> matching_totp_step(secret, "000000", 90) is None
+        True
+    """
+    found: int | None = None
+    for offset in range(-window, window + 1):  # no early exit: constant work per attempt
+        if hmac.compare_digest(totp_code(secret_b32, at + offset * 30), code.strip()):
+            found = int((at + offset * 30) // 30)
+    return found
+
+
 def verify_totp(secret_b32: str, code: str, at: float, *, window: int = 1) -> bool:
     """Accept the current code and ``window`` steps either side (clock drift)."""
-    return any(
-        hmac.compare_digest(totp_code(secret_b32, at + offset * 30), code.strip())
-        for offset in range(-window, window + 1)
-    )
+    return matching_totp_step(secret_b32, code, at, window=window) is not None
 
 
 class SessionService:
@@ -268,6 +287,7 @@ class SessionService:
         self._secrets = secrets_reader
         self._break_glass = break_glass_enabled
         self._clock = clock
+        self.throttle = LoginThrottle(db, clock)
 
     @property
     def oidc(self) -> OidcClient:
@@ -986,13 +1006,28 @@ class SessionService:
                 object_ref=f"local_admin:{username}",
             )
 
-    async def break_glass_login(self, username: str, password: str, code: str) -> LoginResult:
-        """Log the local administrator in. Every attempt is audited; failures lock the account."""
+    async def break_glass_login(
+        self, username: str, password: str, code: str, source: str = "unknown"
+    ) -> LoginResult:
+        """Log the local administrator in. Every attempt is audited and failures back off.
+
+        Failures are counted per source address and per account *from that address* (see
+        :mod:`switchyard.services.throttle`), so someone elsewhere cannot lock out the real
+        administrator. A TOTP code is accepted once.
+
+        Raises:
+            LoginError: With a message that does not say which of the credentials was wrong.
+        """
         if not await self.break_glass_on():
             raise LoginError("break-glass login is not enabled")
+        rules = [source_rule(source), account_rule(f"bg:{username}", source)]
+        if wait := await self.throttle.blocked_for(rules):
+            raise LoginError(f"too many failed attempts; try again in {wait} seconds")
         outcome = await self._break_glass_login(username, password, code)
         if isinstance(outcome, str):
+            await self.throttle.record_failure(rules)
             raise LoginError(outcome)
+        await self.throttle.clear([r.key for r in rules])
         return outcome
 
     async def _break_glass_login(
@@ -1007,9 +1042,8 @@ class SessionService:
                     .with_for_update()
                 )
             ).scalar_one_or_none()
-            if admin is not None and admin.locked_until and admin.locked_until > now:
-                return "too many failed attempts; try again later"
             ok = False
+            step: int | None = None
             if (
                 admin is not None
                 and admin.totp_confirmed_at is not None
@@ -1019,15 +1053,13 @@ class SessionService:
                     secret = await self._secrets.get(admin.totp_secret_ref) if self._secrets else ""
                 except LookupError:
                     secret = ""
-                ok = bool(secret) and verify_totp(secret, code, now.timestamp())
+                step = matching_totp_step(secret, code, now.timestamp()) if secret else None
+                ok = step is not None and (
+                    admin.totp_last_step is None or step > admin.totp_last_step
+                )
             elif admin is None or admin.totp_confirmed_at is None:
                 verify_password(password, hash_password("x" * 16, n=2**10))  # keep timing similar
             if not ok:
-                if admin is not None:
-                    admin.failed_attempts += 1
-                    if admin.failed_attempts >= LOCKOUT_AFTER:
-                        admin.locked_until = now + LOCKOUT_FOR
-                        admin.failed_attempts = 0
                 await audit_log.record(
                     session,
                     tenant_id=None,
@@ -1037,6 +1069,7 @@ class SessionService:
                 return "invalid credentials"
             assert admin is not None  # noqa: S101
             admin.failed_attempts = 0
+            admin.totp_last_step = step
             admin.last_login_at = now
             result = await self._create_session(
                 session,

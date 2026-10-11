@@ -160,6 +160,7 @@ func runEnroll(mode string, args []string) int {
 	token := fs.String("token", "", "one-time enrollment token")
 	tokenFile := fs.String("token-file", "", "file holding the enrollment token (cloud-init writes it)")
 	dir := fs.String("dir", "/etc/switchyard/agent", "agent state directory")
+	plain := fs.Bool("insecure-plain-http", false, "allow an http:// controller URL (throwaway labs only: the answer carries the CA and the bundle signing key)")
 	trust := fs.String("controller-ca", "", "CA file that signs the controller's HTTPS certificate (default: system roots)")
 	_ = fs.Parse(args)
 
@@ -193,6 +194,7 @@ func runEnroll(mode string, args []string) int {
 	host, _ := os.Hostname()
 	engine, err := enroll.Run(context.Background(), enroll.Config{
 		ControllerURL: *controller, Token: value, Dir: *dir, Hostname: host, HTTP: httpClient,
+		AllowPlainHTTP: *plain,
 	})
 	if err != nil {
 		log.Printf("%s: %v", mode, err)

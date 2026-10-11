@@ -126,6 +126,10 @@ class FakeHaproxy:
         """Return the fingerprint of the held configuration."""
         return fingerprint_of(self.files.get(CONFIG_PATH, ""))
 
+    async def running_config(self) -> str | None:
+        """Return the held configuration text."""
+        return self.files.get(CONFIG_PATH) or None
+
     async def server_statuses(self) -> list[ServerStatus]:
         """Return ``UP`` for each server in the configuration unless overridden."""
         backend = ""

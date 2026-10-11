@@ -244,6 +244,72 @@ def validate_secret_ref(value: str) -> str:
     return value
 
 
+#: Secret namespaces that belong to the platform; no tenant object may point into them.
+RESERVED_SECRET_PREFIXES = ("kv/proxmox/", "kv/platform/", "kv/system/", "kv/controller/")
+
+
+@dataclass
+class SecretPolicy:
+    """Which secret paths tenant objects may name besides their own ``kv/tenants/<tenant>/``.
+
+    Attributes:
+        shared_prefixes: Paths every tenant may use, for example ``("kv/se/",)`` for a Data Plane
+            API credential shared by all engines. Each must end with ``/``.
+        open: Allow any path outside the tenant and platform namespaces (labs and tests).
+    """
+
+    shared_prefixes: tuple[str, ...] = ()
+    open: bool = False
+
+
+_POLICY = SecretPolicy()
+
+
+def configure_secret_policy(shared_prefixes: tuple[str, ...] = (), *, open: bool = False) -> None:  # noqa: A002
+    """Set the secret path policy for this process (called once at start-up).
+
+    Raises:
+        ValueError: If a shared prefix is not a path ending in ``/`` or is a reserved one.
+    """
+    for prefix in shared_prefixes:
+        if not prefix.endswith("/") or validate_secret_ref(prefix.rstrip("/")) != prefix.rstrip(
+            "/"
+        ):
+            raise ValueError(f"shared secret prefix {prefix!r} must be a path ending in '/'")
+        if prefix.startswith(RESERVED_SECRET_PREFIXES) or "kv/tenants/".startswith(prefix):
+            raise ValueError(f"shared secret prefix {prefix!r} overlaps a reserved namespace")
+    _POLICY.shared_prefixes = tuple(shared_prefixes)
+    _POLICY.open = open
+
+
+def check_secret_ref_scope(ref: str, tenant_name: str) -> str | None:
+    """Say why a tenant may not use ``ref``, or return ``None`` if it may.
+
+    A tenant's objects may point at its own namespace (``kv/tenants/<tenant>/...``) or at one of
+    the configured shared prefixes (``SecretPolicy``); never at another tenant's secrets or at the
+    platform's own (the controller would read them and hand them to the tenant's engines). With
+    ``open`` any other path is allowed too (labs).
+
+    Example:
+        >>> check_secret_ref_scope("kv/tenants/acme/certs/x/01", "acme") is None
+        True
+        >>> check_secret_ref_scope("kv/tenants/globex/certs/x/01", "acme")
+        'kv/tenants/globex/certs/x/01 belongs to another tenant'
+        >>> check_secret_ref_scope("kv/proxmox/token", "acme")
+        'kv/proxmox/token is a platform secret'
+    """
+    if ref.startswith(RESERVED_SECRET_PREFIXES):
+        return f"{ref} is a platform secret"
+    parts = ref.split("/")
+    if ref.startswith("kv/tenants/"):
+        if len(parts) < 3 or parts[2] != tenant_name:
+            return f"{ref} belongs to another tenant"
+        return None
+    if _POLICY.open or ref.startswith(_POLICY.shared_prefixes):
+        return None
+    return f"{ref} is outside the tenant's namespace and the shared prefixes"
+
+
 def validate_vip_in_network(vip: IPAddress, network: IPNetwork) -> None:
     """Raise ``ValueError`` unless ``vip`` is a usable host address inside ``network``.
 

@@ -323,6 +323,7 @@ async def test_break_glass_is_off_by_default_then_works_with_totp_and_locks_out(
     assert (await rig.client.post(f"{V1}/auth/break-glass", json=good)).status_code == 401, (
         "the TOTP code of the earlier time step no longer matches"
     )
+    rig.clock.now += timedelta(minutes=2)  # the failed try above backs off a little longer
     fresh = totp_code("JBSWY3DPEHPK3PXP", rig.clock.now.timestamp())
     assert (
         await rig.client.post(f"{V1}/auth/break-glass", json=good | {"totp": fresh})
@@ -359,3 +360,59 @@ def test_totp_matches_the_rfc_6238_vector() -> None:
     secret = base64.b32encode(b"12345678901234567890").decode()
     assert totp_code(secret, 59, digits=8) == "94287082"
     assert json.dumps(secret)
+
+
+async def test_break_glass_cannot_be_locked_by_strangers_and_codes_work_once(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SWITCHYARD_TRUST_FORWARDED", "1")
+    sessions = SessionService(
+        rig.w.db,
+        OidcClient(transport=httpx.MockTransport(rig.idp.handler)),
+        rig.secrets,
+        break_glass_enabled=True,
+        clock=rig.clock,
+    )
+    await sessions.create_local_admin("root", "correct horse battery", "kv/break-glass/totp")
+    rig.services.sessions = sessions
+    url = f"{V1}/auth/break-glass"
+    code = totp_code("JBSWY3DPEHPK3PXP", rig.clock.now.timestamp())
+    good = {"username": "root", "password": "correct horse battery", "totp": code}
+    stranger = {"X-Forwarded-For": "203.0.113.66"}
+    home = {"X-Forwarded-For": "198.51.100.7"}
+
+    for _ in range(8):  # a stranger guesses until they are blocked
+        await rig.client.post(url, json=good | {"password": "nope" * 5}, headers=stranger)
+    blocked = await rig.client.post(url, json=good, headers=stranger)
+    assert blocked.status_code == 401 and "try again in" in blocked.text
+
+    ok = await rig.client.post(url, json=good, headers=home)  # the administrator is not locked out
+    assert ok.status_code == 200, ok.text
+
+    again = await rig.client.post(url, json=good, headers=home)  # the same code, a second time
+    assert again.status_code == 401 and "invalid" in again.text
+
+    rig.clock.now += timedelta(minutes=16)  # backoff ends; a fresh code from the stranger's side
+    fresh = totp_code("JBSWY3DPEHPK3PXP", rig.clock.now.timestamp())
+    allowed = await rig.client.post(url, json=good | {"totp": fresh}, headers=stranger)
+    assert allowed.status_code == 200
+
+
+async def test_failed_callbacks_back_off_per_source(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SWITCHYARD_TRUST_FORWARDED", "1")
+    bad = {"code": "x", "state": "y"}
+    for _ in range(10):
+        r = await rig.client.get(
+            f"{V1}/auth/callback/authentik", params=bad, headers={"X-Forwarded-For": "203.0.113.9"}
+        )
+        assert r.headers["location"] != "/login?error=too_many_attempts"
+    blocked = await rig.client.get(
+        f"{V1}/auth/callback/authentik", params=bad, headers={"X-Forwarded-For": "203.0.113.9"}
+    )
+    assert blocked.headers["location"] == "/login?error=too_many_attempts"
+    other = await rig.client.get(
+        f"{V1}/auth/callback/authentik", params=bad, headers={"X-Forwarded-For": "203.0.113.10"}
+    )
+    assert other.headers["location"] != "/login?error=too_many_attempts"

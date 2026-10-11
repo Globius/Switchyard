@@ -177,6 +177,15 @@ expires. Read it with the certificate, change it with a normal update operation.
 `links.grafana` (from `SWITCHYARD_GRAFANA_URL`, else `null`). `GET /tenants/{t}/sdn/status` lists each managed network's SDN apply
 state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 
+## Engine views
+
+- `GET /tenants/{t}/virtual-services/{service}/engines`: the enabled engines of the service's SE group.
+- `GET /tenants/{t}/virtual-services/{service}/engines/{engine}/rendered`: `files[]` (`file`, `scope` `group|engine`, `language`, `content`) and the
+  render `fingerprint`; no certificates or keys, BGP passwords as `REDACTED`.
+- `GET /tenants/{t}/engines/{engine}/running-config`: asks the engine now. `haproxy` has the running `content`, its `fingerprint`, the
+  `desired_fingerprint`, `fingerprint_matches` and `matches_desired` (stamp and text); `agent` lists each routing file's `sha256` against
+  `desired_sha256` (hashes only: the agent cannot read files back). Tenants get a fixed `error` sentence. See ADR 0073.
+
 ## Controller metrics and discovery
 
 `GET /metrics` (outside `/api/v1`) and `GET /api/v1/discovery/prometheus?exporter=haproxy|node&port=` are for Prometheus: the
