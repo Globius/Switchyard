@@ -284,3 +284,59 @@ describe("revisions", () => {
     expect(await screen.findByText("A rollback is already open.")).toBeInTheDocument();
   });
 });
+
+describe("tenant home", () => {
+  it("shows counts, failing members, drift, expiring certificates and recent revisions", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/summary", () =>
+        HttpResponse.json({
+          services: { total: 7, healthy: 4, degraded: 1, down: 1, disabled: 1, unknown: 0 },
+          failing_members: [
+            {
+              backend: "api-v1",
+              server: "api-v1-01",
+              engine: "se-a",
+              engine_id: "e1",
+              status: "DOWN",
+            },
+          ],
+          drifted_engines: [
+            {
+              engine: "se-edge-a-02",
+              engine_id: "e2",
+              kinds: ["haproxy_config"],
+              se_group_id: "g",
+            },
+          ],
+          unreachable_engines: [],
+          expiring_certificates: [
+            {
+              id: "c1",
+              name: "mqtt-example-com",
+              days_left: 5,
+              not_after: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+            },
+          ],
+          jobs: { running: 2, queued: 0, failed: 0 },
+          open_drafts: 2,
+          pending_approval: 0,
+          latest_revision: null,
+        }),
+      ),
+      http.get("*/api/v1/tenants/acme/engines", () =>
+        HttpResponse.json([
+          { id: "e1", name: "se-a" },
+          { id: "e2", name: "se-edge-a-02" },
+        ]),
+      ),
+    );
+    renderAt("/t/acme");
+    expect(await screen.findByText("4 healthy")).toBeInTheDocument();
+    expect(screen.getByText("1 drifted")).toBeInTheDocument();
+    expect(screen.getByText("1 within 7 days")).toBeInTheDocument();
+    const failing = screen.getByText("Failing members").closest("section")!;
+    expect(within(failing).getByText("api-v1-01")).toBeInTheDocument();
+    expect(screen.getByText("se-edge-a-02", { selector: "span" })).toBeInTheDocument();
+    expect(await screen.findByText("Move billing-db")).toBeInTheDocument();
+  });
+});

@@ -51,8 +51,23 @@ user menu and ChangeSetBar. Routes are file-based (`src/routes`, generated `rout
 committed). Screens that are not built yet render a `NotBuilt` placeholder. Review and the create
 wizard sit outside the shell (full screen), as in the design handoff.
 
-## Open items
+## Built (U1)
 
+Virtual services (list, page with Overview / Settings / Rendered config / History, create wizard),
+pools, health monitors, certificates (PEM files or PKCS#12, issue, usage), policies, change sets,
+revisions with compare and rollback, review and apply (objects, config, impact, approval, conflict
+resolution, job progress), login and the shell. Checked against Design's v46 screenshots.
+
+- The open draft is the change set whose `author` equals `principal` from `GET /me`.
+- Every edit is an op in that draft; reads pass `?change_set=` so lists show your draft.
+
+## Known differences from the design
+
+- Revision "message" is read-only: the apply endpoint takes none.
+- Config diff is plain text, not Monaco.
+- No per-member health on the Overview (the API has none).
+- Certificates have no "Replace" action yet: it needs an in-place replace endpoint.
+- Not built: tenant home, networks and VIP pools, SE groups, routing profiles, jobs, admin and tenant access
+  screens (they render `NotBuilt`).
+- Viewer (read-only) states are covered by tests only; no viewer user exists in the demo data.
 - Theme: `ui/src/globals.css` from the design handoff (ADR 0042).
-- The open draft is found by matching the change set's `author` to `/me` name or email
-  (`features/shell/draft.ts`); confirm the API's author format.

@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NotBuilt } from "@/components/sy/NotBuilt";
+import { Home } from "@/features/home/Home";
 
-// Tenant home is U2.
-export const Route = createFileRoute("/t/$tenant/_shell/")({
-  component: () => <NotBuilt name="Home" />,
-});
+function Page() {
+  const { tenant } = Route.useParams();
+  return <Home tenant={tenant} />;
+}
+
+export const Route = createFileRoute("/t/$tenant/_shell/")({ component: Page });
