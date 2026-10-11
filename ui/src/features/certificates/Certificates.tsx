@@ -606,7 +606,7 @@ export function Certificates({ tenant }: { tenant: string }) {
             <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
                 {["Name", "Source", "SANs", "Expires", "Renewal", "Used by", "Actions"].map((h) => (
-                  <th key={h} className="px-4 py-2.5 font-medium">
+                  <th key={h} className="px-4 py-2.5 font-medium whitespace-nowrap">
                     {t(h)}
                   </th>
                 ))}
@@ -625,7 +625,7 @@ export function Certificates({ tenant }: { tenant: string }) {
                           type="button"
                           aria-label={t("Where {name} is used", { name: c.name })}
                           className={cn(
-                            "font-medium text-primary hover:underline",
+                            "text-left font-medium whitespace-nowrap text-primary hover:underline",
                             c.draft_status === "deleted" && "line-through",
                           )}
                           onClick={() => setDetail(c.id)}
