@@ -210,6 +210,62 @@ describe("virtual service detail", () => {
     expect(describeMatch({})).toBe("any request");
   });
 
+  it("shows per-member health from engine status with the failed-check reason", async () => {
+    const row = (
+      pool_id: string,
+      member_id: string,
+      status: string,
+      engine: string,
+      extra = {},
+    ) => ({
+      pool: "p",
+      pool_id,
+      member_id,
+      address: "10.1.0.1",
+      port: 80,
+      engine,
+      engine_id: engine,
+      status,
+      check_status: null,
+      last_check: null,
+      last_change_s: null,
+      last_checked_at: "2026-10-11T10:00:00Z",
+      ...extra,
+    });
+    server.use(
+      http.get("*/api/v1/tenants/acme/status/virtual-services", () =>
+        HttpResponse.json([
+          {
+            id: "v1",
+            name: "web",
+            protocol: "http",
+            state: "serving",
+            health: "degraded",
+            members_total: 3,
+            members_up: 2,
+            members: [
+              row("p1", "m1", "UP", "se-a"),
+              row("p1", "m1", "DOWN", "se-b", {
+                check_status: "L4TOUT",
+                last_check: "connection timed out",
+                last_change_s: 180,
+              }),
+              row("p1", "m2", "DRAIN", "se-a"),
+            ],
+          },
+        ]),
+      ),
+    );
+    renderAt("/t/acme/virtual-services/v1");
+    const first = (await screen.findByText("10.1.0.1", { selector: "td" })).closest("tr")!;
+    expect(await within(first).findByText("Down")).toBeInTheDocument();
+    expect(
+      within(first).getByText(/L4TOUT · connection timed out · 3 min ago · 2 engines/),
+    ).toBeInTheDocument();
+    const second = (await screen.findByText("10.1.0.2", { selector: "td" })).closest("tr")!;
+    expect(within(second).getAllByText("Draining").length).toBeGreaterThan(0);
+  });
+
   it("overview shows the header, tabs, routes and pools", async () => {
     renderAt("/t/acme/virtual-services/v1");
     expect(await screen.findByRole("heading", { name: "web" })).toBeInTheDocument();

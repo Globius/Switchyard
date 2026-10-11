@@ -272,6 +272,7 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
   const [rejecting, setRejecting] = useState(false);
   const [comment, setComment] = useState("");
   const [bypass, setBypass] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [jobId, setJobId] = useState<string | null>(null);
   const [problem, setProblem] = useState<unknown>(null);
@@ -325,7 +326,9 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
     }
   }
   const startApply = async (r: string | null) => {
-    const res = await run(() => actions.apply.mutateAsync(r));
+    const res = await run(() =>
+      actions.apply.mutateAsync({ reason: r, message: message ?? undefined }),
+    );
     if (res?.job_id) setJobId(res.job_id);
   };
   const conflict =
@@ -483,8 +486,20 @@ export function Review({ tenant, cs }: { tenant: string; cs: string }) {
           {phase === "ready" && (
             <>
               <div className="space-y-1">
-                <div className="text-sm font-medium">{t("Revision message")}</div>
-                <p className="rounded-md border bg-muted/40 p-2 text-sm">{c.summary}</p>
+                <label className="text-sm font-medium" htmlFor="revision-message">
+                  {t("Revision message")}
+                </label>
+                <textarea
+                  id="revision-message"
+                  rows={3}
+                  maxLength={2000}
+                  className="w-full rounded-md border border-input bg-card p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={message ?? c.summary}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("Kept on the revision and in the Git mirror commit.")}
+                </p>
               </div>
               {warnings > 0 && (
                 <label className="flex items-center gap-2 text-sm">

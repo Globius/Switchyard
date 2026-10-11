@@ -21,7 +21,8 @@ import {
 } from "./detail-queries";
 import { useServiceFindings } from "./findings";
 import { usePolicySets, useVsLogs } from "./overview-queries";
-import { useCertificates, useSeGroups, useVsMetrics } from "./queries";
+import { checkText, healthOf, rowsFor, worstOf, type MemberRow } from "./member-health";
+import { useCertificates, useSeGroups, useVsMetrics, useVsStatus } from "./queries";
 
 type Member = PoolRead["members"][number];
 
@@ -59,6 +60,36 @@ const STATE_PILL = {
 const CARD = "rounded-lg border bg-card";
 const CARD_HEAD = "border-b px-4 py-3";
 
+/** A member's health pill with the reason of its last failed check. */
+function MemberHealth({ row, engines }: { row: MemberRow | undefined; engines: number }) {
+  if (!row) return <span className="text-muted-foreground">—</span>;
+  const h = healthOf(row.status);
+  const pill =
+    h === "up" ? (
+      <StatusPill status="healthy">{t("Up")}</StatusPill>
+    ) : h === "down" ? (
+      <StatusPill status="down">{t("Down")}</StatusPill>
+    ) : h === "drain" ? (
+      <StatusPill status="degraded">{t("Draining")}</StatusPill>
+    ) : h === "maint" ? (
+      <StatusPill status="neutral">{t("Maintenance")}</StatusPill>
+    ) : (
+      <StatusPill status="neutral">{t("Unknown")}</StatusPill>
+    );
+  const detail = checkText(row);
+  return (
+    <span className="flex flex-col gap-0.5">
+      {pill}
+      {(detail || engines > 1) && (
+        <span className="text-xs text-muted-foreground">
+          {detail}
+          {engines > 1 ? `${detail ? " · " : ""}${t("{n} engines", { n: engines })}` : ""}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** Routes, members (runtime drain/enable/disable), listener, certificates, logs and the frontend. */
 export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
   const { draft } = useDraft(tenant);
@@ -74,6 +105,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
   const policySets = usePolicySets(tenant);
   const rendered = useVsRendered(tenant, id, overlay);
   const logs = useVsLogs(tenant, id);
+  const status = useVsStatus(tenant);
   const can = useCan(tenant);
   const setState = useSetMemberState(tenant);
   const [pending, setPending] = useState<{
@@ -103,6 +135,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
   ];
   const usedPools = used.map((x) => byId.get(x)).filter((p) => p !== undefined);
   const result = setState.data;
+  const svcStatus = status.data?.find((x) => x.id === id);
   const certs = (certList.data?.items ?? []).filter((c) =>
     (v.certificate_ids ?? []).includes(c.id),
   );
@@ -245,7 +278,15 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
               <table className="w-full text-[13px]">
                 <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
                   <tr>
-                    {["Pool", "Member", "Address", "Weight", "Admin state", "Runtime"].map((h) => (
+                    {[
+                      "Pool",
+                      "Member",
+                      "Address",
+                      "Health",
+                      "Weight",
+                      "Admin state",
+                      "Runtime",
+                    ].map((h) => (
                       <th key={h} className="px-4 py-2 font-medium">
                         {t(h)}
                       </th>
@@ -274,6 +315,16 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                           <td className="px-4 py-3 font-mono">
                             {m.address}
                             {m.port ? `:${m.port}` : ""}
+                          </td>
+                          <td className="px-4 py-3">
+                            {fresh ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : (
+                              <MemberHealth
+                                row={worstOf(rowsFor(svcStatus?.members, p.id, m.id))}
+                                engines={rowsFor(svcStatus?.members, p.id, m.id).length}
+                              />
+                            )}
                           </td>
                           <td className="px-4 py-3">{m.weight}</td>
                           <td className="px-4 py-3">
@@ -320,7 +371,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
             )}
             <p className="border-t px-4 py-3 text-xs text-muted-foreground">
               {t(
-                "Health per member isn't reported, so rows show only their admin state. The service's health and its members-up count at the top come from engine status.",
+                "Health comes from engine status: the worst state any engine reports, with the reason of the last failed check. Admin state is what the config says; the Live buttons act at runtime.",
               )}
             </p>
           </section>

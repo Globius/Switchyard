@@ -195,6 +195,9 @@ export function Revisions({ tenant }: { tenant: string }) {
                           </>
                         )}
                       </div>
+                      {r.message && r.message !== r.summary && (
+                        <p className="text-xs whitespace-pre-line">{r.message}</p>
+                      )}
                       {i > 0 && (
                         <Tip label={rollback.reason}>
                           <Button
