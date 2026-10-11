@@ -6538,6 +6538,34 @@
         "title": "PoolRead",
         "type": "object"
       },
+      "PrincipalNameRead": {
+        "additionalProperties": false,
+        "description": "A principal label (`actor`, `author`, `approver`) with a name for people.",
+        "properties": {
+          "actor": {
+            "description": "The label as given, for example `user:3f9a`, `token:ci-bot`.",
+            "title": "Actor",
+            "type": "string"
+          },
+          "display_name": {
+            "description": "Never empty; users get the name their provider gave.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "kind": {
+            "description": "`user`, `token`, `local`, `login`, `system` or `unknown`.",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actor",
+          "kind",
+          "display_name"
+        ],
+        "title": "PrincipalNameRead",
+        "type": "object"
+      },
       "ProblemDetail": {
         "additionalProperties": false,
         "description": "One field-level finding inside a problem response (``errors[]``).",
@@ -13207,6 +13235,119 @@
           "auth"
         ],
         "x-required-role": "authenticated"
+      }
+    },
+    "/api/v1/principals": {
+      "get": {
+        "description": "As `GET /tenants/{t}/principals` for any user, for the cross-tenant audit log. Requires `system-admin`.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "system_principals_api_v1_principals_get",
+        "parameters": [
+          {
+            "description": "A principal label to resolve (repeat up to 100 times).",
+            "in": "query",
+            "name": "actor",
+            "required": true,
+            "schema": {
+              "description": "A principal label to resolve (repeat up to 100 times).",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Actor",
+              "type": "array"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "actor": "user:3f9a",
+                    "display_name": "Alice Admin",
+                    "kind": "user"
+                  },
+                  {
+                    "actor": "token:ci-bot",
+                    "display_name": "ci-bot (API token)",
+                    "kind": "token"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrincipalNameRead"
+                  },
+                  "title": "Response System Principals Api V1 Principals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Names for principal labels (system-admin)",
+        "tags": [
+          "audit"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/role-mappings": {
@@ -24950,6 +25091,129 @@
           "pools"
         ],
         "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/principals": {
+      "get": {
+        "description": "Turns the labels that audit events, change sets and revisions carry (`user:...`, `token:...`, `local:...`, `system:...`) into names for people, in the order given, one answer per distinct label. Users who appear in this tenant's own history get the name their identity provider gave; any other `user:` label is answered from the label alone. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "tenant_principals_api_v1_tenants__t__principals_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A principal label to resolve (repeat up to 100 times).",
+            "in": "query",
+            "name": "actor",
+            "required": true,
+            "schema": {
+              "description": "A principal label to resolve (repeat up to 100 times).",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Actor",
+              "type": "array"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "actor": "user:3f9a",
+                    "display_name": "Alice Admin",
+                    "kind": "user"
+                  },
+                  {
+                    "actor": "token:ci-bot",
+                    "display_name": "ci-bot (API token)",
+                    "kind": "token"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PrincipalNameRead"
+                  },
+                  "title": "Response Tenant Principals Api V1 Tenants  T  Principals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Names for principal labels",
+        "tags": [
+          "audit"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/revisions": {

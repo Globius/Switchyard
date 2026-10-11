@@ -159,6 +159,10 @@ name, so every virtual service using it is unchanged; the secret reference, name
 `action` (a trailing `*` means prefix), `object`, `since`, `until` and `q`, newest first, with a cursor.
 `GET /audit-actions` lists every action name with a category and description.
 
+`GET /tenants/{t}/principals?actor=user:…&actor=token:…` (and `GET /principals` for system administrators) turns the
+labels audit events, change sets and revisions carry into `display_name`s (`kind`: `user`, `token`, `local`, `login`,
+`system`, `unknown`). A user only resolves to a provider name when they appear in the tenant's own history. See ADR 0062.
+
 ## Search
 
 `GET /tenants/{t}/search?q=&types=&limit=` finds objects by name; virtual services also match their VIP, certificates

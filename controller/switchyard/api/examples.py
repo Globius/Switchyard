@@ -282,6 +282,10 @@ ENGINE_READ = {
     "agent_enrolled": True,
     "agent_cert_serial": "3f2a9c",
 }
+PRINCIPALS = [
+    {"actor": "user:3f9a", "kind": "user", "display_name": "Alice Admin"},
+    {"actor": "token:ci-bot", "kind": "token", "display_name": "ci-bot (API token)"},
+]
 VIRTUAL_SERVICE_STATUS = {
     "id": "00000000-0000-0000-0000-0000000000d1",
     "name": "dns",

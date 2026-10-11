@@ -46,3 +46,4 @@ Date: YYYY-MM-DD
 | [0042](0042-ui-theme-and-fonts.md) | UI theme: shadcn tokens, status tokens and fonts | Accepted |
 | [0046](0046-revision-message.md) | Revision message on apply | Accepted |
 | [0045](0045-tenant-quota-enforcement.md) | Tenant quota enforcement and usage counts | Accepted |
+| [0062](0062-principal-display-names.md) | Display names for principal labels | Accepted |

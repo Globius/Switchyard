@@ -1067,6 +1067,14 @@ class VirtualServiceHealth(StrEnum):
     DISABLED = "disabled"
 
 
+class PrincipalNameRead(ApiModel):
+    """A principal label (`actor`, `author`, `approver`) with a name for people."""
+
+    actor: str = Field(description="The label as given, for example `user:3f9a`, `token:ci-bot`.")
+    kind: str = Field(description="`user`, `token`, `local`, `login`, `system` or `unknown`.")
+    display_name: str = Field(description="Never empty; users get the name their provider gave.")
+
+
 class VirtualServiceStatusRead(ApiModel):
     """State and health of one virtual service.
 
