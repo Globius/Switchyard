@@ -44,4 +44,4 @@ pools:
     tenant_id: lab
     name: controller-api
     health_monitor_id: hm
-    members: [{address: 10.98.0.1, port: 8000}]
+    members: [{address: 10.98.0.1, port: 8001}]

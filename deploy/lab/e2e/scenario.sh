@@ -64,16 +64,18 @@ B1=$(vmid_of edge-bgp-1 work/deploy-bgp.json)
 M1=$(getj "print(next(e['mgmt_ip'] for e in d['engines'] if e['name']=='edge-bgp-1'))" < work/deploy-bgp.json)
 M2=$(getj "print(next(e['mgmt_ip'] for e in d['engines'] if e['name']=='edge-1'))" < work/deploy-edge.json)
 [ "$M1" != "$M2" ] || fail "two groups got the same management address $M1"
+# Explicit neighbor with BFD (a dynamic listen-range neighbor never brings BFD up, so the engine's session would stay Idle).
+pct exec 9970 -- vtysh -c "configure terminal" -c "router bgp 65000" -c "neighbor $M1 remote-as 65100" -c "neighbor $M1 bfd" -c "address-family ipv4 unicast" -c "neighbor $M1 activate"
 sh enroll.sh work/deploy-bgp.json >/dev/null
 wait_for "BGP engine reachable" "[ \"\$(engine_state edge-bgp-1 reachable)\" = True ]" 40
 api vs bgpweb edge-bgp 10.99.0.230 > work/vs-bgp.json
 getj "assert d.get('state')=='applied', d" < work/vs-bgp.json
 wait_for "BGP session Established on the upstream" "pct exec 9970 -- vtysh -c 'show bgp summary' | grep -q Estab" 20
-wait_for "upstream learned the VIP" "pct exec 9970 -- vtysh -c 'show ip route 10.99.0.230/32' | grep -q 'via $M1'" 20
+wait_for "upstream learned the VIP" "pct exec 9970 -- vtysh -c 'show ip route 10.99.0.230/32' | grep -q '$M1,'" 20
 wait_for "traffic from the upstream router reaches the VIP over BGP" "pct exec 9970 -- curl -s -m 3 -o /dev/null -w '%{http_code}' http://10.99.0.230/api/v1/healthz | grep -q 200" 20
 pct exec "$B1" -- systemctl stop haproxy
-wait_for "route withdrawn when HAProxy is down" "! pct exec 9970 -- vtysh -c 'show ip route 10.99.0.230/32' | grep -q 'via $M1'" 40
+wait_for "route withdrawn when HAProxy is down" "! pct exec 9970 -- vtysh -c 'show ip route 10.99.0.230/32' | grep -q '$M1,'" 40
 pct exec "$B1" -- systemctl start haproxy
-wait_for "route back when HAProxy is healthy again" "pct exec 9970 -- vtysh -c 'show ip route 10.99.0.230/32' | grep -q 'via $M1'" 40
+wait_for "route back when HAProxy is healthy again" "pct exec 9970 -- vtysh -c 'show ip route 10.99.0.230/32' | grep -q '$M1,'" 40
 
 echo "E2E PASSED: addressed data NICs, canary order, VRRP failover and rejoin, controller-less reboot, BGP announce and withdraw"

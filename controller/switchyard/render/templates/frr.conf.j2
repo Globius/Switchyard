@@ -4,6 +4,19 @@ frr defaults traditional
 hostname {{ engine }}
 log syslog informational
 !
+{% if v4_vips or v6_vips %}
+! Each VIP is also a local address on lo: the kernel accepts traffic for it and BGP's `network` statement finds the
+! prefix in the routing table (otherwise it is never announced).
+interface lo
+{% for net in v4_vips %}
+ ip address {{ net }}
+{% endfor %}
+{% for net in v6_vips %}
+ ipv6 address {{ net }}
+{% endfor %}
+exit
+!
+{% endif %}
 {% for net in v4_vips %}
 ip prefix-list SY-VIPS seq {{ loop.index * 5 }} permit {{ net }}
 {% endfor %}

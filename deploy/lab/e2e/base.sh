@@ -43,4 +43,9 @@ sh up.sh >/dev/null
 # The Proxmox container is the client and the pool member: give it an address on each lab network.
 docker exec $PVE ip addr add 10.99.0.1/24 dev vmbr0 2>/dev/null || true
 docker exec $PVE ip addr add 10.98.0.1/24 dev vmbr0 2>/dev/null || true
+# The pool member: a plain web server on the backend network, independent of the controller (so the lab can stop the
+# controller and still have a healthy backend).
+docker exec $PVE mkdir -p /srv/www/api/v1
+docker exec $PVE sh -c 'echo ok > /srv/www/api/v1/healthz'
+docker exec -d $PVE python3 -m http.server 8001 --bind 10.98.0.1 --directory /srv/www
 echo "base ready"

@@ -5,6 +5,7 @@ Commands:
                           engines, with a fresh enrollment token for every engine that has not enrolled
   vs NAME GROUP VIP       create an HTTP virtual service on the pool `controller-api` and wait for the rollout
   status                  engine status (reachability, members, VRRP, BGP, drift)
+  reapply                 apply the newest failed change set again
   lastapply               log and result of the newest apply job
 Environment: SY_TOKEN (admin API token), TEMPLATE_VMID. Prints one JSON document.
 """
@@ -92,6 +93,30 @@ async def vs(lab: Lab, name: str, group_name: str, vip: str) -> dict:
     return {"state": "applied", "object": await lab.get(f"/virtual-services/{accepted['object_id']}")}
 
 
+async def recreate(lab: Lab, name: str, group_name: str, vip: str) -> dict:
+    """Delete the virtual service and create it again (two rollouts: re-renders everything for the group)."""
+    existing = await lab.find("virtual-services", name)
+    deleted = await lab.request(
+        "DELETE",
+        f"/tenants/{TENANT}/virtual-services/{existing['id']}",
+        params={"apply": "true"},
+        headers={"If-Match": f'"{existing["version"]}"'},
+    )
+    await lab.wait_job(deleted["job_id"], timeout_s=300)
+    return await vs(lab, name, group_name, vip)
+
+
+async def reapply(lab: Lab) -> dict:
+    """Apply the newest failed change set again (after fixing the engine or its peer)."""
+    failed = next(c for c in await lab.items("/change-sets?limit=20") if c["state"] == "failed")
+    accepted = await lab.request(
+        "POST", f"/tenants/{TENANT}/change-sets/{failed['id']}/apply", json_body={}
+    )
+    await lab.wait_job(accepted["job_id"], timeout_s=300)
+    done = await lab.get(f"/change-sets/{failed['id']}")
+    return {"state": done["state"], "error": done.get("error")}
+
+
 async def status(lab: Lab) -> list:
     return await lab.get("/status/engines")
 
@@ -102,7 +127,7 @@ async def lastapply(lab: Lab) -> dict:
     return {"job": job, "log": await lab.get(f"/jobs/{job['id']}/log")}
 
 
-COMMANDS = {"deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply}
+COMMANDS = {"deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
 
 
 async def main() -> None:

@@ -14,6 +14,7 @@ for u in sy-agent sy-agent-enroll sy-agent-renew dataplaneapi; do
 done
 systemd-analyze verify /etc/systemd/system/sy-agent.service /etc/systemd/system/sy-agent-enroll.service \
   /etc/systemd/system/sy-agent-renew.service /etc/systemd/system/sy-agent-renew.timer 2>&1 | grep -v -E 'not executable|/usr/local/bin/sy-agent' || true
+dpkg -s frr-pythontools >/dev/null 2>&1 || fail "frr-pythontools missing (systemctl reload frr needs it)"
 command -v vector >/dev/null || fail "vector missing"
 VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true LOKI_URL=http://loki:3100 TENANT_ID=t TENANT_NAME=t SE_GROUP=g ENGINE=e vector validate --no-environment /etc/switchyard/vector.yaml   || fail "vector config invalid"
 [ ! -s /etc/machine-id ] || fail "machine-id not cleared"
