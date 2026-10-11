@@ -159,6 +159,10 @@ updates the existing certificate object in a change set (`?apply=true` or `?chan
 name, so every virtual service using it is unchanged; the secret reference, names and expiry change, `source` becomes
 `upload` and `renew_policy` `manual`. Unknown id: 404. See ADR 0044.
 
+`POST /tenants/{t}/certificates/import-ca` (`{name, pem, crl_pem?}`) imports a client CA (certificates only, optional CRL) as a
+certificate with `purpose: client_ca`. A TLS port names it as `client_ca_id` with `client_verify` `required` or `optional`; the
+validator reports `wrong_certificate_purpose` for mix-ups. See ADR 0070.
+
 Certificates carry `renew_before_days` (1 to 365, default 30): an `auto` certificate is renewed that many days before it
 expires. Read it with the certificate, change it with a normal update operation. See ADR 0064.
 

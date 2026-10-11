@@ -95,6 +95,7 @@ class Snapshot(Model):
                 pool_ids.add(s.default_pool_id)
             pool_ids.update(r.pool_id for r in s.routes if r.pool_id)
             cert_ids.update(s.certificate_ids)
+            cert_ids.update(p.client_ca_id for p in s.ports if p.client_ca_id)
             policy_ids.update(s.policy_set_ids)
             if s.allow_list_id:
                 policy_ids.add(s.allow_list_id)
@@ -146,6 +147,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       a SAN of the service's certificates (wildcards cover exactly one label).
     - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
+    - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
+      ``client_ca_id`` a client CA.
     - ``needs_health_monitor`` and ``passive_check_layer7_needs_http``: passive checks and slow
       start build on a health monitor, and ``layer7`` observation needs an HTTP-only pool.
 
@@ -269,7 +272,33 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
             if check_ref(path, s.tenant_id, "pool", pid, pools_by_id) is not None:
                 pool_protocols[pid].add(s.protocol)
         for i, cid in enumerate(s.certificate_ids):
-            check_ref(f"{base}.certificate_ids[{i}]", s.tenant_id, "certificate", cid, certs)
+            cert = check_ref(f"{base}.certificate_ids[{i}]", s.tenant_id, "certificate", cid, certs)
+            if cert is not None and cert.purpose != "server":
+                problems.append(
+                    Problem(
+                        f"{base}.certificate_ids[{i}]",
+                        "wrong_certificate_purpose",
+                        f"certificate {cert.name} is a client CA, not a server certificate",
+                    )
+                )
+        for i, port in enumerate(s.ports):
+            if port.client_ca_id is None:
+                continue
+            ca = check_ref(
+                f"{base}.ports[{i}].client_ca_id",
+                s.tenant_id,
+                "certificate",
+                port.client_ca_id,
+                certs,
+            )
+            if ca is not None and ca.purpose != "client_ca":
+                problems.append(
+                    Problem(
+                        f"{base}.ports[{i}].client_ca_id",
+                        "wrong_certificate_purpose",
+                        f"certificate {ca.name} is a server certificate, not a client CA",
+                    )
+                )
         for i, pid in enumerate(s.policy_set_ids):
             ps = check_ref(f"{base}.policy_set_ids[{i}]", s.tenant_id, "policy set", pid, policies)
             if ps is not None and not isinstance(ps, RedirectPolicySet):

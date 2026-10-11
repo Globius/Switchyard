@@ -1447,6 +1447,16 @@ class CertImportIn(CertMaterialIn):
     name: str
 
 
+class CaImportIn(ApiModel):
+    """Body of `POST /certificates/import-ca`: a client CA bundle for mutual TLS."""
+
+    name: str
+    pem: str = Field(max_length=65536, description="The CA certificates (PEM), no private key.")
+    crl_pem: str | None = Field(
+        default=None, max_length=1048576, description="Optional certificate revocation list (PEM)."
+    )
+
+
 class CertReplaceIn(CertMaterialIn):
     """Body of ``POST /certificates/{id}/replace``: new material for an existing certificate."""
 

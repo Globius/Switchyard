@@ -16,8 +16,11 @@ Login: ``SWITCHYARD_PUBLIC_URL`` (external base URL, for redirect URIs and Secur
 (``SWITCHYARD_PKI_MOUNT``, ``SWITCHYARD_PKI_ROLE``).
 """
 
+import logging
 import os
+import socket
 from datetime import timedelta
+from logging.handlers import SysLogHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -179,6 +182,50 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     """
     client = proxmox_client()
     return InfraService(db, client) if client else None
+
+
+def audit_syslog_target(value: str) -> tuple[str | tuple[str, int], socket.SocketKind]:
+    """Parse ``SWITCHYARD_AUDIT_SYSLOG`` into a ``SysLogHandler`` address and socket type.
+
+    Forms: ``udp://host[:514]``, ``tcp://host[:514]`` and ``unix:///dev/log``.
+
+    Example:
+        >>> audit_syslog_target("udp://logs.example.test")[0]
+        ('logs.example.test', 514)
+        >>> audit_syslog_target("unix:///dev/log")[0]
+        '/dev/log'
+        >>> audit_syslog_target("http://x")
+        Traceback (most recent call last):
+            ...
+        ValueError: SWITCHYARD_AUDIT_SYSLOG must be udp://host[:port], tcp://host[:port] or unix:///path
+    """
+    parsed = urlparse(value)
+    message = "SWITCHYARD_AUDIT_SYSLOG must be udp://host[:port], tcp://host[:port] or unix:///path"
+    if parsed.scheme == "unix" and parsed.path:
+        return parsed.path, socket.SOCK_DGRAM
+    if parsed.scheme in {"udp", "tcp"} and parsed.hostname:
+        kind = socket.SOCK_DGRAM if parsed.scheme == "udp" else socket.SOCK_STREAM
+        return (parsed.hostname, parsed.port or 514), kind
+    raise ValueError(message)
+
+
+def setup_audit_syslog() -> bool:
+    """Send audit events to syslog when ``SWITCHYARD_AUDIT_SYSLOG`` is set. Returns whether it did.
+
+    Audit events are always written to the database; this adds a copy as one JSON line per event
+    on the ``switchyard.audit`` logger, facility ``local0``, so a central log host keeps them even
+    if the database is lost.
+    """
+    value = os.environ.get("SWITCHYARD_AUDIT_SYSLOG", "").strip()
+    if not value:
+        return False
+    address, kind = audit_syslog_target(value)
+    handler = SysLogHandler(address=address, facility=SysLogHandler.LOG_LOCAL0, socktype=kind)
+    handler.setFormatter(logging.Formatter("switchyard-audit: %(message)s"))
+    audit = logging.getLogger("switchyard.audit")
+    audit.addHandler(handler)
+    audit.setLevel(logging.INFO)
+    return True
 
 
 def grafana_url() -> str | None:

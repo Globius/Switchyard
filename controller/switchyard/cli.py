@@ -173,6 +173,7 @@ def serve(
     from switchyard import runtime
     from switchyard.api.app import build_services, create_app
 
+    runtime.setup_audit_syslog()
     db = runtime.databases()
     secrets = runtime.secrets_backend()
     services = build_services(
@@ -203,6 +204,8 @@ def run_worker(
 ) -> None:
     """Run a job worker until interrupted."""
     from switchyard import runtime
+
+    runtime.setup_audit_syslog()
 
     async def go() -> None:
         db = runtime.databases()

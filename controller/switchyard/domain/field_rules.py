@@ -25,6 +25,7 @@ UDP_FORBIDDEN_PORT_FIELDS = (
     "http2",
     "https_redirect_port",
     "tls_profile",
+    "client_ca_id",
 )
 
 

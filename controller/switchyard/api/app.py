@@ -47,6 +47,7 @@ from switchyard.api.schemas import (
     BreakGlassIn,
     BreakGlassRead,
     BreakGlassSwitchIn,
+    CaImportIn,
     CertImportIn,
     CertIssueIn,
     CertReplaceIn,
@@ -3181,6 +3182,38 @@ def create_app(
         )
         return await _write(
             svc, who, tenant, op, change_set, apply, f"import certificate {body.name}"
+        )
+
+    @router.post(
+        "/tenants/{t}/certificates/import-ca",
+        status_code=202,
+        tags=["certificates"],
+        summary="Import a client CA for mutual TLS",
+        description=(
+            "Stores CA certificates (no key) and an optional revocation list, and adds a "
+            "`certificate` with `purpose: client_ca` to a change set. Reference it from a TLS "
+            "port as `client_ca_id` (with `client_verify` `required` or `optional`) to check "
+            "client certificates. It cannot be used as a server certificate."
+        ),
+        response_model=Accepted,
+        responses=_ok(ex.ACCEPTED, 202) | VALIDATION_RESPONSE,
+    )
+    async def import_client_ca(
+        body: CaImportIn,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        change_set: UUID | None = None,
+        apply: bool = False,
+    ) -> Accepted:
+        if svc.certs is None:
+            raise ApiError(503, "no secrets backend is configured for certificates")
+        data = await svc.certs.import_client_ca(who, tenant.id, body.name, body.pem, body.crl_pem)
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE, object_id=uuid7(), action=Action.CREATE, body=data
+        )
+        return await _write(
+            svc, who, tenant, op, change_set, apply, f"import client CA {body.name}"
         )
 
     @router.post(
