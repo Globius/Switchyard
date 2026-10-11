@@ -3131,8 +3131,11 @@ export interface components {
          *         peer_ip: Neighbour address.
          *         remote_asn: Neighbour AS number.
          *         md5_ref: OpenBao reference of the session password; the password itself is never stored.
+         *         max_prefixes: Prefix limit for this neighbour; overrides the profile's ``max_prefixes``.
          */
         BgpPeer: {
+            /** Max Prefixes */
+            max_prefixes?: number | null;
             /** Md5 Ref */
             md5_ref?: string | null;
             /** Peer Ip */
@@ -3148,6 +3151,9 @@ export interface components {
          *         asn: The engines' AS number.
          *         bfd: Run BFD with the peers for sub-second failure detection.
          *         peers: Upstream neighbours (at least one).
+         *         max_prefixes: Default prefix limit per neighbour (``maximum-prefix``): FRR resets the
+         *             session when a neighbour announces more, and tries again after five minutes.
+         *             ``None`` sets no limit.
          *         max_paths: ECMP width.
          *         static_routes: Routes installed on every engine.
          */
@@ -3174,6 +3180,8 @@ export interface components {
              * @default 4
              */
             max_paths: number;
+            /** Max Prefixes */
+            max_prefixes?: number | null;
             /** Name */
             name: string;
             /** Peers */
@@ -3213,6 +3221,8 @@ export interface components {
              * @default 4
              */
             max_paths: number;
+            /** Max Prefixes */
+            max_prefixes?: number | null;
             /** Name */
             name: string;
             /** Peers */
@@ -3236,6 +3246,8 @@ export interface components {
             kind: "bgp";
             /** Max Paths */
             max_paths?: number | null;
+            /** Max Prefixes */
+            max_prefixes?: number | null;
             /** Name */
             name?: string | null;
             /** Peers */
@@ -3277,6 +3289,8 @@ export interface components {
              * @default 4
              */
             max_paths: number;
+            /** Max Prefixes */
+            max_prefixes?: number | null;
             /** Name */
             name: string;
             /** Peers */

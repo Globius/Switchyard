@@ -3,7 +3,6 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useState } from "react";
 import { api, unwrap } from "@/api/client";
-import type { components } from "@/api/schema";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,6 @@ import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { objectLabel, shortRequestId, shortWhen } from "@/lib/format";
 import { usePrincipalNames } from "@/lib/principals";
-
-type Event = components["schemas"]["AuditEventRead"];
 
 const SELECT =
   "h-9 rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -24,19 +21,19 @@ const RANGES = [
   { key: "all", label: "All time", ms: 0 },
 ] as const;
 
-/** RFC 4180 CSV of the events shown, for the Export button. */
-export function toCsv(events: Event[]): string {
-  const esc = (v: unknown) => {
-    const s = v == null ? "" : typeof v === "string" ? v : JSON.stringify(v);
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const head = ["time", "actor", "action", "object", "request_id", "diff"];
-  return [
-    head.join(","),
-    ...events.map((e) =>
-      [e.at, e.actor, e.action, e.object, e.request_id, e.diff].map(esc).join(","),
-    ),
-  ].join("\n");
+/** Download URL for the server-side export with the filters on screen (up to 500 events). */
+export function exportUrl(
+  format: "csv" | "jsonl",
+  f: { q?: string; tenant?: string; action?: string; actor?: string; sinceMs?: number },
+  now = Date.now(),
+): string {
+  const p = new URLSearchParams({ format, limit: "500" });
+  if (f.q) p.set("q", f.q);
+  if (f.tenant) p.set("tenant", f.tenant);
+  if (f.action) p.set("action", f.action);
+  if (f.actor) p.set("actor", f.actor);
+  if (f.sinceMs) p.set("since", new Date(now - f.sinceMs).toISOString());
+  return `/api/v1/audit-events/export?${p}`;
 }
 
 function DiffView({ diff }: { diff: Record<string, unknown> }) {
@@ -95,19 +92,6 @@ export function AuditLog() {
   );
   const tenantName = (id: string | null | undefined) =>
     tenants.data?.find((x) => x.id === id)?.name;
-  /** Streams the full filtered log from the server, not just the rows loaded here. */
-  function exportCsv() {
-    const params = new URLSearchParams({ format: "csv" });
-    if (q) params.set("q", q);
-    if (tenant) params.set("tenant", tenant);
-    if (action) params.set("action", action);
-    if (actor) params.set("actor", actor);
-    if (span) params.set("since", new Date(Date.now() - span).toISOString());
-    const a = document.createElement("a");
-    a.href = `/api/v1/audit-events/export?${params.toString()}`;
-    a.download = "audit-log.csv";
-    a.click();
-  }
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -117,9 +101,19 @@ export function AuditLog() {
             {t("Every write, runtime action, sign-in and approval across tenants, newest first")}
           </p>
         </div>
-        <Button variant="outline" disabled={events.length === 0} onClick={exportCsv}>
-          {t("Export")}
-        </Button>
+        <div className="flex gap-2">
+          {(["csv", "jsonl"] as const).map((fmt) => (
+            <Button key={fmt} asChild variant="outline" aria-disabled={events.length === 0}>
+              <a
+                href={exportUrl(fmt, { q, tenant, action, actor, sinceMs: span })}
+                download
+                onClick={(e) => events.length === 0 && e.preventDefault()}
+              >
+                {fmt === "csv" ? t("Export CSV") : t("Export JSON Lines")}
+              </a>
+            </Button>
+          ))}
+        </div>
       </div>
       <div className="flex flex-wrap gap-3">
         <input

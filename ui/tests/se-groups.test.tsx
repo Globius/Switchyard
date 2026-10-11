@@ -294,4 +294,51 @@ describe("SE groups", () => {
       }),
     );
   });
+
+  it("shows where engines run on Proxmox and warns when one host carries them all", async () => {
+    const node = (name: string, engines: object[]) => ({
+      name,
+      online: true,
+      cpu: 0.25,
+      max_cpu: 16,
+      mem_used: 8 * 1024 ** 3,
+      mem_total: 64 * 1024 ** 3,
+      uptime_s: 1000,
+      storage: [],
+      engines,
+    });
+    server.use(
+      http.get("*/api/v1/tenants/acme/se-groups/g1/placement", () =>
+        HttpResponse.json({
+          available: true,
+          reason: null,
+          nodes: [
+            node("pve-01", [
+              { id: "e1", name: "se-edge-a-01", state: "enabled", vmid: 101 },
+              { id: "e2", name: "se-edge-a-02", state: "enabled", vmid: 102 },
+            ]),
+            node("pve-02", []),
+          ],
+        }),
+      ),
+    );
+    renderAt("/t/acme/se-groups");
+    expect(await screen.findByText("Placement on Proxmox")).toBeInTheDocument();
+    expect(await screen.findByText(/se-edge-a-01 · VM 101/)).toBeInTheDocument();
+    expect(screen.getAllByText("CPU 25% of 16 · memory 8 of 64 GiB")).toHaveLength(2);
+    expect(screen.getByText(/All engines run on pve-01/)).toBeInTheDocument();
+    expect(screen.getByText("No engines of yours")).toBeInTheDocument();
+  });
+
+  it("says host state is not reported with the reason", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/se-groups/g1/placement", () =>
+        HttpResponse.json({ available: false, reason: "Proxmox is not configured.", nodes: [] }),
+      ),
+    );
+    renderAt("/t/acme/se-groups");
+    expect(
+      await screen.findByText("Host state not reported: Proxmox is not configured."),
+    ).toBeInTheDocument();
+  });
 });
