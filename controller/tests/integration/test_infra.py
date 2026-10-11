@@ -13,6 +13,7 @@ from switchyard.db.tenancy import admin_session
 from switchyard.domain.loader import symbolic_uuid
 from switchyard.jobs.handlers import build_handlers
 from switchyard.jobs.worker import Worker
+from switchyard.services.engines import EngineService
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
     DeployError,
@@ -343,6 +344,11 @@ async def test_deploy_addresses_the_data_nics_without_reusing_addresses(pg_url: 
         assert (
             await count(w, "SELECT count(*) FROM service_engine WHERE data_ips <> '[]'::jsonb") == 2
         )
+        listed = await EngineService(w.db).describe(principal(), TENANT, se_group_id=GROUP)
+        assert [e.data_ips for e in listed] == [
+            ((str(backend), "10.20.0.200"),),
+            ((str(backend), "10.20.0.201"),),
+        ]
         await infra.deploy_se_group(
             request(3, nic_pools=pools)
         )  # one more engine continues the range

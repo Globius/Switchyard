@@ -294,6 +294,13 @@ class TokenCreated(ApiModel):
     role: Role
 
 
+class EngineAddress(ApiModel):
+    """One address the deploy job gave an engine's NIC on a network."""
+
+    network_id: UUID
+    address: str = Field(description="IP address without a prefix length (the network's applies).")
+
+
 class EngineRead(ApiModel):
     """A service engine (SE VM) with where it runs and whether its agent has enrolled.
 
@@ -317,6 +324,12 @@ class EngineRead(ApiModel):
         default=None,
         description="`qemu` (a VM) or `lxc` (a container), as deployed; null for a hand-built "
         "engine (show nothing, or a generic icon).",
+    )
+    addresses: list[EngineAddress] = Field(
+        default_factory=list,
+        description="Addresses the deploy job gave the engine's VIP and backend NICs, one per "
+        "addressed NIC (the management address is `mgmt_ip`). Empty for a hand-built engine or a "
+        "NIC deployed without `nic_pools`.",
     )
     agent_enrolled: bool = Field(
         description="True once `sy-agent enroll` has traded a token for a client certificate."

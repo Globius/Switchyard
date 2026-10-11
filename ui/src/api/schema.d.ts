@@ -4176,6 +4176,22 @@ export interface components {
             via: components["schemas"]["GrantSourceRead"][];
         };
         /**
+         * EngineAddress
+         * @description One address the deploy job gave an engine's NIC on a network.
+         */
+        EngineAddress: {
+            /**
+             * Address
+             * @description IP address without a prefix length (the network's applies).
+             */
+            address: string;
+            /**
+             * Network Id
+             * Format: uuid
+             */
+            network_id: string;
+        };
+        /**
          * EngineFileRead
          * @description One rendered file.
          */
@@ -4222,6 +4238,11 @@ export interface components {
          *     Live health (reachable, drift, BGP/VRRP) is in `GET /status/engines`, not here.
          */
         EngineRead: {
+            /**
+             * Addresses
+             * @description Addresses the deploy job gave the engine's VIP and backend NICs, one per addressed NIC (the management address is `mgmt_ip`). Empty for a hand-built engine or a NIC deployed without `nic_pools`.
+             */
+            addresses?: components["schemas"]["EngineAddress"][];
             /**
              * Agent Cert Serial
              * @description Serial of the agent's client certificate.
@@ -14111,6 +14132,12 @@ export interface operations {
                     /**
                      * @example [
                      *       {
+                     *         "addresses": [
+                     *           {
+                     *             "address": "192.0.2.31",
+                     *             "network_id": "0192f3a0-0000-7000-8000-000000000010"
+                     *           }
+                     *         ],
                      *         "agent_cert_serial": "3f2a9c",
                      *         "agent_enrolled": true,
                      *         "agent_url": "192.0.2.21:7443",
@@ -14193,6 +14220,12 @@ export interface operations {
                 content: {
                     /**
                      * @example {
+                     *       "addresses": [
+                     *         {
+                     *           "address": "192.0.2.31",
+                     *           "network_id": "0192f3a0-0000-7000-8000-000000000010"
+                     *         }
+                     *       ],
                      *       "agent_cert_serial": "3f2a9c",
                      *       "agent_enrolled": true,
                      *       "agent_url": "192.0.2.21:7443",
@@ -19620,6 +19653,12 @@ export interface operations {
                     /**
                      * @example [
                      *       {
+                     *         "addresses": [
+                     *           {
+                     *             "address": "192.0.2.31",
+                     *             "network_id": "0192f3a0-0000-7000-8000-000000000010"
+                     *           }
+                     *         ],
                      *         "agent_cert_serial": "3f2a9c",
                      *         "agent_enrolled": true,
                      *         "agent_url": "192.0.2.21:7443",
@@ -19715,6 +19754,12 @@ export interface operations {
                 content: {
                     /**
                      * @example {
+                     *       "addresses": [
+                     *         {
+                     *           "address": "192.0.2.31",
+                     *           "network_id": "0192f3a0-0000-7000-8000-000000000010"
+                     *         }
+                     *       ],
                      *       "agent_cert_serial": "3f2a9c",
                      *       "agent_enrolled": true,
                      *       "agent_url": "192.0.2.21:7443",
