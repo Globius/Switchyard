@@ -2350,6 +2350,34 @@
         "title": "DiffWarning",
         "type": "object"
       },
+      "DiscoveryGroup": {
+        "additionalProperties": false,
+        "description": "One Prometheus HTTP service-discovery target group (the format Prometheus reads).",
+        "properties": {
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "`tenant` (id), `tenant_name`, `se_group`, `engine` and `vs` (the group's service names between commas, for example `,shop,www,`).",
+            "title": "Labels",
+            "type": "object"
+          },
+          "targets": {
+            "description": "`host:port` of the exporter.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "targets",
+          "labels"
+        ],
+        "title": "DiscoveryGroup",
+        "type": "object"
+      },
       "DraftStatus": {
         "description": "How an object differs between the base state and a draft.",
         "enum": [
@@ -11815,6 +11843,138 @@
           "auth"
         ],
         "x-required-role": "public"
+      }
+    },
+    "/api/v1/discovery/prometheus": {
+      "get": {
+        "description": "Prometheus `http_sd_configs` target groups, one per enabled engine with a management address, labelled `tenant`, `tenant_name`, `se_group`, `engine` and `vs`. `exporter` is `haproxy` (default port 8405) or `node` (9100); `port` overrides the port. Requires `system-admin` or the metrics scrape token.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "prometheus_discovery_api_v1_discovery_prometheus_get",
+        "parameters": [
+          {
+            "description": "`haproxy` or `node`.",
+            "in": "query",
+            "name": "exporter",
+            "required": false,
+            "schema": {
+              "default": "haproxy",
+              "description": "`haproxy` or `node`.",
+              "title": "Exporter",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exporter port; default per exporter.",
+            "in": "query",
+            "name": "port",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 65535,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exporter port; default per exporter.",
+              "title": "Port"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "labels": {
+                      "engine": "edge-1",
+                      "se_group": "edge",
+                      "tenant": "0192f3a0-0000-7000-8000-000000000001",
+                      "tenant_name": "acme",
+                      "vs": ",shop,www,"
+                    },
+                    "targets": [
+                      "192.0.2.21:8405"
+                    ]
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DiscoveryGroup"
+                  },
+                  "title": "Response Prometheus Discovery Api V1 Discovery Prometheus Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Prometheus service discovery for the SE exporters",
+        "tags": [
+          "meta"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/enroll": {

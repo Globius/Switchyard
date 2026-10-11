@@ -58,8 +58,8 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Search, summary, VIP allocations, next-free, monitor test, engines list (A2 to A6) | done | | |
 | UDP via IPVS, `udp` monitor, field rules, schema endpoint (M6, T6, T7) | done | | |
 | Metrics and logs endpoints (A9) | partial | API done and answers `available: false`; the pipeline (HAProxy exporter, Prometheus, Vector, Loki) is not built, `HttpTelemetry` never run against a real stack | Deploy and document the pipeline; test against it |
-| Prometheus HTTP service-discovery endpoint for SEs | missing | *not started* (02 telemetry) | Endpoint with `tenant`, `se_group`, `vs` labels |
-| Controller own `/metrics` | missing | *not started*; no route in `app.py` or OpenAPI | `prometheus_client`: job durations, apply failures, drift count |
+| Prometheus HTTP service-discovery endpoint for SEs | done | `GET /discovery/prometheus` (ADR 0061); the SE image must serve the exporters | |
+| Controller own `/metrics` | done | Database-derived, text format (ADR 0061) | |
 | Grafana embed or proxy (01, 03) | partial | VS Overview has a text hint only; no proxy | Proxy or link (*design question*) |
 | `waf_policy`, Coraza SPOA | missing | *deferred*: phase 2 | Table, renderer, agent bundle, UI |
 | Rate limits, IP groups | missing | *deferred*: phase 2 | |

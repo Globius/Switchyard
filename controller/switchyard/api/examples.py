@@ -282,6 +282,18 @@ ENGINE_READ = {
     "agent_enrolled": True,
     "agent_cert_serial": "3f2a9c",
 }
+DISCOVERY = [
+    {
+        "targets": ["192.0.2.21:8405"],
+        "labels": {
+            "tenant": TENANT,
+            "tenant_name": "acme",
+            "se_group": "edge",
+            "engine": "edge-1",
+            "vs": ",shop,www,",
+        },
+    }
+]
 VIRTUAL_SERVICE_STATUS = {
     "id": "00000000-0000-0000-0000-0000000000d1",
     "name": "dns",
