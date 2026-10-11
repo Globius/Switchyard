@@ -7,6 +7,7 @@ import { api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
 import { ChipInput } from "@/components/sy/ChipInput";
+import { ShowOnceSecret } from "@/components/sy/ShowOnceSecret";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { DraftMarker, StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
@@ -193,6 +194,7 @@ function EnginesCard({
   const [confirm, setConfirm] = useState<{ kind: "retire" | "delete"; engine: Engine } | null>(
     null,
   );
+  const [tokenStored, setTokenStored] = useState(false);
   const [token, setToken] = useState<{ name: string; token: string; expires_at: string } | null>(
     null,
   );
@@ -314,6 +316,7 @@ function EnginesCard({
                               disabled: !manage.allowed,
                               onSelect: async () => {
                                 const r = await act.mutateAsync({ kind: "token", engine: e.id });
+                                setTokenStored(false);
                                 setToken({
                                   name: e.name,
                                   token: (r as { token: string }).token,
@@ -399,22 +402,28 @@ function EnginesCard({
               )}
         </p>
       </ConfirmDialog>
-      <ConfirmDialog
-        open={token !== null}
-        onOpenChange={(o) => !o && setToken(null)}
-        title={t("Enrollment token for {name}", { name: token?.name ?? "" })}
-        confirmLabel={t("Done")}
-        onConfirm={() => setToken(null)}
-      >
-        <p>
-          {t("Shown once. Give it to the engine's agent; it expires {when}.", {
-            when: token ? new Date(token.expires_at).toLocaleString() : "",
-          })}
-        </p>
-        <code className="block break-all rounded bg-muted p-2 font-mono text-xs">
-          {token?.token}
-        </code>
-      </ConfirmDialog>
+      {token && (
+        <Sheet
+          open
+          centered
+          onOpenChange={(o) => !o && tokenStored && setToken(null)}
+          title={t("Enrollment token for {name}", { name: token.name })}
+          footer={
+            <Button className="ml-auto" disabled={!tokenStored} onClick={() => setToken(null)}>
+              {t("Done")}
+            </Button>
+          }
+        >
+          <ShowOnceSecret
+            secrets={[{ label: t("Enrollment token"), value: token.token }]}
+            stored={tokenStored}
+            onStoredChange={setTokenStored}
+            note={t("Shown once. Give it to the engine's agent; it expires {when}.", {
+              when: new Date(token.expires_at).toLocaleString(),
+            })}
+          />
+        </Sheet>
+      )}
     </section>
   );
 }
