@@ -16,6 +16,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAuditLogRouteImport } from './routes/admin.audit-log'
 import { Route as AdminIdentityProvidersRouteImport } from './routes/admin.identity-providers'
 import { Route as AdminRoleMappingsRouteImport } from './routes/admin.role-mappings'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminTenantsRouteImport } from './routes/admin.tenants'
 import { Route as AdminTokensRouteImport } from './routes/admin.tokens'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -76,6 +77,11 @@ const AdminIdentityProvidersRoute = AdminIdentityProvidersRouteImport.update({
 const AdminRoleMappingsRoute = AdminRoleMappingsRouteImport.update({
   id: '/role-mappings',
   path: '/role-mappings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminTenantsRoute = AdminTenantsRouteImport.update({
@@ -224,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
   '/admin/tokens': typeof AdminTokensRoute
   '/admin/users': typeof AdminUsersRoute
@@ -257,6 +264,7 @@ export interface FileRoutesByTo {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
   '/admin/tokens': typeof AdminTokensRoute
   '/admin/users': typeof AdminUsersRoute
@@ -290,6 +298,7 @@ export interface FileRoutesById {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
+  '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
   '/admin/tokens': typeof AdminTokensRoute
   '/admin/users': typeof AdminUsersRoute
@@ -327,6 +336,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
+    | '/admin/settings'
     | '/admin/tenants'
     | '/admin/tokens'
     | '/admin/users'
@@ -360,6 +370,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
+    | '/admin/settings'
     | '/admin/tenants'
     | '/admin/tokens'
     | '/admin/users'
@@ -392,6 +403,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
+    | '/admin/settings'
     | '/admin/tenants'
     | '/admin/tokens'
     | '/admin/users'
@@ -477,6 +489,13 @@ declare module '@tanstack/react-router' {
       path: '/role-mappings'
       fullPath: '/admin/role-mappings'
       preLoaderRoute: typeof AdminRoleMappingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/tenants': {
@@ -668,6 +687,7 @@ interface AdminRouteChildren {
   AdminAuditLogRoute: typeof AdminAuditLogRoute
   AdminIdentityProvidersRoute: typeof AdminIdentityProvidersRoute
   AdminRoleMappingsRoute: typeof AdminRoleMappingsRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTenantsRoute: typeof AdminTenantsRoute
   AdminTokensRoute: typeof AdminTokensRoute
   AdminUsersRoute: typeof AdminUsersRoute
@@ -678,6 +698,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditLogRoute: AdminAuditLogRoute,
   AdminIdentityProvidersRoute: AdminIdentityProvidersRoute,
   AdminRoleMappingsRoute: AdminRoleMappingsRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
   AdminTenantsRoute: AdminTenantsRoute,
   AdminTokensRoute: AdminTokensRoute,
   AdminUsersRoute: AdminUsersRoute,

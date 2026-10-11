@@ -305,3 +305,11 @@ Checked on 2026-10-11 against a local controller, signed in as the break-glass s
 | Inline amber warning on an empty row, by role | Done; it does not block. A network with no pools shows a disabled picker, "No pools on this network" and a link to Networks. |
 | 422 field errors on the row (`nic_pools.<network>`) | Done. |
 | Addresses on the engine row ("edge-vip 10.40.12.6 · backend —") | Done, from `addresses` on the engine read: a second sub-line per engine, one entry per VIP or backend network of the group, "—" where unaddressed; nothing for an engine without deploy-time addresses. |
+
+## LXC behind a system setting (ADR 0076)
+
+| Item | Status |
+| --- | --- |
+| Container option in the deploy sheet only when `GET /me` `features.lxc_guests` is true | Done. While it is off the Guest type choice is hidden and the request sends `guest_kind: qemu`. |
+| `403 lxc_disabled` | Done. The deploy sheet shows a plain explanation that points to Admin > System settings. |
+| Admin > System settings with the `allow_lxc_guests` toggle | Built without an artboard, following the other Admin screens (card, switch, confirm before enabling, read-only note when `allow_lxc_guests_forced`). **Deviation: Design to specify or confirm.** |

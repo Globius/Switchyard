@@ -730,4 +730,38 @@ describe("admin area", () => {
     await userEvent.click(dlg.getByRole("button", { name: "Create tenant" }));
     expect(await dlg.findByText("Name already exists.")).toBeInTheDocument();
   });
+
+  it("turns container guests on after a confirm, and shows the forced state read-only", async () => {
+    let patched: unknown = null;
+    let state = { allow_lxc_guests: false, allow_lxc_guests_forced: false };
+    server.use(
+      http.get("*/api/v1/system/settings", () => HttpResponse.json(state)),
+      http.patch("*/api/v1/system/settings", async ({ request }) => {
+        patched = await request.json();
+        state = { ...state, allow_lxc_guests: true };
+        return HttpResponse.json(state);
+      }),
+    );
+    renderAt("/admin/settings");
+    const sw = await screen.findByRole("switch", { name: "Allow container (LXC) guests" });
+    expect(sw).not.toBeChecked();
+    await userEvent.click(sw);
+    const dlg = within(await screen.findByRole("alertdialog"));
+    await userEvent.click(dlg.getByRole("button", { name: "Allow containers" }));
+    await waitFor(() => expect(patched).toEqual({ allow_lxc_guests: true }));
+    await waitFor(() => expect(sw).toBeChecked());
+  });
+
+  it("disables the container switch when the deployment forces it on", async () => {
+    server.use(
+      http.get("*/api/v1/system/settings", () =>
+        HttpResponse.json({ allow_lxc_guests: true, allow_lxc_guests_forced: true }),
+      ),
+    );
+    renderAt("/admin/settings");
+    expect(
+      await screen.findByRole("switch", { name: "Allow container (LXC) guests" }),
+    ).toBeDisabled();
+    expect(screen.getByText(/forces containers on/)).toBeInTheDocument();
+  });
 });

@@ -678,6 +678,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Controller-wide settings
+         * @description The settings in effect: today `allow_lxc_guests` (default off) and whether the deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`). Requires `system-admin`; every signed-in user can read what they need from `GET /me` `features`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_system_settings_api_v1_system_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change controller-wide settings
+         * @description Send only the settings to change. `allow_lxc_guests` lets tenant administrators deploy SE groups as containers; while it is off a deploy with `guest_kind: lxc` answers `403` with code `lxc_disabled`. Audited as `system.settings_changed`. Requires `system-admin`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        patch: operations["patch_system_settings_api_v1_system_settings_patch"];
+        trace?: never;
+    };
     "/api/v1/system/tokens": {
         parameters: {
             query?: never;
@@ -2195,6 +2223,8 @@ export interface paths {
         /**
          * Deploy engines for an SE group on Proxmox
          * @description Grow an SE group to ``count`` engines by cloning the SE template on Proxmox.
+         *
+         *     `403` with code `lxc_disabled` when `guest_kind` is `lxc` and containers are not enabled.
          *
          *     **Access:** `tenant-admin` or higher in the tenant.
          */
@@ -3971,7 +4001,7 @@ export interface components {
             } | null;
             /**
              * Nodes
-             * @description Proxmox nodes to spread new VMs over.
+             * @description Proxmox nodes to spread new VMs over (node names).
              */
             nodes: string[];
             /** Pool */
@@ -5164,6 +5194,7 @@ export interface components {
             csrf_token: string | null;
             /** Email */
             email?: string | null;
+            features?: components["schemas"]["MeFeatures"];
             /**
              * Id
              * @description Session id; null for API tokens.
@@ -5183,6 +5214,18 @@ export interface components {
             session: components["schemas"]["MeSession"] | null;
             /** Tenants */
             tenants: components["schemas"]["MeTenant"][];
+        };
+        /**
+         * MeFeatures
+         * @description Optional features, so the UI can show or hide controls.
+         */
+        MeFeatures: {
+            /**
+             * Lxc Guests
+             * @description Container (LXC) guests may be deployed (`allow_lxc_guests`).
+             * @default false
+             */
+            lxc_guests: boolean;
         };
         /**
          * MeLinks
@@ -7286,6 +7329,30 @@ export interface components {
             tenant_id?: string | null;
         };
         /**
+         * SystemSettingsIn
+         * @description Change settings; send only the ones to change.
+         */
+        SystemSettingsIn: {
+            /** Allow Lxc Guests */
+            allow_lxc_guests?: boolean | null;
+        };
+        /**
+         * SystemSettingsRead
+         * @description Controller-wide settings as they are in effect.
+         */
+        SystemSettingsRead: {
+            /**
+             * Allow Lxc Guests
+             * @description Whether SE groups may be deployed as containers (LXC). Off by default: a privileged container shares the Proxmox host's kernel.
+             */
+            allow_lxc_guests: boolean;
+            /**
+             * Allow Lxc Guests Forced
+             * @description True when the deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`); the stored value then has no effect.
+             */
+            allow_lxc_guests_forced: boolean;
+        };
+        /**
          * SystemTokenCreated
          * @description A new system token; the plaintext is shown once.
          */
@@ -7783,6 +7850,11 @@ export interface components {
         VipPoolUsage: {
             /** Allocations */
             allocations: components["schemas"]["VipAllocation"][];
+            /**
+             * Engine Addresses
+             * @description Addresses in the pool that engines hold (a management or data NIC). They count as used and are never offered as `next_free`.
+             */
+            engine_addresses?: string[];
             /** Free */
             free: number;
             /**
@@ -8709,6 +8781,9 @@ export interface operations {
                      *       "break_glass": false,
                      *       "csrf_token": "c3JmLXRva2Vu",
                      *       "email": "alice@example.test",
+                     *       "features": {
+                     *         "lxc_guests": false
+                     *       },
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "links": {
@@ -9044,6 +9119,9 @@ export interface operations {
                      *       "break_glass": false,
                      *       "csrf_token": "c3JmLXRva2Vu",
                      *       "email": "alice@example.test",
+                     *       "features": {
+                     *         "lxc_guests": false
+                     *       },
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "links": {
@@ -10072,6 +10150,9 @@ export interface operations {
                      *       "break_glass": false,
                      *       "csrf_token": "c3JmLXRva2Vu",
                      *       "email": "alice@example.test",
+                     *       "features": {
+                     *         "lxc_guests": false
+                     *       },
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "links": {
@@ -11139,6 +11220,145 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["BreakGlassRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_system_settings_api_v1_system_settings_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "allow_lxc_guests": false,
+                     *       "allow_lxc_guests_forced": false
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SystemSettingsRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_system_settings_api_v1_system_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "allow_lxc_guests": true
+                 *     }
+                 */
+                "application/json": components["schemas"]["SystemSettingsIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "allow_lxc_guests": false,
+                     *       "allow_lxc_guests_forced": false
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SystemSettingsRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
