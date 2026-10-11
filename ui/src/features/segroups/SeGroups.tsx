@@ -29,6 +29,27 @@ type Engine = components["schemas"]["EngineRead"];
 type EngineStatus = components["schemas"]["EngineStatusRead"];
 
 /** "VM 201 · pve-atl-01 · " from the engine read; nothing for a hand-built engine without a guest type. */
+/**
+ * "edge-vip 10.40.12.6 · backend —" for one engine: its address on each VIP or backend network
+ * of the group, with "—" where the NIC is unaddressed. Empty when the engine has no deploy-time
+ * addresses at all (a hand-registered engine), so nothing is implied about it.
+ */
+export function addressLine(
+  e: Pick<Engine, "addresses">,
+  groupNetworks: { network_id: string; role: string }[],
+  nameOf: (id: string) => string,
+): string {
+  const have = e.addresses ?? [];
+  if (have.length === 0) return "";
+  return groupNetworks
+    .filter((n) => n.role !== "mgmt")
+    .map((n) => {
+      const a = have.find((x) => x.network_id === n.network_id)?.address;
+      return a ? `${nameOf(n.network_id)} ${a}` : `${nameOf(n.network_id)} —`;
+    })
+    .join(" · ");
+}
+
 function guestPrefix(e: Engine): string {
   if (!e.guest_kind) return "";
   const kind = e.guest_kind === "lxc" ? "CT" : "VM";
@@ -199,6 +220,16 @@ function EnginesCard({
   onRegister: () => void;
 }) {
   const engines = useEngines(tenant);
+  const nets = useQuery({
+    queryKey: ["t", tenant, "networks", { changeSet: undefined }],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/v1/tenants/{t}/networks", {
+          params: { path: { t: tenant }, query: { limit: 200 } },
+        }),
+      ),
+  });
+  const netName = (id: string) => nets.data?.items.find((n) => n.id === id)?.name ?? id.slice(0, 8);
   const status = useEngineStatus(tenant);
   const can = useCan(tenant);
   const manage = can("manage", "engine");
@@ -270,6 +301,11 @@ function EnginesCard({
                         {e.mgmt_ip ?? "—"}
                         {st?.agent?.version ? ` · agent ${st.agent.version}` : ""}
                       </div>
+                      {addressLine(e, group.networks, netName) && (
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {addressLine(e, group.networks, netName)}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {e.state === "enabled" ? t("Enabled") : t("Disabled")}
