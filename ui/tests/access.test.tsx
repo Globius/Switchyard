@@ -242,7 +242,10 @@ describe("tenant access and settings", () => {
     await userEvent.click(dlg.getByRole("button", { name: "Create token" }));
     expect(await screen.findByText("sy_secret")).toBeInTheDocument();
     await waitFor(() => expect(calls.token).toEqual({ name: "ci2", role: "viewer", ttl_days: 90 }));
-    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    const done = screen.getByRole("button", { name: "Done" });
+    expect(done).toBeDisabled();
+    await userEvent.click(screen.getByLabelText("I have stored it"));
+    await userEvent.click(done);
     const row = screen.getByText("gitlab-ci").closest("tr")!;
     await userEvent.click(within(row).getByRole("button", { name: "Revoke" }));
     await userEvent.click(await screen.findByRole("button", { name: "Revoke token" }));

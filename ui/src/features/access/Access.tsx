@@ -9,6 +9,7 @@ import { StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ShowOnceSecret } from "@/components/sy/ShowOnceSecret";
 import { Sheet } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
@@ -329,6 +330,7 @@ function Tokens({ tenant, myRole }: { tenant: string; myRole: Role | undefined }
   const [role, setRole] = useState<Role>("viewer");
   const [ttl, setTtl] = useState("90");
   const [shown, setShown] = useState<string | null>(null);
+  const [stored, setStored] = useState(false);
   const [revoking, setRevoking] = useState<{ id: string; name: string } | null>(null);
   const list = useQuery({
     queryKey: ["t", tenant, "tokens"],
@@ -439,9 +441,10 @@ function Tokens({ tenant, myRole }: { tenant: string; myRole: Role | undefined }
           open
           centered
           onOpenChange={(o) => {
-            if (!o) {
+            if (!o && !(shown && !stored)) {
               setCreating(false);
               setShown(null);
+              setStored(false);
             }
           }}
           title={t("Create token")}
@@ -450,9 +453,11 @@ function Tokens({ tenant, myRole }: { tenant: string; myRole: Role | undefined }
               <Button
                 variant="ghost"
                 className="ml-auto"
+                disabled={!!shown && !stored}
                 onClick={() => {
                   setCreating(false);
                   setShown(null);
+                  setStored(false);
                 }}
               >
                 {shown ? t("Done") : t("Cancel")}
@@ -467,12 +472,11 @@ function Tokens({ tenant, myRole }: { tenant: string; myRole: Role | undefined }
         >
           {create.error && <ErrorState error={create.error} />}
           {shown ? (
-            <div className="space-y-2" role="status">
-              <p className="text-sm">{t("Copy it now. It is not shown again.")}</p>
-              <code className="block break-all rounded bg-muted p-2 font-mono text-xs">
-                {shown}
-              </code>
-            </div>
+            <ShowOnceSecret
+              secrets={[{ label: t("Token"), value: shown }]}
+              stored={stored}
+              onStoredChange={setStored}
+            />
           ) : (
             <>
               <label className="block space-y-1.5 text-sm font-medium">
@@ -619,7 +623,7 @@ export function Access({ tenant }: { tenant: string }) {
             : t("Who can use {tenant}, and how.", { tenant })}
         </p>
       </div>
-      <div role="tablist" className="flex gap-1 border-b">
+      <div role="tablist" className="flex gap-1 overflow-x-auto border-b">
         {TABS.map((x) => (
           <button
             key={x.key}

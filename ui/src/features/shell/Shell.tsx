@@ -1,9 +1,10 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Activity, Moon, Search, Signpost, Sun, WifiOff } from "lucide-react";
+import { Activity, Menu, Moon, Search, Signpost, Sun, WifiOff } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { useTheme } from "@/lib/theme";
 import { ChangeSetBar } from "./ChangeSetBar";
 import { CommandPalette } from "./CommandPalette";
@@ -98,6 +99,7 @@ function StreamBanner({ stream }: { stream: Stream }) {
 /** Top bar, left nav and the change-set bar around every tenant page. */
 export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean }) {
   const [palette, setPalette] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const stream = useTenantStream(tenant);
   const { draft } = useDraft(tenant);
   const sections = isSystem
@@ -105,30 +107,60 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
     : NAV;
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex h-14 items-center gap-3 border-b bg-card px-4">
+      <header className="flex h-14 items-center gap-2 border-b bg-card px-3 sm:gap-3 sm:px-4">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          aria-label={navOpen ? t("Close menu") : t("Open menu")}
+          aria-expanded={navOpen}
+          onClick={() => setNavOpen((o) => !o)}
+        >
+          <Menu />
+        </Button>
         <Link to="/t/$tenant" params={{ tenant }} className="flex items-center gap-2 font-semibold">
           <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
             <Signpost className="size-4" aria-hidden />
           </span>
-          Switchyard
+          <span className="hidden sm:inline">Switchyard</span>
         </Link>
         <TenantSwitcher tenant={tenant} />
         <button
           type="button"
           onClick={() => setPalette(true)}
-          className="ml-auto flex w-80 items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm text-muted-foreground"
+          aria-label={t("Jump to any object")}
+          className="ml-auto flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 text-sm text-muted-foreground lg:w-80 lg:px-3"
         >
           <Search className="size-4" />
-          <span className="flex-1 text-left">{t("Jump to any object")}</span>
-          <kbd className="rounded border px-1.5 font-mono text-xs">Ctrl K</kbd>
+          <span className="hidden flex-1 text-left lg:inline">{t("Jump to any object")}</span>
+          <kbd className="hidden rounded border px-1.5 font-mono text-xs lg:inline">Ctrl K</kbd>
         </button>
-        <StreamIndicator s={stream.state} />
+        <span className="hidden sm:inline-flex">
+          <StreamIndicator s={stream.state} />
+        </span>
         <ThemeToggle />
         <UserMenu />
       </header>
       <StreamBanner stream={stream} />
       <div className="flex flex-1">
-        <nav aria-label={t("Sections")} className="w-56 shrink-0 border-r bg-sidebar p-3 text-sm">
+        {navOpen && (
+          <button
+            type="button"
+            aria-label={t("Close menu")}
+            className="fixed inset-0 top-14 z-30 bg-black/30 md:hidden"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
+        <nav
+          aria-label={t("Sections")}
+          onClick={(e) => (e.target as HTMLElement).closest("a") && setNavOpen(false)}
+          className={cn(
+            "w-56 shrink-0 border-r bg-sidebar p-3 text-sm",
+            navOpen
+              ? "fixed inset-y-0 top-14 left-0 z-40 overflow-y-auto shadow-xl md:static md:shadow-none"
+              : "hidden md:block",
+          )}
+        >
           {sections.map((s) => (
             <div key={s.heading ?? "home"} className="mb-2">
               {s.heading && (
@@ -161,7 +193,7 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
             </div>
           ))}
         </nav>
-        <main className={draft ? "flex-1 p-8 pb-24" : "flex-1 p-8"}>
+        <main className={cn("min-w-0 flex-1 p-4 md:p-8", draft && "pb-24")}>
           <Outlet />
         </main>
       </div>

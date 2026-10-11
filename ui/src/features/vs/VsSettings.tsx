@@ -1,13 +1,16 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { DropdownMenu } from "radix-ui";
 import { ApiError, api, unwrap } from "@/api/client";
 import { useCan } from "@/auth/session";
 import { ChipInput } from "@/components/sy/ChipInput";
 import { FindingsSummary, focusField } from "@/components/sy/Findings";
 import { expiryStatus } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Menu, MenuContent, MenuTrigger } from "@/components/ui/popover-menu";
+import { Sheet } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
 import { useEnsureDraft } from "@/features/shell/draft-write";
 import { useDraft } from "@/features/shell/draft";
@@ -47,6 +50,18 @@ function usePolicySets(tenant: string) {
     queryFn: async () =>
       unwrap(
         await api.GET("/api/v1/tenants/{t}/policy-sets", {
+          params: { path: { t: tenant }, query: { limit: 200 } },
+        }),
+      ),
+  });
+}
+
+function useVipPools(tenant: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "vip-pools"],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/v1/tenants/{t}/vip-pools", {
           params: { path: { t: tenant }, query: { limit: 200 } },
         }),
       ),
@@ -98,6 +113,154 @@ function Field({
   );
 }
 
+function SettingsCard({
+  title,
+  subtitle,
+  dot,
+  action,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  dot?: boolean;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border bg-card">
+      <header className="flex items-center gap-3 border-b px-4 py-3">
+        {dot && (
+          <span className="size-2 rounded-full bg-draft" aria-label={t("Changed in draft")} />
+        )}
+        <h2 className="text-base font-semibold">{title}</h2>
+        {subtitle && <span className="text-xs text-muted-foreground">{subtitle}</span>}
+        {action && <span className="ml-auto">{action}</span>}
+      </header>
+      <div>{children}</div>
+    </section>
+  );
+}
+
+type PortRow = Editable["ports"][number];
+
+/** The detailed port editor: add, remove and set each port's flags. */
+function PortsSheet({
+  ports,
+  disabled,
+  portForbidden,
+  errors,
+  onChange,
+  onClose,
+}: {
+  ports: PortRow[];
+  disabled: boolean;
+  portForbidden: Set<string>;
+  errors: Record<string, string[]>;
+  onChange: (p: PortRow[]) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Sheet
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={t("Edit ports")}
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            onClick={() =>
+              onChange([
+                ...ports,
+                {
+                  port: 80,
+                  tls: false,
+                  http2: false,
+                  proxy_protocol: false,
+                  https_redirect_port: null,
+                },
+              ])
+            }
+          >
+            {t("Add port")}
+          </Button>
+          <Button type="button" className="ml-auto" onClick={onClose}>
+            {t("Done")}
+          </Button>
+        </>
+      }
+    >
+      {ports.map((p, i) => (
+        <div
+          key={i}
+          className="flex flex-wrap items-center gap-4 rounded-lg border bg-card p-3 text-sm"
+        >
+          <input
+            aria-label={t("Port {n}", { n: i + 1 })}
+            type="number"
+            className={cn(INPUT, "w-28 font-mono")}
+            disabled={disabled}
+            value={p.port}
+            onChange={(e) =>
+              onChange(ports.map((x, j) => (j === i ? { ...x, port: Number(e.target.value) } : x)))
+            }
+          />
+          {(["tls", "http2", "proxy_protocol"] as const).map((k) => (
+            <label key={k} className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                disabled={disabled || portForbidden.has(k)}
+                checked={p[k]}
+                onChange={(e) =>
+                  onChange(ports.map((x, j) => (j === i ? { ...x, [k]: e.target.checked } : x)))
+                }
+              />
+              {k === "tls" ? "TLS" : k === "http2" ? "HTTP/2" : "PROXY"}
+            </label>
+          ))}
+          <label className="flex items-center gap-1.5">
+            {t("HTTPS redirect to")}
+            <input
+              aria-label={t("Port {n} redirect to", { n: i + 1 })}
+              type="number"
+              className={cn(INPUT, "w-24 font-mono")}
+              disabled={disabled || p.tls}
+              value={p.https_redirect_port ?? ""}
+              onChange={(e) =>
+                onChange(
+                  ports.map((x, j) =>
+                    j === i
+                      ? {
+                          ...x,
+                          https_redirect_port: e.target.value ? Number(e.target.value) : null,
+                        }
+                      : x,
+                  ),
+                )
+              }
+            />
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled || ports.length === 1}
+            onClick={() => onChange(ports.filter((_, j) => j !== i))}
+          >
+            {t("Remove")}
+          </Button>
+          {messagesFor(errors, `ports.${i}`).map((m) => (
+            <span key={m} role="alert" className="w-full text-xs text-status-down">
+              {m}
+            </span>
+          ))}
+        </div>
+      ))}
+    </Sheet>
+  );
+}
+
 /** Edit every field of a virtual service; Save adds an update op to your draft. */
 export function VsSettings({ tenant, id, focus }: { tenant: string; id: string; focus?: string }) {
   const { draft } = useDraft(tenant);
@@ -144,6 +307,7 @@ function SettingsForm({
   const certs = useCertificates(tenant, draftId);
   const groups = useSeGroups(tenant);
   const policies = usePolicySets(tenant);
+  const vipPools = useVipPools(tenant);
   const rules = useProtocolRules(v.protocol);
   const can = useCan(tenant);
   const write = can("write", "application");
@@ -156,6 +320,8 @@ function SettingsForm({
   const [stale, setStale] = useState(false);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<unknown>(null);
+  const [portsOpen, setPortsOpen] = useState(false);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
 
   useEffect(() => {
     if (focus) focusField(focus);
@@ -167,7 +333,8 @@ function SettingsForm({
 
   const forbidden = new Set([...(rules.data?.service_forbidden ?? [])]);
   const portForbidden = new Set(rules.data?.port_forbidden ?? []);
-  const set = <K extends keyof Editable>(k: K, val: Editable[K]) => setForm({ ...form, [k]: val });
+  const set = <K extends keyof Editable>(k: K, val: Editable[K]) =>
+    setForm((f) => ({ ...f, [k]: val }));
   const changed = (k: keyof Editable) => v.changed_fields.includes(k);
   const liveText = (k: keyof Editable) =>
     liveEditable ? JSON.stringify(liveEditable[k]) : undefined;
@@ -178,11 +345,26 @@ function SettingsForm({
     Object.fromEntries(
       Object.entries(errors).flatMap(([path, msgs]) => {
         const idx = path.startsWith(`${field}.`) ? Number(path.slice(field.length + 1)) : NaN;
-        const v = Number.isInteger(idx) ? values[idx] : undefined;
-        return v ? [[v, msgs.join(" ")]] : [];
+        const val = Number.isInteger(idx) ? values[idx] : undefined;
+        return val ? [[val, msgs.join(" ")]] : [];
       }),
     );
   const disabled = !write.allowed;
+
+  /** Ask the pool for its next free address. It is a suggestion: nothing is reserved. */
+  async function suggest(poolId: string) {
+    try {
+      const r = unwrap(
+        await api.POST("/api/v1/tenants/{t}/vip-pools/{pool_id}/next-free", {
+          params: { path: { t: tenant, pool_id: poolId } },
+        }),
+      );
+      setForm((f) => ({ ...f, vip: r.address, vip_pool_id: poolId }));
+      setProblem(null);
+    } catch (e) {
+      setProblem(e);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -201,6 +383,9 @@ function SettingsForm({
         }),
       );
       setBase(form);
+      setSavedAt(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
+      );
       await qc.invalidateQueries({ queryKey: ["t", tenant] });
     } catch (e) {
       if (e instanceof ApiError && e.status === 412) setStale(true);
@@ -212,14 +397,26 @@ function SettingsForm({
     }
   }
 
+  const policyItems = policies.data?.items ?? [];
+  const allowLists = policyItems.filter((x) => x.kind === "allow_list");
+  const groupLabel = (g: { name: string; ha_mode?: string }) =>
+    g.ha_mode ? `${g.name} · ${g.ha_mode.toUpperCase()}` : g.name;
+  const poolOptions = pools.data?.items ?? [];
+  const vipMode: "fixed" | "pool" = form.vip_pool_id ? "pool" : "fixed";
+
   return (
     <form
-      className="max-w-3xl space-y-8"
+      className="space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
         void save();
       }}
     >
+      <p className="text-sm text-muted-foreground">
+        {t(
+          "Every change here becomes an op in your draft. Nothing goes live until the change set is applied. Changed fields show their live value underneath.",
+        )}
+      </p>
       <FindingsSummary findings={flatFindings(errors)} />
       {draftState === "pending_approval" && (
         <div
@@ -260,200 +457,546 @@ function SettingsForm({
       )}
       {problem != null && <ErrorState error={problem} />}
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">{t("Basics")}</h2>
-        <Field
-          label={t("Name")}
-          name="name"
-          changed={changed("name")}
-          live={liveText("name")}
-          onRevert={revert("name")}
-          errors={er("name")}
-        >
-          <input
-            aria-label={t("Name")}
-            className={INPUT}
-            disabled={disabled}
-            value={form.name}
-            onChange={(e) => set("name", e.target.value)}
-          />
-        </Field>
-        <Field
-          label={t("Enabled")}
-          name="enabled"
-          changed={changed("enabled")}
-          live={liveText("enabled")}
-          onRevert={revert("enabled")}
-          errors={er("enabled")}
-        >
-          <input
-            type="checkbox"
-            aria-label={t("Enabled")}
-            disabled={disabled}
-            checked={form.enabled}
-            onChange={(e) => set("enabled", e.target.checked)}
-          />
-        </Field>
-        <Field
-          label={t("SE group")}
-          name="se_group_id"
-          changed={changed("se_group_id")}
-          live={liveText("se_group_id")}
-          onRevert={revert("se_group_id")}
-          errors={er("se_group_id")}
-        >
-          <select
-            aria-label={t("SE group")}
-            className={INPUT}
-            disabled={disabled}
-            value={form.se_group_id}
-            onChange={(e) => set("se_group_id", e.target.value)}
-          >
-            {groups.data?.items.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <p className="text-xs text-muted-foreground">
-          {t("Protocol")}: <Badge>{v.protocol.toUpperCase()}</Badge>{" "}
-          {t("(cannot be changed; create a new service)")}
-        </p>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">{t("Addressing")}</h2>
-        <Field
-          label={t("VIP")}
-          name="vip"
-          changed={changed("vip")}
-          live={liveText("vip")}
-          onRevert={revert("vip")}
-          errors={er("vip")}
-        >
-          <input
-            aria-label={t("VIP")}
-            className={cn(INPUT, "font-mono")}
-            disabled={disabled}
-            value={form.vip ?? ""}
-            placeholder={t("allocated from the VIP pool")}
-            onChange={(e) => set("vip", e.target.value)}
-          />
-        </Field>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">{t("Ports")}</h2>
-        {(errors.ports ?? []).map((m) => (
-          <p key={m} role="alert" className="text-xs text-status-down">
-            {m}
-          </p>
-        ))}
-        {form.ports.map((p, i) => (
-          <div
-            key={i}
-            data-field={`ports.${i}`}
-            className="flex flex-wrap items-center gap-4 rounded-lg border bg-card p-3 text-sm"
+      <SettingsCard title={t("General")}>
+        <div className="grid gap-x-8 gap-y-5 p-4 md:grid-cols-2">
+          <Field
+            label={t("Name")}
+            name="name"
+            changed={changed("name")}
+            live={liveText("name")}
+            onRevert={revert("name")}
+            errors={er("name")}
           >
             <input
-              aria-label={t("Port {n}", { n: i + 1 })}
-              type="number"
-              className={cn(INPUT, "w-28 font-mono")}
+              aria-label={t("Name")}
+              className={INPUT}
               disabled={disabled}
-              value={p.port}
-              onChange={(e) =>
-                set(
-                  "ports",
-                  form.ports.map((x, j) => (j === i ? { ...x, port: Number(e.target.value) } : x)),
-                )
-              }
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
             />
-            {(["tls", "http2", "proxy_protocol"] as const).map((k) => (
-              <label key={k} className="flex items-center gap-1.5">
+            <p className="text-xs text-muted-foreground">
+              {t("Lower case, digits and hyphens. Used in rendered config as {fe}.", {
+                fe: `fe_${form.name.replace(/-/g, "_")}`,
+              })}
+            </p>
+          </Field>
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">{t("Protocol")}</div>
+            <div
+              role="radiogroup"
+              aria-label={t("Protocol")}
+              className="flex overflow-hidden rounded-md border"
+            >
+              {(["http", "tcp", "udp"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={v.protocol === k}
+                  disabled
+                  className={cn(
+                    "flex-1 px-4 py-1.5 text-sm",
+                    v.protocol === k ? "bg-accent font-medium" : "text-muted-foreground",
+                  )}
+                >
+                  {k.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("The protocol cannot be changed here; create a new service for another one.")}
+            </p>
+          </div>
+          <Field
+            label={t("SE group")}
+            name="se_group_id"
+            changed={changed("se_group_id")}
+            live={liveText("se_group_id")}
+            onRevert={revert("se_group_id")}
+            errors={er("se_group_id")}
+          >
+            <select
+              aria-label={t("SE group")}
+              className={INPUT}
+              disabled={disabled}
+              value={form.se_group_id}
+              onChange={(e) => set("se_group_id", e.target.value)}
+            >
+              {groups.data?.items.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {groupLabel(g)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label={t("Enabled")}
+            name="enabled"
+            changed={changed("enabled")}
+            live={liveText("enabled")}
+            onRevert={revert("enabled")}
+            errors={er("enabled")}
+          >
+            <div className="flex h-9 items-center gap-3">
+              <Switch
+                aria-label={t("Enabled")}
+                disabled={disabled}
+                checked={form.enabled}
+                onCheckedChange={(on) => set("enabled", on)}
+              />
+              <span className="text-sm text-muted-foreground">
+                {t("Disabled services are not rendered")}
+              </span>
+            </div>
+          </Field>
+        </div>
+      </SettingsCard>
+
+      <SettingsCard title={t("Listener")}>
+        <div className="grid gap-x-8 gap-y-5 p-4 md:grid-cols-2">
+          <Field
+            label={t("VIP")}
+            name="vip"
+            changed={changed("vip") || changed("vip_pool_id")}
+            live={changed("vip") ? liveText("vip") : undefined}
+            onRevert={() => {
+              revert("vip")();
+              revert("vip_pool_id")();
+            }}
+            errors={er("vip")}
+          >
+            <div role="radiogroup" aria-label={t("VIP source")} className="space-y-2">
+              <div
+                className={cn(
+                  "flex gap-3 rounded-lg border p-3",
+                  vipMode === "fixed" && "border-primary bg-primary/10",
+                )}
+              >
                 <input
-                  type="checkbox"
-                  disabled={disabled || portForbidden.has(k)}
-                  checked={p[k]}
-                  onChange={(e) =>
-                    set(
-                      "ports",
-                      form.ports.map((x, j) => (j === i ? { ...x, [k]: e.target.checked } : x)),
-                    )
-                  }
+                  type="radio"
+                  name="vip-mode"
+                  aria-label={t("Fixed address")}
+                  disabled={disabled}
+                  checked={vipMode === "fixed"}
+                  onChange={() => set("vip_pool_id", null)}
                 />
-                {k === "tls" ? "TLS" : k === "http2" ? "HTTP/2" : "PROXY"}
-              </label>
+                <div className="flex-1">
+                  <div className="font-medium">{t("Fixed address")}</div>
+                  <input
+                    aria-label={t("VIP")}
+                    data-focus
+                    className={cn(INPUT, "mt-1.5 font-mono")}
+                    disabled={disabled || vipMode !== "fixed"}
+                    value={form.vip ?? ""}
+                    placeholder={t("allocated from the VIP pool")}
+                    onChange={(e) => set("vip", e.target.value)}
+                  />
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {t("must be inside a network of the SE group")}
+                  </div>
+                </div>
+              </div>
+              <div
+                className={cn(
+                  "flex gap-3 rounded-lg border p-3",
+                  vipMode === "pool" && "border-primary bg-primary/10",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="vip-mode"
+                  aria-label={t("Suggest from a VIP pool")}
+                  disabled={disabled}
+                  checked={vipMode === "pool"}
+                  onChange={() => set("vip_pool_id", vipPools.data?.items[0]?.id ?? null)}
+                />
+                <div className="flex-1">
+                  <div className="font-medium">{t("Suggest from a VIP pool")}</div>
+                  <select
+                    aria-label={t("VIP pool")}
+                    className={cn(INPUT, "mt-1.5")}
+                    disabled={disabled || vipMode !== "pool"}
+                    value={form.vip_pool_id ?? ""}
+                    onChange={(e) => set("vip_pool_id", e.target.value || null)}
+                  >
+                    {vipPools.data?.items.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    {t("fills in the lowest free address now; it isn't reserved")}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={disabled || vipMode !== "pool" || !form.vip_pool_id}
+                      onClick={() => void suggest(form.vip_pool_id!)}
+                    >
+                      {t("Suggest")}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Field>
+          <div className="space-y-1.5" data-field="ports">
+            <div className="text-sm font-medium">{t("Ports")}</div>
+            {(errors.ports ?? []).map((m) => (
+              <p key={m} role="alert" className="text-xs text-status-down">
+                {m}
+              </p>
             ))}
+            <table className="w-full overflow-hidden rounded-md border text-[13px]">
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr>
+                  {["Port", "TLS", "HTTP/2", "PROXY", "Redirect"].map((h) => (
+                    <th key={h} className="px-3 py-2 font-medium">
+                      {t(h)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {form.ports.map((p, i) => (
+                  <tr key={i} data-field={`ports.${i}`}>
+                    <td className="px-3 py-2 font-mono">{p.port}</td>
+                    <td className="px-3 py-2">{p.tls ? t("On") : t("Off")}</td>
+                    <td className="px-3 py-2">{p.http2 ? t("On") : t("Off")}</td>
+                    <td className="px-3 py-2">{p.proxy_protocol ? t("On") : t("Off")}</td>
+                    <td className="px-3 py-2">{p.https_redirect_port ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {form.ports.flatMap((_, i) =>
+              messagesFor(errors, `ports.${i}`).map((m) => (
+                <p key={`${i}-${m}`} role="alert" className="text-xs text-status-down">
+                  {m}
+                </p>
+              )),
+            )}
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="sm"
-              disabled={disabled || form.ports.length === 1}
+              disabled={disabled}
+              onClick={() => setPortsOpen(true)}
+            >
+              {t("Edit ports")}
+            </Button>
+          </div>
+          {!forbidden.has("certificate_ids") && (
+            <Field
+              label={t("Certificates")}
+              name="certificate_ids"
+              changed={changed("certificate_ids")}
+              live={liveText("certificate_ids")}
+              onRevert={revert("certificate_ids")}
+              errors={errors.certificate_ids ?? []}
+            >
+              <ChipInput
+                label={t("Certificates")}
+                disabled={disabled}
+                value={form.certificate_ids}
+                onChange={(val) => set("certificate_ids", val)}
+                options={(certs.data?.items ?? []).map((c) => ({
+                  value: c.id,
+                  label: c.name,
+                  hint: expiryStatus(c.not_after).label,
+                }))}
+                itemErrors={itemErrors("certificate_ids", form.certificate_ids)}
+                emptyMessage={(q) => t("No certificate named “{q}”.", { q })}
+                placeholder={t("Add certificate")}
+              />
+            </Field>
+          )}
+          <Field
+            label={t("Restore client IP header")}
+            name="restore_client_ip_header"
+            changed={changed("restore_client_ip_header")}
+            live={liveText("restore_client_ip_header")}
+            onRevert={revert("restore_client_ip_header")}
+            errors={er("restore_client_ip_header")}
+          >
+            <select
+              aria-label={t("Restore client IP header")}
+              className={INPUT}
+              disabled={disabled}
+              value={form.restore_client_ip_header ?? ""}
+              onChange={(e) => set("restore_client_ip_header", e.target.value || null)}
+            >
+              <option value="">{t("None")}</option>
+              {["X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP"].map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </SettingsCard>
+
+      {!forbidden.has("routes") && (
+        <SettingsCard
+          title={t("Routes")}
+          subtitle={t("first match wins · reorder from the row menu")}
+          dot={changed("routes")}
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled}
               onClick={() =>
-                set(
-                  "ports",
-                  form.ports.filter((_, j) => j !== i),
-                )
+                set("routes", [
+                  ...form.routes,
+                  {
+                    order: form.routes.length + 1,
+                    match: { host: null, path_prefix: null, path_exact: null },
+                    pool_id: null,
+                    redirect: null,
+                  },
+                ])
               }
             >
-              {t("Remove")}
+              {t("Add route")}
             </Button>
-            {messagesFor(errors, `ports.${i}`).map((m) => (
-              <span key={m} role="alert" className="w-full text-xs text-status-down">
-                {m}
-              </span>
-            ))}
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={disabled}
-          onClick={() =>
-            set("ports", [
-              ...form.ports,
-              {
-                port: 80,
-                tls: false,
-                http2: false,
-                proxy_protocol: false,
-                https_redirect_port: null,
-              },
-            ])
           }
         >
-          {t("Add port")}
-        </Button>
-      </section>
+          {(errors.routes ?? []).map((m) => (
+            <p key={m} role="alert" className="px-4 pt-3 text-xs text-status-down">
+              {m}
+            </p>
+          ))}
+          {form.routes.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead className="border-b text-left text-xs text-muted-foreground">
+                  <tr>
+                    {["#", "Host", "Path match", "Path", "Action", "Target", ""].map((h, i) => (
+                      <th key={i} className="px-3 py-2 font-medium">
+                        {t(h)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {form.routes.map((r, i) => {
+                    const upd = (patchR: Partial<typeof r>) =>
+                      set(
+                        "routes",
+                        form.routes.map((x, j) => (j === i ? { ...x, ...patchR } : x)),
+                      );
+                    const redirect = r.redirect != null;
+                    const exact = r.match.path_exact != null;
+                    const msgs = messagesFor(errors, `routes.${i}`);
+                    return (
+                      <Fragment key={i}>
+                        <tr
+                          data-field={`routes.${i}`}
+                          className={cn(msgs.length > 0 && "bg-draft/10")}
+                        >
+                          <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
+                          <td className="px-3 py-2">
+                            <input
+                              aria-label={t("Route {n} host", { n: i + 1 })}
+                              placeholder={t("host")}
+                              className={INPUT}
+                              disabled={disabled}
+                              value={r.match.host ?? ""}
+                              onChange={(e) =>
+                                upd({ match: { ...r.match, host: e.target.value || null } })
+                              }
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              aria-label={t("Route {n} path match", { n: i + 1 })}
+                              className={cn(INPUT, "w-28")}
+                              disabled={disabled}
+                              value={exact ? "exact" : "prefix"}
+                              onChange={(e) => {
+                                const val = r.match.path_exact ?? r.match.path_prefix ?? null;
+                                upd({
+                                  match: {
+                                    ...r.match,
+                                    path_exact: e.target.value === "exact" ? val : null,
+                                    path_prefix: e.target.value === "exact" ? null : val,
+                                  },
+                                });
+                              }}
+                            >
+                              <option value="prefix">{t("Prefix")}</option>
+                              <option value="exact">{t("Exact")}</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              aria-label={t("Route {n} path prefix", { n: i + 1 })}
+                              placeholder={t("path")}
+                              className={cn(INPUT, "font-mono")}
+                              disabled={disabled}
+                              value={(exact ? r.match.path_exact : r.match.path_prefix) ?? ""}
+                              onChange={(e) =>
+                                upd({
+                                  match: exact
+                                    ? { ...r.match, path_exact: e.target.value || null }
+                                    : { ...r.match, path_prefix: e.target.value || null },
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              aria-label={t("Route {n} action", { n: i + 1 })}
+                              className={cn(INPUT, "w-28")}
+                              disabled={disabled}
+                              value={redirect ? "redirect" : "pool"}
+                              onChange={(e) =>
+                                upd(
+                                  e.target.value === "redirect"
+                                    ? { pool_id: null, redirect: { location: "/", code: 301 } }
+                                    : { redirect: null },
+                                )
+                              }
+                            >
+                              <option value="pool">{t("Pool")}</option>
+                              <option value="redirect">{t("Redirect")}</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            {redirect ? (
+                              <input
+                                aria-label={t("Route {n} redirect location", { n: i + 1 })}
+                                className={cn(INPUT, "font-mono")}
+                                disabled={disabled}
+                                value={r.redirect?.location ?? ""}
+                                onChange={(e) =>
+                                  upd({
+                                    redirect: {
+                                      location: e.target.value,
+                                      code: r.redirect?.code ?? 301,
+                                    },
+                                  })
+                                }
+                              />
+                            ) : (
+                              <select
+                                aria-label={t("Route {n} pool", { n: i + 1 })}
+                                className={INPUT}
+                                disabled={disabled}
+                                value={r.pool_id ?? ""}
+                                onChange={(e) => upd({ pool_id: e.target.value || null })}
+                              >
+                                <option value="">{t("Pool")}</option>
+                                {poolOptions.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <Menu>
+                              <MenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  aria-label={t("Route {n} actions", { n: i + 1 })}
+                                  disabled={disabled}
+                                >
+                                  ⋮
+                                </Button>
+                              </MenuTrigger>
+                              <MenuContent className="w-44">
+                                {[
+                                  {
+                                    label: t("Move up"),
+                                    off: i === 0,
+                                    run: () => set("routes", swap(form.routes, i, i - 1)),
+                                  },
+                                  {
+                                    label: t("Move down"),
+                                    off: i === form.routes.length - 1,
+                                    run: () => set("routes", swap(form.routes, i, i + 1)),
+                                  },
+                                  {
+                                    label: t("Remove"),
+                                    off: false,
+                                    run: () =>
+                                      set(
+                                        "routes",
+                                        renumber(form.routes.filter((_, j) => j !== i)),
+                                      ),
+                                  },
+                                ].map((it) => (
+                                  <DropdownMenu.Item
+                                    key={it.label}
+                                    disabled={it.off}
+                                    onSelect={it.run}
+                                    className="cursor-default rounded-md px-3 py-2 text-sm outline-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent"
+                                  >
+                                    {it.label}
+                                  </DropdownMenu.Item>
+                                ))}
+                              </MenuContent>
+                            </Menu>
+                          </td>
+                        </tr>
+                        {msgs.length > 0 && (
+                          <tr className="bg-draft/10">
+                            <td />
+                            <td colSpan={6} className="px-3 pb-2 text-xs text-status-degraded">
+                              {msgs.map((m) => (
+                                <span key={m} role="alert" className="mr-3">
+                                  {m}
+                                </span>
+                              ))}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="border-t p-4">
+            <Field
+              label={t("Default pool")}
+              name="default_pool_id"
+              changed={changed("default_pool_id")}
+              live={liveText("default_pool_id")}
+              onRevert={revert("default_pool_id")}
+              errors={er("default_pool_id")}
+            >
+              <select
+                aria-label={t("Default pool")}
+                className={cn(INPUT, "max-w-md")}
+                disabled={disabled}
+                value={form.default_pool_id ?? ""}
+                onChange={(e) => set("default_pool_id", e.target.value || null)}
+              >
+                <option value="">{t("None")}</option>
+                {poolOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">{t("Used when no route matches.")}</p>
+            </Field>
+          </div>
+        </SettingsCard>
+      )}
 
-      {!forbidden.has("certificate_ids") && (
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">{t("Certificates and policies")}</h2>
-          <Field
-            label={t("Certificates")}
-            name="certificate_ids"
-            changed={changed("certificate_ids")}
-            live={liveText("certificate_ids")}
-            onRevert={revert("certificate_ids")}
-            errors={errors.certificate_ids ?? []}
-          >
-            <ChipInput
-              label={t("Certificates")}
-              disabled={disabled}
-              value={form.certificate_ids}
-              onChange={(v) => set("certificate_ids", v)}
-              options={(certs.data?.items ?? []).map((c) => ({
-                value: c.id,
-                label: c.name,
-                hint: expiryStatus(c.not_after).label,
-              }))}
-              itemErrors={itemErrors("certificate_ids", form.certificate_ids)}
-              emptyMessage={(q) => t("No certificate named “{q}”.", { q })}
-              placeholder={t("Search certificates")}
-            />
-          </Field>
+      <SettingsCard title={t("Policies and access")}>
+        <div className="grid gap-x-8 gap-y-5 p-4 md:grid-cols-2">
           <Field
             label={t("Policy sets")}
             name="policy_set_ids"
@@ -466,195 +1009,92 @@ function SettingsForm({
               label={t("Policy sets")}
               disabled={disabled}
               value={form.policy_set_ids}
-              onChange={(v) => set("policy_set_ids", v)}
-              options={(policies.data?.items ?? []).map((x) => ({ value: x.id, label: x.name }))}
+              onChange={(val) => set("policy_set_ids", val)}
+              options={policyItems.map((x) => ({ value: x.id, label: x.name, hint: x.kind }))}
               itemErrors={itemErrors("policy_set_ids", form.policy_set_ids)}
               emptyMessage={(q) => t("No policy named “{q}”.", { q })}
-              placeholder={t("Search policy sets")}
+              placeholder={t("Add policy set")}
             />
+            <p className="text-xs text-muted-foreground">{t("Applied in order, before routes.")}</p>
           </Field>
-        </section>
-      )}
-
-      {!forbidden.has("routes") && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">{t("Routes")}</h2>
           <Field
-            label={t("Default pool")}
-            name="default_pool_id"
-            changed={changed("default_pool_id")}
-            live={liveText("default_pool_id")}
-            onRevert={revert("default_pool_id")}
-            errors={er("default_pool_id")}
+            label={t("Source allow list")}
+            name="allow_list_id"
+            changed={changed("allow_list_id")}
+            live={liveText("allow_list_id")}
+            onRevert={revert("allow_list_id")}
+            errors={er("allow_list_id")}
           >
             <select
-              aria-label={t("Default pool")}
+              aria-label={t("Source allow list")}
               className={INPUT}
               disabled={disabled}
-              value={form.default_pool_id ?? ""}
-              onChange={(e) => set("default_pool_id", e.target.value || null)}
+              value={form.allow_list_id ?? ""}
+              onChange={(e) => set("allow_list_id", e.target.value || null)}
             >
               <option value="">{t("None")}</option>
-              {pools.data?.items.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+              {allowLists.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
                 </option>
               ))}
             </select>
           </Field>
-          {(errors.routes ?? []).map((m) => (
-            <p key={m} role="alert" className="text-xs text-status-down">
-              {m}
-            </p>
-          ))}
-          {form.routes.map((r, i) => {
-            const upd = (patchR: Partial<typeof r>) =>
-              set(
-                "routes",
-                form.routes.map((x, j) => (j === i ? { ...x, ...patchR } : x)),
-              );
-            const redirect = r.redirect != null;
-            return (
-              <div
-                key={i}
-                data-field={`routes.${i}`}
-                className="grid gap-3 rounded-lg border bg-card p-3 text-sm md:grid-cols-4"
-              >
-                <input
-                  aria-label={t("Route {n} host", { n: i + 1 })}
-                  placeholder={t("host")}
-                  className={INPUT}
-                  disabled={disabled}
-                  value={r.match.host ?? ""}
-                  onChange={(e) => upd({ match: { ...r.match, host: e.target.value || null } })}
-                />
-                <input
-                  aria-label={t("Route {n} path prefix", { n: i + 1 })}
-                  placeholder={t("path prefix")}
-                  className={cn(INPUT, "font-mono")}
-                  disabled={disabled}
-                  value={r.match.path_prefix ?? ""}
-                  onChange={(e) =>
-                    upd({ match: { ...r.match, path_prefix: e.target.value || null } })
-                  }
-                />
-                {redirect ? (
-                  <input
-                    aria-label={t("Route {n} redirect location", { n: i + 1 })}
-                    className={cn(INPUT, "font-mono")}
-                    disabled={disabled}
-                    value={r.redirect?.location ?? ""}
-                    onChange={(e) =>
-                      upd({ redirect: { location: e.target.value, code: r.redirect?.code ?? 301 } })
-                    }
-                  />
-                ) : (
-                  <select
-                    aria-label={t("Route {n} pool", { n: i + 1 })}
-                    className={INPUT}
-                    disabled={disabled}
-                    value={r.pool_id ?? ""}
-                    onChange={(e) => upd({ pool_id: e.target.value || null })}
-                  >
-                    <option value="">{t("Pool")}</option>
-                    {pools.data?.items.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      disabled={disabled}
-                      checked={redirect}
-                      onChange={(e) =>
-                        upd(
-                          e.target.checked
-                            ? { pool_id: null, redirect: { location: "/", code: 301 } }
-                            : { redirect: null },
-                        )
-                      }
-                    />
-                    {t("Redirect")}
-                  </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={disabled || i === 0}
-                    aria-label={t("Move route {n} up", { n: i + 1 })}
-                    onClick={() => set("routes", swap(form.routes, i, i - 1))}
-                  >
-                    ↑
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={disabled || i === form.routes.length - 1}
-                    aria-label={t("Move route {n} down", { n: i + 1 })}
-                    onClick={() => set("routes", swap(form.routes, i, i + 1))}
-                  >
-                    ↓
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={disabled}
-                    onClick={() => set("routes", renumber(form.routes.filter((_, j) => j !== i)))}
-                  >
-                    {t("Remove")}
-                  </Button>
-                </div>
-                {messagesFor(errors, `routes.${i}`).map((m) => (
-                  <span key={m} role="alert" className="text-xs text-status-down md:col-span-4">
-                    {m}
-                  </span>
-                ))}
-              </div>
-            );
-          })}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled}
-            onClick={() =>
-              set("routes", [
-                ...form.routes,
-                {
-                  order: form.routes.length + 1,
-                  match: { host: null, path_prefix: null, path_exact: null },
-                  pool_id: null,
-                  redirect: null,
-                },
-              ])
-            }
+          <Field
+            label={t("Enforce allow list")}
+            name="enforce_allow_list"
+            changed={changed("enforce_allow_list")}
+            live={liveText("enforce_allow_list")}
+            onRevert={revert("enforce_allow_list")}
+            errors={er("enforce_allow_list")}
           >
-            {t("Add route")}
-          </Button>
-        </section>
-      )}
+            <div className="flex items-center gap-3">
+              <Switch
+                aria-label={t("Enforce allow list")}
+                disabled={disabled}
+                checked={form.enforce_allow_list}
+                onCheckedChange={(on) => set("enforce_allow_list", on)}
+              />
+              <span className="text-sm text-muted-foreground">{t("Off means log only.")}</span>
+            </div>
+          </Field>
+        </div>
+      </SettingsCard>
 
-      <div className="sticky bottom-0 -mx-2 flex items-center gap-3 border-t bg-background px-2 py-3">
+      <div className="flex items-center gap-3 pb-4">
+        <span className="text-xs text-muted-foreground">
+          {savedAt && !dirty
+            ? t("Saved to draft at {time} · version {n}", { time: savedAt, n: v.version })
+            : dirty
+              ? t("{n} unsaved fields", { n: Object.keys(patch).length })
+              : ""}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          className="ml-auto"
+          disabled={!dirty}
+          onClick={() => setForm(base)}
+        >
+          {t("Revert all fields")}
+        </Button>
         <Tip label={write.reason}>
           <Button type="submit" disabled={!write.allowed || !dirty || saving || stale}>
-            {t("Add to change set")}
+            {t("Save to draft")}
           </Button>
         </Tip>
-        <Button type="button" variant="ghost" disabled={!dirty} onClick={() => setForm(base)}>
-          {t("Discard edits")}
-        </Button>
-        {dirty && (
-          <span className="text-xs text-muted-foreground">
-            {t("{n} unsaved fields", { n: Object.keys(patch).length })}
-          </span>
-        )}
       </div>
+
+      {portsOpen && (
+        <PortsSheet
+          ports={form.ports}
+          disabled={disabled}
+          portForbidden={portForbidden}
+          errors={errors}
+          onChange={(ports) => set("ports", ports)}
+          onClose={() => setPortsOpen(false)}
+        />
+      )}
     </form>
   );
 }

@@ -27,6 +27,7 @@ function config(api: string, devToken?: string): ViteUserConfig {
     test: {
       environment: "jsdom",
       globals: true,
+      include: ["tests/**/*.test.{ts,tsx}"],
       testTimeout: 15000,
       setupFiles: ["tests/setup.ts"],
       coverage: {
