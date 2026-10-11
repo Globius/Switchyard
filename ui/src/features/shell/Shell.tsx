@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Activity, Moon, Search, Sun, WifiOff } from "lucide-react";
+import { Activity, Moon, Search, Signpost, Sun, WifiOff } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,7 +88,7 @@ export function Shell({ tenant, isSystem }: { tenant: string; isSystem: boolean 
       <header className="flex h-14 items-center gap-3 border-b bg-card px-4">
         <Link to="/t/$tenant" params={{ tenant }} className="flex items-center gap-2 font-semibold">
           <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
-            S
+            <Signpost className="size-4" aria-hidden />
           </span>
           Switchyard
         </Link>

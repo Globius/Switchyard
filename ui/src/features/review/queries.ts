@@ -3,8 +3,9 @@ import { api, rawGet, unwrap } from "@/api/client";
 import { diffObject, type FieldChange } from "@/lib/snapshot-diff";
 import { TYPE_PATH } from "./model";
 
-export function useChangeSetRead(tenant: string, cs: string) {
+export function useChangeSetRead(tenant: string, cs: string, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ["t", tenant, "change-sets", cs],
     // While an apply runs the state changes underneath us (applying, then failed or applied).
     refetchInterval: (q) => (q.state.data?.state === "applying" ? 1500 : false),
