@@ -231,7 +231,7 @@ describe("SE groups", () => {
     expect(dlg.queryByText("Containers are privileged and partly untested")).toBeNull();
     await userEvent.click(dlg.getByRole("radio", { name: /Container \(LXC\)/ }));
     expect(dlg.getByText("Containers are privileged and partly untested")).toBeInTheDocument();
-    await userEvent.type(dlg.getByLabelText("Container template"), "9100");
+    await userEvent.type(dlg.getByLabelText("Template container ID"), "9100");
     await userEvent.type(dlg.getByLabelText("Proxmox nodes"), "pve-01,");
     await userEvent.selectOptions(
       await dlg.findByLabelText("Management addresses from"),

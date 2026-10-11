@@ -291,7 +291,7 @@ Checked on 2026-10-11 against a local controller, signed in as the break-glass s
 | Item | Status |
 | --- | --- |
 | Guest type radio cards (VM recommended, Container LXC) first in "Deploy engines for <group>" | Done. Sends `guest_kind` on the deploy request. |
-| Template field follows the guest type ("Template VM ID" or "Container template") | Done, but the API takes a numeric `template_vmid` for both, so the container template is a Proxmox ID too. The mockup shows `local:vztmpl/...` text; Design to confirm. |
+| Template field follows the guest type | Done and resolved in favour of the API (Design v50): numeric Proxmox ID for both kinds, sent as `template_vmid`. Labels "Template VM ID" / "Template container ID", with help text. |
 | LXC inline warning with required acknowledgement; Start deploy disabled with the reason | Done. The checkbox is UI-only and clears when the guest type changes. |
 | Engine sub-line "VM 201 · pve-atl-01 · ip · agent" / "CT 203 ..." | Done from `guest_kind`, `vmid` and `pve_node` on the engine read; left out when the engine has no guest type. Placement cards use the same VM/CT label. |
 | Header buttons, sheet titles, Retire/Remove help text | Renamed to "engine", "VM or container" and "guest". |
