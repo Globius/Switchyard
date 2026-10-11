@@ -313,6 +313,11 @@ class EngineRead(ApiModel):
     vmid: int | None = Field(
         default=None, description="Proxmox VM id; null for a hand-built engine."
     )
+    guest_kind: Literal["qemu", "lxc"] | None = Field(
+        default=None,
+        description="`qemu` (a VM) or `lxc` (a container), as deployed; null for a hand-built "
+        "engine (show nothing, or a generic icon).",
+    )
     agent_enrolled: bool = Field(
         description="True once `sy-agent enroll` has traded a token for a client certificate."
     )

@@ -62,6 +62,7 @@ class ServiceEngineRow(TenantOwnedMixin, Base):
         tenant_fk("se_group_id", "se_group"),
         UniqueConstraint("se_group_id", "name"),
         enum_check("state", EngineState),
+        CheckConstraint("guest_kind IS NULL OR guest_kind IN ('qemu', 'lxc')", name="guest_kind"),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -73,6 +74,7 @@ class ServiceEngineRow(TenantOwnedMixin, Base):
     state: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'enabled'"))
     pve_node: Mapped[str | None] = mapped_column(Text)
     vmid: Mapped[int | None] = mapped_column(Integer)
+    guest_kind: Mapped[str | None] = mapped_column(Text)
     agent_cert_serial: Mapped[str | None] = mapped_column(Text)
 
 

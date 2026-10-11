@@ -281,6 +281,7 @@ ENGINE_READ = {
     "agent_url": "192.0.2.21:7443",
     "pve_node": "pve1",
     "vmid": 9101,
+    "guest_kind": "qemu",
     "agent_enrolled": True,
     "agent_cert_serial": "3f2a9c",
     "host_online": True,

@@ -512,6 +512,7 @@ class InfraService:
                 agent_url=f"{address}:{request.agent_port}",
                 pve_node=node,
                 vmid=vmid,
+                guest_kind=request.guest_kind,
             )
             session.add(row)
             await session.flush()

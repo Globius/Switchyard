@@ -143,6 +143,7 @@ async def test_deploy_creates_vms_registers_engines_and_spreads_over_nodes(pg_ur
         assert specs[0].mgmt_bridge == "vmgmt" and specs[0].nics == (("vlb", None), ("vbe", None))
         assert all(status == "running" for _, status in pve.vms.values())
         assert await count(w, "SELECT count(*) FROM service_engine WHERE vmid IS NOT NULL") == 2
+        assert await count(w, "SELECT count(*) FROM service_engine WHERE guest_kind = 'qemu'") == 2
         assert (
             await count(
                 w, "SELECT count(*) FROM service_engine WHERE agent_url = '10.30.0.10:7443'"
@@ -156,6 +157,7 @@ async def test_deploy_can_ask_for_containers(pg_url: str) -> None:
         pve = FakeProxmox()
         await InfraService(w.db, pve).deploy_se_group(request(1, guest_kind="lxc"))
         assert [s.kind for s, _ in pve.vms.values()] == ["lxc"]
+        assert await count(w, "SELECT count(*) FROM service_engine WHERE guest_kind = 'lxc'") == 1
         roundtrip = DeployRequest.from_payload(request(1, guest_kind="lxc").as_payload())
         assert roundtrip.guest_kind == "lxc"
         assert (
