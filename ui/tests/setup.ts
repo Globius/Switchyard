@@ -21,6 +21,7 @@ class FakeEventSource {
   constructor() {
     queueMicrotask(() => this.onopen?.());
   }
+  addEventListener() {}
   close() {}
 }
 globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;

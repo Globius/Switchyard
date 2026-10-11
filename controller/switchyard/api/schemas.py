@@ -261,8 +261,14 @@ class TenantRead(ApiModel):
     id: UUID
     name: str
     version: int
-    quotas: dict[str, int] = Field(description="Object-count limits by object type.")
+    quotas: dict[str, int] = Field(
+        description="Object-count limits by object type name (`virtual_service`, `pool`, ...)."
+    )
     require_approval: bool
+    usage: dict[str, int] = Field(
+        default_factory=dict,
+        description="Objects the tenant owns now, by object type name (zeros included).",
+    )
 
 
 class TokenRead(ApiModel):
