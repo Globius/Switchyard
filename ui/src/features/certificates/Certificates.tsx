@@ -1,13 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { AlertTriangle, Clock, XCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
 import { ChipInput, validateHostname } from "@/components/sy/ChipInput";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
-import { DraftMarker, expiryStatus, StatusPill } from "@/components/sy/StatusPill";
+import { DraftMarker, expiryStatus, ExpiryPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
@@ -549,7 +551,7 @@ function UsageSheet({
         <dd className="font-mono text-xs">{cert.sans.join(", ")}</dd>
         <dt className="text-muted-foreground">{t("Expires")}</dt>
         <dd className="flex items-center gap-2">
-          <StatusPill status={ex.status}>{ex.label}</StatusPill>
+          <ExpiryPill ex={ex} />
           {shortDate(cert.not_after)}
         </dd>
         <dt className="text-muted-foreground">{t("Renewal")}</dt>
@@ -743,7 +745,16 @@ export function Certificates({ tenant }: { tenant: string }) {
       for (const c of v.certificate_ids) m.set(c, [...(m.get(c) ?? []), v.name]);
     return m;
   }, [services.data]);
-  const rows = [...(list.data?.items ?? [])].sort((a, b) => a.not_after.localeCompare(b.not_after));
+  const [q, setQ] = useState("");
+  const [expiryFilter, setExpiryFilter] = useState<"" | "30" | "14" | "7">("");
+  const [issuer, setIssuer] = useState("");
+  const all = [...(list.data?.items ?? [])].sort((a, b) => a.not_after.localeCompare(b.not_after));
+  const rows = all.filter((c) => {
+    if (issuer && c.source !== issuer) return false;
+    if (expiryFilter && expiryStatus(c.not_after).days > Number(expiryFilter)) return false;
+    const needle = q.trim().toLowerCase();
+    return !needle || `${c.name} ${c.sans.join(" ")}`.toLowerCase().includes(needle);
+  });
 
   async function renew(id: string) {
     setProblem(null);
@@ -797,6 +808,55 @@ export function Certificates({ tenant }: { tenant: string }) {
         </div>
       </div>
       {problem != null && <ErrorState error={problem} />}
+      {all.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <input
+              aria-label={t("Filter by name or SAN")}
+              placeholder={t("Filter by name or SAN")}
+              className="h-9 w-64 rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <select
+              aria-label={t("Expiry")}
+              className="h-9 rounded-md border border-input bg-card px-3 text-sm"
+              value={expiryFilter}
+              onChange={(e) => setExpiryFilter(e.target.value as typeof expiryFilter)}
+            >
+              <option value="">{t("Any expiry")}</option>
+              <option value="30">{t("30 days or less")}</option>
+              <option value="14">{t("14 days or less")}</option>
+              <option value="7">{t("7 days or less, or expired")}</option>
+            </select>
+            <select
+              aria-label={t("Issuer")}
+              className="h-9 rounded-md border border-input bg-card px-3 text-sm"
+              value={issuer}
+              onChange={(e) => setIssuer(e.target.value)}
+            >
+              <option value="">{t("Any issuer")}</option>
+              {[...new Set(all.map((c) => c.source))].map((s) => (
+                <option key={s} value={s}>
+                  {t(SOURCE[s] ?? s)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            {t("Expiry:")}
+            <Badge tone="neutral">
+              <Clock className="size-3" aria-hidden /> {t("30 days or less")}
+            </Badge>
+            <Badge tone="degraded">
+              <AlertTriangle className="size-3" aria-hidden /> {t("14 or less")}
+            </Badge>
+            <Badge tone="down">
+              <XCircle className="size-3" aria-hidden /> {t("7 or less, or expired")}
+            </Badge>
+          </div>
+        </div>
+      )}
       <div className="overflow-x-auto rounded-lg border bg-card">
         {list.isPending ? (
           <TableSkeleton cols={7} />
@@ -818,7 +878,7 @@ export function Certificates({ tenant }: { tenant: string }) {
           <table className="w-full text-[13px]">
             <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
               <tr>
-                {["Name", "Source", "SANs", "Expires", "Renewal", "Used by", "Actions"].map((h) => (
+                {["Name", "Issuer", "SANs", "Expires", "Renewal", "Used by", "Actions"].map((h) => (
                   <th key={h} className="px-4 py-2.5 font-medium whitespace-nowrap">
                     {t(h)}
                   </th>
@@ -858,7 +918,7 @@ export function Certificates({ tenant }: { tenant: string }) {
                     <td className="px-4 py-3 font-mono text-xs">{c.sans.join(", ")}</td>
                     <td className="px-4 py-3">
                       <span className="flex items-center gap-2 whitespace-nowrap">
-                        <StatusPill status={ex.status}>{ex.label}</StatusPill>
+                        <ExpiryPill ex={ex} />
                         <span className="whitespace-nowrap text-muted-foreground">
                           {shortDate(c.not_after)}
                         </span>

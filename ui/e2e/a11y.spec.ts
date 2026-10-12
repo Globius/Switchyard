@@ -5,6 +5,7 @@ const PAGES = [
   ["login", "/login"],
   ["tenant home", "/t/acme"],
   ["virtual services", "/t/acme/virtual-services"],
+  ["virtual service overview with metrics", "/t/acme/virtual-services/v1"],
   ["virtual service settings", "/t/acme/virtual-services/v1/settings"],
   ["virtual service rendered config", "/t/acme/virtual-services/v1/rendered"],
   ["jobs", "/t/acme/jobs"],

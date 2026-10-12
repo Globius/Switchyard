@@ -329,3 +329,18 @@ Shared helpers in `ui/src/lib/ip.ts` (`isIPv4`, `isIPv6`, `cidrProblem`, `hostPo
 | Rendered config highlighting | Bracketed IPv6 (`[::]:443`) is highlighted like IPv4. |
 | Per-family VRRP instances | Not shown anywhere in the UI today, so nothing to fix. If Design adds them to engine status, they need a row per family. |
 | Not changed | Network, pool range and BGP peer inputs have no client-side validation (the API reports field errors), so IPv6 values pass through unchanged. |
+
+## Design v52 (certificates, ACME, DNS credentials, metrics, controller, system settings)
+
+Built against what `openapi.json` has; the rest waits for the API (see the list at the end).
+
+| Screen | Status |
+| --- | --- |
+| Admin > System settings | Matches v52. Added the audit-log link in place of "changed by/when" (the API has neither). When the deployment forces containers on, the API returns the effective value only, so "the stored value" is not shown. |
+| Metrics on VS Overview | Built. Four single-series panels drawn in SVG from `GET …/virtual-services/{id}/metrics` (no iframe), range 15 m to 7 d, auto-refresh, refresh button, table view, gaps as gaps, "—" for missing numbers, states for loading, no data, no access (403 detail and role) and unavailable (the API reason). "Open in Grafana" stays a link. **Deviations:** no "Custom…" range (the API takes `window_s` only) and no retention sentence (the API does not say). |
+| Metrics for an engine | Not built: no engine metrics endpoint. |
+| Certificates list | Expiry tiers (over 30 healthy, 30 or fewer neutral with a clock, 14 or fewer degraded, 7 or fewer or expired down), legend and expiry, issuer and name/SAN filters. The Issuer column shows the certificate source (Upload, ACME, Cloudflare Origin CA, Step CA); the API has no issuer name or ACME provider. The Renewal column shows Manual or Auto with days; "Renewal failed", "Requesting" and the history sheet need renewal status and history from the API. |
+| Request certificate | Not changed: today's `POST …/certificates/issue` takes `{name, source, sans}`. Provider, validation (DNS-01/HTTP-01), per-name credential, auto-renew fields wait for the API. |
+| Admin > ACME providers, Tenant > DNS credentials, Admin > Controller | Not built: no endpoints on main. Navigation entries are added with each screen. |
+
+Needed from the API: ACME providers CRUD, test, default flag and registration status; per-tenant DNS credentials with provider schemas, zones and a test; certificate request fields (provider, validation, credential per name, auto-renew); issuer, renewal status and renewal history on the certificate read; engine metrics; controller settings with a pending change, expiry, confirm and revert.

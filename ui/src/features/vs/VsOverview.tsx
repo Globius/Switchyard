@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
+import { VsMetrics } from "./VsMetrics";
 import { hostPort } from "@/lib/ip";
 import { AlertTriangle, Zap } from "lucide-react";
 import { useState } from "react";
-import { useCan, useMe } from "@/auth/session";
+import { useCan } from "@/auth/session";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { fieldOf, InvalidDraftCard } from "@/components/sy/Findings";
-import { expiryStatus, StatusPill } from "@/components/sy/StatusPill";
+import { expiryStatus, ExpiryPill, StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton, UnavailableState } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import {
 import { useServiceFindings } from "./findings";
 import { usePolicySets, useVsLogs } from "./overview-queries";
 import { checkText, healthOf, rowsFor, worstOf, type MemberRow } from "./member-health";
-import { useCertificates, useSeGroups, useVsMetrics, useVsStatus } from "./queries";
+import { useCertificates, useSeGroups, useVsStatus } from "./queries";
 
 type Member = PoolRead["members"][number];
 
@@ -100,14 +101,12 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
   const pools = usePools(tenant, overlay);
   const livePools = usePools(tenant);
   const { findings, warnings } = useServiceFindings(tenant, vs.data?.name);
-  const metrics = useVsMetrics(tenant);
   const certList = useCertificates(tenant, overlay);
   const groups = useSeGroups(tenant);
   const policySets = usePolicySets(tenant);
   const rendered = useVsRendered(tenant, id, overlay);
   const logs = useVsLogs(tenant, id);
   const status = useVsStatus(tenant);
-  const me = useMe();
   const can = useCan(tenant);
   const setState = useSetMemberState(tenant);
   const [pending, setPending] = useState<{
@@ -390,30 +389,11 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
             </p>
           </section>
 
-          <section className={CARD}>
-            <header className={`${CARD_HEAD} flex items-center`}>
-              <h2 className="text-base font-semibold">{t("Latency breakdown")}</h2>
-              {me.data?.links?.grafana && (
-                <a
-                  href={me.data.links.grafana}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-auto text-sm text-primary hover:underline"
-                >
-                  {t("Open in Grafana")}
-                </a>
-              )}
-            </header>
-            <div className="p-4">
-              {metrics.data && !metrics.data.available ? (
-                <UnavailableState title={t("Metrics unavailable")} reason={metrics.data.reason} />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  {t("Open the Grafana dashboard for latency by backend.")}
-                </p>
-              )}
-            </div>
-          </section>
+          <VsMetrics
+            tenant={tenant}
+            id={id}
+            groupName={groups.data?.items.find((g) => g.id === vs.data?.se_group_id)?.name}
+          />
         </div>
 
         <aside className="space-y-6">
@@ -474,11 +454,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                 return (
                   <div key={c.id} className="space-y-1">
                     <div className="font-medium text-primary">{c.name}</div>
-                    <StatusPill status={ex.status === "neutral" ? "healthy" : ex.status}>
-                      {ex.status === "neutral"
-                        ? ex.label
-                        : t("Expires in {n} days", { n: ex.days })}
-                    </StatusPill>
+                    <ExpiryPill ex={ex} />
                     <div className="font-mono text-xs text-muted-foreground">
                       {c.sans.join(", ")} · {c.source} · {t("renew {r}", { r: c.renew_policy })}
                     </div>

@@ -159,10 +159,15 @@ describe("helpers", () => {
     expect(metric(18, 0, " ms")).toBe("18 ms");
   });
   it("expiry thresholds", () => {
-    expect(expiryStatus(days(41), NOW).status).toBe("neutral");
-    expect(expiryStatus(days(20), NOW).status).toBe("degraded");
+    expect(expiryStatus(days(41), NOW).status).toBe("healthy");
+    expect(expiryStatus(days(20), NOW).status).toBe("neutral");
+    expect(expiryStatus(days(10), NOW).status).toBe("degraded");
     expect(expiryStatus(days(5), NOW).status).toBe("down");
     expect(expiryStatus(days(-1), NOW).label).toBe("Expired");
+    expect(expiryStatus(days(7), NOW).status).toBe("down");
+    expect(expiryStatus(days(14), NOW).status).toBe("degraded");
+    expect(expiryStatus(days(30), NOW).status).toBe("neutral");
+    expect(expiryStatus(days(31), NOW).status).toBe("healthy");
   });
 });
 

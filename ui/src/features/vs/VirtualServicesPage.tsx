@@ -3,7 +3,13 @@ import { Combobox } from "@/components/ui/combobox";
 import { Plus } from "lucide-react";
 import { useMemo } from "react";
 import { useCan } from "@/auth/session";
-import { DraftMarker, expiryStatus, HealthPill, StatusPill } from "@/components/sy/StatusPill";
+import {
+  DraftMarker,
+  expiryStatus,
+  ExpiryPill,
+  HealthPill,
+  StatusPill,
+} from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton, UnavailableState } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
@@ -266,7 +272,7 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
                       {v.certificate_ids.length === 0 ? (
                         <span className="text-muted-foreground">{t("No TLS")}</span>
                       ) : expiry ? (
-                        <StatusPill status={expiry.status}>{expiry.label}</StatusPill>
+                        <ExpiryPill ex={expiry} />
                       ) : (
                         "—"
                       )}

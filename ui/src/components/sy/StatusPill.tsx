@@ -77,11 +77,28 @@ export function DraftMarker({ status }: { status: "created" | "modified" | "dele
   );
 }
 
-/** Certificate expiry: 30 days or less warns, 7 or less is danger, past is expired (icon + text). */
+/**
+ * Certificate expiry tiers (icon and text, never colour alone): over 30 days healthy, 30 or
+ * fewer neutral with a clock, 14 or fewer degraded, 7 or fewer or expired down.
+ */
 export function expiryStatus(notAfter: string, now = Date.now()) {
   const days = Math.floor((new Date(notAfter).getTime() - now) / 86_400_000);
   if (days < 0) return { days, status: "down" as const, label: t("Expired") };
-  if (days <= 7) return { days, status: "down" as const, label: t("{n} days", { n: days }) };
-  if (days <= 30) return { days, status: "degraded" as const, label: t("{n} days", { n: days }) };
-  return { days, status: "neutral" as const, label: t("{n} days", { n: days }) };
+  const label = t("{n} days", { n: days });
+  if (days <= 7) return { days, status: "down" as const, label };
+  if (days <= 14) return { days, status: "degraded" as const, label };
+  if (days <= 30) return { days, status: "neutral" as const, label };
+  return { days, status: "healthy" as const, label };
+}
+
+/** The pill for {@link expiryStatus}: the neutral tier carries a clock so it is not text alone. */
+export function ExpiryPill({ ex }: { ex: ReturnType<typeof expiryStatus> }) {
+  if (ex.status === "neutral")
+    return (
+      <Badge tone="neutral">
+        <Clock className="size-3" aria-hidden />
+        {ex.label}
+      </Badge>
+    );
+  return <StatusPill status={ex.status}>{ex.label}</StatusPill>;
 }

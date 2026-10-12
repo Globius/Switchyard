@@ -3,6 +3,7 @@ import { expect, test } from "./fixtures";
 const PAGES = [
   "/t/acme",
   "/t/acme/virtual-services",
+  "/t/acme/virtual-services/v1",
   "/t/acme/virtual-services/v1/settings",
   "/t/acme/jobs",
 ];

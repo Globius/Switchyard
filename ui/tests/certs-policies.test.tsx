@@ -276,6 +276,26 @@ describe("certificates", () => {
     expect(screen.getByText("gone")).toHaveClass("line-through");
   });
 
+  it("filters by expiry tier and issuer, and shows the tier legend", async () => {
+    renderAt("/t/acme/certificates");
+    await screen.findByText("mqtt");
+    expect(screen.getByText("Expiry:")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Expiry"), "7");
+    expect(screen.getByText("mqtt")).toBeInTheDocument();
+    expect(screen.queryByText("wildcard")).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Expiry"), "14");
+    expect(screen.getByText("wildcard")).toBeInTheDocument();
+    expect(screen.queryByText("portal")).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Expiry"), "");
+    await userEvent.selectOptions(screen.getByLabelText("Issuer"), "cloudflare_origin");
+    expect(screen.getByText("portal")).toBeInTheDocument();
+    expect(screen.queryByText("mqtt")).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Issuer"), "");
+    await userEvent.type(screen.getByLabelText("Filter by name or SAN"), "*.example");
+    expect(screen.getByText("wildcard")).toBeInTheDocument();
+    expect(screen.queryByText("mqtt")).toBeNull();
+  });
+
   it("delete is blocked while a service uses the certificate; otherwise adds a delete op", async () => {
     renderAt("/t/acme/certificates");
     const wild = (await screen.findByText("wildcard")).closest("tr")!;

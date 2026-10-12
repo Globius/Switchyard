@@ -23,6 +23,29 @@ const PERMS = {
   ],
 };
 
+/** 120 points over the last hour with a gap in the connections series. */
+function series() {
+  const end = Date.parse("2026-10-11T11:00:00Z");
+  const at = (i: number) => new Date(end - (119 - i) * 30_000).toISOString();
+  const line = (base: number, amp: number, skip = false) =>
+    Array.from({ length: 120 }, (_, i) => i)
+      .filter((i) => !(skip && i > 50 && i < 62))
+      .map((i) => ({ t: at(i), v: base + amp * Math.sin(i / 9) + (i % 7) }));
+  return {
+    available: true,
+    reason: null,
+    metrics: {
+      window_s: 3600,
+      step_s: 30,
+      summary: { rps: 379, p95_ms: 43, error_5xx_ratio: 0.005, active_connections: 1504 },
+      rps: line(420, 90),
+      p95_ms: line(50, 8),
+      error_5xx_ratio: line(0.005, 0.003).map((p) => ({ ...p, v: Math.abs(p.v) / 100 })),
+      active_connections: line(1300, 200, true),
+    },
+  };
+}
+
 export const VS = {
   id: "v1",
   tenant_id: "t1",
@@ -148,6 +171,7 @@ const ROUTES: [RegExp, unknown][] = [
       latest_revision: null,
     },
   ],
+  [/\/virtual-services\/[^/]+\/metrics$/, series()],
   [/\/engines$/, []],
   [/\/principals$/, []],
 ];
