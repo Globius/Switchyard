@@ -329,6 +329,26 @@ def create_system_token(
     typer.echo(run(go()))
 
 
+jwks_app = typer.Typer(help="Work with JSON Web Key Sets (JWT policy sets).", no_args_is_help=True)
+app.add_typer(jwks_app, name="jwks")
+
+
+@jwks_app.command("convert")
+def jwks_convert(
+    file: Annotated[Path, typer.Argument(help="A JWKS document (JSON).")],
+) -> None:
+    """Print the ``keys`` of a ``jwt`` policy set made from a JWKS, as JSON."""
+    import json
+
+    from switchyard.services.jwks import JwksError, jwks_to_keys
+
+    try:
+        keys = jwks_to_keys(file.read_text("utf-8"))
+    except JwksError as exc:
+        raise fail(str(exc), 2) from exc
+    typer.echo(json.dumps(keys, indent=2))
+
+
 idp_app = typer.Typer(help="Identity providers for user login (OIDC).", no_args_is_help=True)
 app.add_typer(idp_app, name="idp")
 
