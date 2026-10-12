@@ -3,6 +3,8 @@
 **What.** A pool is a set of backend members, an algorithm (`roundrobin`, `leastconn`, `source` or `random`) and how to talk
 to the members.
 
+![The pools list](../assets/screenshots/pools.png)
+
 **How to use.**
 
 ```yaml

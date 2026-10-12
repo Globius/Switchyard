@@ -3,6 +3,8 @@
 **What.** A web application firewall on `http` services: Coraza with a pinned OWASP Core Rule Set, run as a sidecar on every
 engine (`coraza-spoa`) and called by HAProxy for each request.
 
+![Editing a WAF policy](../assets/screenshots/policies.png)
+
 **How to use.**
 
 ```yaml

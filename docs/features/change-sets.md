@@ -5,6 +5,10 @@ validated, diffed and applied as one. An apply locks the SE group, renders, vali
 one **canary** engine, watches it for `canary_seconds`, then rolls out to the rest, and records a numbered **revision**
 (mirrored to Git).
 
+![Reviewing a change set: the rendered HAProxy diff before apply](../assets/screenshots/review.png)
+
+![Open change sets, including one awaiting approval](../assets/screenshots/change-sets.png)
+
 **How to use.**
 
 - `POST .../change-sets`, add operations to `.../{cs}/ops`, read `.../{cs}/diff` (with impact and warnings), then

@@ -4,6 +4,8 @@
 Encrypt, ZeroSSL, step-ca and others; DNS-01, HTTP-01 or TLS-ALPN-01), Cloudflare Origin CA, or replaced in place. Keys live
 in OpenBao; PostgreSQL holds only a reference.
 
+![Certificates sorted by expiry, with renewal policy and users](../assets/screenshots/certificates.png)
+
 **How to use.**
 
 - Import: `POST .../certificates/import` with the PEM or a `.p12` and its password.

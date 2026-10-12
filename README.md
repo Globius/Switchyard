@@ -12,6 +12,19 @@ and an OpenTofu provider. The [feature notes](docs/features/index.md) list what 
 engines ([ADR 0180](docs/adr/0180-multi-site-and-remote-engines.md), proposed) and a Kubernetes deployment of the controller
 (in progress).
 
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Tenant home: health, failing members, expiring certificates, drafts and revisions](docs/assets/screenshots/dashboard.png) | ![Virtual services with health and certificate expiry](docs/assets/screenshots/virtual-services.png) |
+| Tenant home | Virtual services |
+| ![A virtual service: routes, live members and metrics](docs/assets/screenshots/virtual-service.png) | ![Reviewing a change set: the rendered HAProxy diff before apply](docs/assets/screenshots/review.png) |
+| A virtual service | Reviewing a change set before apply |
+| ![An SE group: engines, reachability and config sync](docs/assets/screenshots/se-groups.png) | ![Policies, with a WAF policy open](docs/assets/screenshots/policies.png) |
+| An SE group's engines | Policies (WAF shown) |
+
+The screenshots use a demo dataset against a mocked API; `make ui-screenshots` refreshes them.
+
 ## Documentation
 
 The docs build into a site with `make docs` (MkDocs Material, [ADR 0190](docs/adr/0190-docs-site-mkdocs-material.md)); they

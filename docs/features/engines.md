@@ -4,6 +4,8 @@
 Keepalived, `sy-agent` and the optional sidecars (Coraza, oauth2-proxy, Vector). The controller creates them, gives them
 addresses from VIP pools, enrols their agent, and retires them.
 
+![An SE group: engines, reachability and config sync](../assets/screenshots/se-groups.png)
+
 **How to use.**
 
 - Build the template once: [Build the SE template](../runbooks/build-se-template.md).

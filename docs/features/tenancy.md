@@ -4,6 +4,8 @@
 SAML; their provider groups map to roles per tenant (`role-mappings`). Machines use API tokens. A break-glass account with
 TOTP exists for emergencies and is off by default. The `management` tenant holds the controller's own service.
 
+![Sign-in page](../assets/screenshots/login.png)
+
 **How to use.** Configure identity providers (`/identity-providers`, with a test sign-in), map groups to roles, and give
 automation a tenant token (`/tenants/{t}/tokens`). `GET /permissions` and `GET /me` tell a client what the caller may do.
 Guides: [Signing in, roles and access](../auth.md), [Controller settings](../controller-settings.md).

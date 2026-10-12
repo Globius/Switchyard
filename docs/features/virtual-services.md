@@ -4,6 +4,8 @@
 with host and path routing), `tcp` (HAProxy at L4) or `udp` (Keepalived and IPVS, see [UDP services](udp.md)). It belongs to
 one SE group, which decides the engines that serve it.
 
+![A virtual service: routes, live members and metrics](../assets/screenshots/virtual-service.png)
+
 **How to use.**
 
 ```yaml

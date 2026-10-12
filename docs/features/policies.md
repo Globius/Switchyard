@@ -5,6 +5,8 @@
 prefix), `respond` (fixed answers, maintenance pages), `error_pages`, `allow_list`, `rate_limit`, `jwt`, `client_cert`,
 `access`, `directory`, `waf` and `protection`.
 
+![Policies, with a WAF policy open](../assets/screenshots/policies.png)
+
 **How to use.**
 
 ```yaml

@@ -14,3 +14,16 @@ VMware NSX Advanced Load Balancer (Avi).
   [decision records](adr/README.md).
 - **Using the API:** [API conventions](api.md); the live reference is at `/api/v1/docs` on a running controller.
 - **What has been proven:** the [lab results](lab/2026-10-12-full-pass.md).
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Tenant home: health, failing members, expiring certificates, drafts and revisions](assets/screenshots/dashboard.png) | ![Virtual services with health and certificate expiry](assets/screenshots/virtual-services.png) |
+| Tenant home | Virtual services |
+| ![A virtual service: routes, live members and metrics](assets/screenshots/virtual-service.png) | ![Reviewing a change set: the rendered HAProxy diff before apply](assets/screenshots/review.png) |
+| A virtual service | Reviewing a change set before apply |
+| ![An SE group: engines, reachability and config sync](assets/screenshots/se-groups.png) | ![Policies, with a WAF policy open](assets/screenshots/policies.png) |
+| An SE group's engines | Policies (WAF shown) |
+
+The screenshots use a demo dataset against a mocked API; `make ui-screenshots` refreshes them.
