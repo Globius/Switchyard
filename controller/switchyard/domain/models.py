@@ -37,6 +37,7 @@ UrlPath = Annotated[str, AfterValidator(v.validate_path)]
 Location = Annotated[str, AfterValidator(v.validate_location)]
 HeaderName = Annotated[str, AfterValidator(v.validate_header_name)]
 MediaType = Annotated[str, AfterValidator(v.validate_media_type)]
+PersistenceCookieName = Annotated[str, AfterValidator(v.validate_persistence_cookie_name)]
 CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
 MatchText = Annotated[str, AfterValidator(v.validate_match_text)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
@@ -120,6 +121,7 @@ class AcmeChallenge(enum.StrEnum):
 
     DNS01 = "dns-01"
     HTTP01 = "http-01"
+    TLSALPN01 = "tls-alpn-01"
 
 
 class TlsProfile(enum.StrEnum):
@@ -806,7 +808,7 @@ class PersistenceCookie(Model):
     """
 
     type: Literal["http_cookie"] = "http_cookie"
-    name: CookieName
+    name: PersistenceCookieName
     mode: Literal["insert", "rewrite", "prefix"] = "insert"
     ttl_s: int | None = Field(default=None, ge=1, le=31_536_000)
     secure: bool = False
@@ -1152,10 +1154,12 @@ class Certificate(TenantOwned):
             self.source is not CertSource.ACME
         ):
             raise ValueError("acme_provider, challenge and dns_provider only apply to source acme")
-        if self.dns_provider and self.challenge is AcmeChallenge.HTTP01:
+        if self.dns_provider and self.challenge in {AcmeChallenge.HTTP01, AcmeChallenge.TLSALPN01}:
             raise ValueError("dns_provider is only valid with the dns-01 challenge")
-        if self.challenge is AcmeChallenge.HTTP01 and any(s.startswith("*.") for s in self.sans):
-            raise ValueError("http-01 cannot validate wildcard names; use dns-01")
+        if self.challenge in {AcmeChallenge.HTTP01, AcmeChallenge.TLSALPN01} and any(
+            s.startswith("*.") for s in self.sans
+        ):
+            raise ValueError(f"{self.challenge.value} cannot validate wildcard names; use dns-01")
         if self.purpose == "server" and not self.sans:
             raise ValueError("a server certificate needs at least one name")
         if self.purpose == "client_ca" and (
@@ -1460,6 +1464,60 @@ class RateLimitPolicySet(TenantOwned):
 
     kind: Literal["rate_limit"] = "rate_limit"
     rules: tuple[RateLimitRule, ...] = Field(min_length=1, max_length=8)
+
+
+#: OWASP Core Rule Set versions the SE image ships; a policy pins one of them (ADR 0141).
+CRS_VERSIONS = ("4.8.0",)
+
+
+class WafPolicySet(TenantOwned):
+    """Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).
+
+    New policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,
+    so a tenant can read the logs before turning blocking on. A service can carry one WAF policy.
+
+    Attributes:
+        mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.
+        crs_version: CRS release to use; must be one the SE image ships.
+        paranoia_level: CRS paranoia level 1 (fewest rules) to 4.
+        inbound_threshold: Anomaly score at which a request counts as an attack.
+        outbound_threshold: Anomaly score at which a response counts as a leak.
+        disabled_rule_ids: CRS rules to switch off (for false positives).
+        excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.
+        inspect_body: Send the request body (up to the engine buffer size) to the WAF too.
+        fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the
+            request through, ``closed`` refuses it with 503 (ADR 0142).
+        timeout_ms: How long HAProxy waits for the WAF's verdict.
+
+    Example:
+        >>> WafPolicySet.model_validate(
+        ...     {"id": "00000000-0000-0000-0000-000000000001",
+        ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "w"}
+        ... ).mode
+        'detect'
+    """
+
+    kind: Literal["waf"] = "waf"
+    mode: Literal["detect", "block"] = "detect"
+    crs_version: Literal["4.8.0"] = "4.8.0"
+    paranoia_level: int = Field(default=1, ge=1, le=4)
+    inbound_threshold: int = Field(default=5, ge=1, le=100)
+    outbound_threshold: int = Field(default=4, ge=1, le=100)
+    disabled_rule_ids: tuple[int, ...] = Field(default=(), max_length=64)
+    excluded_paths: tuple[UrlPath, ...] = Field(default=(), max_length=16)
+    inspect_body: bool = True
+    fail_mode: Literal["open", "closed"] = "open"
+    timeout_ms: int = Field(default=100, ge=10, le=2000)
+
+    @model_validator(mode="after")
+    def _rules(self) -> Self:
+        if any(not 1 <= rule_id <= 999_999 for rule_id in self.disabled_rule_ids):
+            raise ValueError("rule ids are numbers from 1 to 999999")
+        if len(set(self.disabled_rule_ids)) != len(self.disabled_rule_ids):
+            raise ValueError("disabled_rule_ids must be unique")
+        if len(set(self.excluded_paths)) != len(self.excluded_paths):
+            raise ValueError("excluded_paths must be unique")
+        return self
 
 
 class OidcSettings(Model):
@@ -1789,6 +1847,170 @@ class ClientCertPolicySet(TenantOwned):
         return self
 
 
+#: User-agent substrings of well-known scanners and exploit tools (ADR 0170), lower case.
+KNOWN_SCANNERS = (
+    "acunetix",
+    "dirbuster",
+    "gobuster",
+    "havij",
+    "masscan",
+    "netsparker",
+    "nikto",
+    "nmap",
+    "nessus",
+    "nuclei",
+    "openvas",
+    "sqlmap",
+    "wpscan",
+    "zgrab",
+)
+UserAgentToken = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._/+-]{1,63}$")]
+
+
+class JsChallenge(Model):
+    """Make a new client prove it runs a browser before it gets any answer (ADR 0171).
+
+    The page asks the browser to find a number whose SHA-256 (with the client address) starts
+    with ``difficulty`` zero hex digits: a fraction of a second of work for a person and a cost
+    per client for a bot farm. The result is kept in a cookie for ``valid_for_s``. Nothing secret
+    is involved.
+
+    Attributes:
+        difficulty: Leading zero hex digits required; 3 is about 4,000 hashes, 4 about 65,000,
+            5 about a million.
+        valid_for_s: How long a solved challenge lasts.
+        skip_paths: Paths that are never challenged (``path_beg``), such as an API.
+        skip_user_agents: Lower-case ``User-Agent`` substrings that are never challenged (search
+            engines). The header is easy to fake; use it only where that risk is acceptable.
+
+    Example:
+        >>> JsChallenge().difficulty
+        4
+    """
+
+    difficulty: int = Field(default=4, ge=3, le=5)
+    valid_for_s: int = Field(default=3600, ge=300, le=86_400)
+    skip_paths: tuple[UrlPath, ...] = Field(default=(), max_length=16)
+    skip_user_agents: tuple[UserAgentToken, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        if len(set(self.skip_paths)) != len(self.skip_paths):
+            raise ValueError("skip_paths must be unique")
+        if len(set(self.skip_user_agents)) != len(self.skip_user_agents):
+            raise ValueError("skip_user_agents must be unique")
+        return self
+
+
+class CaptchaGate(Model):
+    """Ask new clients to pass a CAPTCHA from a provider before they get any answer (ADR 0172).
+
+    The page shows the provider's widget; a Lua service on the engine asks the provider to verify
+    the answer, then sets a signed cookie. The provider's secret key is kept in OpenBao.
+
+    Attributes:
+        provider: ``turnstile`` (Cloudflare) or ``hcaptcha``.
+        site_key: The public site key of the widget.
+        secret_ref: OpenBao path of the provider's secret key (never the key itself).
+        valid_for_s: How long a passed CAPTCHA lasts.
+        skip_paths: Paths that are never gated (``path_beg``), such as an API.
+        skip_user_agents: Lower-case ``User-Agent`` substrings that are never gated.
+
+    Example:
+        >>> CaptchaGate(provider="hcaptcha", site_key="10000000-ffff-ffff-ffff-000000000001",
+        ...             secret_ref="tenants/acme/captcha").valid_for_s
+        3600
+    """
+
+    provider: Literal["turnstile", "hcaptcha"]
+    site_key: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,128}$")]
+    secret_ref: SecretRef
+    valid_for_s: int = Field(default=3600, ge=300, le=86_400)
+    skip_paths: tuple[UrlPath, ...] = Field(default=(), max_length=16)
+    skip_user_agents: tuple[UserAgentToken, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        if len(set(self.skip_paths)) != len(self.skip_paths):
+            raise ValueError("skip_paths must be unique")
+        if len(set(self.skip_user_agents)) != len(self.skip_user_agents):
+            raise ValueError("skip_user_agents must be unique")
+        return self
+
+
+class ProtectionPolicySet(TenantOwned):
+    """Bot and DDoS protection for a service (ADR 0170).
+
+    Per-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits
+    stay in ``rate_limit`` sets.
+
+    Attributes:
+        max_connections_per_source: Connections one address may hold open; more are refused.
+        max_new_connections_per_source: New connections one address may open per
+            ``connection_rate_period_s``; more are refused.
+        connection_rate_period_s: Window of the connection rate.
+        header_timeout_s: How long a client has to send the whole request head (``timeout
+            http-request``); the answer to slow-header attacks.
+        client_timeout_s: Idle time allowed on a client connection (``timeout client``).
+        block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.
+        block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).
+        deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.
+        bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.
+        exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).
+        challenge: A JavaScript proof-of-work challenge for new clients (ADR 0171).
+        captcha: A CAPTCHA from a provider instead (ADR 0172); not together with ``challenge``.
+        table_size: Addresses the connection table holds.
+
+    Example:
+        >>> ProtectionPolicySet.model_validate(
+        ...     {"id": "00000000-0000-0000-0000-000000000001",
+        ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "p",
+        ...      "block_scanners": True}
+        ... ).bot_action
+        'deny'
+    """
+
+    kind: Literal["protection"] = "protection"
+    max_connections_per_source: int | None = Field(default=None, ge=1, le=100_000)
+    max_new_connections_per_source: int | None = Field(default=None, ge=1, le=100_000)
+    connection_rate_period_s: Literal[1, 10, 60] = 10
+    header_timeout_s: int | None = Field(default=None, ge=1, le=60)
+    client_timeout_s: int | None = Field(default=None, ge=1, le=3600)
+    block_empty_user_agent: bool = False
+    block_scanners: bool = False
+    deny_user_agents: tuple[UserAgentToken, ...] = Field(default=(), max_length=32)
+    bot_action: Literal["deny", "silent_drop"] = "deny"
+    exempt_cidrs: tuple[IPNetwork, ...] = Field(default=(), max_length=32)
+    challenge: JsChallenge | None = None
+    captcha: CaptchaGate | None = None
+    table_size: int = Field(default=100_000, ge=1_000, le=1_000_000)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if len(set(self.deny_user_agents)) != len(self.deny_user_agents):
+            raise ValueError("deny_user_agents must be unique")
+        if self.challenge is not None and self.captcha is not None:
+            raise ValueError("use either challenge or captcha, not both")
+        if not (
+            self.max_connections_per_source
+            or self.max_new_connections_per_source
+            or self.header_timeout_s
+            or self.client_timeout_s
+            or self.block_empty_user_agent
+            or self.block_scanners
+            or self.deny_user_agents
+            or self.challenge
+            or self.captcha
+        ):
+            raise ValueError("a protection set needs at least one protection")
+        return self
+
+    @property
+    def tracks_connections(self) -> bool:
+        """True when the set needs a per-source connection table."""
+        return bool(self.max_connections_per_source or self.max_new_connections_per_source)
+
+
 class LdapConnector(Model):
     """Sign in against an LDAP or Active Directory server (ADR 0137).
 
@@ -1888,6 +2110,8 @@ PolicySet = Annotated[
     | RespondPolicySet
     | ErrorPagesPolicySet
     | RateLimitPolicySet
+    | WafPolicySet
+    | ProtectionPolicySet
     | AccessPolicySet
     | JwtPolicySet
     | ClientCertPolicySet
@@ -1901,6 +2125,8 @@ ATTACHABLE_POLICY_KINDS = (
     RespondPolicySet,
     ErrorPagesPolicySet,
     RateLimitPolicySet,
+    WafPolicySet,
+    ProtectionPolicySet,
     AccessPolicySet,
     JwtPolicySet,
     ClientCertPolicySet,

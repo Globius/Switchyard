@@ -83,22 +83,42 @@ Date: YYYY-MM-DD
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
 | [0147](0147-country-and-reputation-ip-lists.md) | Country and reputation IP lists | Accepted |
+| [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
+| [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
+| [0162](0162-gslb-zones-ownership-and-dnssec.md) | GSLB zones: ownership, DNSSEC, several sites | Accepted |
+| [0165](0165-gslb-latency-selection.md) | GSLB latency-based selection: measured round trips with hysteresis | Accepted |
+| [0164](0164-dnsdist-in-front-of-powerdns.md) | dnsdist in front of PowerDNS: ANY and transfers refused, per-network rate limits | Accepted |
+| [0163](0163-gslb-scope-and-deferred.md) | GSLB: what is built and what is not | Accepted |
 | [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
 | [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
 | [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |
 | [0123](0123-tenant-log-api.md) | Tenant-wide request log API | Accepted |
 | [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
+| [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
+| [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |
+| [0150](0150-avi-importer.md) | Avi configuration importer | Accepted |
 | [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
 | [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
 | [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
 | [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
+| [0140](0140-waf-policy-set.md) | WAF policy set | Accepted |
+| [0141](0141-waf-detect-first-and-crs-pinning.md) | Detect first, and a pinned Core Rule Set | Accepted |
+| [0142](0142-waf-sidecar-and-failure-mode.md) | WAF sidecar life cycle and failure mode | Accepted |
+| [0143](0143-waf-logs.md) | WAF logs in Loki | Accepted |
+| [0144](0144-waf-image-and-agent-contract.md) | What the SE image and the agent must provide for the WAF | Accepted |
+| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |
 | [0130](0130-auth-service-architecture.md) | Authentication service: oauth2-proxy, loopback re-entry, closed by default | Accepted |
 | [0131](0131-access-rules-and-authorization.md) | Access rules and authorization | Accepted |
 | [0132](0132-identity-headers.md) | Identity headers to the origin | Accepted |
 | [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
 | [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
 | [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
+| [0137](0137-directory-logins-saml-ldap-radius-local.md) | Directory logins (SAML, LDAP, RADIUS, local users): not built, and why | Accepted |
+| [0170](0170-bot-and-ddos-protection.md) | Bot and DDoS protection set | Accepted |
+| [0171](0171-javascript-challenge.md) | JavaScript challenge (proof of work) | Accepted |
+| [0172](0172-captcha-gate.md) | CAPTCHA gate with a pluggable provider | Accepted |
+| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |
 | [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
 | [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |

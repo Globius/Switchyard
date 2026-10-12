@@ -47,7 +47,13 @@ from uuid import UUID
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
 from switchyard.domain import models as dm
-from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
+from switchyard.domain.snapshot import (
+    Snapshot,
+    ensure_valid,
+    protection_set,
+    rate_limit_rules,
+)
+from switchyard.render import captcha, waf
 from switchyard.render import escape as esc
 from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
@@ -316,6 +322,43 @@ def _cookie_value(pool: dm.Pool, member: dm.PoolMember) -> str:
     return f"m{digest[:12]}"
 
 
+_CHALLENGE_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Checking your browser</title></head>
+<body style="font-family:sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem">
+<h1>Checking your browser</h1>
+<p>This takes a moment. JavaScript must be enabled.</p>
+<noscript><p>Please enable JavaScript to continue.</p></noscript>
+<script>
+(async () => {
+  const ts = "%[date]", ip = "%[src]", salt = "@SALT@", zeros = "0".repeat(@ZEROS@);
+  const enc = new TextEncoder();
+  for (let n = 0; ; n++) {
+    const v = ts + "-" + n;
+    const d = await crypto.subtle.digest("SHA-256", enc.encode(v + "|" + ip + "|" + salt));
+    const h = Array.from(new Uint8Array(d), b => b.toString(16).padStart(2, "0")).join("");
+    if (h.startsWith(zeros)) {
+      const secure = location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = "sy_chal=" + v + "; Path=/; Max-Age=@VALID@; SameSite=Lax" + secure;
+      location.reload();
+      return;
+    }
+  }
+})();
+</script>
+</body></html>
+"""
+
+
+def _challenge_page(difficulty: int, valid_for_s: int, salt: str) -> str:
+    """The challenge page; ``%[date]`` and ``%[src]`` are filled in by HAProxy per request."""
+    return (
+        _CHALLENGE_PAGE.replace("@SALT@", salt)
+        .replace("@ZEROS@", str(int(difficulty)))
+        .replace("@VALID@", str(int(valid_for_s)))
+    )
+
+
 def _map_rule(converter: str, path: str) -> str:
     """Route by map lookup.
 
@@ -353,6 +396,8 @@ class _Renderer:
         self.warnings: list[str] = []
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
+        self.uses_waf = False
+        self.lua_loads: list[str] = []
         self.limit_backends: list[dict[str, Any]] = []
         self.instances = {i.service.id: i for i in auth_instances(snapshot, self.group.id)}
         self.guard = ""
@@ -386,6 +431,8 @@ class _Renderer:
                 fingerprint=fingerprint,
                 peers=self._peers(),
                 caches=self._caches(),
+                lua_loads=self.lua_loads,
+                waf_backend=waf.backend_lines() if self.uses_waf else [],
             )
 
         # The fingerprint covers every file; the config is hashed with a placeholder in its own
@@ -493,7 +540,15 @@ class _Renderer:
             routing_rules = self._sni_rules(svc, name)
         if mode == "http":
             options = self._http_options(svc, ports)
+            protection = protection_set(svc, self.policies)
+            if protection is not None:
+                connection_rules = self._connection_protection(svc, protection) + connection_rules
+                options += self._timeout_options(protection)
             request_rules = self._request_rules(svc, ports, allow, deny, inst)
+            if protection is not None:
+                request_rules += self._bot_rules(protection)
+                request_rules += self._challenge_rules(svc, protection)
+                request_rules += self._captcha_rules(svc, protection)
             tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
@@ -502,6 +557,13 @@ class _Renderer:
                 request_rules.insert(0, _acme_rule())
                 self.files[ACME_MAP_FILE] = _ACME_MAP_TEXT
             routing_rules = self._routing_rules(svc, name)
+            policy = waf.waf_policy(svc, self.policies)
+            if policy is not None:
+                waf_options, waf_rules = waf.frontend_lines(svc, policy)
+                options += waf_options
+                request_rules += waf_rules
+                self.files[waf.spoe_path(svc)] = waf.render_spoe(svc, policy)
+                self.uses_waf = True
             if svc.cache is not None:
                 cache = self._cache_name(svc)
                 request_rules.append(f"http-request cache-use {cache}")
@@ -554,6 +616,151 @@ class _Renderer:
                 )
         return out
 
+    def _connection_protection(
+        self, svc: dm.VirtualService, protection: dm.ProtectionPolicySet
+    ) -> list[str]:
+        """Per-source connection limits, tracked at connection time (ADR 0170)."""
+        rules: list[str] = []
+        if protection.exempt_cidrs:
+            rules.append(f"tcp-request connection accept if {self._exempt(protection)}")
+        if not protection.tracks_connections:
+            return rules
+        slot = len(rate_limit_rules(svc, self.policies))
+        table = f"pt_{esc.ident(svc.name)}"
+        period = protection.connection_rate_period_s
+        self.limit_backends.append(
+            {
+                "name": table,
+                "lines": [
+                    f"stick-table type ipv6 size {protection.table_size} expire 60s "
+                    f"store conn_cur,conn_rate({period}s)"
+                ],
+                "servers": [],
+            }
+        )
+        self.stick_counters = max(self.stick_counters, slot + 1)
+        rules.append(f"tcp-request connection track-sc{slot} src table {table}")
+        if protection.max_connections_per_source:
+            limit = protection.max_connections_per_source
+            rules.append(
+                f"tcp-request connection reject if {{ sc_conn_cur({slot},{table}) gt {limit} }}"
+            )
+        if protection.max_new_connections_per_source:
+            limit = protection.max_new_connections_per_source
+            rules.append(
+                f"tcp-request connection reject if {{ sc_conn_rate({slot},{table}) gt {limit} }}"
+            )
+        return rules
+
+    def _challenge_rules(
+        self, svc: dm.VirtualService, protection: dm.ProtectionPolicySet
+    ) -> list[str]:
+        """The JavaScript proof-of-work gate (ADR 0171).
+
+        The cookie ``sy_chal`` holds ``<epoch>-<counter>``. A request passes when
+        ``sha256("<cookie>|<client address>|<salt>")`` starts with the required zeros and the epoch
+        is at most ``valid_for_s`` old. The salt is public and per service, so a solved cookie is
+        good for one client address and one service only.
+        """
+        gate = protection.challenge
+        if gate is None:
+            return []
+        name = esc.ident(svc.name)
+        salt = hashlib.sha256(f"{svc.id}/{protection.id}".encode()).hexdigest()[:16]
+        self.files[f"haproxy/challenge/{name}.html"] = _challenge_page(
+            gate.difficulty, gate.valid_for_s, salt
+        )
+        skips = []
+        if protection.exempt_cidrs:
+            skips.append(f"!{self._exempt(protection)}")
+        if gate.skip_paths:
+            paths = " ".join(esc.arg(p) for p in sorted(gate.skip_paths))
+            skips.append(f"!{{ path_beg {paths} }}")
+        if gate.skip_user_agents:
+            words = " ".join(esc.user_agent_token(t) for t in sorted(gate.skip_user_agents))
+            skips.append(f"!{{ req.hdr(user-agent),lower -m sub {words} }}")
+        unsolved = " ".join([*skips, "!{ var(txn.sy_pass) -m bool }"])
+        has = "if { var(txn.sy_cv) -m found }"
+        zeros = "0" * gate.difficulty
+        page = f"{BASE_DIR}/challenge/{name}.html"
+        return [
+            "http-request set-var(txn.sy_cv) req.cook(sy_chal) if { req.cook(sy_chal) -m found }",
+            f"http-request set-var(txn.sy_ts) var(txn.sy_cv),field(1,-),add(0) {has}",
+            f'http-request set-var-fmt(txn.sy_in) "%[var(txn.sy_cv)]|%[src]|{salt}" {has}',
+            f"http-request set-var(txn.sy_hash) var(txn.sy_in),sha2(256),hex {has}",
+            f"http-request set-var(txn.sy_age) date,sub(txn.sy_ts) {has}",
+            "http-request set-var(txn.sy_pass) bool(true)"
+            f" if {{ var(txn.sy_hash) -m beg {zeros} }} {{ var(txn.sy_age) -m int ge 0 }}"
+            f" {{ var(txn.sy_age) -m int le {gate.valid_for_s} }}",
+            "http-request return status 200 content-type text/html hdr cache-control no-store"
+            f" lf-file {page} if {{ method GET HEAD }} {unsolved}",
+            f"http-request deny deny_status 403 if {unsolved}",
+        ]
+
+    def _captcha_rules(
+        self, svc: dm.VirtualService, protection: dm.ProtectionPolicySet
+    ) -> list[str]:
+        """The CAPTCHA gate: Lua check, Lua verify service, page for the unverified (ADR 0172)."""
+        gate = protection.captcha
+        if gate is None:
+            return []
+        name = esc.ident(svc.name)
+        ident = captcha.lua_id(svc)
+        self.files[f"haproxy/captcha/{name}.lua"] = captcha.render_lua(svc, gate)
+        self.files[f"haproxy/captcha/{name}.html"] = captcha.render_page(gate)
+        self.lua_loads.append(f"{BASE_DIR}/captcha/{name}.lua")
+        skips = []
+        if protection.exempt_cidrs:
+            skips.append(f"!{self._exempt(protection)}")
+        if gate.skip_paths:
+            paths = " ".join(esc.arg(p) for p in sorted(gate.skip_paths))
+            skips.append(f"!{{ path_beg {paths} }}")
+        if gate.skip_user_agents:
+            words = " ".join(esc.user_agent_token(t) for t in sorted(gate.skip_user_agents))
+            skips.append(f"!{{ req.hdr(user-agent),lower -m sub {words} }}")
+        unsolved = " ".join([*skips, "!{ var(txn.sy_pass) -m bool }"])
+        return [
+            f"http-request lua.sy_cap_check_{ident}",
+            f"http-request use-service lua.sy_cap_{ident} if {{ path {captcha.SUBMIT_PATH} }}"
+            " { method POST }",
+            "http-request return status 200 content-type text/html hdr cache-control no-store"
+            f" lf-file {BASE_DIR}/captcha/{name}.html if {{ method GET HEAD }} {unsolved}",
+            f"http-request deny deny_status 403 if {unsolved}",
+        ]
+
+    @staticmethod
+    def _exempt(protection: dm.ProtectionPolicySet) -> str:
+        nets = sorted(protection.exempt_cidrs, key=lambda n: (n.version, int(n.network_address)))
+        return "{ src " + " ".join(str(n) for n in nets) + " }"
+
+    @staticmethod
+    def _timeout_options(protection: dm.ProtectionPolicySet) -> list[str]:
+        options = []
+        if protection.header_timeout_s is not None:
+            options.append(f"timeout http-request {protection.header_timeout_s}s")
+        if protection.client_timeout_s is not None:
+            options.append(f"timeout client {protection.client_timeout_s}s")
+        return options
+
+    def _bot_rules(self, protection: dm.ProtectionPolicySet) -> list[str]:
+        """User-agent rules: empty agents, known scanners, and the tenant's own list."""
+        action = (
+            "http-request deny deny_status 403"
+            if protection.bot_action == "deny"
+            else "http-request silent-drop"
+        )
+        exempt = f" !{self._exempt(protection)}" if protection.exempt_cidrs else ""
+        rules: list[str] = []
+        if protection.block_empty_user_agent:
+            rules.append(f"{action} if !{{ req.hdr(user-agent) -m found }}{exempt}")
+            rules.append(f"{action} if {{ req.hdr(user-agent) -m len 0 }}{exempt}")
+        tokens = list(dm.KNOWN_SCANNERS) if protection.block_scanners else []
+        tokens += sorted(set(protection.deny_user_agents) - set(tokens))
+        if tokens:
+            words = " ".join(esc.user_agent_token(t) for t in tokens)
+            rules.append(f"{action} if {{ req.hdr(user-agent),lower -m sub {words} }}{exempt}")
+        return rules
+
     @staticmethod
     def _http_options(svc: dm.VirtualService, ports: list[dm.VsPort]) -> list[str]:
         """Frontend keywords of an HTTP service: compression, ``Alt-Svc`` (ADR 0116, 0117)."""
@@ -595,7 +802,7 @@ class _Renderer:
         if not port.http3:
             return [bind]
         # The same listener again over QUIC (UDP), with ALPN h3 instead of h2 and http/1.1.
-        quic = bind.replace("alpn h2,http/1.1", "alpn h3")
+        quic = bind.replace(",acme-tls/1", "").replace("alpn h2,http/1.1", "alpn h3")
         family = "quic6@" if svc.vip.version == 6 else "quic4@"
         address = f"[{svc.vip}]:{port.port}" if svc.vip.version == 6 else f"{svc.vip}:{port.port}"
         quic = quic.replace(
@@ -620,7 +827,11 @@ class _Renderer:
                     parts.append(f"ciphers {ciphers}")
                 parts.append(f"ciphersuites {suites}")
             if mode == "http":
-                parts.append("alpn h2,http/1.1" if port.http2 else "alpn http/1.1")
+                # acme-tls/1 lets the controller answer TLS-ALPN-01 challenges (ADR 0082); no
+                # browser or API client offers it, so it changes nothing for them.
+                parts.append(
+                    "alpn h2,http/1.1,acme-tls/1" if port.http2 else "alpn http/1.1,acme-tls/1"
+                )
         if port.proxy_protocol:
             parts.append("accept-proxy")
         return " ".join(parts)

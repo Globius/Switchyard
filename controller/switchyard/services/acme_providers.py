@@ -18,7 +18,6 @@ from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
 
-from acme import challenges
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -767,7 +766,13 @@ class AcmeProviders:
 class _NoSolver:
     """A solver for account registration, which proves nothing."""
 
-    challenge_type = challenges.DNS01
+    typ = "dns-01"
+
+    def select(self, offered: list[Any]) -> Any:  # pragma: no cover
+        return None
+
+    def answer(self, challenge: Any, key: Any) -> Any:  # pragma: no cover
+        return None
 
     async def present(self, domain: str, challenge: Any, key: Any) -> Any:  # pragma: no cover
         raise AcmeError("registration does not validate names")

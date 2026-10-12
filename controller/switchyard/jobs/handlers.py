@@ -28,8 +28,10 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.gc import GC_JOB, GarbageCollector
+from switchyard.services.gslb import PROBE_GSLB_JOB, SYNC_GSLB_JOB, GslbProber, GslbSync
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
     DEPLOY_SE_GROUP_JOB,
@@ -38,6 +40,7 @@ from switchyard.services.infra import (
     InfraService,
 )
 from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
+from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
 
@@ -57,10 +60,14 @@ def build_handlers(
     infra: InfraService | None = None,
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
+    controller: ControllerSettings | None = None,
+    kubernetes: KubernetesClusters | None = None,
     members: MemberService | None = None,
     discovery: DiscoveryService | None = None,
     alerts: AlertEvaluator | None = None,
     iplists: IpListSync | None = None,
+    gslb: GslbSync | None = None,
+    prober: GslbProber | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -71,7 +78,13 @@ def build_handlers(
         iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
+        kubernetes: Syncs the tenants' Kubernetes clusters; ``None`` skips the ``kubernetes_sync``
+            kind.
+        controller: Checks controller settings changes that wait for confirmation; ``None`` skips
+            the ``controller_tick`` kind.
         alerts: The alert evaluator; ``None`` skips the ``evaluate_alerts`` kind.
+        gslb: The GSLB sync; ``None`` skips the ``sync_gslb`` kind.
+        prober: The latency prober; ``None`` skips the ``probe_gslb`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
@@ -100,6 +113,18 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}
+    if kubernetes is not None:
+
+        async def kubernetes_sync(job: Job) -> dict[str, Any]:
+            return {"clusters": await kubernetes.sync_all()}
+
+        handlers[KUBERNETES_SYNC_JOB] = kubernetes_sync
+    if controller is not None:
+
+        async def controller_tick(job: Job) -> dict[str, Any]:
+            return {"events": await controller.tick()}
+
+        handlers[CONTROLLER_TICK_JOB] = controller_tick
     if members is not None:
 
         async def expire_drains(job: Job) -> dict[str, Any]:
@@ -130,6 +155,18 @@ def build_handlers(
             return dict(await alerts.run())
 
         handlers[EVALUATE_ALERTS_JOB] = evaluate_alerts
+    if gslb is not None:
+
+        async def sync_gslb(job: Job) -> dict[str, Any]:
+            return dict(await gslb.run())
+
+        handlers[SYNC_GSLB_JOB] = sync_gslb
+    if prober is not None:
+
+        async def probe_gslb(job: Job) -> dict[str, Any]:
+            return dict(await prober.run())
+
+        handlers[PROBE_GSLB_JOB] = probe_gslb
     if certs is not None:
 
         async def issue_cert(job: Job) -> dict[str, Any]:

@@ -1,0 +1,55 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+policy_sets:
+- id: ps-gate
+  tenant_id: t-acme
+  name: gate
+  kind: protection
+  captcha:
+    provider: turnstile
+    site_key: 1x00000000000000000000AA
+    secret_ref: kv/tenants/acme/captcha/app
+    valid_for_s: 1800
+    skip_paths: [/api]
+  exempt_cidrs: [198.51.100.0/24]
+pools:
+- id: p-app
+  tenant_id: t-acme
+  name: app
+  members:
+  - address: 10.20.12.2
+    port: 8080
+virtual_services:
+- id: v-app
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: app
+  protocol: http
+  vip: 192.0.2.90
+  ports:
+  - port: 80
+  policy_set_ids: [ps-gate]
+  default_pool_id: p-app

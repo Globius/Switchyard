@@ -8,6 +8,16 @@ global
 {% if stick_counters %}
     tune.stick-counters {{ stick_counters }}
 {% endif %}
+{% if lua_loads %}
+    tune.lua.bool-sample-conversion normal
+    httpclient.ssl.ca-file /etc/ssl/certs/ca-certificates.crt
+    httpclient.ssl.verify required
+    httpclient.resolvers.id sy_dns
+    httpclient.resolvers.prefer ipv4
+{% for path in lua_loads %}
+    lua-load {{ path }}
+{% endfor %}
+{% endif %}
     stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
     ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
     ssl-default-server-options ssl-min-ver TLSv1.2
@@ -29,6 +39,14 @@ peers {{ peers.name }}
 {% for peer in peers.members %}
     peer {{ peer.name }} {{ peer.target }}
 {% endfor %}
+
+{% endif %}
+{% if lua_loads %}
+resolvers sy_dns
+    parse-resolv-conf
+    timeout resolve 1s
+    timeout retry 1s
+    resolve_retries 2
 
 {% endif %}
 {% for cache in caches %}
@@ -62,6 +80,10 @@ frontend sy_prometheus
 
 {% include "frontend.j2" %}
 {% endfor %}
+{% if waf_backend %}
+
+{{ waf_backend | join("\n") }}
+{% endif %}
 {% for b in backends %}
 
 {% include "backend.j2" %}

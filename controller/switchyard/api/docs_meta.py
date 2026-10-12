@@ -36,6 +36,10 @@ TAGS: list[dict[str, str]] = [
         "description": "Grafana embedded in the UI: one-time launch links, scoped to a tenant.",
     },
     {
+        "name": "gslb",
+        "description": "Global server load balancing on PowerDNS: zones and wide IPs.",
+    },
+    {
         "name": "alerts",
         "description": "Alert targets (webhook, chat, email), rules on events, metrics and certificate expiry, and what is firing.",
     },
@@ -71,6 +75,14 @@ TAGS: list[dict[str, str]] = [
     {"name": "break-glass", "description": "The local emergency administrator and system tokens."},
     {"name": "system", "description": "Controller-wide settings (system administrators)."},
     {
+        "name": "kubernetes",
+        "description": "Kubernetes clusters whose Services and Gateways become virtual services.",
+    },
+    {
+        "name": "imports",
+        "description": "Convert another vendor's configuration into a draft change set.",
+    },
+    {
         "name": "acme providers",
         "description": "Certificate authorities (ACME) and their accounts; system administrators "
         "write, everyone signed in reads.",
@@ -93,6 +105,8 @@ PARAMS: dict[str, str] = {
     "cursor": "`next_cursor` of the previous page.",
     "limit": "Page size.",
     "object_id": "Object id.",
+    "zone": "Zone name, for example `gslb.example.test` (a filter on the list route).",
+    "cluster": "Kubernetes cluster id.",
     "cs": "Change set id.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
@@ -287,6 +301,7 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ),
     ("(POST|PATCH|DELETE)", r"/acme-providers(/.*)?", "system-admin", False),
     ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/dns-providers(/.*)?", "tenant-admin", False),
+    ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/kubernetes-clusters(/.*)?", "tenant-admin", False),
     (
         "(GET|POST|PATCH|PUT|DELETE)",
         r"/(identity-providers|role-mappings|system|users)(/.*)?",
@@ -317,6 +332,15 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("(GET|POST)", r"/tenants/\{t\}/tokens(/\{token\})?", "tenant-admin", False),
     ("DELETE", r"/tenants/\{t\}/tokens/\{token\}", "tenant-admin", False),
     ("POST", r"/tenants/\{t\}/vip-pools/\{pool_id\}/next-free", "viewer", False),
+    ("(POST|DELETE)", r"/tenants/\{t\}/gslb-zones(/\{zone\})?", "system-admin", False),
+    ("POST", r"/tenants/\{t\}/gslb-zones/\{zone\}/dnssec", "tenant-admin", False),
+    (
+        "(POST|PATCH|DELETE)",
+        r"/tenants/\{t\}/gslb-zones/\{zone\}/wide-ips(/\{name\})?",
+        "tenant-admin",
+        False,
+    ),
+    ("POST", r"/tenants/\{t\}/gslb/sync", "tenant-admin", False),
     ("POST", r"/tenants/\{t\}/grafana/launch", "viewer", False),
     (
         "(POST|PATCH|DELETE)",
@@ -392,6 +416,19 @@ def _patch_example(slug: str) -> dict[str, Any] | None:
 
 
 REQUEST_EXAMPLES: dict[str, Any] = {
+    "POST /tenants/{t}/gslb-zones": {
+        "name": "gslb.example.test",
+        "nameservers": ["ns1.example.test"],
+    },
+    "POST /tenants/{t}/gslb-zones/{zone}/wide-ips": {
+        "name": "shop",
+        "algorithm": "failover",
+        "members": [
+            {"address": "192.0.2.10", "site": "pve1", "priority": 1},
+            {"virtual_service": "shop", "site": "pve2", "priority": 2},
+        ],
+    },
+    "PATCH /tenants/{t}/gslb-zones/{zone}/wide-ips/{name}": {"ttl": 60},
     "POST /tenants/{t}/alert-targets": {
         "name": "ops-chat",
         "kind": "chat",
@@ -441,6 +478,23 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "dns_provider": "cloudflare-main",
         "renew_policy": "auto",
         "renew_before_days": 30,
+    },
+    "POST /tenants/{t}/kubernetes-clusters": {
+        "name": "prod",
+        "api_url": "https://k8s.example.test:6443",
+        "token": "eyJhbGciOi...",
+        "se_group": "edge",
+        "vip_pool": "main",
+        "mode": "nodeport",
+    },
+    "PATCH /tenants/{t}/kubernetes-clusters/{cluster}": {"mode": "pods"},
+    "POST /tenants/{t}/imports/avi": {
+        "export": {"VirtualService": [], "Pool": []},
+        "se_group": "edge",
+        "vip_pool": "main",
+        "vip_map": {"vip-20": "192.0.2.20"},
+        "prefix": "avi-",
+        "dry_run": True,
     },
     "POST /tenants/{t}/certificates/issue/check": {
         "name": "web-example",
@@ -525,6 +579,12 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     "PATCH /tenants/{t}/role-mappings/{mapping}": {"role": "viewer"},
     "POST /system/break-glass/admin/confirm": {"totp": "123456"},
     "PATCH /system/settings": {"allow_lxc_guests": True},
+    "PUT /system/controller/pending": {
+        "fqdn": "sy.example.test",
+        "vip": "192.0.2.11",
+        "certificate": "controller-new",
+        "confirm_within_s": 120,
+    },
     "PUT /system/break-glass": {"enabled": True, "ttl_minutes": 30, "reason": "SSO outage"},
     "POST /system/break-glass/admin": {"username": "breakglass"},
     "POST /system/tokens": {"name": "bootstrap", "ttl_days": 30},

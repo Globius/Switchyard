@@ -80,7 +80,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Service `name` (http, tcp) | `frontend vs_<name>`, `mode http` or `mode tcp`, `option httplog` / `tcplog` |
 | Service `vip` + each port | one `bind <vip>:<port>` per port, sorted by port. IPv6 uses `bind ipv6@<addr>:<port>` |
 | Port `tls` | `ssl crt-list /etc/switchyard/certs/<name>.crtlist` on that bind |
-| Port `http2` | `alpn h2,http/1.1` (otherwise `alpn http/1.1` on an HTTP TLS port) |
+| Port `http2` | `alpn h2,http/1.1,acme-tls/1` (otherwise `alpn http/1.1,acme-tls/1` on an HTTP TLS port; `acme-tls/1` is for TLS-ALPN-01, ADR 0082) |
 | Port `proxy_protocol` | `accept-proxy` |
 | Port `https_redirect_port` | `http-request redirect prefix "https://%[var(txn.host)][:port]" code 301 if { dst_port <port> }` |
 | Service `default_pool_id` | `default_backend pool_<name>` |
@@ -114,6 +114,10 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Route `pools` (weighted) | one `http-request set-var(txn.pick) rand(100)` per request, then one `use_backend <pool> if <match> { var(txn.pick) -m int lt <cumulative weight> }` per pool except the last, which takes the rest (ADR 0119) |
 | Route `fallback_pool_ids` | `use_backend <pool> if <match> { nbsrv(<pool>) gt 0 }` per pool in order, the last without the condition (ADR 0119) |
 | Service `cache` | a `cache sy_cache_<name>` section (`total-max-size` MB, `max-object-size` bytes, `max-age` s) and `http-request cache-use` / `http-response cache-store` after the policy rules (ADR 0117); at most 1024 MB per SE group |
+| Policy set `waf` on a service | `filter spoe engine coraza config .../waf/<service>.spoe`, `option http-buffer-request` (with `inspect_body`), deny rules on `txn.coraza.action` in `block` mode and on `txn.coraza.error` with `fail_mode: closed`, one `backend sy_coraza_spoa` for the group; the SPOE file and, in the agent bundle, `coraza/config.yaml` (engine mode, pinned CRS, paranoia, thresholds, disabled rules) (ADR 0140 to 0144) |
+| Policy set `protection` on a service | `tcp-request connection accept` for the exempt CIDRs, `track-sc<n> src` into `backend pt_<service>` with `reject` on `sc_conn_cur` / `sc_conn_rate`, `timeout http-request` and `timeout client`, and `http-request deny` / `silent-drop` on the lower-cased `User-Agent` (ADR 0170) |
+| `protection.challenge` | `sy_chal` cookie check (`req.cook`, `sha2(256)`, `hex`, `date`) and an `lf-file` challenge page `haproxy/challenge/<service>.html`; unsolved `GET`/`HEAD` get the page, others 403 (ADR 0171) |
+| `protection.captcha` | `lua-load` of `haproxy/captcha/<service>.lua` (global, with `httpclient.*` and a `resolvers sy_dns` section), `lua.sy_cap_check_*`, `use-service lua.sy_cap_*` on `/.sy/captcha`, an `lf-file` page; the provider secret travels in the bundle as `certs/captcha-<service>.secret` (ADR 0172) |
 | Pool `passive_check`, `slow_start_s` | server options `observe <layer> error-limit <n> on-error <action>` and `slowstart <n>s`; both need the pool's health monitor (ADR 0066) |
 | Port `tls_profile` | `ssl-min-ver`, `ciphers` and `ciphersuites` on the TLS `bind` (`modern`, `intermediate`, `legacy`; none keeps the default), see ADR 0067 |
 | Port `client_ca_id`, `client_verify` | `ca-file certs/ca-<name>.pem verify required|optional` (and `crl-file certs/ca-<name>.crl`) on the TLS `bind`; the files travel in the agent bundle (ADR 0070) |
@@ -201,7 +205,7 @@ The demo tenant (`controller/switchyard/examples/demo.yaml`) renders, for its HT
 frontend vs_web
     mode http
     bind 192.0.2.20:80
-    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/certs/web.crtlist alpn h2,http/1.1
+    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/certs/web.crtlist alpn h2,http/1.1,acme-tls/1
     option httplog
     option forwardfor
     http-request del-header X-Forwarded-For

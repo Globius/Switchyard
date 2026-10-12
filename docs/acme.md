@@ -67,7 +67,7 @@ write-only and stored in OpenBao.
 ## Requesting a certificate
 
 **Certificates > Request certificate**, `POST /tenants/{t}/certificates/issue` or
-`syctl api cert issue`. Choose the provider (default if empty), the names, the validation method and
+`syctl api cert issue`. Choose the provider (default if empty), the names, the validation method (`dns-01`, `http-01`, `tls-alpn-01`) and
 the renewal (`auto`, `renew_before_days`). `POST /tenants/{t}/certificates/issue/check` runs the same
 checks without queueing and returns every finding with its field path:
 
@@ -75,7 +75,9 @@ checks without queueing and returns every finding with its field path:
 - **DNS-01**: every name has a credential that covers it (`GET /tenants/{t}/dns-providers/match?names=`
   lists the candidates per name, longest zone first);
 - **HTTP-01**: one name, no wildcard, and it resolves to a VIP of one of your HTTP services with a
-  port-80 listener that does not enforce an allow list.
+  port-80 listener that does not enforce an allow list;
+- **TLS-ALPN-01**: no wildcard, and each name resolves to a VIP of one of your HTTP services with a
+  TLS listener on port 443 (names that already serve HTTPS give a warning, not an error).
 
 The job reports the stages `order`, `validate`, `finalize`, `store` and `change set`. The result is a
 `system:certs` change set, validated, audited, canaried and revertible like any other. A failure
@@ -90,6 +92,19 @@ the VIP through the Data Plane API's runtime calls (no reload) and removes it af
 engine cannot take it, the order is not started. An engine that still runs a configuration from
 before this feature reports `apply any change set to its SE group first`: applying any change
 re-renders the rule.
+
+### TLS-ALPN-01
+
+For deployments where only port 443 is reachable (ADR 0082). Every HTTP service with a TLS port renders the
+ALPN protocol `acme-tls/1` next to `h2` and `http/1.1`. While a certificate is validated the controller
+loads the RFC 8737 challenge certificate into each engine's HAProxy through the Data Plane API (no reload)
+and adds it to the crt-lists of the group's TLS services, for that name and for clients that offer
+`acme-tls/1`, and removes it afterwards. No wildcard names. The name has to lead to a VIP of an HTTP service
+with a TLS listener on port 443.
+
+**Visitors of that name see a certificate error for the few seconds validation takes**, because HAProxy picks the
+certificate by name, not by ALPN. `issue/check` returns a `warnings` entry for names that already serve HTTPS.
+Choose DNS-01 or HTTP-01 where that matters.
 
 ### Renewal
 

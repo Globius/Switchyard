@@ -216,6 +216,22 @@ def validate_header_name(value: str) -> str:
     return value
 
 
+def validate_persistence_cookie_name(value: str) -> str:
+    """Validate a persistence cookie name (letters, digits, ``_`` and ``-``; 1-64 characters).
+
+    Example:
+        >>> validate_persistence_cookie_name("SY_SRV")
+        'SY_SRV'
+        >>> validate_persistence_cookie_name("a;b")
+        Traceback (most recent call last):
+            ...
+        ValueError: cookie name must be 1-64 characters of letters, digits, '_' and '-'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
+        raise ValueError("cookie name must be 1-64 characters of letters, digits, '_' and '-'")
+    return value
+
+
 def validate_media_type(value: str) -> str:
     """Validate a media type such as ``text/html`` (no parameters, lower case).
 

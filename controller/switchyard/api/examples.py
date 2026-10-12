@@ -773,6 +773,74 @@ ALERT_CATALOG = {
     "email_configured": False,
 }
 
+GSLB_ZONE = {
+    "id": "0192f3a0-0000-7000-8000-0000000000b1",
+    "name": "gslb.example.test",
+    "nameservers": ["ns1.example.test", "ns2.example.test"],
+    "dnssec": False,
+    "version": 1,
+    "created_by": "user:authentik:root",
+    "created_at": WHEN,
+}
+
+GSLB_DS = {
+    "zone": "gslb.example.test",
+    "dnssec": True,
+    "ds": [
+        "gslb.example.test. IN DS 12345 13 2 "
+        "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+    ],
+}
+
+WIDE_IP = {
+    "id": "0192f3a0-0000-7000-8000-0000000000b2",
+    "name": "shop",
+    "zone": "gslb.example.test",
+    "fqdn": "shop.gslb.example.test",
+    "algorithm": "failover",
+    "ttl": 30,
+    "health": {
+        "kind": "tcp",
+        "port": 443,
+        "scheme": None,
+        "path": None,
+        "match": None,
+        "host": None,
+        "timeout_ms": 1000,
+    },
+    "members": [
+        {
+            "address": "192.0.2.10",
+            "virtual_service": None,
+            "site": "pve1",
+            "weight": 1,
+            "priority": 1,
+            "subnets": [],
+        },
+        {
+            "address": None,
+            "virtual_service": "shop",
+            "site": "pve2",
+            "weight": 1,
+            "priority": 2,
+            "subnets": [],
+        },
+    ],
+    "enabled": True,
+    "version": 1,
+    "applied_at": WHEN,
+    "last_error": None,
+    "created_by": "user:authentik:alice",
+    "created_at": WHEN,
+}
+
+WIDE_IP_STATE = {
+    "fqdn": "shop.gslb.example.test",
+    "state": "in_sync",
+    "last_error": None,
+    "applied_at": WHEN,
+}
+
 METRICS = {
     "available": True,
     "reason": None,
@@ -1002,6 +1070,7 @@ DNS_PROVIDER_TEST = {
 ISSUE_CHECK = {
     "ok": False,
     "problems": [{"path": "sans[1]", "message": "no DNS credential covers this name"}],
+    "warnings": [],
 }
 RENEWAL = {
     "id": "0192f1a2-0000-7000-8000-00000000e501",
@@ -1086,4 +1155,128 @@ ACME_PROVIDER_TEST = {
     ],
     "tos_url": "https://letsencrypt.org/documents/LE-SA-v1.5.pdf",
     "external_account_required": False,
+}
+
+
+CONTROLLER = {
+    "managed": True,
+    "fqdn": "switchyard.example.test",
+    "public_url": "https://switchyard.example.test",
+    "listen": {
+        "vip": "192.0.2.10",
+        "ports": [
+            {"port": 443, "tls": True, "https_redirect_port": None},
+            {"port": 80, "tls": False, "https_redirect_port": 443},
+        ],
+    },
+    "certificate": {
+        "name": "controller",
+        "sans": ["switchyard.example.test"],
+        "not_after": "2027-01-10T02:01:00Z",
+    },
+    "pending": {
+        "state": "waiting",
+        "proposed_by": "user:root",
+        "proposed_at": "2026-10-12T05:00:00Z",
+        "window_s": 120,
+        "expires_at": "2026-10-12T05:02:20Z",
+        "seconds_left": 95,
+        "before": {
+            "fqdn": "switchyard.example.test",
+            "public_url": "https://switchyard.example.test",
+            "vip": "192.0.2.10",
+            "certificate": "controller",
+        },
+        "after": {
+            "fqdn": "sy.example.test",
+            "public_url": "https://sy.example.test",
+            "vip": "192.0.2.11",
+            "certificate": "controller-new",
+        },
+        "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+        "revision_before": 7,
+        "revision_after": 8,
+    },
+    "last_result": {
+        "kind": "confirmed",
+        "at": "2026-10-01T09:00:00Z",
+        "by": "user:root",
+        "fqdn": "switchyard.example.test",
+    },
+    "redirect_urls": [
+        {
+            "provider": "authentik",
+            "protocol": "oidc",
+            "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik",
+        }
+    ],
+    "break_glass": (
+        "On a controller node: `syctl controller status` and `syctl controller revert` need only "
+        "database access; the break-glass login still works."
+    ),
+}
+
+
+AVI_IMPORT = {
+    "dry_run": True,
+    "change_set_id": None,
+    "counts": {"health_monitor": 1, "pool": 2, "virtual_service": 1, "certificate": 1},
+    "objects": [
+        {"kind": "pool", "avi_name": "Keycloak Pool", "name": "keycloak-pool"},
+        {"kind": "virtual_service", "avi_name": "External-ParentSNI", "name": "external-parentsni"},
+    ],
+    "vips": [
+        {
+            "avi_vsvip": "vip-20",
+            "address": "10.60.3.20",
+            "new_address": "192.0.2.20",
+            "services": ["External-ParentSNI"],
+        }
+    ],
+    "findings": [
+        {
+            "level": "manual",
+            "object": "virtual_service:External-ParentSNI",
+            "message": "WAF policy detect-only is not converted (no WAF yet)",
+        }
+    ],
+}
+
+
+KUBERNETES_CLUSTER = {
+    "id": "0192f1a2-0000-7000-8000-00000000b701",
+    "name": "prod",
+    "api_url": "https://k8s.example.test:6443",
+    "ca_set": True,
+    "se_group": "edge",
+    "vip_pool": "main",
+    "mode": "nodeport",
+    "class_name": "switchyard.io/lb",
+    "gateway_class": "switchyard",
+    "enabled": True,
+    "waiting_for_change_set": None,
+    "last_sync_at": "2026-10-12T05:00:00Z",
+    "last_sync_ok": True,
+    "last_sync_error": None,
+    "last_sync": {
+        "planned_services": 3,
+        "planned_pools": 3,
+        "created": 1,
+        "updated": 0,
+        "deleted": 0,
+        "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+        "addresses_written": 2,
+        "notes": [],
+    },
+    "version": 2,
+}
+KUBERNETES_TEST = {
+    "ok": True,
+    "detail": "reachable, with the access the connector needs",
+    "version": "v1.31.2",
+    "nodes": 3,
+    "services": 42,
+    "gateway_api": True,
+    "permissions": {"list nodes": True, "list services": True, "patch services/status": True},
+    "problems": [],
 }

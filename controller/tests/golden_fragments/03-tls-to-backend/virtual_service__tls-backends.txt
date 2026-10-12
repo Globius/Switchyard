@@ -1,7 +1,7 @@
 ==> haproxy/haproxy.cfg (haproxy, lines 31-40)
 frontend vs_tls-backends
     mode http
-    bind 192.0.2.22:443 ssl crt-list /etc/switchyard/certs/tls-backends.crtlist alpn h2,http/1.1
+    bind 192.0.2.22:443 ssl crt-list /etc/switchyard/certs/tls-backends.crtlist alpn h2,http/1.1,acme-tls/1
     option httplog
     option forwardfor
     http-request del-header X-Forwarded-For
