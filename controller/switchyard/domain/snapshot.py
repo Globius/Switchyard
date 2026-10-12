@@ -33,6 +33,7 @@ from switchyard.domain.models import (
     Entity,
     ErrorPagesPolicySet,
     HealthMonitor,
+    IpvsForward,
     JwtPolicySet,
     LdapConnector,
     LocalConnector,
@@ -122,11 +123,15 @@ class Snapshot(Model):
         cert_ids.update(p.client_certificate_id for p in pools if p.client_certificate_id)
         monitor_ids = {p.health_monitor_id for p in pools if p.health_monitor_id}
         network_ids = {n.network_id for n in group.networks}
-        pool_networks = {p.network_id for p in self.vip_pools if p.id in _vip_pool_ids(services)}
+        vip_pool_ids = _vip_pool_ids(services)
+        if group.autoscale is not None:  # its deploy settings name pools that must stay valid
+            vip_pool_ids |= {group.autoscale.deploy.mgmt_pool_id}
+            vip_pool_ids |= set(group.autoscale.deploy.nic_pools.values())
+        pool_networks = {p.network_id for p in self.vip_pools if p.id in vip_pool_ids}
         return Snapshot(
             tenants=tuple(t for t in self.tenants if t.id == group.tenant_id),
             networks=tuple(n for n in self.networks if n.id in network_ids | pool_networks),
-            vip_pools=tuple(p for p in self.vip_pools if p.id in _vip_pool_ids(services)),
+            vip_pools=tuple(p for p in self.vip_pools if p.id in vip_pool_ids),
             se_groups=(group,),
             virtual_services=services,
             pools=pools,
@@ -253,6 +258,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                         f"{peer.address} is not in a backend network of the group",
                     )
                 )
+    for g in snapshot.se_groups:
+        _check_autoscale(g, networks, vip_pools, problems)
     for g in snapshot.se_groups:
         if g.routing_profile_id is None:
             continue
@@ -426,11 +433,22 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
+            _check_ipvs_forwarding(s, group, networks, pools_by_id, base, problems)
+        _check_dns(s, base, problems)
+        if s.protocol is not Protocol.UDP and s.forward_mode is not IpvsForward.NAT:
+            problems.append(
+                Problem(
+                    f"{base}.forward_mode",
+                    "forward_mode_not_allowed",
+                    "forward_mode is only valid on udp services",
+                )
+            )
 
         transport = "udp" if s.protocol is Protocol.UDP else "tcp"
         listeners += [v.Listener(s.name, s.vip, p.port, transport) for p in s.ports]
 
     _check_udp_pools(snapshot, pool_protocols, monitors, problems)
+    _check_dns_names(snapshot, problems)
     _check_failover(snapshot, problems)
     _check_cache_quota(snapshot, problems)
 
@@ -622,6 +640,140 @@ def _check_udp_service(s: VirtualService, base: str, problems: list[Problem]) ->
                         f"{field} is not valid on udp",
                     )
                 )
+
+
+def _check_autoscale(
+    g: SeGroup,
+    networks: Mapping[UUID, Network],
+    vip_pools: Mapping[UUID, VipPool],
+    problems: list[Problem],
+) -> None:
+    """The deploy settings of an autoscaled group must fit its networks (ADR 0194)."""
+    if g.autoscale is None:
+        return
+    base = f"se_groups.{g.name}.autoscale.deploy"
+    mgmt = [gn.network_id for gn in g.networks if gn.role is NetworkRole.MGMT]
+    if len(mgmt) != 1:
+        problems.append(
+            Problem(
+                f"se_groups.{g.name}.autoscale",
+                "autoscale_needs_mgmt_network",
+                "an autoscaled group needs exactly one mgmt network to address new engines on",
+            )
+        )
+        return
+    pool = vip_pools.get(g.autoscale.deploy.mgmt_pool_id)
+    if pool is None or pool.network_id != mgmt[0]:
+        problems.append(
+            Problem(
+                f"{base}.mgmt_pool_id",
+                "autoscale_pool_mismatch",
+                "mgmt_pool_id must be a VIP pool on the group's mgmt network",
+            )
+        )
+    data_networks = {gn.network_id for gn in g.networks if gn.role is not NetworkRole.MGMT}
+    for network_id, pool_id in g.autoscale.deploy.nic_pools.items():
+        pool = vip_pools.get(pool_id)
+        if network_id not in data_networks or pool is None or pool.network_id != network_id:
+            problems.append(
+                Problem(
+                    f"{base}.nic_pools.{network_id}",
+                    "autoscale_pool_mismatch",
+                    "each nic_pools entry must name a VIP pool on one of the group's data networks",
+                )
+            )
+    for network_id in (*mgmt, *data_networks):
+        if networks.get(network_id) is not None and not networks[network_id].vnet:
+            problems.append(
+                Problem(
+                    f"se_groups.{g.name}.networks",
+                    "autoscale_network_without_vnet",
+                    f"network {networks[network_id].name} has no VNet to attach new engines to",
+                )
+            )
+
+
+def _check_dns(s: VirtualService, base: str, problems: list[Problem]) -> None:
+    """Reject ``proxied`` on UDP: Cloudflare's proxy only carries HTTP(S) and TCP ports."""
+    if s.dns is not None and s.dns.proxied and s.protocol is Protocol.UDP:
+        problems.append(
+            Problem(
+                f"{base}.dns.proxied", "dns_proxy_not_allowed", "a udp service cannot be proxied"
+            )
+        )
+
+
+def _check_dns_names(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """A host name is published by one service only (ADR 0193)."""
+    owner: dict[tuple[UUID, str], str] = {}
+    for s in snapshot.virtual_services:
+        if s.dns is None:
+            continue
+        for i, name in enumerate(s.dns.names):
+            key = (s.tenant_id, name.lower())
+            if key in owner and owner[key] != s.name:
+                problems.append(
+                    Problem(
+                        f"virtual_services.{s.name}.dns.names[{i}]",
+                        "dns_name_taken",
+                        f"{name} is already published by virtual service {owner[key]}",
+                    )
+                )
+            owner.setdefault(key, s.name)
+
+
+def _check_ipvs_forwarding(
+    s: VirtualService,
+    group: SeGroup | None,
+    networks: Mapping[UUID, Network],
+    pools: Mapping[UUID, Pool],
+    base: str,
+    problems: list[Problem],
+) -> None:
+    """Check the members of a ``dr`` or ``tunnel`` UDP service (ADR 0192).
+
+    Neither method can change the destination port, so every member must listen on every service
+    port. Direct return also needs the member on a layer-2 segment of the SE: its address must be
+    in a backend network of the group.
+    """
+    if s.forward_mode is IpvsForward.NAT or s.default_pool_id is None:
+        return
+    pool = pools.get(s.default_pool_id)
+    if pool is None:
+        return
+    backend_cidrs = (
+        [
+            networks[gn.network_id].cidr
+            for gn in group.networks
+            if gn.role is NetworkRole.BACKEND and gn.network_id in networks
+        ]
+        if group is not None
+        else []
+    )
+    ports = {p.port for p in s.ports}
+    for member in pool.members:
+        path = f"pools.{pool.name}.members.{member.server_name}"
+        if member.port is not None and ports != {member.port}:
+            problems.append(
+                Problem(
+                    f"{path}.port",
+                    "ipvs_port_mismatch",
+                    f"forward_mode {s.forward_mode} cannot change the port: the member must use "
+                    f"the service port ({', '.join(str(p) for p in sorted(ports))}) and a service "
+                    "with several ports needs a pool per port",
+                )
+            )
+        if s.forward_mode is IpvsForward.DR and not any(
+            member.address in cidr for cidr in backend_cidrs
+        ):
+            problems.append(
+                Problem(
+                    f"{path}.address",
+                    "ipvs_dr_not_adjacent",
+                    f"{member.address} is not in a backend network of the group; direct return "
+                    "needs the member on the SE's layer-2 segment (use tunnel mode otherwise)",
+                )
+            )
 
 
 def _check_udp_pools(

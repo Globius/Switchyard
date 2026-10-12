@@ -1,6 +1,6 @@
 # Roll an SE group to a new template, or scale it out
 
-Use to put a new template (new HAProxy, FRR, Keepalived or agent version, [build-se-template.md](build-se-template.md)) under a
+A group can also scale out by itself ([automatic scale-out](../autoscale.md)). Use this runbook to put a new template (new HAProxy, FRR, Keepalived or agent version, [build-se-template.md](build-se-template.md)) under a
 whole SE group without dropping the VIP, or to add engines to a group. One engine at a time, gated on the group's health score
 (`GET /tenants/{t}/status/se-groups`: 80 or more for the group and for every engine).
 

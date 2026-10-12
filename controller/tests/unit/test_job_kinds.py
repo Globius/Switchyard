@@ -3,6 +3,8 @@
 from switchyard.api.job_models import JobKind
 from switchyard.jobs.handlers import GIT_MIRROR_JOB, POLL_STATUS_JOB
 from switchyard.services.alerts import EVALUATE_ALERTS_JOB
+from switchyard.services.autoscale import AUTOSCALE_JOB
+from switchyard.services.captures import PACKET_CAPTURE_JOB
 from switchyard.services.certificates import (
     ISSUE_CERT_JOB,
     RENEW_CERTS_JOB,
@@ -11,6 +13,7 @@ from switchyard.services.certificates import (
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB
 from switchyard.services.discovery import DISCOVER_POOLS_JOB
+from switchyard.services.dns_records import SYNC_DNS_RECORDS_JOB
 from switchyard.services.gc import GC_JOB
 from switchyard.services.gslb import PROBE_GSLB_JOB, SYNC_GSLB_JOB
 from switchyard.services.infra import APPLY_SDN_JOB, DEPLOY_SE_GROUP_JOB, RETIRE_ENGINE_JOB
@@ -40,5 +43,8 @@ def test_every_job_kind_is_published() -> None:
         EVALUATE_ALERTS_JOB,
         SYNC_GSLB_JOB,
         PROBE_GSLB_JOB,
+        SYNC_DNS_RECORDS_JOB,
+        AUTOSCALE_JOB,
+        PACKET_CAPTURE_JOB,
     }
     assert kinds == {k.value for k in JobKind}

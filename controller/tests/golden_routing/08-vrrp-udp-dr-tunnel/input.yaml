@@ -1,0 +1,104 @@
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/24
+vip_pools:
+- id: vp-main
+  tenant_id: t-acme
+  name: main
+  network_id: net-lb
+  ranges:
+  - start: 192.0.2.10
+    end: 192.0.2.50
+se_groups:
+- id: seg-1
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+  routing_profile_id: rp-1
+pools:
+- id: pool-dr
+  tenant_id: t-acme
+  name: media-dr
+  members:
+  - address: 10.20.0.60
+    port: 5004
+  - address: 10.20.0.61
+    port: 5004
+- id: pool-tun
+  tenant_id: t-acme
+  name: media-tun
+  members:
+  - address: 10.99.4.10
+    port: 5005
+- id: pool-nat
+  tenant_id: t-acme
+  name: syslog
+  members:
+  - address: 10.20.0.70
+    port: 514
+virtual_services:
+- id: vs-dr
+  tenant_id: t-acme
+  se_group_id: seg-1
+  name: media-dr
+  protocol: udp
+  forward_mode: dr
+  vip: 192.0.2.22
+  ports:
+  - port: 5004
+  default_pool_id: pool-dr
+- id: vs-tun
+  tenant_id: t-acme
+  se_group_id: seg-1
+  name: media-tun
+  protocol: udp
+  forward_mode: tunnel
+  vip: 192.0.2.23
+  ports:
+  - port: 5005
+  default_pool_id: pool-tun
+- id: vs-nat
+  tenant_id: t-acme
+  se_group_id: seg-1
+  name: syslog
+  protocol: udp
+  vip: 192.0.2.24
+  ports:
+  - port: 514
+  default_pool_id: pool-nat
+routing_profiles:
+- id: rp-1
+  tenant_id: t-acme
+  name: edge-routing
+  kind: vrrp
+  vrid: 51
+  interface: eth1
+  static_routes:
+  - prefix: 10.99.0.0/16
+    next_hop: 192.0.2.1
+render:
+  se_group: seg-1
+  engines:
+  - name: se-a
+    index: 0
+    router_id: 10.30.0.11
+  - name: se-b
+    index: 1
+    router_id: 10.30.0.12
+  secrets:
+    kv/bgp/peer-1: example-password-1

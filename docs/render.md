@@ -54,8 +54,8 @@ Disabled services and pools that no enabled service uses are not rendered. UDP s
 
 ## UDP (IPVS)
 
-Each port of an enabled UDP service becomes one `virtual_server <vip> <port>` with `lb_kind NAT` and
-`protocol UDP`, sorted by VIP and port. Scheduler: `roundrobin` `rr`, `leastconn` `lc`, `source` `sh`;
+Each port of an enabled UDP service becomes one `virtual_server <vip> <port>` with `lb_kind` (`NAT`,
+`DR` or `TUN` by the service's `forward_mode`, below) and `protocol UDP`, sorted by VIP and port. Scheduler: `roundrobin` `rr`, `leastconn` `lc`, `source` `sh`;
 when the members' effective weights differ `wrr` / `wlc` (`sh` stays). Members: `drain` renders weight
 0, `disabled` is omitted. A pool monitor of type `udp` renders `UDP_CHECK` per real server:
 `delay_loop` is the interval, `retry` is `fall`, `connect_timeout` the timeout, `connect_port` the
@@ -71,6 +71,21 @@ a render error.
 
 The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.conf` and link
 `/etc/switchyard/sysctl/switchyard-udp.conf` into `/etc/sysctl.d/` (ADR 0020).
+
+### Forwarding method (`forward_mode`)
+
+| Mode | `lb_kind` | Replies | Member requirements |
+| --- | --- | --- | --- |
+| `nat` (default) | `NAT` | through the SE (masquerade rule and sysctls rendered) | none; the member port may differ from the service port |
+| `dr` | `DR` | straight to the client | in a `backend` network of the SE group; same port as the service; owns the VIP on `lo` without answering ARP |
+| `tunnel` | `TUN` | straight to the client | routable from the SE; same port as the service; an `ipip` (`ip6tnl` for IPv6) interface that owns the VIP |
+
+Member setup for `dr` (the controller never logs in to members): `ip addr add <vip>/32 dev lo`,
+`sysctl -w net.ipv4.conf.all.arp_ignore=1 net.ipv4.conf.all.arp_announce=2`. For `tunnel`:
+`ip tunnel add sytun0 mode ipip local <member-ip>`, `ip addr add <vip>/32 dev sytun0`, `ip link set sytun0 up`,
+`sysctl -w net.ipv4.conf.sytun0.rp_filter=0`. The nftables masquerade set and the sysctl file are rendered only while the
+group has a `nat` UDP service. Validation codes: `ipvs_port_mismatch`, `ipvs_dr_not_adjacent`,
+`forward_mode_not_allowed`. See ADR 0192.
 
 ## Object mapping
 

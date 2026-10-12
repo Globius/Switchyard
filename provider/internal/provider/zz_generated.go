@@ -40,8 +40,31 @@ var Definitions = []Definition{
 		Slug:      "se-groups",
 		Doc:       "",
 		Resource:  true,
-		PatchKeys: []string{"canary_seconds", "ha_mode", "maxconn", "name", "networks", "peers", "routing_profile_id"},
+		PatchKeys: []string{"autoscale", "canary_seconds", "ha_mode", "maxconn", "name", "networks", "peers", "routing_profile_id"},
 		Attrs: []Attr{
+			{Name: "autoscale", Kind: KindObject, Doc: "Add service engines to a group by itself when it is busy (ADR 0194). Scale-out only.", Attrs: []Attr{
+				{Name: "cooldown_s", Kind: KindInt},
+				{Name: "deploy", Kind: KindObject, Required: true, Doc: "What the autoscaler clones when it adds an engine (the arguments of a deploy).", Attrs: []Attr{
+					{Name: "agent_port", Kind: KindInt},
+					{Name: "credentials_ref", Kind: KindString, Required: true},
+					{Name: "dataplane_port", Kind: KindInt},
+					{Name: "mgmt_pool_id", Kind: KindString, Required: true},
+					{Name: "nic_pools", Kind: KindMap, Elem: &Attr{Kind: KindString}},
+					{Name: "nodes", Kind: KindList, Required: true, Elem: &Attr{Kind: KindString}},
+					{Name: "pool", Kind: KindString},
+					{Name: "ssh_public_keys", Kind: KindString},
+					{Name: "template_vmid", Kind: KindInt, Required: true},
+				}},
+				{Name: "enabled", Kind: KindBool},
+				{Name: "enroll", Kind: KindObject, Required: true, Doc: "How a new engine reaches the controller to enroll (ADR 0194).", Attrs: []Attr{
+					{Name: "ca_ref", Kind: KindString, Required: true},
+					{Name: "controller_cn", Kind: KindString},
+					{Name: "controller_url", Kind: KindString, Required: true},
+				}},
+				{Name: "max_engines", Kind: KindInt},
+				{Name: "scale_out_at", Kind: KindInt},
+				{Name: "sustain_s", Kind: KindInt},
+			}},
 			{Name: "canary_seconds", Kind: KindInt},
 			{Name: "ha_mode", Kind: KindString, Required: true, Doc: "How an SE group places its VIPs.", Enum: []string{"bgp", "vrrp"}},
 			{Name: "maxconn", Kind: KindInt},
@@ -65,7 +88,7 @@ var Definitions = []Definition{
 		Slug:      "virtual-services",
 		Doc:       "",
 		Resource:  true,
-		PatchKeys: []string{"allow_list_id", "cache", "certificate_ids", "compression", "default_pool_id", "deny_list_id", "enabled", "enforce_allow_list", "name", "policy_set_ids", "ports", "protocol", "restore_client_ip_header", "routes", "se_group_id", "vip", "vip_pool_id"},
+		PatchKeys: []string{"allow_list_id", "cache", "certificate_ids", "compression", "default_pool_id", "deny_list_id", "dns", "enabled", "enforce_allow_list", "forward_mode", "name", "policy_set_ids", "ports", "protocol", "restore_client_ip_header", "routes", "se_group_id", "vip", "vip_pool_id"},
 		Attrs: []Attr{
 			{Name: "allow_list_id", Kind: KindString},
 			{Name: "cache", Kind: KindObject, Doc: "HAProxy small-object cache for the responses of an ``http`` service (ADR 0117).", Attrs: []Attr{
@@ -80,8 +103,15 @@ var Definitions = []Definition{
 			}},
 			{Name: "default_pool_id", Kind: KindString},
 			{Name: "deny_list_id", Kind: KindString},
+			{Name: "dns", Kind: KindObject, Doc: "Publish a service's VIP as DNS address records (ADR 0193).", Attrs: []Attr{
+				{Name: "credential", Kind: KindString},
+				{Name: "names", Kind: KindList, Required: true, Elem: &Attr{Kind: KindString}},
+				{Name: "proxied", Kind: KindBool},
+				{Name: "ttl", Kind: KindInt},
+			}},
 			{Name: "enabled", Kind: KindBool},
 			{Name: "enforce_allow_list", Kind: KindBool},
+			{Name: "forward_mode", Kind: KindString, Doc: "How IPVS sends a UDP service's packets to a real server (ADR 0192).", Enum: []string{"nat", "dr", "tunnel"}},
 			{Name: "name", Kind: KindString, Required: true},
 			{Name: "policy_set_ids", Kind: KindList, Elem: &Attr{Kind: KindString}},
 			{Name: "ports", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{

@@ -50,6 +50,9 @@ nav:
       - Certificates from ACME providers: acme.md
       - Alerting: alerting.md
       - GSLB - wide IPs on PowerDNS: gslb.md
+      - DNS records from a virtual service: dns-records.md
+      - Automatic scale-out of an SE group: autoscale.md
+      - Packet capture on an engine: packet-capture.md
       - Country and reputation lists: ip-lists.md
       - IPv6 and dual-stack: ipv6.md
       - Kubernetes connector: kubernetes.md

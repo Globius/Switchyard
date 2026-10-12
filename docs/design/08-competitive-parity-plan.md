@@ -61,7 +61,7 @@ component), **n/a** (does not fit). Priority: **M** must, **S** should, **L** la
 | Backend mTLS (client cert to servers) | yes | yes | no | App GW | no (06: missing) | HAProxy | S |
 | Connection reuse / multiplexing (OneConnect) | yes | OneConnect | ALB | App GW | HAProxy default; no knob | HAProxy | L |
 | Source NAT / SNAT pools | yes | SNAT pools | NLB IP preserve | LB | not exposed | HAProxy+nft | S |
-| Direct server return, L2/L3 modes | yes | nPath | GWLB (Geneve) | no | no (IPVS NAT only) | IPVS | L |
+| Direct server return, L2/L3 modes | yes | nPath | GWLB (Geneve) | no | IPVS DR and tunnel (ADR 0192) | IPVS | L |
 | Transparent / bridge mode | yes | yes | no | no | no | n/a | - |
 | PROXY protocol | yes | yes | NLB | no | done (accept side) | HAProxy | |
 | Send PROXY protocol to backends | yes | yes | NLB | no | no | HAProxy | S |
@@ -171,7 +171,7 @@ component), **n/a** (does not fit). Priority: **M** must, **S** should, **L** la
 | Alerts and notifications | yes | yes | CloudWatch alarms | Monitor | events/SSE; no outbound webhook or mail | ctrl | **M** |
 | Health score | yes | no | no | no | plan | ctrl | S |
 | Request logs with per-request fields | yes | yes | access logs | diagnostic logs | HAProxy log lines; Vector/Loki plan | ext | **M** |
-| Packet capture | yes | tcpdump | traffic mirroring | packet capture | plan (phase 3) | ctrl | L |
+| Packet capture | yes | tcpdump | traffic mirroring | packet capture | agent `tcpdump` job (ADR 0194) | ctrl | L |
 | Auto scaling of ADC instances | yes (cloud) | yes (cloud) | automatic | automatic | manual deploy and retire | ctrl | S |
 | Upgrade orchestration (rolling SE upgrade) | yes | yes | n/a | n/a | via image rebuild; no job | ctrl | S |
 | Backup / restore of controller | yes | UCS | n/a | n/a | in the ops plan (pgBackRest) | ctrl | **M** |

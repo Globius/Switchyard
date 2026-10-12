@@ -47,6 +47,8 @@ from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
 from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator, AlertService
+from switchyard.services.autoscale import AUTOSCALE_JOB, Autoscaler
+from switchyard.services.captures import PacketCaptures
 from switchyard.services.certificates import (
     RENEW_CERTS_JOB,
     SYNC_CLOUDFLARE_IPS_JOB,
@@ -57,6 +59,7 @@ from switchyard.services.context import Databases
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.dns_providers import DnsProviders
+from switchyard.services.dns_records import SYNC_DNS_RECORDS_JOB, DnsRecordSync
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
@@ -183,6 +186,30 @@ def certificates(db: Databases, secrets: SecretsReader | None = None) -> Certifi
         alpn_publisher=lambda tenant_id: EngineTlsAlpnPublisher(db, engines, tenant_id),
         dns_wait_s=float(os.environ.get("SWITCHYARD_ACME_DNS_WAIT", "15")),
     )
+
+
+def dns_record_sync(db: Databases, secrets: SecretsReader | None = None) -> DnsRecordSync | None:
+    """Publishes virtual services as DNS address records, if the secrets backend is OpenBao.
+
+    The credentials of the tenant's DNS providers live in OpenBao (ADR 0079), so without it there
+    is nothing to publish with.
+    """
+    store = secrets or secrets_backend()
+    if not isinstance(store, OpenBaoSecrets):
+        return None
+    return DnsRecordSync(db, DnsProviders(db, store))
+
+
+def autoscaler(
+    db: Databases, engines: DbEngineDirectory, secrets: SecretsReader | None = None
+) -> Autoscaler | None:
+    """The SE group autoscaler, if Proxmox and agent enrollment are both configured (ADR 0194)."""
+    store = secrets or secrets_backend()
+    client = proxmox_client()
+    enroll = enrollment(db, store)
+    if client is None or enroll is None:
+        return None
+    return Autoscaler(db, engines, client, enroll, store)
 
 
 def telemetry() -> Telemetry | None:
@@ -444,6 +471,9 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         GslbSync(gslb, db) if (gslb := gslb_service(db)) is not None else None,
         GslbProber(gslb, db) if gslb is not None else None,
         JwksSync(db, ChangeSetService(db)),
+        dns_record_sync(db, secrets),
+        scaler := autoscaler(db, engines, secrets),
+        PacketCaptures(db, engines),
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
@@ -454,6 +484,10 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         EVALUATE_ALERTS_JOB: timedelta(minutes=1),
         SYNC_JWKS_JOB: timedelta(minutes=5),
     }
+    if scaler is not None:
+        schedule[AUTOSCALE_JOB] = timedelta(seconds=30)
+    if handlers.get(SYNC_DNS_RECORDS_JOB) is not None:
+        schedule[SYNC_DNS_RECORDS_JOB] = timedelta(minutes=1)
     if gslb_service(db) is not None:
         schedule[SYNC_GSLB_JOB] = timedelta(minutes=5)
         schedule[PROBE_GSLB_JOB] = timedelta(minutes=1)
