@@ -71,7 +71,7 @@ class Telemetry(Protocol):
     async def logs(
         self,
         tenant_id: UUID,
-        service: str,
+        service: str | None,
         *,
         since: datetime,
         until: datetime,
@@ -79,7 +79,7 @@ class Telemetry(Protocol):
         contains: str | None = None,
         status_class: int | None = None,
     ) -> list[AccessLogEntry]:
-        """Access log lines of one service, newest first."""
+        """Access log lines of one service (or of the whole tenant), newest first."""
         ...
 
 
@@ -344,7 +344,7 @@ class HttpTelemetry:
     async def logs(
         self,
         tenant_id: UUID,
-        service: str,
+        service: str | None,
         *,
         since: datetime,
         until: datetime,
@@ -355,7 +355,10 @@ class HttpTelemetry:
         """Query Loki, newest first; filters run in LogQL after the tenant matcher."""
         if self._loki is None:
             raise TelemetryError("no log backend is configured")
-        query = "{" + f'tenant="{tenant_id}",frontend="{frontend_name(service)}"' + "}"
+        selector = f'tenant="{tenant_id}"'
+        if service is not None:
+            selector += f',frontend="{frontend_name(service)}"'
+        query = "{" + selector + "}"
         if contains:
             query += " |= `" + contains.replace("`", "") + "`"
         if status_class is not None:
@@ -460,7 +463,7 @@ class FakeTelemetry:
     async def logs(
         self,
         tenant_id: UUID,
-        service: str,
+        service: str | None,
         *,
         since: datetime,
         until: datetime,
@@ -471,6 +474,8 @@ class FakeTelemetry:
         """The stored entries inside the window, filtered like the real client."""
         self.asked.append(tenant_id)
         out = [e for e in self.entries if since <= e.at < until]
+        if service is not None:
+            out = [e for e in out if e.frontend == frontend_name(service)]
         if contains:
             out = [e for e in out if contains in e.raw]
         if status_class is not None:
