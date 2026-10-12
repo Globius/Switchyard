@@ -40,6 +40,7 @@ from switchyard.api.alert_models import (
     AlertTargetRead,
     AlertTargetTest,
 )
+from switchyard.api.autoscale_models import AutoscaleRead
 from switchyard.api.dns_record_models import DnsRecordRead, DnsRecordSyncResult
 from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
 from switchyard.api.gslb_models import (
@@ -198,6 +199,7 @@ from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
 from switchyard.services import principals
 from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.alerts import EVENT_ACTIONS, AlertService
+from switchyard.services.autoscale import Autoscaler
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
 from switchyard.services.cert_requests import CertificateRequests, IssueRequest
 from switchyard.services.certificates import CertificateJobs, CertificateService
@@ -285,6 +287,7 @@ class ApiServices:
     avi_import: AviImportService = None  # type: ignore[assignment]
     kubernetes: KubernetesClusters | None = None
     dns_records: DnsRecordSync | None = None
+    autoscaler: Autoscaler | None = None
 
 
 def build_services(
@@ -303,6 +306,7 @@ def build_services(
     alerts: AlertService | None = None,
     email_configured: bool = False,
     gslb: GslbService | None = None,
+    autoscaler: Autoscaler | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles.
 
@@ -356,6 +360,7 @@ def build_services(
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
         dns_providers=dns_providers,
         dns_records=DnsRecordSync(db, dns_providers) if dns_providers is not None else None,
+        autoscaler=autoscaler,
         controller=ControllerSettings(db, ChangeSetService(db)),
         avi_import=AviImportService(db, ChangeSetService(db), certs),
         kubernetes=KubernetesClusters(db, secrets, ChangeSetService(db))
@@ -2501,6 +2506,25 @@ def create_app(
         return await need_gslb(svc, who).sync(  # type: ignore[no-any-return]
             who, tenant.id, force=True, request_id=_rid()
         )
+
+    @router.get(
+        "/tenants/{t}/autoscale",
+        tags=["se-groups"],
+        summary="Autoscaler state of the SE groups",
+        description="For each SE group with an `autoscale` block: its engine count, the average "
+        "connection load the autoscaler measured and its last decision (`idle`, `busy`, "
+        "`scaling`, `cooldown`, `at_max`, `blocked` with the reason, or `off`). The autoscaler "
+        "only adds engines. 404 when the controller has no Proxmox client or agent enrollment. "
+        "Requires any role in the tenant.",
+        response_model=list[AutoscaleRead],
+        responses=_ok([ex.AUTOSCALE]),
+    )
+    async def list_autoscale(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        if svc.autoscaler is None:
+            raise ApiError(
+                404, "autoscaling needs Proxmox and agent enrollment", code="not_enabled"
+            )
+        return await svc.autoscaler.list_states(who, tenant.id)
 
     # DNS address records of virtual services (ADR 0193)
     @router.get(

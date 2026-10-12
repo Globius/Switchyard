@@ -282,6 +282,74 @@ class PeerSync(Model):
         return self
 
 
+class AutoscaleDeploy(Model):
+    """What the autoscaler clones when it adds an engine (the arguments of a deploy).
+
+    Attributes:
+        nodes: Proxmox nodes to place new engines on, round-robin.
+        template_vmid: The SE template to clone (a QEMU template with the guest agent).
+        mgmt_pool_id: VIP pool on the group's management network that addresses come from.
+        credentials_ref: OpenBao reference of the Data Plane API login (``user:password``).
+        pool: Proxmox resource pool for the VMs, if any.
+        nic_pools: Pool each data NIC takes its address from, by network id.
+        dataplane_port: Data Plane API port.
+        agent_port: ``sy-agent`` gRPC port.
+        ssh_public_keys: Operator keys for cloud-init.
+    """
+
+    nodes: tuple[str, ...] = Field(min_length=1, max_length=8)
+    template_vmid: int = Field(ge=100)
+    mgmt_pool_id: UUID
+    credentials_ref: SecretRef
+    pool: str | None = None
+    nic_pools: dict[UUID, UUID] = Field(default_factory=dict)
+    dataplane_port: Port = 5556
+    agent_port: Port = 7443
+    ssh_public_keys: str | None = None
+
+
+class AutoscaleEnroll(Model):
+    """How a new engine reaches the controller to enroll (ADR 0194).
+
+    Attributes:
+        controller_url: ``https://`` address the agent enrolls to.
+        controller_cn: Name in the controller's certificate.
+        ca_ref: OpenBao reference of the controller CA certificate (PEM) the agent trusts.
+    """
+
+    controller_url: str = Field(pattern=r"^https://[A-Za-z0-9.\-\[\]:]{1,253}(:\d{1,5})?/?$")
+    controller_cn: Hostname = "switchyard-controller"
+    ca_ref: SecretRef
+
+
+class Autoscale(Model):
+    """Add service engines to a group by itself when it is busy (ADR 0194). Scale-out only.
+
+    The group counts as busy while the engines' current connections, averaged over the reachable
+    ones, stay at ``scale_out_at`` percent of the group's ``maxconn`` or more for ``sustain_s``.
+    The autoscaler then deploys one more engine (never above ``max_engines``, never while an
+    earlier one is still enrolling, never within ``cooldown_s`` of the last), enrolls it, and
+    brings it into the group with a canary-first reapply. It never removes an engine.
+
+    Attributes:
+        enabled: Turn the autoscaler off without losing the settings.
+        max_engines: Upper limit for the group's engine count.
+        scale_out_at: Percent of ``maxconn`` that counts as busy.
+        sustain_s: How long the group must stay busy before an engine is added.
+        cooldown_s: Minimum time between two scale-outs.
+        deploy: What to clone.
+        enroll: How the new engine finds the controller.
+    """
+
+    enabled: bool = True
+    max_engines: int = Field(default=8, ge=2, le=16)
+    scale_out_at: int = Field(default=70, ge=30, le=95)
+    sustain_s: int = Field(default=300, ge=30, le=3600)
+    cooldown_s: int = Field(default=900, ge=60, le=86_400)
+    deploy: AutoscaleDeploy
+    enroll: AutoscaleEnroll
+
+
 class SeGroup(TenantOwned):
     """A set of HAProxy service engines that serve the same virtual services.
 
@@ -294,6 +362,7 @@ class SeGroup(TenantOwned):
         canary_seconds: How long the canary SE is watched after a push before the rest of the
             group is updated (0 skips the wait).
         peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
+        autoscale: Adds engines by itself when the group is busy (ADR 0194).
     """
 
     ha_mode: HaMode
@@ -302,6 +371,7 @@ class SeGroup(TenantOwned):
     canary_seconds: int = Field(default=30, ge=0, le=600)
     routing_profile_id: UUID | None = None
     peers: PeerSync | None = None
+    autoscale: Autoscale | None = None
 
 
 InterfaceName = Annotated[str, AfterValidator(v.validate_interface)]

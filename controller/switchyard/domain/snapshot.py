@@ -123,11 +123,15 @@ class Snapshot(Model):
         cert_ids.update(p.client_certificate_id for p in pools if p.client_certificate_id)
         monitor_ids = {p.health_monitor_id for p in pools if p.health_monitor_id}
         network_ids = {n.network_id for n in group.networks}
-        pool_networks = {p.network_id for p in self.vip_pools if p.id in _vip_pool_ids(services)}
+        vip_pool_ids = _vip_pool_ids(services)
+        if group.autoscale is not None:  # its deploy settings name pools that must stay valid
+            vip_pool_ids |= {group.autoscale.deploy.mgmt_pool_id}
+            vip_pool_ids |= set(group.autoscale.deploy.nic_pools.values())
+        pool_networks = {p.network_id for p in self.vip_pools if p.id in vip_pool_ids}
         return Snapshot(
             tenants=tuple(t for t in self.tenants if t.id == group.tenant_id),
             networks=tuple(n for n in self.networks if n.id in network_ids | pool_networks),
-            vip_pools=tuple(p for p in self.vip_pools if p.id in _vip_pool_ids(services)),
+            vip_pools=tuple(p for p in self.vip_pools if p.id in vip_pool_ids),
             se_groups=(group,),
             virtual_services=services,
             pools=pools,
@@ -254,6 +258,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                         f"{peer.address} is not in a backend network of the group",
                     )
                 )
+    for g in snapshot.se_groups:
+        _check_autoscale(g, networks, vip_pools, problems)
     for g in snapshot.se_groups:
         if g.routing_profile_id is None:
             continue
@@ -634,6 +640,57 @@ def _check_udp_service(s: VirtualService, base: str, problems: list[Problem]) ->
                         f"{field} is not valid on udp",
                     )
                 )
+
+
+def _check_autoscale(
+    g: SeGroup,
+    networks: Mapping[UUID, Network],
+    vip_pools: Mapping[UUID, VipPool],
+    problems: list[Problem],
+) -> None:
+    """The deploy settings of an autoscaled group must fit its networks (ADR 0194)."""
+    if g.autoscale is None:
+        return
+    base = f"se_groups.{g.name}.autoscale.deploy"
+    mgmt = [gn.network_id for gn in g.networks if gn.role is NetworkRole.MGMT]
+    if len(mgmt) != 1:
+        problems.append(
+            Problem(
+                f"se_groups.{g.name}.autoscale",
+                "autoscale_needs_mgmt_network",
+                "an autoscaled group needs exactly one mgmt network to address new engines on",
+            )
+        )
+        return
+    pool = vip_pools.get(g.autoscale.deploy.mgmt_pool_id)
+    if pool is None or pool.network_id != mgmt[0]:
+        problems.append(
+            Problem(
+                f"{base}.mgmt_pool_id",
+                "autoscale_pool_mismatch",
+                "mgmt_pool_id must be a VIP pool on the group's mgmt network",
+            )
+        )
+    data_networks = {gn.network_id for gn in g.networks if gn.role is not NetworkRole.MGMT}
+    for network_id, pool_id in g.autoscale.deploy.nic_pools.items():
+        pool = vip_pools.get(pool_id)
+        if network_id not in data_networks or pool is None or pool.network_id != network_id:
+            problems.append(
+                Problem(
+                    f"{base}.nic_pools.{network_id}",
+                    "autoscale_pool_mismatch",
+                    "each nic_pools entry must name a VIP pool on one of the group's data networks",
+                )
+            )
+    for network_id in (*mgmt, *data_networks):
+        if networks.get(network_id) is not None and not networks[network_id].vnet:
+            problems.append(
+                Problem(
+                    f"se_groups.{g.name}.networks",
+                    "autoscale_network_without_vnet",
+                    f"network {networks[network_id].name} has no VNet to attach new engines to",
+                )
+            )
 
 
 def _check_dns(s: VirtualService, base: str, problems: list[Problem]) -> None:

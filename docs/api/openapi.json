@@ -2567,6 +2567,250 @@
         "title": "AuthProviders",
         "type": "object"
       },
+      "Autoscale": {
+        "additionalProperties": false,
+        "description": "Add service engines to a group by itself when it is busy (ADR 0194). Scale-out only.\n\nThe group counts as busy while the engines' current connections, averaged over the reachable\nones, stay at ``scale_out_at`` percent of the group's ``maxconn`` or more for ``sustain_s``.\nThe autoscaler then deploys one more engine (never above ``max_engines``, never while an\nearlier one is still enrolling, never within ``cooldown_s`` of the last), enrolls it, and\nbrings it into the group with a canary-first reapply. It never removes an engine.\n\nAttributes:\n    enabled: Turn the autoscaler off without losing the settings.\n    max_engines: Upper limit for the group's engine count.\n    scale_out_at: Percent of ``maxconn`` that counts as busy.\n    sustain_s: How long the group must stay busy before an engine is added.\n    cooldown_s: Minimum time between two scale-outs.\n    deploy: What to clone.\n    enroll: How the new engine finds the controller.",
+        "properties": {
+          "cooldown_s": {
+            "default": 900,
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Cooldown S",
+            "type": "integer"
+          },
+          "deploy": {
+            "$ref": "#/components/schemas/AutoscaleDeploy"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "enroll": {
+            "$ref": "#/components/schemas/AutoscaleEnroll"
+          },
+          "max_engines": {
+            "default": 8,
+            "maximum": 16.0,
+            "minimum": 2.0,
+            "title": "Max Engines",
+            "type": "integer"
+          },
+          "scale_out_at": {
+            "default": 70,
+            "maximum": 95.0,
+            "minimum": 30.0,
+            "title": "Scale Out At",
+            "type": "integer"
+          },
+          "sustain_s": {
+            "default": 300,
+            "maximum": 3600.0,
+            "minimum": 30.0,
+            "title": "Sustain S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deploy",
+          "enroll"
+        ],
+        "title": "Autoscale",
+        "type": "object"
+      },
+      "AutoscaleDeploy": {
+        "additionalProperties": false,
+        "description": "What the autoscaler clones when it adds an engine (the arguments of a deploy).\n\nAttributes:\n    nodes: Proxmox nodes to place new engines on, round-robin.\n    template_vmid: The SE template to clone (a QEMU template with the guest agent).\n    mgmt_pool_id: VIP pool on the group's management network that addresses come from.\n    credentials_ref: OpenBao reference of the Data Plane API login (``user:password``).\n    pool: Proxmox resource pool for the VMs, if any.\n    nic_pools: Pool each data NIC takes its address from, by network id.\n    dataplane_port: Data Plane API port.\n    agent_port: ``sy-agent`` gRPC port.\n    ssh_public_keys: Operator keys for cloud-init.",
+        "properties": {
+          "agent_port": {
+            "default": 7443,
+            "title": "Agent Port",
+            "type": "integer"
+          },
+          "credentials_ref": {
+            "title": "Credentials Ref",
+            "type": "string"
+          },
+          "dataplane_port": {
+            "default": 5556,
+            "title": "Dataplane Port",
+            "type": "integer"
+          },
+          "mgmt_pool_id": {
+            "format": "uuid",
+            "title": "Mgmt Pool Id",
+            "type": "string"
+          },
+          "nic_pools": {
+            "additionalProperties": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "title": "Nic Pools",
+            "type": "object"
+          },
+          "nodes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "pool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pool"
+          },
+          "ssh_public_keys": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssh Public Keys"
+          },
+          "template_vmid": {
+            "minimum": 100.0,
+            "title": "Template Vmid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nodes",
+          "template_vmid",
+          "mgmt_pool_id",
+          "credentials_ref"
+        ],
+        "title": "AutoscaleDeploy",
+        "type": "object"
+      },
+      "AutoscaleEnroll": {
+        "additionalProperties": false,
+        "description": "How a new engine reaches the controller to enroll (ADR 0194).\n\nAttributes:\n    controller_url: ``https://`` address the agent enrolls to.\n    controller_cn: Name in the controller's certificate.\n    ca_ref: OpenBao reference of the controller CA certificate (PEM) the agent trusts.",
+        "properties": {
+          "ca_ref": {
+            "title": "Ca Ref",
+            "type": "string"
+          },
+          "controller_cn": {
+            "default": "switchyard-controller",
+            "title": "Controller Cn",
+            "type": "string"
+          },
+          "controller_url": {
+            "pattern": "^https://[A-Za-z0-9.\\-\\[\\]:]{1,253}(:\\d{1,5})?/?$",
+            "title": "Controller Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "controller_url",
+          "ca_ref"
+        ],
+        "title": "AutoscaleEnroll",
+        "type": "object"
+      },
+      "AutoscaleRead": {
+        "additionalProperties": false,
+        "description": "What the autoscaler last saw and did for one SE group.",
+        "properties": {
+          "decision": {
+            "enum": [
+              "off",
+              "idle",
+              "busy",
+              "at_max",
+              "cooldown",
+              "blocked",
+              "scaling",
+              "scale_out"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "engines": {
+            "title": "Engines",
+            "type": "integer"
+          },
+          "last_scaled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scaled At"
+          },
+          "max_engines": {
+            "title": "Max Engines",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "scale_out_at": {
+            "title": "Scale Out At",
+            "type": "integer"
+          },
+          "se_group": {
+            "title": "Se Group",
+            "type": "string"
+          },
+          "utilization": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization"
+          }
+        },
+        "required": [
+          "se_group",
+          "enabled",
+          "engines",
+          "max_engines",
+          "scale_out_at",
+          "utilization",
+          "decision",
+          "reason",
+          "last_scaled_at"
+        ],
+        "title": "AutoscaleRead",
+        "type": "object"
+      },
       "AviFindingRead": {
         "additionalProperties": false,
         "description": "One decision of the conversion.",
@@ -9769,7 +10013,8 @@
           "evaluate_alerts",
           "sync_gslb",
           "probe_gslb",
-          "sync_dns_records"
+          "sync_dns_records",
+          "autoscale_se_groups"
         ],
         "title": "JobKind",
         "type": "string"
@@ -17962,8 +18207,18 @@
       },
       "SeGroup": {
         "additionalProperties": false,
-        "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).\n    peers: Persistence table sync between the group's engines; ``None`` keeps each table local.",
+        "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).\n    peers: Persistence table sync between the group's engines; ``None`` keeps each table local.\n    autoscale: Adds engines by itself when the group is busy (ADR 0194).",
         "properties": {
+          "autoscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Autoscale"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canary_seconds": {
             "default": 30,
             "maximum": 600.0,
@@ -18045,6 +18300,16 @@
       "SeGroupCreate": {
         "additionalProperties": false,
         "properties": {
+          "autoscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Autoscale"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canary_seconds": {
             "default": 30,
             "maximum": 600.0,
@@ -18172,6 +18437,16 @@
       "SeGroupPatch": {
         "additionalProperties": false,
         "properties": {
+          "autoscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Autoscale"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canary_seconds": {
             "anyOf": [
               {
@@ -18259,6 +18534,16 @@
         "additionalProperties": false,
         "description": "SeGroup as returned by the API.",
         "properties": {
+          "autoscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Autoscale"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canary_seconds": {
             "default": 30,
             "maximum": 600.0,
@@ -31216,6 +31501,113 @@
         "summary": "Download audit events as CSV or JSON Lines",
         "tags": [
           "audit"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/autoscale": {
+      "get": {
+        "description": "For each SE group with an `autoscale` block: its engine count, the average connection load the autoscaler measured and its last decision (`idle`, `busy`, `scaling`, `cooldown`, `at_max`, `blocked` with the reason, or `off`). The autoscaler only adds engines. 404 when the controller has no Proxmox client or agent enrollment. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_autoscale_api_v1_tenants__t__autoscale_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "decision": "idle",
+                    "enabled": true,
+                    "engines": 3,
+                    "max_engines": 6,
+                    "scale_out_at": 70,
+                    "se_group": "edge",
+                    "utilization": 41
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AutoscaleRead"
+                  },
+                  "title": "Response List Autoscale Api V1 Tenants  T  Autoscale Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Autoscaler state of the SE groups",
+        "tags": [
+          "se-groups"
         ],
         "x-required-role": "viewer"
       }

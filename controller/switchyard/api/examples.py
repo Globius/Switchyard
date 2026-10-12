@@ -853,6 +853,18 @@ WIDE_IP_STATE = {
     "applied_at": WHEN,
 }
 
+AUTOSCALE = {
+    "se_group": "edge",
+    "enabled": True,
+    "engines": 3,
+    "max_engines": 6,
+    "scale_out_at": 70,
+    "utilization": 41,
+    "decision": "idle",
+    "reason": None,
+    "last_scaled_at": None,
+}
+
 DNS_RECORD = {
     "hostname": "app.example.test",
     "type": "A",

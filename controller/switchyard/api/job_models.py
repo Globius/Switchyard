@@ -66,6 +66,7 @@ class JobKind(StrEnum):
     SYNC_GSLB = "sync_gslb"
     PROBE_GSLB = "probe_gslb"
     SYNC_DNS_RECORDS = "sync_dns_records"
+    AUTOSCALE_SE_GROUPS = "autoscale_se_groups"
 
 
 class JobStage(ApiModel):

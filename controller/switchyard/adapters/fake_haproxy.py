@@ -59,6 +59,9 @@ class FakeHaproxy:
         self._failures: list[Failure] = []
         self._status_overrides: dict[tuple[str, str], str] = {}
         self.closed = False
+        #: What ``info`` reports as load (``None``: the Data Plane API does not say).
+        self.curr_conns: int | None = None
+        self.max_conn: int | None = None
         #: Entries added at run time: ``map file -> key -> value``.
         self.map_entries: dict[str, dict[str, str]] = {}
         #: TLS-ALPN-01 certificates: ``crt-list -> name -> (sni, pem)``.
@@ -126,7 +129,9 @@ class FakeHaproxy:
 
     async def info(self) -> EngineInfo:
         """Return a pid that changes with every successful push."""
-        return EngineInfo(pid=self._pid, uptime_s=0)
+        return EngineInfo(
+            pid=self._pid, uptime_s=0, curr_conns=self.curr_conns, max_conn=self.max_conn
+        )
 
     async def fingerprint(self) -> str | None:
         """Return the fingerprint of the held configuration."""

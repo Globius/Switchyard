@@ -331,3 +331,30 @@ class SdnObjectRow(Base):
     kind: Mapped[str] = mapped_column(Text, primary_key=True)  # "zone" | "vnet"
     name: Mapped[str] = mapped_column(Text, primary_key=True)
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
+class AutoscaleStateRow(Base):
+    """``autoscale_state``: what the autoscaler last saw and did for one SE group (ADR 0194).
+
+    ``decision`` is ``idle``, ``busy`` (over the threshold, waiting out ``sustain_s``),
+    ``scaling`` (an engine is deploying or enrolling), ``cooldown``, ``at_max`` or ``blocked``
+    (``reason`` says why: an unhealthy group, an engine that never enrolled, a failed deploy).
+    """
+
+    __tablename__ = "autoscale_state"
+    __table_args__ = (ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),)
+
+    se_group_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    busy_since: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    last_scaled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    pending_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    pending_engine_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    enroll_sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    pending_since: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    utilization: Mapped[int | None] = mapped_column(Integer)
+    decision: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'idle'"))
+    reason: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
+    )

@@ -47,6 +47,7 @@ from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
 from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator, AlertService
+from switchyard.services.autoscale import AUTOSCALE_JOB, Autoscaler
 from switchyard.services.certificates import (
     RENEW_CERTS_JOB,
     SYNC_CLOUDFLARE_IPS_JOB,
@@ -196,6 +197,18 @@ def dns_record_sync(db: Databases, secrets: SecretsReader | None = None) -> DnsR
     if not isinstance(store, OpenBaoSecrets):
         return None
     return DnsRecordSync(db, DnsProviders(db, store))
+
+
+def autoscaler(
+    db: Databases, engines: DbEngineDirectory, secrets: SecretsReader | None = None
+) -> Autoscaler | None:
+    """The SE group autoscaler, if Proxmox and agent enrollment are both configured (ADR 0194)."""
+    store = secrets or secrets_backend()
+    client = proxmox_client()
+    enroll = enrollment(db, store)
+    if client is None or enroll is None:
+        return None
+    return Autoscaler(db, engines, client, enroll, store)
 
 
 def telemetry() -> Telemetry | None:
@@ -458,6 +471,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         GslbProber(gslb, db) if gslb is not None else None,
         JwksSync(db, ChangeSetService(db)),
         dns_record_sync(db, secrets),
+        scaler := autoscaler(db, engines, secrets),
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
@@ -468,6 +482,8 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         EVALUATE_ALERTS_JOB: timedelta(minutes=1),
         SYNC_JWKS_JOB: timedelta(minutes=5),
     }
+    if scaler is not None:
+        schedule[AUTOSCALE_JOB] = timedelta(seconds=30)
     if handlers.get(SYNC_DNS_RECORDS_JOB) is not None:
         schedule[SYNC_DNS_RECORDS_JOB] = timedelta(minutes=1)
     if gslb_service(db) is not None:
