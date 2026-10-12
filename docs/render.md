@@ -104,6 +104,8 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Service `compression` | `compression algo <a>...` and `compression type <t>...` in the frontend (ADR 0117) |
 | SE group `peers` | a `peers sy_peers` section with one `peer <name> <address>:<port>` per engine, and `peers sy_peers` on every stick table; each engine's host name must be one of the peer names (ADR 0118) |
 | Route `pools` (weighted) | one `http-request set-var(txn.pick) rand(100)` per request, then one `use_backend <pool> if <match> { var(txn.pick) -m int lt <cumulative weight> }` per pool except the last, which takes the rest (ADR 0119) |
+| Route `fallback_pool_ids` | `use_backend <pool> if <match> { nbsrv(<pool>) gt 0 }` per pool in order, the last without the condition (ADR 0119) |
+| Service `cache` | a `cache sy_cache_<name>` section (`total-max-size` MB, `max-object-size` bytes, `max-age` s) and `http-request cache-use` / `http-response cache-store` after the policy rules (ADR 0117); at most 1024 MB per SE group |
 | Pool `passive_check`, `slow_start_s` | server options `observe <layer> error-limit <n> on-error <action>` and `slowstart <n>s`; both need the pool's health monitor (ADR 0066) |
 | Port `tls_profile` | `ssl-min-ver`, `ciphers` and `ciphersuites` on the TLS `bind` (`modern`, `intermediate`, `legacy`; none keeps the default), see ADR 0067 |
 | Port `client_ca_id`, `client_verify` | `ca-file certs/ca-<name>.pem verify required|optional` (and `crl-file certs/ca-<name>.crl`) on the TLS `bind`; the files travel in the agent bundle (ADR 0070) |
