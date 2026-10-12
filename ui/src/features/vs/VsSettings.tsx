@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { emptyMatch, ExtraMatch } from "@/features/policies/MatchEditor";
 import { Combobox } from "@/components/ui/combobox";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DropdownMenu } from "radix-ui";
@@ -827,7 +828,7 @@ function SettingsForm({
                   ...form.routes,
                   {
                     order: form.routes.length + 1,
-                    match: { host: null, path_prefix: null, path_exact: null },
+                    match: emptyMatch(),
                     pool_id: null,
                     redirect: null,
                   },
@@ -1012,6 +1013,17 @@ function SettingsForm({
                                 ))}
                               </MenuContent>
                             </Menu>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td />
+                          <td colSpan={6} className="px-3 pb-2">
+                            <ExtraMatch
+                              id={`Route ${i + 1}`}
+                              match={r.match}
+                              disabled={disabled}
+                              onChange={(m) => upd({ match: m })}
+                            />
                           </td>
                         </tr>
                         {msgs.length > 0 && (

@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
 import { buildBundle, looksLikePem, toBase64 } from "@/features/certificates/Certificates";
 import { parseCidrs } from "@/features/policies/Policies";
+import { cleanMatch, describeMatch, parseNetworks } from "@/features/policies/MatchEditor";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
 
@@ -735,5 +736,153 @@ describe("policies", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "New allow list" })).toBeDisabled(),
     );
+  });
+});
+
+describe("match helpers", () => {
+  it("drops empty conditions and describes what is left", () => {
+    expect(cleanMatch({ host: "", methods: [], headers: [], query: [], source_cidrs: [] })).toEqual(
+      {},
+    );
+    const m = cleanMatch({
+      host: "api.example.test",
+      path_prefix: "/v2",
+      methods: ["GET", "POST"],
+      headers: [
+        { name: "X-Env", op: "present", value: "ignored" },
+        { name: "X-A", op: "equals", value: "1" },
+      ],
+      query: [{ name: "debug", op: "present", value: "x" }],
+      source_cidrs: ["10.0.0.0/8"],
+      sni: "*.example.test",
+    });
+    expect(m.headers).toEqual([
+      { name: "X-Env", op: "present" },
+      { name: "X-A", op: "equals", value: "1" },
+    ]);
+    expect(m.query).toEqual([{ name: "debug", op: "present" }]);
+    expect(describeMatch(m)).toBe(
+      "GET/POST · api.example.test · /v2* · X-Env present · X-A equals 1 · ?debug · from 10.0.0.0/8 · SNI *.example.test",
+    );
+    expect(describeMatch({})).toBe("every request");
+  });
+
+  it("parses one network per line, IPv4 and IPv6", () => {
+    expect(parseNetworks("10.0.0.0/8\n\n2001:db8::/32 ")).toEqual({
+      list: ["10.0.0.0/8", "2001:db8::/32"],
+    });
+    expect(parseNetworks("10.0.0.0/8\nnope").error).toMatch(/Line 2/);
+  });
+});
+
+describe("rule policies", () => {
+  it("creates a rewrite policy with a header action, a variable value and a header condition", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New rewrite policy" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "add-headers");
+    await userEvent.type(screen.getByLabelText("Rule 1 header name"), "X-Client");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 value source"), "variable");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 variable"), "client_ip");
+    await userEvent.click(screen.getByText("More conditions"));
+    await userEvent.click(screen.getByRole("button", { name: "Add header condition" }));
+    await userEvent.type(screen.getByLabelText("Rule 1 header 1 name"), "X-Env");
+    await userEvent.type(screen.getByLabelText("Rule 1 header 1 value"), "canary");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toEqual({
+      kind: "rewrite",
+      name: "add-headers",
+      rules: [
+        {
+          phase: "request",
+          match: { headers: [{ name: "X-Env", op: "equals", value: "canary" }] },
+          action: { type: "set_header", name: "X-Client", variable: "client_ip" },
+        },
+      ],
+    });
+  });
+
+  it("offers Replace path prefix only in the request phase", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New rewrite policy" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    const action = await screen.findByLabelText("Rule 1 action");
+    expect(within(action).getByRole("option", { name: "Replace path prefix" })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 phase"), "response");
+    expect(within(action).queryByRole("option", { name: "Replace path prefix" })).toBeNull();
+  });
+
+  it("creates a fixed response with a body and Retry-After", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New fixed response" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "maintenance");
+    expect(screen.getByLabelText("Rule 1 retry after")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Rule 1 retry after"), "120");
+    await userEvent.type(screen.getByLabelText("Rule 1 body"), "Back soon");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toEqual({
+      kind: "respond",
+      name: "maintenance",
+      rules: [
+        {
+          match: {},
+          status: 503,
+          body: "Back soon",
+          content_type: "text/html",
+          retry_after_s: 120,
+        },
+      ],
+    });
+  });
+
+  it("creates custom error pages for the chosen statuses only", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New error pages" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "pages");
+    await userEvent.click(screen.getByLabelText("Custom page for 503"));
+    await userEvent.type(screen.getByLabelText("Page 503 body"), "Down");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toEqual({
+      kind: "error_pages",
+      name: "pages",
+      pages: [{ status: 503, content_type: "text/html", body: "Down" }],
+    });
+  });
+
+  it("shows server findings by path", async () => {
+    server.use(
+      http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", () =>
+        HttpResponse.json(
+          {
+            title: "Invalid",
+            status: 422,
+            errors: [
+              {
+                path: "rules[0].action.name",
+                code: "protected_header",
+                message: "Host cannot be changed",
+              },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New rewrite policy" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "bad");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    expect(await screen.findByText(/Host cannot be changed/)).toBeInTheDocument();
   });
 });
