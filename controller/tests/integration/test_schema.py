@@ -122,6 +122,7 @@ def full_data() -> dict:  # type: ignore[type-arg]
     vs = data["virtual_services"][0]
     vs["ports"][0]["tls_profile"] = "modern"
     vs["ports"][0]["http3"] = True
+    vs["cache"] = {"size_mb": 8, "max_object_kb": 128, "max_age_s": 20}
     vs["compression"] = {"algorithms": ["gzip", "deflate"], "content_types": ["text/html"]}
     vs.update(
         policy_set_ids=["ps-redir"],
@@ -135,7 +136,12 @@ def full_data() -> dict:  # type: ignore[type-arg]
             "match": {"host": "app.example.test", "path_prefix": "/old"},
             "redirect": {"location": "https://app.example.test/new", "code": 302},
         },
-        {"order": 2, "match": {"path_exact": "/status"}, "pool_id": "pool-web"},
+        {
+            "order": 2,
+            "match": {"path_exact": "/status"},
+            "pool_id": "pool-web",
+            "fallback_pool_ids": ["pool-split"],
+        },
         {
             "order": 3,
             "match": {"host": "split.example.test"},

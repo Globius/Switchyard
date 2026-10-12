@@ -507,6 +507,8 @@ class VsRoute(Model):
         match: What the request must match. Must not be empty.
         pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.
         redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.
+        fallback_pool_ids: Priority groups: pools tried in order when every server of the pool
+            before them is down (``pool_id`` only; up to three; ADR 0119).
         pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each
             request is sent to one of them at random in that proportion (ADR 0119).
 
@@ -528,6 +530,7 @@ class VsRoute(Model):
     pool_id: UUID | None = None
     redirect: RedirectAction | None = None
     pools: tuple[WeightedPool, ...] = Field(default=(), max_length=8)
+    fallback_pool_ids: tuple[UUID, ...] = Field(default=(), max_length=3)
 
     @model_validator(mode="after")
     def _one_action(self) -> Self:
@@ -540,6 +543,12 @@ class VsRoute(Model):
                 raise ValueError("the weights of a weighted route must add up to 100")
             if len({p.pool_id for p in self.pools}) != len(self.pools):
                 raise ValueError("a pool can appear only once in a weighted route")
+        if self.fallback_pool_ids:
+            if self.pool_id is None:
+                raise ValueError("fallback_pool_ids needs pool_id")
+            chain = (self.pool_id, *self.fallback_pool_ids)
+            if len(set(chain)) != len(chain):
+                raise ValueError("a pool can appear only once in a priority chain")
         if self.match.is_empty:
             raise ValueError("a route must match a host or a path; use default_pool_id as fallback")
         return self
@@ -549,7 +558,7 @@ class VsRoute(Model):
         """Every pool the route can send traffic to (none for a redirect)."""
         if self.pools:
             return tuple(p.pool_id for p in self.pools)
-        return (self.pool_id,) if self.pool_id is not None else ()
+        return (self.pool_id, *self.fallback_pool_ids) if self.pool_id is not None else ()
 
 
 class VsPort(Model):
@@ -644,6 +653,32 @@ class Compression(Model):
         return self
 
 
+#: Most cache memory one service may ask for, and the total for one SE group (ADR 0117).
+CACHE_MAX_MB_PER_SERVICE = 256
+CACHE_MAX_MB_PER_GROUP = 1024
+
+
+class CacheSettings(Model):
+    """HAProxy small-object cache for the responses of an ``http`` service (ADR 0117).
+
+    Only responses the origin marks cacheable are stored, for ``GET`` and ``HEAD`` requests without
+    ``Authorization``; ``Vary`` is honoured. Rate limits and deny rules run before the cache.
+
+    Attributes:
+        size_mb: Memory of the cache in megabytes (1 to 256).
+        max_object_kb: Largest response body kept, in kilobytes (1 to 8192).
+        max_age_s: Longest time an entry is served without asking the origin (1 to 86400).
+
+    Example:
+        >>> CacheSettings().size_mb
+        16
+    """
+
+    size_mb: int = Field(default=16, ge=1, le=CACHE_MAX_MB_PER_SERVICE)
+    max_object_kb: int = Field(default=1024, ge=1, le=8192)
+    max_age_s: int = Field(default=60, ge=1, le=86_400)
+
+
 class VirtualService(TenantOwned):
     """A VIP, its ports and how traffic reaches pools.
 
@@ -662,6 +697,7 @@ class VirtualService(TenantOwned):
         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
             client address; honoured only when the connection source is in the allow list.
         compression: Response compression (``http`` only; ADR 0117).
+        cache: Response cache (``http`` only; ADR 0117).
     """
 
     se_group_id: UUID
@@ -678,6 +714,7 @@ class VirtualService(TenantOwned):
     enforce_allow_list: bool = False
     restore_client_ip_header: HeaderName | None = None
     compression: Compression | None = None
+    cache: CacheSettings | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -704,8 +741,8 @@ class VirtualService(TenantOwned):
                     f"a {self.protocol} service cannot have routes or policy sets "
                     "(routes need every port to be tls_passthrough)"
                 )
-            if self.compression is not None:
-                raise ValueError("compression is only valid for http services")
+            if self.compression is not None or self.cache is not None:
+                raise ValueError("compression and cache are only valid for http services")
             if passthrough and self.protocol is not Protocol.TCP:
                 raise ValueError("tls_passthrough is only valid for tcp services")
             if self.default_pool_id is None:

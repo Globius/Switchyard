@@ -2787,6 +2787,35 @@
         "title": "CaImportIn",
         "type": "object"
       },
+      "CacheSettings": {
+        "additionalProperties": false,
+        "description": "HAProxy small-object cache for the responses of an ``http`` service (ADR 0117).\n\nOnly responses the origin marks cacheable are stored, for ``GET`` and ``HEAD`` requests without\n``Authorization``; ``Vary`` is honoured. Rate limits and deny rules run before the cache.\n\nAttributes:\n    size_mb: Memory of the cache in megabytes (1 to 256).\n    max_object_kb: Largest response body kept, in kilobytes (1 to 8192).\n    max_age_s: Longest time an entry is served without asking the origin (1 to 86400).\n\nExample:\n    >>> CacheSettings().size_mb\n    16",
+        "properties": {
+          "max_age_s": {
+            "default": 60,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Max Age S",
+            "type": "integer"
+          },
+          "max_object_kb": {
+            "default": 1024,
+            "maximum": 8192.0,
+            "minimum": 1.0,
+            "title": "Max Object Kb",
+            "type": "integer"
+          },
+          "size_mb": {
+            "default": 16,
+            "maximum": 256.0,
+            "minimum": 1.0,
+            "title": "Size Mb",
+            "type": "integer"
+          }
+        },
+        "title": "CacheSettings",
+        "type": "object"
+      },
       "CertImportIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /certificates/import``.",
@@ -15454,7 +15483,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -15467,6 +15496,16 @@
               }
             ],
             "title": "Allow List Id"
+          },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "certificate_ids": {
             "default": [],
@@ -15625,6 +15664,16 @@
               }
             ],
             "title": "Allow List Id"
+          },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "certificate_ids": {
             "default": [],
@@ -15881,6 +15930,16 @@
             ],
             "title": "Allow List Id"
           },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "certificate_ids": {
             "anyOf": [
               {
@@ -16074,6 +16133,16 @@
               }
             ],
             "title": "Allow List Id"
+          },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "certificate_ids": {
             "default": [],
@@ -16733,8 +16802,18 @@
       },
       "VsRoute": {
         "additionalProperties": false,
-        "description": "Route a request to a pool, split it over weighted pools, or answer it with a redirect.\n\nAttributes:\n    order: Position among path routes; lower runs first. Host-only routes are looked up in map\n        files and are order-independent (exact host wins over wildcard).\n    match: What the request must match. Must not be empty.\n    pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.\n    redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.\n    pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each\n        request is sent to one of them at random in that proportion (ADR 0119).\n\nExample:\n    >>> import uuid\n    >>> route = VsRoute(\n    ...     match=RouteMatch(host=\"app.example.test\"),\n    ...     pools=(\n    ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),\n    ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),\n    ...     ),\n    ... )\n    >>> len(route.pool_ids)\n    2",
+        "description": "Route a request to a pool, split it over weighted pools, or answer it with a redirect.\n\nAttributes:\n    order: Position among path routes; lower runs first. Host-only routes are looked up in map\n        files and are order-independent (exact host wins over wildcard).\n    match: What the request must match. Must not be empty.\n    pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.\n    redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.\n    fallback_pool_ids: Priority groups: pools tried in order when every server of the pool\n        before them is down (``pool_id`` only; up to three; ADR 0119).\n    pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each\n        request is sent to one of them at random in that proportion (ADR 0119).\n\nExample:\n    >>> import uuid\n    >>> route = VsRoute(\n    ...     match=RouteMatch(host=\"app.example.test\"),\n    ...     pools=(\n    ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),\n    ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),\n    ...     ),\n    ... )\n    >>> len(route.pool_ids)\n    2",
         "properties": {
+          "fallback_pool_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Fallback Pool Ids",
+            "type": "array"
+          },
           "match": {
             "$ref": "#/components/schemas/RouteMatch"
           },

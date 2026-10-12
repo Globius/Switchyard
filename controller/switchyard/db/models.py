@@ -319,6 +319,7 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
     )
     restore_client_ip_header: Mapped[str | None] = mapped_column(Text)
     compression: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    cache: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class VsPortRow(Base):
@@ -378,6 +379,7 @@ class VsRouteRow(Base):
     redirect_location: Mapped[str | None] = mapped_column(Text)
     redirect_code: Mapped[int | None] = mapped_column(Integer)
     pool_weights: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
+    fallback_pools: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True))
     match_extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
 
