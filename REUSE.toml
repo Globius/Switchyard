@@ -1,0 +1,10 @@
+# REUSE (https://reuse.software) licensing for files that cannot, or should not, carry a header.
+# Source files (.py .go .ts .tsx .sh) carry SPDX headers themselves; those win over this file (precedence "closest").
+# Checked in CI by the `reuse` job (docs/sbom-and-licensing.md, ADR 0200).
+version = 1
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 The Switchyard contributors"
+SPDX-License-Identifier = "Apache-2.0"

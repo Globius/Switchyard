@@ -145,6 +145,92 @@ helm:
 
 # Docs site (ADR 0190): strict MkDocs build with link checking on every pipeline, published to GitLab
 # Pages from main. Same as `make docs` locally.
+# Licensing and SBOMs (ADR 0200, docs/sbom-and-licensing.md).
+reuse:
+  stage: check
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/fsfe/reuse:5
+    entrypoint: [""]
+  script:
+    - reuse lint
+
+# SBOMs in SPDX JSON, made by Syft. Artifacts of every pipeline on main and on v* tags (and by hand with SBOM=1).
+.sbom:
+  stage: check
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/anchore/syft:v1.19.0-debug
+    entrypoint: [""]
+  rules:
+    - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $SBOM
+  variables:
+    SYFT_CHECK_FOR_APP_UPDATE: "false"
+  before_script: [mkdir -p sbom]
+  artifacts:
+    paths: [sbom/]
+    expire_in: 90 days
+
+sbom-controller:
+  extends: .sbom
+  script: [syft scan dir:controller --source-name switchyard-controller -o spdx-json=sbom/switchyard-controller.spdx.json]
+
+sbom-ui:
+  extends: .sbom
+  script: [syft scan dir:ui --source-name switchyard-ui -o spdx-json=sbom/switchyard-ui.spdx.json]
+
+sbom-agent:
+  extends: .sbom
+  script:
+    - syft scan dir:agent --source-name sy-agent -o spdx-json=sbom/sy-agent.spdx.json
+    - syft scan dir:provider --source-name terraform-provider-switchyard -o spdx-json=sbom/switchyard-provider.spdx.json
+
+sbom-helm:
+  extends: .sbom
+  script: [syft scan dir:deploy/helm --source-name switchyard-helm-chart -o spdx-json=sbom/switchyard-helm-chart.spdx.json]
+
+# The SE image: build the image the se-image job tests (Debian 13 plus every binary) and scan it.
+sbom-se-image:
+  extends: .sbom
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27
+  services:
+    - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - for i in $(seq 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
+    - echo "$CI_DEPENDENCY_PROXY_PASSWORD" | docker login -u "$CI_DEPENDENCY_PROXY_USER" --password-stdin "$CI_DEPENDENCY_PROXY_SERVER"
+    - docker build -q --build-arg REGISTRY="$CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/" -f se-image/test/Dockerfile -t sy-se-image-test .
+    - docker pull -q ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/anchore/syft:v1.19.0
+    - mkdir -p sbom
+    - docker save sy-se-image-test | docker run -i --rm ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/anchore/syft:v1.19.0 scan - --source-name switchyard-se-image -o spdx-json > sbom/switchyard-se-image.spdx.json
+
+# On a v* tag: the SBOMs go to the Package Registry and onto the GitLab release.
+release:
+  stage: deploy
+  interruptible: false
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v/
+  needs: [sbom-controller, sbom-ui, sbom-agent, sbom-helm, sbom-se-image]
+  before_script: [apk add --no-cache curl]
+  script:
+    - |
+      for f in sbom/*.spdx.json; do
+        curl --fail --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$f"           "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/switchyard-sbom/$CI_COMMIT_TAG/$(basename "$f")"
+      done
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: "SPDX SBOMs for $CI_COMMIT_TAG (docs/sbom-and-licensing.md)."
+    assets:
+      links:
+        - {name: "SBOM: controller", url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/switchyard-sbom/$CI_COMMIT_TAG/switchyard-controller.spdx.json"}
+        - {name: "SBOM: UI", url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/switchyard-sbom/$CI_COMMIT_TAG/switchyard-ui.spdx.json"}
+        - {name: "SBOM: agent", url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/switchyard-sbom/$CI_COMMIT_TAG/sy-agent.spdx.json"}
+        - {name: "SBOM: OpenTofu provider", url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/switchyard-sbom/$CI_COMMIT_TAG/switchyard-provider.spdx.json"}
+        - {name: "SBOM: Helm chart", url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/switchyard-sbom/$CI_COMMIT_TAG/switchyard-helm-chart.spdx.json"}
+        - {name: "SBOM: SE image", url: "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/switchyard-sbom/$CI_COMMIT_TAG/switchyard-se-image.spdx.json"}
+
 docs:
   stage: check
   script:

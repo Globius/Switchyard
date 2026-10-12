@@ -55,6 +55,7 @@ nav:
       - Kubernetes connector: kubernetes.md
       - Pool discovery by Proxmox tag: pool-discovery.md
       - Importing an Avi (NSX ALB) configuration: import-avi.md
+      - SBOMs and licensing: sbom-and-licensing.md
       - HTTP API: api.md
       - How Switchyard objects render to HAProxy: render.md
   - Features:
