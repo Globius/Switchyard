@@ -114,4 +114,6 @@ message Status {
   repeated IpvsRealServer ipvs = 9;     // UDP real servers; empty when no UDP service is rendered
   bool keepalived_running = 10;         // only meaningful when `ipvs` is expected
   repeated string withdrawn_prefixes = 11;  // BGP prefixes the watchdog has withdrawn, sorted
+  bool waf_expected = 12;               // a Coraza config is present: the WAF sidecar should run
+  bool waf_running = 13;                // coraza-spoa is active and its port accepts connections
 }

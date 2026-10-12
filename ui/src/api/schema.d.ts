@@ -4652,6 +4652,18 @@ export interface components {
             /** Vrrp */
             vrrp: components["schemas"]["VrrpInstanceStatus"][];
             /**
+             * Waf Expected
+             * @description A WAF policy is applied: the Coraza sidecar should run.
+             * @default false
+             */
+            waf_expected: boolean;
+            /**
+             * Waf Running
+             * @description The Coraza sidecar is active and accepts connections. False while waf_expected is true means the WAF is inert (fail-open policies serve uninspected).
+             * @default false
+             */
+            waf_running: boolean;
+            /**
              * Withdrawn Prefixes
              * @description The BGP prefixes the watchdog has withdrawn, sorted.
              */
@@ -31692,6 +31704,8 @@ export interface operations {
                      *               "state": "MASTER"
                      *             }
                      *           ],
+                     *           "waf_expected": false,
+                     *           "waf_running": false,
                      *           "withdrawn_prefixes": []
                      *         },
                      *         "drift": [

@@ -9,7 +9,8 @@ Per engine, starting at 100:
 * unreachable: 0 (and nothing else is counted);
 * each drift item: 20 off, at most 40;
 * pool members: up to 30 off in proportion to members that are ``DOWN``;
-* HAProxy reported unhealthy: 30 off; routes withdrawn: 20 off;
+* HAProxy reported unhealthy: 30 off; routes withdrawn: 20 off; WAF sidecar expected but not
+  running: 25 off;
 * each BGP session not ``Established``: 25 off, at most 50; a VRRP instance in ``FAULT``: 40 off.
 
 A group's score is the mean of its engines' scores, capped at 50 when fewer than two engines
@@ -60,6 +61,11 @@ def engine_health(status: Mapping[str, Any]) -> Health:
     if agent.get("routes_withdrawn"):
         score -= 20
         reasons.append("routes withdrawn")
+    if agent.get("waf_expected") and not agent.get("waf_running"):
+        score -= 25
+        reasons.append(
+            "WAF sidecar not running: requests go uninspected or are refused (see fail_mode)"
+        )
     bad_bgp = sum(1 for s in agent.get("bgp") or [] if s.get("state") != "Established")
     if bad_bgp:
         score -= min(50, 25 * bad_bgp)

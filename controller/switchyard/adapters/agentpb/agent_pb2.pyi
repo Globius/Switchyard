@@ -141,7 +141,7 @@ class IpvsRealServer(_message.Message):
     def __init__(self, service: _Optional[str] = ..., vip: _Optional[str] = ..., port: _Optional[int] = ..., address: _Optional[str] = ..., member_port: _Optional[int] = ..., state: _Optional[str] = ..., weight: _Optional[int] = ..., active_conns: _Optional[int] = ..., inactive_conns: _Optional[int] = ..., in_packets: _Optional[int] = ..., out_packets: _Optional[int] = ..., in_bytes: _Optional[int] = ..., out_bytes: _Optional[int] = ...) -> None: ...
 
 class Status(_message.Message):
-    __slots__ = ("agent_version", "bundle_id", "file_hashes", "bgp", "vrrp", "haproxy_healthy", "routes_withdrawn", "observed_at_unix", "ipvs", "keepalived_running", "withdrawn_prefixes")
+    __slots__ = ("agent_version", "bundle_id", "file_hashes", "bgp", "vrrp", "haproxy_healthy", "routes_withdrawn", "observed_at_unix", "ipvs", "keepalived_running", "withdrawn_prefixes", "waf_expected", "waf_running")
     class FileHashesEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
@@ -160,6 +160,8 @@ class Status(_message.Message):
     IPVS_FIELD_NUMBER: _ClassVar[int]
     KEEPALIVED_RUNNING_FIELD_NUMBER: _ClassVar[int]
     WITHDRAWN_PREFIXES_FIELD_NUMBER: _ClassVar[int]
+    WAF_EXPECTED_FIELD_NUMBER: _ClassVar[int]
+    WAF_RUNNING_FIELD_NUMBER: _ClassVar[int]
     agent_version: str
     bundle_id: str
     file_hashes: _containers.ScalarMap[str, str]
@@ -171,4 +173,6 @@ class Status(_message.Message):
     ipvs: _containers.RepeatedCompositeFieldContainer[IpvsRealServer]
     keepalived_running: bool
     withdrawn_prefixes: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, agent_version: _Optional[str] = ..., bundle_id: _Optional[str] = ..., file_hashes: _Optional[_Mapping[str, str]] = ..., bgp: _Optional[_Iterable[_Union[BgpSession, _Mapping]]] = ..., vrrp: _Optional[_Iterable[_Union[VrrpInstance, _Mapping]]] = ..., haproxy_healthy: _Optional[bool] = ..., routes_withdrawn: _Optional[bool] = ..., observed_at_unix: _Optional[int] = ..., ipvs: _Optional[_Iterable[_Union[IpvsRealServer, _Mapping]]] = ..., keepalived_running: _Optional[bool] = ..., withdrawn_prefixes: _Optional[_Iterable[str]] = ...) -> None: ...
+    waf_expected: bool
+    waf_running: bool
+    def __init__(self, agent_version: _Optional[str] = ..., bundle_id: _Optional[str] = ..., file_hashes: _Optional[_Mapping[str, str]] = ..., bgp: _Optional[_Iterable[_Union[BgpSession, _Mapping]]] = ..., vrrp: _Optional[_Iterable[_Union[VrrpInstance, _Mapping]]] = ..., haproxy_healthy: _Optional[bool] = ..., routes_withdrawn: _Optional[bool] = ..., observed_at_unix: _Optional[int] = ..., ipvs: _Optional[_Iterable[_Union[IpvsRealServer, _Mapping]]] = ..., keepalived_running: _Optional[bool] = ..., withdrawn_prefixes: _Optional[_Iterable[str]] = ..., waf_expected: _Optional[bool] = ..., waf_running: _Optional[bool] = ...) -> None: ...

@@ -152,3 +152,19 @@ def test_disabled_services_are_not_protected() -> None:
     d = with_waf(waf())
     d["virtual_services"][0]["enabled"] = False
     assert render(d)[1] == {}
+
+
+def test_coraza_config_names_a_log_format_everywhere_it_names_a_log_file() -> None:
+    _, agent = render(with_waf(waf()))
+    yaml = agent["coraza/config.yaml"]
+    assert yaml.count("log_file:") == yaml.count("log_format: json") == 2  # top level + application
+
+
+def test_the_sample_used_by_the_image_check_is_what_the_renderer_writes() -> None:
+    from pathlib import Path
+
+    sample = Path(__file__).parents[4] / "se-image" / "test" / "coraza-config.yaml"
+    d = with_waf(waf(mode="block"))
+    d["virtual_services"][0]["name"] = "app"
+    _, agent = render(d)
+    assert sample.read_text("utf-8") == agent["coraza/config.yaml"]

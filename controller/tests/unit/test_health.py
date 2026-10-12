@@ -36,3 +36,15 @@ def test_group_needs_two_healthy_engines() -> None:
     one = group_health([good, bad])
     assert one.score == 50 and "no redundancy" in one.reasons[-1]
     assert group_health([good]).score == 50
+
+
+def test_an_inert_waf_costs_25_and_says_so() -> None:
+    base = {"reachable": True, "drift": [], "members": []}
+    inert = engine_health({**base, "agent": {"waf_expected": True, "waf_running": False}})
+    assert inert.score == 75 and "WAF sidecar not running" in inert.reasons[0]
+    assert (
+        engine_health({**base, "agent": {"waf_expected": True, "waf_running": True}}).score == 100
+    )
+    assert (
+        engine_health({**base, "agent": {"waf_expected": False, "waf_running": False}}).score == 100
+    )
