@@ -179,6 +179,8 @@ class _Plan:
     agents: dict[str, AgentEngine] = field(default_factory=dict)
     bundles: dict[str, dict[str, str]] = field(default_factory=dict)
     previous_bundles: dict[str, dict[str, str]] = field(default_factory=dict)
+    #: Engines whose bundle was already sent (certificates go ahead of the canary's validation).
+    bundle_sent: set[str] = field(default_factory=set)
 
     @property
     def changed(self) -> bool:
@@ -589,15 +591,22 @@ class ApplyPipeline:
         previous_files = plan.previous.files if plan.previous else None
         agent = plan.agents.get(record.name)
         bundle = plan.bundles.get(record.name)
-        before = plan.previous_bundles.get(record.name, {})
-        certs_changed = bundle is not None and any(
-            path.startswith("certs/") and before.get(path) != text for path, text in bundle.items()
-        )
-        if certs_changed:
+        certs_changed = self._certs_changed(plan, record)
+        if certs_changed and record.name not in plan.bundle_sent:
             await self._send_bundle(record, agent, bundle)
+            plan.bundle_sent.add(record.name)
         await engine.push(plan.target.files, previous=previous_files)
         if not certs_changed:
             await self._send_bundle(record, agent, bundle)
+
+    @staticmethod
+    def _certs_changed(plan: _Plan, record: EngineRecord) -> bool:
+        """True when this engine's bundle carries a certificate it does not have yet."""
+        bundle = plan.bundles.get(record.name)
+        before = plan.previous_bundles.get(record.name, {})
+        return bundle is not None and any(
+            path.startswith("certs/") and before.get(path) != text for path, text in bundle.items()
+        )
 
     @staticmethod
     async def _send_bundle(
@@ -621,14 +630,32 @@ class ApplyPipeline:
         try:
             async with rec.stage("validate"):
                 if self._sandbox is not None:
-                    await require_valid(self._sandbox, files)
+                    # the certificates sit beside the config on a real engine, so they do here
+                    certs = {
+                        path: text
+                        for path, text in plan.bundles.get(canary_record.name, {}).items()
+                        if path.startswith("certs/")
+                    }
+                    await require_valid(self._sandbox, {**files, **certs})
+                if self._certs_changed(plan, canary_record):
+                    # HAProxy checks that every certificate file exists, so a new certificate has
+                    # to be on the canary before its configuration can be validated there. The
+                    # canary is recorded first: a failure from here on is reverted.
+                    pushed.append((canary, plan))
+                    await self._send_bundle(
+                        canary_record,
+                        plan.agents.get(canary_record.name),
+                        plan.bundles.get(canary_record.name),
+                    )
+                    plan.bundle_sent.add(canary_record.name)
                 await canary.validate(files)
                 before: list[ServerStatus] = await canary.server_statuses()
         except (HaproxyError, AgentError) as exc:
             raise _RolloutFailedError(plan, f"SE group {group.name}: {exc}") from exc
         try:
             async with rec.stage("canary"):
-                pushed.append((canary, plan))  # recorded first: a half-applied push is reverted
+                if canary_record.name not in plan.bundle_sent:
+                    pushed.append((canary, plan))  # recorded first: a half-applied push is reverted
                 await self._push_one(plan, canary_record, canary)
                 await self._watch_canary(plan, canary_record, canary, before)
         except (HaproxyError, AgentError) as exc:

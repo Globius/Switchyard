@@ -249,6 +249,67 @@ async def test_certificates_reach_the_agents_before_haproxy_uses_them(pg_url: st
         assert seen == [True], "the new certificate was on the engine before HAProxy was pushed"
 
 
+async def test_a_new_certificate_is_on_the_canary_before_its_config_is_validated(
+    pg_url: str,
+) -> None:
+    """HAProxy refuses a config whose certificate file is missing (the first TLS service)."""
+    from tests.pipeline_env import CERT_SECRETS, FAKE_PEM
+
+    async with world(pg_url, vrrp_data()) as w:
+        new_ref = "kv/tenants/acme/certs/wild-example-test/v3"
+        rotated = FAKE_PEM.replace("placeholder", "first")
+        w.use_engines("se-a", "se-b", agents=True, secrets={**CERT_SECRETS, new_ref: rotated})
+        await w.prime()
+        await prime_bundles(w)
+        healthy_vrrp(w)
+        seen: list[bool] = []
+        real_validate = w.engines["se-a"].validate
+
+        async def validate(files: Any) -> None:
+            seen.append(w.agents["se-a"].files.get(CERT_PATH) == rotated)
+            await real_validate(files)
+
+        w.engines["se-a"].validate = validate  # type: ignore[method-assign]
+        cert_id = (await w.snapshot()).certificates[0].id
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE,
+            object_id=cert_id,
+            action=Action.UPDATE,
+            body={"secret_ref": new_ref},
+            expected_version=1,
+        )
+        report = await w.run_change([op], principal())
+        assert report.ok, report.error
+        assert seen and all(seen), "the certificate was not on the canary when HAProxy validated"
+        assert w.agents["se-b"].files[CERT_PATH] == rotated
+
+
+async def test_a_rejected_config_after_certificates_were_staged_is_reverted(pg_url: str) -> None:
+    from tests.pipeline_env import CERT_SECRETS, FAKE_PEM
+
+    async with world(pg_url, vrrp_data()) as w:
+        new_ref = "kv/tenants/acme/certs/wild-example-test/v4"
+        rotated = FAKE_PEM.replace("placeholder", "second")
+        w.use_engines("se-a", "se-b", agents=True, secrets={**CERT_SECRETS, new_ref: rotated})
+        await w.prime()
+        await prime_bundles(w)
+        healthy_vrrp(w)
+        original = w.agents["se-a"].files[CERT_PATH]
+        w.engines["se-a"].fail_next("rejected")
+        cert_id = (await w.snapshot()).certificates[0].id
+        op = ChangeOp(
+            object_type=ObjectType.CERTIFICATE,
+            object_id=cert_id,
+            action=Action.UPDATE,
+            body={"secret_ref": new_ref},
+            expected_version=1,
+        )
+        report = await w.run_change([op], principal())
+        assert not report.ok
+        assert w.agents["se-a"].files[CERT_PATH] == original
+        assert w.engines["se-b"].pushes == []
+
+
 async def test_missing_certificate_secret_fails_the_plan_before_anything_is_pushed(
     pg_url: str,
 ) -> None:
