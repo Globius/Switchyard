@@ -214,7 +214,8 @@ class PolicySetRow(TenantOwnedMixin, Base):
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         CheckConstraint(
-            "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit')",
+            "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit',"
+            " 'waf')",
             name="kind",
         ),
         CheckConstraint(

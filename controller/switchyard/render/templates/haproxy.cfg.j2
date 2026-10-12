@@ -62,6 +62,10 @@ frontend sy_prometheus
 
 {% include "frontend.j2" %}
 {% endfor %}
+{% if waf_backend %}
+
+{{ waf_backend | join("\n") }}
+{% endif %}
 {% for b in backends %}
 
 {% include "backend.j2" %}

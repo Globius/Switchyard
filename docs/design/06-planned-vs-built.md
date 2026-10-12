@@ -64,7 +64,7 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Prometheus HTTP service-discovery endpoint for SEs | done | `GET /discovery/prometheus` (ADR 0061); the SE image must serve the exporters | |
 | Controller own `/metrics` | done | Database-derived, text format (ADR 0061) | |
 | Grafana embed or proxy (01, 03) | done | Grafana behind the controller (opened in its own tab), one organization per tenant, every data source query rewritten to the tenant (ADR 0085); off until its settings are present, then `links.grafana_embedded` on `GET /me`; the plain link (`SWITCHYARD_GRAFANA_URL`, ADR 0068) remains. Checked against real Prometheus, Loki and Grafana; not yet on the two-host lab | Lab run; a separate origin for Grafana if the shared one is not acceptable |
-| `waf_policy`, Coraza SPOA | missing | *deferred*: phase 2 | Table, renderer, agent bundle, UI |
+| `waf_policy`, Coraza SPOA | partial | `waf` policy set, SPOE and Coraza files, detect-first, fail mode, golden case, logs source for Loki (ADR 0140 to 0144). The `coraza-spoa` binary and CRS are not yet in the SE image build (Operations) and nothing has run against a real SPOA | Wire the binary and CRS into the image, lab test, UI |
 | Rate limits, IP groups | missing | *deferred*: phase 2 | |
 | CrowdSec, oauth2-proxy SSO, caching, compression, Lua | missing | *deferred* or out of scope in 01 | |
 | Passive checks (`observe`) and slow-start | done | `passive_check` and `slow_start_s` on the pool (ADR 0066) | |

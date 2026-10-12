@@ -50,6 +50,17 @@ def full_data() -> dict:  # type: ignore[type-arg]
     ]
     data["policy_sets"] = [
         {
+            "id": "ps-waf",
+            "tenant_id": "t-acme",
+            "name": "waf",
+            "kind": "waf",
+            "mode": "block",
+            "paranoia_level": 2,
+            "disabled_rule_ids": [920350],
+            "excluded_paths": ["/upload"],
+            "fail_mode": "closed",
+        },
+        {
             "id": "ps-redir",
             "tenant_id": "t-acme",
             "name": "dav",
@@ -125,7 +136,7 @@ def full_data() -> dict:  # type: ignore[type-arg]
     vs["cache"] = {"size_mb": 8, "max_object_kb": 128, "max_age_s": 20}
     vs["compression"] = {"algorithms": ["gzip", "deflate"], "content_types": ["text/html"]}
     vs.update(
-        policy_set_ids=["ps-redir"],
+        policy_set_ids=["ps-redir", "ps-waf"],
         allow_list_id="ps-cf",
         enforce_allow_list=True,
         restore_client_ip_header="CF-Connecting-IP",

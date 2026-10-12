@@ -8996,7 +8996,7 @@
         "title": "OpsIn",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
@@ -9008,7 +9008,8 @@
                   "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                   "redirect": "#/components/schemas/RedirectPolicySetRead",
                   "respond": "#/components/schemas/RespondPolicySetRead",
-                  "rewrite": "#/components/schemas/RewritePolicySetRead"
+                  "rewrite": "#/components/schemas/RewritePolicySetRead",
+                  "waf": "#/components/schemas/WafPolicySetRead"
                 },
                 "propertyName": "kind"
               },
@@ -9030,6 +9031,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/RateLimitPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/WafPolicySetRead"
                 }
               ]
             },
@@ -9052,7 +9056,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -14195,7 +14199,8 @@
                   "rate_limit": "#/components/schemas/RateLimitPolicySet",
                   "redirect": "#/components/schemas/RedirectPolicySet",
                   "respond": "#/components/schemas/RespondPolicySet",
-                  "rewrite": "#/components/schemas/RewritePolicySet"
+                  "rewrite": "#/components/schemas/RewritePolicySet",
+                  "waf": "#/components/schemas/WafPolicySet"
                 },
                 "propertyName": "kind"
               },
@@ -14217,6 +14222,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/RateLimitPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/WafPolicySet"
                 }
               ]
             },
@@ -16859,6 +16867,496 @@
           "match"
         ],
         "title": "VsRoute",
+        "type": "object"
+      },
+      "WafPolicySet": {
+        "additionalProperties": false,
+        "description": "Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).\n\nNew policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,\nso a tenant can read the logs before turning blocking on. A service can carry one WAF policy.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.\n    crs_version: CRS release to use; must be one the SE image ships.\n    paranoia_level: CRS paranoia level 1 (fewest rules) to 4.\n    inbound_threshold: Anomaly score at which a request counts as an attack.\n    outbound_threshold: Anomaly score at which a response counts as a leak.\n    disabled_rule_ids: CRS rules to switch off (for false positives).\n    excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.\n    inspect_body: Send the request body (up to the engine buffer size) to the WAF too.\n    fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503 (ADR 0142).\n    timeout_ms: How long HAProxy waits for the WAF's verdict.\n\nExample:\n    >>> WafPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"w\"}\n    ... ).mode\n    'detect'",
+        "properties": {
+          "crs_version": {
+            "const": "4.8.0",
+            "default": "4.8.0",
+            "title": "Crs Version",
+            "type": "string"
+          },
+          "disabled_rule_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "title": "Disabled Rule Ids",
+            "type": "array"
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbound_threshold": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Inbound Threshold",
+            "type": "integer"
+          },
+          "inspect_body": {
+            "default": true,
+            "title": "Inspect Body",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "waf",
+            "default": "waf",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outbound_threshold": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Outbound Threshold",
+            "type": "integer"
+          },
+          "paranoia_level": {
+            "default": 1,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Paranoia Level",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name"
+        ],
+        "title": "WafPolicySet",
+        "type": "object"
+      },
+      "WafPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "crs_version": {
+            "const": "4.8.0",
+            "default": "4.8.0",
+            "title": "Crs Version",
+            "type": "string"
+          },
+          "disabled_rule_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "title": "Disabled Rule Ids",
+            "type": "array"
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "inbound_threshold": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Inbound Threshold",
+            "type": "integer"
+          },
+          "inspect_body": {
+            "default": true,
+            "title": "Inspect Body",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "waf",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outbound_threshold": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Outbound Threshold",
+            "type": "integer"
+          },
+          "paranoia_level": {
+            "default": 1,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Paranoia Level",
+            "type": "integer"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "WafPolicySetCreate",
+        "type": "object"
+      },
+      "WafPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "crs_version": {
+            "anyOf": [
+              {
+                "const": "4.8.0",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crs Version"
+          },
+          "disabled_rule_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Rule Ids"
+          },
+          "excluded_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Paths"
+          },
+          "fail_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "closed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fail Mode"
+          },
+          "inbound_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Threshold"
+          },
+          "inspect_body": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspect Body"
+          },
+          "kind": {
+            "const": "waf",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "detect",
+                  "block"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "outbound_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outbound Threshold"
+          },
+          "paranoia_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paranoia Level"
+          },
+          "timeout_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Ms"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WafPolicySetPatch",
+        "type": "object"
+      },
+      "WafPolicySetRead": {
+        "additionalProperties": false,
+        "description": "WafPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "crs_version": {
+            "const": "4.8.0",
+            "default": "4.8.0",
+            "title": "Crs Version",
+            "type": "string"
+          },
+          "disabled_rule_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "title": "Disabled Rule Ids",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbound_threshold": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Inbound Threshold",
+            "type": "integer"
+          },
+          "inspect_body": {
+            "default": true,
+            "title": "Inspect Body",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "waf",
+            "default": "waf",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outbound_threshold": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Outbound Threshold",
+            "type": "integer"
+          },
+          "paranoia_level": {
+            "default": 1,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Paranoia Level",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "WafPolicySetRead",
         "type": "object"
       },
       "WeightedPool": {
@@ -34440,7 +34938,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -34610,7 +35108,8 @@
                     "rate_limit": "#/components/schemas/RateLimitPolicySetCreate",
                     "redirect": "#/components/schemas/RedirectPolicySetCreate",
                     "respond": "#/components/schemas/RespondPolicySetCreate",
-                    "rewrite": "#/components/schemas/RewritePolicySetCreate"
+                    "rewrite": "#/components/schemas/RewritePolicySetCreate",
+                    "waf": "#/components/schemas/WafPolicySetCreate"
                   },
                   "propertyName": "kind"
                 },
@@ -34632,6 +35131,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/RateLimitPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WafPolicySetCreate"
                   }
                 ],
                 "title": "Body"
@@ -34990,7 +35492,8 @@
                       "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                       "redirect": "#/components/schemas/RedirectPolicySetRead",
                       "respond": "#/components/schemas/RespondPolicySetRead",
-                      "rewrite": "#/components/schemas/RewritePolicySetRead"
+                      "rewrite": "#/components/schemas/RewritePolicySetRead",
+                      "waf": "#/components/schemas/WafPolicySetRead"
                     },
                     "propertyName": "kind"
                   },
@@ -35012,6 +35515,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/RateLimitPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WafPolicySetRead"
                     }
                   ],
                   "title": "Response Get Policy Sets Api V1 Tenants  T  Policy Sets  Object Id  Get"
@@ -35181,7 +35687,8 @@
                     "rate_limit": "#/components/schemas/RateLimitPolicySetPatch",
                     "redirect": "#/components/schemas/RedirectPolicySetPatch",
                     "respond": "#/components/schemas/RespondPolicySetPatch",
-                    "rewrite": "#/components/schemas/RewritePolicySetPatch"
+                    "rewrite": "#/components/schemas/RewritePolicySetPatch",
+                    "waf": "#/components/schemas/WafPolicySetPatch"
                   },
                   "propertyName": "kind"
                 },
@@ -35203,6 +35710,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/RateLimitPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WafPolicySetPatch"
                   }
                 ],
                 "title": "Body"

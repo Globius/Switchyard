@@ -1417,13 +1417,68 @@ class RateLimitPolicySet(TenantOwned):
     rules: tuple[RateLimitRule, ...] = Field(min_length=1, max_length=8)
 
 
+#: OWASP Core Rule Set versions the SE image ships; a policy pins one of them (ADR 0141).
+CRS_VERSIONS = ("4.8.0",)
+
+
+class WafPolicySet(TenantOwned):
+    """Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).
+
+    New policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,
+    so a tenant can read the logs before turning blocking on. A service can carry one WAF policy.
+
+    Attributes:
+        mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.
+        crs_version: CRS release to use; must be one the SE image ships.
+        paranoia_level: CRS paranoia level 1 (fewest rules) to 4.
+        inbound_threshold: Anomaly score at which a request counts as an attack.
+        outbound_threshold: Anomaly score at which a response counts as a leak.
+        disabled_rule_ids: CRS rules to switch off (for false positives).
+        excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.
+        inspect_body: Send the request body (up to the engine buffer size) to the WAF too.
+        fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the
+            request through, ``closed`` refuses it with 503 (ADR 0142).
+        timeout_ms: How long HAProxy waits for the WAF's verdict.
+
+    Example:
+        >>> WafPolicySet.model_validate(
+        ...     {"id": "00000000-0000-0000-0000-000000000001",
+        ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "w"}
+        ... ).mode
+        'detect'
+    """
+
+    kind: Literal["waf"] = "waf"
+    mode: Literal["detect", "block"] = "detect"
+    crs_version: Literal["4.8.0"] = "4.8.0"
+    paranoia_level: int = Field(default=1, ge=1, le=4)
+    inbound_threshold: int = Field(default=5, ge=1, le=100)
+    outbound_threshold: int = Field(default=4, ge=1, le=100)
+    disabled_rule_ids: tuple[int, ...] = Field(default=(), max_length=64)
+    excluded_paths: tuple[UrlPath, ...] = Field(default=(), max_length=16)
+    inspect_body: bool = True
+    fail_mode: Literal["open", "closed"] = "open"
+    timeout_ms: int = Field(default=100, ge=10, le=2000)
+
+    @model_validator(mode="after")
+    def _rules(self) -> Self:
+        if any(not 1 <= rule_id <= 999_999 for rule_id in self.disabled_rule_ids):
+            raise ValueError("rule ids are numbers from 1 to 999999")
+        if len(set(self.disabled_rule_ids)) != len(self.disabled_rule_ids):
+            raise ValueError("disabled_rule_ids must be unique")
+        if len(set(self.excluded_paths)) != len(self.excluded_paths):
+            raise ValueError("excluded_paths must be unique")
+        return self
+
+
 PolicySet = Annotated[
     RedirectPolicySet
     | AllowListPolicySet
     | RewritePolicySet
     | RespondPolicySet
     | ErrorPagesPolicySet
-    | RateLimitPolicySet,
+    | RateLimitPolicySet
+    | WafPolicySet,
     Field(discriminator="kind"),
 ]
 #: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).
@@ -1433,4 +1488,5 @@ ATTACHABLE_POLICY_KINDS = (
     RespondPolicySet,
     ErrorPagesPolicySet,
     RateLimitPolicySet,
+    WafPolicySet,
 )

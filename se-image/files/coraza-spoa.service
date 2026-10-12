@@ -1,0 +1,27 @@
+[Unit]
+Description=Coraza SPOA (WAF) for HAProxy
+Documentation=https://github.com/corazawaf/coraza-spoa
+After=network.target
+# The agent writes this file; without a WAF policy there is nothing to run.
+ConditionPathExists=/etc/switchyard/coraza/config.yaml
+
+[Service]
+# Binary and OWASP CRS come from the SE image (fetch-binaries.sh); the CRS version is pinned there.
+ExecStart=/usr/local/bin/coraza-spoa -config /etc/switchyard/coraza/config.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2
+User=coraza
+Group=coraza
+# Listens on 127.0.0.1:9000 only; it needs no other network access.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_INET AF_UNIX
+CapabilityBoundingSet=
+ReadOnlyPaths=/etc/switchyard/coraza
+
+[Install]
+WantedBy=multi-user.target

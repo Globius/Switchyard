@@ -87,3 +87,8 @@ Date: YYYY-MM-DD
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
 | [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
 | [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
+| [0140](0140-waf-policy-set.md) | WAF policy set | Accepted |
+| [0141](0141-waf-detect-first-and-crs-pinning.md) | Detect first, and a pinned Core Rule Set | Accepted |
+| [0142](0142-waf-sidecar-and-failure-mode.md) | WAF sidecar life cycle and failure mode | Accepted |
+| [0143](0143-waf-logs.md) | WAF logs in Loki | Accepted |
+| [0144](0144-waf-image-and-agent-contract.md) | What the SE image and the agent must provide for the WAF | Accepted |

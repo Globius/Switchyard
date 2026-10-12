@@ -7557,10 +7557,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -9869,7 +9869,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -11158,6 +11158,291 @@ export interface components {
              */
             pools: components["schemas"]["WeightedPool"][];
             redirect?: components["schemas"]["RedirectAction"] | null;
+        };
+        /**
+         * WafPolicySet
+         * @description Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).
+         *
+         *     New policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,
+         *     so a tenant can read the logs before turning blocking on. A service can carry one WAF policy.
+         *
+         *     Attributes:
+         *         mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.
+         *         crs_version: CRS release to use; must be one the SE image ships.
+         *         paranoia_level: CRS paranoia level 1 (fewest rules) to 4.
+         *         inbound_threshold: Anomaly score at which a request counts as an attack.
+         *         outbound_threshold: Anomaly score at which a response counts as a leak.
+         *         disabled_rule_ids: CRS rules to switch off (for false positives).
+         *         excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.
+         *         inspect_body: Send the request body (up to the engine buffer size) to the WAF too.
+         *         fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the
+         *             request through, ``closed`` refuses it with 503 (ADR 0142).
+         *         timeout_ms: How long HAProxy waits for the WAF's verdict.
+         *
+         *     Example:
+         *         >>> WafPolicySet.model_validate(
+         *         ...     {"id": "00000000-0000-0000-0000-000000000001",
+         *         ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "w"}
+         *         ... ).mode
+         *         'detect'
+         */
+        WafPolicySet: {
+            /**
+             * Crs Version
+             * @default 4.8.0
+             * @constant
+             */
+            crs_version: "4.8.0";
+            /**
+             * Disabled Rule Ids
+             * @default []
+             */
+            disabled_rule_ids: number[];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbound Threshold
+             * @default 5
+             */
+            inbound_threshold: number;
+            /**
+             * Inspect Body
+             * @default true
+             */
+            inspect_body: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "waf";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Outbound Threshold
+             * @default 4
+             */
+            outbound_threshold: number;
+            /**
+             * Paranoia Level
+             * @default 1
+             */
+            paranoia_level: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** WafPolicySetCreate */
+        WafPolicySetCreate: {
+            /**
+             * Crs Version
+             * @default 4.8.0
+             * @constant
+             */
+            crs_version: "4.8.0";
+            /**
+             * Disabled Rule Ids
+             * @default []
+             */
+            disabled_rule_ids: number[];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Inbound Threshold
+             * @default 5
+             */
+            inbound_threshold: number;
+            /**
+             * Inspect Body
+             * @default true
+             */
+            inspect_body: boolean;
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "waf";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Outbound Threshold
+             * @default 4
+             */
+            outbound_threshold: number;
+            /**
+             * Paranoia Level
+             * @default 1
+             */
+            paranoia_level: number;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+        };
+        /** WafPolicySetPatch */
+        WafPolicySetPatch: {
+            /** Crs Version */
+            crs_version?: "4.8.0" | null;
+            /** Disabled Rule Ids */
+            disabled_rule_ids?: number[] | null;
+            /** Excluded Paths */
+            excluded_paths?: string[] | null;
+            /** Fail Mode */
+            fail_mode?: ("open" | "closed") | null;
+            /** Inbound Threshold */
+            inbound_threshold?: number | null;
+            /** Inspect Body */
+            inspect_body?: boolean | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "waf";
+            /** Mode */
+            mode?: ("detect" | "block") | null;
+            /** Name */
+            name?: string | null;
+            /** Outbound Threshold */
+            outbound_threshold?: number | null;
+            /** Paranoia Level */
+            paranoia_level?: number | null;
+            /** Timeout Ms */
+            timeout_ms?: number | null;
+        };
+        /**
+         * WafPolicySetRead
+         * @description WafPolicySet as returned by the API.
+         */
+        WafPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /**
+             * Crs Version
+             * @default 4.8.0
+             * @constant
+             */
+            crs_version: "4.8.0";
+            /**
+             * Disabled Rule Ids
+             * @default []
+             */
+            disabled_rule_ids: number[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbound Threshold
+             * @default 5
+             */
+            inbound_threshold: number;
+            /**
+             * Inspect Body
+             * @default true
+             */
+            inspect_body: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "waf";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Outbound Threshold
+             * @default 4
+             */
+            outbound_threshold: number;
+            /**
+             * Paranoia Level
+             * @default 1
+             */
+            paranoia_level: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * WeightedPool
@@ -22596,7 +22881,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -22687,7 +22972,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"];
             };
         };
         responses: {
@@ -22804,7 +23089,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -22982,7 +23267,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"];
             };
         };
         responses: {

@@ -49,6 +49,7 @@ from jinja2 import Environment, PackageLoader, StrictUndefined
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
 from switchyard.render import escape as esc
+from switchyard.render import waf
 from switchyard.render.escape import RenderError
 
 ROOT_DIR = "/etc/switchyard"
@@ -336,6 +337,7 @@ class _Renderer:
         self.warnings: list[str] = []
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
+        self.uses_waf = False
         self.limit_backends: list[dict[str, Any]] = []
         self.stick_counters = 0
 
@@ -367,6 +369,7 @@ class _Renderer:
                 fingerprint=fingerprint,
                 peers=self._peers(),
                 caches=self._caches(),
+                waf_backend=waf.backend_lines() if self.uses_waf else [],
             )
 
         # The fingerprint covers every file; the config is hashed with a placeholder in its own
@@ -470,6 +473,13 @@ class _Renderer:
                 request_rules.insert(0, _acme_rule())
                 self.files[ACME_MAP_FILE] = _ACME_MAP_TEXT
             routing_rules = self._routing_rules(svc, name)
+            policy = waf.waf_policy(svc, self.policies)
+            if policy is not None:
+                waf_options, waf_rules = waf.frontend_lines(svc, policy)
+                options += waf_options
+                request_rules += waf_rules
+                self.files[waf.spoe_path(svc)] = waf.render_spoe(svc, policy)
+                self.uses_waf = True
             if svc.cache is not None:
                 cache = self._cache_name(svc)
                 request_rules.append(f"http-request cache-use {cache}")

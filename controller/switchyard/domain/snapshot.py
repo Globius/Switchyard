@@ -44,6 +44,7 @@ from switchyard.domain.models import (
     Tenant,
     VipPool,
     VirtualService,
+    WafPolicySet,
 )
 
 
@@ -393,6 +394,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
 
         _check_routes(s, base, problems)
         _check_rate_limits(s, policies, base, problems)
+        _check_waf(s, policies, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
@@ -730,6 +732,21 @@ def stick_table_entries(snapshot: "Snapshot", tenant_id: UUID) -> int:
         if s.tenant_id == tenant_id
         for _, _, r in rate_limit_rules(s, policies)
     )
+
+
+def _check_waf(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    """A service carries at most one WAF policy (``too_many_waf_policies``, ADR 0140)."""
+    wafs = [pid for pid in s.policy_set_ids if isinstance(policies.get(pid), WafPolicySet)]
+    if len(wafs) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "too_many_waf_policies",
+                "a service can carry only one WAF policy",
+            )
+        )
 
 
 def _check_rate_limits(

@@ -14,6 +14,7 @@ from switchyard.domain.snapshot import Snapshot
 from switchyard.render import escape as esc
 from switchyard.render.escape import RenderError
 from switchyard.render.routing import EngineSlot, render_agent_bundle
+from switchyard.render.waf import render_waf_files
 
 CERT_PATH = "certs/{name}.pem"
 CA_PATH = "certs/ca-{name}.pem"
@@ -119,6 +120,7 @@ async def engine_files(
             files |= render_agent_bundle(snapshot, group.id, slot, bgp)
         except RenderError as exc:
             raise BundleError(str(exc)) from exc
+    files |= render_waf_files(snapshot, group.id)
     for cert in referenced_certs(snapshot, group.id):
         if cert.purpose == "client_ca":
             files |= await _ca_files(cert, secrets)
