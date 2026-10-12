@@ -4,6 +4,8 @@ stages: [check, deploy]
 
 default:
   image: ghcr.io/astral-sh/uv:python3.12-bookworm
+  # The Kubernetes runner: privileged pods (docker:dind for the test job) and no host Docker socket needed.
+  tags: [kubernetes, docker-privileged]
   cache:
     key: uv-$CI_COMMIT_REF_SLUG
     paths: [.cache/uv]
