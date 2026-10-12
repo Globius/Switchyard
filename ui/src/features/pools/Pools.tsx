@@ -19,6 +19,7 @@ import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type Member = PoolRead["members"][number];
+type PoolDiscovery = NonNullable<PoolRead["discovery"]>;
 export interface PoolForm {
   name: string;
   algorithm: PoolRead["algorithm"];
@@ -28,6 +29,7 @@ export interface PoolForm {
   persistence: { type: "source_ip"; table_size: number; timeout_s: number } | null;
   passive_check: PassiveCheck | null;
   slow_start_s: number | null;
+  discovery: PoolDiscovery | null;
   members: Member[];
 }
 export type PassiveCheck = {
@@ -55,6 +57,7 @@ export function emptyPool(): PoolForm {
     persistence: null,
     passive_check: null,
     slow_start_s: null,
+    discovery: null,
     members: [],
   };
 }
@@ -75,6 +78,7 @@ export function toForm(p: PoolRead): PoolForm {
       : null,
     passive_check: p.passive_check ? { ...p.passive_check } : null,
     slow_start_s: p.slow_start_s ?? null,
+    discovery: p.discovery ? { ...p.discovery } : null,
     members: structuredClone(p.members),
   };
 }
@@ -435,6 +439,121 @@ function PoolSheet({
             </span>
           </label>
         </fieldset>
+        <section className="space-y-3 rounded-lg border p-3">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 text-sm">
+              <div className="font-medium">{t("Discover members from Proxmox")}</div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Members follow the running guests that carry a Proxmox tag. A job checks every minute and opens a change set when the list changes.",
+                )}
+              </p>
+            </div>
+            <Switch
+              aria-label={t("Discover members from Proxmox")}
+              checked={f.discovery !== null}
+              disabled={!write.allowed}
+              onCheckedChange={(on) =>
+                set({
+                  discovery: on
+                    ? {
+                        source: "proxmox_tag",
+                        tag: `sy-${tenant}.`,
+                        cidr: "",
+                        port: 8080,
+                        weight: 100,
+                      }
+                    : null,
+                })
+              }
+            />
+          </div>
+          {f.discovery && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-1.5 text-sm font-medium">
+                  {t("Proxmox tag")}
+                  <input
+                    aria-label={t("Proxmox tag")}
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    value={f.discovery.tag}
+                    onChange={(e) => set({ discovery: { ...f.discovery!, tag: e.target.value } })}
+                  />
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {t(
+                      "Must start with sy-{tenant}. Tags are cluster-wide, so the prefix keeps tenants apart.",
+                      {
+                        tenant,
+                      },
+                    )}
+                  </span>
+                  {(errors["discovery.tag"] ?? errors.discovery) && (
+                    <span role="alert" className="block text-xs font-normal text-status-down">
+                      {errors["discovery.tag"] ?? errors.discovery}
+                    </span>
+                  )}
+                </label>
+                <label className="space-y-1.5 text-sm font-medium">
+                  {t("Network (CIDR)")}
+                  <input
+                    aria-label={t("Network (CIDR)")}
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    placeholder="10.20.0.0/24"
+                    value={f.discovery.cidr}
+                    onChange={(e) => set({ discovery: { ...f.discovery!, cidr: e.target.value } })}
+                  />
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {t(
+                      "A guest's address in this network becomes the member address (IPv4 or IPv6).",
+                    )}
+                  </span>
+                  {errors["discovery.cidr"] && (
+                    <span role="alert" className="block text-xs font-normal text-status-down">
+                      {errors["discovery.cidr"]}
+                    </span>
+                  )}
+                </label>
+                <label className="space-y-1.5 text-sm font-medium">
+                  {t("Member port")}
+                  <input
+                    aria-label={t("Member port")}
+                    type="number"
+                    min={1}
+                    max={65535}
+                    className={INPUT}
+                    disabled={!write.allowed}
+                    value={f.discovery.port}
+                    onChange={(e) =>
+                      set({ discovery: { ...f.discovery!, port: Number(e.target.value) } })
+                    }
+                  />
+                </label>
+                <label className="space-y-1.5 text-sm font-medium">
+                  {t("Weight of a new member")}
+                  <input
+                    aria-label={t("Weight of a new member")}
+                    type="number"
+                    min={0}
+                    max={256}
+                    className={INPUT}
+                    disabled={!write.allowed}
+                    value={f.discovery.weight}
+                    onChange={(e) =>
+                      set({ discovery: { ...f.discovery!, weight: Number(e.target.value) } })
+                    }
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Install the QEMU guest agent in the guests; a guest without an address is skipped. A pool is never emptied this way. Weight and admin state you set on a discovered member are kept.",
+                )}
+              </p>
+            </div>
+          )}
+        </section>
         <section className="space-y-2">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium">{t("Members")}</h3>
@@ -443,7 +562,7 @@ function PoolSheet({
               size="sm"
               variant="outline"
               className="ml-auto"
-              disabled={!write.allowed}
+              disabled={!write.allowed || f.discovery !== null}
               onClick={() =>
                 set({
                   members: [
@@ -468,7 +587,14 @@ function PoolSheet({
               {errors.members}
             </p>
           )}
-          <div className="rounded-lg border">
+          {f.discovery && (
+            <p role="note" className="rounded-md bg-muted p-3 text-xs">
+              {t(
+                "These members are managed by discovery. Typed members are replaced at the next change; turn discovery off to manage the list by hand.",
+              )}
+            </p>
+          )}
+          <fieldset disabled={f.discovery !== null} className="rounded-lg border">
             <div className="grid grid-cols-[1fr_1.2fr_5rem_5rem_6.5rem_auto] gap-2 border-b bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
               <span>{t("Name")}</span>
               <span>{t("Address")}</span>
@@ -551,7 +677,7 @@ function PoolSheet({
                 </div>
               );
             })}
-          </div>
+          </fieldset>
           <div className="flex gap-2 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>

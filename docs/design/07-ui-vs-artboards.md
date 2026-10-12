@@ -364,3 +364,11 @@ Needed from the API: ACME providers CRUD, test, default flag and registration st
 6. **Test connection** works on a saved provider only (the API tests by id), so an unsaved edit says "Save first".
 7. **Account key** shows Set / Replace; the API does not return when or by whom it was set.
 8. **No TLS-ALPN-01**, per the backend.
+
+## Parity block P12: pool discovery by Proxmox tag (ADR 0145)
+
+| Item | Status |
+| --- | --- |
+| Discovery block on the pool form (switch, Proxmox tag, network CIDR, member port, weight of a new member) | Built **without an artboard**; Design to specify. The tag defaults to `sy-<tenant>.`; the 422 `discovery_tag_not_allowed` shows on the tag field. Turning the switch off sends `discovery: null`. |
+| Member list while discovery is on | Read-only with a note ("managed by discovery"); Add member is disabled. |
+| Pools list marker for discovered pools, and the `system:discovery` change sets | Not built; Design question: should a discovered pool show a badge and a "last discovered" time? The API has no last-run time. |

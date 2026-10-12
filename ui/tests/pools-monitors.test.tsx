@@ -331,6 +331,63 @@ describe("pools", () => {
     });
   });
 
+  it("turns on discovery by Proxmox tag, locks the member list, and sends the discovery block", async () => {
+    hasDraft = false;
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "web");
+    await userEvent.click(screen.getByRole("switch", { name: "Discover members from Proxmox" }));
+    expect(screen.getByLabelText("Proxmox tag")).toHaveValue("sy-acme.");
+    await userEvent.type(screen.getByLabelText("Proxmox tag"), "web");
+    await userEvent.type(screen.getByLabelText("Network (CIDR)"), "2001:db8:20::/64");
+    expect(screen.getByRole("button", { name: "Add member" })).toBeDisabled();
+    expect(screen.getByText(/These members are managed by discovery/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect(posted?.ops[0]?.body).toMatchObject({
+        name: "web",
+        discovery: {
+          source: "proxmox_tag",
+          tag: "sy-acme.web",
+          cidr: "2001:db8:20::/64",
+          port: 8080,
+          weight: 100,
+        },
+      }),
+    );
+  });
+
+  it("shows the tag error on the tag field and clears discovery with null", async () => {
+    server.use(
+      http.post("*/api/v1/tenants/acme/change-sets/:cs/ops", () =>
+        HttpResponse.json(
+          {
+            title: "Invalid",
+            status: 422,
+            errors: [
+              {
+                path: "discovery.tag",
+                code: "discovery_tag_not_allowed",
+                message: "The tag must start with sy-acme.",
+              },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "web");
+    await userEvent.click(screen.getByRole("switch", { name: "Discover members from Proxmox" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    expect(await screen.findByText("The tag must start with sy-acme.")).toBeInTheDocument();
+  });
+
   it("maps 422 findings onto member fields and deletes after confirming", async () => {
     server.use(
       http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", () =>
