@@ -24,6 +24,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 
+from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db import changesets as store
 from switchyard.db.models import SeGroupRow, TenantRow
@@ -197,10 +198,10 @@ def render_diffs(before: Snapshot, after: Snapshot) -> tuple[GroupDiff, ...]:
     old_groups = {g.id for g in before.se_groups}
     for group in sorted(after.se_groups, key=lambda g: g.name):
         try:
-            rendered = render_haproxy(after, group.id)
+            rendered = render_haproxy(after, group.id, broker_url())
             new_files: Mapping[str, str] = rendered.files
             old: RenderResult | None = (
-                render_haproxy(before, group.id) if group.id in old_groups else None
+                render_haproxy(before, group.id, broker_url()) if group.id in old_groups else None
             )
         except (RenderError, ValueError) as exc:
             out.append(GroupDiff(group.id, group.name, error=str(exc)))

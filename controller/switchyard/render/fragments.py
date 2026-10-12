@@ -190,7 +190,10 @@ def _select(c: _Collector, view: Snapshot, object_type: ObjectType, object_id: U
 
 
 def rendered_fragments(
-    snapshot: Snapshot, object_type: ObjectType, object_id: UUID
+    snapshot: Snapshot,
+    object_type: ObjectType,
+    object_id: UUID,
+    broker_url: str | None = None,
 ) -> list[Fragment]:
     """Return the rendered fragments one object produced, across every SE group that uses it.
 
@@ -201,6 +204,7 @@ def rendered_fragments(
         snapshot: Desired state, live or with a change set applied.
         object_type: Kind of object; must be in :data:`RENDERED_TYPES`.
         object_id: The object.
+        broker_url: The login broker's public URL, needed by step-up rules (ADR 0196).
 
     Returns:
         Fragments sorted by SE group name, then in the order the object's text appears. Empty when
@@ -233,7 +237,7 @@ def rendered_fragments(
     out: list[Fragment] = []
     for group in sorted(snapshot.se_groups, key=lambda g: g.name):
         view = snapshot.for_se_group(group.id)
-        collector = _Collector(group.id, render_haproxy(snapshot, group.id))
+        collector = _Collector(group.id, render_haproxy(snapshot, group.id, broker_url))
         _select(collector, view, object_type, object_id)
         out += collector.out
     return out

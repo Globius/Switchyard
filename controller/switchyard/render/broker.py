@@ -378,7 +378,8 @@ def render_broker_files(
 ) -> dict[str, str]:
     """All broker files: ``dex/<tenant>-<directory>.yaml``, ``instances.json`` and ``routes.conf``.
 
-    ``instances.json`` lists the instances (name, public path, port, whether a gate fronts it) for the supervisor.
+    ``instances.json`` lists the instances (name, public path, port, ``gate``) for the supervisor,
+    and ``gate/<name>.json`` configures the login gate of each RADIUS directory (ADR 0195).
     ``routes.conf`` is an nginx snippet for the controller's public proxy: one ``location`` per
     instance that passes the request, path unchanged, to the instance on the loopback.
     """

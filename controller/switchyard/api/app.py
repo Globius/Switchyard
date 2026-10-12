@@ -175,6 +175,7 @@ from switchyard.api.schemas import (
     VirtualServiceStatusRead,
 )
 from switchyard.api.stream_models import EVENTS
+from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
@@ -1264,7 +1265,7 @@ def _rendered_route(router: APIRouter, slug: str, object_type: ObjectType) -> No
         if not any(o.id == object_id for o in getattr(snapshot, COLLECTION[object_type])):
             raise ApiError(404, f"{slug} {object_id} not found")
         try:
-            fragments = rendered_fragments(snapshot, object_type, object_id)
+            fragments = rendered_fragments(snapshot, object_type, object_id, broker_url())
         except RenderError as exc:
             raise ApiError(422, f"cannot render: {exc}") from exc
         return RenderedConfig(items=[RenderedFragment(**f.__dict__) for f in fragments])

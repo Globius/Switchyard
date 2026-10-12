@@ -17,6 +17,7 @@ from switchyard.render.broker import (
     render_broker_files,
 )
 from switchyard.render.escape import RenderError
+from switchyard.render.haproxy import render_haproxy
 from switchyard.services.broker import write_broker_files
 from tests.unit.render.test_broker import SECRETS, URL, T, access, codes, data_with, directory
 
@@ -264,3 +265,40 @@ class TestFiles:
 
 def test_tenant_constant_is_the_one_the_fixtures_use() -> None:
     assert T == "t-acme"
+
+
+class TestStepUp:
+    def snap(self) -> Any:
+        sso = access(rules=[{"mode": "login", "min_factors": 2}])
+        return snapshot_from_mapping(data_with(radius_dir(), sso))
+
+    def config(self, snap: Any, broker: str | None = URL) -> str:
+        return render_haproxy(snap, snap.se_groups[0].id, broker).files["haproxy/haproxy.cfg"]
+
+    def test_the_rule_redirects_get_to_the_gate_and_refuses_other_methods(self) -> None:
+        lines = [ln for ln in self.config(self.snap()).splitlines() if "sy-factors-2" in ln]
+        assert len(lines) == 2
+        assert lines[0].startswith(
+            'http-request redirect location "https://auth.example.test/dex/acme/staff/_gate/'
+            'elevate?level=2&host=%[req.hdr(host),field(1,:),url_enc]&path=%[pathq,url_enc]"'
+        )
+        assert "method GET HEAD" in lines[0] and "code 303" in lines[0]
+        assert "return status 403" in lines[1] and "method" not in lines[1]
+
+    def test_the_address_needs_the_broker_url(self) -> None:
+        with pytest.raises(RenderError, match="broker URL"):
+            self.config(self.snap(), None)
+
+    def test_a_set_without_min_factors_needs_no_broker_url_and_no_rule(self) -> None:
+        snap = snapshot_from_mapping(data_with(radius_dir(), access()))
+        assert "sy-factors" not in self.config(snap, None)
+
+    def test_only_the_rule_that_asks_is_guarded(self) -> None:
+        rules = [
+            {"match": {"path_prefix": "/open"}, "mode": "login"},
+            {"match": {"path_prefix": "/admin"}, "mode": "login", "min_factors": 2},
+        ]
+        snap = snapshot_from_mapping(data_with(radius_dir(), access(rules=rules)))
+        cfg = self.config(snap)
+        assert cfg.count("sy-factors-2") == 2
+        assert "var(txn.sy_ad) -m int 3 } !{ req.fhdr(X-Forwarded-Groups)" in cfg

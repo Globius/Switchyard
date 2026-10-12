@@ -58,7 +58,7 @@ _HOP = {
     "host",
 }
 _SAFE_TARGET = re.compile(r"/[A-Za-z0-9._~%!$&'()*+,;=:@/?-]*")
-_SAFE_PATH = re.compile(r"/[A-Za-z0-9._~%!$&'()*+,;=:@/-]*")
+_SAFE_PATH = _SAFE_TARGET  # a step-up may come back to a path with a query
 _HOST = re.compile(r"[A-Za-z0-9.-]{1,253}")
 
 ClientFactory = Callable[[fl.GateConfig, str], RadiusClient]
