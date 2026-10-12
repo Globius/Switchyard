@@ -5,8 +5,9 @@ Date: 2026-10-12
 
 ## Decisions
 
-1. **SE image:** `coraza-spoa` (a pinned release) at `/usr/local/bin/coraza-spoa`, the OWASP CRS releases listed in `CRS_VERSIONS` where the Coraza
-   `@owasp_crs` include resolves, a `coraza` user, the unit `se-image/files/coraza-spoa.service` (enabled, hardened, read-only access to
+1. **SE image:** `coraza-spoa` (a pinned release) at `/usr/local/bin/coraza-spoa`, the OWASP CRS releases listed in `CRS_VERSIONS`, each in its own
+   directory `/usr/share/coreruleset/<version>/` (the generated directives include `crs-setup.conf.example` and `rules/*.conf` from the pinned
+   version's directory, never a `current` link, so a policy cannot drift), a `coraza` user, the unit `se-image/files/coraza-spoa.service` (enabled, hardened, read-only access to
    `/etc/switchyard/coraza`), and the Vector source added to `se-image/files/vector.yaml`. `provision.sh` and `fetch-binaries.sh` belong to the
    Operations thread (P7); this change adds the unit and the Vector source and asks P7 to wire the binary and the CRS in.
 2. **Agent:** no change. The `coraza` directory and the `coraza-spoa` reload are already in the allowlist; the agent still writes only under

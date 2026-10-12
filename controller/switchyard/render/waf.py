@@ -124,6 +124,8 @@ def frontend_lines(svc: dm.VirtualService, policy: dm.WafPolicySet) -> tuple[lis
 
 
 BASE_DIR = "/etc/switchyard/haproxy"
+#: Where the SE image keeps the OWASP CRS releases, one directory per version (ADR 0141, 0144).
+CRS_ROOT = "/usr/share/coreruleset"
 
 
 def backend_lines() -> list[str]:
@@ -188,17 +190,18 @@ def directives(policy: dm.WafPolicySet) -> list[str]:
     paranoia = int(policy.paranoia_level)
     inbound = int(policy.inbound_threshold)
     outbound = int(policy.outbound_threshold)
+    version = esc.arg(policy.crs_version)
     lines = [
         "Include @coraza.conf-recommended",
         f"SecRuleEngine {engine}",
-        "Include @crs-setup.conf.example",
-        f"# OWASP CRS {esc.arg(policy.crs_version)}, pinned in the SE image",
+        f"# OWASP CRS {version}, pinned in the SE image",
+        f"Include {CRS_ROOT}/{version}/crs-setup.conf.example",
         'SecAction "id:900000,phase:1,pass,t:none,nolog,'
         f'setvar:tx.blocking_paranoia_level={paranoia}"',
         'SecAction "id:900110,phase:1,pass,t:none,nolog,'
         f"setvar:tx.inbound_anomaly_score_threshold={inbound},"
         f'setvar:tx.outbound_anomaly_score_threshold={outbound}"',
-        "Include @owasp_crs/*.conf",
+        f"Include {CRS_ROOT}/{version}/rules/*.conf",
     ]
     lines += [f"SecRuleRemoveById {int(rule_id)}" for rule_id in sorted(policy.disabled_rule_ids)]
     return lines
