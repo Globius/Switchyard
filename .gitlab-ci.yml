@@ -86,6 +86,7 @@ se-image:
   rules:
     - changes: [se-image/**/*, agent/**/*]
   script:
+    - for i in $(seq 60); do docker info >/dev/null 2>&1 && break; sleep 2; done  # dind starts after the job
     - docker build -q -f se-image/test/Dockerfile -t sy-se-image-test .
 
 # The live checks (.p12 import, 412/428 conflict responses: deploy/lab/checks/live.sh) need a running stack and the lab
