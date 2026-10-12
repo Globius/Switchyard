@@ -42,6 +42,7 @@ while read -r old node <&5; do
   grow "$node"   # not in a subshell: a failed gate must stop the whole script before anything is retired
   new=$(cat work/up-new.txt)
   api retire "$old" >/dev/null
+  api repair "$GROUP" >/dev/null   # the remaining engines' configuration names their peers: converge it again
   wait_for "group healthy after retiring $old" "[ \"\$(score_ok)\" = 1 ]" 120
   echo "   $old -> $new"
 done
