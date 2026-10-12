@@ -1,5 +1,6 @@
 import { t } from "@/lib/i18n";
 /** Pure helpers of the Review and apply screen. */
+import { hostPort } from "@/lib/ip";
 import type { components } from "@/api/schema";
 
 export type Job = components["schemas"]["Job"];
@@ -143,7 +144,7 @@ export function describeCreated(type: string, o: Obj, labels: Record<string, str
   }
   if (type === "pool") {
     const m = (o.members as { address: string; port?: number | null }[] | undefined) ?? [];
-    return `${String(o.algorithm ?? "")} · ${m.length} member${m.length === 1 ? "" : "s"}${m.length ? ` (${m.map((x) => `${x.address}${x.port ? `:${x.port}` : ""}`).join(", ")})` : ""}`;
+    return `${String(o.algorithm ?? "")} · ${m.length} member${m.length === 1 ? "" : "s"}${m.length ? ` (${m.map((x) => hostPort(x.address, x.port)).join(", ")})` : ""}`;
   }
   if (type === "health_monitor")
     return `${String(o.type ?? "").toUpperCase()} · every ${o.interval_s} s, timeout ${o.timeout_s} s`;

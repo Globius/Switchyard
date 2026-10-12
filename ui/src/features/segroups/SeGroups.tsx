@@ -296,13 +296,13 @@ function EnginesCard({
                   <tr key={e.id}>
                     <td className="px-4 py-3">
                       <div className="font-mono text-sm">{e.name}</div>
-                      <div className="font-mono text-xs text-muted-foreground">
+                      <div className="font-mono text-xs break-all text-muted-foreground">
                         {guestPrefix(e)}
                         {e.mgmt_ip ?? "—"}
                         {st?.agent?.version ? ` · agent ${st.agent.version}` : ""}
                       </div>
                       {addressLine(e, group.networks, netName) && (
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <div className="font-mono text-xs break-all text-muted-foreground">
                           {addressLine(e, group.networks, netName)}
                         </div>
                       )}

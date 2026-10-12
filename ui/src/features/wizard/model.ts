@@ -2,6 +2,7 @@
  * State, validation and ops of the create-virtual-service wizard. Pure, so it is tested without
  * rendering. Everything the wizard creates is sent as one atomic `POST /change-sets/{cs}/ops`.
  */
+import { isIp } from "@/lib/ip";
 import type { components } from "@/api/schema";
 
 export type Protocol = "http" | "tcp" | "udp";
@@ -65,7 +66,6 @@ export interface WizardState {
 }
 
 export const NAME_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 
 export function initialState(): WizardState {
   return {
@@ -150,8 +150,7 @@ export function validateStep(step: number, s: WizardState, existingNames: Set<st
   }
   if (step === 2) {
     if (s.vipMode === "pool" && !s.vip_pool_id) e.vip_pool_id = "Choose a VIP pool.";
-    if (s.vipMode === "fixed" && !IPV4.test(s.vip) && !s.vip.includes(":"))
-      e.vip = "Enter an IP address.";
+    if (s.vipMode === "fixed" && !isIp(s.vip)) e.vip = "Enter an IP address.";
   }
   if (step === 3) {
     if (s.ports.length === 0) e.ports = "Add at least one port.";
@@ -176,8 +175,7 @@ export function validateStep(step: number, s: WizardState, existingNames: Set<st
       const valid = s.members.filter((m) => m.address);
       if (valid.length === 0) e.members = "Add at least one member.";
       s.members.forEach((m, i) => {
-        if (m.address && !IPV4.test(m.address) && !m.address.includes(":"))
-          e[`members.${i}.address`] = "Enter an IP address.";
+        if (m.address && !isIp(m.address)) e[`members.${i}.address`] = "Enter an IP address.";
         if (s.protocol === "udp" && m.address && !m.port)
           e[`members.${i}.port`] = "UDP members need a port.";
         if (m.port && (Number(m.port) < 1 || Number(m.port) > 65535))

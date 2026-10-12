@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { hostPort } from "@/lib/ip";
 import { AlertTriangle, Zap } from "lucide-react";
 import { useState } from "react";
 import { useCan, useMe } from "@/auth/session";
@@ -328,10 +329,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                             )}
                             {m.name ?? m.address}
                           </td>
-                          <td className="px-4 py-3 font-mono">
-                            {m.address}
-                            {m.port ? `:${m.port}` : ""}
-                          </td>
+                          <td className="px-4 py-3 font-mono">{hostPort(m.address, m.port)}</td>
                           <td className="px-4 py-3">
                             {fresh ? (
                               <span className="text-muted-foreground">—</span>

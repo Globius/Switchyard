@@ -57,6 +57,17 @@ describe("helpers", () => {
     expect(parseCidrs("nope").error?.message).toBe("not a valid address or range");
     expect(parseCidrs("").error?.message).toBe("add at least one range");
   });
+  it("checks IPv6 ranges strictly", () => {
+    expect(parseCidrs("2001:db8::/129").error).toEqual({
+      line: 1,
+      message: "prefix length must be 0–128 for IPv6",
+    });
+    expect(parseCidrs("::::").error?.message).toBe("not a valid address or range");
+    expect(parseCidrs("2001:db8::1" + String.fromCharCode(10) + "fe80::/10").cidrs).toEqual([
+      "2001:db8::1",
+      "fe80::/10",
+    ]);
+  });
 });
 
 let role = "operator";
