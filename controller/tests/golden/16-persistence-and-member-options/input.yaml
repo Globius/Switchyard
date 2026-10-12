@@ -1,0 +1,118 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+pools:
+- id: p-cookie
+  tenant_id: t-acme
+  name: cookie-insert
+  persistence:
+    type: http_cookie
+    name: SY_SRV
+    mode: insert
+    ttl_s: 3600
+    secure: true
+  members:
+  - address: 10.20.5.2
+    port: 8080
+  - address: 10.20.5.3
+    port: 8080
+    maxconn: 200
+  - address: 10.20.5.4
+    port: 8080
+    backup: true
+    name: standby
+- id: p-prefix
+  tenant_id: t-acme
+  name: cookie-prefix
+  persistence:
+    type: http_cookie
+    name: JSESSIONID
+    mode: prefix
+  members:
+  - address: 10.20.5.5
+    port: 8080
+- id: p-header
+  tenant_id: t-acme
+  name: header-sticky
+  persistence:
+    type: header
+    header: X-Session-Id
+    timeout_s: 900
+    table_size: 20000
+  members:
+  - address: 10.20.5.6
+    port: 8080
+- id: p-uri
+  tenant_id: t-acme
+  name: uri-param
+  persistence:
+    type: uri
+    source: url_param
+    param: tenant
+  members:
+  - address: 10.20.5.7
+    port: 8080
+- id: p-path
+  tenant_id: t-acme
+  name: uri-path
+  persistence:
+    type: uri
+    source: path
+  members:
+  - address: 10.20.5.8
+    port: 8080
+- id: p-proxy
+  tenant_id: t-acme
+  name: proxied
+  send_proxy: v2
+  members:
+  - address: 10.20.5.9
+    port: 9000
+virtual_services:
+- id: v-web
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: web
+  protocol: http
+  vip: 192.0.2.30
+  ports:
+  - port: 80
+  routes:
+  - match:
+      host: cookie.example.test
+    pool_id: p-cookie
+  - match:
+      host: prefix.example.test
+    pool_id: p-prefix
+  - match:
+      host: header.example.test
+    pool_id: p-header
+  - match:
+      host: uri.example.test
+    pool_id: p-uri
+  - match:
+      host: path.example.test
+    pool_id: p-path
+  default_pool_id: p-proxy

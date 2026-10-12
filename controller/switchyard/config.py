@@ -3,6 +3,8 @@
 import os
 
 #: Default points at ``deploy/dev/compose.yaml``.
+#: Public base URL of the login broker (ADR 0137), for example ``https://auth.example.test/dex``.
+BROKER_URL_ENV = "SWITCHYARD_AUTH_BROKER_URL"
 DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/switchyard"
 
 

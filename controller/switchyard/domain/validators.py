@@ -19,6 +19,12 @@ _NAME = re.compile(r"^[a-z0-9]([a-z0-9_-]{0,61}[a-z0-9])?$")
 _PATH = re.compile(r"^/[A-Za-z0-9._~/%:@+,;=-]{0,1023}$")
 _LOCATION_TAIL = re.compile(r"^[A-Za-z0-9._~/%:@+,;=?&-]{0,1023}$")
 _HEADER = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?$")
+# Header values are rendered inside double quotes: no quote, backslash, ``$`` (environment
+# expansion), ``%`` (log-format variables), ``#`` or control characters. Spaces are allowed inside.
+_VALUE_CHARS = r"A-Za-z0-9._~/:@+,;=*()&!'-"
+_HEADER_VALUE = re.compile(rf"^[{_VALUE_CHARS}]([ {_VALUE_CHARS}]{{0,254}}[{_VALUE_CHARS}])?$")
+_BAD_VALUE = "header value must be 1-256 characters without quotes, backslash, $, % or #"
+_QUERY_PARAM = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _SECRET_REF = re.compile(r"^[a-z0-9][a-z0-9/_.-]{0,254}$")
 
 
@@ -210,6 +216,38 @@ def validate_header_name(value: str) -> str:
     return value
 
 
+def validate_media_type(value: str) -> str:
+    """Validate a media type such as ``text/html`` (no parameters, lower case).
+
+    Example:
+        >>> validate_media_type("image/svg+xml")
+        'image/svg+xml'
+        >>> validate_media_type("Text/HTML")
+        Traceback (most recent call last):
+            ...
+        ValueError: media type must look like 'text/html' (lower case, no parameters)
+    """
+    if not re.fullmatch(r"[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/[a-z0-9][a-z0-9!#$&^_.+-]{0,62}", value):
+        raise ValueError("media type must look like 'text/html' (lower case, no parameters)")
+    return value
+
+
+def validate_match_text(value: str) -> str:
+    """Validate literal text a health check looks for (letters, digits and ``._:/-``; 1-128).
+
+    Example:
+        >>> validate_match_text("status:ok")
+        'status:ok'
+        >>> validate_match_text("a b")
+        Traceback (most recent call last):
+            ...
+        ValueError: match text must be 1-128 characters of letters, digits and '._:/-'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9._:/-]{1,128}", value):
+        raise ValueError("match text must be 1-128 characters of letters, digits and '._:/-'")
+    return value
+
+
 def validate_interface(value: str) -> str:
     """Validate a network interface name (Linux ``IFNAMSIZ``: at most 15 characters).
 
@@ -383,3 +421,347 @@ def host_port(host: str, port: int) -> str:
         '[2001:db8::5]:5556'
     """
     return f"[{host}]:{port}" if ":" in host and not host.startswith("[") else f"{host}:{port}"
+
+
+def validate_header_value(value: str) -> str:
+    """Validate a literal header value (match operand or value to set).
+
+    One to 256 characters of ``A-Z a-z 0-9`` and ``. _ ~ / : @ + , ; = * ( ) & ! ' -``, with
+    single spaces allowed between them. No quotes, backslash, ``$``, ``%`` or ``#``: a value that
+    must vary per request uses a variable from the fixed list instead.
+
+    Example:
+        >>> validate_header_value("max-age=31536000; includeSubDomains")
+        'max-age=31536000; includeSubDomains'
+        >>> validate_header_value("%[src]")
+        Traceback (most recent call last):
+            ...
+        ValueError: header value must be 1-256 characters without quotes, backslash, $, % or #
+    """
+    if not _HEADER_VALUE.fullmatch(value):
+        raise ValueError(_BAD_VALUE)
+    return value
+
+
+def validate_query_param(value: str) -> str:
+    """Validate a query-string parameter name.
+
+    Example:
+        >>> validate_query_param("utm_source")
+        'utm_source'
+        >>> validate_query_param("a b")
+        Traceback (most recent call last):
+            ...
+        ValueError: query parameter name must be 1-64 characters of letters, digits, '_', '.' or '-'
+    """
+    if not _QUERY_PARAM.fullmatch(value):
+        raise ValueError(
+            "query parameter name must be 1-64 characters of letters, digits, '_', '.' or '-'"
+        )
+    return value
+
+
+#: Headers a policy may never set, add or remove: message framing and hop-by-hop headers.
+FORBIDDEN_HEADERS = frozenset(
+    {
+        "content-length",
+        "transfer-encoding",
+        "connection",
+        "keep-alive",
+        "te",
+        "trailer",
+        "upgrade",
+        "expect",
+        "proxy-authorization",
+        "proxy-authenticate",
+        "proxy-connection",
+    }
+)
+#: Request headers the renderer owns (client-address hygiene); a policy cannot touch them.
+MANAGED_REQUEST_HEADERS = frozenset({"x-forwarded-for", "x-forwarded-proto"})
+#: Headers the authentication proxy uses between itself and the engine (ADR 0132).
+AUTH_INTERNAL_HEADERS = frozenset(
+    {
+        "host",
+        "authorization",
+        "x-forwarded-user",
+        "x-forwarded-email",
+        "x-forwarded-groups",
+        "x-forwarded-preferred-username",
+        "x-forwarded-access-token",
+    }
+)
+
+
+def validate_body(value: str) -> str:
+    r"""Validate the text of a fixed response or an error page.
+
+    At most 16 KiB of UTF-8, no NUL or other control characters except tab, CR and LF. The text is
+    stored as a file and served as is, so it needs no escaping, but it must not break the file
+    format or the HTTP message.
+
+    Example:
+        >>> validate_body("Down for maintenance")
+        'Down for maintenance'
+        >>> validate_body("a\x00b")
+        Traceback (most recent call last):
+            ...
+        ValueError: body must not contain control characters
+    """
+    if len(value.encode("utf-8")) > 16_384:
+        raise ValueError("body must be at most 16 KiB")
+    if any((ord(c) < 32 and c not in "\t\r\n") or ord(c) == 127 for c in value):
+        raise ValueError("body must not contain control characters")
+    return value
+
+
+_COUNTRY = re.compile(r"^[A-Z]{2}$")
+_DISCOVERY_TAG = re.compile(r"^[a-z0-9_][a-z0-9_+.-]{0,63}$")
+
+
+def validate_discovery_tag(value: str) -> str:
+    """Validate a Proxmox tag used for pool discovery.
+
+    Proxmox tags are lower-case and may contain ``a-z``, ``0-9``, ``_``, ``+``, ``.`` and ``-``.
+    Which tags a tenant may use is a cross-object rule (:func:`discovery_tag_prefix`).
+
+    Example:
+        >>> validate_discovery_tag("sy-acme.web")
+        'sy-acme.web'
+        >>> validate_discovery_tag("Web Tier")
+        Traceback (most recent call last):
+            ...
+        ValueError: tag must be 1-64 characters: a-z, 0-9, '_', '+', '.' or '-'
+    """
+    if not _DISCOVERY_TAG.fullmatch(value):
+        raise ValueError("tag must be 1-64 characters: a-z, 0-9, '_', '+', '.' or '-'")
+    return value
+
+
+def discovery_tag_prefix(tenant_name: str) -> str:
+    """The prefix every discovery tag of a tenant must start with.
+
+    Proxmox tags are cluster-wide, so a tenant may only discover guests whose tag begins with
+    ``sy-<tenant>.``. Tenant names never contain a dot, so ``sy-acme.`` cannot be a prefix of the
+    tags of a tenant called ``acme-x`` (ADR 0145).
+
+    Example:
+        >>> discovery_tag_prefix("acme")
+        'sy-acme.'
+    """
+    return f"sy-{tenant_name}."
+
+
+_OIDC_ISSUER = re.compile(
+    r"^https://([a-z0-9]([a-z0-9-]*[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?(/[A-Za-z0-9._~/%:@+-]{0,512})?$"
+)
+_CLAIM = re.compile(r"^[A-Za-z0-9_.:/-]{1,64}$")
+_COOKIE_NAME = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+_CLIENT_ID = re.compile(r"^[A-Za-z0-9._~:@-]{1,128}$")
+_GROUP = re.compile(r"^[A-Za-z0-9_.:/@=-]{1,128}$")
+
+
+def validate_issuer(value: str) -> str:
+    """Validate an OpenID Connect issuer URL: ``https`` and a host, an optional port and path.
+
+    No user info, query or fragment, and only characters that are safe in a quoted config value.
+
+    Example:
+        >>> validate_issuer("https://login.example.test/realms/acme")
+        'https://login.example.test/realms/acme'
+        >>> validate_issuer("http://login.example.test")
+        Traceback (most recent call last):
+            ...
+        ValueError: issuer must be an https URL (host, optional port and path)
+    """
+    if not _OIDC_ISSUER.fullmatch(value) or len(value) > 512:
+        raise ValueError("issuer must be an https URL (host, optional port and path)")
+    host = value[len("https://") :].split("/", 1)[0].split(":", 1)[0]
+    validate_hostname(host)
+    return value
+
+
+def validate_claim_name(value: str) -> str:
+    """Validate a token claim name (for example ``groups``).
+
+    Example:
+        >>> validate_claim_name("groups")
+        'groups'
+    """
+    if not _CLAIM.fullmatch(value):
+        raise ValueError("claim name must be 1-64 characters of letters, digits and _ . : / -")
+    return value
+
+
+def validate_cookie_name(value: str) -> str:
+    """Validate a session cookie name.
+
+    Example:
+        >>> validate_cookie_name("_sy_auth")
+        '_sy_auth'
+    """
+    if not _COOKIE_NAME.fullmatch(value):
+        raise ValueError("cookie name must be 1-32 characters of letters, digits, _ and -")
+    return value
+
+
+def validate_client_id(value: str) -> str:
+    """Validate an OAuth client id.
+
+    Example:
+        >>> validate_client_id("switchyard-web")
+        'switchyard-web'
+    """
+    if not _CLIENT_ID.fullmatch(value):
+        raise ValueError("client_id must be 1-128 characters of letters, digits and . _ ~ : @ -")
+    return value
+
+
+def validate_group_name(value: str) -> str:
+    """Validate an identity-provider group name or id.
+
+    Example:
+        >>> validate_group_name("/staff/admins")
+        '/staff/admins'
+    """
+    if not _GROUP.fullmatch(value):
+        raise ValueError("group must be 1-128 characters of letters, digits and . _ : / @ = -")
+    return value
+
+
+_PUBLIC_KEY = re.compile(
+    r"^-----BEGIN PUBLIC KEY-----\n[A-Za-z0-9+/=\n]{40,4000}\n-----END PUBLIC KEY-----\n?$"
+)
+_CERT_NAME = re.compile(r"^[A-Za-z0-9._@:-]{1,128}$")
+
+
+def validate_public_key_pem(value: str) -> str:
+    r"""Validate a PEM public key block (never a private key).
+
+    Example:
+        >>> validate_public_key_pem("-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----")
+        Traceback (most recent call last):
+            ...
+        ValueError: public_key_pem must be one PEM PUBLIC KEY block
+    """
+    if not _PUBLIC_KEY.fullmatch(value):
+        raise ValueError("public_key_pem must be one PEM PUBLIC KEY block")
+    return value if value.endswith("\n") else value + "\n"
+
+
+def validate_cert_name(value: str) -> str:
+    """Validate a certificate common name or a user label used in a map file.
+
+    Example:
+        >>> validate_cert_name("alice@example.test")
+        'alice@example.test'
+        >>> validate_cert_name("a b")
+        Traceback (most recent call last):
+            ...
+        ValueError: name must be 1-128 characters of letters, digits and . _ @ : -
+    """
+    if not _CERT_NAME.fullmatch(value):
+        raise ValueError("name must be 1-128 characters of letters, digits and . _ @ : -")
+    return value
+
+
+_DN = re.compile(r"^[A-Za-z0-9=,._ -]{1,512}$")
+_LDAP_FILTER = re.compile(r"^[A-Za-z0-9()=&|!*_.:@ -]{1,256}$")
+_LDAP_ATTR = re.compile(r"^[A-Za-z][A-Za-z0-9-]{0,63}$")
+_EMAIL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}$")
+_CERT_PEM = re.compile(
+    r"^(-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]{40,6000}\n-----END CERTIFICATE-----\n?){1,5}$"
+)
+
+
+def validate_dn(value: str) -> str:
+    """Validate an LDAP distinguished name (letters, digits and ``= , . _ -``, spaces).
+
+    Example:
+        >>> validate_dn("ou=People,dc=example,dc=test")
+        'ou=People,dc=example,dc=test'
+        >>> validate_dn("cn=a)(uid=*")
+        Traceback (most recent call last):
+            ...
+        ValueError: distinguished name has characters that are not allowed
+    """
+    if not _DN.fullmatch(value):
+        raise ValueError("distinguished name has characters that are not allowed")
+    return value
+
+
+def validate_ldap_filter(value: str) -> str:
+    """Validate an LDAP search filter: balanced parentheses and plain characters.
+
+    Example:
+        >>> validate_ldap_filter("(&(objectClass=person)(memberOf=cn=staff))")
+        '(&(objectClass=person)(memberOf=cn=staff))'
+        >>> validate_ldap_filter("(uid=a")
+        Traceback (most recent call last):
+            ...
+        ValueError: filter must have balanced parentheses
+    """
+    if not _LDAP_FILTER.fullmatch(value):
+        raise ValueError("filter has characters that are not allowed")
+    depth = 0
+    for c in value:
+        depth += (c == "(") - (c == ")")
+        if depth < 0:
+            break
+    if depth != 0 or not value.startswith("("):
+        raise ValueError("filter must have balanced parentheses")
+    return value
+
+
+def validate_ldap_attr(value: str) -> str:
+    """Validate an LDAP attribute name.
+
+    Example:
+        >>> validate_ldap_attr("sAMAccountName")
+        'sAMAccountName'
+    """
+    if not _LDAP_ATTR.fullmatch(value):
+        raise ValueError("attribute must be a letter then up to 63 letters, digits and -")
+    return value
+
+
+def validate_email_address(value: str) -> str:
+    """Validate a plain e-mail address.
+
+    Example:
+        >>> validate_email_address("alice@example.test")
+        'alice@example.test'
+    """
+    if not _EMAIL.fullmatch(value) or ".." in value:
+        raise ValueError("not an e-mail address")
+    return value
+
+
+def validate_cert_pem(value: str) -> str:
+    """Validate one to five PEM CERTIFICATE blocks (public; never a key).
+
+    Example:
+        >>> validate_cert_pem("-----BEGIN PRIVATE KEY-----")
+        Traceback (most recent call last):
+            ...
+        ValueError: expected PEM CERTIFICATE blocks only
+    """
+    if not _CERT_PEM.fullmatch(value):
+        raise ValueError("expected PEM CERTIFICATE blocks only")
+    return value if value.endswith("\n") else value + "\n"
+
+
+def validate_country_code(value: str) -> str:
+    """Validate an ISO 3166 alpha-2 country code (upper case, two letters).
+
+    Example:
+        >>> validate_country_code("NL")
+        'NL'
+        >>> validate_country_code("nld")
+        Traceback (most recent call last):
+            ...
+        ValueError: country must be a two-letter upper-case ISO 3166 code
+    """
+    if not _COUNTRY.fullmatch(value):
+        raise ValueError("country must be a two-letter upper-case ISO 3166 code")
+    return value

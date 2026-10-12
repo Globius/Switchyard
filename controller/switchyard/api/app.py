@@ -14,9 +14,10 @@ from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal, cast
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlencode
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
@@ -27,6 +28,18 @@ from switchyard.adapters.secrets import SecretsReader, SecretsWriter
 from switchyard.adapters.telemetry import Telemetry, TelemetryError
 from switchyard.api import docs_meta, job_models, overview
 from switchyard.api import examples as ex
+from switchyard.api.alert_models import (
+    AlertCatalog,
+    AlertRuleIn,
+    AlertRulePatch,
+    AlertRuleRead,
+    AlertStatus,
+    AlertTargetIn,
+    AlertTargetPatch,
+    AlertTargetRead,
+    AlertTargetTest,
+)
+from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
 from switchyard.api.overview import SearchResults, TenantSummary
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.api.rendered_models import RenderedConfig, RenderedFragment
@@ -70,6 +83,7 @@ from switchyard.api.schemas import (
     DnsProviderTestRead,
     DnsProviderTypeRead,
     EngineIn,
+    EngineMetricsRead,
     EngineRead,
     EngineRenderedRead,
     EngineStateOut,
@@ -77,6 +91,8 @@ from switchyard.api.schemas import (
     EnrollIn,
     EnrollmentToken,
     EnrollOut,
+    GrafanaLaunchIn,
+    GrafanaLaunchOut,
     Health,
     IdentityProviderIn,
     IdentityProviderPatch,
@@ -158,6 +174,7 @@ from switchyard.render.escape import RenderError
 from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
 from switchyard.services import principals
 from switchyard.services.acme_providers import AcmeProviders
+from switchyard.services.alerts import EVENT_ACTIONS, AlertService
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
 from switchyard.services.cert_requests import CertificateRequests, IssueRequest
 from switchyard.services.certificates import CertificateJobs, CertificateService
@@ -171,6 +188,7 @@ from switchyard.services.context import Databases, Principal
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
+from switchyard.services.grafana import GrafanaLaunchError, GrafanaService
 from switchyard.services.hosts import HostService
 from switchyard.services.identity_providers import (
     IdentityProviderRecord,
@@ -229,6 +247,9 @@ class ApiServices:
     break_glass: BreakGlassService | None = None
     hosts: HostService | None = None
     settings: SystemSettings = None  # type: ignore[assignment]
+    grafana: GrafanaService | None = None
+    alerts: AlertService | None = None
+    email_configured: bool = False
     acme_providers: AcmeProviders | None = None
     dns_providers: DnsProviders | None = None
 
@@ -245,6 +266,9 @@ def build_services(
     identity_providers: IdentityProviderService | None = None,
     break_glass: BreakGlassService | None = None,
     proxmox: Proxmox | None = None,
+    grafana: GrafanaService | None = None,
+    alerts: AlertService | None = None,
+    email_configured: bool = False,
 ) -> ApiServices:
     """Wire the services over one set of database handles.
 
@@ -290,6 +314,9 @@ def build_services(
         break_glass=break_glass,
         hosts=HostService(db, engines, proxmox),
         settings=SystemSettings(db),
+        grafana=grafana,
+        alerts=alerts,
+        email_configured=email_configured,
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
         dns_providers=DnsProviders(db, secrets) if writer is not None else None,
     )
@@ -307,6 +334,35 @@ Services = Annotated[ApiServices, Depends(_services)]
 
 
 SESSION_COOKIE = "sy_session"
+
+#: Metric queries: seconds back from the end of the range (up to the 30 days Prometheus keeps).
+WindowS = Annotated[
+    int, Query(ge=60, le=2592000, description="Seconds back from `until` (default: now).")
+]
+StepS = Annotated[
+    int | None,
+    Query(ge=5, le=3600, description="Seconds between points; default fits ~120 points."),
+]
+UntilQ = Annotated[
+    datetime | None,
+    Query(
+        description="End of the range (RFC 3339); default now. Not more than five minutes ahead.",
+    ),
+]
+
+
+def _until(value: datetime | None) -> datetime | None:
+    """The end of a metric range, checked: timezone-aware and not in the future."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    if value > datetime.now(UTC) + timedelta(minutes=5):
+        raise ApiError(422, "`until` is in the future")
+    return value
+
+
+DEFAULT_LAUNCH = GrafanaLaunchIn()
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -1230,6 +1286,7 @@ def create_app(
     public_url: str | None = None,
     metrics_token: str | None = None,
     grafana_url: str | None = None,
+    grafana_client: httpx.AsyncClient | None = None,
 ) -> FastAPI:
     """Build the application over ready-made services.
 
@@ -1238,6 +1295,7 @@ def create_app(
         public_url: External base URL (``https://switchyard.example.test``), used to build login
             redirect URIs and to decide whether cookies are ``Secure``.
         grafana_url: Base URL of Grafana, shown to the UI as ``links.grafana`` on ``GET /me``.
+        grafana_client: HTTP client for Grafana and the data source backends (tests inject one).
         metrics_token: Bearer token that may read ``/metrics`` and the Prometheus
             service-discovery list; without it only system administrators can.
     """
@@ -1257,6 +1315,12 @@ def create_app(
     app.state.services = services
     app.state.public_url = public_url
     app.state.metrics_token = metrics_token
+    grafana_service: GrafanaService | None = getattr(services, "grafana", None)
+    grafana_proxy = (
+        GrafanaProxy(grafana_service, grafana_client) if grafana_service is not None else None
+    )
+    if grafana_proxy is not None:
+        app.router.on_shutdown.append(grafana_proxy.aclose)
     install_handlers(app)
 
     @app.middleware("http")
@@ -1593,7 +1657,7 @@ def create_app(
                 }
                 for t in tenants
             ],
-            "links": {"grafana": grafana_url},
+            "links": {"grafana": grafana_url, "grafana_embedded": svc.grafana is not None},
             "features": {"lxc_guests": await svc.settings.lxc_allowed()},
         }
 
@@ -1771,6 +1835,410 @@ def create_app(
             raise ApiError(502, str(exc)) from exc
         return MonitorTestOut(**result.__dict__)
 
+    # embedded Grafana (ADR 0085)
+    def grafana_launch_out(launch_url: str, expires_at: datetime, tenant_id: UUID | None) -> Any:
+        return {"url": launch_url, "expires_at": expires_at, "tenant_id": tenant_id}
+
+    async def grafana_launch(
+        request: Request,
+        svc: ApiServices,
+        who: Principal,
+        tenant_id: UUID | None,
+        body: GrafanaLaunchIn,
+    ) -> Any:
+        # who may ask is decided before whether the feature is on (the same answer everywhere)
+        if tenant_id is None:
+            require(who, "manage", "tenant")  # system administrators only
+        else:
+            require(who, "read", "tenant_data")
+        if svc.grafana is None:
+            raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
+        session = getattr(request.state, "session", None)
+        try:
+            launch = await svc.grafana.launch(
+                who,
+                tenant_id,
+                user_session_id=session.id if session is not None else None,
+                landing=body.landing,
+                request_id=_rid(),
+            )
+        except GrafanaLaunchError as exc:
+            raise ApiError(422, str(exc)) from exc
+        return grafana_launch_out(
+            "/grafana/launch?" + urlencode({"ticket": launch.ticket}),
+            launch.expires_at,
+            launch.tenant_id,
+        )
+
+    @router.post(
+        "/tenants/{t}/grafana/launch",
+        tags=["grafana"],
+        summary="Open Grafana for a tenant",
+        description=(
+            "Returns a link that works once, for 60 seconds. Opening it in a new browser tab "
+            "starts a Grafana session that can read this tenant's metrics and logs and nothing "
+            "else: the controller scopes every query Grafana sends to Prometheus and Loki. The "
+            "session ends 30 minutes after its last use (8 hours at most) and with the browser "
+            "session. Requires any role in the tenant."
+        ),
+        response_model=GrafanaLaunchOut,
+        responses=_ok(ex.GRAFANA_LAUNCH),
+    )
+    async def grafana_launch_tenant(
+        request: Request,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        body: GrafanaLaunchIn = DEFAULT_LAUNCH,
+    ) -> Any:
+        return await grafana_launch(request, svc, who, tenant.id, body)
+
+    @router.post(
+        "/grafana/launch",
+        tags=["grafana"],
+        summary="Open Grafana for every tenant",
+        description=(
+            "Like the tenant form, for the administrator's own Grafana organization with the "
+            "dashboards that span tenants. Requires the system-admin role."
+        ),
+        response_model=GrafanaLaunchOut,
+        responses=_ok(ex.GRAFANA_LAUNCH),
+    )
+    async def grafana_launch_all(
+        request: Request, who: Who, svc: Services, body: GrafanaLaunchIn = DEFAULT_LAUNCH
+    ) -> Any:
+        return await grafana_launch(request, svc, who, None, body)
+
+    def grafana_secure(request: Request) -> bool:
+        return (request.app.state.public_url or str(request.base_url)).startswith("https") or (
+            request.headers.get("x-forwarded-proto") == "https"
+        )
+
+    def set_grafana_cookie(
+        request: Request, response: Response, cookie: str, expires_at: datetime
+    ) -> None:
+        response.set_cookie(
+            PROXY_COOKIE,
+            cookie,
+            max_age=max(1, int((expires_at - datetime.now(UTC)).total_seconds())),
+            httponly=True,
+            samesite="strict",
+            secure=grafana_secure(request),
+            path="/grafana",
+        )
+
+    @app.get("/grafana/launch", include_in_schema=False)
+    async def grafana_redeem(request: Request, ticket: str) -> Response:
+        """Spend a ticket: set the proxy cookie, then redirect into Grafana."""
+        if grafana_service is None:
+            raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
+        try:
+            started = await grafana_service.redeem(ticket)
+        except GrafanaLaunchError as exc:
+            raise ApiError(403, str(exc), code="grafana_ticket") from exc
+        response = Response(
+            status_code=303, headers={"Location": "/grafana/" + started.landing.lstrip("/")}
+        )
+        set_grafana_cookie(request, response, started.cookie, started.expires_at)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.api_route(
+        "/grafana/{path:path}",
+        methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        include_in_schema=False,
+    )
+    async def grafana_forward(request: Request, path: str) -> Response:
+        """Carry a browser request to Grafana as the user the proxy cookie stands for."""
+        if grafana_service is None or grafana_proxy is None:
+            raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
+        cookie = request.cookies.get(PROXY_COOKIE, "")
+        grant = await grafana_service.authenticate(cookie)
+        if grant is None:
+            raise ApiError(
+                401,
+                "open Grafana from Switchyard to start a session",
+                code="grafana_session",
+            )
+        response = await grafana_proxy.forward(request, path, grant)
+        if grant.renewed:  # the session was used again: keep the browser's cookie as long
+            set_grafana_cookie(request, response, cookie, grant.expires_at)
+        return response
+
+    @app.api_route(
+        "/internal/ds/{kind}/{path:path}",
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+        include_in_schema=False,
+    )
+    async def grafana_datasource(request: Request, kind: str, path: str) -> Response:
+        """Grafana's data source requests, scoped to the tenant of their token (not public)."""
+        if grafana_proxy is None:
+            raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
+        return await grafana_proxy.datasource(request, kind, path)
+
+    # alerting (ADR 0120 to 0123)
+    def need_alerts(svc: ApiServices, who: Principal | None = None) -> AlertService:
+        if who is not None:  # who may write is decided before whether the feature is on
+            require(who, "write", "infrastructure")
+        if svc.alerts is None:
+            raise ApiError(404, "alerting is not enabled on this controller", code="not_enabled")
+        return svc.alerts
+
+    @router.get(
+        "/alert-catalog",
+        tags=["alerts"],
+        summary="What alert rules and targets can use",
+        description="Metrics a rule can watch, audit actions an event rule can name, chat formats.",
+        response_model=AlertCatalog,
+        responses=_ok(ex.ALERT_CATALOG),
+    )
+    async def alert_catalog(who: Who, svc: Services) -> dict[str, Any]:
+        from switchyard.domain.alerts import CHAT_FORMATS, METRICS
+
+        return {
+            "metrics": [
+                {"name": n, "label": v[0], "unit": v[1], "scope": v[2]}
+                for n, v in sorted(METRICS.items())
+            ],
+            "event_actions": sorted(EVENT_ACTIONS),
+            "chat_formats": list(CHAT_FORMATS),
+            "email_configured": svc.email_configured,
+        }
+
+    @router.get(
+        "/tenants/{t}/alert-targets",
+        tags=["alerts"],
+        summary="List alert targets",
+        description="Where this tenant's alerts go. Requires any role in the tenant.",
+        response_model=list[AlertTargetRead],
+        responses=_ok([ex.ALERT_TARGET]),
+    )
+    async def list_alert_targets(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return await need_alerts(svc).list_targets(who, tenant.id)
+
+    @router.post(
+        "/tenants/{t}/alert-targets",
+        status_code=201,
+        tags=["alerts"],
+        summary="Create an alert target",
+        description=(
+            "A webhook (JSON body, optionally signed with a secret kept in OpenBao), a chat "
+            "incoming webhook (Slack, Teams or Mattermost) or a list of email addresses. URLs "
+            "must be https and must not name a private address. Applies live (no change set) "
+            "and is audited. Requires `tenant-admin`."
+        ),
+        response_model=AlertTargetRead,
+        responses=_ok(ex.ALERT_TARGET, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_alert_target(
+        body: AlertTargetIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).create_target(
+            who,
+            tenant.id,
+            name=body.name,
+            kind=body.kind,
+            config=body.config,
+            secret_ref=body.secret_ref,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+
+    @router.patch(
+        "/tenants/{t}/alert-targets/{name}",
+        tags=["alerts"],
+        summary="Change an alert target",
+        description="Change the configuration, the secret reference or the enabled flag. "
+        "Requires `tenant-admin`.",
+        response_model=AlertTargetRead,
+        responses=_ok(ex.ALERT_TARGET) | VALIDATION_RESPONSE,
+    )
+    async def patch_alert_target(
+        name: str, body: AlertTargetPatch, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).update_target(
+            who,
+            tenant.id,
+            name,
+            config=body.config,
+            secret_ref=body.secret_ref,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+
+    @router.delete(
+        "/tenants/{t}/alert-targets/{name}",
+        status_code=204,
+        tags=["alerts"],
+        summary="Delete an alert target",
+        description="Rules that name it skip it from then on. Requires `tenant-admin`.",
+        responses=_ok(None, 204),
+    )
+    async def delete_alert_target(name: str, tenant: Tenant, who: Who, svc: Services) -> Response:
+        await need_alerts(svc, who).delete_target(who, tenant.id, name, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.post(
+        "/tenants/{t}/alert-targets/{name}/test",
+        tags=["alerts"],
+        summary="Send a test message through an alert target",
+        description="Sends one clearly marked test message now and reports whether it was "
+        "delivered. Requires `tenant-admin`.",
+        response_model=AlertTargetTest,
+        responses=_ok({"ok": True, "error": None}),
+    )
+    async def test_alert_target(
+        name: str, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).test_target(who, tenant.id, name)
+
+    @router.get(
+        "/tenants/{t}/alert-rules",
+        tags=["alerts"],
+        summary="List alert rules",
+        description="What this tenant watches. Requires any role in the tenant.",
+        response_model=list[AlertRuleRead],
+        responses=_ok([ex.ALERT_RULE]),
+    )
+    async def list_alert_rules(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return await need_alerts(svc).list_rules(who, tenant.id)
+
+    @router.post(
+        "/tenants/{t}/alert-rules",
+        status_code=201,
+        tags=["alerts"],
+        summary="Create an alert rule",
+        description=(
+            "`event`: tell me when an audit event with one of these actions is written. "
+            "`metric`: tell me when a built-in series is over or under a threshold for N "
+            "minutes (and when it recovers). `cert_expiry`: tell me when a certificate is "
+            "within 30, 14 or 7 days (or your own days) of expiring, and when it is renewed. "
+            "Applies live and is audited. Requires `tenant-admin`."
+        ),
+        response_model=AlertRuleRead,
+        responses=_ok(ex.ALERT_RULE, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_alert_rule(
+        body: AlertRuleIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).create_rule(
+            who,
+            tenant.id,
+            name=body.name,
+            kind=body.kind,
+            spec=body.spec,
+            targets=body.targets,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+
+    @router.patch(
+        "/tenants/{t}/alert-rules/{name}",
+        tags=["alerts"],
+        summary="Change an alert rule",
+        description="Change the specification, the targets or the enabled flag. "
+        "Requires `tenant-admin`.",
+        response_model=AlertRuleRead,
+        responses=_ok(ex.ALERT_RULE) | VALIDATION_RESPONSE,
+    )
+    async def patch_alert_rule(
+        name: str, body: AlertRulePatch, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).update_rule(
+            who,
+            tenant.id,
+            name,
+            spec=body.spec,
+            targets=body.targets,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+
+    @router.delete(
+        "/tenants/{t}/alert-rules/{name}",
+        status_code=204,
+        tags=["alerts"],
+        summary="Delete an alert rule",
+        description="Also forgets what it was firing. Requires `tenant-admin`.",
+        responses=_ok(None, 204),
+    )
+    async def delete_alert_rule(name: str, tenant: Tenant, who: Who, svc: Services) -> Response:
+        await need_alerts(svc, who).delete_rule(who, tenant.id, name, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.get(
+        "/tenants/{t}/alerts",
+        tags=["alerts"],
+        summary="What is firing and what was sent",
+        description="Alerts firing or waiting out their duration, and the latest deliveries "
+        "with their outcome. Requires any role in the tenant.",
+        response_model=AlertStatus,
+        responses=_ok(ex.ALERT_STATUS),
+    )
+    async def alert_status(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> dict[str, Any]:
+        return await need_alerts(svc).status(who, tenant.id, limit=limit)
+
+    @router.get(
+        "/tenants/{t}/logs",
+        tags=["virtual-services"],
+        summary="Access log of the whole tenant",
+        description=(
+            "HAProxy HTTP log lines of every virtual service of the tenant (or of one, with "
+            "`service`), newest first. Same filters and paging as the per-service log: "
+            "`since`/`until` (default: the last hour), `q`, `status_class`, `limit`, `cursor`. "
+            "Read from Loki with the tenant label enforced. Requires any role in the tenant."
+        ),
+        response_model=AccessLogs,
+        responses=_ok(ex.ACCESS_LOGS),
+    )
+    async def tenant_logs(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        service: Annotated[str | None, Query(max_length=63)] = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
+        status_class: Annotated[int | None, Query(ge=2, le=5)] = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> AccessLogs:
+        if svc.telemetry is None:
+            return AccessLogs(available=False, reason="no log backend is configured", entries=[])
+        end = until or datetime.now(UTC)
+        if cursor:
+            try:
+                end = _EPOCH + timedelta(microseconds=int(cursor))
+            except ValueError:
+                raise ApiError(400, "cursor is not valid") from None
+        start = since or end - timedelta(hours=1)
+        try:
+            found = await svc.telemetry.logs(
+                tenant.id,
+                service,
+                since=start,
+                until=end,
+                limit=limit + 1,
+                contains=q,
+                status_class=status_class,
+            )
+        except (TelemetryError, RenderError) as exc:
+            return AccessLogs(available=False, reason=str(exc), entries=[])
+        window = found[:limit]
+        more = len(found) > limit
+        return AccessLogs(
+            available=True,
+            entries=window,
+            next_cursor=(
+                str((window[-1].at - _EPOCH) // timedelta(microseconds=1)) if more else None
+            ),
+        )
+
     # telemetry
     async def _service_name(svc: ApiServices, tenant: TenantRecord, service_id: UUID) -> str:
         from switchyard.db.repository import load_snapshot
@@ -1802,23 +2270,64 @@ def create_app(
         tenant: Tenant,
         who: Who,
         svc: Services,
-        window_s: Annotated[
-            int, Query(ge=60, le=604800, description="Seconds back from now.")
-        ] = 3600,
-        step_s: Annotated[
-            int | None,
-            Query(ge=5, le=3600, description="Seconds between points; default fits ~120 points."),
-        ] = None,
+        window_s: WindowS = 3600,
+        step_s: StepS = None,
+        until: UntilQ = None,
     ) -> MetricsRead:
         name = await _service_name(svc, tenant, object_id)
         if svc.telemetry is None:
             return MetricsRead(available=False, reason="no metrics backend is configured")
         step = step_s or max(5, window_s // 120)
         try:
-            found = await svc.telemetry.metrics(tenant.id, name, window_s=window_s, step_s=step)
-        except TelemetryError as exc:
+            found = await svc.telemetry.metrics(
+                tenant.id, name, window_s=window_s, step_s=step, until=_until(until)
+            )
+        except (TelemetryError, RenderError) as exc:
             return MetricsRead(available=False, reason=str(exc))
         return MetricsRead(available=True, metrics=found)
+
+    @router.get(
+        "/tenants/{t}/engines/{engine}/metrics",
+        tags=["engines"],
+        summary="Metrics of a service engine",
+        description=(
+            "CPU as a percentage of all vCPUs, memory in use, current HAProxy sessions and "
+            "traffic received (bits per second) of one engine over the last `window_s` seconds "
+            "(ending at `until` when given), one point per `step_s`, plus the latest value of "
+            "each and the engine's vCPU count and memory. Read from Prometheus with the tenant "
+            "and engine labels enforced. `available: false` (with a `reason`) when no backend "
+            "is configured or it fails; a missing sample is a gap in the series, never zero. "
+            "Requires any role in the tenant."
+        ),
+        response_model=EngineMetricsRead,
+        responses=_ok(ex.ENGINE_METRICS),
+    )
+    async def engine_metrics(
+        engine: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        window_s: WindowS = 3600,
+        step_s: StepS = None,
+        until: UntilQ = None,
+    ) -> EngineMetricsRead:
+        found_engine = await svc.engines.describe(who, tenant.id, engine_id=engine)
+        if not found_engine:
+            raise ApiError(404, f"engine {engine} not found")
+        if svc.telemetry is None:
+            return EngineMetricsRead(available=False, reason="no metrics backend is configured")
+        step = step_s or max(5, window_s // 120)
+        try:
+            found = await svc.telemetry.engine_metrics(
+                tenant.id,
+                found_engine[0].record.name,
+                window_s=window_s,
+                step_s=step,
+                until=_until(until),
+            )
+        except (TelemetryError, RenderError) as exc:
+            return EngineMetricsRead(available=False, reason=str(exc))
+        return EngineMetricsRead(available=True, metrics=found)
 
     @router.get(
         "/tenants/{t}/metrics/virtual-services",

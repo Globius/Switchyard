@@ -31,9 +31,11 @@ from switchyard.domain.snapshot import Snapshot
 from switchyard.pipeline.apply import bundle_id, file_hashes
 from switchyard.pipeline.bundles import BundleError, engine_files
 from switchyard.pipeline.engines import EngineDirectory, EngineRecord
+from switchyard.render.auth import auth_secret_refs, render_auth_files
 from switchyard.render.escape import RenderError, ident
 from switchyard.render.haproxy import fingerprint_of, render_haproxy
 from switchyard.render.routing import EngineSlot, render_agent_bundle
+from switchyard.render.tokens import jwt_key_files
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import NotFoundError, PermissionDeniedError
 
@@ -186,7 +188,7 @@ def virtual_service_members(
     """
     if not service.enabled:
         return ()
-    pool_ids = {r.pool_id for r in service.routes if r.pool_id}
+    pool_ids = {pid for r in service.routes for pid in r.pool_ids}
     if service.default_pool_id:
         pool_ids.add(service.default_pool_id)
     rows: list[MemberRow] = []
@@ -248,7 +250,7 @@ def virtual_service_health(
     """
     if not service.enabled:
         return "disabled", 0, 0
-    pool_ids = [r.pool_id for r in service.routes if r.pool_id]
+    pool_ids = [pid for r in service.routes for pid in r.pool_ids]
     if service.default_pool_id:
         pool_ids.append(service.default_pool_id)
     pools = [p for p in snapshot.pools if p.id in set(pool_ids)]
@@ -567,6 +569,14 @@ class StatusService:
             # a group that cannot render its routing yet shows the HAProxy files only
             with contextlib.suppress(RenderError):
                 files |= render_agent_bundle(snapshot, group.id, slot, refs)
+        # access sets: the proxy configs, with their secrets shown as REDACTED
+        placeholders = dict.fromkeys(
+            auth_secret_refs(snapshot.for_se_group(group.id), group.id), "REDACTEDREDACTED"
+        )
+        with contextlib.suppress(RenderError):
+            files |= render_auth_files(snapshot, group.id, placeholders)
+        with contextlib.suppress(RenderError):
+            files |= jwt_key_files(snapshot, group.id)
         return record, rendered.fingerprint, files
 
     async def running_config(

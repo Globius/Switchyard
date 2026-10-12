@@ -73,9 +73,12 @@ func verb(unit string) string {
 // keeps its crt-lists in the same directory as the certificates, so only "*.pem" files (server
 // certificates and client CA bundles) and "*.crl" files (client CA revocation lists) there are the
 // agent's; everything else is left alone and never removed.
-var suffixOnly = map[string][]string{"certs": {".pem", ".crl"}}
+var suffixOnly = map[string][]string{"certs": {".pem", ".crl"}, "auth": {".cfg", ".env"}}
 
 // secretDirs hold private keys and are written with owner-only permissions.
+// The auth directory is not here: its files are group-readable (0640) because the proxies run as
+// their own user and the SE image makes the directory root:sy-auth 0750, which is what keeps them
+// private (including the "*.env" files that hold the secrets).
 var secretDirs = map[string]bool{"certs": true}
 
 // groupDirs name the group that may read a managed directory: the sidecar that runs from it. The

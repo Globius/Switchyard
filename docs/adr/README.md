@@ -68,5 +68,38 @@ Date: YYYY-MM-DD
 | [0077](0077-wait-for-storage-reloads.md) | Wait for the reload a storage call starts | Accepted |
 | [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
+| [0105](0105-pool-persistence-kinds.md) | Pool persistence: cookie, header and URI | Accepted |
+| [0106](0106-member-options-and-send-proxy.md) | Member backup and maxconn, PROXY protocol to members | Accepted |
+| [0107](0107-backend-client-certificate.md) | Client certificate to pool members (backend mTLS) | Accepted |
+| [0108](0108-health-check-presets.md) | Health checks: body and header match, protocol presets | Accepted |
+| [0109](0109-timed-member-drain.md) | Timed member drain | Accepted |
+| [0115](0115-sni-passthrough.md) | TLS passthrough with SNI routing on TCP services | Accepted |
+| [0116](0116-http3-grpc-websocket.md) | HTTP/3, gRPC backends and WebSocket timeout | Accepted |
+| [0117](0117-response-compression.md) | Response compression | Accepted |
+| [0118](0118-persistence-peers.md) | Persistence table sync between engines (peers) | Accepted |
+| [0119](0119-weighted-pool-routes.md) | Weighted pool routes (canary and blue-green) | Accepted |
+| [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
+| [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
+| [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0147](0147-country-and-reputation-ip-lists.md) | Country and reputation IP lists | Accepted |
+| [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
+| [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
+| [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |
+| [0123](0123-tenant-log-api.md) | Tenant-wide request log API | Accepted |
+| [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
 | [0081](0081-se-image-sidecar-slot-and-rolling-operations.md) | SE image sidecar slot, pinned versions, rolling upgrade, health score | Accepted |
+| [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
+| [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
+| [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
+| [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
+| [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
+| [0130](0130-auth-service-architecture.md) | Authentication service: oauth2-proxy, loopback re-entry, closed by default | Accepted |
+| [0131](0131-access-rules-and-authorization.md) | Access rules and authorization | Accepted |
+| [0132](0132-identity-headers.md) | Identity headers to the origin | Accepted |
+| [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
+| [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
+| [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
+| [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
+| [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |

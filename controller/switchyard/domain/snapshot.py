@@ -20,12 +20,22 @@ from switchyard.domain import validators as v
 from switchyard.domain.errors import DomainValidationError, Problem
 from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDDEN_SERVICE_FIELDS
 from switchyard.domain.models import (
+    ATTACHABLE_POLICY_KINDS,
+    CACHE_MAX_MB_PER_GROUP,
+    HTTP_ONLY_PERSISTENCE,
+    AccessPolicySet,
     Algorithm,
     AllowListPolicySet,
     BgpProfile,
     Certificate,
+    ClientCertPolicySet,
+    DirectoryPolicySet,
     Entity,
+    ErrorPagesPolicySet,
     HealthMonitor,
+    JwtPolicySet,
+    LdapConnector,
+    LocalConnector,
     Model,
     MonitorType,
     Network,
@@ -33,7 +43,8 @@ from switchyard.domain.models import (
     PolicySet,
     Pool,
     Protocol,
-    RedirectPolicySet,
+    RateLimitPolicySet,
+    RateLimitRule,
     RoutingProfile,
     SeGroup,
     Tenant,
@@ -94,13 +105,19 @@ class Snapshot(Model):
         for s in services:
             if s.default_pool_id:
                 pool_ids.add(s.default_pool_id)
-            pool_ids.update(r.pool_id for r in s.routes if r.pool_id)
+            pool_ids.update(pid for r in s.routes for pid in r.pool_ids)
             cert_ids.update(s.certificate_ids)
             cert_ids.update(p.client_ca_id for p in s.ports if p.client_ca_id)
             policy_ids.update(s.policy_set_ids)
             if s.allow_list_id:
                 policy_ids.add(s.allow_list_id)
+            if s.deny_list_id:
+                policy_ids.add(s.deny_list_id)
+        for ps in self.policy_sets:
+            if ps.id in policy_ids and isinstance(ps, AccessPolicySet) and ps.oidc.directory_id:
+                policy_ids.add(ps.oidc.directory_id)
         pools = tuple(p for p in self.pools if p.id in pool_ids)
+        cert_ids.update(p.client_certificate_id for p in pools if p.client_certificate_id)
         monitor_ids = {p.health_monitor_id for p in pools if p.health_monitor_id}
         network_ids = {n.network_id for n in group.networks}
         pool_networks = {p.network_id for p in self.vip_pools if p.id in _vip_pool_ids(services)}
@@ -148,6 +165,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       a SAN of the service's certificates (wildcards cover exactly one label).
     - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
+    - ``discovery_tag_not_allowed``: a pool's Proxmox discovery tag starts with ``sy-<tenant>.``,
+      so a tenant never discovers another tenant's guests (ADR 0145).
     - ``secret_ref_not_allowed``: certificate and BGP secret references stay in the tenant's own
       namespace and out of the platform's (ADR 0071).
     - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
@@ -188,6 +207,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
 
     _check_names(snapshot, problems)
     _check_secret_scopes(snapshot, problems)
+    _check_discovery_scopes(snapshot, problems)
+    _check_directories(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -213,6 +234,23 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
             check_ref(
                 f"se_groups.{g.name}.networks[{i}]", g.tenant_id, "network", gn.network_id, networks
             )
+    for g in snapshot.se_groups:
+        if g.peers is None:
+            continue
+        backend_cidrs = [
+            networks[gn.network_id].cidr
+            for gn in g.networks
+            if gn.role is NetworkRole.BACKEND and gn.network_id in networks
+        ]
+        for i, peer in enumerate(g.peers.members):
+            if not any(peer.address in cidr for cidr in backend_cidrs):
+                problems.append(
+                    Problem(
+                        f"se_groups.{g.name}.peers.members[{i}].address",
+                        "peer_outside_backend_network",
+                        f"{peer.address} is not in a backend network of the group",
+                    )
+                )
     for g in snapshot.se_groups:
         if g.routing_profile_id is None:
             continue
@@ -252,6 +290,25 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                             )
                         )
 
+    for pool in snapshot.pools:
+        if pool.client_certificate_id is None:
+            continue
+        cert = check_ref(
+            f"pools.{pool.name}.client_certificate_id",
+            pool.tenant_id,
+            "certificate",
+            pool.client_certificate_id,
+            certs,
+        )
+        if cert is not None and cert.purpose != "server":
+            problems.append(
+                Problem(
+                    f"pools.{pool.name}.client_certificate_id",
+                    "wrong_certificate_purpose",
+                    f"certificate {cert.name} is a client CA, not a certificate with a key",
+                )
+            )
+
     pool_protocols: dict[UUID, set[Protocol]] = defaultdict(set)
     listeners: list[v.Listener] = []
     for s in snapshot.virtual_services:
@@ -269,9 +326,17 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         used_pools: list[tuple[str, UUID]] = []
         if s.default_pool_id:
             used_pools.append((f"{base}.default_pool_id", s.default_pool_id))
-        used_pools += [
-            (f"{base}.routes[{i}].pool_id", r.pool_id) for i, r in enumerate(s.routes) if r.pool_id
-        ]
+        for i, route in enumerate(s.routes):
+            if route.pool_id:
+                used_pools.append((f"{base}.routes[{i}].pool_id", route.pool_id))
+            used_pools += [
+                (f"{base}.routes[{i}].pools[{j}].pool_id", w.pool_id)
+                for j, w in enumerate(route.pools)
+            ]
+            used_pools += [
+                (f"{base}.routes[{i}].fallback_pool_ids[{j}]", pid)
+                for j, pid in enumerate(route.fallback_pool_ids)
+            ]
         for path, pid in used_pools:
             if check_ref(path, s.tenant_id, "pool", pid, pools_by_id) is not None:
                 pool_protocols[pid].add(s.protocol)
@@ -303,16 +368,28 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                         f"certificate {ca.name} is a server certificate, not a client CA",
                     )
                 )
+        error_statuses: set[int] = set()
         for i, pid in enumerate(s.policy_set_ids):
             ps = check_ref(f"{base}.policy_set_ids[{i}]", s.tenant_id, "policy set", pid, policies)
-            if ps is not None and not isinstance(ps, RedirectPolicySet):
+            if ps is not None and not isinstance(ps, ATTACHABLE_POLICY_KINDS):
                 problems.append(
                     Problem(
                         f"{base}.policy_set_ids[{i}]",
                         "wrong_policy_kind",
-                        f"policy set {ps.name} is not a redirect policy set",
+                        f"policy set {ps.name} (kind {ps.kind}) cannot be attached to a service",
                     )
                 )
+            if isinstance(ps, ErrorPagesPolicySet):
+                for page in ps.pages:
+                    if page.status in error_statuses:
+                        problems.append(
+                            Problem(
+                                f"{base}.policy_set_ids[{i}]",
+                                "duplicate_error_page",
+                                f"another error-page policy set already defines {page.status}",
+                            )
+                        )
+                    error_statuses.add(page.status)
         if s.allow_list_id:
             ps = check_ref(
                 f"{base}.allow_list_id", s.tenant_id, "policy set", s.allow_list_id, policies
@@ -326,7 +403,22 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                     )
                 )
 
+        if s.deny_list_id:
+            ps = check_ref(
+                f"{base}.deny_list_id", s.tenant_id, "policy set", s.deny_list_id, policies
+            )
+            if ps is not None and not isinstance(ps, AllowListPolicySet):
+                problems.append(
+                    Problem(
+                        f"{base}.deny_list_id",
+                        "wrong_policy_kind",
+                        f"policy set {ps.name} is not an IP list policy set",
+                    )
+                )
+
         _check_routes(s, base, problems)
+        _check_rate_limits(s, policies, base, problems)
+        _check_access(s, policies, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
@@ -335,6 +427,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         listeners += [v.Listener(s.name, s.vip, p.port, transport) for p in s.ports]
 
     _check_udp_pools(snapshot, pool_protocols, monitors, problems)
+    _check_failover(snapshot, problems)
+    _check_cache_quota(snapshot, problems)
 
     for first, second in v.find_port_collisions(listeners):
         problems.append(
@@ -358,6 +452,52 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     return sorted(problems)
 
 
+def _check_discovery_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """Discovery tags start with the owning tenant's prefix (``discovery_tag_not_allowed``)."""
+    names = {t.id: t.name for t in snapshot.tenants}
+    for pool in snapshot.pools:
+        if pool.discovery is None or pool.tenant_id not in names:
+            continue
+        prefix = v.discovery_tag_prefix(names[pool.tenant_id])
+        if not pool.discovery.tag.startswith(prefix) or pool.discovery.tag == prefix:
+            problems.append(
+                Problem(
+                    f"pools.{pool.name}.discovery.tag",
+                    "discovery_tag_not_allowed",
+                    f"a discovery tag must start with {prefix!r} and continue with a label",
+                )
+            )
+
+
+def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """Access sets name a directory of their own tenant; local users have no groups."""
+    directories = {p.id: p for p in snapshot.policy_sets if isinstance(p, DirectoryPolicySet)}
+    for ps in snapshot.policy_sets:
+        if not isinstance(ps, AccessPolicySet) or ps.oidc.directory_id is None:
+            continue
+        base = f"policy_sets.{ps.name}.oidc.directory_id"
+        directory = directories.get(ps.oidc.directory_id)
+        if directory is None:
+            problems.append(
+                Problem(base, "unknown_reference", "directory policy set does not exist")
+            )
+            continue
+        if directory.tenant_id != ps.tenant_id:
+            problems.append(
+                Problem(base, "wrong_tenant", "directory belongs to a different tenant")
+            )
+        if isinstance(directory.connector, LocalConnector) and any(
+            r.mode == "groups" for r in ps.rules
+        ):
+            problems.append(
+                Problem(
+                    f"policy_sets.{ps.name}.rules",
+                    "directory_has_no_groups",
+                    f"directory {directory.name} holds local users, who have no groups",
+                )
+            )
+
+
 def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
     """Secret references stay inside the owning tenant's namespace (``secret_ref_not_allowed``)."""
     names = {t.id: t.name for t in snapshot.tenants}
@@ -366,6 +506,25 @@ def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
         refs.append((f"certificates.{c.name}.secret_ref", c.tenant_id, c.secret_ref))
         if c.crl_secret_ref:
             refs.append((f"certificates.{c.name}.crl_secret_ref", c.tenant_id, c.crl_secret_ref))
+    for ps in snapshot.policy_sets:
+        if isinstance(ps, DirectoryPolicySet):
+            conn = ps.connector
+            where = f"policy_sets.{ps.name}.connector"
+            if isinstance(conn, LdapConnector):
+                refs.append((f"{where}.bind_password_ref", ps.tenant_id, conn.bind_password_ref))
+            if isinstance(conn, LocalConnector):
+                for i, user in enumerate(conn.users):
+                    refs.append(
+                        (
+                            f"{where}.users[{i}].password_hash_ref",
+                            ps.tenant_id,
+                            user.password_hash_ref,
+                        )
+                    )
+        if isinstance(ps, AccessPolicySet):
+            base = f"policy_sets.{ps.name}.oidc"
+            refs.append((f"{base}.client_secret_ref", ps.tenant_id, ps.oidc.client_secret_ref))
+            refs.append((f"{base}.cookie_secret_ref", ps.tenant_id, ps.oidc.cookie_secret_ref))
     for profile in snapshot.routing_profiles:
         if isinstance(profile, BgpProfile):
             for i, peer in enumerate(profile.peers):
@@ -487,7 +646,7 @@ def _check_udp_pools(
                         "persistence is not valid on a udp pool; use the source algorithm",
                     )
                 )
-            for field in ("passive_check", "slow_start_s"):
+            for field in ("passive_check", "slow_start_s", "send_proxy", "client_certificate_id"):
                 if getattr(pool, field) is not None:
                     problems.append(
                         Problem(
@@ -496,6 +655,22 @@ def _check_udp_pools(
                             f"{field} is not valid on a udp pool",
                         )
                     )
+            if pool.tunnel_timeout_s is not None:
+                problems.append(
+                    Problem(
+                        f"{base}.tunnel_timeout_s",
+                        "udp_field_not_allowed",
+                        "tunnel_timeout_s is not valid on a udp pool",
+                    )
+                )
+            if pool.backend_protocol != "http1":
+                problems.append(
+                    Problem(
+                        f"{base}.backend_protocol",
+                        "udp_field_not_allowed",
+                        "backend_protocol is not valid on a udp pool",
+                    )
+                )
             if pool.algorithm is Algorithm.RANDOM:
                 problems.append(
                     Problem(
@@ -513,6 +688,15 @@ def _check_udp_pools(
                             "a member of a udp pool needs a port",
                         )
                     )
+                for field in ("backup", "maxconn"):
+                    if getattr(member, field):
+                        problems.append(
+                            Problem(
+                                f"{base}.members.{member.server_name}.{field}",
+                                "udp_field_not_allowed",
+                                f"{field} is not valid on a member of a udp pool",
+                            )
+                        )
             if monitor is not None and monitor.type is not MonitorType.UDP:
                 problems.append(
                     Problem(
@@ -544,9 +728,27 @@ def _check_live_traffic(
 ) -> None:
     """Passive checks and slow start build on the health monitor; ``layer7`` needs HTTP.
 
-    Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``) and
-    ``passive_check_layer7_needs_http``.
+    Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``),
+    ``passive_check_layer7_needs_http`` and ``persistence_needs_http`` (cookie, header and URI
+    persistence on a pool a ``tcp`` service uses).
     """
+    if pool.backend_protocol != "http1" and Protocol.TCP in protocols:
+        problems.append(
+            Problem(
+                f"{base}.backend_protocol",
+                "backend_protocol_needs_http",
+                f"backend_protocol {pool.backend_protocol} needs a pool used only by http services",
+            )
+        )
+    if isinstance(pool.persistence, HTTP_ONLY_PERSISTENCE) and Protocol.TCP in protocols:
+        problems.append(
+            Problem(
+                f"{base}.persistence",
+                "persistence_needs_http",
+                f"{pool.persistence.type} persistence needs a pool used only by http services; "
+                "use source_ip for tcp",
+            )
+        )
     for field in ("passive_check", "slow_start_s"):
         if getattr(pool, field) is not None and monitor is None:
             problems.append(
@@ -570,16 +772,224 @@ def _check_live_traffic(
         )
 
 
+#: Rate-limit rules one service may carry (one stick counter each; HAProxy tracks few per stream).
+MAX_RATE_LIMITS_PER_SERVICE = 8
+#: Stick-table entries one service may ask for in total (memory on the SE).
+MAX_TABLE_ENTRIES_PER_SERVICE = 2_000_000
+
+
+def rate_limit_rules(
+    s: VirtualService, policies: Mapping[UUID, Any]
+) -> list[tuple[RateLimitPolicySet, int, RateLimitRule]]:
+    """The rate-limit rules of a service in render order: ``(set, 1-based index in set, rule)``."""
+    out = []
+    for pid in s.policy_set_ids:
+        ps = policies.get(pid)
+        if isinstance(ps, RateLimitPolicySet):
+            out += [(ps, i, r) for i, r in enumerate(ps.rules, start=1)]
+    return out
+
+
+def stick_table_entries(snapshot: "Snapshot", tenant_id: UUID) -> int:
+    """Stick-table entries a tenant's rate-limit rules ask for, counted once per service using them.
+
+    Example:
+        >>> stick_table_entries(Snapshot(), UUID(int=1))
+        0
+    """
+    policies = {p.id: p for p in snapshot.policy_sets}
+    return sum(
+        r.table_size
+        for s in snapshot.virtual_services
+        if s.tenant_id == tenant_id
+        for _, _, r in rate_limit_rules(s, policies)
+    )
+
+
+def _check_rate_limits(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    rules = rate_limit_rules(s, policies)
+    if len(rules) > MAX_RATE_LIMITS_PER_SERVICE:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "too_many_rate_limits",
+                f"a service may have {MAX_RATE_LIMITS_PER_SERVICE} rate-limit rules; "
+                f"this one has {len(rules)}",
+            )
+        )
+    if sum(r.table_size for _, _, r in rules) > MAX_TABLE_ENTRIES_PER_SERVICE:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "stick_table_too_large",
+                f"rate-limit tables of one service may hold {MAX_TABLE_ENTRIES_PER_SERVICE} "
+                "entries in total",
+            )
+        )
+    delays = {r.tarpit_s for _, _, r in rules if r.action == "tarpit"}
+    if len(delays) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "tarpit_conflict",
+                "tarpit rules of one service must use the same tarpit_s (one timeout per frontend)",
+            )
+        )
+
+
+def _check_failover(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """A priority chain needs health checks on all pools but the last.
+
+    Code: ``failover_needs_health_monitor``.
+
+    Without a check HAProxy counts a down server as up, so traffic would never move on.
+    """
+    pools = {p.id: p for p in snapshot.pools}
+    for s in snapshot.virtual_services:
+        for i, route in enumerate(s.routes):
+            if not route.fallback_pool_ids or route.pool_id is None:
+                continue
+            for pid in (route.pool_id, *route.fallback_pool_ids)[:-1]:
+                pool = pools.get(pid)
+                if pool is not None and pool.health_monitor_id is None:
+                    problems.append(
+                        Problem(
+                            f"virtual_services.{s.name}.routes[{i}].fallback_pool_ids",
+                            "failover_needs_health_monitor",
+                            f"pool {pool.name} needs a health monitor to fail over",
+                        )
+                    )
+
+
+def _check_cache_quota(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """The caches of one SE group share a memory quota (``cache_quota_exceeded``, ADR 0117)."""
+    for group in snapshot.se_groups:
+        total = sum(
+            s.cache.size_mb
+            for s in snapshot.virtual_services
+            if s.se_group_id == group.id and s.enabled and s.cache is not None
+        )
+        if total > CACHE_MAX_MB_PER_GROUP:
+            problems.append(
+                Problem(
+                    f"se_groups.{group.name}",
+                    "cache_quota_exceeded",
+                    f"caches of the group's services use {total} MB; the limit is "
+                    f"{CACHE_MAX_MB_PER_GROUP} MB",
+                )
+            )
+
+
+def _check_access(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    """A service has at most one access set and offers a login only over TLS."""
+    sets = [p for pid in s.policy_set_ids if isinstance(p := policies.get(pid), AccessPolicySet)]
+    attached = [policies[pid] for pid in s.policy_set_ids if pid in policies]
+    tokens = [p for p in attached if isinstance(p, JwtPolicySet)]
+    certs = [p for p in attached if isinstance(p, ClientCertPolicySet)]
+    _check_identity_headers(sets, tokens, certs, base, problems)
+    if len(certs) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "multiple_client_cert_sets",
+                "a service may attach one client-certificate policy set",
+            )
+        )
+    if certs and not any(p.client_ca_id for p in s.ports):
+        problems.append(
+            Problem(
+                f"{base}.ports",
+                "client_cert_needs_client_ca",
+                "a client-certificate policy set needs a port with client_ca_id",
+            )
+        )
+    if any(r.posture and r.posture.device_certificate for a in sets for r in a.rules) and not any(
+        p.client_ca_id for p in s.ports
+    ):
+        problems.append(
+            Problem(
+                f"{base}.ports",
+                "posture_needs_client_ca",
+                "a device-certificate posture rule needs a port with client_ca_id",
+            )
+        )
+    if len(sets) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "multiple_access_sets",
+                "a service may attach one access policy set",
+            )
+        )
+    if sets or tokens:
+        for i, port in enumerate(s.ports):
+            if not port.tls and port.https_redirect_port is None:
+                problems.append(
+                    Problem(
+                        f"{base}.ports[{i}]",
+                        "access_needs_tls",
+                        f"port {port.port} would carry credentials in clear text; make it a TLS "
+                        "port or redirect it to one (https_redirect_port)",
+                    )
+                )
+
+
+def _check_identity_headers(
+    access: list[AccessPolicySet],
+    tokens: list[JwtPolicySet],
+    certs: list[ClientCertPolicySet],
+    base: str,
+    problems: list[Problem],
+) -> None:
+    """No two policies on a service may write the same identity header."""
+    names: list[str] = []
+    for a in access:
+        h = a.identity_headers
+        names += [n.lower() for n in (h.user, h.email, h.groups, h.token) if n]
+    for t in tokens:
+        names += [r.subject_header.lower() for r in t.rules if r.subject_header]
+    for c in certs:
+        names += [n.lower() for n in (c.user_header, c.groups_header) if n]
+    if len(set(names)) != len(names):
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "identity_header_conflict",
+                "two policies on this service write the same identity header",
+            )
+        )
+
+
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
-    seen: set[tuple[str | None, str | None, str | None]] = set()
+    if s.protocol is Protocol.TCP:
+        for i, r in enumerate(s.routes):
+            if (
+                r.match.host is None
+                or r.match.path_prefix
+                or r.match.path_exact
+                or r.redirect
+                or r.pools
+            ):
+                problems.append(
+                    Problem(
+                        f"{base}.routes[{i}]",
+                        "passthrough_route_invalid",
+                        "a tcp route matches the SNI host only and names a pool",
+                    )
+                )
+    seen: set[str] = set()
     for i, r in enumerate(s.routes):
-        key = (r.match.host, r.match.path_prefix, r.match.path_exact)
+        key = r.match.model_dump_json()
         if key in seen:
             problems.append(
                 Problem(
                     f"{base}.routes[{i}]",
                     "duplicate_route",
-                    "same host and path match as an earlier route",
+                    "same match as an earlier route",
                 )
             )
         seen.add(key)

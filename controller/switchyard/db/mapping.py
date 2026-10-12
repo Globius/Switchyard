@@ -87,6 +87,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 maxconn=g.maxconn,
                 canary_seconds=g.canary_seconds,
                 routing_profile_id=g.routing_profile_id,
+                peers=g.peers.model_dump(mode="json") if g.peers else None,
             )
         )
     for hm in snapshot.health_monitors:
@@ -104,6 +105,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 fall=hm.fall,
                 http=hm.http.model_dump(mode="json") if hm.http else None,
                 udp=hm.udp.model_dump(mode="json") if hm.udp else None,
+                preset=hm.preset,
             )
         )
     for c in snapshot.certificates:
@@ -128,18 +130,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
             )
         )
     for ps in snapshot.policy_sets:
-        if isinstance(ps, dm.RedirectPolicySet):
-            rows.append(
-                m.PolicySetRow(
-                    id=ps.id,
-                    version=ps.version,
-                    tenant_id=ps.tenant_id,
-                    name=ps.name,
-                    kind="redirect",
-                    rules=[r.model_dump(mode="json") for r in ps.rules],
-                )
-            )
-        else:
+        if isinstance(ps, dm.AllowListPolicySet):
             rows.append(
                 m.PolicySetRow(
                     id=ps.id,
@@ -149,6 +140,33 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     kind="allow_list",
                     cidrs=[str(c) for c in ps.cidrs],
                     managed_by=ps.managed_by,
+                    countries=list(ps.countries) or None,
+                    feed=ps.feed,
+                )
+            )
+        elif isinstance(ps, dm.AccessPolicySet | dm.ClientCertPolicySet | dm.DirectoryPolicySet):
+            rows.append(
+                m.PolicySetRow(
+                    id=ps.id,
+                    version=ps.version,
+                    tenant_id=ps.tenant_id,
+                    name=ps.name,
+                    kind=ps.kind,
+                    config=ps.model_dump(
+                        mode="json", exclude={"id", "version", "tenant_id", "name", "kind"}
+                    ),
+                )
+            )
+        else:
+            items = ps.pages if isinstance(ps, dm.ErrorPagesPolicySet) else ps.rules
+            rows.append(
+                m.PolicySetRow(
+                    id=ps.id,
+                    version=ps.version,
+                    tenant_id=ps.tenant_id,
+                    name=ps.name,
+                    kind=ps.kind,
+                    rules=[item.model_dump(mode="json") for item in items],
                 )
             )
     for p in snapshot.pools:
@@ -165,6 +183,11 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 tls_verify=p.tls_verify,
                 passive_check=p.passive_check.model_dump(mode="json") if p.passive_check else None,
                 slow_start_s=p.slow_start_s,
+                send_proxy=p.send_proxy,
+                tunnel_timeout_s=p.tunnel_timeout_s,
+                backend_protocol=p.backend_protocol,
+                client_certificate_id=p.client_certificate_id,
+                discovery=p.discovery.model_dump(mode="json") if p.discovery else None,
             )
         )
     for s in snapshot.virtual_services:
@@ -181,8 +204,11 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 vip_pool_id=s.vip_pool_id,
                 default_pool_id=s.default_pool_id,
                 allow_list_id=s.allow_list_id,
+                deny_list_id=s.deny_list_id,
                 enforce_allow_list=s.enforce_allow_list,
                 restore_client_ip_header=s.restore_client_ip_header,
+                compression=s.compression.model_dump(mode="json") if s.compression else None,
+                cache=s.cache.model_dump(mode="json") if s.cache else None,
             )
         )
     # Child rows come after their parents so inserts satisfy the foreign keys.
@@ -210,6 +236,9 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     port=mem.port,
                     weight=mem.weight,
                     admin_state=mem.admin_state.value,
+                    backup=mem.backup,
+                    maxconn=mem.maxconn,
+                    drain_timeout_s=mem.drain_timeout_s,
                 )
             )
     for s in snapshot.virtual_services:
@@ -226,6 +255,8 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     tls_profile=port.tls_profile.value if port.tls_profile else None,
                     client_ca_id=port.client_ca_id,
                     client_verify=port.client_verify,
+                    tls_passthrough=port.tls_passthrough,
+                    http3=port.http3,
                 )
             )
         for i, r in enumerate(s.routes):
@@ -238,9 +269,12 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     host=r.match.host,
                     path_prefix=r.match.path_prefix,
                     path_exact=r.match.path_exact,
+                    match_extra=_match_extra(r.match),
                     pool_id=r.pool_id,
                     redirect_location=r.redirect.location if r.redirect else None,
                     redirect_code=r.redirect.code if r.redirect else None,
+                    pool_weights=[w.model_dump(mode="json") for w in r.pools] or None,
+                    fallback_pools=[str(p) for p in r.fallback_pool_ids] or None,
                 )
             )
         for i, cid in enumerate(s.certificate_ids):
@@ -341,6 +375,7 @@ def rows_to_snapshot(
                 "ha_mode": g.ha_mode,
                 "maxconn": g.maxconn,
                 "canary_seconds": g.canary_seconds,
+                "peers": g.peers,
                 "routing_profile_id": g.routing_profile_id,
                 "networks": [
                     {"network_id": gn.network_id, "role": gn.role}
@@ -363,6 +398,7 @@ def rows_to_snapshot(
                 "fall": hm.fall,
                 "http": hm.http,
                 "udp": hm.udp,
+                "preset": hm.preset,
             }
             for hm in health_monitors
         ],
@@ -412,6 +448,11 @@ def rows_to_snapshot(
                 "tls_verify": p.tls_verify,
                 "passive_check": p.passive_check,
                 "slow_start_s": p.slow_start_s,
+                "send_proxy": p.send_proxy,
+                "tunnel_timeout_s": p.tunnel_timeout_s,
+                "backend_protocol": p.backend_protocol,
+                "client_certificate_id": p.client_certificate_id,
+                "discovery": p.discovery,
                 "members": [
                     {
                         "id": mem.id,
@@ -420,6 +461,9 @@ def rows_to_snapshot(
                         "port": mem.port,
                         "weight": mem.weight,
                         "admin_state": mem.admin_state,
+                        "backup": mem.backup,
+                        "maxconn": mem.maxconn,
+                        "drain_timeout_s": mem.drain_timeout_s,
                     }
                     for mem in members.get(p.id, [])
                 ],
@@ -439,8 +483,11 @@ def rows_to_snapshot(
                 "vip_pool_id": s.vip_pool_id,
                 "default_pool_id": s.default_pool_id,
                 "allow_list_id": s.allow_list_id,
+                "deny_list_id": s.deny_list_id,
                 "enforce_allow_list": s.enforce_allow_list,
                 "restore_client_ip_header": s.restore_client_ip_header,
+                "compression": s.compression,
+                "cache": s.cache,
                 "ports": [
                     {
                         "port": p.port,
@@ -451,6 +498,8 @@ def rows_to_snapshot(
                         "tls_profile": p.tls_profile,
                         "client_ca_id": p.client_ca_id,
                         "client_verify": p.client_verify,
+                        "tls_passthrough": p.tls_passthrough,
+                        "http3": p.http3,
                     }
                     for p in sorted(ports.get(s.id, []), key=lambda r: r.port)
                 ],
@@ -464,11 +513,27 @@ def rows_to_snapshot(
     return Snapshot.model_validate(data)
 
 
+_PLAIN_MATCH = {"host", "path_prefix", "path_exact"}
+
+
+def _match_extra(match: dm.RouteMatch) -> dict[str, Any] | None:
+    """Match conditions beyond host and path (stored as JSON), or ``None`` when there are none."""
+    extra = match.model_dump(mode="json", exclude=_PLAIN_MATCH, exclude_defaults=True)
+    return extra or None
+
+
 def _route_to_dict(r: m.VsRouteRow) -> dict[str, Any]:
     return {
         "order": r.route_order,
-        "match": {"host": r.host, "path_prefix": r.path_prefix, "path_exact": r.path_exact},
+        "match": {
+            "host": r.host,
+            "path_prefix": r.path_prefix,
+            "path_exact": r.path_exact,
+            **(r.match_extra or {}),
+        },
         "pool_id": r.pool_id,
+        "pools": r.pool_weights or [],
+        "fallback_pool_ids": r.fallback_pools or [],
         "redirect": (
             {"location": r.redirect_location, "code": r.redirect_code}
             if r.redirect_location is not None
@@ -485,9 +550,15 @@ def _policy_to_dict(ps: m.PolicySetRow) -> dict[str, Any]:
         "name": ps.name,
         "kind": ps.kind,
     }
-    if ps.kind == "redirect":
-        base["rules"] = ps.rules
-    else:
+    if ps.kind == "allow_list":
         base["cidrs"] = [_net(c) for c in ps.cidrs or []]
         base["managed_by"] = ps.managed_by
+        base["countries"] = tuple(ps.countries or ())
+        base["feed"] = ps.feed
+    elif ps.kind in ("access", "client_cert", "directory"):
+        base |= ps.config or {}
+    elif ps.kind == "error_pages":
+        base["pages"] = ps.rules
+    else:
+        base["rules"] = ps.rules
     return base

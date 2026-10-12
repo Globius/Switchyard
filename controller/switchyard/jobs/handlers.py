@@ -18,6 +18,7 @@ from switchyard.jobs.progress import JobProgress
 from switchyard.jobs.queue import Job
 from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
+from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator
 from switchyard.services.certificates import (
     ISSUE_CERT_JOB,
     RENEW_CERTS_JOB,
@@ -27,6 +28,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
@@ -35,6 +37,8 @@ from switchyard.services.infra import (
     DeployRequest,
     InfraService,
 )
+from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
+from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
@@ -42,6 +46,7 @@ GIT_MIRROR_JOB = "git_mirror"
 
 
 POLL_STATUS_JOB = "poll_status"
+EXPIRE_DRAINS_JOB = "expire_drains"
 
 
 def build_handlers(
@@ -52,13 +57,21 @@ def build_handlers(
     infra: InfraService | None = None,
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
+    members: MemberService | None = None,
+    discovery: DiscoveryService | None = None,
+    alerts: AlertEvaluator | None = None,
+    iplists: IpListSync | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
+        iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
+        discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
+        alerts: The alert evaluator; ``None`` skips the ``evaluate_alerts`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
@@ -87,12 +100,36 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}
+    if members is not None:
+
+        async def expire_drains(job: Job) -> dict[str, Any]:
+            return {"disabled": await members.expire_drains()}
+
+        handlers[EXPIRE_DRAINS_JOB] = expire_drains
     if gc is not None:
 
         async def collect_garbage(job: Job) -> dict[str, Any]:
             return dict(await gc.run())
 
         handlers[GC_JOB] = collect_garbage
+    if iplists is not None:
+
+        async def sync_ip_lists(job: Job) -> dict[str, Any]:
+            return {"changed": await iplists.run()}
+
+        handlers[SYNC_IP_LISTS_JOB] = sync_ip_lists
+    if discovery is not None:
+
+        async def discover_pool_members(job: Job) -> dict[str, Any]:
+            return {"changed": await discovery.run()}
+
+        handlers[DISCOVER_POOLS_JOB] = discover_pool_members
+    if alerts is not None:
+
+        async def evaluate_alerts(job: Job) -> dict[str, Any]:
+            return dict(await alerts.run())
+
+        handlers[EVALUATE_ALERTS_JOB] = evaluate_alerts
     if certs is not None:
 
         async def issue_cert(job: Job) -> dict[str, Any]:

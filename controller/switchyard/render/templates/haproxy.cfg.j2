@@ -5,6 +5,9 @@
 global
     log /dev/log local0
     maxconn {{ maxconn }}
+{% if stick_counters %}
+    tune.stick-counters {{ stick_counters }}
+{% endif %}
     stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
     ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
     ssl-default-server-options ssl-min-ver TLSv1.2
@@ -21,6 +24,20 @@ defaults
     timeout http-keep-alive 10s
     timeout tunnel 1h
 
+{% if peers %}
+peers {{ peers.name }}
+{% for peer in peers.members %}
+    peer {{ peer.name }} {{ peer.target }}
+{% endfor %}
+
+{% endif %}
+{% for cache in caches %}
+cache {{ cache.name }}
+    total-max-size {{ cache.size_mb }}
+    max-object-size {{ cache.max_object }}
+    max-age {{ cache.max_age }}
+
+{% endfor %}
 # Local health endpoint for keepalived's check script and the agent's route-health watchdog.
 frontend sy_local_health
     mode http

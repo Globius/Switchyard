@@ -392,6 +392,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
           <VsMetrics
             tenant={tenant}
             id={id}
+            name={vs.data?.name}
             groupName={groups.data?.items.find((g) => g.id === vs.data?.se_group_id)?.name}
           />
         </div>

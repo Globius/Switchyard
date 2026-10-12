@@ -1,0 +1,179 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+certificates:
+- id: c-client
+  tenant_id: t-acme
+  name: backend-client
+  source: upload
+  sans:
+  - sy-edge.internal.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/backend-client
+- id: c-front
+  tenant_id: t-acme
+  name: front
+  source: upload
+  sans:
+  - hdr.example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/front
+health_monitors:
+- id: hm-body
+  tenant_id: t-acme
+  name: http-body
+  type: http
+  http:
+    path: /status
+    expect_body: status_ok
+- id: hm-header
+  tenant_id: t-acme
+  name: http-header
+  type: http
+  http:
+    path: /status
+    expect_header:
+      name: X-Health
+      value: ok
+- id: hm-redis
+  tenant_id: t-acme
+  name: redis
+  type: tcp
+  preset: redis
+- id: hm-smtp
+  tenant_id: t-acme
+  name: smtp
+  type: tcp
+  preset: smtp
+- id: hm-ldap
+  tenant_id: t-acme
+  name: ldap
+  type: tcp
+  preset: ldap
+- id: hm-mysql
+  tenant_id: t-acme
+  name: mysql
+  type: tcp
+  preset: mysql
+pools:
+- id: p-mtls
+  tenant_id: t-acme
+  name: mtls-api
+  tls: true
+  tls_verify: true
+  client_certificate_id: c-client
+  health_monitor_id: hm-body
+  send_proxy: v1
+  members:
+  - address: 10.20.6.2
+    port: 8443
+- id: p-hdr
+  tenant_id: t-acme
+  name: header-check
+  health_monitor_id: hm-header
+  members:
+  - address: 10.20.6.3
+    port: 8080
+- id: p-redis
+  tenant_id: t-acme
+  name: cache
+  health_monitor_id: hm-redis
+  members:
+  - address: 10.20.6.4
+    port: 6379
+- id: p-smtp
+  tenant_id: t-acme
+  name: mail
+  health_monitor_id: hm-smtp
+  members:
+  - address: 10.20.6.5
+    port: 25
+- id: p-ldap
+  tenant_id: t-acme
+  name: directory
+  health_monitor_id: hm-ldap
+  members:
+  - address: 10.20.6.6
+    port: 389
+- id: p-mysql
+  tenant_id: t-acme
+  name: database
+  health_monitor_id: hm-mysql
+  members:
+  - address: 10.20.6.7
+    port: 3306
+virtual_services:
+- id: v-api
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: api
+  protocol: http
+  vip: 192.0.2.31
+  ports:
+  - port: 443
+    tls: true
+  certificate_ids:
+  - c-front
+  routes:
+  - match:
+      host: hdr.example.test
+    pool_id: p-hdr
+  default_pool_id: p-mtls
+- id: v-redis
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: redis
+  protocol: tcp
+  vip: 192.0.2.32
+  ports:
+  - port: 6379
+  default_pool_id: p-redis
+- id: v-smtp
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: smtp
+  protocol: tcp
+  vip: 192.0.2.33
+  ports:
+  - port: 25
+  default_pool_id: p-smtp
+- id: v-ldap
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: ldap
+  protocol: tcp
+  vip: 192.0.2.34
+  ports:
+  - port: 389
+  default_pool_id: p-ldap
+- id: v-mysql
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: mysql
+  protocol: tcp
+  vip: 192.0.2.35
+  ports:
+  - port: 3306
+  default_pool_id: p-mysql
