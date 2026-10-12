@@ -162,6 +162,8 @@ reuse:
     entrypoint: [""]
   rules:
     - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $SBOM
+    - if: $CI_MERGE_REQUEST_ID
+      changes: [.gitlab-ci.yml]
   variables:
     SYFT_CHECK_FOR_APP_UPDATE: "false"
   before_script: [mkdir -p sbom]
