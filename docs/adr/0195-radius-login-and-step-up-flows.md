@@ -17,7 +17,8 @@ login service of our own" stays possible. Dex does have an `authproxy` connector
 `timeout_s`, `retries`, `require_message_authenticator`), `nas_identifier`, `group_attribute` (`filter_id` or `class`), `email_domain` (RADIUS has no address, so the
 user gets `<name>@<email_domain>`; a name that already has an `@` is used as is), `signing_secret_ref` (the key for the gate's cookies)
 and `login_timeout_s`. A server address is a host name or a routable IP; loopback, link-local, unspecified, multicast and reserved
-addresses are refused, so a tenant cannot aim the gate at services on the broker host. Shared secrets and the signing key are
+addresses are refused, and the gate checks the address a name resolves to as well, so a tenant cannot aim the gate at services on
+the broker host. Shared secrets and the signing key are
 OpenBao references inside the tenant namespace like every other secret.
 
 **The login gate (`syctl broker gate`).** For each RADIUS directory the broker still runs one Dex, now with an `authproxy`

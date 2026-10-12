@@ -36,6 +36,7 @@ def config(
                 "secret": SECRET.decode(),
                 "timeout_s": 1,
                 "retries": 0,
+                "allow_local": True,
             },
             "otp": {
                 "host": "127.0.0.1",
@@ -43,6 +44,7 @@ def config(
                 "secret": SECRET.decode(),
                 "timeout_s": 1,
                 "retries": 0,
+                "allow_local": True,
             },
         },
         "steps": steps

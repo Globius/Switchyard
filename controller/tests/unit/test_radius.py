@@ -97,7 +97,7 @@ def test_class_attribute_as_group_source() -> None:
 
 def _client(port: int, secret: bytes = SECRET, **kw: object) -> r.UdpRadiusClient:
     return r.UdpRadiusClient(
-        r.RadiusServer("127.0.0.1", port, secret, timeout_s=0.3, retries=1, **kw)  # type: ignore[arg-type]
+        r.RadiusServer("127.0.0.1", port, secret, timeout_s=0.3, retries=1, allow_local=True, **kw)  # type: ignore[arg-type]
     )
 
 
@@ -169,7 +169,7 @@ def test_a_legacy_server_needs_to_be_allowed_explicitly() -> None:
     port = srv.start()
     try:
         strict = r.UdpRadiusClient(
-            r.RadiusServer("127.0.0.1", port, SECRET, timeout_s=0.3, retries=0)
+            r.RadiusServer("127.0.0.1", port, SECRET, timeout_s=0.3, retries=0, allow_local=True)
         )
         with pytest.raises(r.RadiusError):
             asyncio.run(strict.authenticate("alice", "pw"))
@@ -180,9 +180,16 @@ def test_a_legacy_server_needs_to_be_allowed_explicitly() -> None:
                 SECRET,
                 timeout_s=0.3,
                 retries=0,
+                allow_local=True,
                 require_message_authenticator=False,
             )
         )
         assert asyncio.run(lenient.authenticate("alice", "pw")).status == "accept"
     finally:
         srv.stop()
+
+
+def test_the_client_refuses_a_name_that_resolves_to_a_local_address() -> None:
+    client = r.UdpRadiusClient(r.RadiusServer("localhost", 1812, SECRET, timeout_s=0.2, retries=0))
+    with pytest.raises(r.RadiusError, match="will not contact"):
+        asyncio.run(client.authenticate("alice", "pw"))

@@ -153,7 +153,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         config = json.loads(files["gate/acme-staff-radius.json"])
         config["dex_port"] = host_port
         for server, server_port in (("main", main_port), ("otp", otp_port)):
-            config["servers"][server].update(host="127.0.0.1", port=server_port)
+            config["servers"][server].update(host="127.0.0.1", port=server_port, allow_local=True)
         config["servers"]["main"]["port"] = main_port
         config["servers"]["otp"]["port"] = otp_port
         directory: Path = tmp_path_factory.mktemp("gate")

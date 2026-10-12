@@ -17,6 +17,7 @@ Example:
 import asyncio
 import hashlib
 import hmac
+import ipaddress
 import os
 import socket
 import struct
@@ -308,6 +309,17 @@ class RadiusServer:
     retries: int = 2
     group_attribute: str = "filter_id"
     require_message_authenticator: bool = True
+    #: Allow a server that resolves to a loopback, link-local or similar address (tests only).
+    #: Names are checked after resolution, so a tenant cannot aim the gate at the broker host
+    #: with a DNS name that points there.
+    allow_local: bool = False
+
+
+def _forbidden(address: str) -> bool:
+    ip = ipaddress.ip_address(address.split("%")[0])
+    return (
+        ip.is_loopback or ip.is_link_local or ip.is_unspecified or ip.is_multicast or ip.is_reserved
+    )
 
 
 class _Protocol(asyncio.DatagramProtocol):
@@ -344,6 +356,8 @@ class UdpRadiusClient:
         except OSError as exc:
             raise RadiusError(f"cannot resolve {srv.host}") from exc
         family, _, _, _, addr = infos[0]
+        if not srv.allow_local and _forbidden(str(addr[0])):
+            raise RadiusError(f"{srv.host} resolves to an address the gate will not contact")
         remote = (str(addr[0]), int(addr[1]))
         transport, proto = await loop.create_datagram_endpoint(
             _Protocol, remote_addr=remote, family=family
