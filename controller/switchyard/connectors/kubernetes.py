@@ -331,9 +331,8 @@ def _plan_gateway(
         )
         if not attached:
             continue
-        hostnames = [str(h).lower() for h in (route.get("spec") or {}).get("hostnames") or []] or [
-            None
-        ]
+        names = [str(h).lower() for h in (route.get("spec") or {}).get("hostnames") or []]
+        hostnames: list[str | None] = [*names] if names else [None]
         for rule in (route.get("spec") or {}).get("rules") or []:
             backends = rule.get("backendRefs") or []
             if not backends:
