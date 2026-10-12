@@ -16,14 +16,18 @@ Example:
 
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import yaml
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from switchyard.db.models import NetworkRow, SeGroupRow, TenantRow, VirtualServiceRow
 from switchyard.db.ops_models import ServiceEngineRow
 from switchyard.db.repository import add_snapshot, find_tenant_id
 from switchyard.db.tenancy import admin_session
 from switchyard.domain.loader import reassign_ids, snapshot_from_mapping
+from switchyard.domain.management import MANAGEMENT_TENANT
 from switchyard.domain.snapshot import Snapshot, ensure_valid
 from switchyard.ids import uuid7
 from switchyard.services.engines import validate_dataplane_url
@@ -51,6 +55,17 @@ def load_adoption(text: str) -> tuple[Snapshot, list[dict[str, Any]]]:
     return snapshot, engines
 
 
+async def _is_bootstrap_shell(session: AsyncSession, tenant_id: UUID, name: str) -> bool:
+    """True for the empty management tenant created at start-up: nothing in it yet."""
+    if name != MANAGEMENT_TENANT:
+        return False
+    for model in (SeGroupRow, VirtualServiceRow, NetworkRow, ServiceEngineRow):
+        found = await session.execute(select(model.id).where(model.tenant_id == tenant_id).limit(1))
+        if found.first():
+            return False
+    return True
+
+
 async def adopt(admin: AsyncEngine, path: Path) -> tuple[Snapshot, int]:
     """Insert the objects and engines from ``path``. Returns the snapshot and the engine count.
 
@@ -61,8 +76,13 @@ async def adopt(admin: AsyncEngine, path: Path) -> tuple[Snapshot, int]:
     tenant = snapshot.tenants[0]
     group_ids = {g.name: g.id for g in snapshot.se_groups}
     async with admin_session(admin) as session:
-        if await find_tenant_id(session, tenant.name) is not None:
-            raise AlreadyExistsError(f"tenant {tenant.name!r} already exists")
+        existing = await find_tenant_id(session, tenant.name)
+        if existing is not None:
+            if not await _is_bootstrap_shell(session, existing, tenant.name):
+                raise AlreadyExistsError(f"tenant {tenant.name!r} already exists")
+            # the empty `management` tenant the controller created at start-up (ADR 0155)
+            await session.execute(delete(TenantRow).where(TenantRow.id == existing))
+            await session.flush()
         await add_snapshot(session, snapshot)
         for engine in engines:
             session.add(

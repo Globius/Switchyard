@@ -4137,7 +4137,13 @@ def create_app(
         Also its certificate, the change that waits for confirmation (with the seconds left) and
         the redirect addresses each identity provider must allow for the new FQDN.
         """
-        view = await svc.controller.view(who, env_public_url=request.app.state.public_url)
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+        host = request.headers.get("host")
+        view = await svc.controller.view(
+            who,
+            env_public_url=request.app.state.public_url,
+            reached_at=f"{proto}://{host}" if host else None,
+        )
         return asdict(view)
 
     @router.put(

@@ -5375,6 +5375,11 @@
             "title": "Managed",
             "type": "boolean"
           },
+          "management_tenant": {
+            "description": "The `management` tenant exists (it is created at start-up). `managed` also needs a `controller` service in it; until then only the public URL can change, and the screen should say that the service has not been adopted or deployed, not that the tenant is missing.",
+            "title": "Management Tenant",
+            "type": "boolean"
+          },
           "pending": {
             "anyOf": [
               {
@@ -5396,6 +5401,18 @@
             ],
             "title": "Public Url"
           },
+          "reached_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The address this request came in on (`scheme://host`); offer it as the public URL. An IP address is accepted as the FQDN while `managed` is false.",
+            "title": "Reached At"
+          },
           "redirect_urls": {
             "description": "For a pending change: what each identity provider must allow first.",
             "items": {
@@ -5407,6 +5424,8 @@
         },
         "required": [
           "managed",
+          "management_tenant",
+          "reached_at",
           "fqdn",
           "public_url",
           "listen",
@@ -27642,6 +27661,7 @@
                     "vip": "192.0.2.10"
                   },
                   "managed": true,
+                  "management_tenant": true,
                   "pending": {
                     "after": {
                       "certificate": "controller-new",
@@ -27666,6 +27686,7 @@
                     "window_s": 120
                   },
                   "public_url": "https://switchyard.example.test",
+                  "reached_at": "https://switchyard.example.test",
                   "redirect_urls": [
                     {
                       "protocol": "oidc",
@@ -27787,6 +27808,7 @@
                     "vip": "192.0.2.10"
                   },
                   "managed": true,
+                  "management_tenant": true,
                   "pending": {
                     "after": {
                       "certificate": "controller-new",
@@ -27811,6 +27833,7 @@
                     "window_s": 120
                   },
                   "public_url": "https://switchyard.example.test",
+                  "reached_at": "https://switchyard.example.test",
                   "redirect_urls": [
                     {
                       "protocol": "oidc",
@@ -27948,6 +27971,7 @@
                     "vip": "192.0.2.10"
                   },
                   "managed": true,
+                  "management_tenant": true,
                   "pending": {
                     "after": {
                       "certificate": "controller-new",
@@ -27972,6 +27996,7 @@
                     "window_s": 120
                   },
                   "public_url": "https://switchyard.example.test",
+                  "reached_at": "https://switchyard.example.test",
                   "redirect_urls": [
                     {
                       "protocol": "oidc",
@@ -28093,6 +28118,7 @@
                     "vip": "192.0.2.10"
                   },
                   "managed": true,
+                  "management_tenant": true,
                   "pending": {
                     "after": {
                       "certificate": "controller-new",
@@ -28117,6 +28143,7 @@
                     "window_s": 120
                   },
                   "public_url": "https://switchyard.example.test",
+                  "reached_at": "https://switchyard.example.test",
                   "redirect_urls": [
                     {
                       "protocol": "oidc",

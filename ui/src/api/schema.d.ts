@@ -6537,9 +6537,19 @@ export interface components {
              * @description The management tenant and its `controller` service exist. Without them only the FQDN (public URL) can be set.
              */
             managed: boolean;
+            /**
+             * Management Tenant
+             * @description The `management` tenant exists (it is created at start-up). `managed` also needs a `controller` service in it; until then only the public URL can change, and the screen should say that the service has not been adopted or deployed, not that the tenant is missing.
+             */
+            management_tenant: boolean;
             pending: components["schemas"]["ControllerChangeRead"] | null;
             /** Public Url */
             public_url: string | null;
+            /**
+             * Reached At
+             * @description The address this request came in on (`scheme://host`); offer it as the public URL. An IP address is accepted as the FQDN while `managed` is false.
+             */
+            reached_at: string | null;
             /**
              * Redirect Urls
              * @description For a pending change: what each identity provider must allow first.
@@ -17966,6 +17976,7 @@ export interface operations {
                      *         "vip": "192.0.2.10"
                      *       },
                      *       "managed": true,
+                     *       "management_tenant": true,
                      *       "pending": {
                      *         "after": {
                      *           "certificate": "controller-new",
@@ -17990,6 +18001,7 @@ export interface operations {
                      *         "window_s": 120
                      *       },
                      *       "public_url": "https://switchyard.example.test",
+                     *       "reached_at": "https://switchyard.example.test",
                      *       "redirect_urls": [
                      *         {
                      *           "protocol": "oidc",
@@ -18090,6 +18102,7 @@ export interface operations {
                      *         "vip": "192.0.2.10"
                      *       },
                      *       "managed": true,
+                     *       "management_tenant": true,
                      *       "pending": {
                      *         "after": {
                      *           "certificate": "controller-new",
@@ -18114,6 +18127,7 @@ export interface operations {
                      *         "window_s": 120
                      *       },
                      *       "public_url": "https://switchyard.example.test",
+                     *       "reached_at": "https://switchyard.example.test",
                      *       "redirect_urls": [
                      *         {
                      *           "protocol": "oidc",
@@ -18226,6 +18240,7 @@ export interface operations {
                      *         "vip": "192.0.2.10"
                      *       },
                      *       "managed": true,
+                     *       "management_tenant": true,
                      *       "pending": {
                      *         "after": {
                      *           "certificate": "controller-new",
@@ -18250,6 +18265,7 @@ export interface operations {
                      *         "window_s": 120
                      *       },
                      *       "public_url": "https://switchyard.example.test",
+                     *       "reached_at": "https://switchyard.example.test",
                      *       "redirect_urls": [
                      *         {
                      *           "protocol": "oidc",
@@ -18350,6 +18366,7 @@ export interface operations {
                      *         "vip": "192.0.2.10"
                      *       },
                      *       "managed": true,
+                     *       "management_tenant": true,
                      *       "pending": {
                      *         "after": {
                      *           "certificate": "controller-new",
@@ -18374,6 +18391,7 @@ export interface operations {
                      *         "window_s": 120
                      *       },
                      *       "public_url": "https://switchyard.example.test",
+                     *       "reached_at": "https://switchyard.example.test",
                      *       "redirect_urls": [
                      *         {
                      *           "protocol": "oidc",

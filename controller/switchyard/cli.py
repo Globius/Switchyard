@@ -200,8 +200,15 @@ def serve(
         grafana_url=runtime.grafana_url(),
     )
     config = uvicorn.Config(app, host=host, port=port)
+
+    async def main() -> None:
+        from switchyard.services.bootstrap import ensure_management_tenant
+
+        await ensure_management_tenant(db)
+        await uvicorn.Server(config).serve()
+
     # uvicorn's own loop is Proactor on Windows, which psycopg rejects; run() uses the selector.
-    run(uvicorn.Server(config).serve())
+    run(main())
 
 
 @app.command("adopt")
