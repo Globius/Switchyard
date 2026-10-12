@@ -4,6 +4,8 @@ Files are copied into the container with the Docker API (not bind mounts), so th
 on Windows, WSL2, Linux and a CI job that talks to a Docker-in-Docker daemon.
 """
 
+import atexit
+import contextlib
 import io
 import re
 import tarfile
@@ -12,6 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 import docker
+from docker.models.containers import Container
 
 HAPROXY_IMAGE = "haproxy:3.2"
 
@@ -84,26 +87,47 @@ def _tar(files: Mapping[str, str]) -> bytes:
     return buffer.getvalue()
 
 
+_WIPE = "rm -rf /etc/switchyard /run/haproxy /tmp/ca /tmp/*.pem"
+_shared: dict[str | None, Container] = {}
+
+
+def _container(hostname: str | None) -> Container:
+    """A long-lived ``haproxy`` container per host name, reused by every check of this process.
+
+    Creating a container per check was most of the test suite's run time on a Docker-in-Docker runner;
+    each check now wipes the files of the previous one and runs the same script with ``exec``.
+    """
+    container = _shared.get(hostname)
+    if container is None:
+        container = docker.from_env().containers.run(
+            HAPROXY_IMAGE,
+            command=["sleep", "infinity"],
+            user="root",
+            network_mode="none",
+            hostname=hostname,
+            detach=True,
+        )
+        _shared[hostname] = container
+    return container
+
+
+@atexit.register
+def _remove_shared() -> None:
+    for container in _shared.values():
+        with contextlib.suppress(Exception):
+            container.remove(force=True)
+    _shared.clear()
+
+
 def haproxy_check(files: Mapping[str, str]) -> CheckResult:
     """Run ``haproxy -c`` against rendered ``files`` and return the verdict and its output."""
-    client = docker.from_env()
     # A ``peers`` section only stays when one of its peers carries the host name of the engine.
     local = re.search(r"^\s+peer (\S+) ", files.get("haproxy/haproxy.cfg", ""), re.MULTILINE)
-    container = client.containers.create(
-        HAPROXY_IMAGE,
-        command=["sh", "-c", _SCRIPT],
-        user="root",
-        network_mode="none",
-        hostname=local.group(1) if local else None,
-    )
-    try:
-        container.put_archive("/", _tar(files))
-        container.start()
-        status = container.wait()["StatusCode"]
-        output = container.logs().decode(errors="replace")
-    finally:
-        container.remove(force=True)
-    return CheckResult(ok=status == 0, output=_clean(output))
+    container = _container(local.group(1) if local else None)
+    container.exec_run(["sh", "-c", _WIPE], user="root")
+    container.put_archive("/", _tar(files))
+    status, output = container.exec_run(["sh", "-c", _SCRIPT], user="root")
+    return CheckResult(ok=status == 0, output=_clean(output.decode(errors="replace")))
 
 
 def _clean(output: str) -> str:
