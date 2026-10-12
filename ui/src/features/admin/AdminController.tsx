@@ -130,6 +130,7 @@ export function AdminController() {
         await api.PUT("/api/v1/system/controller/pending", {
           body: {
             fqdn: f,
+            reset_to_default: false,
             ...(s?.managed
               ? {
                   vip: v && v !== s.listen?.vip ? v : null,

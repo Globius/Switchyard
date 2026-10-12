@@ -27,7 +27,8 @@ type Policy =
   | components["schemas"]["RedirectPolicySetRead"]
   | components["schemas"]["AllowListPolicySetRead"]
   | RulePolicy
-  | SecurityPolicy;
+  | SecurityPolicy
+  | components["schemas"]["DirectoryPolicySetRead"];
 type Kind = "redirect" | "allow_list" | RuleKind | SecurityKind;
 const SECURITY_KINDS: SecurityKind[] = ["access", "jwt", "client_cert", "waf", "protection"];
 type Rule = components["schemas"]["RedirectRule"];
@@ -97,7 +98,7 @@ function useServices(tenant: string, cs?: string) {
   });
 }
 
-type ClassicPolicy = Exclude<Policy, RulePolicy | SecurityPolicy>;
+type ClassicPolicy = Extract<Policy, { kind: "redirect" | "allow_list" }>;
 
 function PolicySheet({
   tenant,
@@ -694,9 +695,11 @@ export function Policies({ tenant }: { tenant: string }) {
                                 p.kind === "waf" ||
                                 p.kind === "protection"
                               ? t(SECURITY_LABEL[p.kind])
-                              : p.managed_by
-                                ? t("Allow list · managed")
-                                : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
+                              : p.kind === "directory"
+                                ? t("Directory login · {c}", { c: p.connector.type })
+                                : p.managed_by
+                                  ? t("Allow list · managed")
+                                  : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
                 return (
                   <li key={p.id}>
                     <button

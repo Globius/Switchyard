@@ -69,6 +69,7 @@ Policy sets and routing profiles are unions on `kind`:
 | | `respond` | `rules[]` (`match`, `status`, `content_type`, `body`, `retry_after_s`), ADR 0103 |
 | | `error_pages` | `pages[]` (`status`, `content_type`, `body`), ADR 0103 |
 | | `access` | `oidc`, `default_mode`, `rules[]` (`match`, `mode`, `groups`, `email_domains`), `identity_headers`, `auth_path`, ADR 0130 to 0132 |
+| | `directory` | `connector` (`type`: `ldap`, `saml` or `local`, with its settings), ADR 0137; an access set names it in `oidc.directory_id` |
 | | `jwt` | `rules[]` (`match`, `issuer`, `audiences`, `required_scopes`, `leeway_s`, `keys[]` (`kid`, `alg`, `public_key_pem`), `subject_header`), ADR 0135 |
 | | `client_cert` | `identities[]` (`by`, `value`, `user`, `groups`), `rules[]` (`match`, `mode`, `groups`), `user_header`, `groups_header`, ADR 0136 |
 | | `rate_limit` | `rules[]` (`match`, `key`, `header_name`, `max_requests`, `period_s`, `max_concurrent`, `action`, `deny_status`, `tarpit_s`, `table_size`), ADR 0110 |
@@ -197,6 +198,20 @@ expires. Read it with the certificate, change it with a normal update operation.
 `POST /system/controller/revert` (system administrators). A proposal is applied to the `controller`
 service of the management tenant and reverted by the worker unless confirmed on the new FQDN in time;
 see `docs/controller-settings.md` and ADR 0081.
+
+## Kubernetes clusters
+
+`/tenants/{t}/kubernetes-clusters` (tenant-admin to write, viewer to read; see `docs/kubernetes.md`).
+
+| Call | Purpose |
+| --- | --- |
+| `GET` / `POST` | List, register. Body: `name`, `api_url`, `token` (write-only, stored in OpenBao), `ca_pem?`, `se_group`, `vip_pool`, `mode` (`nodeport`/`pods`), `class_name?`, `gateway_class?`, `enabled?` |
+| `GET` / `PATCH` / `DELETE` `/{cluster}` | Read (ETag), change (`If-Match`; `token` replaces the secret), remove |
+| `POST /{cluster}/test` | `{ok, version, nodes, services, gateway_api, permissions, detail}` |
+| `POST /{cluster}/sync` | 202 with `job_id`; a sync opens one change set as `system:k8s` |
+
+A cluster reads back with `last_sync` (`created`, `updated`, `deleted`, `change_set_id`,
+`addresses_written`), `last_sync_ok`, `last_sync_error` and `waiting_for_change_set`. The token is never returned.
 
 ## Importing an Avi export
 

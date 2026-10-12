@@ -1294,4 +1294,46 @@ describe("security policies", () => {
       },
     });
   });
+
+  it("adds device conditions to a login rule and drops them for a public rule", async () => {
+    await userEvent.type(await open("access"), "zt");
+    await userEvent.type(screen.getByLabelText("Issuer URL"), "https://idp.example.test");
+    await userEvent.type(screen.getByLabelText("Client ID"), "sy");
+    await userEvent.type(screen.getByLabelText("Client secret reference"), "kv/a");
+    await userEvent.type(screen.getByLabelText("Cookie secret reference"), "kv/b");
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.click(
+      screen.getByRole("switch", { name: "Rule 1 requires a device certificate" }),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Add claim check" }));
+    await userEvent.type(screen.getByLabelText("Rule 1 claim 1 name"), "device_compliant");
+    await userEvent.click(screen.getByRole("button", { name: "Add claim check" }));
+    await userEvent.type(screen.getByLabelText("Rule 1 claim 2 name"), "tier");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 claim 2 check"), "equals");
+    await userEvent.type(screen.getByLabelText("Rule 1 claim 2 value"), "gold");
+    await userEvent.click(screen.getByRole("button", { name: "Add claim check" }));
+    await userEvent.type(screen.getByLabelText("Rule 1 claim 3 name"), "os");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 claim 3 check"), "in");
+    await userEvent.type(screen.getByRole("combobox", { name: "Rule 1 claim 3 values" }), "mac,");
+    await userEvent.click(screen.getByRole("button", { name: "Rule 1 remove claim 3" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.selectOptions(screen.getByLabelText("Rule 2 mode"), "public");
+    expect(screen.queryByLabelText("Rule 2 requires a device certificate")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      rules: [
+        {
+          posture: {
+            device_certificate: true,
+            claims: [
+              { name: "device_compliant", op: "true", value: null, values: [] },
+              { name: "tier", op: "equals", value: "gold", values: [] },
+            ],
+          },
+        },
+        { mode: "public", posture: null },
+      ],
+    });
+  });
 });

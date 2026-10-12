@@ -34,13 +34,13 @@ class JobKind(StrEnum):
         POLL_STATUS: Scheduled engine status poll and drift detection.
         GIT_MIRROR: Pushes a revision to the Git mirror.
         GC: Scheduled housekeeping.
+        PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.
+        SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
         KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and
             Gateways and applies the difference as a `system:k8s` change set.
         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
             confirmation; reverts it when the window runs out.
         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
-        PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.
-        SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
 

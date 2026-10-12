@@ -16,11 +16,11 @@ depends_on = None
 
 _OLD = (
     "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit',"
-    " 'access', 'jwt', 'client_cert')"
+    " 'access', 'jwt', 'client_cert', 'directory')"
 )
 _NEW = (
     "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit',"
-    " 'access', 'jwt', 'client_cert', 'waf', 'protection')"
+    " 'access', 'jwt', 'client_cert', 'directory', 'waf', 'protection')"
 )
 
 

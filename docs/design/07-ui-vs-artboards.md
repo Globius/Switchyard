@@ -430,3 +430,10 @@ Created from the "New security policy…" menu on the Policies screen.
 ## JavaScript challenge and CAPTCHA (no artboard; Design to specify or confirm)
 
 On the **Bot and DDoS protection** policy, a "Check new visitors" card: nothing, a JavaScript proof of work (difficulty 3 to 5, with the cost explained), or a CAPTCHA (Turnstile or hCaptcha, site key, OpenBao path of the secret, never the key). Both have how long a pass lasts, paths never checked and User-Agent text never checked. Design questions: whether this belongs on its own policy kind, and a preview of the challenge page.
+
+## Device posture, pending alerts, directory logins (no artboard)
+
+- **Device posture (ADR 0138):** every non-public rule of a Login policy has a "Device conditions" box: a switch for a client certificate the port accepts (with the Verify: optional hint) and claim checks (is present, is true, equals, is one of). Questions: placement inside a rule; whether the missing client CA should be flagged on the rule.
+- **Pending alerts:** the firing list shows "pending, fires in N min" and the value against the threshold. Questions: a progress bar to the fire time.
+- **Directory logins (ADR 0137):** the API has a `directory` policy kind (LDAP, SAML, local users). The Policies list shows it read-only; the editor is not built. Design is needed first.
+- **Controller:** the API now accepts "use the default address" (`reset_to_default`); the screen does not offer it yet.

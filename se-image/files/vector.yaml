@@ -11,8 +11,17 @@ sources:
     # read what blocking would do before turning it on.
     type: journald
     include_units: [coraza-spoa.service]
+  auth:
+    type: journald
+    include_units: [sy-auth.service]
     current_boot_only: true
 transforms:
+  auth_parse:
+    type: remap
+    inputs: [auth]
+    source: |
+      .frontend = "sy_auth"
+
   parse:
     type: remap
     inputs: [haproxy]
@@ -33,7 +42,7 @@ transforms:
 sinks:
   loki:
     type: loki
-    inputs: [parse, parse_waf]
+    inputs: [parse, auth_parse, parse_waf]
     endpoint: "${LOKI_URL}"
     encoding: { codec: text }
     labels:

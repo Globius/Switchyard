@@ -60,7 +60,7 @@ syctl api GET /tenants/acme/alerts
 
 ## When something is not arriving
 
-1. `GET /tenants/{t}/alerts`: `firing` shows what the evaluator thinks is wrong; `deliveries` shows each attempt with its
+1. `GET /tenants/{t}/alerts`: `firing` shows what the evaluator thinks is wrong (a metric rule still waiting out `for_minutes` is `pending`, with the current value and `fires_at`, the time it fires if the value stays past the threshold); `deliveries` shows each attempt with its
    error ("the receiver answered HTTP 403", "the URL names a private or local address", "this controller has no mail server
    configured").
 2. A worker must be running: the job `evaluate_alerts` appears in the jobs list every minute.

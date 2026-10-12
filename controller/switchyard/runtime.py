@@ -429,11 +429,11 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         EXPIRE_DRAINS_JOB: timedelta(seconds=30),
         EVALUATE_ALERTS_JOB: timedelta(minutes=1),
     }
-    if discovery is not None:
-        schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
     if gslb_service(db) is not None:
         schedule[SYNC_GSLB_JOB] = timedelta(minutes=5)
         schedule[PROBE_GSLB_JOB] = timedelta(minutes=1)
+    if discovery is not None:
+        schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

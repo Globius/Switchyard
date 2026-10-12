@@ -272,6 +272,7 @@ OBJECT_MODELS: dict[ObjectType, tuple[type[BaseModel], ...]] = {
         dm.AccessPolicySet,
         dm.JwtPolicySet,
         dm.ClientCertPolicySet,
+        dm.DirectoryPolicySet,
     ),
     ObjectType.ROUTING_PROFILE: (dm.VrrpProfile, dm.BgpProfile),
 }
@@ -2203,7 +2204,15 @@ class ControllerRead(ApiModel):
 class ControllerChangeIn(ApiModel):
     """Propose a change to the controller's address."""
 
-    fqdn: str = Field(description="The host name users will open.")
+    fqdn: str = Field(
+        default="",
+        description="The host name users will open (not needed with `reset_to_default`).",
+    )
+    reset_to_default: bool = Field(
+        default=False,
+        description="Drop the confirmed public URL so the address from the environment applies "
+        "again. Needs confirmation like any other change.",
+    )
     vip: str | None = Field(default=None, description="A new VIP for the `controller` service.")
     certificate: str | None = Field(
         default=None, description="Name of a server certificate in the management tenant."

@@ -122,7 +122,12 @@ describe("Admin > Controller", () => {
     expect(dlg.getByText(/switchyard\.example\.test → lb\.example\.test/)).toBeInTheDocument();
     await userEvent.click(dlg.getByRole("button", { name: "Apply and confirm" }));
     await waitFor(() =>
-      expect(put).toEqual({ fqdn: "lb.example.test", vip: null, certificate: "lb-cert" }),
+      expect(put).toEqual({
+        fqdn: "lb.example.test",
+        reset_to_default: false,
+        vip: null,
+        certificate: "lb-cert",
+      }),
     );
   });
 

@@ -107,6 +107,7 @@ Date: YYYY-MM-DD
 | [0142](0142-waf-sidecar-and-failure-mode.md) | WAF sidecar life cycle and failure mode | Accepted |
 | [0143](0143-waf-logs.md) | WAF logs in Loki | Accepted |
 | [0144](0144-waf-image-and-agent-contract.md) | What the SE image and the agent must provide for the WAF | Accepted |
+| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |
 | [0130](0130-auth-service-architecture.md) | Authentication service: oauth2-proxy, loopback re-entry, closed by default | Accepted |
 | [0131](0131-access-rules-and-authorization.md) | Access rules and authorization | Accepted |
 | [0132](0132-identity-headers.md) | Identity headers to the origin | Accepted |
@@ -119,3 +120,6 @@ Date: YYYY-MM-DD
 | [0170](0170-bot-and-ddos-protection.md) | Bot and DDoS protection set | Accepted |
 | [0171](0171-javascript-challenge.md) | JavaScript challenge (proof of work) | Accepted |
 | [0172](0172-captcha-gate.md) | CAPTCHA gate with a pluggable provider | Accepted |
+| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |
+| [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
+| [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |

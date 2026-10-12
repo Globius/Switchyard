@@ -218,16 +218,16 @@ class PolicySetRow(TenantOwnedMixin, Base):
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         CheckConstraint(
             "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages',"
-            " 'rate_limit', 'access', 'jwt', 'client_cert', 'waf',"
+            " 'rate_limit', 'access', 'jwt', 'client_cert', 'directory', 'waf',"
             " 'protection')",
             name="kind",
         ),
         CheckConstraint(
-            "(kind NOT IN ('allow_list', 'access', 'client_cert') AND rules IS NOT NULL"
-            " AND cidrs IS NULL AND config IS NULL)"
+            "(kind NOT IN ('allow_list', 'access', 'client_cert', 'directory')"
+            " AND rules IS NOT NULL AND cidrs IS NULL AND config IS NULL)"
             " OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL AND config IS NULL)"
-            " OR (kind IN ('access', 'client_cert') AND config IS NOT NULL AND rules IS NULL"
-            " AND cidrs IS NULL)",
+            " OR (kind IN ('access', 'client_cert', 'directory') AND config IS NOT NULL"
+            " AND rules IS NULL AND cidrs IS NULL)",
             name="payload_matches_kind",
         ),
         CheckConstraint("managed_by IS NULL OR managed_by = 'cloudflare'", name="managed_by"),

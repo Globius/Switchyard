@@ -171,6 +171,114 @@ const GATE_DEFAULT = {
   skip_user_agents: [] as string[],
 };
 
+type Claim = {
+  name: string;
+  op: "present" | "true" | "equals" | "in";
+  value?: string | null;
+  values: string[];
+};
+
+/** Device conditions of an access rule besides the login (ADR 0138). */
+export function PostureEditor({
+  id,
+  posture,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  posture: { device_certificate: boolean; claims: Claim[] } | null;
+  disabled: boolean;
+  onChange: (p: { device_certificate: boolean; claims: Claim[] } | null) => void;
+}) {
+  const p = posture ?? { device_certificate: false, claims: [] };
+  const emit = (n: typeof p) => onChange(n.device_certificate || n.claims.length > 0 ? n : null);
+  const setClaim = (i: number, c: Partial<Claim>) =>
+    emit({ ...p, claims: p.claims.map((x, j) => (j === i ? { ...x, ...c } : x)) });
+  return (
+    <fieldset className="space-y-2 rounded-md border border-dashed p-3">
+      <legend className="px-1 text-xs font-medium">{t("Device conditions")}</legend>
+      <label className="flex items-center gap-2 text-sm">
+        <Switch
+          aria-label={`${id} requires a device certificate`}
+          checked={p.device_certificate}
+          disabled={disabled}
+          onCheckedChange={(v) => emit({ ...p, device_certificate: v })}
+        />
+        {t("A client certificate the port accepts")}
+      </label>
+      {p.device_certificate && (
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "The service needs a port with a client CA; use Verify: optional so other paths still work.",
+          )}
+        </p>
+      )}
+      {p.claims.map((c, i) => (
+        <div key={i} className="grid grid-cols-[1fr_8rem_1fr_auto] items-start gap-2">
+          <input
+            aria-label={`${id} claim ${i + 1} name`}
+            placeholder="device_compliant"
+            className={MONO}
+            disabled={disabled}
+            value={c.name}
+            onChange={(e) => setClaim(i, { name: e.target.value })}
+          />
+          <select
+            aria-label={`${id} claim ${i + 1} check`}
+            className={INPUT}
+            disabled={disabled}
+            value={c.op}
+            onChange={(e) => setClaim(i, { op: e.target.value as Claim["op"] })}
+          >
+            <option value="present">{t("is present")}</option>
+            <option value="true">{t("is true")}</option>
+            <option value="equals">{t("equals")}</option>
+            <option value="in">{t("is one of")}</option>
+          </select>
+          {c.op === "equals" ? (
+            <input
+              aria-label={`${id} claim ${i + 1} value`}
+              className={INPUT}
+              disabled={disabled}
+              value={c.value ?? ""}
+              onChange={(e) => setClaim(i, { value: e.target.value })}
+            />
+          ) : c.op === "in" ? (
+            <ChipInput
+              label={`${id} claim ${i + 1} values`}
+              value={c.values}
+              onChange={(v) => setClaim(i, { values: v })}
+              freeText={{ validate: () => null }}
+              disabled={disabled}
+            />
+          ) : (
+            <span />
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={disabled}
+            aria-label={`${id} remove claim ${i + 1}`}
+            onClick={() => emit({ ...p, claims: p.claims.filter((_, j) => j !== i) })}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={() =>
+          emit({ ...p, claims: [...p.claims, { name: "", op: "true", value: null, values: [] }] })
+        }
+      >
+        {t("Add claim check")}
+      </Button>
+    </fieldset>
+  );
+}
+
 /** "Check new visitors": nothing, a JavaScript proof of work, or a CAPTCHA (ADR 0171, 0172). */
 function NewVisitorCheck({
   cfg,
@@ -320,7 +428,22 @@ export function securityBody(kind: SecurityKind, name: string, cfg: Obj): Obj {
   if (kind === "access") {
     for (const k of Object.keys(c.identity_headers))
       c.identity_headers[k] = nz(c.identity_headers[k]);
-    c.rules = c.rules.map((r: Obj) => ({ ...r, match: cleanMatch(r.match) }));
+    c.rules = c.rules.map((r: Obj) => ({
+      ...r,
+      match: cleanMatch(r.match),
+      posture:
+        r.mode === "public" || !r.posture
+          ? null
+          : {
+              ...r.posture,
+              claims: r.posture.claims.map((k: Obj) => ({
+                name: k.name,
+                op: k.op,
+                value: k.op === "equals" ? k.value || null : null,
+                values: k.op === "in" ? k.values : [],
+              })),
+            },
+    }));
   }
   if (kind === "jwt")
     c.rules = c.rules.map((r: Obj) => ({
@@ -683,6 +806,14 @@ export function SecurityPolicySheet({
                         freeText={{ validate: () => null }}
                         placeholder="example.com"
                         disabled={dis}
+                      />
+                    )}
+                    {r.mode !== "public" && (
+                      <PostureEditor
+                        id={`Rule ${i + 1}`}
+                        posture={r.posture ?? null}
+                        disabled={dis}
+                        onChange={(p) => upd({ posture: p })}
                       />
                     )}
                     <MatchEditor
