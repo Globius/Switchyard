@@ -171,10 +171,10 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
         </section>
       ))}
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_20rem]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
           <section className={CARD}>
-            <header className="flex items-center gap-3 border-b px-4 py-3">
+            <header className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
               <h2 className="text-base font-semibold">{t("Routes")}</h2>
               <span className="text-sm text-muted-foreground">{t("first match wins")}</span>
               {v.routes.length > 1 && (
@@ -205,57 +205,59 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                 })}
               </p>
             )}
-            <table className="w-full text-[13px]">
-              <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
-                <tr>
-                  <th className="w-10 px-4 py-2 font-medium">#</th>
-                  <th className="px-4 py-2 font-medium">{t("Host")}</th>
-                  <th className="px-4 py-2 font-medium">{t("Path")}</th>
-                  <th className="px-4 py-2 font-medium">{t("Target")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {sorted.map((r, i) => (
-                  <tr key={`${r.order}-${i}`}>
-                    <td className="px-4 py-3">{i + 1}</td>
-                    <td className="px-4 py-3 font-mono">{r.match.host ?? t("any host")}</td>
-                    <td className="px-4 py-3 font-mono">
-                      {r.match.path_exact
-                        ? `exact ${r.match.path_exact}`
-                        : r.match.path_prefix
-                          ? `prefix ${r.match.path_prefix}`
-                          : "—"}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="w-10 px-4 py-2 font-medium">#</th>
+                    <th className="px-4 py-2 font-medium">{t("Host")}</th>
+                    <th className="px-4 py-2 font-medium">{t("Path")}</th>
+                    <th className="px-4 py-2 font-medium">{t("Target")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {sorted.map((r, i) => (
+                    <tr key={`${r.order}-${i}`}>
+                      <td className="px-4 py-3">{i + 1}</td>
+                      <td className="px-4 py-3 font-mono">{r.match.host ?? t("any host")}</td>
+                      <td className="px-4 py-3 font-mono">
+                        {r.match.path_exact
+                          ? `exact ${r.match.path_exact}`
+                          : r.match.path_prefix
+                            ? `prefix ${r.match.path_prefix}`
+                            : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {r.redirect ? (
+                          t("Redirect {code} to {to}", {
+                            code: r.redirect.code,
+                            to: r.redirect.location,
+                          })
+                        ) : (
+                          <>
+                            {t("pool")}{" "}
+                            <span className="text-primary">
+                              {byId.get(r.pool_id ?? "")?.name ?? "—"}
+                            </span>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="text-muted-foreground">
+                    <td className="px-4 py-3">—</td>
+                    <td className="px-4 py-3">{t("default")}</td>
+                    <td className="px-4 py-3">{t("everything else")}</td>
                     <td className="px-4 py-3">
-                      {r.redirect ? (
-                        t("Redirect {code} to {to}", {
-                          code: r.redirect.code,
-                          to: r.redirect.location,
-                        })
-                      ) : (
-                        <>
-                          {t("pool")}{" "}
-                          <span className="text-primary">
-                            {byId.get(r.pool_id ?? "")?.name ?? "—"}
-                          </span>
-                        </>
-                      )}
+                      {t("pool")}{" "}
+                      <span className="text-primary">
+                        {byId.get(v.default_pool_id ?? "")?.name ?? "—"}
+                      </span>
                     </td>
                   </tr>
-                ))}
-                <tr className="text-muted-foreground">
-                  <td className="px-4 py-3">—</td>
-                  <td className="px-4 py-3">{t("default")}</td>
-                  <td className="px-4 py-3">{t("everything else")}</td>
-                  <td className="px-4 py-3">
-                    {t("pool")}{" "}
-                    <span className="text-primary">
-                      {byId.get(v.default_pool_id ?? "")?.name ?? "—"}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </section>
 
           <section className={CARD}>
@@ -291,96 +293,98 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
                 {t("This service sends traffic to no pool yet.")}
               </p>
             ) : (
-              <table className="w-full text-[13px]">
-                <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
-                  <tr>
-                    {[
-                      "Pool",
-                      "Member",
-                      "Address",
-                      "Health",
-                      "Weight",
-                      "Admin state",
-                      "Runtime",
-                    ].map((h) => (
-                      <th key={h} className="px-4 py-2 font-medium">
-                        {t(h)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {usedPools.flatMap((p) =>
-                    p.members.map((m) => {
-                      const fresh = notApplied(p, m.id, livePools.data?.items);
-                      return (
-                        <tr
-                          key={`${p.id}-${m.id}`}
-                          className={fresh ? "bg-draft-bg/40" : undefined}
-                        >
-                          <td className="px-4 py-3">{p.name}</td>
-                          <td className="px-4 py-3 font-mono">
-                            {fresh && (
-                              <span
-                                className="mr-1.5 inline-block size-2 rounded-full bg-draft"
-                                aria-hidden
-                              />
-                            )}
-                            {m.name ?? m.address}
-                          </td>
-                          <td className="px-4 py-3 font-mono">{hostPort(m.address, m.port)}</td>
-                          <td className="px-4 py-3">
-                            {fresh ? (
-                              <span className="text-muted-foreground">—</span>
-                            ) : (
-                              <MemberHealth
-                                row={worstOf(rowsFor(svcStatus?.members, p.id, m.id))}
-                                engines={rowsFor(svcStatus?.members, p.id, m.id).length}
-                              />
-                            )}
-                          </td>
-                          <td className="px-4 py-3">{m.weight}</td>
-                          <td className="px-4 py-3">
-                            {fresh ? (
-                              <StatusPill status="draft">{t("Not applied")}</StatusPill>
-                            ) : (
-                              STATE_PILL[m.admin_state]
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            {fresh ? (
-                              <span className="text-muted-foreground">{t("after apply")}</span>
-                            ) : (
-                              <span className="flex gap-1.5">
-                                {(["enabled", "drain", "disabled"] as const)
-                                  .filter((st) => st !== m.admin_state)
-                                  .map((st) => (
-                                    <Tip key={st} label={perm.reason}>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={!perm.allowed}
-                                        onClick={() =>
-                                          setPending({ pool: p, member: m, state: st })
-                                        }
-                                      >
-                                        {st === "enabled"
-                                          ? t("Enable")
-                                          : st === "drain"
-                                            ? t("Drain")
-                                            : t("Disable")}
-                                      </Button>
-                                    </Tip>
-                                  ))}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    }),
-                  )}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
+                    <tr>
+                      {[
+                        "Pool",
+                        "Member",
+                        "Address",
+                        "Health",
+                        "Weight",
+                        "Admin state",
+                        "Runtime",
+                      ].map((h) => (
+                        <th key={h} className="px-4 py-2 font-medium">
+                          {t(h)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {usedPools.flatMap((p) =>
+                      p.members.map((m) => {
+                        const fresh = notApplied(p, m.id, livePools.data?.items);
+                        return (
+                          <tr
+                            key={`${p.id}-${m.id}`}
+                            className={fresh ? "bg-draft-bg/40" : undefined}
+                          >
+                            <td className="px-4 py-3">{p.name}</td>
+                            <td className="px-4 py-3 font-mono">
+                              {fresh && (
+                                <span
+                                  className="mr-1.5 inline-block size-2 rounded-full bg-draft"
+                                  aria-hidden
+                                />
+                              )}
+                              {m.name ?? m.address}
+                            </td>
+                            <td className="px-4 py-3 font-mono">{hostPort(m.address, m.port)}</td>
+                            <td className="px-4 py-3">
+                              {fresh ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                <MemberHealth
+                                  row={worstOf(rowsFor(svcStatus?.members, p.id, m.id))}
+                                  engines={rowsFor(svcStatus?.members, p.id, m.id).length}
+                                />
+                              )}
+                            </td>
+                            <td className="px-4 py-3">{m.weight}</td>
+                            <td className="px-4 py-3">
+                              {fresh ? (
+                                <StatusPill status="draft">{t("Not applied")}</StatusPill>
+                              ) : (
+                                STATE_PILL[m.admin_state]
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {fresh ? (
+                                <span className="text-muted-foreground">{t("after apply")}</span>
+                              ) : (
+                                <span className="flex gap-1.5">
+                                  {(["enabled", "drain", "disabled"] as const)
+                                    .filter((st) => st !== m.admin_state)
+                                    .map((st) => (
+                                      <Tip key={st} label={perm.reason}>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          disabled={!perm.allowed}
+                                          onClick={() =>
+                                            setPending({ pool: p, member: m, state: st })
+                                          }
+                                        >
+                                          {st === "enabled"
+                                            ? t("Enable")
+                                            : st === "drain"
+                                              ? t("Drain")
+                                              : t("Disable")}
+                                        </Button>
+                                      </Tip>
+                                    ))}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      }),
+                    )}
+                  </tbody>
+                </table>
+              </div>
             )}
             <p className="border-t px-4 py-3 text-xs text-muted-foreground">
               {t(
@@ -402,7 +406,7 @@ export function VsOverview({ tenant, id }: { tenant: string; id: string }) {
             <header className={CARD_HEAD}>
               <h2 className="text-base font-semibold">{t("Listener")}</h2>
             </header>
-            <dl className="grid grid-cols-[7rem_1fr] gap-y-2 p-4 text-[13px]">
+            <dl className="grid grid-cols-[7rem_minmax(0,1fr)] [&_dd]:break-words gap-y-2 p-4 text-[13px]">
               <dt className="text-muted-foreground">VIP</dt>
               <dd className="font-mono">
                 {v.vip ?? t("allocated on apply")}
