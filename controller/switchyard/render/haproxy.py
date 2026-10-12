@@ -377,10 +377,17 @@ class _Renderer:
             if svc.enforce_allow_list:
                 lst = self._list_path(allow)
                 connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
+        deny = _allow_list(self.policies[svc.deny_list_id]) if svc.deny_list_id else None
+        if deny is not None:
+            self.files[f"haproxy/lists/{esc.ident(deny.name)}.cidr"] = self._allow_list_text(deny)
+            if mode != "http":
+                connection_rules.append(
+                    f"tcp-request session reject if {{ src -f {self._list_path(deny)} }}"
+                )
         request_rules: list[str] = []
         routing_rules: list[str] = []
         if mode == "http":
-            request_rules = self._request_rules(svc, ports, allow)
+            request_rules = self._request_rules(svc, ports, allow, deny)
             if any(p.port == 80 and not p.tls for p in ports):
                 # First, before redirects and routes: the CA's request must reach the answer.
                 request_rules.insert(0, _acme_rule())
@@ -439,6 +446,7 @@ class _Renderer:
         svc: dm.VirtualService,
         ports: list[dm.VsPort],
         allow: dm.AllowListPolicySet | None,
+        deny: dm.AllowListPolicySet | None = None,
     ) -> list[str]:
         rules: list[str] = []
         # Client address and header hygiene. The trusted flag is computed first because
@@ -452,6 +460,12 @@ class _Renderer:
                 f"if {{ var(txn.trusted) -m bool }} {{ hdr({header}) -m found }}",
                 f"http-request del-header {header} if !{{ var(txn.trusted) -m bool }}",
             ]
+        if deny is not None:
+            # After the client address is restored (behind a CDN ``src`` is the real client), and
+            # before anything else touches the request.
+            rules.append(
+                f"http-request deny deny_status 403 if {{ src -f {self._list_path(deny)} }}"
+            )
         rules += [
             "http-request del-header X-Forwarded-For",
             "http-request set-header X-Forwarded-Proto https if { ssl_fc }",

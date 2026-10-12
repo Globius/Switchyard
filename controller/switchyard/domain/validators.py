@@ -385,6 +385,7 @@ def host_port(host: str, port: int) -> str:
     return f"[{host}]:{port}" if ":" in host and not host.startswith("[") else f"{host}:{port}"
 
 
+_COUNTRY = re.compile(r"^[A-Z]{2}$")
 _DISCOVERY_TAG = re.compile(r"^[a-z0-9_][a-z0-9_+.-]{0,63}$")
 
 
@@ -419,3 +420,19 @@ def discovery_tag_prefix(tenant_name: str) -> str:
         'sy-acme.'
     """
     return f"sy-{tenant_name}."
+
+
+def validate_country_code(value: str) -> str:
+    """Validate an ISO 3166 alpha-2 country code (upper case, two letters).
+
+    Example:
+        >>> validate_country_code("NL")
+        'NL'
+        >>> validate_country_code("nld")
+        Traceback (most recent call last):
+            ...
+        ValueError: country must be a two-letter upper-case ISO 3166 code
+    """
+    if not _COUNTRY.fullmatch(value):
+        raise ValueError("country must be a two-letter upper-case ISO 3166 code")
+    return value

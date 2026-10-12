@@ -216,7 +216,10 @@ class PolicySetRow(TenantOwnedMixin, Base):
             " OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL)",
             name="payload_matches_kind",
         ),
-        CheckConstraint("managed_by IS NULL OR managed_by = 'cloudflare'", name="managed_by"),
+        CheckConstraint(
+            "managed_by IS NULL OR managed_by IN ('cloudflare', 'geo', 'reputation')",
+            name="managed_by",
+        ),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -224,6 +227,8 @@ class PolicySetRow(TenantOwnedMixin, Base):
     rules: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
     cidrs: Mapped[list[str] | None] = mapped_column(ARRAY(CIDR))
     managed_by: Mapped[str | None] = mapped_column(Text)
+    countries: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    feed: Mapped[str | None] = mapped_column(Text)
 
 
 class PoolRow(TenantOwnedMixin, Base):
@@ -282,6 +287,7 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
         tenant_fk("vip_pool_id", "vip_pool"),
         tenant_fk("default_pool_id", "pool"),
         tenant_fk("allow_list_id", "policy_set"),
+        tenant_fk("deny_list_id", "policy_set"),
         enum_check("protocol", dm.Protocol),
         CheckConstraint("version >= 1", name="version"),
     )
@@ -293,6 +299,7 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
     vip_pool_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     default_pool_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     allow_list_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    deny_list_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     enforce_allow_list: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
