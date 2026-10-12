@@ -12237,7 +12237,7 @@
       },
       "OidcSettings": {
         "additionalProperties": false,
-        "description": "OpenID Connect login against a tenant's identity provider (ADR 0130).\n\nAttributes:\n    issuer: The provider's issuer URL (``https``); discovery is read from it. Or:\n    directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).\n    redirect_hosts: With a directory, the hosts the service is reached on; the broker only\n        redirects back to ``https://<host><auth_path>/callback`` for these.\n    client_id: The client registered for Switchyard at the provider.\n    client_secret_ref: OpenBao path of the client secret (never the secret).\n    cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies\n        (16, 24 or 32 bytes). One key per access set; rotate it to end every session.\n    scopes: Scopes to request; ``openid`` is required.\n    groups_claim: Claim that carries the user's groups.\n    cookie_name: Session cookie name.\n    cookie_expire_s: Absolute session lifetime.\n    cookie_refresh_s: How often the session is refreshed against the provider (a user whose\n        account was disabled loses the session at the next refresh). Less than the lifetime.",
+        "description": "OpenID Connect login against a tenant's identity provider (ADR 0130).\n\nAttributes:\n    issuer: The provider's issuer URL (``https``); discovery is read from it. Or:\n    directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).\n    provider_ca_pem: PEM certificate(s) that sign the provider's TLS certificate, when they are\n        not in the engine's trust store (a private CA); delivered to the proxy with its config.\n    redirect_hosts: With a directory, the hosts the service is reached on; the broker only\n        redirects back to ``https://<host><auth_path>/callback`` for these.\n    client_id: The client registered for Switchyard at the provider.\n    client_secret_ref: OpenBao path of the client secret (never the secret).\n    cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies\n        (16, 24 or 32 bytes). One key per access set; rotate it to end every session.\n    scopes: Scopes to request; ``openid`` is required.\n    groups_claim: Claim that carries the user's groups.\n    cookie_name: Session cookie name.\n    cookie_expire_s: Absolute session lifetime.\n    cookie_refresh_s: How often the session is refreshed against the provider (a user whose\n        account was disabled loses the session at the next refresh). Less than the lifetime.",
         "properties": {
           "client_id": {
             "title": "Client Id",
@@ -12297,6 +12297,17 @@
               }
             ],
             "title": "Issuer"
+          },
+          "provider_ca_pem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Ca Pem"
           },
           "redirect_hosts": {
             "default": [],

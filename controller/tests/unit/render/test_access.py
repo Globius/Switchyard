@@ -489,8 +489,8 @@ class TestPosture:
         )
         fetch = "var(txn.sy_idt),jwt_payload_query('$.{}')"
         assert (
-            f"http-request return status 403 if {here} !{{ {fetch.format('device_compliant')} -m str true }}"
-            in lines
+            f"http-request return status 403 if {here} "
+            f'!{{ {fetch.format("device_compliant")} -m str "1" "true" }}' in lines
         )
         assert (
             f'http-request return status 403 if {here} !{{ {fetch.format("tier")} -m str "gold" "silver" }}'
@@ -517,3 +517,63 @@ class TestPosture:
         assert "http-request del-header Authorization if { var(txn.sy_loop) -m bool }" in "\n".join(
             frontend(self.data())
         )
+
+
+class TestBooleansCookiesAndProviderCa:
+    def test_boolean_spellings(self) -> None:
+        from switchyard.render.haproxy import _claim_forms
+
+        assert _claim_forms(("true",)) == ["1", "true"]
+        assert _claim_forms(("false", "x")) == ["0", "false", "x"]
+
+    def test_equals_true_matches_a_json_boolean_too(self) -> None:
+        rule = {
+            "mode": "login",
+            "posture": {"claims": [{"name": "email_verified", "op": "equals", "value": "true"}]},
+        }
+        lines = frontend(with_access(access(rules=[rule])))
+        assert any(
+            'jwt_payload_query(\'$.email_verified\') -m str "1" "true"' in ln for ln in lines
+        )
+
+    def test_session_cookies_are_stripped_on_the_second_hop_only(self) -> None:
+        lines = frontend(with_access(access()))  # default name
+        strip = [ln for ln in lines if ln.startswith("http-request set-header Cookie ")]
+        assert len(strip) == 1 and "(^|; *)_sy_auth(_[A-Za-z0-9]+)*=[^;]*" in strip[0]
+        assert strip[0].endswith("if { var(txn.sy_loop) -m bool } { req.hdr(cookie) -m found }")
+        assert (
+            "http-request del-header Cookie if { var(txn.sy_loop) -m bool } { req.fhdr(cookie) -m len 0 }"
+            in lines
+        )
+
+    def test_a_provider_ca_goes_to_the_proxy_as_a_file(self) -> None:
+        data = with_access(access())
+        data["policy_sets"][0]["oidc"]["provider_ca_pem"] = CA_PEM
+        snap = snapshot_from_mapping(data)
+        files = render_auth_files(snap, GROUP, SECRETS)
+        assert files["auth/web-sso-ca.pem"] == CA_PEM
+        assert (
+            'provider_ca_files = ["/etc/switchyard/auth/web-sso-ca.pem"]'
+            in files["auth/web-sso.cfg"]
+        )
+        plain = render_auth_files(snapshot_from_mapping(with_access(access())), GROUP, SECRETS)
+        assert (
+            "auth/web-sso-ca.pem" not in plain
+            and "provider_ca_files" not in plain["auth/web-sso.cfg"]
+        )
+
+    def test_the_provider_ca_must_be_certificates_only(self) -> None:
+        data = with_access(access())
+        data["policy_sets"][0]["oidc"]["provider_ca_pem"] = (
+            "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n"
+        )
+        with pytest.raises(ValidationError):
+            snapshot_from_mapping(data)
+
+
+CA_PEM = (
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIBtjCCAVugAwIBAgITBmyf1XSXNmY/Owua2eiedgPySjAKBggqhkjOPQQDAjA5\n"
+    "MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6b24g\n"
+    "-----END CERTIFICATE-----\n"
+)

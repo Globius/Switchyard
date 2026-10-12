@@ -29,6 +29,9 @@ hop writes the configured headers from the proxy's values and deletes the proxy 
 headers are absent. Names that would collide with message framing, hop-by-hop, `Host`, `Authorization`, the proxy's own headers
 or `X-Forwarded-For` and `-Proto` are refused when the set is saved (`cannot carry identity`).
 
+**Cookies.** The proxy's session cookie (and its split parts) and CSRF cookies are removed from the request the origin gets, on the
+second hop; other cookies pass unchanged.
+
 **Trust.** An origin may trust these headers only if its traffic comes only through the engine (network rule, or the origin lock-down
 in plan section E). The record does not enforce that.
 
