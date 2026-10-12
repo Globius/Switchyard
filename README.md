@@ -73,6 +73,8 @@ Notes:
 - Line endings are LF (`.gitattributes`). Keep `core.autocrlf` off or `input` for this repo.
 - On Linux/macOS or WSL2, `make -C controller check` runs all gates, same as `.gitlab-ci.yml`; run them
   (and `make docs`) locally before pushing a merge request.
+- CI runs in two tiers: every push and merge request gets lint, types, docs, the Docker-free tests and a container smoke
+  set; the full container suite and the coverage gate run on main, on `v*` tags, nightly, or with `FULL_TESTS=1`.
 - The UI (`ui/`, Node 22 and pnpm) has its own targets in the root `Makefile` (`make ui-check`); see [docs/ui/README.md](docs/ui/README.md).
 
 ## Working with Claude Code

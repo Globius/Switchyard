@@ -36,7 +36,15 @@ typecheck:
   script:
     - uv run mypy
 
+# Tests in two tiers. Every push and MR: the tests that need no Docker plus a small container smoke set.
+# The full suite (every container test and the coverage gate) runs on main, on version tags (v*),
+# nightly from a schedule, and by hand ("Run pipeline" with FULL_TESTS=1).
 test:
+  extends: .controller
+  script:
+    - uv run pytest -m "not docker"
+
+.docker-tests:
   extends: .controller
   # Docker-backed tests (PostgreSQL, HAProxy) need a Docker daemon; use the dind service.
   services:
@@ -45,10 +53,33 @@ test:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
     TESTCONTAINERS_HOST_OVERRIDE: docker
-  script:
+  before_script:
+    - cd controller
+    - uv sync --frozen
+    - for i in $(seq 60); do uv run python -c "import docker; docker.from_env().ping()" 2>/dev/null && break; sleep 2; done
     # The SDK-created test containers do not pull missing images, and dind starts empty.
     - uv run python -m tests.ci_pull_images
+
+test-smoke:
+  extends: .docker-tests
+  rules:
+    - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "schedule" || $FULL_TESTS
+      when: never
+    - when: on_success
+  script:
+    # RLS isolation, the apply pipeline end to end, and HAProxy validation of the rendered golden cases.
     # Bind mounts are resolved by dind: keep pytest's temporary files on the build volume it shares.
+    - uv run pytest --basetemp="$CI_PROJECT_DIR/.pytest-tmp" -p no:cacheprovider
+      tests/integration/test_rls.py tests/integration/test_apply_pipeline.py
+      "tests/integration/test_golden_haproxy.py::test_haproxy_accepts_rendered_config[01-minimal-http]"
+
+test-full:
+  extends: .docker-tests
+  timeout: 3h
+  interruptible: false
+  rules:
+    - if: $CI_COMMIT_TAG || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_PIPELINE_SOURCE == "schedule" || $FULL_TESTS
+  script:
     - uv run pytest --basetemp="$CI_PROJECT_DIR/.pytest-tmp" --cov --cov-report=term-missing --cov-report=xml
     - uv run coverage report --include="switchyard/domain/*,switchyard/render/*,switchyard/pipeline/*" --fail-under=85
   coverage: '/TOTAL.*\s+(\d+(?:\.\d+)?)%/'
