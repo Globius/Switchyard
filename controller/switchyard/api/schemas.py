@@ -2279,6 +2279,16 @@ class ControllerRead(ApiModel):
         description="The management tenant and its `controller` service exist. Without them only "
         "the FQDN (public URL) can be set."
     )
+    management_tenant: bool = Field(
+        description="The `management` tenant exists (it is created at start-up). `managed` also "
+        "needs a `controller` service in it; until then only the public URL can change, and the "
+        "screen should say that the service has not been adopted or deployed, not that the "
+        "tenant is missing."
+    )
+    reached_at: str | None = Field(
+        description="The address this request came in on (`scheme://host`); offer it as the "
+        "public URL. An IP address is accepted as the FQDN while `managed` is false."
+    )
     fqdn: str | None
     public_url: str | None
     listen: ControllerListenRead | None

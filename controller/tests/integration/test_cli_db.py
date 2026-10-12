@@ -93,3 +93,28 @@ def test_adopt_management_example_then_refuses_second_run(
     code, out, err = syctl(pg_url, "render", "--tenant", "management", "--se-group", "management")
     assert code == 0, err
     assert "frontend vs_controller" in out
+
+
+def test_adopt_replaces_the_empty_management_tenant_the_controller_created(
+    pg_url: str, owner_engine: object
+) -> None:
+    import asyncio
+
+    from switchyard.db.tenancy import ADMIN_ROLE, make_engine
+    from switchyard.services.bootstrap import ensure_management_tenant
+    from switchyard.services.context import Databases
+
+    async def bootstrap() -> bool:
+        admin = make_engine(pg_url, role=ADMIN_ROLE)
+        try:
+            return await ensure_management_tenant(Databases(app=admin, admin=admin))
+        finally:
+            await admin.dispose()
+
+    assert asyncio.run(bootstrap()) is True
+    example = Path(__file__).parents[3] / "deploy/prod/adopt/management.example.yaml"
+    code, out, err = syctl(pg_url, "adopt", str(example))
+    assert code == 0, err
+    assert "adopted tenant 'management'" in out
+    code, _, err = syctl(pg_url, "adopt", str(example))
+    assert code == 1 and "already exists" in err, "a tenant with objects is never replaced"

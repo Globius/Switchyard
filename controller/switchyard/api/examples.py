@@ -1172,6 +1172,8 @@ ACME_PROVIDER_TEST = {
 
 CONTROLLER = {
     "managed": True,
+    "management_tenant": True,
+    "reached_at": "https://switchyard.example.test",
     "fqdn": "switchyard.example.test",
     "public_url": "https://switchyard.example.test",
     "listen": {
