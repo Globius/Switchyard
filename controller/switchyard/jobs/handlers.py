@@ -39,6 +39,7 @@ from switchyard.services.infra import (
     DeployRequest,
     InfraService,
 )
+from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
 from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
@@ -64,6 +65,7 @@ def build_handlers(
     members: MemberService | None = None,
     discovery: DiscoveryService | None = None,
     alerts: AlertEvaluator | None = None,
+    iplists: IpListSync | None = None,
     gslb: GslbSync | None = None,
     prober: GslbProber | None = None,
 ) -> dict[str, Handler]:
@@ -73,6 +75,7 @@ def build_handlers(
         db: Database handles.
         pipeline: The apply pipeline.
         members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
+        iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
         kubernetes: Syncs the tenants' Kubernetes clusters; ``None`` skips the ``kubernetes_sync``
@@ -134,6 +137,12 @@ def build_handlers(
             return dict(await gc.run())
 
         handlers[GC_JOB] = collect_garbage
+    if iplists is not None:
+
+        async def sync_ip_lists(job: Job) -> dict[str, Any]:
+            return {"changed": await iplists.run()}
+
+        handlers[SYNC_IP_LISTS_JOB] = sync_ip_lists
     if discovery is not None:
 
         async def discover_pool_members(job: Job) -> dict[str, Any]:

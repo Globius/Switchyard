@@ -14,6 +14,7 @@ from switchyard.services.discovery import DISCOVER_POOLS_JOB
 from switchyard.services.gc import GC_JOB
 from switchyard.services.gslb import PROBE_GSLB_JOB, SYNC_GSLB_JOB
 from switchyard.services.infra import APPLY_SDN_JOB, DEPLOY_SE_GROUP_JOB, RETIRE_ENGINE_JOB
+from switchyard.services.iplists import SYNC_IP_LISTS_JOB
 from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB
 
 
@@ -33,6 +34,7 @@ def test_every_job_kind_is_published() -> None:
         CONTROLLER_TICK_JOB,
         KUBERNETES_SYNC_JOB,
         DISCOVER_POOLS_JOB,
+        SYNC_IP_LISTS_JOB,
         EVALUATE_ALERTS_JOB,
         SYNC_GSLB_JOB,
         PROBE_GSLB_JOB,

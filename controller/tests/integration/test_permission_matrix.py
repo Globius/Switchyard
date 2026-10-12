@@ -98,6 +98,7 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/{certificate}/renew"): ("manage", "certificate"),
     ("POST", "/tenants/{t}/certificates/{certificate}/replace"): ("manage", "certificate"),
     ("GET", "/tenants/{t}/status/engines"): READ,
+    ("GET", "/tenants/{t}/status/se-groups"): READ,
     ("GET", "/tenants/{t}/status/virtual-services"): READ,
     ("GET", "/tenants/{t}/status/stream"): READ,
     ("GET", "/tenants/{t}/jobs"): READ,

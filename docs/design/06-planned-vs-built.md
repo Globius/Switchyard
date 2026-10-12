@@ -22,7 +22,7 @@ four groups:
 4. **Phase 2 and 3 (deferred by the plan):** WAF, rate limits, Kubernetes, GSLB, tag discovery, Avi importer, health score,
    packet capture, scale-out, tenant portal.
 
-Never verified live: the `.p12` upload and the conflict view (tests with mocked responses only).
+The `.p12` upload and the conflict view were never verified live; `deploy/lab/checks/live.sh` now does (ADR 0083).
 
 ## 1. Backend capabilities (02, 05, ADRs)
 
@@ -81,7 +81,7 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Pool discovery by Proxmox tags | missing | *deferred*: phase 2 | |
 | Kubernetes connector | missing | *deferred*: phase 2 | |
 | Avi config importer | missing | *deferred*: phase 2 | |
-| Health score | missing | *deferred*: phase 2 (summary has counts only) | |
+| Health score | done | `GET /tenants/{t}/status/se-groups` (ADR 0083) | |
 | SE scale-out (automatic) | missing | *deferred*: v3; manual deploy and retire exist | |
 | GSLB, PowerDNS | missing | *deferred*: phase 3 | |
 | Packet capture job | missing | *deferred*: phase 3 | |
@@ -118,11 +118,11 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Create wizard (HTTP, TCP, UDP) | done | | | |
 | Review and apply: Objects, Config, Impact | partial | Config diff is plain text, not Monaco | as above | Monaco diff editor |
 | Approval, apply progress | done | | | |
-| Conflict resolver | partial | Built and unit-tested; never run live against a controller | *not started* (live check) | Provoke a 412 against a real stack |
+| Conflict resolver | partial | Built and unit-tested; never run live against a controller | *done*: the 412 and 428 responses checked live (`deploy/lab/checks/live.sh`, ADR 0083); the browser view is still unrun | Provoke a 412 against a real stack |
 | Change sets list, Jobs | done | | | |
 | Revisions: compare, rollback | partial | Revision "message" is read-only in the UI; the API now takes `message` on apply (ADR 0046) | *UI to wire* | Message field on the apply dialog |
 | Pools, health monitors (with test), policies | done | | | |
-| Certificates: PEM, PKCS#12, issue, renew, replace | partial | `.p12` upload never run live | *not started* (live check) | Upload a real `.p12` against OpenBao |
+| Certificates: PEM, PKCS#12, issue, renew, replace | partial | `.p12` upload never run live | *done*: `deploy/lab/checks/live.sh` (ADR 0083) | Upload a real `.p12` against OpenBao |
 | Networks, VIP pools, allocations, apply SDN | done | | | |
 | SE groups: engines, deploy, register, enrollment, retire | partial | No Placement card; routing mode and networks read-only in group settings; "Host state not reported" | *UI to wire* (host API done, ADR 0049) | Placement card, then the edit forms |
 | Routing profiles | done | | | |
@@ -143,7 +143,7 @@ Every route exists; only unknown paths render the `NotBuilt` placeholder.
 | Playwright end-to-end | missing | Not in `package.json` |
 | Phone widths, real data volumes, keyboard flows | missing | Design listed them as not checked; no one has since |
 | Contrast 4.5:1 measured | missing | Designed, not measured |
-| Live checks against a real controller (`.p12`, conflict) | missing | Mocked only |
+| Live checks against a real controller (`.p12`, conflict) | done | `deploy/lab/checks/live.sh` (ADR 0083) |
 
 ## 5. Known gaps from the brief, verified
 

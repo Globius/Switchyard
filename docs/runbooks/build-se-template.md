@@ -25,4 +25,11 @@ runs `provision.sh` inside, and converts it to a template. Deploy requests use i
 needs `ip_vs`, `ip_vs_rr`, `ip_vs_wrr`, `ip_vs_sh` and `nf_conntrack` loaded; containers have no cloud-init, so push the
 enrollment files in with `pct push` (see `replace-se.md`).
 
+**Versions and the sidecar slots.** `se-image/versions.env` pins the HAProxy series, oauth2-proxy (with its SHA-256), coraza-spoa and
+the OWASP Core Rule Set (with its SHA-256). `se-image/fetch-binaries.sh` produces `sy-agent`, the Data Plane API, oauth2-proxy,
+coraza-spoa (built from its tag) and the CRS tarball in `se-image/dist/` (`WITH_AUTH=0` / `WITH_WAF=0` skip a sidecar). Pass
+`SIDECAR_DIR=se-image/dist` to the build scripts to install what is there; without it the image still has the idle `sy-auth` and
+`coraza-spoa` slots ([adr/0083](../adr/0083-se-image-sidecar-slot-and-rolling-operations.md)). Roll a new template under a group with
+[rolling-upgrade.md](rolling-upgrade.md).
+
 Rollback: keep the previous template vmid; point `template_vmid` back.

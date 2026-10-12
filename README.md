@@ -18,6 +18,7 @@ deterministic `haproxy.cfg` from PostgreSQL. M2 (change sets, API, jobs) and M3 
 | [Runbooks](docs/runbooks/README.md) | Restore the database, rotate the CA, replace an engine, roll back, set up lab hosts |
 | [Render guide](docs/render.md) | How each object maps to HAProxy configuration |
 | [Pool discovery](docs/pool-discovery.md) | Pools filled from tagged Proxmox guests |
+| [Country and reputation lists](docs/ip-lists.md) | Deny traffic by country or reputation feed |
 | [OpenTofu provider](provider/README.md) | Manage a tenant with OpenTofu; generated from the OpenAPI |
 | [Operating guide](docs/operating.md) | Processes, configuration, login, `syctl api`, agents, housekeeping |
 | [API conventions](docs/api.md) | Auth, errors, filters, pagination, health, live events, metrics; live docs at `/api/v1/docs` and `/api/v1/redoc` |

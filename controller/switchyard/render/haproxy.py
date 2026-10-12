@@ -519,6 +519,13 @@ class _Renderer:
                 connection_rules.append(
                     f"tcp-request session reject if !{{ src -f {lst} }}{exempt}"
                 )
+        deny = _allow_list(self.policies[svc.deny_list_id]) if svc.deny_list_id else None
+        if deny is not None:
+            self.files[f"haproxy/lists/{esc.ident(deny.name)}.cidr"] = self._allow_list_text(deny)
+            if mode != "http":
+                connection_rules.append(
+                    f"tcp-request session reject if {{ src -f {self._list_path(deny)} }}"
+                )
         request_rules: list[str] = []
         tarpit_s: int | None = None
         response_rules: list[str] = []
@@ -537,7 +544,7 @@ class _Renderer:
             if protection is not None:
                 connection_rules = self._connection_protection(svc, protection) + connection_rules
                 options += self._timeout_options(protection)
-            request_rules = self._request_rules(svc, ports, allow, inst)
+            request_rules = self._request_rules(svc, ports, allow, deny, inst)
             if protection is not None:
                 request_rules += self._bot_rules(protection)
                 request_rules += self._challenge_rules(svc, protection)
@@ -1286,6 +1293,7 @@ class _Renderer:
         svc: dm.VirtualService,
         ports: list[dm.VsPort],
         allow: dm.AllowListPolicySet | None,
+        deny: dm.AllowListPolicySet | None = None,
         inst: AuthInstance | None = None,
     ) -> list[str]:
         rules: list[str] = []
@@ -1302,6 +1310,12 @@ class _Renderer:
                 f"if {{ var(txn.trusted) -m bool }} {{ hdr({header}) -m found }}",
                 f"http-request del-header {header} if !{{ var(txn.trusted) -m bool }}",
             ]
+        if deny is not None:
+            # After the client address is restored (behind a CDN ``src`` is the real client), and
+            # before anything else touches the request.
+            rules.append(
+                f"http-request deny deny_status 403 if {{ src -f {self._list_path(deny)} }}"
+            )
         rules += [
             "http-request del-header X-Forwarded-For",
             f"http-request set-header X-Forwarded-Proto https if {{ ssl_fc }}{self._g()}",

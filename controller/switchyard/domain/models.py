@@ -55,6 +55,7 @@ LdapFilter = Annotated[str, AfterValidator(v.validate_ldap_filter)]
 LdapAttr = Annotated[str, AfterValidator(v.validate_ldap_attr)]
 EmailAddress = Annotated[str, AfterValidator(v.validate_email_address)]
 CertPem = Annotated[str, AfterValidator(v.validate_cert_pem)]
+CountryCode = Annotated[str, AfterValidator(v.validate_country_code)]
 DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
 
@@ -708,6 +709,8 @@ class VirtualService(TenantOwned):
         policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.
         allow_list_id: Allow-list policy set (for example the Cloudflare ranges).
         enforce_allow_list: Reject connections from sources outside the allow list.
+        deny_list_id: Allow-list policy set whose networks are refused (for example a country or
+            reputation list, ADR 0147). Applies to the client address after restoration.
         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
             client address; honoured only when the connection source is in the allow list.
         compression: Response compression (``http`` only; ADR 0117).
@@ -726,6 +729,7 @@ class VirtualService(TenantOwned):
     policy_set_ids: tuple[UUID, ...] = ()
     allow_list_id: UUID | None = None
     enforce_allow_list: bool = False
+    deny_list_id: UUID | None = None
     restore_client_ip_header: HeaderName | None = None
     compression: Compression | None = None
     cache: CacheSettings | None = None
@@ -1194,16 +1198,45 @@ class RedirectPolicySet(TenantOwned):
 
 
 class AllowListPolicySet(TenantOwned):
-    """Source networks, for example the published Cloudflare ranges.
+    """Source networks: the published Cloudflare ranges, a country list or a reputation feed.
+
+    The same object serves as an allow list (``allow_list_id``) and as a deny list
+    (``deny_list_id``) of a virtual service.
 
     Attributes:
-        cidrs: Networks in the list.
-        managed_by: ``cloudflare`` when the daily ``sync_cloudflare_ips`` job maintains the list.
+        cidrs: Networks in the list. A list managed by ``geo`` or ``reputation`` may be empty
+            until its first sync; the sync never writes an empty list.
+        managed_by: ``cloudflare`` when the daily ``sync_cloudflare_ips`` job maintains the list;
+            ``geo`` or ``reputation`` when ``sync_ip_lists`` does (ADR 0147).
+        countries: ISO 3166 alpha-2 codes whose networks a ``geo`` list holds.
+        feed: Name of the operator-configured feed a ``reputation`` list mirrors.
+
+    Example:
+        >>> AllowListPolicySet(
+        ...     id=UUID(int=1), tenant_id=UUID(int=2), name="no-xx",
+        ...     managed_by="geo", countries=("XX",),
+        ... ).cidrs
+        ()
     """
 
     kind: Literal["allow_list"] = "allow_list"
-    cidrs: tuple[IPNetwork, ...] = Field(min_length=1)
-    managed_by: Literal["cloudflare"] | None = None
+    cidrs: tuple[IPNetwork, ...] = ()
+    managed_by: Literal["cloudflare", "geo", "reputation"] | None = None
+    countries: tuple[CountryCode, ...] = Field(default=(), max_length=250)
+    feed: Name | None = None
+
+    @model_validator(mode="after")
+    def _managed(self) -> Self:
+        geo, reputation = self.managed_by == "geo", self.managed_by == "reputation"
+        if not (geo or reputation) and not self.cidrs:
+            raise ValueError("cidrs needs at least one network")
+        if geo != bool(self.countries):
+            raise ValueError("countries is required for, and only valid with, managed_by geo")
+        if reputation != (self.feed is not None):
+            raise ValueError("feed is required for, and only valid with, managed_by reputation")
+        if len(set(self.countries)) != len(self.countries):
+            raise ValueError("countries must be unique")
+        return self
 
 
 class HeaderVariable(enum.StrEnum):

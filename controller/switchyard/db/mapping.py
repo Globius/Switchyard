@@ -140,6 +140,8 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     kind="allow_list",
                     cidrs=[str(c) for c in ps.cidrs],
                     managed_by=ps.managed_by,
+                    countries=list(ps.countries) or None,
+                    feed=ps.feed,
                 )
             )
         elif isinstance(ps, dm.AccessPolicySet | dm.ClientCertPolicySet | dm.DirectoryPolicySet):
@@ -217,6 +219,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 vip_pool_id=s.vip_pool_id,
                 default_pool_id=s.default_pool_id,
                 allow_list_id=s.allow_list_id,
+                deny_list_id=s.deny_list_id,
                 enforce_allow_list=s.enforce_allow_list,
                 restore_client_ip_header=s.restore_client_ip_header,
                 compression=s.compression.model_dump(mode="json") if s.compression else None,
@@ -495,6 +498,7 @@ def rows_to_snapshot(
                 "vip_pool_id": s.vip_pool_id,
                 "default_pool_id": s.default_pool_id,
                 "allow_list_id": s.allow_list_id,
+                "deny_list_id": s.deny_list_id,
                 "enforce_allow_list": s.enforce_allow_list,
                 "restore_client_ip_header": s.restore_client_ip_header,
                 "compression": s.compression,
@@ -564,6 +568,8 @@ def _policy_to_dict(ps: m.PolicySetRow) -> dict[str, Any]:
     if ps.kind == "allow_list":
         base["cidrs"] = [_net(c) for c in ps.cidrs or []]
         base["managed_by"] = ps.managed_by
+        base["countries"] = tuple(ps.countries or ())
+        base["feed"] = ps.feed
     elif ps.kind in ("access", "client_cert", "directory"):
         base |= ps.config or {}
     elif ps.kind == "error_pages":

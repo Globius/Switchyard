@@ -80,6 +80,9 @@ Date: YYYY-MM-DD
 | [0119](0119-weighted-pool-routes.md) | Weighted pool routes (canary and blue-green) | Accepted |
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
+| [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0147](0147-country-and-reputation-ip-lists.md) | Country and reputation IP lists | Accepted |
 | [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
 | [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
 | [0162](0162-gslb-zones-ownership-and-dnssec.md) | GSLB zones: ownership, DNSSEC, several sites | Accepted |
@@ -95,6 +98,7 @@ Date: YYYY-MM-DD
 | [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
 | [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |
 | [0150](0150-avi-importer.md) | Avi configuration importer | Accepted |
+| [0083](0083-se-image-sidecar-slot-and-rolling-operations.md) | SE image sidecar slot, pinned versions, rolling upgrade, health score | Accepted |
 | [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
 | [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
