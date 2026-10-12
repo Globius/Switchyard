@@ -88,6 +88,7 @@ from switchyard.api.schemas import (
     ChangeSetSummary,
     ControllerChangeIn,
     ControllerRead,
+    CrsCatalogueRead,
     DeployIn,
     DiscoveryGroup,
     DnsNameMatchRead,
@@ -175,7 +176,7 @@ from switchyard.api.stream_models import EVENTS
 from switchyard.db import audit_log
 from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
-from switchyard.domain import permissions
+from switchyard.domain import crs, permissions
 from switchyard.domain.changes import (
     COLLECTION,
     Action,
@@ -3640,6 +3641,24 @@ def create_app(
         if svc.dns_providers is None:
             raise ApiError(503, "DNS credentials need a writable secrets backend (OpenBao)")
         return svc.dns_providers
+
+    @router.get(
+        "/waf/crs-rules",
+        tags=["policy-sets"],
+        summary="OWASP Core Rule Set catalogue",
+        response_model=CrsCatalogueRead,
+        responses=_ok(ex.CRS_RULES),
+    )
+    async def crs_rules(who: Who) -> dict[str, Any]:
+        """Rule families and the rules most often disabled, for picking `disabled_rule_ids`.
+
+        Not the whole rule set (`complete` is false): any numeric id is accepted in a policy.
+        """
+        return {
+            "crs_version": crs.CRS_VERSION,
+            "complete": False,
+            "groups": [asdict(g) for g in crs.CATALOGUE],
+        }
 
     @router.get(
         "/acme-provider-presets",

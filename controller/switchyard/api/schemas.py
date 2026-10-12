@@ -1944,6 +1944,34 @@ class DnsNameMatchRead(ApiModel):
     candidates: list[DnsCandidateRead]
 
 
+class CrsRuleRead(ApiModel):
+    """One OWASP Core Rule Set rule."""
+
+    id: int = Field(description="The rule id as the audit log shows it.")
+    name: str = Field(description="What the rule detects.")
+    paranoia_level: int = Field(description="The lowest paranoia level (1 to 4) that runs it.")
+
+
+class CrsGroupRead(ApiModel):
+    """A family of rules."""
+
+    prefix: int = Field(description="First three digits of the family's ids (942: 942000-942999).")
+    name: str
+    description: str
+    rules: list[CrsRuleRead]
+
+
+class CrsCatalogueRead(ApiModel):
+    """The rule catalogue of the CRS release a WAF policy uses."""
+
+    crs_version: str
+    complete: bool = Field(
+        description="False: the list holds the families and the commonly disabled rules. Any "
+        "numeric id may still be put in `disabled_rule_ids`."
+    )
+    groups: list[CrsGroupRead]
+
+
 class AcmePresetRead(ApiModel):
     """A well-known certificate authority."""
 

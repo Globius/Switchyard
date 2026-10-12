@@ -1290,3 +1290,23 @@ KUBERNETES_TEST = {
     "permissions": {"list nodes": True, "list services": True, "patch services/status": True},
     "problems": [],
 }
+
+
+CRS_RULES = {
+    "crs_version": "4.8.0",
+    "complete": False,
+    "groups": [
+        {
+            "prefix": 942,
+            "name": "SQL injection",
+            "description": "SQL injection into queries.",
+            "rules": [
+                {
+                    "id": 942100,
+                    "name": "SQL injection attack detected via libinjection",
+                    "paranoia_level": 1,
+                }
+            ],
+        }
+    ],
+}

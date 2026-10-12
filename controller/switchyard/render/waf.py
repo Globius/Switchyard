@@ -114,6 +114,9 @@ def frontend_lines(svc: dm.VirtualService, policy: dm.WafPolicySet) -> tuple[lis
         options.append("option http-buffer-request")
     rules: list[str] = []
     if policy.mode == "block":
+        # The verdict is captured so the access log line says which requests the WAF stopped
+        # (``{deny}`` before the quoted request line; empty braces when it let the request through).
+        rules.append("http-request capture var(txn.coraza.action) len 8")
         rules += [
             "http-request deny deny_status 403 if { var(txn.coraza.action) -m str deny }",
             "http-request silent-drop if { var(txn.coraza.action) -m str drop }",

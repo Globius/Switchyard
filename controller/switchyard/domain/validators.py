@@ -577,6 +577,25 @@ _CLIENT_ID = re.compile(r"^[A-Za-z0-9._~:@-]{1,128}$")
 _GROUP = re.compile(r"^[A-Za-z0-9_.:/@=-]{1,128}$")
 
 
+def validate_jwks_url(value: str) -> str:
+    """Validate the address of a JSON Web Key Set: ``https``, a host, an optional port and path.
+
+    No user info, query or fragment, at most 512 characters.
+
+    Example:
+        >>> validate_jwks_url("https://login.example.test/.well-known/jwks.json")
+        'https://login.example.test/.well-known/jwks.json'
+        >>> validate_jwks_url("http://login.example.test/jwks")
+        Traceback (most recent call last):
+            ...
+        ValueError: jwks_url must be an https URL (host, optional port and path)
+    """
+    try:
+        return validate_issuer(value)
+    except ValueError:
+        raise ValueError("jwks_url must be an https URL (host, optional port and path)") from None
+
+
 def validate_issuer(value: str) -> str:
     """Validate an OpenID Connect issuer URL: ``https`` and a host, an optional port and path.
 

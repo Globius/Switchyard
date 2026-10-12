@@ -94,6 +94,10 @@ _HTTPLOG = re.compile(
 )
 
 
+#: The WAF verdict HAProxy captures before the request line: ``{deny}`` or ``{drop}``.
+_WAF_CAPTURE = re.compile(r"\{(?P<action>deny|drop)\} \"")
+
+
 def parse_httplog(line: str, fallback: datetime | None = None) -> AccessLogEntry | None:
     """Parse one HAProxy ``httplog`` line; ``None`` for a line that is not one.
 
@@ -102,6 +106,12 @@ def parse_httplog(line: str, fallback: datetime | None = None) -> AccessLogEntry
         ...                   '0/0/1/12/13 200 512 - - ---- 1/1/0/0/0 0/0 "GET /a HTTP/1.1"')
         >>> (e.client_ip, e.status, e.duration_ms, e.path)
         ('192.0.2.7', 200, 13, '/a')
+        >>> blocked = parse_httplog(
+        ...     '192.0.2.7:51514 [10/Oct/2026:08:30:00.123] vs_shop pool_web/web-1 '
+        ...     '0/0/1/12/13 403 212 - - ---- 1/1/0/0/0 0/0 {deny} "GET /a HTTP/1.1"'
+        ... )
+        >>> (blocked.waf, blocked.waf_action)
+        (True, 'deny')
     """
     m = _HTTPLOG.search(line)
     if m is None:
@@ -112,6 +122,8 @@ def parse_httplog(line: str, fallback: datetime | None = None) -> AccessLogEntry
         if fallback is None:
             return None
         at = fallback
+    verdict = _WAF_CAPTURE.search(line)
+    waf_action = verdict["action"] if verdict else None
     return AccessLogEntry(
         at=at,
         client_ip=m["client"],
@@ -123,6 +135,8 @@ def parse_httplog(line: str, fallback: datetime | None = None) -> AccessLogEntry
         duration_ms=int(m["tt"].lstrip("+")),
         method=m["method"],
         path=m["uri"],
+        waf=waf_action is not None,
+        waf_action=waf_action,
         raw=line,
     )
 
