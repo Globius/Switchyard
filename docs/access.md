@@ -38,9 +38,19 @@ For a signed-in user the origin gets `X-Auth-User`, `X-Auth-Email` and `X-Auth-G
 ID token, if you name that header). Client copies of those headers are always removed, so the origin can trust them as long as it
 accepts traffic only from the engines. Public paths carry no identity.
 
+## Identity provider requirements
+
+- `oidc.issuer` must be an **https URL with a host name** (an IP address is refused). The engine's authentication proxy fetches
+  the provider's discovery document and keys from it, so every engine must reach it.
+- The provider's TLS certificate must be trusted by the engine. A public CA is in the engine's trust store already. For a private CA
+  put its certificate(s) in `oidc.provider_ca_pem`; the controller delivers them to the proxy with its config.
+- The ID token's `email_verified` claim must be true, as oauth2-proxy requires verified e-mail addresses.
+
 ## Behavior to know
 
 - **Closed by default.** If the engine's authentication proxy is down, protected paths answer 503. Public paths keep working.
+- **Cookies:** the session cookie (`cookie_name`, default `_sy_auth`, also its `_0`, `_1` parts) and the CSRF cookies are removed from
+  the request the origin gets; other cookies pass unchanged.
 - **Sessions** are signed, encrypted cookies (`cookie_expire_s`, default 8 hours). Access to a group is re-checked at each
   refresh (`cookie_refresh_s`, default 15 minutes). To end every session of a set at once, change `cookie_secret_ref` to a new
   secret.

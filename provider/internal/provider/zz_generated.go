@@ -260,6 +260,7 @@ var Definitions = []Definition{
 				{Name: "directory_id", Kind: KindString},
 				{Name: "groups_claim", Kind: KindString},
 				{Name: "issuer", Kind: KindString},
+				{Name: "provider_ca_pem", Kind: KindString},
 				{Name: "redirect_hosts", Kind: KindList, Elem: &Attr{Kind: KindString}},
 				{Name: "scopes", Kind: KindList, Elem: &Attr{Kind: KindString}},
 			}},
@@ -403,7 +404,8 @@ var Definitions = []Definition{
 			{Name: "rules", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
 				{Name: "audiences", Kind: KindList, Elem: &Attr{Kind: KindString}},
 				{Name: "issuer", Kind: KindString, Required: true},
-				{Name: "keys", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+				{Name: "jwks_url", Kind: KindString},
+				{Name: "keys", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
 					{Name: "alg", Kind: KindString, Enum: []string{"RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512"}},
 					{Name: "kid", Kind: KindString},
 					{Name: "public_key_pem", Kind: KindString, Required: true},
