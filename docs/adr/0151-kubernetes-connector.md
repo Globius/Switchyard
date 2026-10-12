@@ -29,3 +29,10 @@ cluster, and the data plane must not depend on the controller.
 
 Up to 30 s of delay between a Service change and its change set. Drift is reported, not corrected.
 UDP Services get a UDP health monitor, TCP and HTTP ones a TCP monitor.
+
+## Addendum (lab findings)
+
+- A Gateway of our class gets `status.addresses` and the `Accepted` and `Programmed` conditions once its
+  virtual service is committed (needs `patch` on `gateways/status`, checked by the connection test).
+- `last_sync.last_change` keeps the counts and change set of the last sync that changed anything.
+

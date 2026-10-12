@@ -36,6 +36,10 @@ Check it: `curl --cacert secrets/ca.pem https://<host>:8443/api/v1/healthz` answ
 
 Use another HTTPS port with `--port 9443`. Everything it generates is in `.env` and `secrets/` (git-ignored): keep them, they
 are the instance. `--rebuild` rebuilds the controller image after a `git pull` (otherwise an existing image is reused).
+`--mtu N` (or `DOCKER_MTU` in `.env`) sets the MTU of the stack's Docker network, 1500 by default. Where the
+host's network is tunnelled (an overlay with MTU 1430, WireGuard, some clouds) the default drops large TLS
+handshake records and logins or engine calls hang; use the uplink's MTU or lower, then
+`docker compose down && sh bootstrap.sh` (the network is recreated).
 
 **IPv6 and several addresses.** `--host` takes a comma-separated list (`--host 192.0.2.10,2001:db8::10`): the first is what
 browsers and engines are told to use, every one is a name in the certificate, and an IPv6 literal is bracketed in URLs for

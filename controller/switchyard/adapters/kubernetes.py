@@ -7,11 +7,13 @@ against the CA given in the cluster's settings, and returns the raw JSON objects
 for tests.
 
 Needed RBAC (``docs/kubernetes.md`` has the manifest): ``get, list`` on ``nodes``, ``services``,
-``endpointslices``, ``gateways`` and ``httproutes``; ``patch`` on ``services/status``.
+``endpointslices``, ``gateways`` and ``httproutes``; ``patch`` on ``services/status`` and
+``gateways/status``.
 """
 
 import ssl
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import httpx
@@ -53,6 +55,12 @@ class Kube(Protocol):
 
     async def set_service_address(self, namespace: str, name: str, address: str | None) -> None:
         """Set (or clear, with ``None``) ``status.loadBalancer.ingress`` of a service."""
+        ...
+
+    async def set_gateway_status(
+        self, namespace: str, name: str, address: str | None, generation: int
+    ) -> None:
+        """Mark a Gateway accepted and programmed with ``address`` (cleared with ``None``)."""
         ...
 
     async def can(self, verb: str, resource: str, group: str = "", subresource: str = "") -> bool:
@@ -151,6 +159,42 @@ class HttpKube:
         if response.status_code >= 400:
             raise KubeError(f"PATCH {path}: HTTP {response.status_code}: {_reason(response)}")
 
+    async def set_gateway_status(
+        self, namespace: str, name: str, address: str | None, generation: int
+    ) -> None:
+        """Write ``status.addresses`` and the Accepted and Programmed conditions of a Gateway."""
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        ok = address is not None
+
+        def condition(kind: str, reason: str, message: str) -> dict[str, Any]:
+            return {
+                "type": kind,
+                "status": "True" if ok else "False",
+                "reason": reason if ok else "Pending",
+                "message": message,
+                "observedGeneration": generation,
+                "lastTransitionTime": now,
+            }
+
+        status = {
+            "addresses": [{"type": "IPAddress", "value": address}] if address else [],
+            "conditions": [
+                condition("Accepted", "Accepted", "accepted by Switchyard"),
+                condition("Programmed", "Programmed", "served by the service engines"),
+            ],
+        }
+        path = f"{GATEWAY_API}/namespaces/{namespace}/gateways/{name}/status"
+        try:
+            response = await self._http.patch(
+                path,
+                json={"status": status},
+                headers={"Content-Type": "application/merge-patch+json"},
+            )
+        except httpx.HTTPError as exc:
+            raise KubeError(f"PATCH {path}: {exc}") from exc
+        if response.status_code >= 400:
+            raise KubeError(f"PATCH {path}: HTTP {response.status_code}: {_reason(response)}")
+
     async def can(self, verb: str, resource: str, group: str = "", subresource: str = "") -> bool:
         """Ask the API server whether this token may do something."""
         review = {
@@ -208,6 +252,7 @@ class FakeKube:
     gateway_list: list[dict[str, Any]] | None = None
     route_list: list[dict[str, Any]] | None = None
     statuses: dict[tuple[str, str], str | None] = field(default_factory=dict)
+    gateway_statuses: dict[tuple[str, str], str | None] = field(default_factory=dict)
     denied: set[str] = field(default_factory=set)
     fail: set[str] = field(default_factory=set)
     closed: bool = False
@@ -254,6 +299,24 @@ class FakeKube:
             if (meta["namespace"], meta["name"]) == (namespace, name):
                 ingress = [{"ip": address}] if address else []
                 item["status"] = {"loadBalancer": {"ingress": ingress}}
+
+    async def set_gateway_status(
+        self, namespace: str, name: str, address: str | None, generation: int
+    ) -> None:
+        """Record the address and mark the gateway programmed."""
+        self._check("status")
+        self.gateway_statuses[(namespace, name)] = address
+        for item in self.gateway_list or []:
+            meta = item["metadata"]
+            if (meta["namespace"], meta["name"]) == (namespace, name):
+                ok = "True" if address else "False"
+                item["status"] = {
+                    "addresses": [{"type": "IPAddress", "value": address}] if address else [],
+                    "conditions": [
+                        {"type": "Accepted", "status": ok},
+                        {"type": "Programmed", "status": ok},
+                    ],
+                }
 
     async def can(self, verb: str, resource: str, group: str = "", subresource: str = "") -> bool:
         """Allowed unless listed in ``denied``."""

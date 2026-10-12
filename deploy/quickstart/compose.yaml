@@ -102,3 +102,9 @@ services:
     volumes: ["./tls.conf:/etc/nginx/conf.d/default.conf:ro", "./secrets:/secrets:ro"]
     depends_on: [proxy]
 volumes: {pgdata: {}, openbao-data: {}}
+# MTU of the stack's Docker network. Docker's default 1500 breaks TLS where the host's underlay is tunnelled
+# (an overlay with MTU 1430, WireGuard, some clouds): large handshake records are dropped. Set DOCKER_MTU in .env
+# (or `sh bootstrap.sh --mtu 1430`) to the host's uplink MTU, or lower.
+networks:
+  default:
+    driver_opts: {com.docker.network.driver.mtu: "${DOCKER_MTU:-1500}"}
