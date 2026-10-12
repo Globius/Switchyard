@@ -28,6 +28,7 @@ _HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9]
 _MATCH = re.compile(r"[A-Za-z0-9._:/-]{1,128}")
 _MEDIA = re.compile(r"[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/[a-z0-9][a-z0-9!#$&^_.+-]{0,62}")
 _UA = re.compile(r"[a-z0-9][a-z0-9._/+-]{1,63}")
+_SITE_KEY = re.compile(r"[A-Za-z0-9_-]{8,128}")
 _COOKIE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _HEADER = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?")
 _VALUE = re.compile(r"[A-Za-z0-9 ._~/:@+,;=*()&!'-]+")
@@ -140,6 +141,22 @@ def user_agent_token(value: str) -> str:
     """
     if not _UA.fullmatch(value):
         raise RenderError(f"unsafe user agent token {value!r}")
+    return value
+
+
+def site_key(value: str) -> str:
+    """Return ``value`` if it is a plain CAPTCHA site key, else raise.
+
+    Example:
+        >>> site_key("0x4AAAAAAAxyz")
+        '0x4AAAAAAAxyz'
+        >>> site_key('a"b')
+        Traceback (most recent call last):
+            ...
+        switchyard.render.escape.RenderError: unsafe site key 'a"b'
+    """
+    if not _SITE_KEY.fullmatch(value):
+        raise RenderError(f"unsafe site key {value!r}")
     return value
 
 

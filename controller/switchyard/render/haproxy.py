@@ -53,8 +53,8 @@ from switchyard.domain.snapshot import (
     protection_set,
     rate_limit_rules,
 )
+from switchyard.render import captcha, waf
 from switchyard.render import escape as esc
-from switchyard.render import waf
 from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
 from switchyard.render.tokens import key_file
@@ -320,6 +320,43 @@ def _cookie_value(pool: dm.Pool, member: dm.PoolMember) -> str:
     return f"m{digest[:12]}"
 
 
+_CHALLENGE_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Checking your browser</title></head>
+<body style="font-family:sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem">
+<h1>Checking your browser</h1>
+<p>This takes a moment. JavaScript must be enabled.</p>
+<noscript><p>Please enable JavaScript to continue.</p></noscript>
+<script>
+(async () => {
+  const ts = "%[date]", ip = "%[src]", salt = "@SALT@", zeros = "0".repeat(@ZEROS@);
+  const enc = new TextEncoder();
+  for (let n = 0; ; n++) {
+    const v = ts + "-" + n;
+    const d = await crypto.subtle.digest("SHA-256", enc.encode(v + "|" + ip + "|" + salt));
+    const h = Array.from(new Uint8Array(d), b => b.toString(16).padStart(2, "0")).join("");
+    if (h.startsWith(zeros)) {
+      const secure = location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = "sy_chal=" + v + "; Path=/; Max-Age=@VALID@; SameSite=Lax" + secure;
+      location.reload();
+      return;
+    }
+  }
+})();
+</script>
+</body></html>
+"""
+
+
+def _challenge_page(difficulty: int, valid_for_s: int, salt: str) -> str:
+    """The challenge page; ``%[date]`` and ``%[src]`` are filled in by HAProxy per request."""
+    return (
+        _CHALLENGE_PAGE.replace("@SALT@", salt)
+        .replace("@ZEROS@", str(int(difficulty)))
+        .replace("@VALID@", str(int(valid_for_s)))
+    )
+
+
 def _map_rule(converter: str, path: str) -> str:
     """Route by map lookup.
 
@@ -358,6 +395,7 @@ class _Renderer:
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
         self.uses_waf = False
+        self.lua_loads: list[str] = []
         self.limit_backends: list[dict[str, Any]] = []
         self.instances = {i.service.id: i for i in auth_instances(snapshot, self.group.id)}
         self.guard = ""
@@ -391,6 +429,7 @@ class _Renderer:
                 fingerprint=fingerprint,
                 peers=self._peers(),
                 caches=self._caches(),
+                lua_loads=self.lua_loads,
                 waf_backend=waf.backend_lines() if self.uses_waf else [],
             )
 
@@ -499,6 +538,8 @@ class _Renderer:
             request_rules = self._request_rules(svc, ports, allow, inst)
             if protection is not None:
                 request_rules += self._bot_rules(protection)
+                request_rules += self._challenge_rules(svc, protection)
+                request_rules += self._captcha_rules(svc, protection)
             tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
@@ -569,7 +610,7 @@ class _Renderer:
     def _connection_protection(
         self, svc: dm.VirtualService, protection: dm.ProtectionPolicySet
     ) -> list[str]:
-        """Per-source connection limits, tracked at connection time (ADR 0150)."""
+        """Per-source connection limits, tracked at connection time (ADR 0170)."""
         rules: list[str] = []
         if protection.exempt_cidrs:
             rules.append(f"tcp-request connection accept if {self._exempt(protection)}")
@@ -601,6 +642,82 @@ class _Renderer:
                 f"tcp-request connection reject if {{ sc_conn_rate({slot},{table}) gt {limit} }}"
             )
         return rules
+
+    def _challenge_rules(
+        self, svc: dm.VirtualService, protection: dm.ProtectionPolicySet
+    ) -> list[str]:
+        """The JavaScript proof-of-work gate (ADR 0171).
+
+        The cookie ``sy_chal`` holds ``<epoch>-<counter>``. A request passes when
+        ``sha256("<cookie>|<client address>|<salt>")`` starts with the required zeros and the epoch
+        is at most ``valid_for_s`` old. The salt is public and per service, so a solved cookie is
+        good for one client address and one service only.
+        """
+        gate = protection.challenge
+        if gate is None:
+            return []
+        name = esc.ident(svc.name)
+        salt = hashlib.sha256(f"{svc.id}/{protection.id}".encode()).hexdigest()[:16]
+        self.files[f"haproxy/challenge/{name}.html"] = _challenge_page(
+            gate.difficulty, gate.valid_for_s, salt
+        )
+        skips = []
+        if protection.exempt_cidrs:
+            skips.append(f"!{self._exempt(protection)}")
+        if gate.skip_paths:
+            paths = " ".join(esc.arg(p) for p in sorted(gate.skip_paths))
+            skips.append(f"!{{ path_beg {paths} }}")
+        if gate.skip_user_agents:
+            words = " ".join(esc.user_agent_token(t) for t in sorted(gate.skip_user_agents))
+            skips.append(f"!{{ req.hdr(user-agent),lower -m sub {words} }}")
+        unsolved = " ".join([*skips, "!{ var(txn.sy_pass) -m bool }"])
+        has = "if { var(txn.sy_cv) -m found }"
+        zeros = "0" * gate.difficulty
+        page = f"{BASE_DIR}/challenge/{name}.html"
+        return [
+            "http-request set-var(txn.sy_cv) req.cook(sy_chal) if { req.cook(sy_chal) -m found }",
+            f"http-request set-var(txn.sy_ts) var(txn.sy_cv),field(1,-),add(0) {has}",
+            f'http-request set-var-fmt(txn.sy_in) "%[var(txn.sy_cv)]|%[src]|{salt}" {has}',
+            f"http-request set-var(txn.sy_hash) var(txn.sy_in),sha2(256),hex {has}",
+            f"http-request set-var(txn.sy_age) date,sub(txn.sy_ts) {has}",
+            "http-request set-var(txn.sy_pass) bool(true)"
+            f" if {{ var(txn.sy_hash) -m beg {zeros} }} {{ var(txn.sy_age) -m int ge 0 }}"
+            f" {{ var(txn.sy_age) -m int le {gate.valid_for_s} }}",
+            "http-request return status 200 content-type text/html hdr cache-control no-store"
+            f" lf-file {page} if {{ method GET HEAD }} {unsolved}",
+            f"http-request deny deny_status 403 if {unsolved}",
+        ]
+
+    def _captcha_rules(
+        self, svc: dm.VirtualService, protection: dm.ProtectionPolicySet
+    ) -> list[str]:
+        """The CAPTCHA gate: Lua check, Lua verify service, page for the unverified (ADR 0172)."""
+        gate = protection.captcha
+        if gate is None:
+            return []
+        name = esc.ident(svc.name)
+        ident = captcha.lua_id(svc)
+        self.files[f"haproxy/captcha/{name}.lua"] = captcha.render_lua(svc, gate)
+        self.files[f"haproxy/captcha/{name}.html"] = captcha.render_page(gate)
+        self.lua_loads.append(f"{BASE_DIR}/captcha/{name}.lua")
+        skips = []
+        if protection.exempt_cidrs:
+            skips.append(f"!{self._exempt(protection)}")
+        if gate.skip_paths:
+            paths = " ".join(esc.arg(p) for p in sorted(gate.skip_paths))
+            skips.append(f"!{{ path_beg {paths} }}")
+        if gate.skip_user_agents:
+            words = " ".join(esc.user_agent_token(t) for t in sorted(gate.skip_user_agents))
+            skips.append(f"!{{ req.hdr(user-agent),lower -m sub {words} }}")
+        unsolved = " ".join([*skips, "!{ var(txn.sy_pass) -m bool }"])
+        return [
+            f"http-request lua.sy_cap_check_{ident}",
+            f"http-request use-service lua.sy_cap_{ident} if {{ path {captcha.SUBMIT_PATH} }}"
+            " { method POST }",
+            "http-request return status 200 content-type text/html hdr cache-control no-store"
+            f" lf-file {BASE_DIR}/captcha/{name}.html if {{ method GET HEAD }} {unsolved}",
+            f"http-request deny deny_status 403 if {unsolved}",
+        ]
 
     @staticmethod
     def _exempt(protection: dm.ProtectionPolicySet) -> str:

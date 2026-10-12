@@ -1,4 +1,4 @@
-# 0150. Bot and DDoS protection set
+# 0170. Bot and DDoS protection set
 
 Status: Accepted
 Date: 2026-10-12

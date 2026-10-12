@@ -154,3 +154,116 @@ def test_the_renderer_refuses_an_unsafe_token_even_if_validation_was_bypassed() 
     broken = snap.model_copy(update={"policy_sets": (bad,)})
     with pytest.raises(RenderError, match="user agent token"):
         render_haproxy(broken, broken.se_groups[0].id)
+
+
+# -- JavaScript challenge (ADR 0171) -------------------------------------------------------------
+
+
+def test_challenge_bounds_and_it_counts_as_a_protection() -> None:
+    for bad in (
+        {"difficulty": 2},
+        {"difficulty": 6},
+        {"valid_for_s": 10},
+        {"skip_paths": ["/a", "/a"]},
+    ):
+        with pytest.raises(ValidationError):
+            dm.JsChallenge.model_validate(bad)
+    snapshot_from_mapping(with_sets(protection(challenge={})))
+
+
+def test_challenge_rules_page_and_skips() -> None:
+    d = with_sets(
+        protection(
+            challenge={
+                "difficulty": 3,
+                "valid_for_s": 600,
+                "skip_paths": ["/api"],
+                "skip_user_agents": ["googlebot"],
+            },
+            exempt_cidrs=["198.51.100.0/24"],
+        )
+    )
+    snap = snapshot_from_mapping(d)
+    result = render_haproxy(snap, snap.se_groups[0].id)
+    cfg = result.files["haproxy/haproxy.cfg"]
+    assert "{ var(txn.sy_hash) -m beg 000 }" in cfg and "le 600 }" in cfg
+    assert "lf-file /etc/switchyard/haproxy/challenge/web.html" in cfg
+    assert "!{ path_beg /api }" in cfg and "-m sub googlebot" in cfg
+    page = result.files["haproxy/challenge/web.html"]
+    assert 'zeros = "0".repeat(3)' in page and "Max-Age=600" in page and "%[src]" in page
+    assert "@" not in page.replace("@", "", 0) or "@SALT@" not in page
+
+
+# -- CAPTCHA gate (ADR 0172) ---------------------------------------------------------------------
+
+GATE = {
+    "provider": "turnstile",
+    "site_key": "1x00000000000000000000AA",
+    "secret_ref": "kv/tenants/acme/captcha/web",
+    "skip_paths": ["/api"],
+}
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"provider": "recaptcha"},
+        {"site_key": "short"},
+        {"site_key": 'bad"key-0000'},
+        {"valid_for_s": 10},
+        {"skip_paths": ["/a", "/a"]},
+    ],
+)
+def test_bad_captcha_settings_are_refused(bad: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        snapshot_from_mapping(with_sets(protection(captcha={**GATE, **bad})))
+
+
+def test_challenge_and_captcha_exclude_each_other() -> None:
+    with pytest.raises(ValidationError, match="not both"):
+        snapshot_from_mapping(with_sets(protection(challenge={}, captcha=GATE)))
+
+
+def test_captcha_files_rules_and_widgets() -> None:
+    d = with_sets(protection(captcha=GATE))
+    snap = snapshot_from_mapping(d)
+    files = render_haproxy(snap, snap.se_groups[0].id).files
+    cfg = files["haproxy/haproxy.cfg"]
+    assert "lua-load /etc/switchyard/haproxy/captcha/web.lua" in cfg
+    assert "httpclient.ssl.verify required" in cfg and "resolvers sy_dns" in cfg
+    assert "use-service lua.sy_cap_" in cfg and "{ path /.sy/captcha } { method POST }" in cfg
+    assert "!{ path_beg /api }" in cfg
+    lua = files["haproxy/captcha/web.lua"]
+    assert "challenges.cloudflare.com/turnstile/v0/siteverify" in lua
+    assert "cf-turnstile-response" in lua and "/etc/switchyard/certs/captcha-web.secret" in lua
+    assert "@" not in lua.replace("\\", "")  # every placeholder was filled
+    page = files["haproxy/captcha/web.html"]
+    assert 'data-sitekey="1x00000000000000000000AA"' in page and "turnstile" in page
+    hcaptcha = with_sets(protection(captcha={**GATE, "provider": "hcaptcha"}))
+    snap = snapshot_from_mapping(hcaptcha)
+    files = render_haproxy(snap, snap.se_groups[0].id).files
+    assert "api.hcaptcha.com/siteverify" in files["haproxy/captcha/web.lua"]
+    assert "h-captcha" in files["haproxy/captcha/web.html"]
+
+
+def test_the_captcha_secret_must_stay_in_the_tenants_namespace() -> None:
+    d = with_sets(protection(captcha={**GATE, "secret_ref": "kv/tenants/other/captcha"}))
+    got = [(p.path, p.code) for p in validate_snapshot(snapshot_from_mapping(d))]
+    assert got == [("policy_sets.shield.captcha.secret_ref", "secret_ref_not_allowed")]
+
+
+async def test_the_provider_secret_travels_in_the_bundle_only() -> None:
+    from switchyard.adapters.secrets import MemorySecrets
+    from switchyard.pipeline.bundles import BundleError, engine_files
+    from switchyard.render.routing import EngineSlot
+
+    snap = snapshot_from_mapping(with_sets(protection(captcha=GATE)))
+    group = snap.se_groups[0]
+    slot = EngineSlot("se-1", 0, "192.0.2.5")
+    cert = {"kv/tenants/acme/certs/wild-example-test": "BEGIN CERTIFICATE PRIVATE KEY"}
+    store = MemorySecrets({GATE["secret_ref"]: "topsecret\n", **cert})
+    files = await engine_files(snap, group, slot, store)
+    assert files["certs/captcha-web.secret"] == "topsecret\n"
+    assert "topsecret" not in "".join(v for k, v in render_haproxy(snap, group.id).files.items())
+    with pytest.raises(BundleError):
+        await engine_files(snap, group, slot, MemorySecrets(cert))

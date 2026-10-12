@@ -4,13 +4,13 @@ The settings of a WAF policy are stored as the single element of ``policy_set.ru
 other policy kinds, so the payload constraint is unchanged.
 
 Revision ID: 0032
-Revises: 0028
+Revises: 0031
 """
 
 from alembic import op
 
 revision = "0032"
-down_revision = "0028"
+down_revision = "0031"
 branch_labels = None
 depends_on = None
 

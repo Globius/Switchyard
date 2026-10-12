@@ -5565,6 +5565,52 @@ export interface components {
             size_mb: number;
         };
         /**
+         * CaptchaGate
+         * @description Ask new clients to pass a CAPTCHA from a provider before they get any answer (ADR 0172).
+         *
+         *     The page shows the provider's widget; a Lua service on the engine asks the provider to verify
+         *     the answer, then sets a signed cookie. The provider's secret key is kept in OpenBao.
+         *
+         *     Attributes:
+         *         provider: ``turnstile`` (Cloudflare) or ``hcaptcha``.
+         *         site_key: The public site key of the widget.
+         *         secret_ref: OpenBao path of the provider's secret key (never the key itself).
+         *         valid_for_s: How long a passed CAPTCHA lasts.
+         *         skip_paths: Paths that are never gated (``path_beg``), such as an API.
+         *         skip_user_agents: Lower-case ``User-Agent`` substrings that are never gated.
+         *
+         *     Example:
+         *         >>> CaptchaGate(provider="hcaptcha", site_key="10000000-ffff-ffff-ffff-000000000001",
+         *         ...             secret_ref="tenants/acme/captcha").valid_for_s
+         *         3600
+         */
+        CaptchaGate: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "turnstile" | "hcaptcha";
+            /** Secret Ref */
+            secret_ref: string;
+            /** Site Key */
+            site_key: string;
+            /**
+             * Skip Paths
+             * @default []
+             */
+            skip_paths: string[];
+            /**
+             * Skip User Agents
+             * @default []
+             */
+            skip_user_agents: string[];
+            /**
+             * Valid For S
+             * @default 3600
+             */
+            valid_for_s: number;
+        };
+        /**
          * CertIdentity
          * @description Map a client certificate to a user and groups (ADR 0136).
          *
@@ -8183,6 +8229,49 @@ export interface components {
          */
         JobState: "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
         /**
+         * JsChallenge
+         * @description Make a new client prove it runs a browser before it gets any answer (ADR 0171).
+         *
+         *     The page asks the browser to find a number whose SHA-256 (with the client address) starts
+         *     with ``difficulty`` zero hex digits: a fraction of a second of work for a person and a cost
+         *     per client for a bot farm. The result is kept in a cookie for ``valid_for_s``. Nothing secret
+         *     is involved.
+         *
+         *     Attributes:
+         *         difficulty: Leading zero hex digits required; 3 is about 4,000 hashes, 4 about 65,000,
+         *             5 about a million.
+         *         valid_for_s: How long a solved challenge lasts.
+         *         skip_paths: Paths that are never challenged (``path_beg``), such as an API.
+         *         skip_user_agents: Lower-case ``User-Agent`` substrings that are never challenged (search
+         *             engines). The header is easy to fake; use it only where that risk is acceptable.
+         *
+         *     Example:
+         *         >>> JsChallenge().difficulty
+         *         4
+         */
+        JsChallenge: {
+            /**
+             * Difficulty
+             * @default 4
+             */
+            difficulty: number;
+            /**
+             * Skip Paths
+             * @default []
+             */
+            skip_paths: string[];
+            /**
+             * Skip User Agents
+             * @default []
+             */
+            skip_user_agents: string[];
+            /**
+             * Valid For S
+             * @default 3600
+             */
+            valid_for_s: number;
+        };
+        /**
          * JwtKey
          * @description A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.
          *
@@ -10008,7 +10097,7 @@ export interface components {
         };
         /**
          * ProtectionPolicySet
-         * @description Bot and DDoS protection for a service (ADR 0150).
+         * @description Bot and DDoS protection for a service (ADR 0170).
          *
          *     Per-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits
          *     stay in ``rate_limit`` sets.
@@ -10026,6 +10115,8 @@ export interface components {
          *         deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.
          *         bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.
          *         exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).
+         *         challenge: A JavaScript proof-of-work challenge for new clients (ADR 0171).
+         *         captcha: A CAPTCHA from a provider instead (ADR 0172); not together with ``challenge``.
          *         table_size: Addresses the connection table holds.
          *
          *     Example:
@@ -10053,6 +10144,8 @@ export interface components {
              * @enum {string}
              */
             bot_action: "deny" | "silent_drop";
+            captcha?: components["schemas"]["CaptchaGate"] | null;
+            challenge?: components["schemas"]["JsChallenge"] | null;
             /** Client Timeout S */
             client_timeout_s?: number | null;
             /**
@@ -10123,6 +10216,8 @@ export interface components {
              * @enum {string}
              */
             bot_action: "deny" | "silent_drop";
+            captcha?: components["schemas"]["CaptchaGate"] | null;
+            challenge?: components["schemas"]["JsChallenge"] | null;
             /** Client Timeout S */
             client_timeout_s?: number | null;
             /**
@@ -10168,6 +10263,8 @@ export interface components {
             block_scanners?: boolean | null;
             /** Bot Action */
             bot_action?: ("deny" | "silent_drop") | null;
+            captcha?: components["schemas"]["CaptchaGate"] | null;
+            challenge?: components["schemas"]["JsChallenge"] | null;
             /** Client Timeout S */
             client_timeout_s?: number | null;
             /** Connection Rate Period S */
@@ -10213,6 +10310,8 @@ export interface components {
              * @enum {string}
              */
             bot_action: "deny" | "silent_drop";
+            captcha?: components["schemas"]["CaptchaGate"] | null;
+            challenge?: components["schemas"]["JsChallenge"] | null;
             /**
              * Changed Fields
              * @description Fields a draft changed; empty outside a draft.

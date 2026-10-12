@@ -421,3 +421,16 @@ func TestAuthProxyConfigsAreSecretFlatCfgFilesRestartedAndStoppedWithTheirFiles(
 		t.Fatalf("dropping the last access policy must stop the proxies: %v", r.calls)
 	}
 }
+
+func TestCertsDirectoryAlsoHoldsCaptchaSecrets(t *testing.T) {
+	for rel, want := range map[string]bool{
+		"certs/captcha-web.secret": true,
+		"certs/web.pem":            true,
+		"certs/web.crtlist":        false,
+		"certs/sub/x.secret":       false,
+	} {
+		if got := managedFile(rel); got != want {
+			t.Errorf("managedFile(%q) = %v, want %v", rel, got, want)
+		}
+	}
+}

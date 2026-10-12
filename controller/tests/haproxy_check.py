@@ -64,7 +64,11 @@ class CheckResult:
     @property
     def warnings(self) -> list[str]:
         """Lines HAProxy reported as ``[WARNING]``."""
-        return [line for line in self.output.splitlines() if "[WARNING]" in line]
+        return [
+            line
+            for line in self.output.splitlines()
+            if "[WARNING]" in line and "can't connect socket for nameserver" not in line
+        ]
 
 
 def _tar(files: Mapping[str, str]) -> bytes:

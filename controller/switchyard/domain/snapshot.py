@@ -464,6 +464,10 @@ def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
             base = f"policy_sets.{ps.name}.oidc"
             refs.append((f"{base}.client_secret_ref", ps.tenant_id, ps.oidc.client_secret_ref))
             refs.append((f"{base}.cookie_secret_ref", ps.tenant_id, ps.oidc.cookie_secret_ref))
+        if isinstance(ps, ProtectionPolicySet) and ps.captcha is not None:
+            refs.append(
+                (f"policy_sets.{ps.name}.captcha.secret_ref", ps.tenant_id, ps.captcha.secret_ref)
+            )
     for profile in snapshot.routing_profiles:
         if isinstance(profile, BgpProfile):
             for i, peer in enumerate(profile.peers):
@@ -751,7 +755,7 @@ def stick_table_entries(snapshot: "Snapshot", tenant_id: UUID) -> int:
 def _check_protection(
     s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
 ) -> None:
-    """A service carries at most one protection set (``too_many_protection_sets``, ADR 0150)."""
+    """A service carries at most one protection set (``too_many_protection_sets``, ADR 0170)."""
     sets = [pid for pid in s.policy_set_ids if isinstance(policies.get(pid), ProtectionPolicySet)]
     if len(sets) > 1:
         problems.append(
