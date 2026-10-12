@@ -10,6 +10,7 @@ import pytest
 from switchyard.adapters.telemetry import (
     HttpTelemetry,
     TelemetryError,
+    engine_promql,
     frontend_name,
     parse_httplog,
     promql,
@@ -45,6 +46,57 @@ def test_every_query_carries_the_tenant_label_and_refuses_unsafe_names() -> None
     assert frontend_name("shop") == "vs_shop"
     with pytest.raises(RenderError):
         promql(TENANT, 'x"} or {tenant="other')
+
+
+def test_engine_queries_carry_tenant_first_and_refuse_unsafe_names() -> None:
+    queries = engine_promql(TENANT, "se-a-01")
+    assert set(queries) == {
+        "cpu_percent",
+        "memory_used_bytes",
+        "haproxy_sessions",
+        "traffic_in_bps",
+        "vcpus",
+        "memory_total_bytes",
+    }
+    for query in queries.values():
+        # every selector starts with the tenant, then the engine
+        assert query.count("{") == query.count(f'{{tenant="{TENANT}",engine="se-a-01"')
+    with pytest.raises(RenderError):
+        engine_promql(TENANT, 'x"} or {tenant="other')
+
+
+async def test_engine_metrics_are_queried_per_tenant_and_engine_at_the_end_of_the_range() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path == "/api/v1/query":
+            return httpx.Response(
+                200,
+                json={"status": "success", "data": {"result": [{"value": [1760000000, "4"]}]}},
+            )
+        if "node_cpu_seconds_total" in request.url.params["query"]:
+            return httpx.Response(200, json={"status": "success", "data": {"result": []}})
+        return httpx.Response(
+            200,
+            json={
+                "status": "success",
+                "data": {"result": [{"values": [[1760000000, "7"], [1760000030, "NaN"]]}]},
+            },
+        )
+
+    t = HttpTelemetry(
+        "http://prom", client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    end = datetime(2026, 10, 10, 8, 30, tzinfo=UTC)
+    m = await t.engine_metrics(TENANT, "se-a-01", window_s=3600, step_s=30, until=end)
+    assert m.cpu_percent == [] and m.summary.cpu_percent is None  # no data is not zero
+    assert [p.v for p in m.haproxy_sessions] == [7.0]  # NaN dropped: a gap
+    assert m.summary.vcpus == 4 and m.summary.memory_total_bytes == 4
+    assert all(f'tenant="{TENANT}",engine="se-a-01"' in r.url.params["query"] for r in seen)
+    ranges = [r for r in seen if r.url.path == "/api/v1/query_range"]
+    assert {float(r.url.params["end"]) for r in ranges} == {end.timestamp()}
+    assert {float(r.url.params["start"]) for r in ranges} == {end.timestamp() - 3600}
 
 
 async def test_the_http_client_queries_and_parses() -> None:

@@ -18,6 +18,7 @@ from switchyard.jobs.progress import JobProgress
 from switchyard.jobs.queue import Job
 from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
+from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator
 from switchyard.services.certificates import (
     ISSUE_CERT_JOB,
     RENEW_CERTS_JOB,
@@ -27,6 +28,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
@@ -55,6 +57,8 @@ def build_handlers(
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
     members: MemberService | None = None,
+    discovery: DiscoveryService | None = None,
+    alerts: AlertEvaluator | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -62,7 +66,9 @@ def build_handlers(
         db: Database handles.
         pipeline: The apply pipeline.
         members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
+        discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
+        alerts: The alert evaluator; ``None`` skips the ``evaluate_alerts`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
@@ -103,6 +109,18 @@ def build_handlers(
             return dict(await gc.run())
 
         handlers[GC_JOB] = collect_garbage
+    if discovery is not None:
+
+        async def discover_pool_members(job: Job) -> dict[str, Any]:
+            return {"changed": await discovery.run()}
+
+        handlers[DISCOVER_POOLS_JOB] = discover_pool_members
+    if alerts is not None:
+
+        async def evaluate_alerts(job: Job) -> dict[str, Any]:
+            return dict(await alerts.run())
+
+        handlers[EVALUATE_ALERTS_JOB] = evaluate_alerts
     if certs is not None:
 
         async def issue_cert(job: Job) -> dict[str, Any]:

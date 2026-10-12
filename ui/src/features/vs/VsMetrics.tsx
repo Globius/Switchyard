@@ -1,18 +1,20 @@
 /**
- * Metrics on the VS Overview: four single-series panels drawn in the UI from the tenant-scoped
- * metrics API (never a Grafana iframe, which would let a viewer change the tenant variable).
- * "Open in Grafana" stays as a link. Missing data is a gap, never 0.
+ * The Metrics section (design v52): four single-series panels drawn in the UI from the
+ * tenant-scoped metrics API (never a Grafana iframe, which would let a viewer change the tenant
+ * variable). {@link VsMetrics} is the one on the VS Overview; `EngineMetrics` (SE groups) uses the
+ * same {@link MetricsView}. "Open in Grafana" stays a link. Missing data is a gap, never 0.
  */
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
-import { useMe } from "@/auth/session";
+import type { components } from "@/api/schema";
 import { TimeSeries, type Point } from "@/components/sy/TimeSeries";
 import { UnavailableState } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { GrafanaLink } from "./GrafanaLink";
 
 const RANGES: [number, string][] = [
   [900, "15 m"],
@@ -28,33 +30,12 @@ const REFRESH: [number, string][] = [
   [60, "Refresh every 1 min"],
 ];
 
-function useSeries(tenant: string, id: string, windowS: number, refreshS: number) {
-  return useQuery({
-    queryKey: ["t", tenant, "metrics", "vs", id, { windowS }],
-    placeholderData: keepPreviousData,
-    refetchInterval: refreshS > 0 ? refreshS * 1000 : false,
-    queryFn: async () =>
-      unwrap(
-        await api.GET("/api/v1/tenants/{t}/virtual-services/{object_id}/metrics", {
-          params: { path: { t: tenant, object_id: id }, query: { window_s: windowS } },
-        }),
-      ),
-  });
-}
-
 /** 1,234 / 56 / 7.5: whole numbers from 10 up, one decimal below. */
 export function fmt(v: number): string {
   if (v >= 100) return Math.round(v).toLocaleString();
   if (v >= 10) return v.toFixed(0);
   return v.toFixed(1).replace(/\.0$/, "");
 }
-
-const PANELS = [
-  { key: "rps", title: "Requests", unit: "per second", scale: 1 },
-  { key: "p95_ms", title: "Latency p95", unit: "ms", scale: 1 },
-  { key: "error_5xx_ratio", title: "Server errors (5xx)", unit: "% of responses", scale: 100 },
-  { key: "active_connections", title: "Active connections", unit: "count", scale: 1 },
-] as const;
 
 function offsetLabel(): string {
   const m = -new Date().getTimezoneOffset();
@@ -64,22 +45,57 @@ function offsetLabel(): string {
   return `UTC${sign}${h}${min ? `:${String(min).padStart(2, "0")}` : ""}`;
 }
 
-export function VsMetrics({
+/** One panel, already scaled to the unit it shows. */
+export interface PanelSpec {
+  key: string;
+  title: string;
+  unit: string;
+  points: Point[];
+  /** The API's latest value, scaled; null or undefined shows "—". */
+  now: number | null | undefined;
+}
+
+/** What a scope's API answer turns into. */
+export interface PanelSet {
+  stepS: number;
+  windowS: number;
+  panels: PanelSpec[];
+}
+
+interface Answer<M> {
+  available: boolean;
+  reason?: string | null;
+  metrics?: M | null;
+}
+
+/** The section: controls, the four panels (or a state), the table view and the Grafana link. */
+export function MetricsView<M>({
   tenant,
-  id,
-  groupName,
+  queryKey,
+  fetcher,
+  toPanels,
+  scopeLine,
+  grafanaService,
 }: {
   tenant: string;
-  id: string;
-  groupName?: string;
+  /** Identifies the scope in the query cache; the range is added. */
+  queryKey: unknown[];
+  fetcher: (windowS: number) => Promise<Answer<M>>;
+  toPanels: (m: M) => PanelSet;
+  scopeLine: string;
+  /** The service whose Grafana dashboard "Open in Grafana" lands on, if any. */
+  grafanaService?: string;
 }) {
-  const me = useMe();
   const [windowS, setWindowS] = useState(3600);
   const [refreshS, setRefreshS] = useState(30);
   const [table, setTable] = useState(false);
-  const q = useSeries(tenant, id, windowS, refreshS);
-  const grafana = me.data?.links?.grafana;
-  const m = q.data?.available ? q.data.metrics : null;
+  const q = useQuery({
+    queryKey: [...queryKey, { windowS }],
+    placeholderData: keepPreviousData,
+    refetchInterval: refreshS > 0 ? refreshS * 1000 : false,
+    queryFn: () => fetcher(windowS),
+  });
+  const set = q.data?.available && q.data.metrics ? toPanels(q.data.metrics) : null;
   const rangeLabel = RANGES.find(([s]) => s === windowS)?.[1] ?? "";
 
   let body;
@@ -113,31 +129,32 @@ export function VsMetrics({
     }
   } else if (!q.data.available) {
     body = <UnavailableState title={t("Metrics unavailable")} reason={q.data.reason} />;
-  } else if (!m || PANELS.every((p) => m[p.key].length === 0)) {
+  } else if (!set || set.panels.every((p) => p.points.length === 0)) {
     body = <UnavailableState title={t("No data for this period")} />;
   } else if (table) {
+    const rows = set.panels[0]!.points;
     body = (
       <div className="max-h-96 overflow-auto rounded-lg border">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-muted text-left text-muted-foreground">
             <tr>
               <th className="px-3 py-2 font-medium">{t("Time")}</th>
-              {PANELS.map((p) => (
+              {set.panels.map((p) => (
                 <th key={p.key} className="px-3 py-2 font-medium">
-                  {t(p.title)} ({p.unit})
+                  {p.title} ({p.unit})
                 </th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y font-mono">
-            {m.rps.map((p, i) => (
+            {rows.map((p, i) => (
               <tr key={p.t}>
                 <td className="px-3 py-1.5">{new Date(p.t).toLocaleTimeString()}</td>
-                {PANELS.map((pn) => {
-                  const c: Point | undefined = m[pn.key][i];
+                {set.panels.map((pn) => {
+                  const c: Point | undefined = pn.points[i];
                   return (
                     <td key={pn.key} className="px-3 py-1.5">
-                      {c ? fmt(c.v * pn.scale) : "—"}
+                      {c ? fmt(c.v) : "—"}
                     </td>
                   );
                 })}
@@ -150,30 +167,26 @@ export function VsMetrics({
   } else {
     body = (
       <div className="grid gap-4 sm:grid-cols-2">
-        {PANELS.map((p) => {
-          const pts = m[p.key].map((x) => ({ ...x, v: x.v * p.scale }));
-          const now = m.summary[p.key];
-          return (
-            <section key={p.key} className="rounded-lg border bg-card p-3">
-              <header className="mb-1 flex items-baseline gap-2 text-sm">
-                <h3 className="font-semibold whitespace-nowrap">{t(p.title)}</h3>
-                <span className="truncate text-xs text-muted-foreground">{p.unit}</span>
-                <span className="ml-auto font-mono text-xs">
-                  {now == null ? "—" : fmt(now * p.scale)}{" "}
-                  <span className="font-sans text-muted-foreground">{t("now")}</span>
-                </span>
-              </header>
-              <TimeSeries
-                points={pts}
-                stepS={m.step_s}
-                windowS={m.window_s}
-                label={`${t(p.title)}, ${p.unit}`}
-                format={fmt}
-                unit={p.unit}
-              />
-            </section>
-          );
-        })}
+        {set.panels.map((p) => (
+          <section key={p.key} className="rounded-lg border bg-card p-3">
+            <header className="mb-1 flex items-baseline gap-2 text-sm">
+              <h3 className="font-semibold whitespace-nowrap">{p.title}</h3>
+              <span className="truncate text-xs text-muted-foreground">{p.unit}</span>
+              <span className="ml-auto font-mono text-xs">
+                {p.now == null ? "—" : fmt(p.now)}{" "}
+                <span className="font-sans text-muted-foreground">{t("now")}</span>
+              </span>
+            </header>
+            <TimeSeries
+              points={p.points}
+              stepS={set.stepS}
+              windowS={set.windowS}
+              label={`${p.title}, ${p.unit}`}
+              format={fmt}
+              unit={p.unit}
+            />
+          </section>
+        ))}
       </div>
     );
   }
@@ -184,11 +197,7 @@ export function VsMetrics({
         <h2 id="metrics-h" className="text-base font-semibold">
           {t("Metrics")}
         </h2>
-        <span className="text-xs text-muted-foreground">
-          {groupName
-            ? t("this service, summed over the engines of {group}", { group: groupName })
-            : t("this service")}
-        </span>
+        <span className="text-xs text-muted-foreground">{scopeLine}</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <div
             role="group"
@@ -233,26 +242,17 @@ export function VsMetrics({
         </div>
       </header>
       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        {grafana && (
-          <a
-            href={grafana}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-          >
-            <ExternalLink className="size-3.5" aria-hidden /> {t("Open in Grafana")}
-          </a>
-        )}
-        {m && (
+        <GrafanaLink tenant={tenant} service={grafanaService} />
+        {set && (
           <span>
             {t("Last {range}, {step} s steps · times in your browser's zone ({zone})", {
               range: rangeLabel,
-              step: m.step_s,
+              step: set.stepS,
               zone: offsetLabel(),
             })}
           </span>
         )}
-        {m && (
+        {set && (
           <button
             type="button"
             className="ml-auto text-sm text-primary hover:underline"
@@ -263,7 +263,7 @@ export function VsMetrics({
         )}
       </div>
       {body}
-      {m && !table && (
+      {set && !table && (
         <p className="text-xs text-muted-foreground">
           {t(
             "The grey band is a gap with no samples; lines break there instead of joining. Hover or use the arrow keys for the value at a time; the table view lists the same samples.",
@@ -271,5 +271,64 @@ export function VsMetrics({
         </p>
       )}
     </section>
+  );
+}
+
+type ServiceMetrics = components["schemas"]["ServiceMetrics"];
+
+const VS_PANELS = [
+  { key: "rps", title: "Requests", unit: "per second", scale: 1 },
+  { key: "p95_ms", title: "Latency p95", unit: "ms", scale: 1 },
+  { key: "error_5xx_ratio", title: "Server errors (5xx)", unit: "% of responses", scale: 100 },
+  { key: "active_connections", title: "Active connections", unit: "count", scale: 1 },
+] as const;
+
+function vsPanels(m: ServiceMetrics): PanelSet {
+  return {
+    stepS: m.step_s,
+    windowS: m.window_s,
+    panels: VS_PANELS.map((p) => {
+      const now = m.summary[p.key];
+      return {
+        key: p.key,
+        title: t(p.title),
+        unit: p.unit,
+        points: m[p.key].map((x) => ({ ...x, v: x.v * p.scale })),
+        now: now == null ? null : now * p.scale,
+      };
+    }),
+  };
+}
+
+export function VsMetrics({
+  tenant,
+  id,
+  name,
+  groupName,
+}: {
+  tenant: string;
+  id: string;
+  name?: string;
+  groupName?: string;
+}) {
+  return (
+    <MetricsView
+      tenant={tenant}
+      queryKey={["t", tenant, "metrics", "vs", id]}
+      fetcher={async (windowS) =>
+        unwrap(
+          await api.GET("/api/v1/tenants/{t}/virtual-services/{object_id}/metrics", {
+            params: { path: { t: tenant, object_id: id }, query: { window_s: windowS } },
+          }),
+        )
+      }
+      toPanels={vsPanels}
+      scopeLine={
+        groupName
+          ? t("this service, summed over the engines of {group}", { group: groupName })
+          : t("this service")
+      }
+      grafanaService={name}
+    />
   );
 }

@@ -27,6 +27,8 @@ from urllib.parse import urlparse
 from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
 from switchyard.adapters.git import GitLabMirror, GitMirror
+from switchyard.adapters.grafana import HttpGrafana
+from switchyard.adapters.notify import HttpNotifier, SmtpSettings
 from switchyard.adapters.pki import OpenBaoPki
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
@@ -41,6 +43,7 @@ from switchyard.jobs.worker import Worker
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
 from switchyard.services.acme_providers import AcmeProviders
+from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator, AlertService
 from switchyard.services.certificates import (
     RENEW_CERTS_JOB,
     SYNC_CLOUDFLARE_IPS_JOB,
@@ -48,9 +51,11 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
+from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
+from switchyard.services.grafana import GrafanaConfig, GrafanaService
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
 from switchyard.services.members import MemberService
@@ -175,6 +180,80 @@ def telemetry() -> Telemetry | None:
     return HttpTelemetry(prometheus, os.environ.get("SWITCHYARD_LOKI_URL"))
 
 
+def grafana(db: Databases) -> GrafanaService | None:
+    """The embedded Grafana (ADR 0085), if every setting it needs is present.
+
+    ``SWITCHYARD_GRAFANA_INTERNAL_URL`` (Grafana, ``http://host:3000``, reachable from the
+    controller only), ``SWITCHYARD_GRAFANA_ADMIN_PASSWORD`` (and optionally
+    ``SWITCHYARD_GRAFANA_ADMIN_USER``, default ``admin``), ``SWITCHYARD_GRAFANA_DS_SECRET``
+    (at least 32 characters; derives the per-tenant data source tokens),
+    ``SWITCHYARD_GRAFANA_DS_URL`` (where *Grafana* reaches this controller's ``/internal/ds``) and
+    ``SWITCHYARD_PROMETHEUS_URL``; ``SWITCHYARD_LOKI_URL`` adds logs. Without them the UI keeps
+    the plain link from ``SWITCHYARD_GRAFANA_URL``.
+    """
+    names = (
+        "SWITCHYARD_GRAFANA_INTERNAL_URL",
+        "SWITCHYARD_GRAFANA_ADMIN_PASSWORD",
+        "SWITCHYARD_GRAFANA_DS_SECRET",
+        "SWITCHYARD_GRAFANA_DS_URL",
+        "SWITCHYARD_PROMETHEUS_URL",
+    )
+    values = [os.environ.get(n, "").strip() for n in names]
+    if not all(values):
+        return None
+    internal, password, ds_secret, ds_url, prometheus = values
+    config = GrafanaConfig(
+        internal_url=internal.rstrip("/"),
+        admin_user=os.environ.get("SWITCHYARD_GRAFANA_ADMIN_USER", "admin"),
+        admin_password=password,
+        ds_secret=ds_secret,
+        datasource_url=ds_url.rstrip("/"),
+        prometheus_url=prometheus.rstrip("/"),
+        loki_url=os.environ.get("SWITCHYARD_LOKI_URL") or None,
+    )
+    admin = HttpGrafana(config.internal_url, config.admin_user, config.admin_password)
+    return GrafanaService(db, config, admin)
+
+
+def smtp_settings() -> SmtpSettings | None:
+    """Mail server for email alert targets, from ``SWITCHYARD_SMTP_HOST`` (and friends).
+
+    ``SWITCHYARD_SMTP_PORT`` (587), ``SWITCHYARD_SMTP_USER``, ``SWITCHYARD_SMTP_PASSWORD``,
+    ``SWITCHYARD_SMTP_FROM`` and ``SWITCHYARD_SMTP_STARTTLS`` (``0`` turns STARTTLS off).
+    Without a host, email targets cannot send.
+    """
+    host = os.environ.get("SWITCHYARD_SMTP_HOST", "").strip()
+    if not host:
+        return None
+    return SmtpSettings(
+        host=host,
+        port=int(os.environ.get("SWITCHYARD_SMTP_PORT", "587")),
+        user=os.environ.get("SWITCHYARD_SMTP_USER") or None,
+        password=os.environ.get("SWITCHYARD_SMTP_PASSWORD") or None,
+        sender=os.environ.get("SWITCHYARD_SMTP_FROM", "switchyard@localhost"),
+        starttls=os.environ.get("SWITCHYARD_SMTP_STARTTLS", "1") != "0",
+    )
+
+
+def alert_notifier() -> HttpNotifier:
+    """The alert sender; `SWITCHYARD_ALERT_ALLOW_PRIVATE=1` lets webhooks name private IPs."""
+    return HttpNotifier(
+        smtp=smtp_settings(),
+        allow_private=os.environ.get("SWITCHYARD_ALERT_ALLOW_PRIVATE") == "1",
+    )
+
+
+def alert_service(db: Databases, secrets: SecretsReader | None = None) -> AlertService:
+    """The tenant-facing alert service (targets, rules, test messages)."""
+    return AlertService(
+        db,
+        alert_notifier(),
+        secrets or secrets_backend(),
+        allow_http=os.environ.get("SWITCHYARD_ALERT_ALLOW_HTTP") == "1",
+        allow_private=os.environ.get("SWITCHYARD_ALERT_ALLOW_PRIVATE") == "1",
+    )
+
+
 def git_mirror() -> GitMirror | None:
     """The GitLab mirror, if configured."""
     url = os.environ.get("SWITCHYARD_GITLAB_URL")
@@ -191,6 +270,12 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     """
     client = proxmox_client()
     return InfraService(db, client) if client else None
+
+
+def discovery_service(db: Databases) -> DiscoveryService | None:
+    """Pool discovery, if the Proxmox client is configured (same settings as the infra jobs)."""
+    client = proxmox_client()
+    return DiscoveryService(db, client, ChangeSetService(db)) if client else None
 
 
 def audit_syslog_target(value: str) -> tuple[str | tuple[str, int], socket.SocketKind]:
@@ -293,6 +378,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     pipeline = ApplyPipeline(db, engines, sandbox=sandbox, secrets=secrets)
     status = StatusService(db, engines, secrets)
     certs = certificates(db, secrets)
+    discovery = discovery_service(db)
     handlers = build_handlers(
         db,
         pipeline,
@@ -302,12 +388,17 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         certs,
         GarbageCollector(db),
         MemberService(db, engines),
+        discovery,
+        AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
         GC_JOB: timedelta(hours=1),
         EXPIRE_DRAINS_JOB: timedelta(seconds=30),
+        EVALUATE_ALERTS_JOB: timedelta(minutes=1),
     }
+    if discovery is not None:
+        schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

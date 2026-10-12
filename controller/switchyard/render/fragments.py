@@ -14,7 +14,8 @@ Pool                    its ``backend`` block
 Health monitor          the ``backend`` block of every pool that uses it
 Certificate             the crt-list line of every service that serves it
 Policy set (allow list) the ``.cidr`` file
-Policy set (redirect)   the ``frontend`` block of every service that applies it
+Policy set (other)      the ``frontend`` block of every service that applies it, plus the
+                        response and error page files of a respond or error-pages set
 SE group                every file of the group
 ======================= ===================================================================
 
@@ -179,6 +180,10 @@ def _select(c: _Collector, view: Snapshot, object_type: ObjectType, object_id: U
         if isinstance(policy, dm.AllowListPolicySet):
             c.file(f"haproxy/lists/{esc.ident(policy.name)}.cidr")
         elif policy is not None:
+            prefix = f"haproxy/lists/{esc.ident(policy.name)}-"
+            for path in sorted(c.result.files):
+                if path.startswith(prefix) and path.endswith(".page"):
+                    c.file(path)
             for svc in services:
                 if object_id in svc.policy_set_ids:
                     c.section(f"frontend vs_{esc.ident(svc.name)}")

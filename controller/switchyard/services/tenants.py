@@ -16,7 +16,7 @@ from switchyard.db import models as m
 from switchyard.db.auth_models import IdpRoleMappingRow, UserAccountRow
 from switchyard.db.models import TenantRow
 from switchyard.db.tenancy import admin_session
-from switchyard.domain.changes import ObjectType
+from switchyard.domain.changes import STICK_TABLE_QUOTA, ObjectType
 from switchyard.domain.validators import validate_name
 from switchyard.ids import uuid7
 from switchyard.services.changesets import require
@@ -43,13 +43,13 @@ _OBJECT_TABLES = tuple(_USAGE_TABLES.values())
 
 
 def validate_quotas(quotas: dict[str, int]) -> dict[str, int]:
-    """Check quota keys are object type names and limits are not negative.
+    """Check quota keys (object type names or ``stick_table_entries``) and non-negative limits.
 
     Example:
         >>> validate_quotas({"pool": 5})
         {'pool': 5}
     """
-    valid = {t.value for t in ObjectType}
+    valid = {t.value for t in ObjectType} | {STICK_TABLE_QUOTA}
     for key, limit in quotas.items():
         if key not in valid:
             raise ValueError(f"unknown quota {key!r}; use one of {', '.join(sorted(valid))}")

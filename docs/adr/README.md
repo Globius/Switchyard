@@ -77,4 +77,12 @@ Date: YYYY-MM-DD
 | [0116](0116-http3-grpc-websocket.md) | HTTP/3, gRPC backends and WebSocket timeout | Accepted |
 | [0117](0117-response-compression.md) | Response compression | Accepted |
 | [0118](0118-persistence-peers.md) | Persistence table sync between engines (peers) | Accepted |
+| [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
+| [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
+| [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
+| [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
+| [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
+| [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
+| [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |

@@ -5,7 +5,7 @@
 - ``se_group.peers`` (JSON, see ``PeerSync``).
 - ``pool.backend_protocol`` (``http1``, ``h2`` or ``h2c``) and ``pool.tunnel_timeout_s``.
 
-Revision ID: 0029
+Revision ID: 0030
 Revises: 0028
 """
 
@@ -13,7 +13,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "0029"
+revision = "0030"
 down_revision = "0028"
 branch_labels = None
 depends_on = None

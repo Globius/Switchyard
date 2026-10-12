@@ -17,5 +17,5 @@ Plan item C1: HTTP/3 on ports, and gRPC and WebSocket as explicit options with c
    `http` pools only (`backend_protocol_needs_http`).
 3. WebSocket works through HTTP/1.1 upgrade without options. What operators tune is the idle time, so `Pool.tunnel_timeout_s` renders
    `timeout tunnel` in the backend (HAProxy refuses it on a frontend). It also bounds long gRPC streams.
-4. UDP services and pools refuse all of these (`udp_field_not_allowed`). Tables (migration 0029): `vs_port.http3`, `pool.backend_protocol`,
+4. UDP services and pools refuse all of these (`udp_field_not_allowed`). Tables (migration 0030): `vs_port.http3`, `pool.backend_protocol`,
    `pool.tunnel_timeout_s`.

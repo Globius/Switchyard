@@ -20,12 +20,14 @@ from switchyard.domain import validators as v
 from switchyard.domain.errors import DomainValidationError, Problem
 from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDDEN_SERVICE_FIELDS
 from switchyard.domain.models import (
+    ATTACHABLE_POLICY_KINDS,
     HTTP_ONLY_PERSISTENCE,
     Algorithm,
     AllowListPolicySet,
     BgpProfile,
     Certificate,
     Entity,
+    ErrorPagesPolicySet,
     HealthMonitor,
     Model,
     MonitorType,
@@ -34,7 +36,8 @@ from switchyard.domain.models import (
     PolicySet,
     Pool,
     Protocol,
-    RedirectPolicySet,
+    RateLimitPolicySet,
+    RateLimitRule,
     RoutingProfile,
     SeGroup,
     Tenant,
@@ -150,6 +153,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       a SAN of the service's certificates (wildcards cover exactly one label).
     - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
+    - ``discovery_tag_not_allowed``: a pool's Proxmox discovery tag starts with ``sy-<tenant>.``,
+      so a tenant never discovers another tenant's guests (ADR 0145).
     - ``secret_ref_not_allowed``: certificate and BGP secret references stay in the tenant's own
       namespace and out of the platform's (ADR 0071).
     - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
@@ -190,6 +195,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
 
     _check_names(snapshot, problems)
     _check_secret_scopes(snapshot, problems)
+    _check_discovery_scopes(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -341,16 +347,28 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                         f"certificate {ca.name} is a server certificate, not a client CA",
                     )
                 )
+        error_statuses: set[int] = set()
         for i, pid in enumerate(s.policy_set_ids):
             ps = check_ref(f"{base}.policy_set_ids[{i}]", s.tenant_id, "policy set", pid, policies)
-            if ps is not None and not isinstance(ps, RedirectPolicySet):
+            if ps is not None and not isinstance(ps, ATTACHABLE_POLICY_KINDS):
                 problems.append(
                     Problem(
                         f"{base}.policy_set_ids[{i}]",
                         "wrong_policy_kind",
-                        f"policy set {ps.name} is not a redirect policy set",
+                        f"policy set {ps.name} (kind {ps.kind}) cannot be attached to a service",
                     )
                 )
+            if isinstance(ps, ErrorPagesPolicySet):
+                for page in ps.pages:
+                    if page.status in error_statuses:
+                        problems.append(
+                            Problem(
+                                f"{base}.policy_set_ids[{i}]",
+                                "duplicate_error_page",
+                                f"another error-page policy set already defines {page.status}",
+                            )
+                        )
+                    error_statuses.add(page.status)
         if s.allow_list_id:
             ps = check_ref(
                 f"{base}.allow_list_id", s.tenant_id, "policy set", s.allow_list_id, policies
@@ -365,6 +383,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 )
 
         _check_routes(s, base, problems)
+        _check_rate_limits(s, policies, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
@@ -394,6 +413,23 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 )
             )
     return sorted(problems)
+
+
+def _check_discovery_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """Discovery tags start with the owning tenant's prefix (``discovery_tag_not_allowed``)."""
+    names = {t.id: t.name for t in snapshot.tenants}
+    for pool in snapshot.pools:
+        if pool.discovery is None or pool.tenant_id not in names:
+            continue
+        prefix = v.discovery_tag_prefix(names[pool.tenant_id])
+        if not pool.discovery.tag.startswith(prefix) or pool.discovery.tag == prefix:
+            problems.append(
+                Problem(
+                    f"pools.{pool.name}.discovery.tag",
+                    "discovery_tag_not_allowed",
+                    f"a discovery tag must start with {prefix!r} and continue with a label",
+                )
+            )
 
 
 def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
@@ -651,6 +687,73 @@ def _check_live_traffic(
         )
 
 
+#: Rate-limit rules one service may carry (one stick counter each; HAProxy tracks few per stream).
+MAX_RATE_LIMITS_PER_SERVICE = 8
+#: Stick-table entries one service may ask for in total (memory on the SE).
+MAX_TABLE_ENTRIES_PER_SERVICE = 2_000_000
+
+
+def rate_limit_rules(
+    s: VirtualService, policies: Mapping[UUID, Any]
+) -> list[tuple[RateLimitPolicySet, int, RateLimitRule]]:
+    """The rate-limit rules of a service in render order: ``(set, 1-based index in set, rule)``."""
+    out = []
+    for pid in s.policy_set_ids:
+        ps = policies.get(pid)
+        if isinstance(ps, RateLimitPolicySet):
+            out += [(ps, i, r) for i, r in enumerate(ps.rules, start=1)]
+    return out
+
+
+def stick_table_entries(snapshot: "Snapshot", tenant_id: UUID) -> int:
+    """Stick-table entries a tenant's rate-limit rules ask for, counted once per service using them.
+
+    Example:
+        >>> stick_table_entries(Snapshot(), UUID(int=1))
+        0
+    """
+    policies = {p.id: p for p in snapshot.policy_sets}
+    return sum(
+        r.table_size
+        for s in snapshot.virtual_services
+        if s.tenant_id == tenant_id
+        for _, _, r in rate_limit_rules(s, policies)
+    )
+
+
+def _check_rate_limits(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    rules = rate_limit_rules(s, policies)
+    if len(rules) > MAX_RATE_LIMITS_PER_SERVICE:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "too_many_rate_limits",
+                f"a service may have {MAX_RATE_LIMITS_PER_SERVICE} rate-limit rules; "
+                f"this one has {len(rules)}",
+            )
+        )
+    if sum(r.table_size for _, _, r in rules) > MAX_TABLE_ENTRIES_PER_SERVICE:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "stick_table_too_large",
+                f"rate-limit tables of one service may hold {MAX_TABLE_ENTRIES_PER_SERVICE} "
+                "entries in total",
+            )
+        )
+    delays = {r.tarpit_s for _, _, r in rules if r.action == "tarpit"}
+    if len(delays) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "tarpit_conflict",
+                "tarpit rules of one service must use the same tarpit_s (one timeout per frontend)",
+            )
+        )
+
+
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
     if s.protocol is Protocol.TCP:
         for i, r in enumerate(s.routes):
@@ -662,15 +765,15 @@ def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None
                         "a tcp route matches the SNI host only and names a pool",
                     )
                 )
-    seen: set[tuple[str | None, str | None, str | None]] = set()
+    seen: set[str] = set()
     for i, r in enumerate(s.routes):
-        key = (r.match.host, r.match.path_prefix, r.match.path_exact)
+        key = r.match.model_dump_json()
         if key in seen:
             problems.append(
                 Problem(
                     f"{base}.routes[{i}]",
                     "duplicate_route",
-                    "same host and path match as an earlier route",
+                    "same match as an earlier route",
                 )
             )
         seen.add(key)

@@ -130,18 +130,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
             )
         )
     for ps in snapshot.policy_sets:
-        if isinstance(ps, dm.RedirectPolicySet):
-            rows.append(
-                m.PolicySetRow(
-                    id=ps.id,
-                    version=ps.version,
-                    tenant_id=ps.tenant_id,
-                    name=ps.name,
-                    kind="redirect",
-                    rules=[r.model_dump(mode="json") for r in ps.rules],
-                )
-            )
-        else:
+        if isinstance(ps, dm.AllowListPolicySet):
             rows.append(
                 m.PolicySetRow(
                     id=ps.id,
@@ -151,6 +140,18 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     kind="allow_list",
                     cidrs=[str(c) for c in ps.cidrs],
                     managed_by=ps.managed_by,
+                )
+            )
+        else:
+            items = ps.pages if isinstance(ps, dm.ErrorPagesPolicySet) else ps.rules
+            rows.append(
+                m.PolicySetRow(
+                    id=ps.id,
+                    version=ps.version,
+                    tenant_id=ps.tenant_id,
+                    name=ps.name,
+                    kind=ps.kind,
+                    rules=[item.model_dump(mode="json") for item in items],
                 )
             )
     for p in snapshot.pools:
@@ -171,6 +172,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 tunnel_timeout_s=p.tunnel_timeout_s,
                 backend_protocol=p.backend_protocol,
                 client_certificate_id=p.client_certificate_id,
+                discovery=p.discovery.model_dump(mode="json") if p.discovery else None,
             )
         )
     for s in snapshot.virtual_services:
@@ -250,6 +252,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     host=r.match.host,
                     path_prefix=r.match.path_prefix,
                     path_exact=r.match.path_exact,
+                    match_extra=_match_extra(r.match),
                     pool_id=r.pool_id,
                     redirect_location=r.redirect.location if r.redirect else None,
                     redirect_code=r.redirect.code if r.redirect else None,
@@ -430,6 +433,7 @@ def rows_to_snapshot(
                 "tunnel_timeout_s": p.tunnel_timeout_s,
                 "backend_protocol": p.backend_protocol,
                 "client_certificate_id": p.client_certificate_id,
+                "discovery": p.discovery,
                 "members": [
                     {
                         "id": mem.id,
@@ -488,10 +492,24 @@ def rows_to_snapshot(
     return Snapshot.model_validate(data)
 
 
+_PLAIN_MATCH = {"host", "path_prefix", "path_exact"}
+
+
+def _match_extra(match: dm.RouteMatch) -> dict[str, Any] | None:
+    """Match conditions beyond host and path (stored as JSON), or ``None`` when there are none."""
+    extra = match.model_dump(mode="json", exclude=_PLAIN_MATCH, exclude_defaults=True)
+    return extra or None
+
+
 def _route_to_dict(r: m.VsRouteRow) -> dict[str, Any]:
     return {
         "order": r.route_order,
-        "match": {"host": r.host, "path_prefix": r.path_prefix, "path_exact": r.path_exact},
+        "match": {
+            "host": r.host,
+            "path_prefix": r.path_prefix,
+            "path_exact": r.path_exact,
+            **(r.match_extra or {}),
+        },
         "pool_id": r.pool_id,
         "redirect": (
             {"location": r.redirect_location, "code": r.redirect_code}
@@ -509,9 +527,11 @@ def _policy_to_dict(ps: m.PolicySetRow) -> dict[str, Any]:
         "name": ps.name,
         "kind": ps.kind,
     }
-    if ps.kind == "redirect":
-        base["rules"] = ps.rules
-    else:
+    if ps.kind == "allow_list":
         base["cidrs"] = [_net(c) for c in ps.cidrs or []]
         base["managed_by"] = ps.managed_by
+    elif ps.kind == "error_pages":
+        base["pages"] = ps.rules
+    else:
+        base["rules"] = ps.rules
     return base

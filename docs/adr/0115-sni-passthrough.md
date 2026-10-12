@@ -15,5 +15,5 @@ Plan item C4: route TLS to different pools by the server name without terminatin
    refused. `default_pool_id` stays required and catches clients with no SNI or an unknown name.
 3. The frontend waits up to 5 seconds for the client hello (`tcp-request inspect-delay`), accepts only a TLS hello, and chooses the backend from
    `req.ssl_sni` lower-cased through map files, exact first, then wildcards. The map keys pass the hostname validator and `esc.hostname`.
-4. The existing `routes` table and its pool-reference checks are reused, so no new table. Migration 0029 adds `vs_port.tls_passthrough`.
+4. The existing `routes` table and its pool-reference checks are reused, so no new table. Migration 0030 adds `vs_port.tls_passthrough`.
 5. Because TLS stays end to end, HTTP features (headers, redirects, compression) do not apply. `proxy_protocol` on the port (accept) still can.

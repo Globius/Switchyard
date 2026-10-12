@@ -39,6 +39,10 @@ MediaType = Annotated[str, AfterValidator(v.validate_media_type)]
 CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
 MatchText = Annotated[str, AfterValidator(v.validate_match_text)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
+HeaderValue = Annotated[str, AfterValidator(v.validate_header_value)]
+QueryParam = Annotated[str, AfterValidator(v.validate_query_param)]
+Body = Annotated[str, AfterValidator(v.validate_body)]
+DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
 
 class HaMode(enum.StrEnum):
@@ -355,23 +359,130 @@ class RedirectAction(Model):
     code: RedirectCode = 301
 
 
+class HttpMethod(enum.StrEnum):
+    """HTTP request methods a match can name."""
+
+    GET = "GET"
+    HEAD = "HEAD"
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
+    OPTIONS = "OPTIONS"
+
+
+class HeaderOp(enum.StrEnum):
+    """How a header match compares: presence, or a literal comparison of the value."""
+
+    PRESENT = "present"
+    ABSENT = "absent"
+    EQUALS = "equals"
+    PREFIX = "prefix"
+    SUFFIX = "suffix"
+    CONTAINS = "contains"
+
+
+class HeaderMatch(Model):
+    """Match a request header. ``value`` is required for the comparisons and forbidden otherwise.
+
+    Example:
+        >>> HeaderMatch(name="X-Env", op="equals", value="canary").op
+        <HeaderOp.EQUALS: 'equals'>
+    """
+
+    name: HeaderName
+    op: HeaderOp = HeaderOp.EQUALS
+    value: HeaderValue | None = None
+
+    @model_validator(mode="after")
+    def _value_for_op(self) -> Self:
+        has_value = self.op not in (HeaderOp.PRESENT, HeaderOp.ABSENT)
+        if has_value and self.value is None:
+            raise ValueError(f"op {self.op.value} needs a value")
+        if not has_value and self.value is not None:
+            raise ValueError(f"op {self.op.value} takes no value")
+        return self
+
+
+class QueryOp(enum.StrEnum):
+    """How a query-parameter match compares."""
+
+    PRESENT = "present"
+    EQUALS = "equals"
+
+
+class QueryMatch(Model):
+    """Match a query-string parameter (``?name=value``)."""
+
+    name: QueryParam
+    op: QueryOp = QueryOp.EQUALS
+    value: HeaderValue | None = None
+
+    @model_validator(mode="after")
+    def _value_for_op(self) -> Self:
+        if self.op is QueryOp.EQUALS and self.value is None:
+            raise ValueError("op equals needs a value")
+        if self.op is QueryOp.PRESENT and self.value is not None:
+            raise ValueError("op present takes no value")
+        return self
+
+
 class RouteMatch(Model):
-    """Request match: an optional host (exact or ``*.`` wildcard) and an optional path."""
+    """Request match shared by routes and policy rules; every condition given must hold (AND).
+
+    Attributes:
+        host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).
+        path_prefix: Path starts with this.
+        path_exact: Path equals this. Not together with ``path_prefix``.
+        methods: Request method is one of these.
+        headers: Request header conditions, all of which must hold.
+        query: Query-string parameter conditions, all of which must hold.
+        source_cidrs: Client address is inside one of these networks (after client-IP restoration).
+        sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a
+            port without TLS.
+
+    Example:
+        >>> RouteMatch(methods=["GET"], path_prefix="/api").is_empty
+        False
+        >>> RouteMatch().is_empty
+        True
+    """
 
     host: HostPattern | None = None
     path_prefix: UrlPath | None = None
     path_exact: UrlPath | None = None
+    methods: tuple[HttpMethod, ...] = Field(default=(), max_length=7)
+    headers: tuple[HeaderMatch, ...] = Field(default=(), max_length=8)
+    query: tuple[QueryMatch, ...] = Field(default=(), max_length=8)
+    source_cidrs: tuple[IPNetwork, ...] = Field(default=(), max_length=16)
+    sni: HostPattern | None = None
 
     @model_validator(mode="after")
-    def _one_path(self) -> Self:
+    def _consistent(self) -> Self:
         if self.path_prefix is not None and self.path_exact is not None:
             raise ValueError("use either path_prefix or path_exact, not both")
+        if len(set(self.methods)) != len(self.methods):
+            raise ValueError("methods must be unique")
         return self
 
     @property
     def is_empty(self) -> bool:
-        """True when the match has no host and no path (matches every request)."""
-        return self.host is None and self.path_prefix is None and self.path_exact is None
+        """True when the match has no condition (it matches every request)."""
+        return not (
+            self.host
+            or self.path_prefix
+            or self.path_exact
+            or self.methods
+            or self.headers
+            or self.query
+            or self.source_cidrs
+            or self.sni
+        )
+
+    @property
+    def is_host_only(self) -> bool:
+        """True when the host is the only condition (routed through a map file)."""
+        return self.host is not None and self.model_copy(update={"host": None}).is_empty
 
 
 class VsRoute(Model):
@@ -503,7 +614,7 @@ class VirtualService(TenantOwned):
         routes: L7 routes (``http`` only).
         default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.
         certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.
-        policy_set_ids: Redirect policy sets, applied before routing, in order.
+        policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.
         allow_list_id: Allow-list policy set (for example the Cloudflare ranges).
         enforce_allow_list: Reject connections from sources outside the allow list.
         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
@@ -726,6 +837,32 @@ class PoolMember(Model):
         return f"{base}-{self.port}" if self.port is not None else base
 
 
+class PoolDiscovery(Model):
+    """Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).
+
+    The discovery job lists running guests with ``tag``, takes the first address of each that lies
+    in ``cidr`` and keeps ``Pool.members`` in step through a normal change set. Members that were
+    discovered keep the weight and admin state an operator gave them.
+
+    Attributes:
+        source: Where members come from; only ``proxmox_tag`` exists.
+        tag: The Proxmox tag; it must start with ``sy-<tenant>.``.
+        cidr: Backend network; a guest's address in it becomes the member address.
+        port: Member port.
+        weight: Weight of a newly discovered member.
+
+    Example:
+        >>> PoolDiscovery(tag="sy-acme.web", cidr="10.20.0.0/24", port=8080).weight
+        100
+    """
+
+    source: Literal["proxmox_tag"] = "proxmox_tag"
+    tag: DiscoveryTag
+    cidr: IPNetwork
+    port: Port
+    weight: int = Field(default=100, ge=0, le=256)
+
+
 class Pool(TenantOwned):
     """A group of backend servers.
 
@@ -748,7 +885,8 @@ class Pool(TenantOwned):
         send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
         client_certificate_id: Server certificate HAProxy presents to members (backend
             mutual TLS). Needs ``tls``.
-        members: Backend servers, unique by name.
+        discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
+        members: Backend servers, unique by name. With ``discovery`` the job owns this list.
     """
 
     algorithm: Algorithm = Algorithm.ROUNDROBIN
@@ -762,6 +900,7 @@ class Pool(TenantOwned):
     tunnel_timeout_s: int | None = Field(default=None, ge=1, le=86_400)
     send_proxy: Literal["v1", "v2"] | None = None
     client_certificate_id: UUID | None = None
+    discovery: PoolDiscovery | None = None
     members: tuple[PoolMember, ...] = ()
 
     @model_validator(mode="after")
@@ -972,4 +1111,247 @@ class AllowListPolicySet(TenantOwned):
     managed_by: Literal["cloudflare"] | None = None
 
 
-PolicySet = Annotated[RedirectPolicySet | AllowListPolicySet, Field(discriminator="kind")]
+class HeaderVariable(enum.StrEnum):
+    """Per-request values a header action can carry, from a fixed list (no expressions)."""
+
+    CLIENT_IP = "client_ip"
+    CLIENT_PORT = "client_port"
+    HOST = "host"
+    VIP = "vip"
+    VIP_PORT = "vip_port"
+    METHOD = "method"
+    TLS_VERSION = "tls_version"
+    TLS_CIPHER = "tls_cipher"
+    TLS_SNI = "tls_sni"
+    REQUEST_ID = "request_id"
+
+
+class _HeaderAction(Model):
+    """Common part of the header actions: a name and exactly one of ``value`` and ``variable``."""
+
+    name: HeaderName
+    value: HeaderValue | None = None
+    variable: HeaderVariable | None = None
+
+    @model_validator(mode="after")
+    def _one_source(self) -> Self:
+        if (self.value is None) == (self.variable is None):
+            raise ValueError("a header action needs exactly one of value or variable")
+        return self
+
+
+class SetHeader(_HeaderAction):
+    """Set a header, replacing any existing values."""
+
+    type: Literal["set_header"] = "set_header"
+
+
+class AddHeader(_HeaderAction):
+    """Add a header, keeping any existing values."""
+
+    type: Literal["add_header"] = "add_header"
+
+
+class RemoveHeader(Model):
+    """Remove every value of a header."""
+
+    type: Literal["remove_header"] = "remove_header"
+    name: HeaderName
+
+
+class ReplacePrefix(Model):
+    """Replace a path prefix, on path-segment boundaries (request phase only).
+
+    ``/api`` to ``/v2`` turns ``/api`` into ``/v2`` and ``/api/x`` into ``/v2/x``; ``/apix`` is
+    left alone. A ``to_prefix`` of ``/`` strips the prefix (``/api/x`` becomes ``/x``, ``/api``
+    becomes ``/``).
+    """
+
+    type: Literal["replace_prefix"] = "replace_prefix"
+    from_prefix: UrlPath
+    to_prefix: UrlPath
+
+    @model_validator(mode="after")
+    def _no_trailing_slash(self) -> Self:
+        if self.from_prefix == "/" or self.from_prefix.endswith("/"):
+            raise ValueError("from_prefix must name a directory without a trailing slash")
+        if len(self.to_prefix) > 1 and self.to_prefix.endswith("/"):
+            raise ValueError("to_prefix must not end with a slash (use / to strip the prefix)")
+        return self
+
+
+RewriteAction = Annotated[
+    SetHeader | AddHeader | RemoveHeader | ReplacePrefix, Field(discriminator="type")
+]
+
+
+class RewriteRule(Model):
+    """Change a request (before routing) or a response (before it leaves) when ``match`` holds.
+
+    Attributes:
+        phase: ``request`` or ``response``. Response rules match on the request that was made.
+        match: Conditions; an empty match applies to every request.
+        action: What to change.
+    """
+
+    phase: Literal["request", "response"] = "request"
+    match: RouteMatch = RouteMatch()
+    action: RewriteAction
+
+    @model_validator(mode="after")
+    def _allowed(self) -> Self:
+        action = self.action
+        if isinstance(action, ReplacePrefix):
+            if self.phase != "request":
+                raise ValueError("replace_prefix is only valid in the request phase")
+            return self
+        name = action.name.lower()
+        if name in v.FORBIDDEN_HEADERS:
+            raise ValueError(f"header {action.name} cannot be changed by a policy")
+        if self.phase == "request":
+            if name in v.MANAGED_REQUEST_HEADERS:
+                raise ValueError(f"request header {action.name} is managed by Switchyard")
+            if name == "host" and not isinstance(action, SetHeader):
+                raise ValueError("the Host header can only be set")
+        return self
+
+
+class RewritePolicySet(TenantOwned):
+    """Ordered header and URL rewrite rules (ADR 0102).
+
+    Request rules run after redirects and fixed responses and before routing; response rules run
+    on the way out. Rules apply in order within a set and sets in attachment order.
+    """
+
+    kind: Literal["rewrite"] = "rewrite"
+    rules: tuple[RewriteRule, ...] = Field(min_length=1, max_length=64)
+
+
+ResponseStatus = Literal[200, 202, 204, 400, 401, 403, 404, 405, 410, 429, 451, 500, 502, 503, 504]
+ErrorStatus = Literal[400, 403, 408, 500, 502, 503, 504]
+ContentType = Literal["text/plain", "text/html", "application/json"]
+
+
+class ResponseRule(Model):
+    """Answer requests that match ``match`` with a fixed response, without asking a pool.
+
+    Attributes:
+        match: Conditions; an empty match answers every request (a maintenance page).
+        status: Status code.
+        content_type: Media type of ``body``; needed with a body.
+        body: Response text; omitted for an empty response.
+        retry_after_s: Seconds for a ``Retry-After`` header (only with 429 or 503).
+    """
+
+    match: RouteMatch = RouteMatch()
+    status: ResponseStatus
+    content_type: ContentType | None = None
+    body: Body | None = Field(default=None, min_length=1)
+    retry_after_s: int | None = Field(default=None, ge=1, le=86_400)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.body is None) != (self.content_type is None):
+            raise ValueError("body and content_type go together")
+        if self.body is not None and self.status == 204:
+            raise ValueError("a 204 response has no body")
+        if self.retry_after_s is not None and self.status not in (429, 503):
+            raise ValueError("retry_after_s is only valid with status 429 or 503")
+        return self
+
+
+class RespondPolicySet(TenantOwned):
+    """Fixed responses sent instead of routing (ADR 0103); the first match wins."""
+
+    kind: Literal["respond"] = "respond"
+    rules: tuple[ResponseRule, ...] = Field(min_length=1, max_length=64)
+
+
+class ErrorPage(Model):
+    """The body HAProxy sends when it generates the error ``status`` itself."""
+
+    status: ErrorStatus
+    content_type: ContentType = "text/html"
+    body: Body = Field(min_length=1)
+
+
+class ErrorPagesPolicySet(TenantOwned):
+    """Custom pages for the errors HAProxy generates (no server available, timeouts, ...)."""
+
+    kind: Literal["error_pages"] = "error_pages"
+    pages: tuple[ErrorPage, ...] = Field(min_length=1, max_length=7)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        statuses = [p.status for p in self.pages]
+        if len(set(statuses)) != len(statuses):
+            raise ValueError("one page per status")
+        return self
+
+
+class RateLimitRule(Model):
+    """Limit how often one client (or one key) may use the service; excess requests get ``action``.
+
+    Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
+    flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
+
+    Attributes:
+        match: Requests this rule counts and limits; empty counts every request. Use a path in
+            the match for a per-path limit (a login page, an API prefix).
+        key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
+            (an API key header; requests without the header are not counted).
+        max_requests: Requests allowed per ``period_s`` before the action applies.
+        period_s: Length of the window for ``max_requests``.
+        max_concurrent: Requests allowed at the same time.
+        action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
+            seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
+        table_size: Number of keys the table holds; the oldest are evicted when it is full.
+    """
+
+    match: RouteMatch = RouteMatch()
+    key: Literal["client_ip", "header"] = "client_ip"
+    header_name: HeaderName | None = None
+    max_requests: int | None = Field(default=None, ge=1, le=1_000_000)
+    period_s: Literal[1, 10, 60, 300, 3600] = 10
+    max_concurrent: int | None = Field(default=None, ge=1, le=100_000)
+    action: Literal["deny", "tarpit", "silent_drop"] = "deny"
+    deny_status: Literal[403, 429, 503] = 429
+    tarpit_s: int = Field(default=5, ge=1, le=30)
+    table_size: int = Field(default=10_000, ge=100, le=1_000_000)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.max_requests is None) == (self.max_concurrent is None):
+            raise ValueError("set exactly one of max_requests and max_concurrent")
+        if (self.key == "header") != (self.header_name is not None):
+            raise ValueError("header_name goes with key header, and only with it")
+        return self
+
+
+class RateLimitPolicySet(TenantOwned):
+    """Rate and concurrency limits per client or key (ADR 0110).
+
+    A service may carry at most 8 rate-limit rules across its sets.
+    """
+
+    kind: Literal["rate_limit"] = "rate_limit"
+    rules: tuple[RateLimitRule, ...] = Field(min_length=1, max_length=8)
+
+
+PolicySet = Annotated[
+    RedirectPolicySet
+    | AllowListPolicySet
+    | RewritePolicySet
+    | RespondPolicySet
+    | ErrorPagesPolicySet
+    | RateLimitPolicySet,
+    Field(discriminator="kind"),
+]
+#: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).
+ATTACHABLE_POLICY_KINDS = (
+    RedirectPolicySet,
+    RewritePolicySet,
+    RespondPolicySet,
+    ErrorPagesPolicySet,
+    RateLimitPolicySet,
+)
