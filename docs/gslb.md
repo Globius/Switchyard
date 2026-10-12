@@ -88,3 +88,8 @@ a minute. Only dnsdist is published on port 53; PowerDNS listens on 5300 inside 
 A tenant can set only validated fields; none of them reaches the DNS server as code (ADR 0161). Names are lowercase DNS labels, a
 zone cannot be created by a tenant, and one tenant's zone cannot shadow another's. Every change is in the audit log
 (`gslb_zone.*`, `gslb_wide_ip.*`).
+
+## Multi-site and remote clouds (planned)
+
+Members at other clouds work today as plain `address` members. Managed engines in other clouds, sites as objects and health from
+several vantage points are planned for a later phase: [ADR 0180](adr/0180-multi-site-and-remote-engines.md). Not built.
