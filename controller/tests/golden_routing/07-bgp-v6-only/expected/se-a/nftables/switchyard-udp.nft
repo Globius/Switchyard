@@ -1,0 +1,14 @@
+# Managed by Switchyard. Do not edit: changes are reported as drift.
+# Source NAT for UDP that IPVS sends to real servers, so replies return through this SE.
+table ip6 sy_udp {
+    set backends {
+        type ipv6_addr . inet_service
+        elements = {
+            2001:db8:20::40 . 53
+        }
+    }
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        ip6 daddr . udp dport @backends masquerade
+    }
+}

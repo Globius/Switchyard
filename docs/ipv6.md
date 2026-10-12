@@ -10,7 +10,7 @@ Switchyard supports IPv6-only and dual-stack deployments. This is the support ma
 | HAProxy binds, server targets | yes | yes | `ipv6@addr:port` (golden case `10-ipv6`, validated by `haproxy -c`). |
 | Keepalived VRRP | yes | yes | One `vrrp_instance` per family: `sy_<group>` for IPv4 and `sy_<group>_6` (VRRPv3) for IPv6, same VRID and priority. Syntax checked with Keepalived 2.3. |
 | IPVS UDP services | yes | yes | A UDP service's members must be in the VIP's family; nftables masquerade rules exist for both. The agent parses `[addr]:port`. |
-| FRR / BGP | yes | yes | Separate prefix lists, route maps and address families; peers may be v4 or v6 (golden `03-bgp-dual-stack`). |
+| FRR / BGP | yes | yes | The route-health watchdog file lists v4 (/32) and v6 (/128) VIPs, UDP ones included (golden `07-bgp-v6-only`). Separate prefix lists, route maps and address families; peers may be v4 or v6 (golden `03-bgp-dual-stack`). |
 | BGP router id | IPv4 mgmt address | derived | An IPv6-only engine has no IPv4 address; its router id is derived from the engine name inside `100.64.0.0/10`, stable across renders. |
 | Engine address policy, dataplane/agent URLs | yes | yes | Literal IPs checked against the group's mgmt networks; `[addr]:port` accepted. |
 | Monitor test targets | yes | yes | Reported as `[addr]:port`. |
