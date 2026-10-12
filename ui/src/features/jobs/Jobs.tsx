@@ -25,6 +25,7 @@ const KINDS: Record<string, string> = {
   poll_status: "Poll status",
   git_mirror: "Git mirror",
   gc: "Garbage collection",
+  evaluate_alerts: "Evaluate alerts",
 };
 const STATES = ["queued", "running", "succeeded", "failed", "dead", "cancelled"] as const;
 
