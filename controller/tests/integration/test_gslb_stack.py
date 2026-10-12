@@ -1,8 +1,8 @@
 """GSLB against a real PowerDNS 5 (ADR 0160): the records the controller writes answer as designed.
 
 Opt-in (it pulls an image): ``SWITCHYARD_STACK_TESTS=1 pytest tests/integration/test_gslb_stack.py``.
-PowerDNS checks health itself, from inside its container, so the members are 127.0.0.1 (up: PowerDNS
-listens on port 53 there) and addresses in 192.0.2.0/24 (down).
+PowerDNS checks health itself, from inside its container: the members are a web server container
+(up) and unused addresses on the same Docker network (down).
 """
 
 import os
@@ -34,7 +34,9 @@ pytestmark = [
 ROOT = Principal(actor="user:root", role=Role.SYSTEM_ADMIN)
 ADMIN = Principal(actor="user:alice", role=Role.TENANT_ADMIN, tenant_ids=frozenset({TENANT}))
 ZONE = "gslb.example.test"
-UP, DOWN, DOWN2 = "127.0.0.1", "192.0.2.1", "192.0.2.7"
+# Set by the fixture: a web server that is up, and two addresses on the same Docker network that
+# nobody answers for (a connect times out), so "down" does not depend on the host network.
+UP = DOWN = DOWN2 = ""
 
 
 def free_udp_port() -> int:
@@ -102,7 +104,14 @@ def pdns() -> Iterator[Pdns]:
             "--enable-lua-records=yes --lua-health-checks-interval=2"
         )
     )
-    with container:
+    web = DockerContainer("busybox:1.36").with_command("httpd -f -p 8080")
+    with container, web:
+        global UP, DOWN, DOWN2
+        inner = web.get_wrapped_container()
+        inner.reload()
+        UP = inner.attrs["NetworkSettings"]["Networks"]["bridge"]["IPAddress"]
+        prefix = ".".join(UP.split(".")[:2])
+        DOWN, DOWN2 = f"{prefix}.200.1", f"{prefix}.200.2"
         api = f"http://127.0.0.1:{container.get_exposed_port(8081)}"
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
@@ -145,7 +154,7 @@ async def test_failover_answers_the_first_tier_that_is_up(
         "fail",
         {
             "algorithm": "failover",
-            "health": {"port": 53, "timeout_ms": 200},
+            "health": {"port": 8080, "timeout_ms": 200},
             "members": [{"address": DOWN, "priority": 1}, {"address": UP, "priority": 2}],
         },
     )
@@ -166,14 +175,14 @@ async def test_multivalue_and_weighted_skip_members_that_are_down(
         TENANT,
         ZONE,
         "all",
-        {"algorithm": "all", "health": {"port": 53, "timeout_ms": 200}, "members": members},
+        {"algorithm": "all", "health": {"port": 8080, "timeout_ms": 200}, "members": members},
     )
     await service.create_wide_ip(
         ADMIN,
         TENANT,
         ZONE,
         "weighted",
-        {"algorithm": "weighted", "health": {"port": 53, "timeout_ms": 200}, "members": members},
+        {"algorithm": "weighted", "health": {"port": 8080, "timeout_ms": 200}, "members": members},
     )
     assert eventually(f"all.{ZONE}", pdns.port, [UP]) == [UP]
     assert eventually(f"weighted.{ZONE}", pdns.port, [UP]) == [UP]
@@ -185,7 +194,7 @@ async def test_multivalue_and_weighted_skip_members_that_are_down(
         "dead",
         {
             "algorithm": "weighted",
-            "health": {"port": 53, "timeout_ms": 200},
+            "health": {"port": 8080, "timeout_ms": 200},
             "members": [{"address": DOWN}, {"address": DOWN2}],
         },
     )
@@ -206,7 +215,7 @@ async def test_subnet_answers_by_the_clients_network(
         "view",
         {
             "algorithm": "subnet",
-            "health": {"port": 53, "timeout_ms": 200},
+            "health": {"port": 8080, "timeout_ms": 200},
             "members": [{"address": UP, "subnets": ["128.0.0.0/1"]}, {"address": DOWN2}],
         },
     )
@@ -237,7 +246,7 @@ async def test_removing_a_wide_ip_removes_the_answer_and_dnssec_signs_the_zone(
         "gone",
         {
             "algorithm": "all",
-            "health": {"port": 53, "timeout_ms": 200},
+            "health": {"port": 8080, "timeout_ms": 200},
             "members": [{"address": UP}],
         },
     )
