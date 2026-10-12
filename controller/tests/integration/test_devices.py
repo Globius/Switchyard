@@ -421,6 +421,7 @@ async def test_http_endpoints(pg_url: str) -> None:
                     "X-Device-Id": str(device.id),
                     "X-Device-Timestamp": str(ts),
                     "X-Device-Signature": device.sign(body, ts),
+                    "Content-Type": "application/json",
                 },
             )
             assert replay.status_code == 401
