@@ -652,3 +652,124 @@ async def test_match_lists_the_credentials_that_cover_each_name_longest_zone_fir
     ]
     assert by_name["*.example.test"] == [("wide", "example.test"), ("catch-all", None)]
     assert by_name["x.off.test"] == [("catch-all", None)], "disabled credentials are not offered"
+
+
+# -- requests, history and progress ----------------------------------------------------------
+
+
+class Stages:
+    """A progress recorder that keeps what it was told."""
+
+    def __init__(self) -> None:
+        self.names: list[str] = []
+        self.failed: list[str] = []
+        self.notes: list[str] = []
+
+    def stage(self, name: str) -> Any:
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def run() -> Any:
+            self.names.append(name)
+            try:
+                yield
+            except BaseException:
+                self.failed.append(name)
+                raise
+
+        return run()
+
+    async def note(self, message: str, level: str = "info") -> None:
+        self.notes.append(message)
+
+
+async def test_check_lists_every_problem_with_its_field_path(rig: Rig, directory_url: str) -> None:
+    body = {"name": "web", "source": "acme", "sans": ["www.example.test", "www.other.test"]}
+    url = f"{V1}/tenants/{T}/certificates/issue/check"
+    first = (await rig.client.post(url, json=body, headers=rig.operator)).json()
+    assert first["ok"] is False
+    assert {p["path"] for p in first["problems"]} == {"acme_provider", "sans[0]", "sans[1]"}
+    await rig.create_acme(directory_url, default=True)
+    await rig.create_dns(zones=["example.test"])
+    second = (await rig.client.post(url, json=body, headers=rig.operator)).json()
+    assert [(p["path"], p["message"]) for p in second["problems"]] == [
+        ("sans[1]", "no DNS credential covers this name")
+    ]
+    fine = (
+        await rig.client.post(url, json=body | {"sans": ["a.example.test"]}, headers=rig.operator)
+    ).json()
+    assert fine == {"ok": True, "problems": []}
+    wild = (
+        await rig.client.post(
+            url,
+            json=body | {"sans": ["*.example.test"], "challenge": "http-01"},
+            headers=rig.operator,
+        )
+    ).json()
+    assert {p["path"] for p in wild["problems"]} >= {"sans[0]"}
+    assert (
+        await rig.client.post(url, json=body, headers={"Authorization": "Bearer nope"})
+    ).status_code == 401
+
+
+async def test_issuing_through_the_api_refuses_what_the_check_refuses(rig: Rig) -> None:
+    refused = await rig.client.post(
+        f"{V1}/tenants/{T}/certificates/issue",
+        json={"name": "web", "source": "acme", "sans": ["www.example.test"]},
+        headers=rig.operator,
+    )
+    assert refused.status_code == 422
+    assert {e["path"] for e in refused.json()["errors"]} >= {"acme_provider", "sans[0]"}
+
+
+async def test_every_attempt_is_recorded_with_the_error_and_the_stages_are_reported(
+    rig: Rig, directory_url: str
+) -> None:
+    from switchyard.services.certs import CertificateError
+
+    await rig.create_acme(directory_url, default=True)
+    await rig.create_dns()
+    stages = Stages()
+    await rig.certs.issue(
+        TENANT,
+        "history",
+        CertSource.ACME,
+        ("h.example.test",),
+        renew_before_days=45,
+        progress=stages,
+    )
+    assert stages.names == ["order", "validate", "finalize", "store", "change set"]
+    assert "challenge records removed" in stages.notes
+    await run_latest_change_set(rig.w)
+    cert = next(c for c in (await rig.w.snapshot()).certificates if c.name == "history")
+    assert cert.renew_before_days == 45 and cert.renew_policy.value == "auto"
+
+    rig.cloudflare.token = "revoked"
+    failing = Stages()
+    with pytest.raises(CertificateError):
+        await rig.certs.issue(
+            TENANT,
+            "history",
+            CertSource.ACME,
+            ("h2.example.test",),
+            trigger="auto",
+            progress=failing,
+        )
+    assert failing.failed == ["validate"]
+
+    history = (
+        await rig.client.get(
+            f"{V1}/tenants/{T}/certificates/{cert.id}/renewals", headers=rig.operator
+        )
+    ).json()
+    assert [(r["ok"], r["trigger"]) for r in history] == [(False, "auto"), (True, "manual")]
+    assert "bad token" in history[0]["error"] and history[1]["change_set_id"]
+    assert history[1]["acme_provider"] is None and history[1]["challenge"] == "dns-01"
+
+    status = (
+        await rig.client.get(f"{V1}/tenants/{T}/certificate-renewals", headers=rig.operator)
+    ).json()
+    mine = next(s for s in status if s["certificate"] == "history")
+    assert mine["last_ok"] is False and mine["failures_in_a_row"] == 1
+    assert mine["last_success_at"] is not None and "bad token" in mine["last_error"]
+    assert mine["renew_before_days"] == 45 and mine["issuer"] == "ACME (default provider)"

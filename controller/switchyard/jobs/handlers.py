@@ -23,6 +23,7 @@ from switchyard.services.certificates import (
     RENEW_CERTS_JOB,
     SYNC_CLOUDFLARE_IPS_JOB,
     CertificateService,
+    issue_stages,
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
@@ -96,15 +97,22 @@ def build_handlers(
 
         async def issue_cert(job: Job) -> dict[str, Any]:
             p = job.payload
+            source = dm.CertSource(p["source"])
+            progress = JobProgress(db.admin, job.id)
+            await progress.plan(issue_stages(source))
             change_set = await certs.issue(
                 UUID(p["tenant_id"]),
                 p["name"],
-                dm.CertSource(p["source"]),
+                source,
                 tuple(p["sans"]),
+                renew=dm.RenewPolicy(p["renew_policy"]) if p.get("renew_policy") else None,
+                renew_before_days=p.get("renew_before_days"),
                 acme_provider=p.get("acme_provider"),
                 challenge=dm.AcmeChallenge(p["challenge"]) if p.get("challenge") else None,
                 dns_provider=p.get("dns_provider"),
+                progress=progress,
             )
+            await progress.skip_pending()
             return {"change_set_id": str(change_set)}
 
         async def renew_certs(job: Job) -> dict[str, Any]:

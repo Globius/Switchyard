@@ -914,6 +914,38 @@ DNS_PROVIDER_TEST = {
         }
     ],
 }
+ISSUE_CHECK = {
+    "ok": False,
+    "problems": [{"path": "sans[1]", "message": "no DNS credential covers this name"}],
+}
+RENEWAL = {
+    "id": "0192f1a2-0000-7000-8000-00000000e501",
+    "certificate": "web-example",
+    "trigger": "auto",
+    "started_at": "2026-10-12T02:00:00Z",
+    "finished_at": "2026-10-12T02:01:10Z",
+    "ok": True,
+    "error": None,
+    "change_set_id": "0192f1a2-0000-7000-8000-00000000c501",
+    "not_after": "2027-01-10T02:01:00Z",
+    "acme_provider": "letsencrypt",
+    "challenge": "dns-01",
+}
+RENEWAL_STATUS = {
+    "certificate_id": "0192f1a2-0000-7000-8000-00000000f501",
+    "certificate": "web-example",
+    "source": "acme",
+    "issuer": "letsencrypt",
+    "not_after": "2027-01-10T02:01:00Z",
+    "renew_policy": "auto",
+    "renew_before_days": 30,
+    "renew_due_at": "2026-12-11T02:01:00Z",
+    "last_attempt_at": "2026-10-12T02:00:00Z",
+    "last_ok": True,
+    "last_error": None,
+    "last_success_at": "2026-10-12T02:01:10Z",
+    "failures_in_a_row": 0,
+}
 DNS_MATCH = [
     {
         "name": "*.example.test",

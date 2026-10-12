@@ -21,7 +21,8 @@ import asyncio
 import datetime
 import logging
 import ssl
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -57,6 +58,34 @@ class Eab:
 
     kid: str
     hmac_key: str
+
+
+class Progress(Protocol):
+    """Where an issuance reports its stages (a job's progress recorder)."""
+
+    def stage(self, name: str) -> AbstractAsyncContextManager[None]:
+        """Run a block as a named stage; an exception marks it failed and propagates."""
+        ...
+
+    async def note(self, message: str, level: str = "info") -> None:
+        """Add a line to the log."""
+        ...
+
+
+class NoProgress:
+    """A :class:`Progress` that records nothing."""
+
+    @asynccontextmanager
+    async def stage(self, name: str) -> AsyncIterator[None]:
+        """Run the block."""
+        yield
+
+    async def note(self, message: str, level: str = "info") -> None:
+        """Ignore the line."""
+
+
+#: The stages of an ACME issuance, in order.
+ISSUE_STAGES = ("order", "validate", "finalize")
 
 
 class Solver(Protocol):
@@ -408,43 +437,65 @@ class AcmeIssuer:
         except (errors.Error, OSError, ValueError) as exc:
             raise AcmeError(f"ACME registration failed: {exc}") from exc
 
-    async def issue(self, csr_pem: str) -> str:
+    async def issue(self, csr_pem: str, progress: Progress | None = None) -> str:
         """Order, validate with the solver and finalize. Returns the full chain as PEM.
+
+        The stages reported to ``progress`` are ``order``, ``validate`` and ``finalize``. What the
+        solver published is removed as soon as the CA has validated the names, and always when
+        something fails.
 
         Raises:
             AcmeError: On any failure; whatever the solver published is removed first.
         """
+        report = progress or NoProgress()
         cleanups: list[Callable[[], Awaitable[None]]] = []
+
+        async def clean() -> None:
+            if not cleanups:
+                return
+            while cleanups:
+                await cleanups.pop()()
+            await report.note("challenge records removed")
+
         try:
-            bearer = await self._bearer()
-            eab = await self._eab(bearer)
-            acme, _ = await self._call(self._account, bearer, eab)
-            order = await self._call(acme.new_order, csr_pem.encode())
-            pending: list[Any] = []
-            for authz in order.authorizations:
-                if authz.body.status == messages.STATUS_VALID:
-                    continue  # the CA remembers an earlier validation of this name
-                challenge = next(
-                    (
-                        c
-                        for c in authz.body.challenges
-                        if isinstance(c.chall, self._solver.challenge_type)
-                    ),
-                    None,
-                )
-                if challenge is None:
-                    raise AcmeError(f"the CA offers no {self._solver.challenge_type.typ} challenge")
-                domain = authz.body.identifier.value
-                cleanups.append(await self._solver.present(domain, challenge, self._key))
-                pending.append(challenge)
-            await self._solver.settle()
-            for challenge in pending:
-                await self._call(acme.answer_challenge, challenge, challenge.response(self._key))
-            deadline = datetime.datetime.now() + datetime.timedelta(seconds=self._timeout)
-            done = await self._call(acme.poll_and_finalize, order, deadline)
+            async with report.stage("order"):
+                bearer = await self._bearer()
+                eab = await self._eab(bearer)
+                acme, _ = await self._call(self._account, bearer, eab)
+                order = await self._call(acme.new_order, csr_pem.encode())
+            async with report.stage("validate"):
+                pending: list[Any] = []
+                for authz in order.authorizations:
+                    if authz.body.status == messages.STATUS_VALID:
+                        continue  # the CA remembers an earlier validation of this name
+                    challenge = next(
+                        (
+                            c
+                            for c in authz.body.challenges
+                            if isinstance(c.chall, self._solver.challenge_type)
+                        ),
+                        None,
+                    )
+                    if challenge is None:
+                        raise AcmeError(
+                            f"the CA offers no {self._solver.challenge_type.typ} challenge"
+                        )
+                    domain = authz.body.identifier.value
+                    cleanups.append(await self._solver.present(domain, challenge, self._key))
+                    pending.append(challenge)
+                await self._solver.settle()
+                for challenge in pending:
+                    await self._call(
+                        acme.answer_challenge, challenge, challenge.response(self._key)
+                    )
+                deadline = datetime.datetime.now() + datetime.timedelta(seconds=self._timeout)
+                order = await self._call(acme.poll_authorizations, order, deadline)
+                await clean()
+            async with report.stage("finalize"):
+                deadline = datetime.datetime.now() + datetime.timedelta(seconds=self._timeout)
+                done = await self._call(acme.finalize_order, order, deadline)
             return str(done.fullchain_pem)
         except (errors.Error, DnsError, OSError, ValueError) as exc:
             raise AcmeError(f"ACME issuance failed: {exc}") from exc
         finally:
-            for cleanup in reversed(cleanups):
-                await cleanup()
+            await clean()

@@ -84,6 +84,7 @@ from switchyard.api.schemas import (
     IdpTestIn,
     IdpTestResult,
     IdpTestStarted,
+    IssueCheckRead,
     JobAccepted,
     JobRead,
     Me,
@@ -104,6 +105,8 @@ from switchyard.api.schemas import (
     ProblemOut,
     ProtocolRulesRead,
     ReasonIn,
+    RenewalRead,
+    RenewalStatusRead,
     RevisionRead,
     RevisionSummary,
     RoleMappingIn,
@@ -146,7 +149,7 @@ from switchyard.domain.changes import (
 )
 from switchyard.domain.field_rules import protocol_rules
 from switchyard.domain.impact import impact as impact_of
-from switchyard.domain.models import AcmeChallenge, CertSource, Protocol
+from switchyard.domain.models import AcmeChallenge, CertSource, Protocol, RenewPolicy
 from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
@@ -155,6 +158,7 @@ from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
 from switchyard.services import principals
 from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
+from switchyard.services.cert_requests import CertificateRequests, IssueRequest
 from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import (
     ChangeSetDetail,
@@ -211,6 +215,7 @@ class ApiServices:
     status: StatusService
     infra: InfraJobs
     cert_jobs: CertificateJobs
+    cert_requests: CertificateRequests
     jobs: JobService
     role_mappings: RoleMappingService
     users: UserService
@@ -271,6 +276,7 @@ def build_services(
         status=StatusService(db, directory, secrets),
         infra=InfraJobs(db),
         cert_jobs=CertificateJobs(db),
+        cert_requests=CertificateRequests(db),
         jobs=JobService(db),
         role_mappings=RoleMappingService(db),
         users=UserService(db),
@@ -3733,6 +3739,68 @@ def create_app(
             svc, who, tenant, op, change_set, apply, f"import client CA {body.name}"
         )
 
+    def to_request(body: CertIssueIn) -> IssueRequest:
+        return IssueRequest(
+            body.name,
+            CertSource(body.source),
+            tuple(body.sans),
+            body.acme_provider,
+            AcmeChallenge(body.challenge) if body.challenge else None,
+            body.dns_provider,
+            RenewPolicy(body.renew_policy) if body.renew_policy else RenewPolicy.AUTO,
+            body.renew_before_days,
+        )
+
+    @router.post(
+        "/tenants/{t}/certificates/issue/check",
+        tags=["certificates"],
+        summary="Check a certificate request without queueing it",
+        response_model=IssueCheckRead,
+        responses=_ok(ex.ISSUE_CHECK) | VALIDATION_RESPONSE,
+    )
+    async def check_certificate_request(
+        body: CertIssueIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Run the checks the issue call runs, and return every finding with its field path.
+
+        Use it while the request sheet is open: the ACME provider must exist, each name needs a DNS
+        credential that covers it (DNS-01), and an HTTP-01 name must lead to one of the tenant's
+        HTTP services on port 80. Always answers `200`; `ok: false` lists the problems.
+        """
+        problems = await svc.cert_requests.check(who, tenant.id, to_request(body))
+        return {"ok": not problems, "problems": [asdict(p) for p in problems]}
+
+    @router.get(
+        "/tenants/{t}/certificate-renewals",
+        tags=["certificates"],
+        summary="Renewal status of every certificate",
+        response_model=list[RenewalStatusRead],
+        responses=_ok([ex.RENEWAL_STATUS]),
+    )
+    async def renewal_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        """For each server certificate: issuer, expiry, when renewal starts and the last result."""
+        return [asdict(s) for s in await svc.cert_requests.status(who, tenant.id)]
+
+    @router.get(
+        "/tenants/{t}/certificates/{certificate}/renewals",
+        tags=["certificates"],
+        summary="Renewal history of a certificate",
+        response_model=list[RenewalRead],
+        responses=_ok([ex.RENEWAL]),
+    )
+    async def renewal_history(
+        certificate: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        limit: Annotated[int, Query(ge=1, le=200, description="Page size.")] = 50,
+    ) -> list[dict[str, Any]]:
+        """Issuance and renewal attempts, newest first, with the CA's error when one failed."""
+        return [
+            asdict(r)
+            for r in await svc.cert_requests.renewals(who, tenant.id, certificate, limit=limit)
+        ]
+
     @router.post(
         "/tenants/{t}/certificates/issue",
         status_code=202,
@@ -3754,6 +3822,8 @@ def create_app(
             acme_provider=body.acme_provider,
             challenge=AcmeChallenge(body.challenge) if body.challenge else None,
             dns_provider=body.dns_provider,
+            renew_policy=RenewPolicy(body.renew_policy) if body.renew_policy else None,
+            renew_before_days=body.renew_before_days,
             request_id=_rid(),
         )
         return {"job_id": str(job)}

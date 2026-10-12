@@ -6,6 +6,7 @@ stores a secret: the account key, the EAB key and the DNS credentials are in the
 these rows hold the references.
 """
 
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -18,7 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from switchyard.db.base import Base, EntityMixin, TenantOwnedMixin, tenant_unique
@@ -90,4 +91,28 @@ class DnsProviderRow(TenantOwnedMixin, Base):
     )
 
 
-__all__ = ["AcmeProviderRow", "DnsProviderRow"]
+class CertificateRenewalRow(EntityMixin, Base):
+    """``certificate_renewal``: one issuance or renewal attempt of a certificate."""
+
+    __tablename__ = "certificate_renewal"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
+        CheckConstraint("trigger IN ('manual', 'auto')", name="trigger"),
+        CheckConstraint("version >= 1", name="version"),
+        Index("ix_certificate_renewal_lookup", "tenant_id", "certificate", "started_at"),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    certificate: Mapped[str] = mapped_column(Text, nullable=False)
+    trigger: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    finished_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    change_set_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    not_after: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    acme_provider: Mapped[str | None] = mapped_column(Text)
+    challenge: Mapped[str | None] = mapped_column(Text)
+
+
+__all__ = ["AcmeProviderRow", "CertificateRenewalRow", "DnsProviderRow"]

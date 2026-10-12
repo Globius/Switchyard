@@ -74,7 +74,7 @@ async def owner_engine(pg_url: str) -> AsyncIterator[AsyncEngine]:
         await conn.execute(
             text(
                 "TRUNCATE tenant, identity_provider, user_session, local_admin, break_glass_setting, "
-                "login_throttle, acme_provider, system_setting CASCADE"
+                "login_throttle, acme_provider, system_setting, certificate_renewal CASCADE"
             )
         )
     await engine.dispose()

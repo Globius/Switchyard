@@ -1628,6 +1628,15 @@ class CertIssueIn(ApiModel):
         default=None,
         description="DNS credential name for `dns-01`. Chosen by zone when empty.",
     )
+    renew_policy: Literal["auto", "manual"] | None = Field(
+        default=None, description="Defaults to `auto` for a new certificate."
+    )
+    renew_before_days: int | None = Field(
+        default=None,
+        ge=1,
+        le=365,
+        description="How long before expiry an automatic renewal starts.",
+    )
 
 
 #: A Proxmox node name: it becomes a path segment of every Proxmox call.
@@ -1990,3 +1999,51 @@ class AcmeProviderTestRead(ApiModel):
     )
     tos_url: str | None
     external_account_required: bool
+
+
+class IssueProblemRead(ApiModel):
+    """One finding of a certificate request check."""
+
+    path: str = Field(description="Field path, for example `sans[1]` or `acme_provider`.")
+    message: str
+
+
+class IssueCheckRead(ApiModel):
+    """What is wrong with a certificate request, if anything."""
+
+    ok: bool
+    problems: list[IssueProblemRead]
+
+
+class RenewalRead(ApiModel):
+    """One issuance or renewal attempt."""
+
+    id: UUID
+    certificate: str
+    trigger: Literal["manual", "auto"]
+    started_at: datetime
+    finished_at: datetime
+    ok: bool
+    error: str | None = Field(description="The CA's or provider's error, quoted.")
+    change_set_id: UUID | None = Field(description="The `system:certs` change set it opened.")
+    not_after: datetime | None = Field(description="Expiry of the certificate it obtained.")
+    acme_provider: str | None
+    challenge: str | None
+
+
+class RenewalStatusRead(ApiModel):
+    """When a certificate renews and how the last attempts went."""
+
+    certificate_id: UUID
+    certificate: str
+    source: str
+    issuer: str = Field(description="The ACME provider, or the kind of source.")
+    not_after: datetime
+    renew_policy: Literal["auto", "manual"]
+    renew_before_days: int
+    renew_due_at: datetime = Field(description="`not_after` minus `renew_before_days`.")
+    last_attempt_at: datetime | None
+    last_ok: bool | None
+    last_error: str | None
+    last_success_at: datetime | None
+    failures_in_a_row: int

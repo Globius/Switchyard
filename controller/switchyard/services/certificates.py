@@ -20,7 +20,15 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from switchyard.adapters.acme import AcmeError, Dns01Solver, Http01Solver, HttpPublisher, Solver
+from switchyard.adapters.acme import (
+    AcmeError,
+    Dns01Solver,
+    Http01Solver,
+    HttpPublisher,
+    NoProgress,
+    Progress,
+    Solver,
+)
 from switchyard.adapters.cloudflare import Cloudflare, CloudflareError
 from switchyard.adapters.secrets import SecretBackendError, SecretsReader, SecretsWriter
 from switchyard.db import audit_log
@@ -34,6 +42,7 @@ from switchyard.domain.workflow import Role
 from switchyard.ids import uuid7
 from switchyard.jobs import queue
 from switchyard.services.acme_providers import AcmeProviders
+from switchyard.services.cert_requests import CertificateRequests, IssueRequest, record_attempt
 from switchyard.services.certs import (
     CertificateError,
     CertInfo,
@@ -105,16 +114,37 @@ class CertificateJobs:
         acme_provider: str | None = None,
         challenge: dm.AcmeChallenge | None = None,
         dns_provider: str | None = None,
+        renew_policy: dm.RenewPolicy | None = None,
+        renew_before_days: int | None = None,
         request_id: str | None = None,
     ) -> UUID:
         """Queue issuance (or reissue) of a certificate and return the job id.
 
         ``acme_provider``, ``challenge`` and ``dns_provider`` only apply to ``acme`` certificates;
-        what is left out is taken from the existing certificate, then from the defaults.
+        what is left out is taken from the existing certificate, then from the defaults. The
+        request is checked first (:meth:`CertificateRequests.check`), so a name no credential covers
+        is refused here, with the field path, instead of failing in the job.
+
+        Raises:
+            FieldErrors: With every finding of the check.
         """
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
         require(principal, "manage", "certificate")
+        await CertificateRequests(self._db).validate(
+            principal,
+            tenant_id,
+            IssueRequest(
+                name,
+                source,
+                sans,
+                acme_provider,
+                challenge,
+                dns_provider,
+                renew_policy or dm.RenewPolicy.AUTO,
+                renew_before_days,
+            ),
+        )
         async with admin_session(self._db.admin) as session:
             return await queue.enqueue(
                 session,
@@ -127,6 +157,8 @@ class CertificateJobs:
                     "acme_provider": acme_provider,
                     "challenge": challenge.value if challenge else None,
                     "dns_provider": dns_provider,
+                    "renew_policy": renew_policy.value if renew_policy else None,
+                    "renew_before_days": renew_before_days,
                 },
                 tenant_id=tenant_id,
                 max_attempts=2,
@@ -159,6 +191,8 @@ class CertificateJobs:
             acme_provider=cert.acme_provider,
             challenge=cert.challenge,
             dns_provider=cert.dns_provider,
+            renew_policy=cert.renew_policy,
+            renew_before_days=cert.renew_before_days,
             request_id=request_id,
         )
 
@@ -226,6 +260,7 @@ class CertificateService:
         source: dm.CertSource,
         renew: dm.RenewPolicy,
         how: "IssueSettings | None" = None,
+        renew_before_days: int | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "source": source.value,
@@ -234,6 +269,8 @@ class CertificateService:
             "secret_ref": issued.secret_ref,
             "renew_policy": renew.value,
         }
+        if renew_before_days is not None:
+            body["renew_before_days"] = renew_before_days
         if source is dm.CertSource.ACME and how is not None:
             body |= {
                 "acme_provider": how.acme_provider,
@@ -387,7 +424,12 @@ class CertificateService:
     # -- issuing ----------------------------------------------------------------------------------
 
     async def _acme_chain(
-        self, tenant_id: UUID, csr_pem: str, how: IssueSettings, sans: tuple[str, ...]
+        self,
+        tenant_id: UUID,
+        csr_pem: str,
+        how: IssueSettings,
+        sans: tuple[str, ...],
+        progress: Progress,
     ) -> str:
         if self._acme_providers is None:
             raise CertificateError("ACME is not configured")
@@ -406,7 +448,7 @@ class CertificateService:
             solver = Dns01Solver(resolver.resolve, wait_s=self._dns_wait)
         try:
             issuer = await self._acme_providers.issuer(how.acme_provider, solver)
-            return await issuer.issue(csr_pem)
+            return await issuer.issue(csr_pem, progress)
         finally:
             if resolver is not None:
                 await resolver.close()
@@ -417,11 +459,12 @@ class CertificateService:
         source: dm.CertSource,
         sans: tuple[str, ...],
         how: IssueSettings,
+        progress: Progress,
     ) -> str:
         key_pem, csr_pem = generate_key_and_csr(sans)
         try:
             if source is dm.CertSource.ACME:
-                return await self._acme_chain(tenant_id, csr_pem, how, sans) + key_pem
+                return await self._acme_chain(tenant_id, csr_pem, how, sans, progress) + key_pem
             if source is dm.CertSource.CLOUDFLARE_ORIGIN:
                 if self._cloudflare is None:
                     raise CertificateError("Cloudflare is not configured")
@@ -454,12 +497,33 @@ class CertificateService:
         source: dm.CertSource,
         sans: tuple[str, ...],
         *,
-        renew: dm.RenewPolicy = dm.RenewPolicy.AUTO,
+        renew: dm.RenewPolicy | None = None,
+        renew_before_days: int | None = None,
         acme_provider: str | None = None,
         challenge: dm.AcmeChallenge | None = None,
         dns_provider: str | None = None,
+        trigger: str = "manual",
+        progress: Progress | None = None,
     ) -> UUID:
         """Obtain a certificate and create or update the ``certificate`` object.
+
+        What the caller leaves out (provider, challenge, credential, renewal policy and lead time)
+        is taken from the existing certificate, then from the defaults. Every attempt, successful
+        or not, is recorded for the renewal history.
+
+        Args:
+            tenant_id: The tenant.
+            name: Certificate name.
+            source: ``acme`` or ``cloudflare_origin``.
+            sans: The names.
+            renew: Renewal policy; automatic for a new certificate.
+            renew_before_days: Lead time of an automatic renewal.
+            acme_provider: ACME provider name.
+            challenge: ``dns-01`` or ``http-01``.
+            dns_provider: Pinned DNS credential.
+            trigger: ``manual`` (a person asked) or ``auto`` (the daily renewal).
+            progress: Where the stages (``order``, ``validate``, ``finalize``, ``store``,
+                ``change set``) are reported.
 
         Returns:
             The id of the change set that was opened.
@@ -467,34 +531,66 @@ class CertificateService:
         Raises:
             CertificateError: If issuance or storing fails (nothing is changed).
         """
+        report = progress or NoProgress()
+        started = datetime.now(UTC)
         existing = next(
             (c for c in (await self._snapshot(tenant_id)).certificates if c.name == name), None
         )
-        # what the caller leaves out comes from the existing certificate, then the defaults
         how = IssueSettings(
             acme_provider or (existing.acme_provider if existing else None),
             challenge or (existing.challenge if existing else None) or dm.AcmeChallenge.DNS01,
             dns_provider or (existing.dns_provider if existing else None),
         )
-        pem = await self._obtain(tenant_id, source, sans, how)
-        issued = await self._store(tenant_id, name, pem)
-        body = self._body(issued, source, renew, how)
-        if existing is None:
-            op = ChangeOp(
-                object_type=ObjectType.CERTIFICATE,
-                object_id=uuid7(),
-                action=Action.CREATE,
-                body={"name": name} | body,
+        policy = renew or (existing.renew_policy if existing else dm.RenewPolicy.AUTO)
+        lead = renew_before_days or (existing.renew_before_days if existing else None)
+        not_after: datetime | None = None
+        change_set: UUID | None = None
+        error: str | None = None
+        try:
+            if source is dm.CertSource.ACME:
+                pem = await self._obtain(tenant_id, source, sans, how, report)
+            else:
+                async with report.stage("issue"):
+                    pem = await self._obtain(tenant_id, source, sans, how, report)
+            async with report.stage("store"):
+                issued = await self._store(tenant_id, name, pem)
+                not_after = issued.info.not_after
+            body = self._body(issued, source, policy, how, lead)
+            if existing is None:
+                op = ChangeOp(
+                    object_type=ObjectType.CERTIFICATE,
+                    object_id=uuid7(),
+                    action=Action.CREATE,
+                    body={"name": name} | body,
+                )
+            else:
+                op = ChangeOp(
+                    object_type=ObjectType.CERTIFICATE,
+                    object_id=existing.id,
+                    action=Action.UPDATE,
+                    body=body,
+                    expected_version=existing.version,
+                )
+            async with report.stage("change set"):
+                change_set = await self._submit(tenant_id, f"issue certificate {name}", [op])
+            return change_set
+        except Exception as exc:
+            error = str(exc) or type(exc).__name__
+            raise
+        finally:
+            await record_attempt(
+                self._db,
+                tenant_id=tenant_id,
+                certificate=name,
+                trigger=trigger,
+                started_at=started,
+                ok=error is None,
+                error=error,
+                change_set_id=change_set,
+                not_after=not_after,
+                acme_provider=how.acme_provider if source is dm.CertSource.ACME else None,
+                challenge=how.challenge.value if source is dm.CertSource.ACME else None,
             )
-        else:
-            op = ChangeOp(
-                object_type=ObjectType.CERTIFICATE,
-                object_id=existing.id,
-                action=Action.UPDATE,
-                body=body,
-                expected_version=existing.version,
-            )
-        return await self._submit(tenant_id, f"issue certificate {name}", [op])
 
     async def renew_due(self, *, now: datetime | None = None) -> list[str]:
         """Renew every automatic certificate that expires within 30 days.
@@ -526,6 +622,7 @@ class CertificateService:
                         acme_provider=cert.acme_provider,
                         challenge=cert.challenge,
                         dns_provider=cert.dns_provider,
+                        trigger="auto",
                     )
                     renewed.append(f"{tenant_name}/{cert.name}")
                 except (CertificateError, ValueError, PermissionError) as exc:
@@ -577,3 +674,10 @@ class CertificateService:
         import ipaddress
 
         return [str(ipaddress.ip_network(c)) for c in ranges.all]
+
+
+def issue_stages(source: dm.CertSource) -> tuple[str, ...]:
+    """The stages of an issuance job, in order (what a progress view lists up front)."""
+    if source is dm.CertSource.ACME:
+        return ("order", "validate", "finalize", "store", "change set")
+    return ("issue", "store", "change set")

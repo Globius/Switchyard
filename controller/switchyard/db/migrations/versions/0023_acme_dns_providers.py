@@ -112,6 +112,50 @@ def upgrade() -> None:
         "GRANT SELECT, INSERT, UPDATE, DELETE ON dns_provider TO switchyard_app, switchyard_admin"
     )
 
+    op.create_table(
+        "certificate_renewal",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("version", sa.Integer(), server_default=sa.text("1"), nullable=False),
+        sa.Column("tenant_id", sa.UUID(), nullable=False),
+        sa.Column("certificate", sa.Text(), nullable=False),
+        sa.Column("trigger", sa.Text(), nullable=False),
+        sa.Column("started_at", postgresql.TIMESTAMP(timezone=True), nullable=False),
+        sa.Column("finished_at", postgresql.TIMESTAMP(timezone=True), nullable=False),
+        sa.Column("ok", sa.Boolean(), nullable=False),
+        sa.Column("error", sa.Text(), nullable=True),
+        sa.Column("change_set_id", sa.UUID(), nullable=True),
+        sa.Column("not_after", postgresql.TIMESTAMP(timezone=True), nullable=True),
+        sa.Column("acme_provider", sa.Text(), nullable=True),
+        sa.Column("challenge", sa.Text(), nullable=True),
+        sa.CheckConstraint(
+            "trigger IN ('manual', 'auto')", name=op.f("ck_certificate_renewal_trigger")
+        ),
+        sa.CheckConstraint("version >= 1", name=op.f("ck_certificate_renewal_version")),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenant.id"],
+            name=op.f("fk_certificate_renewal_tenant_id_tenant"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_certificate_renewal")),
+    )
+    op.create_index(
+        "ix_certificate_renewal_lookup",
+        "certificate_renewal",
+        ["tenant_id", "certificate", "started_at"],
+    )
+    op.execute("ALTER TABLE certificate_renewal ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE certificate_renewal FORCE ROW LEVEL SECURITY")
+    op.execute(
+        "CREATE POLICY tenant_isolation ON certificate_renewal "
+        "USING (tenant_id = ANY (app_tenant_ids())) "
+        "WITH CHECK (tenant_id = ANY (app_tenant_ids()))"
+    )
+    op.execute(
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON certificate_renewal "
+        "TO switchyard_app, switchyard_admin"
+    )
+
     op.add_column("certificate", sa.Column("acme_provider", sa.Text(), nullable=True))
     op.add_column("certificate", sa.Column("challenge", sa.Text(), nullable=True))
     op.add_column("certificate", sa.Column("dns_provider", sa.Text(), nullable=True))
@@ -127,5 +171,6 @@ def downgrade() -> None:
     op.drop_column("certificate", "dns_provider")
     op.drop_column("certificate", "challenge")
     op.drop_column("certificate", "acme_provider")
+    op.drop_table("certificate_renewal")
     op.drop_table("dns_provider")
     op.drop_table("acme_provider")

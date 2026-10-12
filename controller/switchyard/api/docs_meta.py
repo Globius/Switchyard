@@ -408,6 +408,14 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "acme_provider": "letsencrypt",
         "challenge": "dns-01",
         "dns_provider": "cloudflare-main",
+        "renew_policy": "auto",
+        "renew_before_days": 30,
+    },
+    "POST /tenants/{t}/certificates/issue/check": {
+        "name": "web-example",
+        "source": "acme",
+        "sans": ["www.example.test", "*.example.test"],
+        "challenge": "dns-01",
     },
     "POST /tenants/{t}/dns-providers": {
         "name": "cloudflare-main",
