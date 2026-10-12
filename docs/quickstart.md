@@ -132,7 +132,7 @@ server you run. Review the change set, apply. The canary engine takes the change
 
 ## 10. Add monitoring (optional)
 
-Prometheus, Loki and Grafana beside this stack: in `deploy/telemetry/` copy `telemetry.env.example` to `telemetry.env` with
+Prometheus, Loki and Grafana beside this stack (set `PROMETHEUS_URL=http://prometheus:9090` and `LOKI_URL=http://loki:3100` in the quickstart `.env` and run `docker compose up -d api worker` there, so the UI charts and log tail find them): in `deploy/telemetry/` copy `telemetry.env.example` to `telemetry.env` with
 `CONTROLLER_SCHEME=http` and `CONTROLLER_HOSTPORT=api:8000`, write the `METRICS_TOKEN` of the quickstart's `.env` into
 `secrets/metrics.token` (readable by everyone: the Prometheus container runs as `nobody`), and start it with
 `docker compose -f compose.yaml -f compose.quickstart.yaml --env-file telemetry.env up -d`. The override puts Prometheus on
