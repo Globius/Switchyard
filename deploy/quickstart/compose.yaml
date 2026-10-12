@@ -66,6 +66,7 @@ services:
     depends_on: {migrate: {condition: service_completed_successfully}}
   worker:
     <<: *controller
+    healthcheck: {disable: true}   # the image's HTTP health check is for the API
     command: ["worker", "--name", "qs-worker"]
     depends_on: {migrate: {condition: service_completed_successfully}}
   # The UI and /api behind security headers (deploy/proxy), plain HTTP inside the compose network.

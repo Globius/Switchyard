@@ -100,14 +100,14 @@ chmod 644 secrets/*.crt secrets/ca.pem secrets/*.key secrets/bundle.key   # read
 
 say "controller, UI and TLS front"
 dc up -d --build >/dev/null
-n=0; until [ "$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:$(ENVGET HTTPS_PORT | sed 's/^$/8443/')/api/v1/healthz")" = 200 ]; do
+PORT=$(ENVGET HTTPS_PORT); PORT=${PORT:-8443}
+n=0; until [ "$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:$PORT/api/v1/healthz")" = 200 ]; do
   n=$((n+1)); [ $n -lt 60 ] || { dc logs --tail 30 api; echo "the API did not come up" >&2; exit 1; }; sleep 3; done
 
 say "first login"
 if [ ! -s secrets/admin-token ]; then
   dc run --rm --no-deps migrate token --name quickstart 2>&1 | grep -o 'sy_[A-Za-z0-9_-]*' | tail -1 > secrets/admin-token
 fi
-PORT=$(ENVGET HTTPS_PORT); PORT=${PORT:-8443}
 API="https://127.0.0.1:$PORT/api/v1"
 CURL() { curl -sS --ssl-no-revoke --cacert secrets/ca.pem -H "Authorization: Bearer $(cat secrets/admin-token)" "$@"; }
 if [ ! -s secrets/breakglass.txt ]; then
