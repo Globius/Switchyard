@@ -5,6 +5,8 @@ Commands:
                           engines, with a fresh enrollment token for every engine that has not enrolled
   vs NAME GROUP VIP [PROTOCOL [PORT [POOL]]]   create a virtual service (default http, port 80, pool `controller-api`)
   status                  engine status (reachability, members, VRRP, BGP, drift)
+  cert NAME               import the PEM (chain, then key) in the CERT_PEM environment variable as certificate NAME
+  vstls NAME GROUP VIP CERT [PORT [POOL]]   create an HTTPS virtual service (TLS on PORT, default 443) using certificate CERT
   reapply                 apply the newest failed change set again
   lastapply               log and result of the newest apply job
 Environment: SY_TOKEN (admin API token), TEMPLATE_VMID, LAB_TENANT (default lab). Prints one JSON document.
@@ -97,6 +99,46 @@ async def vs(
     return {"state": "applied", "object": await lab.get(f"/virtual-services/{accepted['object_id']}")}
 
 
+async def cert(lab: Lab, name: str) -> dict:
+    """Import the PEM bundle in ``CERT_PEM`` as a certificate."""
+    accepted = await lab.request(
+        "POST",
+        f"/tenants/{TENANT}/certificates/import",
+        json_body={"name": name, "pem": os.environ["CERT_PEM"]},
+        params={"apply": "true"},
+    )
+    await lab.wait_job(accepted["job_id"], timeout_s=300)
+    return await lab.get(f"/certificates/{accepted['object_id']}")
+
+
+async def vstls(
+    lab: Lab, name: str, group_name: str, vip: str, cert_name: str, port: str = "443", pool_name: str = "web"
+) -> dict:
+    """Create a virtual service that terminates TLS on ``port`` with the named certificate."""
+    pool = await lab.find("pools", pool_name)
+    group = await lab.find("se-groups", group_name)
+    vips = await lab.find("vip-pools", "vips")
+    certificate = await lab.find("certificates", cert_name)
+    body = {
+        "name": name,
+        "protocol": "http",
+        "se_group_id": group["id"],
+        "vip": vip,
+        "vip_pool_id": vips["id"],
+        "ports": [{"port": int(port), "tls": True}],
+        "certificate_ids": [certificate["id"]],
+        "default_pool_id": pool["id"],
+    }
+    accepted = await lab.request(
+        "POST", f"/tenants/{TENANT}/virtual-services", json_body=body, params={"apply": "true"}
+    )
+    await lab.wait_job(accepted["job_id"], timeout_s=300)
+    created = await lab.get(f"/change-sets/{accepted['change_set_id']}")
+    if created["state"] != "applied":
+        return {"state": created["state"], "error": created.get("error")}
+    return {"state": "applied", "object": await lab.get(f"/virtual-services/{accepted['object_id']}")}
+
+
 async def recreate(lab: Lab, name: str, group_name: str, vip: str) -> dict:
     """Delete the virtual service and create it again (two rollouts: re-renders everything for the group)."""
     existing = await lab.find("virtual-services", name)
@@ -131,7 +173,7 @@ async def lastapply(lab: Lab) -> dict:
     return {"job": job, "log": await lab.get(f"/jobs/{job['id']}/log")}
 
 
-COMMANDS = {"deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
+COMMANDS = {"cert": cert, "vstls": vstls, "deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
 
 
 async def main() -> None:

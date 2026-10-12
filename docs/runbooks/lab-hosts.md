@@ -162,6 +162,14 @@ pool. Checked from outside the hosts: `curl -g http://[VIP]/` returns the helper
 datagram to the UDP VIP's port 5301 is echoed back through IPVS. A BGP group would need a real upstream router for public
 reachability, so BGP stays lab-only.
 
+**HTTPS with a managed certificate.** Issue a server certificate from the lab CA (OpenBao `pki/issue/internal`, with the VIP as
+an IP SAN), import it (`drive.py cert NAME`, the `certificates/import` API with the PEM in `CERT_PEM`) and create the service
+with `drive.py vstls NAME GROUP VIP CERT`. Test from outside with the CA: `curl --cacert ca.pem https://[VIP]/` (on Windows
+add `--ssl-no-revoke`). Known problem found doing this: the canary validates the new configuration on a live engine
+**before** it sends the certificate file, so a first TLS service fails with "unable to stat SSL certificate from file
+/etc/switchyard/certs/NAME.pem". The lab works around it by writing the same PEM to `/etc/switchyard/certs/NAME.pem` on the
+engines before creating the service; the bundle then manages the file as usual.
+
 ## Tearing down
 
 Delete the lab guests (ids in `hosts.env` and the engines the controller created), remove the SDN zone `lab`
