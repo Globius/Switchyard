@@ -1,0 +1,36 @@
+[Unit]
+Description=Switchyard auth sidecar (one oauth2-proxy per configuration)
+Documentation=https://github.com/oauth2-proxy/oauth2-proxy
+After=network.target
+# Runs only on engines that have an auth configuration: the agent writes /etc/switchyard/auth/ from the signed bundle,
+# starts this unit when the first file appears and stops it when the last one is gone (agent/internal/bundle, ADR 0081).
+ConditionPathExistsGlob=/etc/switchyard/auth/*.cfg
+ConditionPathExists=/usr/local/bin/oauth2-proxy
+
+[Service]
+User=sy-auth
+Group=sy-auth
+# One process per <name>.cfg, secrets from <name>.env (never on a command line). The agent hands the files to the sy-auth
+# group, so the sidecar needs no other access to /etc/switchyard.
+ExecStart=/usr/local/sbin/sy-auth-run
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallFilter=@system-service
+MemoryMax=512M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

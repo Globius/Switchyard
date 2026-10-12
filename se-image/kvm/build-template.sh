@@ -5,7 +5,7 @@
 # dataplaneapi from a throwaway web server on this node, runs provision.sh and powers off; then converts the VM to a
 # template (clone it with deploy `guest_kind: "qemu"`). Needs /dev/kvm to be quick, and DHCP on BRIDGE.
 # Environment: NODE_URL=http://<address of this node the build VM can reach> (required; an IPv6 address in brackets),
-# PORT=8099, BIND=:: to serve on IPv6, BUILD_IPCONFIG="ip6=auto" for an IPv6-only network (default ip=dhcp).
+# SIDECAR_DIR=se-image/dist installs the sidecars found there (optional; ADR 0081). PORT=8099, BIND=:: to serve on IPv6, BUILD_IPCONFIG="ip6=auto" for an IPv6-only network (default ip=dhcp).
 set -eu
 VMID=${1:?template vmid}; AGENT=${2:?path to sy-agent}; DP=${3:?path to dataplaneapi}
 STORAGE=${4:-local}; BRIDGE=${5:-vmbr0}
@@ -17,9 +17,18 @@ IMG=/var/lib/vz/template/iso/debian-13-genericcloud-amd64.qcow2
 
 WEB=$(mktemp -d)
 mkdir -p "$WEB/se-image"
-cp -r "$HERE/files" "$HERE/cloud-init" "$HERE/provision.sh" "$HERE/packages.txt" "$WEB/se-image/"
+cp -r "$HERE/files" "$HERE/cloud-init" "$HERE/provision.sh" "$HERE/packages.txt" "$HERE/versions.env" "$WEB/se-image/"
 cp "$AGENT" "$WEB/sy-agent"; cp "$DP" "$WEB/dataplaneapi"
-tar -C "$WEB" -czf "$WEB/build.tar.gz" se-image sy-agent dataplaneapi
+EXTRA=""; AUTHENV=""
+if [ -n "${SIDECAR_DIR:-}" ]; then   # sidecar slots (ADR 0081): whatever fetch-binaries.sh put in SIDECAR_DIR (se-image/dist)
+  for f in oauth2-proxy oauth2-proxy.sha256 coraza-spoa coraza-spoa.sha256 coreruleset.tar.gz; do
+    [ ! -f "$SIDECAR_DIR/$f" ] || { cp "$SIDECAR_DIR/$f" "$WEB/$f"; EXTRA="$EXTRA $f"; }
+  done
+  [ ! -f "$SIDECAR_DIR/oauth2-proxy" ] || AUTHENV="$AUTHENV AUTH_PROXY_BIN=/root/oauth2-proxy"
+  [ ! -f "$SIDECAR_DIR/coraza-spoa" ] || AUTHENV="$AUTHENV CORAZA_SPOA_BIN=/root/coraza-spoa"
+  [ ! -f "$SIDECAR_DIR/coreruleset.tar.gz" ] || AUTHENV="$AUTHENV CRS_TARBALL=/root/coreruleset.tar.gz"
+fi
+tar -C "$WEB" -czf "$WEB/build.tar.gz" se-image sy-agent dataplaneapi $EXTRA
 (cd "$WEB" && python3 -m http.server "$PORT" --bind "${BIND:-0.0.0.0}" >/dev/null 2>&1) &
 WEBPID=$!
 trap 'kill $WEBPID 2>/dev/null' EXIT
@@ -29,7 +38,7 @@ cat > /var/lib/vz/snippets/sy-se-template-build.yaml <<YAML
 package_update: true
 packages: [curl, ca-certificates]
 runcmd:
-  - [sh, -c, "curl -g -fsS $NODE_URL:$PORT/build.tar.gz | tar -xz -C /root && AGENT_BIN=/root/sy-agent DATAPLANE_BIN=/root/dataplaneapi sh /root/se-image/provision.sh > /var/log/sy-provision.log 2>&1 && poweroff || echo BUILD FAILED > /dev/ttyS0"]
+  - [sh, -c, "curl -g -fsS $NODE_URL:$PORT/build.tar.gz | tar -xz -C /root && AGENT_BIN=/root/sy-agent DATAPLANE_BIN=/root/dataplaneapi $AUTHENV sh /root/se-image/provision.sh > /var/log/sy-provision.log 2>&1 && poweroff || echo BUILD FAILED > /dev/ttyS0"]
 YAML
 
 qm create "$VMID" --name sy-se-template --memory 1536 --cores 2 --cpu host --ostype l26 --agent 1 \

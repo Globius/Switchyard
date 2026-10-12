@@ -98,6 +98,7 @@ Date: YYYY-MM-DD
 | [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
 | [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |
 | [0150](0150-avi-importer.md) | Avi configuration importer | Accepted |
+| [0081](0081-se-image-sidecar-slot-and-rolling-operations.md) | SE image sidecar slot, pinned versions, rolling upgrade, health score | Accepted |
 | [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
 | [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |

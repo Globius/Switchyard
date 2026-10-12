@@ -417,6 +417,16 @@ VIRTUAL_SERVICE_STATUS = {
     ],
 }
 
+SE_GROUP_HEALTH = {
+    "se_group_id": SE_GROUP,
+    "name": "edge",
+    "score": 90,
+    "reasons": ["1 of 2 engines not healthy"],
+    "engines": [
+        {"engine": "edge-1", "engine_id": ENGINE, "score": 100, "reasons": []},
+        {"engine": "edge-2", "engine_id": ENGINE, "score": 80, "reasons": ["1 drifted file(s)"]},
+    ],
+}
 ENGINE_STATUS = {
     "engine": "edge-1",
     "engine_id": ENGINE,

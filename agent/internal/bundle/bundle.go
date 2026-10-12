@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"sort"
@@ -41,8 +42,8 @@ var Units = map[string]string{
 	"coraza":     "coraza-spoa",
 	"certs":      "haproxy",
 	"nftables":   "nftables",
-	"sysctl":     "systemd-sysctl",
 	"auth":       "sy-auth",
+	"sysctl":     "systemd-sysctl",
 }
 
 // verbs overrides the systemctl verb for units that cannot reload (default "reload"). The
@@ -53,8 +54,13 @@ var Units = map[string]string{
 var verbs = map[string]string{
 	"systemd-sysctl": "restart",
 	"nftables":       "restart",
-	"sy-auth":        "restart",
+	"sy-auth":        "restart", // oauth2-proxy does not reload its configuration
 }
+
+// onDemand units run only while they have files: they are started when the first file appears and stopped
+// when the last one is gone. The SE image skips them at boot until their configuration exists, so an engine
+// without that feature carries no idle daemon, and one that has it comes back after a reboot without the controller.
+var onDemand = map[string]bool{"keepalived": true, "frr": true, "sy-auth": true, "coraza-spoa": true}
 
 func verb(unit string) string {
 	if v, ok := verbs[unit]; ok {
@@ -74,6 +80,11 @@ var suffixOnly = map[string][]string{"certs": {".pem", ".crl", ".secret"}, "auth
 // their own user and the SE image makes the directory root:sy-auth 0750, which is what keeps them
 // private (including the "*.env" files that hold the secrets).
 var secretDirs = map[string]bool{"certs": true}
+
+// groupDirs name the group that may read a managed directory: the sidecar that runs from it. The
+// agent writes the files 0640 and, when the group exists on the engine, hands them to it (and the
+// directory with them), so the sidecar needs no other access to /etc/switchyard.
+var groupDirs = map[string]string{"auth": "sy-auth", "coraza": "coraza"}
 
 func managedFile(rel string) bool {
 	prefix, rest, ok := strings.Cut(rel, "/")
@@ -180,16 +191,10 @@ func hasFiles(unit string, target map[string][]byte) bool {
 }
 
 // activate makes a unit pick up its files, which are now those of target: it reloads the unit (or
-// restarts it, for units that cannot reload). Keepalived and FRR are the exception because they only
-// run when they have something to do (the SE image skips them at boot until their config exists):
-// they are started when their files appear and stopped when they are gone.
+// restarts it, for units that cannot reload). On-demand units (see onDemand) are the exception: they are
+// started when their files appear and stopped when they are gone.
 func (a *Applier) activate(ctx context.Context, unit string, target map[string][]byte) error {
-	if unit == "sy-auth" && !hasFiles(unit, target) {
-		// no access policy left: stop the authentication proxies
-		_, err := a.Runner.Run(ctx, "systemctl", "stop", unit)
-		return err
-	}
-	if unit == "keepalived" || unit == "frr" {
+	if onDemand[unit] {
 		if !hasFiles(unit, target) {
 			_, err := a.Runner.Run(ctx, "systemctl", "stop", unit)
 			return err
@@ -274,7 +279,25 @@ func (a *Applier) write(rel string, data []byte) error {
 	if err := os.Chmod(name, mode); err != nil {
 		return err
 	}
+	if group, ok := groupDirs[strings.SplitN(rel, "/", 2)[0]]; ok {
+		shareWithGroup(name, group)
+		shareWithGroup(filepath.Dir(target), group)
+	}
 	return os.Rename(name, target)
+}
+
+// shareWithGroup makes path belong to group (best effort: the group exists only on engines whose image has the sidecar,
+// and on systems without numeric groups the call is a no-op).
+func shareWithGroup(path, group string) {
+	g, err := user.LookupGroup(group)
+	if err != nil {
+		return
+	}
+	gid, err := strconv.Atoi(g.Gid)
+	if err != nil {
+		return
+	}
+	_ = os.Chown(path, -1, gid)
 }
 
 func (a *Applier) remove(rel string) error {
