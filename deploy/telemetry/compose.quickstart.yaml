@@ -1,4 +1,6 @@
 # Run the telemetry stack beside the quickstart stack on the same machine (docs/quickstart.md, "Add monitoring"):
+# Set PROMETHEUS_URL=http://prometheus:9090, LOKI_URL=http://loki:3100 and GRAFANA_URL=http://<this host>:3000 in the quickstart .env (then
+# `docker compose up -d api worker` there) and the UI charts and log tail work.
 #   docker compose -f compose.yaml -f compose.quickstart.yaml --env-file telemetry.env up -d
 # Prometheus joins the quickstart's Docker network and scrapes the API directly (CONTROLLER_SCHEME=http,
 # CONTROLLER_HOSTPORT=api:8000 in telemetry.env), so it needs no certificate for the TLS front. The service discovery
@@ -6,6 +8,11 @@
 services:
   prometheus:
     networks: [default, quickstart]
+  loki:
+    networks: [default, quickstart]
+  grafana:
+    # Also on IPv6 (the default publish is IPv4 only).
+    ports: ["${BIND:-127.0.0.1}:3000:3000", "[::]:3000:3000"]
 networks:
   quickstart:
     name: ${QUICKSTART_NETWORK:-switchyard-qs_default}

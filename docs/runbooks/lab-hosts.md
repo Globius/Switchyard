@@ -62,7 +62,9 @@ SDN VXLAN zone does not support an IPv6 underlay, which is why this script exist
 - A router, a spare VM or one of the hosts on the management network holds the gateway address (`172.30.0.1`) the engines
   use as their default route.
 - The lab networks need **no internet**: engines boot offline (ADR 0079). Building templates does need it, from the
-  host's own network, not the lab networks.
+  host's own network, not the lab networks. For operators who want internet from a lab guest anyway, `egress.sh` (on the
+  node that holds the gateway addresses) sets up a proxy on the IPv4 gateway (`http_proxy=http://172.30.0.1:8888`; the
+  node may have no IPv4 to NAT with) and NAT66 for the IPv6 lab network. NAT66 is not persistent.
 
 ## 4. Prepare each node
 
