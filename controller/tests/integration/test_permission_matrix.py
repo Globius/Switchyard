@@ -481,7 +481,8 @@ async def test_status_codes_follow_the_matrix(api: Api, role: Role) -> None:
                     or problem.get("required_role") != required.value
                 ):
                     failures.append(f"{where}: 403 without the matrix role: {problem}")
-        elif response.status_code == 403:
+        elif response.status_code == 403 and "reaching the new address" not in response.text:
+            # confirming a controller change is refused on any host but the new one (ADR 0081)
             failures.append(f"{where}: allowed by the matrix but got 403 {response.text}")
         elif response.status_code >= 500:
             failures.append(f"{where}: {response.status_code}")

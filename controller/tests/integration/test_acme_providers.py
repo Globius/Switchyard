@@ -698,7 +698,7 @@ async def test_check_lists_every_problem_with_its_field_path(rig: Rig, directory
     fine = (
         await rig.client.post(url, json=body | {"sans": ["a.example.test"]}, headers=rig.operator)
     ).json()
-    assert fine == {"ok": True, "problems": []}
+    assert fine == {"ok": True, "problems": [], "warnings": []}
     wild = (
         await rig.client.post(
             url,
