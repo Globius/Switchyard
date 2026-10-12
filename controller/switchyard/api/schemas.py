@@ -16,6 +16,7 @@ Example:
 """
 
 import operator
+from contextvars import ContextVar
 from datetime import datetime
 from enum import StrEnum
 from functools import reduce
@@ -24,6 +25,7 @@ from uuid import UUID
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     SecretStr,
@@ -232,10 +234,40 @@ def body_models(model: type[BaseModel]) -> tuple[type[BaseModel], type[BaseModel
     )
 
 
-def _union(members: list[Any]) -> Any:
+#: The ``kind`` of the stored object a PATCH is about, set by the route while it validates the body.
+PATCH_KIND: ContextVar[str | None] = ContextVar("patch_kind", default=None)
+
+
+def _infer_kind(data: Any) -> Any:
+    """Fill in a missing ``kind`` of a PATCH body from the stored object; refuse a different one.
+
+    Only the fields to change are sent in a PATCH, so ``kind`` is optional there. It is never
+    needed to *choose* a kind, only to say which fields are allowed, and the stored object has it.
+
+    Example:
+        >>> token = PATCH_KIND.set("waf")
+        >>> _infer_kind({"mode": "block"})
+        {'mode': 'block', 'kind': 'waf'}
+        >>> PATCH_KIND.reset(token)
+    """
+    stored = PATCH_KIND.get()
+    if stored is None or not isinstance(data, dict):
+        return data
+    sent = data.get("kind")
+    if sent is None:
+        return {**data, "kind": stored}
+    if sent != stored:
+        raise ValueError(f"kind {sent!r} does not match the stored object, which is {stored!r}")
+    return data
+
+
+def _union(members: list[Any], *, infer_kind: bool = False) -> Any:
     if len(members) == 1:
         return members[0]
-    return Annotated[reduce(operator.or_, members), Field(discriminator="kind")]
+    meta: list[Any] = [Field(discriminator="kind")]
+    if infer_kind:
+        meta.append(BeforeValidator(_infer_kind))  # outermost: runs before the union is chosen
+    return Annotated[(reduce(operator.or_, members), *meta)]
 
 
 class ObjectApi:
@@ -246,7 +278,7 @@ class ObjectApi:
         bodies = [body_models(m) for m in members]
         reads = [read_model(m) for m in members]
         self.create: Any = _union([c for c, _ in bodies])
-        self.patch: Any = _union([p for _, p in bodies])
+        self.patch: Any = _union([p for _, p in bodies], infer_kind=True)
         self.read: Any = _union(reads)
         self.read_members = reads
 
@@ -1272,6 +1304,14 @@ class AgentStatusRead(ApiModel):
     routes_withdrawn: bool = Field(description="True while any BGP prefix is withdrawn.")
     withdrawn_prefixes: list[str] = Field(
         default_factory=list, description="The BGP prefixes the watchdog has withdrawn, sorted."
+    )
+    waf_expected: bool = Field(
+        default=False, description="A WAF policy is applied: the Coraza sidecar should run."
+    )
+    waf_running: bool = Field(
+        default=False,
+        description="The Coraza sidecar is active and accepts connections. False while "
+        "waf_expected is true means the WAF is inert (fail-open policies serve uninspected).",
     )
     bgp: list[BgpSessionStatus]
     vrrp: list[VrrpInstanceStatus]

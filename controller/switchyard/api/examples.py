@@ -441,6 +441,8 @@ ENGINE_STATUS = {
         "haproxy_healthy": True,
         "routes_withdrawn": False,
         "withdrawn_prefixes": [],
+        "waf_expected": False,
+        "waf_running": False,
         "bgp": [],
         "vrrp": [{"name": "VI_edge", "state": "MASTER"}],
         "ipvs": [],

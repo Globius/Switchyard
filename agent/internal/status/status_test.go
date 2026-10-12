@@ -59,3 +59,28 @@ func TestCollectReportsIPVSWhenUDPIsConfigured(t *testing.T) {
 		t.Fatalf("no UDP config means no IPVS report: %v", got.Ipvs)
 	}
 }
+
+type failingRunner struct{ err error }
+
+func (r failingRunner) Run(context.Context, string, ...string) ([]byte, error) { return nil, r.err }
+
+func TestCollectReportsTheWafSidecar(t *testing.T) {
+	conf := filepath.Join(t.TempDir(), "config.yaml")
+	c := &Collector{Runner: ipvsRunner{}, WafConfig: conf, WafProbe: func() bool { return true }, StateDir: t.TempDir(), Now: time.Now}
+	if st := c.Collect(context.Background()); st.WafExpected || st.WafRunning {
+		t.Fatalf("no Coraza config means no WAF is expected: %v %v", st.WafExpected, st.WafRunning)
+	}
+	os.WriteFile(conf, []byte("bind: 127.0.0.1:9000\n"), 0o600)
+	if st := c.Collect(context.Background()); !st.WafExpected || !st.WafRunning {
+		t.Fatalf("active unit and open port: expected=%v running=%v", st.WafExpected, st.WafRunning)
+	}
+	c.WafProbe = func() bool { return false }
+	if st := c.Collect(context.Background()); !st.WafExpected || st.WafRunning {
+		t.Fatalf("a closed port means the sidecar is not serving: %v", st.WafRunning)
+	}
+	c.WafProbe = func() bool { return true }
+	c.Runner = failingRunner{err: os.ErrNotExist}
+	if st := c.Collect(context.Background()); !st.WafExpected || st.WafRunning {
+		t.Fatalf("an inactive unit is not running: %v", st.WafRunning)
+	}
+}
