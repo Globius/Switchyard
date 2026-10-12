@@ -3924,6 +3924,7 @@ def create_app(
             vip=body.vip,
             certificate=body.certificate,
             confirm_within_s=body.confirm_within_s,
+            reset_to_default=body.reset_to_default,
             request_id=_rid(),
         )
         return asdict(view)

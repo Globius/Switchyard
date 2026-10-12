@@ -6030,9 +6030,16 @@ export interface components {
             confirm_within_s?: number | null;
             /**
              * Fqdn
-             * @description The host name users will open.
+             * @description The host name users will open (not needed with `reset_to_default`).
+             * @default
              */
             fqdn: string;
+            /**
+             * Reset To Default
+             * @description Drop the confirmed public URL so the address from the environment applies again. Needs confirmation like any other change.
+             * @default false
+             */
+            reset_to_default: boolean;
             /**
              * Vip
              * @description A new VIP for the `controller` service.

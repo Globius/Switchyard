@@ -1091,6 +1091,18 @@ def api_import_avi(
         typer.echo(f"change set {result['change_set_id']}")
 
 
+@api_app.command("controller-reset")
+def api_controller_reset(
+    confirm: Annotated[bool, typer.Option(help="Confirm at once (from this address).")] = False,
+) -> None:
+    """Propose dropping the controller's configured address (the environment default applies)."""
+    result = _api_run(_call("PUT", "/system/controller/pending", {"reset_to_default": True}))
+    typer.echo(f"waiting for confirmation until {result['pending']['expires_at']}")
+    if confirm:
+        _api_run(_call("POST", "/system/controller/confirm", None))
+        typer.echo("confirmed")
+
+
 @api_app.command("k8s-sync")
 def api_k8s_sync(cluster: str, tenant: Tenant) -> None:
     """Queue a sync of a Kubernetes cluster (name or id) and print the job."""

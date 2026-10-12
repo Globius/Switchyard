@@ -4905,9 +4905,16 @@
             "title": "Confirm Within S"
           },
           "fqdn": {
-            "description": "The host name users will open.",
+            "default": "",
+            "description": "The host name users will open (not needed with `reset_to_default`).",
             "title": "Fqdn",
             "type": "string"
+          },
+          "reset_to_default": {
+            "default": false,
+            "description": "Drop the confirmed public URL so the address from the environment applies again. Needs confirmation like any other change.",
+            "title": "Reset To Default",
+            "type": "boolean"
           },
           "vip": {
             "anyOf": [
@@ -4922,9 +4929,6 @@
             "title": "Vip"
           }
         },
-        "required": [
-          "fqdn"
-        ],
         "title": "ControllerChangeIn",
         "type": "object"
       },
