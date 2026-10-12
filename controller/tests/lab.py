@@ -9,7 +9,10 @@ Everything lives on one bridge network in the RFC 5737 range 192.0.2.0/24:
 """
 
 import io
+import os
+import sys
 import tarfile
+import tempfile
 import time
 import uuid
 from collections.abc import Iterator
@@ -108,6 +111,34 @@ def tar_of(files: dict[str, str], *, executable: set[str] | None = None) -> byte
     return buffer.getvalue()
 
 
+def _hold_lab_lock(timeout_s: float = 1800.0) -> Any:
+    """Take the machine-wide lock for the lab's fixed subnet and return the open file.
+
+    Every lab uses 192.0.2.0/24, so two test runs on one Docker daemon (several worktrees, or a run
+    beside a CI job) would fail with "Pool overlaps". The lock is an OS file lock: it is released
+    when the file is closed or the process dies, so a crashed run never blocks the next one.
+    """
+    handle = open(os.path.join(tempfile.gettempdir(), "switchyard-lab.lock"), "a+")  # noqa: SIM115
+    deadline = time.monotonic() + timeout_s
+    while True:
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return handle
+        except OSError:
+            if time.monotonic() > deadline:
+                handle.close()
+                raise
+            time.sleep(1)
+
+
 @dataclass
 class Se:
     """A running service engine."""
@@ -132,7 +163,9 @@ class Lab:
 
     def __init__(self) -> None:
         """Create the network."""
+        self._lock = _hold_lab_lock()
         self.client = docker.from_env()
+        self._remove_leaked_networks()
         self.network_name = f"sy-lab-{uuid.uuid4().hex[:8]}"
         pool = docker.types.IPAMPool(subnet=SUBNET, gateway="192.0.2.254")
         self._network = self.client.networks.create(
@@ -140,6 +173,13 @@ class Lab:
         )
         self._containers: list[Any] = []
         self._scopes: list[list[Any]] = []
+
+    def _remove_leaked_networks(self) -> None:
+        """Remove ``sy-lab-*`` networks left by a run that died. Safe: we hold the lab lock."""
+        for network in self.client.networks.list(names=["sy-lab-"]):
+            network.reload()
+            if not network.attrs.get("Containers"):
+                network.remove()
 
     def _run(
         self,
@@ -275,3 +315,4 @@ class Lab:
         for container in self._containers:
             container.remove(force=True)
         self._network.remove()
+        self._lock.close()
