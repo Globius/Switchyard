@@ -156,7 +156,7 @@ async def test_a_compliant_device_gets_a_short_lived_client_certificate(pg_url: 
             await count(w, "SELECT count(*) FROM audit_event WHERE action='device.compliant'") == 1
         )
         row = await svc.get_device(principal(Role.VIEWER), TENANT, d.id or UUID(int=0))
-        assert row.compliant and row.cert_serial and row.facts["os"] == "windows"
+        assert row.compliant and row.cert_serial and row.facts and row.facts["os"] == "windows"
 
 
 async def test_failing_facts_get_no_certificate_and_flips_are_audited(pg_url: str) -> None:

@@ -74,7 +74,7 @@ def proxy(request: pytest.FixtureRequest) -> Iterator[tuple[str, dict[int, str]]
         ports = container.attrs["NetworkSettings"]["Ports"]
         yield (
             request.param,
-            {p: ports[f"{p}/tcp"][0]["HostPort"] for p in (8080, 8081)},  # type: ignore[dict-item]
+            {p: ports[f"{p}/tcp"][0]["HostPort"] for p in (8080, 8081)},
         )
     finally:
         container.remove(force=True)

@@ -100,8 +100,8 @@ def canonical(method: str, path: str, timestamp_ms: int, body: bytes) -> bytes:
     r"""The bytes a device signs: method, path, timestamp (ms) and SHA-256 of the body.
 
     Example:
-        >>> canonical("POST", "/device/v1/report", 1700000000000, b"{}")[:34]
-        b'POST\\n/device/v1/report\\n1700000000'
+        >>> canonical("POST", "/api/v1/device/report", 1700000000000, b"{}")[:27]
+        b'POST\n/api/v1/device/report\n'
     """
     digest = hashlib.sha256(body).hexdigest()
     return f"{method.upper()}\n{path}\n{timestamp_ms}\n{digest}".encode()

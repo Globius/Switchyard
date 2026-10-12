@@ -14,7 +14,7 @@ from switchyard.render.escape import RenderError
 
 
 def op(method: str = "GET", path: str = "/pets", **kw: Any) -> dm.ApiOperation:
-    return dm.ApiOperation(method=method, path=path, **kw)  # type: ignore[arg-type]
+    return dm.ApiOperation(method=method, path=path, **kw)
 
 
 def schema(*ops: dm.ApiOperation, **kw: Any) -> dm.ApiSchema:
@@ -121,7 +121,7 @@ class TestRegex:
         ],
     )
     def test_value_kinds(self, kind: str, good: list[str], bad: list[str]) -> None:
-        rx = re.compile(aps.value_regex(dm.ApiParam(name="v", kind=kind), in_path=False))  # type: ignore[arg-type]
+        rx = re.compile(aps.value_regex(dm.ApiParam(name="v", kind=kind), in_path=False))
         assert all(rx.fullmatch(v) for v in good)
         assert not any(rx.fullmatch(v) for v in bad)
 

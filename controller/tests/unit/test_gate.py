@@ -94,7 +94,7 @@ class Env:
         page = self.client.get(url).text
         return re.search(r'name=csrf value="([^"]+)"', page).group(1)  # type: ignore[union-attr]
 
-    def login(self, user: str, secret: str, target: str = CALLBACK) -> httpx.Response:
+    def login(self, user: str, secret: str, target: str = CALLBACK) -> Any:
         url = f"{PATH}/_gate/login?return=" + httpx.QueryParams({"x": target})["x"].replace(
             "?", "%3F"
         ).replace("=", "%3D")
@@ -102,7 +102,7 @@ class Env:
             url, data={"username": user, "secret": secret, "csrf": self.csrf(url)}
         )
 
-    def step(self, secret: str) -> httpx.Response:
+    def step(self, secret: str) -> Any:
         url = f"{PATH}/_gate/login"
         return self.client.post(url, data={"secret": secret, "csrf": self.csrf(url)})
 
