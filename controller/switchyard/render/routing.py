@@ -21,6 +21,7 @@ Files (relative to ``/etc/switchyard/``, delivered to the agent as a signed bund
 BGP announces only the group's VIPs (an out route-map) and accepts nothing from the peers.
 """
 
+import hashlib
 import ipaddress
 import json
 import re
@@ -53,7 +54,8 @@ class EngineSlot:
     Attributes:
         name: Engine name (letters, digits, ``-`` and ``_``).
         index: Position in the group's rollout order (0 is the canary and the VRRP master).
-        router_id: IPv4 address used as BGP router id (the engine's management address).
+        router_id: BGP router id: the engine's IPv4 management address, or, for an IPv6-only
+            engine, any other string (the id is then derived from the engine name).
     """
 
     name: str
@@ -250,24 +252,41 @@ def render_keepalived(snapshot: Snapshot, se_group_id: UUID, slot: EngineSlot) -
     view, group, profile = _group_and_profile(snapshot, se_group_id)
     if not isinstance(profile, dm.VrrpProfile):
         raise RenderError(f"SE group {group.name} does not use VRRP")
-    vips = [f"{vip}/{_vip_prefixlen(view, group, vip)}" for vip in _vips(view, group)]
-    if not vips:
+    all_vips = _vips(view, group)
+    if not all_vips:
         raise RenderError(f"SE group {group.name} has no virtual service to announce")
     servers = _ipvs_servers(view, group)
+    interface = esc.ident(profile.interface.lower())
+    # VRRP carries one address family per instance (RFC 5798), so a dual-stack group gets an
+    # IPv4 and an IPv6 (VRRPv3) instance that share the VRID and the priority. The IPv4 instance
+    # keeps the historic name so single-stack groups render exactly as before.
+    base = "sy_" + esc.ident(group.name)
+    instances = []
+    for family, name in ((4, base), (6, base + "_6")):
+        vips = [f"{v}/{_vip_prefixlen(view, group, v)}" for v in all_vips if v.version == family]
+        if not vips:
+            continue
+        routes = tuple(r for r in profile.static_routes if r.prefix.version == family)
+        instances.append(
+            {
+                "name": name,
+                "family": family,
+                "vips": vips,
+                "routes": [
+                    f"{line} dev {esc.ident(profile.interface)}"
+                    for line in _route_lines(routes, "keepalived")
+                ],
+            }
+        )
     text = _ENV.get_template("keepalived.conf.j2").render(
         virtual_servers=_virtual_servers(servers),
         group=esc.ident(group.name),
         engine=esc.ident(slot.name),
-        instance="sy_" + esc.ident(group.name),
-        interface=esc.ident(profile.interface.lower()),
+        instances=instances,
+        interface=interface,
         vrid=profile.vrid,
         priority=max(1, profile.base_priority - profile.priority_step * slot.index),
         advert=profile.advert_interval_s,
-        vips=vips,
-        routes=[
-            f"{line} dev {esc.ident(profile.interface)}"
-            for line in _route_lines(profile.static_routes, "keepalived")
-        ],
     )
     return {"keepalived/keepalived.conf": text} | _udp_host_files(servers)
 
@@ -280,9 +299,34 @@ def _render_ipvs_only(
         virtual_servers=_virtual_servers(servers),
         group=esc.ident(group.name),
         engine=esc.ident(slot.name),
-        instance=None,
+        instances=[],
     )
     return {"keepalived/keepalived.conf": text} | _udp_host_files(servers)
+
+
+def bgp_router_id(slot: EngineSlot) -> str:
+    """The BGP router id (a 32-bit identifier) for an engine.
+
+    An IPv4 management address is used as is. An IPv6-only engine has none, so the id is derived
+    from the engine name inside ``100.64.0.0/10`` (a range that is never a real router address
+    here); it is stable across renders and only needs to be unique among the group's peers.
+
+    Example:
+        >>> bgp_router_id(EngineSlot("se-1", 0, "10.0.0.5"))
+        '10.0.0.5'
+        >>> bgp_router_id(EngineSlot("se-1", 0, "2001:db8::5")).startswith("100.")
+        True
+    """
+    try:
+        return str(ipaddress.IPv4Address(slot.router_id))
+    except ValueError:
+        pass
+    digest = hashlib.sha256(slot.name.encode()).digest()
+    return str(
+        ipaddress.IPv4Address(
+            (100 << 24) | (64 << 16) | int.from_bytes(digest[:3], "big") % (1 << 22)
+        )
+    )
 
 
 def render_frr(
@@ -300,10 +344,7 @@ def render_frr(
     view, group, profile = _group_and_profile(snapshot, se_group_id)
     if not isinstance(profile, dm.BgpProfile):
         raise RenderError(f"SE group {group.name} does not use BGP")
-    try:
-        router_id = str(ipaddress.IPv4Address(slot.router_id))
-    except ValueError:
-        raise RenderError(f"engine {slot.name}: router_id must be an IPv4 address") from None
+    router_id = bgp_router_id(slot)
     vips = _vips(view, group)
     if not vips:
         raise RenderError(f"SE group {group.name} has no virtual service to announce")
