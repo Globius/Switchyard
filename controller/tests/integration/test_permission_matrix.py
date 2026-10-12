@@ -190,6 +190,7 @@ ROUTES[("GET", "/audit-actions")] = ANY
 ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
 ROUTES[("GET", "/principals")] = ("manage", "tenant")
 ROUTES[("GET", "/acme-provider-presets")] = ANY
+ROUTES[("GET", "/waf/crs-rules")] = ANY
 ROUTES[("GET", "/acme-providers")] = ANY
 ROUTES[("GET", "/acme-providers/{provider}")] = ANY
 ROUTES[("GET", "/dns-provider-types")] = ANY
