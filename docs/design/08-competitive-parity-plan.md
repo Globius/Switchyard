@@ -1,13 +1,17 @@
 # Competitive parity matrix and phased plan
 
 Date: 2026-10-12. Planning only: no code changes. Compares Switchyard on `origin/main` (M1 to M6 plus the work in
-`06-planned-vs-built.md`) with FortiADC, F5 BIG-IP (LTM, GTM/DNS, ASM/AWAF, APM), AWS Elastic Load Balancing
-(ALB, NLB, GWLB) and Azure (Traffic Manager, Load Balancer, Application Gateway, Front Door).
+`06-planned-vs-built.md`) with FortiADC, F5 BIG-IP (LTM, GTM/DNS, ASM/AWAF, APM), Citrix NetScaler ADC and Gateway,
+AWS Elastic Load Balancing (ALB, NLB, GWLB) and Azure (Traffic Manager, Load Balancer, Application Gateway, Front Door).
+Revision 2 adds NetScaler and an identity, zero-trust and security section (2.8).
 
 Sources: vendor documentation and datasheets, [FortiADC handbook](https://docs.fortinet.com/document/fortiadc/7.4.3/handbook/869500/server-load-balance),
 [F5 LTM profiles reference](https://techdocs.f5.com/kb/en-us/products/big-ip_ltm/manuals/product/big-ip-local-traffic-management-profiles-reference-14-0-0/09.html),
 [F5 GTM wide IP reference](https://clouddocs.f5.com/cli/tmsh-reference/v16/modules/gtm/gtm_wideip_a.html),
 [Azure Traffic Manager routing methods](https://learn.microsoft.com/en-us/azure/traffic-manager/traffic-manager-routing-methods),
+[NetScaler nFactor](https://docs.netscaler.com/en-us/citrix-adc/current-release/aaa-tm/authentication-methods/multi-factor-nfactor-authentication.html),
+[NetScaler rewrite](https://docs.netscaler.com/en-us/citrix-adc/current-release/appexpert/rewrite) and
+[responder](https://docs.netscaler.com/en-us/citrix-adc/current-release/appexpert/responder),
 AWS Elastic Load Balancing user guide. Where a row rests on general product knowledge and not on a page read for this
 document, treat it as a lead to confirm before an ADR is written. Vendor feature names change between releases.
 
@@ -25,6 +29,10 @@ what fits:
   and anything that makes the data plane depend on the controller (CLAUDE.md "Things not to do").
 
 ## 2. Parity matrix
+
+NetScaler has no column of its own in 2.1 to 2.7: its capabilities match the FortiADC and F5 columns there (L4/L7
+balancing, persistence, rewrite and responder policies, content switching, GSLB, WAF). The differences that matter are in
+2.8 and 2.9.
 
 Legend. Switchyard column: **done** (on main), **part** (built with a limit), **plan** (in 01 or 06 as deferred), **no**
 (not planned). Fit: **HAProxy**, **IPVS**, **FRR**, **ctrl** (controller work), **DNS** (PowerDNS), **ext** (needs a new
@@ -174,6 +182,48 @@ component), **n/a** (does not fit). Priority: **M** must, **S** should, **L** la
 | Service insertion (GWLB / appliance chaining) | no | no | GWLB | Gateway LB | no | n/a | - |
 | Global edge / CDN / anycast | no | no | CloudFront, Global Accelerator | Front Door | no | n/a | - |
 
+### 2.8 Identity, zero trust and advanced security
+
+Authentication in front of a service is where F5 APM, NetScaler AAA/Gateway (nFactor) and FortiADC auth profiles do their
+most valuable work. AWS (ALB OIDC/Cognito) and Azure (Entra, Front Door WAF) cover less of it at the load balancer.
+Switchyard has none of it on the data path: login exists only for the controller (ADR 0012, 0018). Zero trust here means:
+every request carries an identity, policy decides per request (who, which app, which path, which device), and the origin
+is not reachable around the proxy.
+
+| Capability | FortiADC | F5 | NetScaler | AWS | Azure | Switchyard now | Fit | Pri |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| OIDC login in front of an HTTP service | yes | APM | AAA / nFactor | ALB OIDC | Entra, Front Door | no | HAProxy + auth service | **M** |
+| SAML SP login | yes | APM | AAA | via Cognito | Entra | no | auth service | S |
+| LDAP / RADIUS / local users | yes | APM | AAA | no | no | no | auth service | S |
+| Multi-step conditional auth flows | basic | APM policy editor | nFactor | no | Conditional Access | no | auth service | L |
+| MFA (TOTP, push, WebAuthn) | yes | APM | nFactor | Cognito | Entra | delegated to the IdP | IdP | S |
+| SSO to backends (identity headers, JWT, Kerberos delegation) | yes | APM | AAA / Gateway | ALB claims header | App Proxy | no | auth service | **M** (headers), L (Kerberos) |
+| Per-route authorization (group, claim, path) | yes | APM | AAA | ALB rules | no | no | ctrl + auth service | **M** |
+| Sessions: cookie, idle and absolute timeout, logout, revoke | yes | APM | AAA | ALB | no | no | auth service | **M** |
+| Client certificate auth (mTLS) | yes | yes | yes | ALB mTLS | App GW | done (ADR 0070) | HAProxy | |
+| Certificate to identity mapping, OCSP for clients | yes | APM | AAA | no | no | CRL only | HAProxy + ctrl | S |
+| JWT validation for APIs | yes | yes | yes | API Gateway | APIM | no | HAProxy `jwt_verify` | S |
+| Device posture / endpoint checks | no | APM | Gateway EPA | Verified Access | Conditional Access | no | ext | L |
+| ZTNA or VPN gateway for non-HTTP apps | SSL VPN | APM | Gateway | Client VPN, Verified Access | Entra Private Access | no | ext | L |
+| Origin lock-down (only the proxy reaches the app) | yes | yes | yes | security groups | NSG | done for Cloudflare ranges | HAProxy + nft | |
+| Rate limits on login paths, credential-stuffing controls | yes | yes | yes | WAF | WAF | no | HAProxy | S (with A5) |
+| Bot management | yes | Bot Defense | Bot Mgmt | WAF Bot Control | Front Door bot rules | no | ext (CrowdSec, challenge) | L |
+| DDoS (SYN, L4 floods, L7 floods) | yes | AFM / DoS | yes | Shield | DDoS Protection | no | nft + HAProxy | L |
+| API security (schema validation, per-key quotas) | yes | AWAF API | API Security | API Gateway | APIM | no | ext | L |
+| Audit of auth events | yes | yes | yes | CloudTrail | Monitor | controller audit only | ctrl | **M** |
+
+### 2.9 NetScaler-specific items
+
+| Capability | Note | Fit | Pri |
+| --- | --- | --- | --- |
+| Rewrite and responder policies (expressions, bind points, priorities) | Same job as A2 to A4. Switchyard offers a structured match and action model, not an expression language (no free-form snippets). | HAProxy | M (A2 to A4) |
+| Content switching virtual servers | Equals host and path routes to pools. | done | |
+| AppQoE, priority queueing | HAProxy queues, `maxconn`, `timeout queue`. | HAProxy | L |
+| HTTP callouts (external decision per request) | HAProxy SPOE, same sidecar pattern as WAF and auth. | ext | L |
+| Gateway portal theming | Branding of the auth service login page. | ext | L |
+| Clustering, SDX/MPX hardware tenancy | Replaced by SE groups and tenants. | n/a | - |
+| Integrated caching, front-end optimization | See C5. | HAProxy | L |
+
 ## 3. What the matrix says
 
 1. **Core L4/L7 is at parity or ahead** on tenancy, audit, change control and IPv6. The gaps are not in routing or TLS.
@@ -182,11 +232,16 @@ component), **n/a** (does not fit). Priority: **M** must, **S** should, **L** la
    the work is model, validator, renderer and UI, not new infrastructure.
 3. **Observability is the biggest operational gap** and is already in flight (metrics proxy, Vector/Loki). Alerting
    (outbound notifications) is the part nobody owns yet.
-4. **WAF is a product decision.** F5 and Fortinet sell it as the headline. For Switchyard it is a Coraza SPOA sidecar with
+4. **Data-path authentication is the second big gap, and the one that makes zero trust possible.** F5 APM, NetScaler
+   AAA and FortiADC auth profiles put login, MFA, per-route authorization and session handling in front of any
+   application. Switchyard has the controller's own OIDC/SAML login but nothing on the data path. mTLS, the origin
+   lock-down and the audit trail already exist; the missing piece is an identity-aware proxy (an auth service next to
+   HAProxy). See phase E.
+5. **WAF is a product decision.** F5 and Fortinet sell it as the headline. For Switchyard it is a Coraza SPOA sidecar with
    CRS; the cost is the sidecar life cycle and false-positive tuning, not rendering.
-5. **GSLB is a separate subsystem** (PowerDNS, dnsdist). It is where Azure Traffic Manager and F5 GTM live. It does not
+6. **GSLB is a separate subsystem** (PowerDNS, dnsdist). It is where Azure Traffic Manager and F5 GTM live. It does not
    block anything else and has no tenant data-plane dependency, so it can wait.
-6. **Not worth chasing:** scripting engines (iRules and friends), SSL inspection, link load balancing, bridge mode,
+7. **Not worth chasing:** scripting engines (iRules and friends), SSL inspection, link load balancing, bridge mode,
    service insertion and CDN. They fight the "no free-form snippets" and "data plane independent of the controller" rules
    or need a different product.
 
@@ -229,10 +284,30 @@ test, a field-rule entry and a UI form (the UI trails the backend by one step).
 | C5 | Compression; then cache | S, M | A2 | Per service flags. |
 | C6 | Coraza WAF: `waf_policy`, SPOA sidecar in the SE image, detect-first, CRS version pinned | L | B1 (logs), B4 (image) | ADR needed for sidecar life cycle and failure mode (fail-open vs fail-closed). |
 | C7 | ACME HTTP-01 and TLS-ALPN-01; certificate expiry notifications | M | B2 | HTTP-01 needs a route to the controller or a challenge responder on the SE. |
-| C8 | Auth at the LB: OIDC forward-auth via oauth2-proxy, per route | L | A2, A3 | Client-facing SSO is APM's headline feature; separate ADR. |
+| C8 | Moved to phase E (E1). | | | |
 | C9 | Pool discovery by Proxmox tags; health score; rolling SE upgrade job; scale-out | L | B4 | Already in 01/06. |
 | C10 | OpenTofu provider generated from the OpenAPI | M | none | Wraps the API; no server work. |
 | C11 | Geo and IP-reputation lists (managed lists like the Cloudflare one, MaxMind, CrowdSec bouncer) | M | A5 | Reuse the managed allow-list job pattern. |
+
+### Phase E: Identity-aware access and zero trust (E1 to E4 must, rest should or later)
+
+Architecture: an **auth service** per SE group (a sidecar in the SE image, for example oauth2-proxy or a small Go
+service). HAProxy calls it for each request on a protected route (SPOE or an auth subrequest; 01 already names this).
+Sessions are signed cookies, so the SE needs no shared store. The controller owns the config (tenant IdP, route policy);
+the SE keeps serving existing sessions if the controller is down; secrets are `secret_ref`s into OpenBao.
+
+| # | Item | Size | Depends on | Notes |
+| --- | --- | --- | --- | --- |
+| E1 | Auth service in the SE image: OIDC login, session cookie, logout, idle and absolute timeouts. ADR for the call contract and fail mode (closed by default) | L | A3, B4 | Replaces C8. Tenant IdP objects reuse the shape of the controller IdP admin (ADR 0032). |
+| E2 | Per-route authorization: require login, or group, claim or email-domain rules, per route or path | M | E1 | New policy set `kind: access`, placed after the connection filter in the request order. |
+| E3 | Identity headers to the origin (user, groups, signed JWT); client-supplied copies dropped | S | E1, A2 | Same hygiene rule as the client-IP header in `docs/render.md`. |
+| E4 | Auth events in audit and logs (login, deny, logout, revoke), tenant-scoped | S | E1, B1 | Same audit pipeline as the controller. |
+| E5 | SAML SP, LDAP/RADIUS and local-user providers | M each | E1 | After OIDC proves the model; most tenants can federate through an IdP. |
+| E6 | Client certificate identity: map CN/SAN to a user or group, OCSP for client certs, certificate plus OIDC as two factors | M | E1, ADR 0070 | The NetScaler and F5 "certificate then login" flow. |
+| E7 | JWT validation for APIs (issuer, audience, scopes), no login page | M | A3 | HAProxy `jwt_verify`; JWKS fetched and distributed by the controller. |
+| E8 | Conditional flows (nFactor-style step-up by path, group or network) | L | E1 | Only if a tenant asks; ordered rules, no visual editor. |
+| E9 | Device posture and a ZTNA gateway for non-HTTP apps | L | E1 | Needs a client or an IdP device signal (Entra, Okta). Separate product decision. |
+| E10 | Bot defense and DDoS profiles, login-path rate limits, API quotas per key | L | A5, C6 | Was D4. |
 
 ### Phase D: Later (separate subsystems)
 
@@ -241,7 +316,7 @@ test, a field-rule entry and a UI form (the UI trails the backend by one step).
 | D1 | GSLB on PowerDNS and dnsdist: priority, weighted, geo, latency, multivalue, subnet, DNSSEC; wide IP = tenant object | L (multi-MR) | B1 (health data), a second site |
 | D2 | Kubernetes Service/Gateway connector | L | C9 discovery |
 | D3 | Avi importer | M | A1 to A5 (so the objects exist) |
-| D4 | Bot defense (CrowdSec, challenge) and DDoS (nftables, SYN) profiles | L | C6, A5 |
+| D4 | Moved to E10. | | |
 | D5 | API schema protection in the WAF; packet capture job | M each | C6 / agent |
 | D6 | Controlled Lua actions (reviewed, named, per tenant allow) | L | own security review |
 | D7 | IPVS DR/tunnel modes for L4 | M | needs L2 adjacency on SE networks |
@@ -249,11 +324,19 @@ test, a field-rule entry and a UI form (the UI trails the backend by one step).
 
 ### Out of scope (does not fit)
 
-Free-form scripting (iRules, FortiADC scripts) and arbitrary external checks, SSL inspection proxy, multi-WAN link load
+Free-form scripting (iRules, NetScaler policy expressions, FortiADC scripts) and arbitrary external checks, SSL inspection proxy, multi-WAN link load
 balancing, Layer-2 bridge mode, GWLB-style Geneve service insertion, global anycast edge and CDN, hardware offload.
 Revisit only if a tenant requirement makes one of them a decision, with an ADR.
 
 ## 5. Risks and open questions
+
+- **Auth service on the request path.** E1 adds a component every protected request touches. Decide the fail mode
+  (closed) and use signed-cookie sessions so a sidecar restart does not log everyone out. It must not need the
+  controller to serve requests.
+- **Identity spoofing.** The origin must trust identity headers only from the SE. Pair E3 with the origin lock-down and
+  drop client-supplied copies of those headers.
+- **Secrets.** IdP client secrets and session-signing keys are `secret_ref`s into OpenBao, never in PostgreSQL or the
+  rendered config.
 
 - **WAF cost.** C6 is the largest single item and carries operational risk (false positives, sidecar crash policy).
   Cloudflare already filters in front for the current tenant; decide whether any tenant needs it before 2027.
