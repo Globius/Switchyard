@@ -183,6 +183,8 @@ function PortsSheet({
                   proxy_protocol: false,
                   https_redirect_port: null,
                   client_verify: "required",
+                  tls_passthrough: false,
+                  http3: false,
                 },
               ])
             }
