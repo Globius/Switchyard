@@ -27,10 +27,13 @@ from switchyard.domain.models import (
     BgpProfile,
     Certificate,
     ClientCertPolicySet,
+    DirectoryPolicySet,
     Entity,
     ErrorPagesPolicySet,
     HealthMonitor,
     JwtPolicySet,
+    LdapConnector,
+    LocalConnector,
     Model,
     MonitorType,
     Network,
@@ -106,6 +109,9 @@ class Snapshot(Model):
             policy_ids.update(s.policy_set_ids)
             if s.allow_list_id:
                 policy_ids.add(s.allow_list_id)
+        for ps in self.policy_sets:
+            if ps.id in policy_ids and isinstance(ps, AccessPolicySet) and ps.oidc.directory_id:
+                policy_ids.add(ps.oidc.directory_id)
         pools = tuple(p for p in self.pools if p.id in pool_ids)
         monitor_ids = {p.health_monitor_id for p in pools if p.health_monitor_id}
         network_ids = {n.network_id for n in group.networks}
@@ -197,6 +203,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     _check_names(snapshot, problems)
     _check_secret_scopes(snapshot, problems)
     _check_discovery_scopes(snapshot, problems)
+    _check_directories(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -398,6 +405,35 @@ def _check_discovery_scopes(snapshot: Snapshot, problems: list[Problem]) -> None
             )
 
 
+def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """Access sets name a directory of their own tenant; local users have no groups."""
+    directories = {p.id: p for p in snapshot.policy_sets if isinstance(p, DirectoryPolicySet)}
+    for ps in snapshot.policy_sets:
+        if not isinstance(ps, AccessPolicySet) or ps.oidc.directory_id is None:
+            continue
+        base = f"policy_sets.{ps.name}.oidc.directory_id"
+        directory = directories.get(ps.oidc.directory_id)
+        if directory is None:
+            problems.append(
+                Problem(base, "unknown_reference", "directory policy set does not exist")
+            )
+            continue
+        if directory.tenant_id != ps.tenant_id:
+            problems.append(
+                Problem(base, "wrong_tenant", "directory belongs to a different tenant")
+            )
+        if isinstance(directory.connector, LocalConnector) and any(
+            r.mode == "groups" for r in ps.rules
+        ):
+            problems.append(
+                Problem(
+                    f"policy_sets.{ps.name}.rules",
+                    "directory_has_no_groups",
+                    f"directory {directory.name} holds local users, who have no groups",
+                )
+            )
+
+
 def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
     """Secret references stay inside the owning tenant's namespace (``secret_ref_not_allowed``)."""
     names = {t.id: t.name for t in snapshot.tenants}
@@ -407,6 +443,20 @@ def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
         if c.crl_secret_ref:
             refs.append((f"certificates.{c.name}.crl_secret_ref", c.tenant_id, c.crl_secret_ref))
     for ps in snapshot.policy_sets:
+        if isinstance(ps, DirectoryPolicySet):
+            conn = ps.connector
+            where = f"policy_sets.{ps.name}.connector"
+            if isinstance(conn, LdapConnector):
+                refs.append((f"{where}.bind_password_ref", ps.tenant_id, conn.bind_password_ref))
+            if isinstance(conn, LocalConnector):
+                for i, user in enumerate(conn.users):
+                    refs.append(
+                        (
+                            f"{where}.users[{i}].password_hash_ref",
+                            ps.tenant_id,
+                            user.password_hash_ref,
+                        )
+                    )
         if isinstance(ps, AccessPolicySet):
             base = f"policy_sets.{ps.name}.oidc"
             refs.append((f"{base}.client_secret_ref", ps.tenant_id, ps.oidc.client_secret_ref))

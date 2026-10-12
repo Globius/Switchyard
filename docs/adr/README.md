@@ -83,4 +83,4 @@ Date: YYYY-MM-DD
 | [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
 | [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
 | [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
-| [0137](0137-directory-logins-saml-ldap-radius-local.md) | Directory logins (SAML, LDAP, RADIUS, local users): not built, and why | Accepted |
+| [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |

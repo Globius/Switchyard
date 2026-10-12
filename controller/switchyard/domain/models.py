@@ -47,6 +47,11 @@ ClientId = Annotated[str, AfterValidator(v.validate_client_id)]
 GroupName = Annotated[str, AfterValidator(v.validate_group_name)]
 PublicKeyPem = Annotated[str, AfterValidator(v.validate_public_key_pem)]
 CertName = Annotated[str, AfterValidator(v.validate_cert_name)]
+Dn = Annotated[str, AfterValidator(v.validate_dn)]
+LdapFilter = Annotated[str, AfterValidator(v.validate_ldap_filter)]
+LdapAttr = Annotated[str, AfterValidator(v.validate_ldap_attr)]
+EmailAddress = Annotated[str, AfterValidator(v.validate_email_address)]
+CertPem = Annotated[str, AfterValidator(v.validate_cert_pem)]
 DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
 
@@ -1111,7 +1116,10 @@ class OidcSettings(Model):
     """OpenID Connect login against a tenant's identity provider (ADR 0130).
 
     Attributes:
-        issuer: The provider's issuer URL (``https``); discovery is read from it.
+        issuer: The provider's issuer URL (``https``); discovery is read from it. Or:
+        directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).
+        redirect_hosts: With a directory, the hosts the service is reached on; the broker only
+            redirects back to ``https://<host><auth_path>/callback`` for these.
         client_id: The client registered for Switchyard at the provider.
         client_secret_ref: OpenBao path of the client secret (never the secret).
         cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies
@@ -1124,7 +1132,9 @@ class OidcSettings(Model):
             account was disabled loses the session at the next refresh). Less than the lifetime.
     """
 
-    issuer: Issuer
+    issuer: Issuer | None = None
+    directory_id: UUID | None = None
+    redirect_hosts: tuple[Hostname, ...] = Field(default=(), max_length=16)
     client_id: ClientId
     client_secret_ref: SecretRef
     cookie_secret_ref: SecretRef
@@ -1140,6 +1150,14 @@ class OidcSettings(Model):
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
+        if (self.issuer is None) == (self.directory_id is None):
+            raise ValueError("set exactly one of issuer and directory_id")
+        if self.directory_id is not None and not self.redirect_hosts:
+            raise ValueError(
+                "a directory login needs redirect_hosts (the hosts users reach the service on)"
+            )
+        if self.directory_id is None and self.redirect_hosts:
+            raise ValueError("redirect_hosts only goes with directory_id")
         if "openid" not in self.scopes:
             raise ValueError("scopes must include openid")
         if len(set(self.scopes)) != len(self.scopes) or len(self.scopes) > 10:
@@ -1377,6 +1395,98 @@ class ClientCertPolicySet(TenantOwned):
         return self
 
 
+class LdapConnector(Model):
+    """Sign in against an LDAP or Active Directory server (ADR 0137).
+
+    Attributes:
+        host: Server name; ``port`` defaults to 636 (``ldaps``). With ``starttls`` use 389.
+        security: ``ldaps`` or ``starttls``; a clear-text connection is not offered.
+        root_ca_pem: PEM certificate(s) that sign the server certificate (public; omit to use the
+            broker's system roots).
+        bind_dn: Service account used to search.
+        bind_password_ref: OpenBao path of its password.
+        user_base_dn / user_filter: Where and how users are found; the sign-in name is matched
+            with ``username_attr``.
+        group_base_dn: Where groups are searched (omit for no groups); a user's groups are those
+            whose ``group_member_attr`` holds the user's ``group_user_attr`` (``DN`` or an
+            attribute name).
+    """
+
+    type: Literal["ldap"] = "ldap"
+    host: Hostname
+    port: Port = 636
+    security: Literal["ldaps", "starttls"] = "ldaps"
+    root_ca_pem: CertPem | None = None
+    bind_dn: Dn
+    bind_password_ref: SecretRef
+    user_base_dn: Dn
+    user_filter: LdapFilter = "(objectClass=person)"
+    username_attr: LdapAttr = "uid"
+    id_attr: LdapAttr = "uid"
+    email_attr: LdapAttr = "mail"
+    name_attr: LdapAttr = "cn"
+    group_base_dn: Dn | None = None
+    group_filter: LdapFilter = "(objectClass=groupOfNames)"
+    group_user_attr: LdapAttr = "DN"
+    group_member_attr: LdapAttr = "member"
+    group_name_attr: LdapAttr = "cn"
+
+
+class SamlConnector(Model):
+    """Sign in through a SAML 2.0 identity provider (ADR 0137).
+
+    Attributes:
+        sso_url: The provider's single sign-on URL (https).
+        ca_pem: The provider's signing certificate (public PEM); assertions must be signed by it.
+        username_attr / email_attr / groups_attr: Assertion attributes to read (``groups_attr`` of
+            ``None`` means no groups).
+    """
+
+    type: Literal["saml"] = "saml"
+    sso_url: Issuer
+    ca_pem: CertPem
+    username_attr: ClaimName = "name"
+    email_attr: ClaimName = "email"
+    groups_attr: ClaimName | None = "groups"
+
+
+class LocalUser(Model):
+    """A user kept by Switchyard: a name, an address and a bcrypt hash in OpenBao."""
+
+    username: CertName
+    email: EmailAddress
+    password_hash_ref: SecretRef
+
+
+class LocalConnector(Model):
+    """Users defined here, with passwords checked by the broker. They have no groups."""
+
+    type: Literal["local"] = "local"
+    users: tuple[LocalUser, ...] = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        names = [u.username for u in self.users]
+        emails = [u.email.lower() for u in self.users]
+        if len(set(names)) != len(names) or len(set(emails)) != len(emails):
+            raise ValueError("user names and addresses must be unique")
+        return self
+
+
+class DirectoryPolicySet(TenantOwned):
+    """A place users sign in that is not an OIDC provider of their own: LDAP, SAML or local users.
+
+    A central broker (Dex, one instance per directory) turns it into an OIDC issuer that an
+    access set names with ``oidc.directory_id`` (ADR 0137). Directories are not attached to
+    services.
+    """
+
+    kind: Literal["directory"] = "directory"
+    connector: Annotated[
+        LdapConnector | SamlConnector | LocalConnector, Field(discriminator="type")
+    ]
+
+
 PolicySet = Annotated[
     RedirectPolicySet
     | AllowListPolicySet
@@ -1386,7 +1496,8 @@ PolicySet = Annotated[
     | RateLimitPolicySet
     | AccessPolicySet
     | JwtPolicySet
-    | ClientCertPolicySet,
+    | ClientCertPolicySet
+    | DirectoryPolicySet,
     Field(discriminator="kind"),
 ]
 #: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).

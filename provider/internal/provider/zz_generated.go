@@ -224,8 +224,10 @@ var Definitions = []Definition{
 				{Name: "cookie_name", Kind: KindString},
 				{Name: "cookie_refresh_s", Kind: KindInt},
 				{Name: "cookie_secret_ref", Kind: KindString, Required: true},
+				{Name: "directory_id", Kind: KindString},
 				{Name: "groups_claim", Kind: KindString},
-				{Name: "issuer", Kind: KindString, Required: true},
+				{Name: "issuer", Kind: KindString},
+				{Name: "redirect_hosts", Kind: KindList, Elem: &Attr{Kind: KindString}},
 				{Name: "scopes", Kind: KindList, Elem: &Attr{Kind: KindString}},
 			}},
 			{Name: "rules", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
@@ -309,6 +311,20 @@ var Definitions = []Definition{
 				{Name: "mode", Kind: KindString, Enum: []string{"valid", "identity", "groups"}},
 			}}},
 			{Name: "user_header", Kind: KindString},
+		},
+	},
+	{
+		TypeName:      "directory_policy_set",
+		Slug:          "policy-sets",
+		Doc:           "",
+		Resource:      true,
+		Discriminator: "kind",
+		Variant:       "directory",
+		Consts:        map[string]string{"kind": "directory"},
+		PatchKeys:     []string{"connector", "kind", "name"},
+		Attrs: []Attr{
+			{Name: "connector", Kind: KindJSON, Required: true},
+			{Name: "name", Kind: KindString, Required: true},
 		},
 	},
 	{

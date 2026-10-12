@@ -4844,6 +4844,232 @@
         "title": "DiffWarning",
         "type": "object"
       },
+      "DirectoryPolicySet": {
+        "additionalProperties": false,
+        "description": "A place users sign in that is not an OIDC provider of their own: LDAP, SAML or local users.\n\nA central broker (Dex, one instance per directory) turns it into an OIDC issuer that an\naccess set names with ``oidc.directory_id`` (ADR 0137). Directories are not attached to\nservices.",
+        "properties": {
+          "connector": {
+            "discriminator": {
+              "mapping": {
+                "ldap": "#/components/schemas/LdapConnector",
+                "local": "#/components/schemas/LocalConnector",
+                "saml": "#/components/schemas/SamlConnector"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LdapConnector"
+              },
+              {
+                "$ref": "#/components/schemas/SamlConnector"
+              },
+              {
+                "$ref": "#/components/schemas/LocalConnector"
+              }
+            ],
+            "title": "Connector"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "directory",
+            "default": "directory",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "connector"
+        ],
+        "title": "DirectoryPolicySet",
+        "type": "object"
+      },
+      "DirectoryPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "discriminator": {
+              "mapping": {
+                "ldap": "#/components/schemas/LdapConnector",
+                "local": "#/components/schemas/LocalConnector",
+                "saml": "#/components/schemas/SamlConnector"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LdapConnector"
+              },
+              {
+                "$ref": "#/components/schemas/SamlConnector"
+              },
+              {
+                "$ref": "#/components/schemas/LocalConnector"
+              }
+            ],
+            "title": "Connector"
+          },
+          "kind": {
+            "const": "directory",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "connector"
+        ],
+        "title": "DirectoryPolicySetCreate",
+        "type": "object"
+      },
+      "DirectoryPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "connector": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LdapConnector"
+              },
+              {
+                "$ref": "#/components/schemas/SamlConnector"
+              },
+              {
+                "$ref": "#/components/schemas/LocalConnector"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connector"
+          },
+          "kind": {
+            "const": "directory",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "DirectoryPolicySetPatch",
+        "type": "object"
+      },
+      "DirectoryPolicySetRead": {
+        "additionalProperties": false,
+        "description": "DirectoryPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "connector": {
+            "discriminator": {
+              "mapping": {
+                "ldap": "#/components/schemas/LdapConnector",
+                "local": "#/components/schemas/LocalConnector",
+                "saml": "#/components/schemas/SamlConnector"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LdapConnector"
+              },
+              {
+                "$ref": "#/components/schemas/SamlConnector"
+              },
+              {
+                "$ref": "#/components/schemas/LocalConnector"
+              }
+            ],
+            "title": "Connector"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "directory",
+            "default": "directory",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "connector",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "DirectoryPolicySetRead",
+        "type": "object"
+      },
       "DiscoveryGroup": {
         "additionalProperties": false,
         "description": "One Prometheus HTTP service-discovery target group (the format Prometheus reads).",
@@ -8403,6 +8629,174 @@
         "title": "LatestRevision",
         "type": "object"
       },
+      "LdapConnector": {
+        "additionalProperties": false,
+        "description": "Sign in against an LDAP or Active Directory server (ADR 0137).\n\nAttributes:\n    host: Server name; ``port`` defaults to 636 (``ldaps``). With ``starttls`` use 389.\n    security: ``ldaps`` or ``starttls``; a clear-text connection is not offered.\n    root_ca_pem: PEM certificate(s) that sign the server certificate (public; omit to use the\n        broker's system roots).\n    bind_dn: Service account used to search.\n    bind_password_ref: OpenBao path of its password.\n    user_base_dn / user_filter: Where and how users are found; the sign-in name is matched\n        with ``username_attr``.\n    group_base_dn: Where groups are searched (omit for no groups); a user's groups are those\n        whose ``group_member_attr`` holds the user's ``group_user_attr`` (``DN`` or an\n        attribute name).",
+        "properties": {
+          "bind_dn": {
+            "title": "Bind Dn",
+            "type": "string"
+          },
+          "bind_password_ref": {
+            "title": "Bind Password Ref",
+            "type": "string"
+          },
+          "email_attr": {
+            "default": "mail",
+            "title": "Email Attr",
+            "type": "string"
+          },
+          "group_base_dn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Base Dn"
+          },
+          "group_filter": {
+            "default": "(objectClass=groupOfNames)",
+            "title": "Group Filter",
+            "type": "string"
+          },
+          "group_member_attr": {
+            "default": "member",
+            "title": "Group Member Attr",
+            "type": "string"
+          },
+          "group_name_attr": {
+            "default": "cn",
+            "title": "Group Name Attr",
+            "type": "string"
+          },
+          "group_user_attr": {
+            "default": "DN",
+            "title": "Group User Attr",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "id_attr": {
+            "default": "uid",
+            "title": "Id Attr",
+            "type": "string"
+          },
+          "name_attr": {
+            "default": "cn",
+            "title": "Name Attr",
+            "type": "string"
+          },
+          "port": {
+            "default": 636,
+            "title": "Port",
+            "type": "integer"
+          },
+          "root_ca_pem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Ca Pem"
+          },
+          "security": {
+            "default": "ldaps",
+            "enum": [
+              "ldaps",
+              "starttls"
+            ],
+            "title": "Security",
+            "type": "string"
+          },
+          "type": {
+            "const": "ldap",
+            "default": "ldap",
+            "title": "Type",
+            "type": "string"
+          },
+          "user_base_dn": {
+            "title": "User Base Dn",
+            "type": "string"
+          },
+          "user_filter": {
+            "default": "(objectClass=person)",
+            "title": "User Filter",
+            "type": "string"
+          },
+          "username_attr": {
+            "default": "uid",
+            "title": "Username Attr",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "bind_dn",
+          "bind_password_ref",
+          "user_base_dn"
+        ],
+        "title": "LdapConnector",
+        "type": "object"
+      },
+      "LocalConnector": {
+        "additionalProperties": false,
+        "description": "Users defined here, with passwords checked by the broker. They have no groups.",
+        "properties": {
+          "type": {
+            "const": "local",
+            "default": "local",
+            "title": "Type",
+            "type": "string"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/LocalUser"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Users",
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "title": "LocalConnector",
+        "type": "object"
+      },
+      "LocalUser": {
+        "additionalProperties": false,
+        "description": "A user kept by Switchyard: a name, an address and a bcrypt hash in OpenBao.",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "password_hash_ref": {
+            "title": "Password Hash Ref",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "email",
+          "password_hash_ref"
+        ],
+        "title": "LocalUser",
+        "type": "object"
+      },
       "LogLine": {
         "additionalProperties": false,
         "description": "One line of a job's log.",
@@ -9830,7 +10224,7 @@
       },
       "OidcSettings": {
         "additionalProperties": false,
-        "description": "OpenID Connect login against a tenant's identity provider (ADR 0130).\n\nAttributes:\n    issuer: The provider's issuer URL (``https``); discovery is read from it.\n    client_id: The client registered for Switchyard at the provider.\n    client_secret_ref: OpenBao path of the client secret (never the secret).\n    cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies\n        (16, 24 or 32 bytes). One key per access set; rotate it to end every session.\n    scopes: Scopes to request; ``openid`` is required.\n    groups_claim: Claim that carries the user's groups.\n    cookie_name: Session cookie name.\n    cookie_expire_s: Absolute session lifetime.\n    cookie_refresh_s: How often the session is refreshed against the provider (a user whose\n        account was disabled loses the session at the next refresh). Less than the lifetime.",
+        "description": "OpenID Connect login against a tenant's identity provider (ADR 0130).\n\nAttributes:\n    issuer: The provider's issuer URL (``https``); discovery is read from it. Or:\n    directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).\n    redirect_hosts: With a directory, the hosts the service is reached on; the broker only\n        redirects back to ``https://<host><auth_path>/callback`` for these.\n    client_id: The client registered for Switchyard at the provider.\n    client_secret_ref: OpenBao path of the client secret (never the secret).\n    cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies\n        (16, 24 or 32 bytes). One key per access set; rotate it to end every session.\n    scopes: Scopes to request; ``openid`` is required.\n    groups_claim: Claim that carries the user's groups.\n    cookie_name: Session cookie name.\n    cookie_expire_s: Absolute session lifetime.\n    cookie_refresh_s: How often the session is refreshed against the provider (a user whose\n        account was disabled loses the session at the next refresh). Less than the lifetime.",
         "properties": {
           "client_id": {
             "title": "Client Id",
@@ -9863,14 +10257,42 @@
             "title": "Cookie Secret Ref",
             "type": "string"
           },
+          "directory_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directory Id"
+          },
           "groups_claim": {
             "default": "groups",
             "title": "Groups Claim",
             "type": "string"
           },
           "issuer": {
-            "title": "Issuer",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "redirect_hosts": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Redirect Hosts",
+            "type": "array"
           },
           "scopes": {
             "default": [
@@ -9887,7 +10309,6 @@
           }
         },
         "required": [
-          "issuer",
           "client_id",
           "client_secret_ref",
           "cookie_secret_ref"
@@ -9975,7 +10396,7 @@
         "title": "OpsIn",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
@@ -9985,6 +10406,7 @@
                   "access": "#/components/schemas/AccessPolicySetRead",
                   "allow_list": "#/components/schemas/AllowListPolicySetRead",
                   "client_cert": "#/components/schemas/ClientCertPolicySetRead",
+                  "directory": "#/components/schemas/DirectoryPolicySetRead",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                   "jwt": "#/components/schemas/JwtPolicySetRead",
                   "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
@@ -10021,6 +10443,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/ClientCertPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/DirectoryPolicySetRead"
                 }
               ]
             },
@@ -10043,7 +10468,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -13445,6 +13870,54 @@
         "title": "RunningHaproxyRead",
         "type": "object"
       },
+      "SamlConnector": {
+        "additionalProperties": false,
+        "description": "Sign in through a SAML 2.0 identity provider (ADR 0137).\n\nAttributes:\n    sso_url: The provider's single sign-on URL (https).\n    ca_pem: The provider's signing certificate (public PEM); assertions must be signed by it.\n    username_attr / email_attr / groups_attr: Assertion attributes to read (``groups_attr`` of\n        ``None`` means no groups).",
+        "properties": {
+          "ca_pem": {
+            "title": "Ca Pem",
+            "type": "string"
+          },
+          "email_attr": {
+            "default": "email",
+            "title": "Email Attr",
+            "type": "string"
+          },
+          "groups_attr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "groups",
+            "title": "Groups Attr"
+          },
+          "sso_url": {
+            "title": "Sso Url",
+            "type": "string"
+          },
+          "type": {
+            "const": "saml",
+            "default": "saml",
+            "title": "Type",
+            "type": "string"
+          },
+          "username_attr": {
+            "default": "name",
+            "title": "Username Attr",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sso_url",
+          "ca_pem"
+        ],
+        "title": "SamlConnector",
+        "type": "object"
+      },
       "SamlProviderIn": {
         "additionalProperties": false,
         "description": "Create a SAML provider. Send metadata (URL or XML) or the fields it would fill in.",
@@ -14626,6 +15099,7 @@
                   "access": "#/components/schemas/AccessPolicySet",
                   "allow_list": "#/components/schemas/AllowListPolicySet",
                   "client_cert": "#/components/schemas/ClientCertPolicySet",
+                  "directory": "#/components/schemas/DirectoryPolicySet",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySet",
                   "jwt": "#/components/schemas/JwtPolicySet",
                   "rate_limit": "#/components/schemas/RateLimitPolicySet",
@@ -14662,6 +15136,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/ClientCertPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/DirectoryPolicySet"
                 }
               ]
             },
@@ -34753,7 +35230,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -34921,6 +35398,7 @@
                     "access": "#/components/schemas/AccessPolicySetCreate",
                     "allow_list": "#/components/schemas/AllowListPolicySetCreate",
                     "client_cert": "#/components/schemas/ClientCertPolicySetCreate",
+                    "directory": "#/components/schemas/DirectoryPolicySetCreate",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
                     "jwt": "#/components/schemas/JwtPolicySetCreate",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetCreate",
@@ -34957,6 +35435,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ClientCertPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DirectoryPolicySetCreate"
                   }
                 ],
                 "title": "Body"
@@ -35313,6 +35794,7 @@
                       "access": "#/components/schemas/AccessPolicySetRead",
                       "allow_list": "#/components/schemas/AllowListPolicySetRead",
                       "client_cert": "#/components/schemas/ClientCertPolicySetRead",
+                      "directory": "#/components/schemas/DirectoryPolicySetRead",
                       "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                       "jwt": "#/components/schemas/JwtPolicySetRead",
                       "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
@@ -35349,6 +35831,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/ClientCertPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DirectoryPolicySetRead"
                     }
                   ],
                   "title": "Response Get Policy Sets Api V1 Tenants  T  Policy Sets  Object Id  Get"
@@ -35516,6 +36001,7 @@
                     "access": "#/components/schemas/AccessPolicySetPatch",
                     "allow_list": "#/components/schemas/AllowListPolicySetPatch",
                     "client_cert": "#/components/schemas/ClientCertPolicySetPatch",
+                    "directory": "#/components/schemas/DirectoryPolicySetPatch",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
                     "jwt": "#/components/schemas/JwtPolicySetPatch",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetPatch",
@@ -35552,6 +36038,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ClientCertPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DirectoryPolicySetPatch"
                   }
                 ],
                 "title": "Body"

@@ -340,12 +340,15 @@ class TestInstances:
         )
         assert auth_secret_refs(snap, GROUP) == sorted([CLIENT, COOKIE])
         files = render_auth_files(snap, GROUP, SECRETS)
-        assert list(files) == ["auth/web-sso.cfg"]
+        assert list(files) == ["auth/web-sso.cfg", "auth/web-sso.env"]
+        assert files["auth/web-sso.env"].splitlines() == [
+            "OAUTH2_PROXY_CLIENT_SECRET=client-secret-value",
+            "OAUTH2_PROXY_COOKIE_SECRET=0123456789abcdef",
+        ]
         text = files["auth/web-sso.cfg"]
+        assert "secret-value" not in text and "0123456789abcdef" not in text
         for line in (
             'oidc_issuer_url = "https://login.example.test/realms/acme"',
-            'client_secret = "client-secret-value"',
-            'cookie_secret = "0123456789abcdef"',
             f'http_address = "127.0.0.1:{AUTH_PORT_BASE}"',
             f'upstreams = ["http://127.0.0.1:{LOOP_PORT_BASE}"]',
             "cookie_secure = true",
@@ -395,7 +398,7 @@ class TestBundle:
             snap, snap.se_groups[0], slot, MemorySecrets({**SECRETS, CERT: PEM})
         )
         assert "auth/web-sso.cfg" in files
-        assert 'client_secret = "client-secret-value"' in files["auth/web-sso.cfg"]
+        assert "OAUTH2_PROXY_CLIENT_SECRET=client-secret-value" in files["auth/web-sso.env"]
 
     async def test_a_missing_secret_stops_the_rollout(self) -> None:
         from switchyard.adapters.secrets import MemorySecrets

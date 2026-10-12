@@ -630,3 +630,89 @@ def validate_cert_name(value: str) -> str:
     if not _CERT_NAME.fullmatch(value):
         raise ValueError("name must be 1-128 characters of letters, digits and . _ @ : -")
     return value
+
+
+_DN = re.compile(r"^[A-Za-z0-9=,._ -]{1,512}$")
+_LDAP_FILTER = re.compile(r"^[A-Za-z0-9()=&|!*_.:@ -]{1,256}$")
+_LDAP_ATTR = re.compile(r"^[A-Za-z][A-Za-z0-9-]{0,63}$")
+_EMAIL = re.compile(r"^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}$")
+_CERT_PEM = re.compile(
+    r"^(-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]{40,6000}\n-----END CERTIFICATE-----\n?){1,5}$"
+)
+
+
+def validate_dn(value: str) -> str:
+    """Validate an LDAP distinguished name (letters, digits and ``= , . _ -``, spaces).
+
+    Example:
+        >>> validate_dn("ou=People,dc=example,dc=test")
+        'ou=People,dc=example,dc=test'
+        >>> validate_dn("cn=a)(uid=*")
+        Traceback (most recent call last):
+            ...
+        ValueError: distinguished name has characters that are not allowed
+    """
+    if not _DN.fullmatch(value):
+        raise ValueError("distinguished name has characters that are not allowed")
+    return value
+
+
+def validate_ldap_filter(value: str) -> str:
+    """Validate an LDAP search filter: balanced parentheses and plain characters.
+
+    Example:
+        >>> validate_ldap_filter("(&(objectClass=person)(memberOf=cn=staff))")
+        '(&(objectClass=person)(memberOf=cn=staff))'
+        >>> validate_ldap_filter("(uid=a")
+        Traceback (most recent call last):
+            ...
+        ValueError: filter must have balanced parentheses
+    """
+    if not _LDAP_FILTER.fullmatch(value):
+        raise ValueError("filter has characters that are not allowed")
+    depth = 0
+    for c in value:
+        depth += (c == "(") - (c == ")")
+        if depth < 0:
+            break
+    if depth != 0 or not value.startswith("("):
+        raise ValueError("filter must have balanced parentheses")
+    return value
+
+
+def validate_ldap_attr(value: str) -> str:
+    """Validate an LDAP attribute name.
+
+    Example:
+        >>> validate_ldap_attr("sAMAccountName")
+        'sAMAccountName'
+    """
+    if not _LDAP_ATTR.fullmatch(value):
+        raise ValueError("attribute must be a letter then up to 63 letters, digits and -")
+    return value
+
+
+def validate_email_address(value: str) -> str:
+    """Validate a plain e-mail address.
+
+    Example:
+        >>> validate_email_address("alice@example.test")
+        'alice@example.test'
+    """
+    if not _EMAIL.fullmatch(value) or ".." in value:
+        raise ValueError("not an e-mail address")
+    return value
+
+
+def validate_cert_pem(value: str) -> str:
+    """Validate one to five PEM CERTIFICATE blocks (public; never a key).
+
+    Example:
+        >>> validate_cert_pem("-----BEGIN PRIVATE KEY-----")
+        Traceback (most recent call last):
+            ...
+        ValueError: expected PEM CERTIFICATE blocks only
+    """
+    if not _CERT_PEM.fullmatch(value):
+        raise ValueError("expected PEM CERTIFICATE blocks only")
+    return value if value.endswith("\n") else value + "\n"
