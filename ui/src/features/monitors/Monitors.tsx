@@ -27,7 +27,16 @@ export interface MonitorForm {
   rise: number;
   fall: number;
   port: number | null;
-  http: { method: string; path: string; host: string | null; expect_status: number[] } | null;
+  http: {
+    method: string;
+    path: string;
+    host: string | null;
+    expect_status: number[];
+    expect_body?: string | null;
+    expect_header?: { name: string; value: string | null } | null;
+  } | null;
+  /** A built-in protocol check for a tcp monitor (HAProxy's own, no custom commands). */
+  preset?: "redis" | "smtp" | "ldap" | "mysql" | null;
   udp: { payload_hex: string | null; require_reply: boolean } | null;
 }
 
@@ -63,8 +72,13 @@ export function toForm(m: Monitor): MonitorForm {
           path: m.http.path ?? "/",
           host: m.http.host ?? null,
           expect_status: m.http.expect_status ?? [200],
+          expect_body: m.http.expect_body ?? null,
+          expect_header: m.http.expect_header
+            ? { name: m.http.expect_header.name ?? "", value: m.http.expect_header.value ?? null }
+            : null,
         }
       : null,
+    preset: m.preset ?? null,
     udp: m.udp
       ? { payload_hex: m.udp.payload_hex ?? null, require_reply: m.udp.require_reply ?? false }
       : null,
@@ -234,6 +248,7 @@ function MonitorSheet({
             ? (f.http ?? { method: "GET", path: "/", host: null, expect_status: [200] })
             : null,
         udp: udp ? (f.udp ?? { payload_hex: null, require_reply: false }) : null,
+        preset: f.type === "tcp" ? (f.preset ?? null) : null,
       };
       if (monitor === "new") await save.mutateAsync({ action: "create", body });
       else
@@ -443,10 +458,103 @@ function MonitorSheet({
                     placeholder={t("Add code")}
                     disabled={!write.allowed}
                   />
+                  <div className="grid gap-3 sm:grid-cols-[11rem_1fr_1fr]">
+                    <label className="space-y-1.5 text-sm font-medium">
+                      {t("Also check")}
+                      <select
+                        aria-label={t("Also check")}
+                        className={INPUT}
+                        disabled={!write.allowed}
+                        value={h.expect_body != null ? "body" : h.expect_header ? "header" : "none"}
+                        onChange={(e) =>
+                          sh({
+                            expect_body: e.target.value === "body" ? "" : null,
+                            expect_header:
+                              e.target.value === "header" ? { name: "", value: null } : null,
+                          })
+                        }
+                      >
+                        <option value="none">{t("Status only")}</option>
+                        <option value="body">{t("Body contains")}</option>
+                        <option value="header">{t("Response header")}</option>
+                      </select>
+                    </label>
+                    {h.expect_body != null && (
+                      <label className="space-y-1.5 text-sm font-medium sm:col-span-2">
+                        {t("Text the body must contain")}
+                        <input
+                          aria-label={t("Expected body")}
+                          className={cn(INPUT, "font-mono")}
+                          disabled={!write.allowed}
+                          value={h.expect_body}
+                          onChange={(e) => sh({ expect_body: e.target.value })}
+                        />
+                      </label>
+                    )}
+                    {h.expect_header && (
+                      <>
+                        <label className="space-y-1.5 text-sm font-medium">
+                          {t("Header name")}
+                          <input
+                            aria-label={t("Expected header name")}
+                            className={cn(INPUT, "font-mono")}
+                            disabled={!write.allowed}
+                            value={h.expect_header.name}
+                            onChange={(e) =>
+                              sh({ expect_header: { ...h.expect_header!, name: e.target.value } })
+                            }
+                          />
+                        </label>
+                        <label className="space-y-1.5 text-sm font-medium">
+                          {t("Value (optional)")}
+                          <input
+                            aria-label={t("Expected header value")}
+                            className={cn(INPUT, "font-mono")}
+                            disabled={!write.allowed}
+                            value={h.expect_header.value ?? ""}
+                            onChange={(e) =>
+                              sh({
+                                expect_header: {
+                                  ...h.expect_header!,
+                                  value: e.target.value || null,
+                                },
+                              })
+                            }
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {t("One extra matcher per check: the body or a response header, not both.")}
+                  </p>
                 </>
               );
             })()}
           </fieldset>
+        )}
+        {f.type === "tcp" && (
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("Protocol check")}
+            <select
+              aria-label={t("Protocol check")}
+              className={INPUT}
+              disabled={!write.allowed}
+              value={f.preset ?? ""}
+              onChange={(e) => set({ preset: (e.target.value || null) as MonitorForm["preset"] })}
+            >
+              <option value="">{t("None (just connect)")}</option>
+              <option value="redis">Redis</option>
+              <option value="smtp">SMTP</option>
+              <option value="ldap">LDAP</option>
+              <option value="mysql">MySQL</option>
+            </select>
+            <span className="block text-xs font-normal text-muted-foreground">
+              {t(
+                "HAProxy's built-in check for the protocol; the member must answer it, not only accept the connection.",
+              )}
+            </span>
+          </label>
         )}
         {udp && (
           <fieldset className="space-y-3 rounded-lg border p-4">

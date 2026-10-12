@@ -15,6 +15,8 @@ import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
 import { usePools, type PoolRead } from "@/features/vs/detail-queries";
+import { useCertificates } from "@/features/vs/queries";
+import { PersistenceEditor } from "./PersistenceEditor";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +32,8 @@ export interface PoolForm {
   passive_check: PassiveCheck | null;
   slow_start_s: number | null;
   discovery: PoolDiscovery | null;
+  send_proxy: "v1" | "v2" | null;
+  client_certificate_id: string | null;
   members: Member[];
 }
 export type PassiveCheck = {
@@ -58,6 +62,8 @@ export function emptyPool(): PoolForm {
     passive_check: null,
     slow_start_s: null,
     discovery: null,
+    send_proxy: null,
+    client_certificate_id: null,
     members: [],
   };
 }
@@ -82,6 +88,8 @@ export function toForm(p: PoolRead): PoolForm {
     passive_check: p.passive_check ? { ...p.passive_check } : null,
     slow_start_s: p.slow_start_s ?? null,
     discovery: p.discovery ? { ...p.discovery } : null,
+    send_proxy: p.send_proxy ?? null,
+    client_certificate_id: p.client_certificate_id ?? null,
     members: structuredClone(p.members),
   };
 }
@@ -135,6 +143,7 @@ function PoolSheet({
   onClose: () => void;
 }) {
   const monitors = useMonitors(tenant);
+  const certs = useCertificates(tenant);
   const save = useSaveOp(tenant, "pool");
   const can = useCan(tenant);
   const write = can("write", "application");
@@ -283,66 +292,61 @@ function PoolSheet({
             </div>
           </div>
         </div>
+        <PersistenceEditor
+          value={f.persistence}
+          disabled={!write.allowed}
+          onChange={(p) => set({ persistence: p })}
+        />
         <fieldset className="space-y-3 rounded-lg border p-4">
-          <legend className="px-1 text-sm font-medium">{t("Persistence")}</legend>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <legend className="px-1 text-sm font-medium">{t("Connection to members")}</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1.5 text-sm font-medium">
-              {t("Type")}
+              {t("PROXY protocol")}
               <select
-                aria-label={t("Persistence type")}
+                aria-label={t("PROXY protocol")}
                 className={INPUT}
                 disabled={!write.allowed}
-                value={f.persistence?.type ?? "none"}
+                value={f.send_proxy ?? ""}
                 onChange={(e) =>
-                  set({
-                    persistence:
-                      e.target.value === "none"
-                        ? null
-                        : { type: "source_ip", table_size: 100000, timeout_s: 1800 },
-                  })
+                  set({ send_proxy: (e.target.value || null) as PoolForm["send_proxy"] })
                 }
               >
-                <option value="none">{t("None")}</option>
-                <option value="source_ip">{t("Source IP")}</option>
-                {f.persistence && f.persistence.type !== "source_ip" && (
-                  <option value={f.persistence.type} disabled>
-                    {persistenceLabel(f.persistence)} {t("(set through the API)")}
-                  </option>
-                )}
+                <option value="">{t("Off")}</option>
+                <option value="v1">v1</option>
+                <option value="v2">v2</option>
               </select>
+              <span className="block text-xs font-normal text-muted-foreground">
+                {t(
+                  "Sends the client address to members that understand the PROXY header. Health checks send it too.",
+                )}
+              </span>
             </label>
-            <label className="block space-y-1.5 text-sm font-medium">
-              {t("Table size")}
-              <input
-                aria-label={t("Table size")}
-                type="number"
-                className={INPUT}
-                disabled={!write.allowed || f.persistence?.type !== "source_ip"}
-                value={f.persistence?.type === "source_ip" ? f.persistence.table_size : ""}
-                onChange={(e) =>
-                  f.persistence?.type === "source_ip" &&
-                  set({ persistence: { ...f.persistence, table_size: Number(e.target.value) } })
-                }
+            <div className="space-y-1.5">
+              <div className="text-sm font-medium">{t("Client certificate (mutual TLS)")}</div>
+              <Combobox
+                aria-label={t("Client certificate")}
+                disabled={!write.allowed || !f.tls}
+                value={f.client_certificate_id ?? ""}
+                onChange={(v) => set({ client_certificate_id: v || null })}
+                options={[
+                  { value: "", label: t("None") },
+                  ...(certs.data?.items ?? [])
+                    .filter((c) => c.purpose === "server")
+                    .map((c) => ({ value: c.id, label: c.name })),
+                ]}
               />
-            </label>
-            <label className="block space-y-1.5 text-sm font-medium">
-              {t("Timeout (s)")}
-              <input
-                aria-label={t("Persistence timeout")}
-                type="number"
-                className={INPUT}
-                disabled={!write.allowed || f.persistence?.type !== "source_ip"}
-                value={f.persistence?.type === "source_ip" ? f.persistence.timeout_s : ""}
-                onChange={(e) =>
-                  f.persistence?.type === "source_ip" &&
-                  set({ persistence: { ...f.persistence, timeout_s: Number(e.target.value) } })
-                }
-              />
-            </label>
+              <span className="block text-xs text-muted-foreground">
+                {f.tls
+                  ? t("HAProxy presents this server certificate to members that ask for one.")
+                  : t("Needs Backend TLS.")}
+              </span>
+              {errors.client_certificate_id && (
+                <span role="alert" className="block text-xs text-status-down">
+                  {errors.client_certificate_id}
+                </span>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {t("Cookie, header and URI persistence are set through the API for now.")}
-          </p>
         </fieldset>
         <fieldset className="space-y-3 rounded-lg border p-4">
           <legend className="px-1 text-sm font-medium">{t("Passive check and slow start")}</legend>
@@ -678,6 +682,33 @@ function PoolSheet({
                   >
                     {t("Remove")}
                   </Button>
+                  <div className="col-span-6 flex flex-wrap items-center gap-4 text-xs">
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        aria-label={t("Member {n} backup", { n: i + 1 })}
+                        disabled={!write.allowed}
+                        checked={m.backup ?? false}
+                        onChange={(e) => setMember(i, { backup: e.target.checked })}
+                      />
+                      {t("Backup: takes traffic only when every other member is down")}
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      {t("Max connections")}
+                      <input
+                        aria-label={t("Member {n} max connections", { n: i + 1 })}
+                        type="number"
+                        min={1}
+                        className={cn(INPUT, "h-8 w-24")}
+                        disabled={!write.allowed}
+                        placeholder={t("no limit")}
+                        value={m.maxconn ?? ""}
+                        onChange={(e) =>
+                          setMember(i, { maxconn: e.target.value ? Number(e.target.value) : null })
+                        }
+                      />
+                    </label>
+                  </div>
                   {Object.entries(errors)
                     .filter(([p]) => p.startsWith(`members.${i}`))
                     .map(([p, msg]) => (
