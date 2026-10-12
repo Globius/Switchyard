@@ -425,6 +425,276 @@ function NewVisitorCheck({
   );
 }
 
+type JwtKey = { kid: string; alg: string; public_key_pem: string };
+
+const b64 = (buf: ArrayBuffer) =>
+  btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/(.{64})/g, "$1\n");
+
+/**
+ * Converts a JWKS (JSON) into public-key PEM entries in the browser (WebCrypto). Private keys are
+ * never kept; entries without a usable public key are skipped with the reason.
+ */
+export async function jwksToKeys(
+  text: string,
+  existing: JwtKey[],
+): Promise<{ keys: JwtKey[]; added: number; already: number; skipped: string[] }> {
+  const doc = JSON.parse(text) as { keys?: Record<string, unknown>[] };
+  const list = Array.isArray(doc.keys) ? doc.keys : [];
+  const keys = existing.filter((k) => k.public_key_pem.trim() !== "");
+  let added = 0;
+  let already = 0;
+  const skipped: string[] = [];
+  for (const j of list) {
+    const kid = typeof j.kid === "string" ? j.kid : "";
+    if (kid && keys.some((k) => k.kid === kid)) {
+      already += 1;
+      continue;
+    }
+    try {
+      const pub = { ...j };
+      delete pub.d;
+      delete pub.p;
+      delete pub.q;
+      delete pub.dp;
+      delete pub.dq;
+      delete pub.qi;
+      const rsa = j.kty === "RSA";
+      const ec = j.kty === "EC";
+      if (!rsa && !ec) throw new Error(`key type ${String(j.kty)}`);
+      const key = await globalThis.crypto.subtle.importKey(
+        "jwk",
+        pub as JsonWebKey,
+        rsa
+          ? { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }
+          : { name: "ECDSA", namedCurve: String(j.crv) },
+        true,
+        ["verify"],
+      );
+      const der = await globalThis.crypto.subtle.exportKey("spki", key);
+      const alg =
+        typeof j.alg === "string"
+          ? j.alg
+          : rsa
+            ? "RS256"
+            : j.crv === "P-384"
+              ? "ES384"
+              : j.crv === "P-521"
+                ? "ES512"
+                : "ES256";
+      keys.push({
+        kid,
+        alg,
+        public_key_pem: `-----BEGIN PUBLIC KEY-----\n${b64(der)}\n-----END PUBLIC KEY-----`,
+      });
+      added += 1;
+    } catch (e) {
+      skipped.push(`${kid || "(no kid)"}: ${e instanceof Error ? e.message : "unusable key"}`);
+    }
+  }
+  return { keys, added, already, skipped };
+}
+
+function JwksImport({
+  id,
+  keys,
+  onKeys,
+  disabled,
+}: {
+  id: string;
+  keys: JwtKey[];
+  onKeys: (k: JwtKey[]) => void;
+  disabled: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<string | null>(null);
+  const run = async () => {
+    try {
+      const r = await jwksToKeys(text, keys);
+      onKeys(r.keys.length > 0 ? r.keys.slice(0, 8) : keys);
+      setResult(
+        t("{a} added, {b} already here, {c} skipped", {
+          a: r.added,
+          b: r.already,
+          c: r.skipped.length,
+        }) + (r.skipped.length ? `: ${r.skipped.join("; ")}` : ""),
+      );
+      setText("");
+    } catch {
+      setResult(t("That is not valid JSON."));
+    }
+  };
+  return (
+    <div className="space-y-1.5">
+      <Button size="sm" variant="outline" disabled={disabled} onClick={() => setOpen(!open)}>
+        {t("Import from a JWKS")}
+      </Button>
+      {open && (
+        <>
+          <textarea
+            aria-label={`${id} JWKS`}
+            className={cn(MONO, "h-24 py-2 text-xs")}
+            placeholder='{"keys":[…]}'
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <Button size="sm" disabled={disabled || !text.trim()} onClick={() => void run()}>
+            {t("Convert and add")}
+          </Button>
+        </>
+      )}
+      {result && (
+        <p role="status" className="text-xs text-muted-foreground">
+          {result}
+        </p>
+      )}
+    </div>
+  );
+}
+
+type CertIdentity = { by: "cn" | "sha1"; value: string; user: string; groups: string[] };
+
+/**
+ * Parses `by,value,user,groups` lines (groups separated by `;`; a header line is skipped) into
+ * known-certificate entries, up to 500 in all, reporting each bad line.
+ */
+export function parseCertCsv(
+  text: string,
+  existing: CertIdentity[],
+): { identities: CertIdentity[]; added: number; errors: { line: number; message: string }[] } {
+  const identities = [...existing];
+  const errors: { line: number; message: string }[] = [];
+  let added = 0;
+  text.split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || (i === 0 && /^by\s*,/i.test(line))) return;
+    const [by, value, user, groups = ""] = line.split(",").map((x) => x.trim());
+    const fail = (message: string) => errors.push({ line: i + 1, message });
+    if (by !== "cn" && by !== "sha1") return fail(t("The first column is cn or sha1."));
+    if (!value) return fail(t("The value is empty."));
+    if (by === "sha1" && !/^[0-9a-fA-F]{40}$/.test(value))
+      return fail(t("A SHA-1 fingerprint is 40 hex digits."));
+    if (!user) return fail(t("The user is empty."));
+    if (identities.some((x) => x.by === by && x.value.toLowerCase() === value.toLowerCase()))
+      return fail(t("Already in the list."));
+    if (identities.length >= 500) return fail(t("The list holds at most 500 certificates."));
+    identities.push({
+      by,
+      value,
+      user,
+      groups: groups
+        .split(";")
+        .map((g) => g.trim())
+        .filter(Boolean),
+    });
+    added += 1;
+  });
+  return { identities, added, errors };
+}
+
+function CertCsvImport({
+  identities,
+  onIdentities,
+  disabled,
+}: {
+  identities: CertIdentity[];
+  onIdentities: (l: CertIdentity[]) => void;
+  disabled: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<ReturnType<typeof parseCertCsv> | null>(null);
+  return (
+    <div className="space-y-1.5">
+      <Button size="sm" variant="outline" disabled={disabled} onClick={() => setOpen(!open)}>
+        {t("Import CSV")}
+      </Button>
+      {open && (
+        <>
+          <textarea
+            aria-label={t("Certificates CSV")}
+            className={cn(MONO, "h-28 py-2 text-xs")}
+            placeholder={"by,value,user,groups\ncn,sam,sam.o,ops;dev"}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <Button
+            size="sm"
+            disabled={disabled || !text.trim()}
+            onClick={() => {
+              const r = parseCertCsv(text, identities);
+              onIdentities(r.identities.filter((x) => x.value !== "" || x.user !== ""));
+              setResult(r);
+              if (r.errors.length === 0) setText("");
+            }}
+          >
+            {t("Add from CSV")}
+          </Button>
+        </>
+      )}
+      {result && (
+        <div role="status" className="space-y-0.5 text-xs">
+          <p className="text-muted-foreground">
+            {t("{n} added, {e} lines with errors", { n: result.added, e: result.errors.length })}
+          </p>
+          {result.errors.map((e) => (
+            <p key={e.line} className="text-status-down">
+              {t("Line {n}: {m}", { n: e.line, m: e.message })}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** An OpenBao path typed after the tenant's fixed `kv/tenants/<tenant>/` prefix. */
+export function SecretPath({
+  label,
+  tenant,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  tenant: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+}) {
+  const prefix = `kv/tenants/${tenant}/`;
+  const own = value === "" || value.startsWith(prefix);
+  return (
+    <div className="flex items-center">
+      {own && (
+        <span className="flex h-9 shrink-0 items-center rounded-l-md border border-r-0 bg-muted px-2 font-mono text-xs text-muted-foreground">
+          {prefix}
+        </span>
+      )}
+      <input
+        aria-label={label}
+        className={cn(MONO, own && "rounded-l-none")}
+        disabled={disabled}
+        value={own ? value.slice(prefix.length) : value}
+        onChange={(e) => onChange(own ? prefix + e.target.value : e.target.value)}
+      />
+    </div>
+  );
+}
+
+/** Where to put the secrets a login policy points at (the API never takes a secret). */
+function PutSecretCard({ tenant }: { tenant: string }) {
+  return (
+    <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground sm:col-span-2">
+      <div className="mb-1 text-sm font-medium text-foreground">{t("Put a secret")}</div>
+      {t("Store the secret in OpenBao yourself, then type its path above. For example:")}
+      <pre className="mt-1 overflow-x-auto rounded bg-muted p-2 font-mono">
+        {`bao kv put kv/tenants/${tenant}/oidc client_secret=…`}
+      </pre>
+    </div>
+  );
+}
+
 /** The body the API takes: empty optional values become null and empty matches are trimmed. */
 export function securityBody(kind: SecurityKind, name: string, cfg: Obj): Obj {
   const c = structuredClone(cfg);
@@ -652,25 +922,28 @@ export function SecurityPolicySheet({
                 </Field>
                 <Field
                   label={t("Client secret (OpenBao path)")}
-                  help={t("A path such as kv/switchyard/acme/oidc, never the secret itself.")}
+                  help={t(
+                    "Type the rest of the path after the fixed prefix; never the secret itself.",
+                  )}
                 >
-                  <input
-                    aria-label={t("Client secret reference")}
-                    className={MONO}
+                  <SecretPath
+                    label={t("Client secret reference")}
+                    tenant={tenant}
                     disabled={dis}
                     value={cfg.oidc.client_secret_ref}
-                    onChange={(e) => oidc({ client_secret_ref: e.target.value })}
+                    onChange={(v) => oidc({ client_secret_ref: v })}
                   />
                 </Field>
                 <Field label={t("Cookie secret (OpenBao path)")}>
-                  <input
-                    aria-label={t("Cookie secret reference")}
-                    className={MONO}
+                  <SecretPath
+                    label={t("Cookie secret reference")}
+                    tenant={tenant}
                     disabled={dis}
                     value={cfg.oidc.cookie_secret_ref}
-                    onChange={(e) => oidc({ cookie_secret_ref: e.target.value })}
+                    onChange={(v) => oidc({ cookie_secret_ref: v })}
                   />
                 </Field>
+                <PutSecretCard tenant={tenant} />
                 <Field label={t("Groups claim")}>
                   <input
                     aria-label={t("Groups claim")}
@@ -1025,9 +1298,12 @@ export function SecurityPolicySheet({
                     >
                       {t("Add key")}
                     </Button>
-                    <p className="text-xs text-muted-foreground">
-                      {t("Have a JWKS? Convert it with syctl jwks convert.")}
-                    </p>
+                    <JwksImport
+                      id={`Rule ${i + 1}`}
+                      disabled={dis}
+                      keys={r.keys}
+                      onKeys={(k) => upd({ keys: k })}
+                    />
                   </div>
                   <MatchEditor
                     id={`Rule ${i + 1}`}
@@ -1136,6 +1412,11 @@ export function SecurityPolicySheet({
               >
                 {t("Add certificate")}
               </Button>
+              <CertCsvImport
+                disabled={dis}
+                identities={cfg.identities}
+                onIdentities={(l) => set({ identities: l })}
+              />
             </section>
             <section className="space-y-3">
               <h3 className="text-sm font-medium">

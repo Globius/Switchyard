@@ -339,7 +339,15 @@ function EnginesCard({
                             {b.peer} {b.state}
                           </span>
                         ))}
-                        {(st?.agent?.bgp.length ?? 0) === 0 && "—"}
+                        {st?.agent?.waf_expected && !st.agent.waf_running && (
+                          <span
+                            role="alert"
+                            className="w-fit rounded bg-status-down/15 px-1.5 py-0.5 text-xs text-status-down"
+                          >
+                            {t("WAF sidecar not running")}
+                          </span>
+                        )}
+                        {(st?.agent?.bgp.length ?? 0) === 0 && !st?.agent?.waf_expected && "—"}
                       </div>
                     </td>
                     <td className="px-4 py-3">

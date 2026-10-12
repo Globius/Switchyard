@@ -7,6 +7,7 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
 import { buildBundle, looksLikePem, toBase64 } from "@/features/certificates/Certificates";
+import { jwksToKeys } from "@/features/policies/SecurityPolicies";
 import { parseCidrs } from "@/features/policies/Policies";
 import { cleanMatch, describeMatch, parseNetworks } from "@/features/policies/MatchEditor";
 import { ThemeProvider } from "@/lib/theme";
@@ -796,6 +797,9 @@ describe("rule policies", () => {
     await waitFor(() => expect(n).toBeEnabled());
     await userEvent.click(n);
     await userEvent.type(await screen.findByLabelText("Name"), "add-headers");
+    await userEvent.type(screen.getByLabelText("Rule 1 header name"), "Content-Length");
+    expect(screen.getByText(/managed by the platform/)).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText("Rule 1 header name"));
     await userEvent.type(screen.getByLabelText("Rule 1 header name"), "X-Client");
     await userEvent.selectOptions(screen.getByLabelText("Rule 1 value source"), "variable");
     await userEvent.selectOptions(screen.getByLabelText("Rule 1 variable"), "client_ip");
@@ -1063,8 +1067,8 @@ describe("security policies", () => {
     await userEvent.type(await open("access"), "staff-login");
     await userEvent.type(screen.getByLabelText("Issuer URL"), "https://idp.example.test");
     await userEvent.type(screen.getByLabelText("Client ID"), "sy");
-    await userEvent.type(screen.getByLabelText("Client secret reference"), "kv/sy/oidc");
-    await userEvent.type(screen.getByLabelText("Cookie secret reference"), "kv/sy/cookie");
+    await userEvent.type(screen.getByLabelText("Client secret reference"), "oidc");
+    await userEvent.type(screen.getByLabelText("Cookie secret reference"), "cookie");
     await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
     await userEvent.selectOptions(screen.getByLabelText("Rule 1 mode"), "groups");
     await userEvent.type(screen.getByRole("combobox", { name: "Rule 1 groups" }), "staff,");
@@ -1074,7 +1078,7 @@ describe("security policies", () => {
     expect(posted!.ops[0]!.body).toMatchObject({
       kind: "access",
       name: "staff-login",
-      oidc: { issuer: "https://idp.example.test", client_secret_ref: "kv/sy/oidc" },
+      oidc: { issuer: "https://idp.example.test", client_secret_ref: "kv/tenants/acme/oidc" },
       identity_headers: { token: null, user: "X-Auth-User" },
       rules: [{ mode: "groups", groups: ["staff"], match: {} }],
     });
@@ -1367,5 +1371,56 @@ describe("security policies", () => {
     expect(posted!.ops[0]!.body).toMatchObject({
       rules: [{ jwks_url: "https://i.test/jwks.json" }],
     });
+  });
+
+  it("converts a JWKS to PEM keys and reports added, already here and skipped", async () => {
+    const pair = await globalThis.crypto.subtle.generateKey(
+      { name: "ECDSA", namedCurve: "P-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const jwk = await globalThis.crypto.subtle.exportKey("jwk", pair.publicKey);
+    const text = JSON.stringify({
+      keys: [
+        { ...jwk, kid: "k1" },
+        { ...jwk, kid: "k2" },
+        { kty: "oct", kid: "bad" },
+      ],
+    });
+    const r = await jwksToKeys(text, [{ kid: "k2", alg: "ES256", public_key_pem: "PEM" }]);
+    expect(r.added).toBe(1);
+    expect(r.already).toBe(1);
+    expect(r.skipped).toHaveLength(1);
+    expect(r.keys.find((k) => k.kid === "k1")?.public_key_pem).toMatch(/BEGIN PUBLIC KEY/);
+  });
+
+  it("imports a JWKS into a JWT rule from the sheet", async () => {
+    await userEvent.type(await open("jwt"), "imp");
+    await userEvent.click(screen.getByRole("button", { name: "Import from a JWKS" }));
+    await userEvent.click(screen.getByLabelText("Rule 1 JWKS"));
+    await userEvent.paste("not json");
+    await userEvent.click(screen.getByRole("button", { name: "Convert and add" }));
+    expect(await screen.findByText("That is not valid JSON.")).toBeInTheDocument();
+  });
+
+  it("imports certificates from CSV and reports each bad line", async () => {
+    await userEvent.type(await open("client_cert"), "csv");
+    await userEvent.click(screen.getByRole("button", { name: "Import CSV" }));
+    await userEvent.click(screen.getByLabelText("Certificates CSV"));
+    await userEvent.paste(
+      [
+        "by,value,user,groups",
+        "cn,sam,sam.o,ops;dev",
+        "sha1,xyz,a,b",
+        "cn,sam,sam.o",
+        "oops,x,y",
+      ].join("\n"),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Add from CSV" }));
+    expect(await screen.findByText("1 added, 3 lines with errors")).toBeInTheDocument();
+    expect(screen.getByText(/Line 3: A SHA-1 fingerprint/)).toBeInTheDocument();
+    expect(screen.getByText(/Line 4: Already in the list/)).toBeInTheDocument();
+    expect(screen.getByText(/Line 5: The first column/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Identity 1 value")).toHaveValue("sam");
   });
 });

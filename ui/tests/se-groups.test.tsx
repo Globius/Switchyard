@@ -45,6 +45,8 @@ const STATUS = (id: string, name: string, drift: unknown[] = []) => ({
   observed_at: "2026-10-11T10:52:14Z",
   agent: {
     version: "0.9.2",
+    waf_expected: id === "e2",
+    waf_running: false,
     bgp: [{ peer: "10.40.12.2", remote_asn: 65000, state: "Established" }],
   },
 });
@@ -144,6 +146,7 @@ describe("SE groups", () => {
     expect(await within(row).findByText("Drifted")).toBeInTheDocument();
     expect(within(row).getByText(/10\.40\.12\.2 Established/)).toBeInTheDocument();
     expect(within(row).getByText(/agent 0.9.2/)).toBeInTheDocument();
+    expect(within(row).getByText("WAF sidecar not running")).toBeInTheDocument();
     const disable = within(row).getByRole("button", { name: "Disable" });
     await waitFor(() => expect(disable).toBeEnabled());
     await userEvent.click(disable);

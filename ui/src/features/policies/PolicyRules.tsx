@@ -42,6 +42,35 @@ const VARIABLES: Variable[] = [
   "tls_sni",
   "request_id",
 ];
+/** What each variable holds, for the picker. */
+export const VARIABLE_HELP: Record<Variable, string> = {
+  client_ip: "The client's address",
+  client_port: "The client's source port",
+  host: "The Host the client asked for",
+  vip: "The virtual service's address",
+  vip_port: "The port the client connected to",
+  method: "The HTTP method",
+  tls_version: "The negotiated TLS version",
+  tls_cipher: "The negotiated cipher",
+  tls_sni: "The server name sent in the TLS handshake",
+  request_id: "A unique id for this request",
+};
+/** Headers the platform owns; the API refuses a policy that touches them. */
+export const PROTECTED_HEADERS = new Set([
+  "content-length",
+  "transfer-encoding",
+  "connection",
+  "keep-alive",
+  "te",
+  "trailer",
+  "upgrade",
+  "expect",
+  "proxy-authorization",
+  "proxy-authenticate",
+  "proxy-connection",
+  "x-forwarded-for",
+  "x-forwarded-proto",
+]);
 const STATUSES = [
   200, 202, 204, 400, 401, 403, 404, 405, 410, 429, 451, 500, 502, 503, 504,
 ] as const;
@@ -208,6 +237,7 @@ export function RulePolicySheet({
   const save = useSaveOp(tenant, "policy_set");
   const write = useCan(tenant)("write", "application");
   const dis = !write.allowed;
+  const [previewing, setPreviewing] = useState<Record<number, boolean>>({});
   const [name, setName] = useState(policy?.name ?? "");
   const [rewrite, setRewrite] = useState<RewriteRule[]>(
     policy?.kind === "rewrite" ? structuredClone(policy.rules) : [newRewriteRule()],
@@ -447,6 +477,11 @@ export function RulePolicySheet({
                           value={act.name ?? ""}
                           onChange={(e) => setAct({ name: e.target.value })}
                         />
+                        {PROTECTED_HEADERS.has((act.name ?? "").trim().toLowerCase()) && (
+                          <span role="alert" className="block text-xs text-status-down">
+                            {t("This header is managed by the platform and can't be changed.")}
+                          </span>
+                        )}
                       </label>
                       {at !== "remove_header" && (
                         <div className="space-y-1.5">
@@ -478,7 +513,7 @@ export function RulePolicySheet({
                               >
                                 {VARIABLES.map((v) => (
                                   <option key={v} value={v}>
-                                    {v}
+                                    {v} — {t(VARIABLE_HELP[v])}
                                   </option>
                                 ))}
                               </select>
@@ -597,19 +632,44 @@ export function RulePolicySheet({
                       </label>
                     )}
                   </div>
-                  <label className="block">
-                    <span className="mb-1.5 block text-sm font-medium">{t("Body")}</span>
-                    <textarea
-                      aria-label={`Rule ${i + 1} body`}
-                      className={cn(INPUT, "h-28 py-2 font-mono text-xs")}
-                      disabled={dis}
-                      value={r.body ?? ""}
-                      onChange={(e) => upd({ body: e.target.value })}
-                    />
+                  <div className="block">
+                    <div className="mb-1.5 flex items-center gap-2 text-sm font-medium">
+                      {t("Body")}
+                      <Button
+                        size="sm"
+                        variant={previewing[i] ? "ghost" : "outline"}
+                        onClick={() => setPreviewing({ ...previewing, [i]: false })}
+                      >
+                        {t("Edit")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={previewing[i] ? "outline" : "ghost"}
+                        onClick={() => setPreviewing({ ...previewing, [i]: true })}
+                      >
+                        {t("Preview")}
+                      </Button>
+                    </div>
+                    {previewing[i] ? (
+                      <iframe
+                        title={`Rule ${i + 1} body preview`}
+                        sandbox=""
+                        srcDoc={r.body ?? ""}
+                        className="h-40 w-full rounded-md border bg-white"
+                      />
+                    ) : (
+                      <textarea
+                        aria-label={`Rule ${i + 1} body`}
+                        className={cn(INPUT, "h-28 py-2 font-mono text-xs")}
+                        disabled={dis}
+                        value={r.body ?? ""}
+                        onChange={(e) => upd({ body: e.target.value })}
+                      />
+                    )}
                     <span className="block text-xs text-muted-foreground">
-                      {t("Leave empty for an empty response.")}
+                      {t("Leave empty for an empty response. The preview runs no scripts.")}
                     </span>
-                  </label>
+                  </div>
                   <div>
                     <div className="mb-1.5 text-sm font-medium">
                       {t("When the request matches")}
@@ -754,18 +814,25 @@ export function RulePolicySheet({
                         </label>
                       </>
                     )}
-                    <label>
-                      <span className="mb-1.5 block text-sm font-medium">{t("Tracked keys")}</span>
-                      <input
-                        aria-label={`Rule ${i + 1} table size`}
-                        type="number"
-                        min={1}
-                        className={INPUT}
-                        disabled={dis}
-                        value={r.table_size ?? 10000}
-                        onChange={(e) => upd({ table_size: Number(e.target.value) })}
-                      />
-                    </label>
+                    <details className="md:col-span-2">
+                      <summary className="cursor-pointer text-sm font-medium">
+                        {t("Advanced")}
+                      </summary>
+                      <label>
+                        <span className="mb-1.5 block text-sm font-medium">
+                          {t("Tracked keys")}
+                        </span>
+                        <input
+                          aria-label={`Rule ${i + 1} table size`}
+                          type="number"
+                          min={1}
+                          className={INPUT}
+                          disabled={dis}
+                          value={r.table_size ?? 10000}
+                          onChange={(e) => upd({ table_size: Number(e.target.value) })}
+                        />
+                      </label>
+                    </details>
                   </div>
                   <div className="grid gap-3 md:grid-cols-3">
                     <label>
