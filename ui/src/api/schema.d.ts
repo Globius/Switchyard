@@ -858,6 +858,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/controller": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The controller's address, VIP and certificate
+         * @description The public URL in effect and where the `controller` service answers.
+         *
+         *     Also its certificate, the change that waits for confirmation (with the seconds left) and
+         *     the redirect addresses each identity provider must allow for the new FQDN.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_controller_api_v1_system_controller_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep the new controller settings
+         * @description Make the pending FQDN the public URL.
+         *
+         *     The request has to arrive on the new FQDN (`403` otherwise): reaching it is the proof it
+         *     works. `409` when nothing waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["confirm_controller_api_v1_system_controller_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Propose a new FQDN, VIP or certificate
+         * @description Validate, then apply the change to the `controller` service.
+         *
+         *     It is a change set of the management tenant with a recorded reason. When it has applied,
+         *     a confirmation window starts.
+         *
+         *     Update the identity providers' redirect addresses first (`redirect_urls`). The worker
+         *     reverts the change if it is not confirmed in time; nothing depends on this API. `409`
+         *     while another change waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["propose_controller_api_v1_system_controller_pending_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert the pending controller change now
+         * @description Put the previous VIP and certificate back with another change set.
+         *
+         *     Works from either address. `409` when nothing waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["revert_controller_api_v1_system_controller_revert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/settings": {
         parameters: {
             query?: never;
@@ -2102,6 +2205,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/imports/avi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an Avi configuration export
+         * @description Convert the export; with `dry_run: false` open a draft change set from it.
+         *
+         *     SNI parents and their children become one HTTP service with host routes. Pools, health
+         *     monitors, certificates (with keys, stored in the secrets backend), HTTP redirects and pool
+         *     switches are converted; WAF, DataScripts and other things are listed under `findings` as
+         *     `manual`. VIPs do not carry over: they come from `vip_pool` or `vip_map`. The draft is not
+         *     applied; review it like any change set.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["import_avi_api_v1_tenants__t__imports_avi_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/jobs": {
         parameters: {
             query?: never;
@@ -2206,6 +2337,118 @@ export interface paths {
          *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["retry_job_api_v1_tenants__t__jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's Kubernetes clusters
+         * @description Connected clusters by name, with the last sync result. The token is never shown.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_kubernetes_clusters_api_v1_tenants__t__kubernetes_clusters_get"];
+        put?: never;
+        /**
+         * Connect a Kubernetes cluster
+         * @description Connect a cluster.
+         *
+         *     Services of type `LoadBalancer` with the cluster's class and Gateways with its gateway
+         *     class become virtual services. The token is stored in the secrets backend; run the test
+         *     to check access.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a Kubernetes cluster
+         * @description One cluster with its version in the `ETag`.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["get_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect a Kubernetes cluster
+         * @description Forget the cluster; the objects it created stay until you delete them.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a Kubernetes cluster
+         * @description Change settings or replace the token; omitted fields stay.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync a Kubernetes cluster now
+         * @description Queue a sync of every cluster of the platform; the sync also runs every 30 seconds.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["sync_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a Kubernetes cluster connection
+         * @description Reach the API server, count nodes and services and check what the token may do.
+         *
+         *     Always answers `200`; `ok: false` lists the problems.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["test_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3608,11 +3851,226 @@ export interface components {
             reason?: string | null;
         };
         /**
+         * AccessPolicySet
+         * @description Require a login (and optionally a group or e-mail domain) for a service (ADR 0130 to 0132).
+         *
+         *     The engine runs an authentication proxy for the set; requests that need a login are sent
+         *     through it and come back to the same frontend once authenticated.
+         *
+         *     Attributes:
+         *         oidc: The identity provider settings.
+         *         default_mode: What requests that match no rule need: ``login`` (the default, closed) or
+         *             ``public``.
+         *         rules: Ordered rules; the first match decides.
+         *         identity_headers: Which headers carry the user to the origin.
+         *         auth_path: Path prefix of the login endpoints (``/oauth2/start``, ``/oauth2/callback``,
+         *             ``/oauth2/sign_out``), reserved on every host of the service.
+         */
+        AccessPolicySet: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** AccessPolicySetCreate */
+        AccessPolicySetCreate: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+        };
+        /** AccessPolicySetPatch */
+        AccessPolicySetPatch: {
+            /** Auth Path */
+            auth_path?: string | null;
+            /** Default Mode */
+            default_mode?: ("login" | "public") | null;
+            identity_headers?: components["schemas"]["IdentityHeaders"] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name?: string | null;
+            oidc?: components["schemas"]["OidcSettings"] | null;
+            /** Rules */
+            rules?: components["schemas"]["AccessRule"][] | null;
+        };
+        /**
+         * AccessPolicySetRead
+         * @description AccessPolicySet as returned by the API.
+         */
+        AccessPolicySetRead: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * AccessRule
+         * @description What a request needs before it reaches the origin.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers; the first rule that matches decides.
+         *         mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of
+         *             at least one of ``groups``) or ``email_domains`` (an address in one of the domains).
+         */
+        AccessRule: {
+            /**
+             * Email Domains
+             * @default []
+             */
+            email_domains: string[];
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Mode
+             * @default login
+             * @enum {string}
+             */
+            mode: "public" | "login" | "groups" | "email_domains";
+            posture?: components["schemas"]["Posture"] | null;
+        };
+        /**
          * AcmeChallenge
          * @description How an ACME certificate authority checks control of a name.
          * @enum {string}
          */
-        AcmeChallenge: "dns-01" | "http-01";
+        AcmeChallenge: "dns-01" | "http-01" | "tls-alpn-01";
         /**
          * AcmeOauthIn
          * @description OAuth settings for a CA behind an identity provider (client-credentials grant).
@@ -4416,6 +4874,129 @@ export interface components {
             providers: components["schemas"]["AuthProvider"][];
         };
         /**
+         * AviFindingRead
+         * @description One decision of the conversion.
+         */
+        AviFindingRead: {
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "info" | "warning" | "manual" | "skipped";
+            /** Message */
+            message: string;
+            /** Object */
+            object: string;
+        };
+        /**
+         * AviImportIn
+         * @description Convert an Avi configuration export into a draft change set.
+         */
+        AviImportIn: {
+            /**
+             * Dry Run
+             * @description Only report what would be created. Send `false` to create the draft.
+             * @default true
+             */
+            dry_run: boolean;
+            /**
+             * Export
+             * @description The decoded Avi configuration export (`POST /api/configuration/export`, or the `avi_config.json` of a backup): an object with a list per object type.
+             */
+            export: {
+                [key: string]: unknown;
+            };
+            /**
+             * Include Unused
+             * @description Also convert pools and other objects no service uses.
+             * @default false
+             */
+            include_unused: boolean;
+            /**
+             * Only
+             * @description Convert only these virtual services (Avi names).
+             */
+            only?: string[];
+            /**
+             * Prefix
+             * @description Put in front of every new name.
+             * @default
+             */
+            prefix: string;
+            /**
+             * Se Group
+             * @description Name of the SE group the services will use.
+             */
+            se_group: string;
+            /**
+             * Vip Map
+             * @description Fixed new addresses, keyed by the Avi VIP name or its old address.
+             */
+            vip_map?: {
+                [key: string]: string;
+            };
+            /**
+             * Vip Pool
+             * @description VIP pool the new VIPs are taken from, one per Avi VIP.
+             */
+            vip_pool?: string | null;
+        };
+        /**
+         * AviImportRead
+         * @description What the import did or would do.
+         */
+        AviImportRead: {
+            /**
+             * Change Set Id
+             * @description The draft change set; empty for a dry run.
+             */
+            change_set_id: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Dry Run */
+            dry_run: boolean;
+            /** Findings */
+            findings: components["schemas"]["AviFindingRead"][];
+            /** Objects */
+            objects: components["schemas"]["AviMappedRead"][];
+            /** Vips */
+            vips: components["schemas"]["AviVipRead"][];
+        };
+        /**
+         * AviMappedRead
+         * @description An Avi object and what it became.
+         */
+        AviMappedRead: {
+            /** Avi Name */
+            avi_name: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * AviVipRead
+         * @description An Avi VIP and the address that replaces it.
+         */
+        AviVipRead: {
+            /**
+             * Address
+             * @description The address in the export.
+             */
+            address: string | null;
+            /** Avi Vsvip */
+            avi_vsvip: string;
+            /**
+             * New Address
+             * @description The address it gets here, if one was found.
+             */
+            new_address: string | null;
+            /** Services */
+            services: string[];
+        };
+        /**
          * BgpPeer
          * @description An upstream BGP neighbour (for example a tenant's FortiGate VDOM).
          *
@@ -4742,6 +5323,34 @@ export interface components {
             pem: string;
         };
         /**
+         * CertIdentity
+         * @description Map a client certificate to a user and groups (ADR 0136).
+         *
+         *     Attributes:
+         *         by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,
+         *             for individual certificates).
+         *         value: The common name, or 40 hex digits.
+         *         user: The user name written to the user header.
+         *         groups: Groups written to the groups header.
+         */
+        CertIdentity: {
+            /**
+             * By
+             * @default cn
+             * @enum {string}
+             */
+            by: "cn" | "sha1";
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /** User */
+            user: string;
+            /** Value */
+            value: string;
+        };
+        /**
          * CertImportIn
          * @description Body of ``POST /certificates/import``.
          */
@@ -4776,9 +5385,9 @@ export interface components {
             acme_provider?: string | null;
             /**
              * Challenge
-             * @description `dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.
+             * @description `dns-01` (default), `http-01` or `tls-alpn-01`. The last two cannot validate wildcard names. TLS-ALPN-01 answers every HTTPS handshake for the name with the challenge certificate while it runs, so a name that is serving traffic is interrupted for a few seconds (see `warnings` in the check).
              */
-            challenge?: ("dns-01" | "http-01") | null;
+            challenge?: ("dns-01" | "http-01" | "tls-alpn-01") | null;
             /**
              * Dns Provider
              * @description DNS credential name for `dns-01`. Chosen by zone when empty.
@@ -5149,6 +5758,212 @@ export interface components {
             summary: string;
         };
         /**
+         * ClaimCheck
+         * @description A condition on a claim of the signed-in user's ID token (ADR 0138).
+         *
+         *     ``op`` is ``present``, ``true`` (a JSON ``true``), ``equals`` (``value``) or ``in``
+         *     (``values``). The token was verified by the authentication proxy.
+         */
+        ClaimCheck: {
+            /** Name */
+            name: string;
+            /**
+             * Op
+             * @default true
+             * @enum {string}
+             */
+            op: "present" | "true" | "equals" | "in";
+            /** Value */
+            value?: string | null;
+            /**
+             * Values
+             * @default []
+             */
+            values: string[];
+        };
+        /**
+         * ClientCertPolicySet
+         * @description Use the TLS client certificate as the identity (ADR 0136).
+         *
+         *     Attributes:
+         *         identities: Certificates the set knows (up to 500).
+         *         rules: Ordered rules; the first that matches decides. Requests that match no rule are
+         *             not checked.
+         *         user_header: Header that receives the mapped user (client copies removed first).
+         *         groups_header: Header that receives the mapped groups, comma separated.
+         */
+        ClientCertPolicySet: {
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ClientCertPolicySetCreate */
+        ClientCertPolicySetCreate: {
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+        };
+        /** ClientCertPolicySetPatch */
+        ClientCertPolicySetPatch: {
+            /** Groups Header */
+            groups_header?: string | null;
+            /** Identities */
+            identities?: components["schemas"]["CertIdentity"][] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["ClientCertRule"][] | null;
+            /** User Header */
+            user_header?: string | null;
+        };
+        /**
+         * ClientCertPolicySetRead
+         * @description ClientCertPolicySet as returned by the API.
+         */
+        ClientCertPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * ClientCertRule
+         * @description What a request needs from its client certificate.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers (empty: all). The first rule that matches decides.
+         *         mode: ``valid`` (any certificate the port's client CA accepts), ``identity`` (the
+         *             certificate must be in ``identities``) or ``groups`` (and its identity must have one of
+         *             ``groups``).
+         *         groups: Groups for mode ``groups``.
+         */
+        ClientCertRule: {
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Mode
+             * @default valid
+             * @enum {string}
+             */
+            mode: "valid" | "identity" | "groups";
+        };
+        /**
          * Compression
          * @description Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
          *
@@ -5182,6 +5997,174 @@ export interface components {
              *     ]
              */
             content_types: string[];
+        };
+        /**
+         * ControllerCertificateRead
+         * @description The certificate the `controller` service presents.
+         */
+        ControllerCertificateRead: {
+            /** Name */
+            name: string;
+            /**
+             * Not After
+             * Format: date-time
+             */
+            not_after: string;
+            /** Sans */
+            sans: string[];
+        };
+        /**
+         * ControllerChangeIn
+         * @description Propose a change to the controller's address.
+         */
+        ControllerChangeIn: {
+            /**
+             * Certificate
+             * @description Name of a server certificate in the management tenant.
+             */
+            certificate?: string | null;
+            /**
+             * Confirm Within S
+             * @description Seconds to confirm before the change is reverted (default 120).
+             */
+            confirm_within_s?: number | null;
+            /**
+             * Fqdn
+             * @description The host name users will open.
+             */
+            fqdn: string;
+            /**
+             * Vip
+             * @description A new VIP for the `controller` service.
+             */
+            vip?: string | null;
+        };
+        /**
+         * ControllerChangeRead
+         * @description A change that waits for confirmation (or is still being applied).
+         */
+        ControllerChangeRead: {
+            after: components["schemas"]["ControllerStateRead"];
+            before: components["schemas"]["ControllerStateRead"];
+            /**
+             * Change Set Id
+             * @description The management tenant's change set.
+             */
+            change_set_id: string | null;
+            /**
+             * Expires At
+             * @description Set once the change set has applied.
+             */
+            expires_at: string | null;
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /** Proposed By */
+            proposed_by: string;
+            /** Revision After */
+            revision_after: number | null;
+            /** Revision Before */
+            revision_before: number | null;
+            /** Seconds Left */
+            seconds_left: number | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "applying" | "waiting";
+            /** Window S */
+            window_s: number;
+        };
+        /**
+         * ControllerListenRead
+         * @description Where the `controller` service answers.
+         */
+        ControllerListenRead: {
+            /** Ports */
+            ports: components["schemas"]["ControllerPortRead"][];
+            /** Vip */
+            vip: string;
+        };
+        /**
+         * ControllerPortRead
+         * @description A port of the `controller` service.
+         */
+        ControllerPortRead: {
+            /** Https Redirect Port */
+            https_redirect_port: number | null;
+            /** Port */
+            port: number;
+            /** Tls */
+            tls: boolean;
+        };
+        /**
+         * ControllerRead
+         * @description The controller's address settings.
+         */
+        ControllerRead: {
+            /**
+             * Break Glass
+             * @description How to recover without the UI.
+             */
+            break_glass: string;
+            certificate: components["schemas"]["ControllerCertificateRead"] | null;
+            /** Fqdn */
+            fqdn: string | null;
+            last_result: components["schemas"]["ControllerResultRead"] | null;
+            listen: components["schemas"]["ControllerListenRead"] | null;
+            /**
+             * Managed
+             * @description The management tenant and its `controller` service exist. Without them only the FQDN (public URL) can be set.
+             */
+            managed: boolean;
+            pending: components["schemas"]["ControllerChangeRead"] | null;
+            /** Public Url */
+            public_url: string | null;
+            /**
+             * Redirect Urls
+             * @description For a pending change: what each identity provider must allow first.
+             */
+            redirect_urls: components["schemas"]["IdpRedirectRead"][];
+        };
+        /**
+         * ControllerResultRead
+         * @description How the previous change ended.
+         */
+        ControllerResultRead: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** By */
+            by: string | null;
+            /** Fqdn */
+            fqdn?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "confirmed" | "reverted" | "failed";
+            /** Reason */
+            reason?: string | null;
+            /** Restored */
+            restored?: boolean | null;
+        };
+        /**
+         * ControllerStateRead
+         * @description The settings before or after a change.
+         */
+        ControllerStateRead: {
+            /** Certificate */
+            certificate?: string | null;
+            /** Fqdn */
+            fqdn: string | null;
+            /** Public Url */
+            public_url: string | null;
+            /** Vip */
+            vip?: string | null;
         };
         /**
          * DeployIn
@@ -5340,6 +6323,101 @@ export interface components {
             message: string;
             /** Path */
             path: string;
+        };
+        /**
+         * DirectoryPolicySet
+         * @description A place users sign in that is not an OIDC provider of their own: LDAP, SAML or local users.
+         *
+         *     A central broker (Dex, one instance per directory) turns it into an OIDC issuer that an
+         *     access set names with ``oidc.directory_id`` (ADR 0137). Directories are not attached to
+         *     services.
+         */
+        DirectoryPolicySet: {
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** DirectoryPolicySetCreate */
+        DirectoryPolicySetCreate: {
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+        };
+        /** DirectoryPolicySetPatch */
+        DirectoryPolicySetPatch: {
+            /** Connector */
+            connector?: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name?: string | null;
+        };
+        /**
+         * DirectoryPolicySetRead
+         * @description DirectoryPolicySet as returned by the API.
+         */
+        DirectoryPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * DiscoveryGroup
@@ -6531,6 +7609,45 @@ export interface components {
          */
         HttpMethod: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
         /**
+         * IdentityHeaders
+         * @description Headers that carry the signed-in user to the origin (ADR 0132).
+         *
+         *     A name set to ``None`` turns that header off. The names are removed from every client
+         *     request before the user's own values are written, so an origin can trust them when the
+         *     service is only reachable through the engine.
+         */
+        IdentityHeaders: {
+            /**
+             * Email
+             * @default X-Auth-Email
+             */
+            email: string | null;
+            /**
+             * Groups
+             * @default X-Auth-Groups
+             */
+            groups: string | null;
+            /** Token */
+            token?: string | null;
+            /**
+             * User
+             * @default X-Auth-User
+             */
+            user: string | null;
+        };
+        /**
+         * IdpRedirectRead
+         * @description The address an identity provider must allow for the new FQDN.
+         */
+        IdpRedirectRead: {
+            /** Protocol */
+            protocol: string;
+            /** Provider */
+            provider: string;
+            /** Redirect Url */
+            redirect_url: string;
+        };
+        /**
          * IdpTestIn
          * @description Start a test sign-in.
          */
@@ -6679,6 +7796,11 @@ export interface components {
             ok: boolean;
             /** Problems */
             problems: components["schemas"]["IssueProblemRead"][];
+            /**
+             * Warnings
+             * @description Things to know that do not stop the request.
+             */
+            warnings: components["schemas"]["IssueProblemRead"][];
         };
         /**
          * IssueProblemRead
@@ -6797,11 +7919,15 @@ export interface components {
          *         POLL_STATUS: Scheduled engine status poll and drift detection.
          *         GIT_MIRROR: Pushes a revision to the Git mirror.
          *         GC: Scheduled housekeeping.
+         *         KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and
+         *             Gateways and applies the difference as a `system:k8s` change set.
+         *         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
+         *             confirmation; reverts it when the window runs out.
          *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members" | "evaluate_alerts";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "evaluate_alerts";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -6865,6 +7991,351 @@ export interface components {
          */
         JobState: "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
         /**
+         * JwtKey
+         * @description A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.
+         *
+         *     Attributes:
+         *         kid: The ``kid`` header the key belongs to; without it the key is tried for every token.
+         *         alg: The signature algorithm the token must declare.
+         *         public_key_pem: The key as a PEM ``PUBLIC KEY`` block (convert a JWK with
+         *             ``syctl jwks convert``).
+         */
+        JwtKey: {
+            /**
+             * Alg
+             * @default RS256
+             * @enum {string}
+             */
+            alg: "RS256" | "RS384" | "RS512" | "ES256" | "ES384" | "ES512" | "PS256" | "PS384" | "PS512";
+            /** Kid */
+            kid?: string | null;
+            /** Public Key Pem */
+            public_key_pem: string;
+        };
+        /**
+         * JwtPolicySet
+         * @description Validate JWT bearer tokens for APIs, with no login page (ADR 0135).
+         */
+        JwtPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** JwtPolicySetCreate */
+        JwtPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+        };
+        /** JwtPolicySetPatch */
+        JwtPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["JwtRule"][] | null;
+        };
+        /**
+         * JwtPolicySetRead
+         * @description JwtPolicySet as returned by the API.
+         */
+        JwtPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * JwtRule
+         * @description Require a valid bearer token on the requests ``match`` selects.
+         *
+         *     A token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``
+         *     contains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and
+         *     every ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is
+         *     answered 401.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers (empty: all).
+         *         issuer: The expected ``iss`` claim.
+         *         audiences: Accepted ``aud`` values (a string claim or an element of an array claim).
+         *         required_scopes: Scopes the token must carry.
+         *         leeway_s: Clock difference tolerated on ``exp``.
+         *         keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).
+         *         subject_header: Request header that receives the ``sub`` claim of a valid token;
+         *             client copies of it are removed first.
+         */
+        JwtRule: {
+            /**
+             * Audiences
+             * @default []
+             */
+            audiences: string[];
+            /** Issuer */
+            issuer: string;
+            /** Keys */
+            keys: components["schemas"]["JwtKey"][];
+            /**
+             * Leeway S
+             * @default 30
+             */
+            leeway_s: number;
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Required Scopes
+             * @default []
+             */
+            required_scopes: string[];
+            /** Subject Header */
+            subject_header?: string | null;
+        };
+        /**
+         * KubernetesClusterIn
+         * @description Connect a Kubernetes cluster.
+         */
+        KubernetesClusterIn: {
+            /**
+             * Api Url
+             * @description `https://host:port` of the API server.
+             */
+            api_url: string;
+            /**
+             * Ca Pem
+             * @description PEM of the API server's CA, if private.
+             */
+            ca_pem?: string | null;
+            /**
+             * Class Name
+             * @description `loadBalancerClass` of the Services that are ours.
+             * @default switchyard.io/lb
+             */
+            class_name: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Gateway Class
+             * @description `gatewayClassName` of the Gateways that are ours.
+             * @default switchyard
+             */
+            gateway_class: string;
+            /**
+             * Mode
+             * @description `nodeport`: pools hold the ready nodes at the NodePort. `pods`: pools hold the ready endpoints (the SEs must reach the pod network).
+             * @default nodeport
+             * @enum {string}
+             */
+            mode: "nodeport" | "pods";
+            /** Name */
+            name: string;
+            /**
+             * Se Group
+             * @description Name of the SE group the services use.
+             */
+            se_group: string;
+            /**
+             * Token
+             * @description A service-account token with the access in docs/kubernetes.md. Write-only.
+             */
+            token: string;
+            /**
+             * Vip Pool
+             * @description Name of the VIP pool addresses are taken from.
+             */
+            vip_pool: string;
+        };
+        /**
+         * KubernetesClusterPatch
+         * @description Change a cluster; send only what changes.
+         */
+        KubernetesClusterPatch: {
+            /** Api Url */
+            api_url?: string | null;
+            /** Ca Pem */
+            ca_pem?: string | null;
+            /** Class Name */
+            class_name?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Gateway Class */
+            gateway_class?: string | null;
+            /** Mode */
+            mode?: ("nodeport" | "pods") | null;
+            /** Se Group */
+            se_group?: string | null;
+            /**
+             * Token
+             * @description Replaces the stored token.
+             */
+            token?: string | null;
+            /** Vip Pool */
+            vip_pool?: string | null;
+        };
+        /**
+         * KubernetesClusterRead
+         * @description A connected cluster (never the token).
+         */
+        KubernetesClusterRead: {
+            /** Api Url */
+            api_url: string;
+            /** Ca Set */
+            ca_set: boolean;
+            /** Class Name */
+            class_name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Gateway Class */
+            gateway_class: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            last_sync: components["schemas"]["KubernetesSyncRead"] | null;
+            /** Last Sync At */
+            last_sync_at: string | null;
+            /** Last Sync Error */
+            last_sync_error: string | null;
+            /** Last Sync Ok */
+            last_sync_ok: boolean | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "nodeport" | "pods";
+            /** Name */
+            name: string;
+            /** Se Group */
+            se_group: string;
+            /** Version */
+            version: number;
+            /** Vip Pool */
+            vip_pool: string;
+            /**
+             * Waiting For Change Set
+             * @description The sync waits for this change set to finish before it plans again.
+             */
+            waiting_for_change_set: string | null;
+        };
+        /**
+         * KubernetesSyncRead
+         * @description The result of the last sync.
+         */
+        KubernetesSyncRead: {
+            /** Addresses Written */
+            addresses_written?: number | null;
+            /** Change Set Id */
+            change_set_id?: string | null;
+            /** Created */
+            created?: number | null;
+            /** Deleted */
+            deleted?: number | null;
+            /** Notes */
+            notes?: string[] | null;
+            /** Planned Pools */
+            planned_pools?: number | null;
+            /** Planned Services */
+            planned_services?: number | null;
+            /** Skipped */
+            skipped?: string | null;
+            /** Updated */
+            updated?: number | null;
+        };
+        /**
+         * KubernetesTestRead
+         * @description What a connection test found.
+         */
+        KubernetesTestRead: {
+            /** Detail */
+            detail: string;
+            /**
+             * Gateway Api
+             * @description The Gateway API CRDs are installed.
+             */
+            gateway_api: boolean | null;
+            /** Nodes */
+            nodes: number | null;
+            /** Ok */
+            ok: boolean;
+            /** Permissions */
+            permissions: {
+                [key: string]: boolean;
+            };
+            /** Problems */
+            problems: string[];
+            /** Services */
+            services: number | null;
+            /** Version */
+            version: string | null;
+        };
+        /**
          * LatestRevision
          * @description The newest revision.
          */
@@ -6880,6 +8351,123 @@ export interface components {
             number: number;
             /** Summary */
             summary: string;
+        };
+        /**
+         * LdapConnector
+         * @description Sign in against an LDAP or Active Directory server (ADR 0137).
+         *
+         *     Attributes:
+         *         host: Server name; ``port`` defaults to 636 (``ldaps``). With ``starttls`` use 389.
+         *         security: ``ldaps`` or ``starttls``; a clear-text connection is not offered.
+         *         root_ca_pem: PEM certificate(s) that sign the server certificate (public; omit to use the
+         *             broker's system roots).
+         *         bind_dn: Service account used to search.
+         *         bind_password_ref: OpenBao path of its password.
+         *         user_base_dn / user_filter: Where and how users are found; the sign-in name is matched
+         *             with ``username_attr``.
+         *         group_base_dn: Where groups are searched (omit for no groups); a user's groups are those
+         *             whose ``group_member_attr`` holds the user's ``group_user_attr`` (``DN`` or an
+         *             attribute name).
+         */
+        LdapConnector: {
+            /** Bind Dn */
+            bind_dn: string;
+            /** Bind Password Ref */
+            bind_password_ref: string;
+            /**
+             * Email Attr
+             * @default mail
+             */
+            email_attr: string;
+            /** Group Base Dn */
+            group_base_dn?: string | null;
+            /**
+             * Group Filter
+             * @default (objectClass=groupOfNames)
+             */
+            group_filter: string;
+            /**
+             * Group Member Attr
+             * @default member
+             */
+            group_member_attr: string;
+            /**
+             * Group Name Attr
+             * @default cn
+             */
+            group_name_attr: string;
+            /**
+             * Group User Attr
+             * @default DN
+             */
+            group_user_attr: string;
+            /** Host */
+            host: string;
+            /**
+             * Id Attr
+             * @default uid
+             */
+            id_attr: string;
+            /**
+             * Name Attr
+             * @default cn
+             */
+            name_attr: string;
+            /**
+             * Port
+             * @default 636
+             */
+            port: number;
+            /** Root Ca Pem */
+            root_ca_pem?: string | null;
+            /**
+             * Security
+             * @default ldaps
+             * @enum {string}
+             */
+            security: "ldaps" | "starttls";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ldap";
+            /** User Base Dn */
+            user_base_dn: string;
+            /**
+             * User Filter
+             * @default (objectClass=person)
+             */
+            user_filter: string;
+            /**
+             * Username Attr
+             * @default uid
+             */
+            username_attr: string;
+        };
+        /**
+         * LocalConnector
+         * @description Users defined here, with passwords checked by the broker. They have no groups.
+         */
+        LocalConnector: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "local";
+            /** Users */
+            users: components["schemas"]["LocalUser"][];
+        };
+        /**
+         * LocalUser
+         * @description A user kept by Switchyard: a name, an address and a bcrypt hash in OpenBao.
+         */
+        LocalUser: {
+            /** Email */
+            email: string;
+            /** Password Hash Ref */
+            password_hash_ref: string;
+            /** Username */
+            username: string;
         };
         /**
          * LogLine
@@ -7487,6 +9075,72 @@ export interface components {
             warnings: string[];
         };
         /**
+         * OidcSettings
+         * @description OpenID Connect login against a tenant's identity provider (ADR 0130).
+         *
+         *     Attributes:
+         *         issuer: The provider's issuer URL (``https``); discovery is read from it. Or:
+         *         directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).
+         *         redirect_hosts: With a directory, the hosts the service is reached on; the broker only
+         *             redirects back to ``https://<host><auth_path>/callback`` for these.
+         *         client_id: The client registered for Switchyard at the provider.
+         *         client_secret_ref: OpenBao path of the client secret (never the secret).
+         *         cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies
+         *             (16, 24 or 32 bytes). One key per access set; rotate it to end every session.
+         *         scopes: Scopes to request; ``openid`` is required.
+         *         groups_claim: Claim that carries the user's groups.
+         *         cookie_name: Session cookie name.
+         *         cookie_expire_s: Absolute session lifetime.
+         *         cookie_refresh_s: How often the session is refreshed against the provider (a user whose
+         *             account was disabled loses the session at the next refresh). Less than the lifetime.
+         */
+        OidcSettings: {
+            /** Client Id */
+            client_id: string;
+            /** Client Secret Ref */
+            client_secret_ref: string;
+            /**
+             * Cookie Expire S
+             * @default 28800
+             */
+            cookie_expire_s: number;
+            /**
+             * Cookie Name
+             * @default _sy_auth
+             */
+            cookie_name: string;
+            /**
+             * Cookie Refresh S
+             * @default 900
+             */
+            cookie_refresh_s: number;
+            /** Cookie Secret Ref */
+            cookie_secret_ref: string;
+            /** Directory Id */
+            directory_id?: string | null;
+            /**
+             * Groups Claim
+             * @default groups
+             */
+            groups_claim: string;
+            /** Issuer */
+            issuer?: string | null;
+            /**
+             * Redirect Hosts
+             * @default []
+             */
+            redirect_hosts: string[];
+            /**
+             * Scopes
+             * @default [
+             *       "openid",
+             *       "email",
+             *       "profile"
+             *     ]
+             */
+            scopes: string[];
+        };
+        /**
          * OpIn
          * @description One operation in a change set.
          */
@@ -7524,10 +9178,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -7764,7 +9418,7 @@ export interface components {
              * Object
              * @enum {string}
              */
-            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
+            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "kubernetes_cluster" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
             /**
              * Verb
              * @enum {string}
@@ -8222,6 +9876,28 @@ export interface components {
              * @default 1
              */
             version: number;
+        };
+        /**
+         * Posture
+         * @description Device conditions a request must meet besides the login (ADR 0138).
+         *
+         *     Attributes:
+         *         device_certificate: The connection presented a client certificate the port's client CA
+         *             accepted (the service needs a port with ``client_ca_id``).
+         *         claims: Conditions on ID-token claims, all of which must hold (for example a
+         *             ``device_compliant`` claim the identity provider issues).
+         */
+        Posture: {
+            /**
+             * Claims
+             * @default []
+             */
+            claims: components["schemas"]["ClaimCheck"][];
+            /**
+             * Device Certificate
+             * @default false
+             */
+            device_certificate: boolean;
         };
         /**
          * PrincipalNameRead
@@ -9326,6 +11002,42 @@ export interface components {
             matches_desired: boolean;
         };
         /**
+         * SamlConnector
+         * @description Sign in through a SAML 2.0 identity provider (ADR 0137).
+         *
+         *     Attributes:
+         *         sso_url: The provider's single sign-on URL (https).
+         *         ca_pem: The provider's signing certificate (public PEM); assertions must be signed by it.
+         *         username_attr / email_attr / groups_attr: Assertion attributes to read (``groups_attr`` of
+         *             ``None`` means no groups).
+         */
+        SamlConnector: {
+            /** Ca Pem */
+            ca_pem: string;
+            /**
+             * Email Attr
+             * @default email
+             */
+            email_attr: string;
+            /**
+             * Groups Attr
+             * @default groups
+             */
+            groups_attr: string | null;
+            /** Sso Url */
+            sso_url: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "saml";
+            /**
+             * Username Attr
+             * @default name
+             */
+            username_attr: string;
+        };
+        /**
          * SamlProviderIn
          * @description Create a SAML provider. Send metadata (URL or XML) or the fields it would fill in.
          */
@@ -9836,7 +11548,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"] | components["schemas"]["DirectoryPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -14756,6 +16468,514 @@ export interface operations {
             };
         };
     };
+    get_controller_api_v1_system_controller_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    confirm_controller_api_v1_system_controller_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    propose_controller_api_v1_system_controller_pending_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "certificate": "controller-new",
+                 *       "confirm_within_s": 120,
+                 *       "fqdn": "sy.example.test",
+                 *       "vip": "192.0.2.11"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ControllerChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    revert_controller_api_v1_system_controller_revert_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_system_settings_api_v1_system_settings_get: {
         parameters: {
             query?: never;
@@ -17262,7 +19482,8 @@ export interface operations {
                      *           "message": "no DNS credential covers this name",
                      *           "path": "sans[1]"
                      *         }
-                     *       ]
+                     *       ],
+                     *       "warnings": []
                      *     }
                      */
                     "application/json": components["schemas"]["IssueCheckRead"];
@@ -21122,6 +23343,136 @@ export interface operations {
             };
         };
     };
+    import_avi_api_v1_tenants__t__imports_avi_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "dry_run": true,
+                 *       "export": {
+                 *         "Pool": [],
+                 *         "VirtualService": []
+                 *       },
+                 *       "prefix": "avi-",
+                 *       "se_group": "edge",
+                 *       "vip_map": {
+                 *         "vip-20": "192.0.2.20"
+                 *       },
+                 *       "vip_pool": "main"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AviImportIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "counts": {
+                     *         "certificate": 1,
+                     *         "health_monitor": 1,
+                     *         "pool": 2,
+                     *         "virtual_service": 1
+                     *       },
+                     *       "dry_run": true,
+                     *       "findings": [
+                     *         {
+                     *           "level": "manual",
+                     *           "message": "WAF policy detect-only is not converted (no WAF yet)",
+                     *           "object": "virtual_service:External-ParentSNI"
+                     *         }
+                     *       ],
+                     *       "objects": [
+                     *         {
+                     *           "avi_name": "Keycloak Pool",
+                     *           "kind": "pool",
+                     *           "name": "keycloak-pool"
+                     *         },
+                     *         {
+                     *           "avi_name": "External-ParentSNI",
+                     *           "kind": "virtual_service",
+                     *           "name": "external-parentsni"
+                     *         }
+                     *       ],
+                     *       "vips": [
+                     *         {
+                     *           "address": "10.60.3.20",
+                     *           "avi_vsvip": "vip-20",
+                     *           "new_address": "192.0.2.20",
+                     *           "services": [
+                     *             "External-ParentSNI"
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AviImportRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_jobs_api_v1_tenants__t__jobs_get: {
         parameters: {
             query?: {
@@ -21671,6 +24022,689 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_kubernetes_clusters_api_v1_tenants__t__kubernetes_clusters_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "api_url": "https://k8s.example.test:6443",
+                     *         "ca_set": true,
+                     *         "class_name": "switchyard.io/lb",
+                     *         "enabled": true,
+                     *         "gateway_class": "switchyard",
+                     *         "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *         "last_sync": {
+                     *           "addresses_written": 2,
+                     *           "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *           "created": 1,
+                     *           "deleted": 0,
+                     *           "notes": [],
+                     *           "planned_pools": 3,
+                     *           "planned_services": 3,
+                     *           "updated": 0
+                     *         },
+                     *         "last_sync_at": "2026-10-12T05:00:00Z",
+                     *         "last_sync_ok": true,
+                     *         "mode": "nodeport",
+                     *         "name": "prod",
+                     *         "se_group": "edge",
+                     *         "version": 2,
+                     *         "vip_pool": "main"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "api_url": "https://k8s.example.test:6443",
+                 *       "mode": "nodeport",
+                 *       "name": "prod",
+                 *       "se_group": "edge",
+                 *       "token": "eyJhbGciOi...",
+                 *       "vip_pool": "main"
+                 *     }
+                 */
+                "application/json": components["schemas"]["KubernetesClusterIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "mode": "pods"
+                 *     }
+                 */
+                "application/json": components["schemas"]["KubernetesClusterPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sync_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__sync_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job_id": "0192f3a0-0000-7000-8000-000000000021"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "detail": "reachable, with the access the connector needs",
+                     *       "gateway_api": true,
+                     *       "nodes": 3,
+                     *       "ok": true,
+                     *       "permissions": {
+                     *         "list nodes": true,
+                     *         "list services": true,
+                     *         "patch services/status": true
+                     *       },
+                     *       "problems": [],
+                     *       "services": 42,
+                     *       "version": "v1.31.2"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesTestRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -22551,7 +25585,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -22642,7 +25676,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"] | components["schemas"]["DirectoryPolicySetCreate"];
             };
         };
         responses: {
@@ -22759,7 +25793,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -22937,7 +25971,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"] | components["schemas"]["DirectoryPolicySetPatch"];
             };
         };
         responses: {
