@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sy.name" . }}-api
+  labels: {{- include "sy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels: {{- include "sy.selector" (dict "Release" .Release "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sy.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+      annotations:
+        {{- with .Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.hostAliases }}
+      hostAliases: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+{{ include "sy.waitSchema" . | indent 8 }}
+      containers:
+        - name: api
+          image: {{ include "sy.controllerImage" . }}
+          imagePullPolicy: {{ .Values.image.controller.pullPolicy }}
+          args: ["serve", "--host", "0.0.0.0", "--port", "8000"]
+          ports: [{name: http, containerPort: 8000}]
+          env:
+{{ include "sy.controllerEnv" . | indent 12 }}
+          readinessProbe: {httpGet: {path: /api/v1/healthz, port: http}, periodSeconds: 5, failureThreshold: 3}
+          livenessProbe: {httpGet: {path: /api/v1/healthz, port: http}, periodSeconds: 10, failureThreshold: 6, initialDelaySeconds: 10}
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: secrets, mountPath: /secrets, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+{{ include "sy.secretsVolume" . | indent 8 }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      affinity:
+        {{- if .Values.api.affinity }}{{ toYaml .Values.api.affinity | nindent 8 }}{{ else }}
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: {{- include "sy.selector" (dict "Release" .Release "component" "api") | nindent 20 }}
+        {{- end }}

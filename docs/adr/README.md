@@ -123,3 +123,4 @@ Date: YYYY-MM-DD
 | [0153](0153-jwks-url.md) | JWKS URL on JWT rules, refreshed by the controller | Accepted |
 | [0155](0155-management-tenant-at-startup.md) | Management tenant created at start-up; an IP can be the public address | Accepted |
 | [0154](0154-v53-read-additions.md) | WAF flag on log lines, Gateway API checks, latency in the wide IP read | Accepted |
+| [0191](0191-kubernetes-deployment.md) | Kubernetes is a supported place to run the controller (Helm chart) | Accepted |

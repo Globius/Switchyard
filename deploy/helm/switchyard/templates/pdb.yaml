@@ -1,0 +1,14 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- range $c := list "api" "proxy" "worker" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "sy.name" $ }}-{{ $c }}
+  labels: {{- include "sy.labels" $ | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {{- include "sy.selector" (dict "Release" $.Release "component" $c) | nindent 6 }}
+{{- end }}
+{{- end }}

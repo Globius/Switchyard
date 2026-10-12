@@ -1,0 +1,34 @@
+# Runs the forward-only schema migration for this release revision. The API and worker pods wait for it (init
+# container), so an upgrade never serves new code on an old schema. Back up the database before upgrading.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "sy.name" . }}-migrate-{{ .Release.Revision }}
+  labels: {{- include "sy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+spec:
+  backoffLimit: 20
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {{- include "sy.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: OnFailure
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "sy.controllerImage" . }}
+          imagePullPolicy: {{ .Values.image.controller.pullPolicy }}
+          args: ["db", "upgrade"]
+          env:
+{{ include "sy.controllerEnv" . | indent 12 }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {}

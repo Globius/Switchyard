@@ -1,0 +1,50 @@
+# A single OpenBao node for TEST installs only (raft storage, one replica, unsealed by bootstrap-test.sh).
+# Production OpenBao runs on its own with raft storage and auto-unseal (docs/production.md, section 4).
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: openbao-config}
+data:
+  openbao.hcl: |
+    ui = false
+    disable_mlock = true
+    storage "raft" {
+      path    = "/openbao/file"
+      node_id = "test"
+    }
+    listener "tcp" { address = "0.0.0.0:8200"  tls_disable = 1 }
+    api_addr     = "http://openbao:8200"
+    cluster_addr = "http://127.0.0.1:8201"
+---
+apiVersion: v1
+kind: Service
+metadata: {name: openbao}
+spec:
+  selector: {app: openbao}
+  ports: [{name: api, port: 8200}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: openbao}
+spec:
+  serviceName: openbao
+  replicas: 1
+  selector: {matchLabels: {app: openbao}}
+  template:
+    metadata: {labels: {app: openbao}}
+    spec:
+      securityContext: {runAsUser: 100, runAsGroup: 1000, fsGroup: 1000}
+      containers:
+        - name: openbao
+          image: openbao/openbao:latest
+          command: ["bao", "server", "-config=/openbao/config/openbao.hcl"]   # skips the image's chown entrypoint
+          ports: [{containerPort: 8200}]
+          securityContext: {capabilities: {add: [IPC_LOCK]}}
+          volumeMounts:
+            - {name: config, mountPath: /openbao/config}
+            - {name: data, mountPath: /openbao/file}
+      volumes:
+        - name: config
+          configMap: {name: openbao-config}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec: {accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Gi}}}

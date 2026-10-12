@@ -1,0 +1,89 @@
+# The UI and /api behind security headers (deploy/proxy), plus an optional TLS front in the same pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sy.name" . }}-proxy
+  labels: {{- include "sy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: proxy
+spec:
+  replicas: {{ .Values.proxy.replicas }}
+  selector:
+    matchLabels: {{- include "sy.selector" (dict "Release" .Release "component" "proxy") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sy.labels" . | nindent 8 }}
+        app.kubernetes.io/component: proxy
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: proxy
+          image: {{ .Values.image.proxy.repository }}:{{ .Values.image.proxy.tag }}
+          imagePullPolicy: {{ .Values.image.proxy.pullPolicy }}
+          # nginx needs the cluster DNS address for its upstream lookups (re-resolved every few seconds).
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              ns=$(awk '/^nameserver/{print $2; exit}' /etc/resolv.conf)
+              case "$ns" in *:*) ns="[$ns]" ;; esac
+              export NGINX_RESOLVER="$ns"
+              exec /docker-entrypoint.sh nginx -g 'daemon off;'
+          env:
+            - {name: CONTROLLER_UPSTREAM, value: "{{ include "sy.name" . }}-api.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:8000"}
+          ports: [{name: http, containerPort: 8080}]
+          readinessProbe: {httpGet: {path: /, port: http}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /, port: http}, periodSeconds: 10}
+          resources: {{- toYaml .Values.proxy.resources | nindent 12 }}
+        {{- if .Values.tls.enabled }}
+        - name: tls
+          image: {{ .Values.image.tls.repository }}:{{ .Values.image.tls.tag }}
+          imagePullPolicy: {{ .Values.image.tls.pullPolicy }}
+          ports: [{name: https, containerPort: 8443}]
+          readinessProbe: {tcpSocket: {port: https}, periodSeconds: 5}
+          resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {memory: 128Mi}}
+          volumeMounts:
+            - {name: tls-conf, mountPath: /etc/nginx/conf.d, readOnly: true}
+            - {name: tls-cert, mountPath: /secrets, readOnly: true}
+        {{- end }}
+      {{- if .Values.tls.enabled }}
+      volumes:
+        - name: tls-conf
+          configMap: {name: {{ include "sy.name" . }}-tls}
+        - name: tls-cert
+          secret:
+            secretName: {{ required "tls.secretName is required when tls.enabled" .Values.tls.secretName }}
+            items: [{key: tls.crt, path: server.crt}, {key: tls.key, path: server.key}]
+      {{- end }}
+      {{- with .Values.proxy.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.proxy.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.tls.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sy.name" . }}-tls
+  labels: {{- include "sy.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen 8443 ssl;
+        listen [::]:8443 ssl;
+        ssl_certificate /secrets/server.crt;
+        ssl_certificate_key /secrets/server.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        client_max_body_size 5m;
+        location / {
+            proxy_pass http://127.0.0.1:8080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-For $remote_addr;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_buffering off;
+            proxy_read_timeout 1h;
+        }
+    }
+{{- end }}

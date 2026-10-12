@@ -1,0 +1,113 @@
+# Switchyard controller on Kubernetes (docs/kubernetes-deploy.md, ADR 0191).
+# Required: publicUrl, secrets.existingSecret, openbao.* and either database.cnpg or database.external.
+
+# The URL browsers and engines use to reach the controller (https, no trailing slash). Engines enroll against it.
+publicUrl: ""
+
+image:
+  controller: {repository: switchyard-controller, tag: latest, pullPolicy: IfNotPresent}
+  proxy: {repository: switchyard-proxy, tag: latest, pullPolicy: IfNotPresent}
+  tls: {repository: nginx, tag: 1.27-alpine, pullPolicy: IfNotPresent}
+imagePullSecrets: []
+
+# The cluster DNS domain. nginx does not use search domains, so the proxy needs the API service's full name.
+clusterDomain: cluster.local
+
+# Secret with the files the controller mounts at /secrets (see the README): bundle.key, ca.pem, client.crt, client.key.
+# Key metrics-token is optional. Create it yourself or from your secret manager; the chart never stores key material.
+secrets:
+  existingSecret: ""
+
+openbao:
+  addr: ""                       # for example https://openbao.example.net:8200
+  pkiMount: pki
+  pkiRole: agents
+  # Secret with role-id and secret-id for the controller's AppRole (syctl openbao-policy prints the policy).
+  existingSecret: ""
+  roleIdKey: role-id
+  secretIdKey: secret-id
+  sharedSecretPrefixes: kv/se/
+
+database:
+  mode: cnpg                     # cnpg: the chart creates a CloudNativePG Cluster; external: use a database you run
+  name: switchyard
+  cnpg:
+    instances: 3
+    storage: {size: 20Gi, storageClass: ""}
+    imageName: ""                # empty: the operator's default PostgreSQL image
+    resources: {}
+    # Extra spec merged into the Cluster (backup, affinity, monitoring...).
+    extraSpec: {}
+  external:
+    host: ""
+    port: 5432
+    # Secret with the database user and password; the user must be able to run the migrations (owner of the database).
+    existingSecret: ""
+    userKey: username
+    passwordKey: password
+    options: ""                  # for example ?sslmode=require&target_session_attrs=read-write
+
+controller:
+  breakGlass: false              # break-glass sign-in; turn on for a reason and a time window
+  allowLxc: false                # system setting default, ADR 0076
+  trustForwarded: true           # X-Forwarded-For from the proxy
+  engineCidrs: ""
+  # Proxmox API for deploying engines (SE groups, deploy). The token secret is read from a Secret you create.
+  proxmox:
+    url: ""                      # https://pve.example.net:8006
+    tokenId: ""                  # user@realm!tokenname
+    tokenSecret: {existingSecret: "", key: token-secret}
+    caKey: pve-ca.pem            # key in secrets.existingSecret holding the Proxmox CA certificate
+  extraEnv: []                   # extra container env entries (name/value or valueFrom)
+
+api:
+  replicas: 2
+  resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 1Gi}}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Several workers are safe: the queue is claimed with FOR UPDATE SKIP LOCKED and the periodic jobs are scheduled by
+# the worker that holds a PostgreSQL advisory lock (leader election; a new leader takes over within seconds).
+worker:
+  replicas: 2
+  resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 1Gi}}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+proxy:
+  replicas: 2
+  resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {memory: 128Mi}}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# TLS in front of the proxy, in the same pod: engines enroll over https, and browsers need it for the session cookie.
+# Use this, or an Ingress that terminates TLS, or both.
+tls:
+  enabled: true
+  secretName: ""                 # kubernetes.io/tls Secret (tls.crt, tls.key)
+
+service:
+  type: ClusterIP                # LoadBalancer, NodePort or ClusterIP
+  httpsPort: 8443
+  httpPort: 8080
+  nodePort: null                 # https node port when type is NodePort
+  annotations: {}
+  loadBalancerClass: ""
+  loadBalancerIP: ""
+  externalTrafficPolicy: ""      # Local keeps the client address for engines' allow lists
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+  tlsSecretName: ""
+
+podDisruptionBudget: {enabled: true}
+# Extra /etc/hosts entries for the API and worker pods (for example a name for a Proxmox host).
+hostAliases: []
+podAnnotations: {}
+podSecurityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}

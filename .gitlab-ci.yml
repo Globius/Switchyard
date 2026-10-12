@@ -84,5 +84,16 @@ se-image:
   script:
     - docker build -q -f se-image/test/Dockerfile -t sy-se-image-test .
 
+# The Helm chart (deploy/helm): lint, render with the value sets people use, check the invariants.
+helm:
+  stage: check
+  image:
+    name: alpine/helm:3.18.6
+    entrypoint: [""]
+  rules:
+    - changes: [deploy/helm/**/*]
+  script:
+    - sh deploy/helm/test.sh
+
 # The live checks (.p12 import, 412/428 conflict responses: deploy/lab/checks/live.sh) need a running stack and the lab
 # scripts; they are run by hand, see docs/runbooks/lab-hosts.md.
