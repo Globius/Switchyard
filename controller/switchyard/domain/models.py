@@ -1527,6 +1527,8 @@ class OidcSettings(Model):
     Attributes:
         issuer: The provider's issuer URL (``https``); discovery is read from it. Or:
         directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).
+        provider_ca_pem: PEM certificate(s) that sign the provider's TLS certificate, when they are
+            not in the engine's trust store (a private CA); delivered to the proxy with its config.
         redirect_hosts: With a directory, the hosts the service is reached on; the broker only
             redirects back to ``https://<host><auth_path>/callback`` for these.
         client_id: The client registered for Switchyard at the provider.
@@ -1544,6 +1546,7 @@ class OidcSettings(Model):
     issuer: Issuer | None = None
     directory_id: UUID | None = None
     redirect_hosts: tuple[Hostname, ...] = Field(default=(), max_length=16)
+    provider_ca_pem: CertPem | None = None
     client_id: ClientId
     client_secret_ref: SecretRef
     cookie_secret_ref: SecretRef

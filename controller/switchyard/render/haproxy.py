@@ -290,6 +290,22 @@ ACCESS_HEADER = "X-Sy-Access"
 _Stages = tuple[list[str], list[str], list[str], list[str]]
 
 
+def _claim_forms(values: tuple[str, ...]) -> list[str]:
+    """Spellings to match for claim values; ``true`` and ``false`` also match JSON booleans.
+
+    HAProxy renders a JSON boolean claim as ``1`` or ``0``, a string claim as written.
+
+    Example:
+        >>> _claim_forms(("true", "gold"))
+        ['1', 'gold', 'true']
+    """
+    forms = set(values)
+    for value in values:
+        if value in ("true", "false"):
+            forms.add("1" if value == "true" else "0")
+    return sorted(forms)
+
+
 def _is_wild(host: str) -> bool:
     return host.startswith("*.")
 
@@ -1242,11 +1258,30 @@ class _Renderer:
             )
         if ours.token or any(r.posture and r.posture.claims for r in policy.rules):
             rules.append(f"http-request del-header Authorization if {LOOP_ON}")
+        rules += self._strip_session_cookies(policy)
         rules += [
             f"http-request del-header {n} if {LOOP_ON}"
             for n in (*PROXY_HEADERS, ACCESS_HEADER, DEVICE_HEADER)
         ]
         return rules
+
+    @staticmethod
+    def _strip_session_cookies(policy: dm.AccessPolicySet) -> list[str]:
+        """Remove the proxy's session and CSRF cookies from the request the origin gets.
+
+        Covers the cookie itself, its split parts (``name_0``) and the CSRF cookies
+        (``name_csrf``, ``name_<hash>_csrf``): every cookie that starts with the cookie name and an
+        underscore or equals it. The header is rewritten on the loopback hop only; the proxy needs
+        the cookies on the first hop.
+        """
+        name = esc.cookie_name(policy.oidc.cookie_name)
+        pattern = f"(^|; *){name}(_[A-Za-z0-9]+)*=[^;]*"
+        return [
+            "http-request set-header Cookie "
+            f"\"%[req.fhdr(cookie),regsub('{pattern}','',g),regsub('^; *','')]\" "
+            f"if {LOOP_ON} {{ req.hdr(cookie) -m found }}",
+            f"http-request del-header Cookie if {LOOP_ON} {{ req.fhdr(cookie) -m len 0 }}",
+        ]
 
     @staticmethod
     def _posture_rules(policy: dm.AccessPolicySet) -> list[str]:
@@ -1269,12 +1304,12 @@ class _Renderer:
                 fetch = f"var(txn.sy_idt),jwt_payload_query('$.{claim.name}')"
                 if claim.op == "present":
                     test = f"!{{ {fetch} -m found }}"
-                elif claim.op == "true":
-                    test = f"!{{ {fetch} -m str true }}"
-                elif claim.op == "equals":
-                    test = f"!{{ {fetch} -m str {esc.quoted(claim.value or '')} }}"
                 else:
-                    options = " ".join(esc.quoted(v) for v in sorted(claim.values))
+                    # a JSON boolean reaches the comparison as 1 or 0 (seen with a real token)
+                    wanted = (
+                        ("true",) if claim.op == "true" else claim.values or (claim.value or "",)
+                    )
+                    options = " ".join(esc.quoted(v) for v in _claim_forms(wanted))
                     test = f"!{{ {fetch} -m str {options} }}"
                 rules.append(f"http-request return status 403 if {here} {test}")
         return rules

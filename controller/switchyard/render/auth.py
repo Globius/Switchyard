@@ -80,6 +80,11 @@ class AuthInstance:
         return f"auth/{self.name}.cfg"
 
     @property
+    def ca_path(self) -> str:
+        """Bundle path of the identity provider's CA certificates (if the set names any)."""
+        return f"auth/{self.name}-ca.pem"
+
+    @property
     def env_path(self) -> str:
         """Bundle path of the file that holds the proxy's secrets."""
         return f"auth/{self.name}.env"
@@ -229,6 +234,11 @@ def render_instance(inst: AuthInstance, broker_url: str | None = None) -> str:
         "pass_host_header = true",
         "pass_user_headers = true",
         f"pass_authorization_header = {'true' if wants_token else 'false'}",
+        *(
+            [f'provider_ca_files = ["/etc/switchyard/{inst.ca_path}"]']
+            if oidc.provider_ca_pem
+            else []
+        ),
         "set_xauthrequest = false",
         "skip_provider_button = true",
         "silence_ping_logging = true",
@@ -262,4 +272,6 @@ def render_auth_files(
     for inst in auth_instances(view, se_group_id):
         files[inst.path] = render_instance(inst, broker_url)
         files[inst.env_path] = render_env(inst, secrets)
+        if inst.policy.oidc.provider_ca_pem:
+            files[inst.ca_path] = inst.policy.oidc.provider_ca_pem
     return files

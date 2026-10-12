@@ -5,11 +5,14 @@ as ``test_haproxy_behavior``: 192.0.2.20 edge, backends 192.0.2.51-53 that echo 
 received, clients 192.0.2.98 and 192.0.2.99.
 """
 
+import time
 from collections.abc import Iterator
 from typing import Any
 from uuid import UUID
 
 import pytest
+from joserfc import jwt
+from joserfc.jwk import RSAKey
 
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
 from switchyard.render.haproxy import render_haproxy
@@ -40,7 +43,7 @@ hdrs() { label=$1; shift; out=$(curl -s -k --max-time 6 -D - -o /dev/null "$@" |
 
 
 #: Stands in for oauth2-proxy on the engine: no cookie means the login page or a redirect to it, a
-#: cookie ``sy=<user>:<email>:<groups separated by |>`` is a session and the request goes on to the loopback bind
+#: cookie ``sy=<user>:<email>:<groups separated by |>:<id token>`` is a session and the request goes on to the loopback bind
 #: with the headers the real proxy sets.
 STUB_PROXY = """global
     maxconn 100
@@ -56,7 +59,7 @@ frontend p
     http-request set-header X-Forwarded-User %[req.cook(sy),field(1,:)]
     http-request set-header X-Forwarded-Email %[req.cook(sy),field(2,:)]
     http-request set-header X-Forwarded-Groups "%[req.cook(sy),field(3,:),regsub('[|]',',',g)]"
-    http-request set-header Authorization "Bearer tok123"
+    http-request set-header Authorization "Bearer %[req.cook(sy),field(4,:)]"
     default_backend up
 backend up
     server s 127.0.0.1:18000
@@ -234,9 +237,22 @@ def data() -> dict[str, Any]:
                     "client_id": "lab",
                     "client_secret_ref": "kv/tenants/acme/auth/c",
                     "cookie_secret_ref": "kv/tenants/acme/auth/k",
+                    "cookie_name": "sy",
                 },
                 "rules": [
                     {"match": {"path_prefix": "/health"}, "mode": "public"},
+                    {
+                        "match": {"path_prefix": "/posture"},
+                        "mode": "login",
+                        "posture": {
+                            "claims": [
+                                {"name": "email_verified", "op": "true"},
+                                {"name": "email_verified", "op": "equals", "value": "true"},
+                                {"name": "tier", "op": "in", "values": ["gold", "silver"]},
+                                {"name": "mfa", "op": "present"},
+                            ]
+                        },
+                    },
                     {"match": {"path_prefix": "/admin"}, "mode": "groups", "groups": ["ops.team"]},
                     {
                         "match": {"path_prefix": "/staff"},
@@ -536,7 +552,23 @@ class TestRateLimits:
         assert all(_status(got[f"nokey{i}"]) == "HTTP/1.1 200 OK" for i in range(1, 5))
 
 
-SESSION = "-H 'Cookie: sy=alice:alice@example.test:staff|ops.team'"
+_KEY = RSAKey.generate_key(2048)
+
+
+def id_token(**claims: Any) -> str:
+    """A signed ID token like the provider issues (the engine trusts the proxy that verified it)."""
+    body = {"iss": "https://login.example.test", "sub": "alice", "exp": int(time.time()) + 600}
+    return jwt.encode({"alg": "RS256"}, body | claims, _KEY)
+
+
+ID_TOKEN = id_token(email_verified=True, tier="gold", mfa=["otp"])
+
+
+def cookie(token: str) -> str:
+    return f"-H 'Cookie: sy=alice:alice@example.test:staff:{token}'"
+
+
+SESSION = f"-H 'Cookie: sy=alice:alice@example.test:staff|ops.team:{ID_TOKEN}'"
 
 
 @pytest.fixture(scope="module")
@@ -548,9 +580,34 @@ def login_results(lab: Lab) -> dict[str, str]:
             _req("start", 6443, "/oauth2/start"),
             _req("user", 6443, "/private", SESSION, "-H 'X-Auth-User: root'"),
             _req("admin", 6443, "/admin", SESSION),
-            _req("admin-no", 6443, "/admin", "-H 'Cookie: sy=bob:bob@example.test:staff'"),
+            _req("admin-no", 6443, "/admin", "-H 'Cookie: sy=bob:bob@example.test:staff:x'"),
             _req("staff", 6443, "/staff", SESSION),
-            _req("staff-no", 6443, "/staff", "-H 'Cookie: sy=eve:eve@evil.test:ops.team'"),
+            _req("posture", 6443, "/posture", SESSION),
+            _req(
+                "posture-false",
+                6443,
+                "/posture",
+                cookie(id_token(email_verified=False, tier="gold", mfa=[1])),
+            ),
+            _req(
+                "posture-tier",
+                6443,
+                "/posture",
+                cookie(id_token(email_verified=True, tier="bronze", mfa=[1])),
+            ),
+            _req(
+                "posture-nomfa",
+                6443,
+                "/posture",
+                cookie(id_token(email_verified=True, tier="gold")),
+            ),
+            _req(
+                "cookies",
+                6443,
+                "/private",
+                f"-H 'Cookie: other=1; sy=alice:alice@example.test:staff:{ID_TOKEN}; sy_csrf=abc; sy_1=zz; keep=2'",
+            ),
+            _req("staff-no", 6443, "/staff", "-H 'Cookie: sy=eve:eve@evil.test:ops.team:x'"),
             _hdrs("down-h", 6444, "/private", SESSION),
             _req("down-public", 6444, "/health"),
         ]
@@ -579,7 +636,12 @@ class TestAccess:
     ) -> None:
         out = login_results["user"]
         assert out.startswith("be=A ")
-        for part in (" au=alice ", " ae=alice@example.test ", " ag=staff,ops.team ", " at=tok123 "):
+        for part in (
+            " au=alice ",
+            " ae=alice@example.test ",
+            " ag=staff,ops.team ",
+            f" at={ID_TOKEN} ",
+        ):
             assert part in out
         assert " fu= " in out and " sa= " in out and " az= " in out, "proxy headers must not leak"
 
@@ -600,3 +662,16 @@ class TestAccess:
     ) -> None:
         assert login_results["down-h"].startswith("HTTP/1.1 503")
         assert login_results["down-public"].startswith("be=A ")
+
+    def test_posture_claims_match_real_json_booleans_and_arrays(
+        self, login_results: dict[str, str]
+    ) -> None:
+        assert login_results["posture"].startswith("be=A ")
+        assert login_results["posture-false"] == "|403|"
+        assert login_results["posture-tier"] == "|403|"
+        assert login_results["posture-nomfa"] == "|403|"
+
+    def test_the_proxys_cookies_never_reach_the_origin(self, login_results: dict[str, str]) -> None:
+        out = login_results["cookies"]
+        assert out.startswith("be=A ")
+        assert " cookie=other=1; keep=2 " in out or " cookie=other=1;keep=2 " in out, out

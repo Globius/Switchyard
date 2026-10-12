@@ -22,6 +22,8 @@ An `access` rule (ADR 0131) may carry `posture`, in addition to its mode; it nev
   claim of the ID token (`A-Za-z0-9_-`). The proxy passes the token it verified (`pass_authorization_header`), HAProxy reads it with
   `http_auth_bearer` and `jwt_payload_query`, and removes `Authorization` before the origin (as for the `token` identity header).
 - A failing check answers 403, like a failing group rule.
+- A JSON boolean claim reaches the comparison as `1` or `0` (found with a real Dex token), not as `true`; `op: true`, and `equals`/`in`
+  with `true` or `false`, therefore match both spellings.
 
 **Defaults.** No posture means no posture check. Claims are only as fresh as the session: they are re-read when the proxy refreshes
 the session (`cookie_refresh_s`, default 15 minutes), so a device marked non-compliant at the provider is cut off at the next refresh.
