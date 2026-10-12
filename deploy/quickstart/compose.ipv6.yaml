@@ -1,0 +1,15 @@
+# IPv6 for the quickstart stack, added by `bootstrap.sh --ipv6` (docs/ipv6.md, "Quickstart over IPv6"):
+#   - the TLS front is also published on the host's IPv6 addresses (listen [::]:8443), and
+#   - the stack's Docker network gets IPv6 (a private ULA range with NAT66), so the API and worker can reach engines that
+#     only have IPv6 management addresses.
+# Docker needs IPv6 NAT switched on once on the host (Docker 26: /etc/docker/daemon.json
+# {"experimental": true, "ip6tables": true}, then restart Docker; newer versions need nothing).
+services:
+  tls:
+    ports: ["[::]:${HTTPS_PORT:-8443}:8443"]
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd00:5059:5151::/64

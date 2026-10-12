@@ -3,7 +3,7 @@
 name: switchyard-qs
 x-controller-env: &controller-env
   SWITCHYARD_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/switchyard
-  SWITCHYARD_PUBLIC_URL: https://${HOST_ADDR}:${HTTPS_PORT:-8443}
+  SWITCHYARD_PUBLIC_URL: https://${HOST_URL:-${HOST_ADDR}}:${HTTPS_PORT:-8443}
   SWITCHYARD_TRUST_FORWARDED: "1"
   SWITCHYARD_METRICS_TOKEN: ${METRICS_TOKEN}
   SWITCHYARD_OPENBAO_ADDR: http://openbao:8200
@@ -29,6 +29,9 @@ x-controller: &controller
   restart: unless-stopped
   environment: *controller-env
   volumes: ["./secrets:/secrets:ro"]
+  # Lets the controller reach Proxmox by a name on a network it can route to (connect-proxmox.sh --resolve NAME=ADDR),
+  # for hosts whose container network has no route to the Proxmox API address.
+  extra_hosts: ["${PVE_NAME:-pve}:${PVE_ADDR:-127.0.0.1}"]
   depends_on: {postgres: {condition: service_healthy}, openbao: {condition: service_started}}
 services:
   postgres:
@@ -63,11 +66,13 @@ services:
     depends_on: {migrate: {condition: service_completed_successfully}}
   worker:
     <<: *controller
+    healthcheck: {disable: true}   # the image's HTTP health check is for the API
     command: ["worker", "--name", "qs-worker"]
     depends_on: {migrate: {condition: service_completed_successfully}}
   # The UI and /api behind security headers (deploy/proxy), plain HTTP inside the compose network.
   proxy:
-    build: {context: ../.., dockerfile: deploy/proxy/Dockerfile}
+    # network: host lets the build reach package registries over the host's own (possibly IPv6-only) network.
+    build: {context: ../.., dockerfile: deploy/proxy/Dockerfile, network: host}
     image: ${PROXY_IMAGE:-switchyard-proxy:latest}
     restart: unless-stopped
     environment: {CONTROLLER_UPSTREAM: "api:8000"}

@@ -282,7 +282,7 @@ func TestUDPFilesUseTheirOwnUnits(t *testing.T) {
 	}
 	want := []string{
 		"systemctl is-active --quiet keepalived", "systemctl start keepalived",
-		"systemctl reload nftables", "systemctl restart systemd-sysctl",
+		"systemctl restart nftables", "systemctl restart systemd-sysctl",
 	}
 	for _, call := range want {
 		if !contains(r.calls, call) {

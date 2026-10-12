@@ -17,6 +17,10 @@ func TestParseBGP(t *testing.T) {
 	if out[0].Peer != "10.0.0.2" || out[0].State != "Established" || out[1].State != "Active" {
 		t.Fatalf("not sorted by peer: %v", out)
 	}
+	both, err := ParseBGP([]byte(`{"ipv4Unicast":{"peers":{"10.0.0.2":{"remoteAs":65001,"state":"Established"}}},"ipv6Unicast":{"peers":{"fd30::fa":{"remoteAs":65000,"state":"Established"},"10.0.0.2":{"remoteAs":65001,"state":"Active"}}}}`))
+	if err != nil || len(both) != 2 || both[0].Peer != "10.0.0.2" || both[0].State != "Established" || both[1].Peer != "fd30::fa" {
+		t.Fatalf("both families must be reported once per neighbor: %v %v", both, err)
+	}
 	if _, err := ParseBGP([]byte("nope")); err == nil {
 		t.Fatal("garbage must fail")
 	}

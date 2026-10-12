@@ -121,6 +121,7 @@ async def test_create_vm_clones_waits_for_the_task_and_configures() -> None:
     assert clone["newid"] == ["101"] and clone["pool"] == ["switchyard"]
     config = next(b for m, p, b in api.requests if m == "PUT" and p.endswith("/101/config"))
     assert config["ipconfig0"] == ["ip=10.30.0.11/24,gw=10.30.0.1"]
+    assert config["ciupgrade"] == ["0"]  # an engine must not need the internet to boot
     assert config["net1"] == ["virtio,bridge=vnet1"]
     assert config["net2"] == ["virtio,bridge=vnet2,tag=120"]
     await pve.close()
@@ -254,3 +255,17 @@ async def test_only_proxmox_templates_can_be_cloned() -> None:
     with pytest.raises(ProxmoxError, match="does not exist"):
         await pve.create_vm(gone)
     assert not any(m == "POST" and p.endswith("/clone") for m, p, _ in api.requests)
+
+
+async def test_ipv6_addresses_use_the_ip6_options() -> None:
+    qemu, lxc = Api(), Api()
+    nics = (("vnet1", None),)
+    spec = {"gateway": "fd00:30::1", "nics": nics, "nic_addresses": ("fd00:99::5/64",)}
+    await client(qemu).create_vm(VmSpec("x", "pve1", 9000, "fd00:30::5/64", **spec))  # type: ignore[arg-type]
+    await client(lxc).create_vm(VmSpec("x", "pve1", 9901, "fd00:30::5/64", kind="lxc", **spec))  # type: ignore[arg-type]
+    q = next(b for m, p, b in qemu.requests if m == "PUT" and p.endswith("/config"))
+    c = next(b for m, p, b in lxc.requests if m == "PUT" and p.endswith("/config"))
+    assert q["ipconfig0"] == ["ip6=fd00:30::5/64,gw6=fd00:30::1"]
+    assert q["ipconfig1"] == ["ip6=fd00:99::5/64"]
+    assert c["net0"] == ["name=eth0,bridge=vmbr0,ip6=fd00:30::5/64,gw6=fd00:30::1"]
+    assert c["net1"] == ["name=eth1,bridge=vnet1,ip6=fd00:99::5/64"]

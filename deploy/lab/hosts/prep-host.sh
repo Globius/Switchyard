@@ -3,15 +3,19 @@
 #   sh prep-host.sh [--bridge vmbr0] [--sdn "labmgmt:101 labvip:102 labbe:103"] [--token]
 # Checks and fixes what it can, prints OK / WARN / FAIL lines, and exits 1 on any FAIL.
 #   --bridge B   the VLAN-aware bridge the lab VLANs ride on (default vmbr0)
-#   --sdn LIST   create (cluster-wide, run on ONE node) an SDN VLAN zone `lab` with these VNet:VLAN pairs
+#   --sdn LIST   create (cluster-wide, run on ONE node) an SDN zone `lab` with these VNet:tag pairs; a VLAN zone on the
+#                bridge by default, or a VXLAN zone (VNI = tag) between the nodes with --peers
+#   --peers L    comma-separated underlay addresses of the nodes (IPv4 or IPv6): makes the zone VXLAN and skips the
+#                VLAN-aware check, for hosts whose network cannot carry VLANs between them
 #   --token      create the controller API user and token (run on ONE node); the secret is printed once
 set -u
-BRIDGE=vmbr0; SDN=""; TOKEN=0; FAILS=0
+BRIDGE=vmbr0; SDN=""; TOKEN=0; FAILS=0; PEERS=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --bridge) BRIDGE=$2; shift 2 ;;
     --sdn) SDN=$2; shift 2 ;;
     --token) TOKEN=1; shift ;;
+    --peers) PEERS=$2; shift 2 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -37,7 +41,8 @@ else warn "IPVS modules could not be loaded: UDP services cannot run on this nod
 
 # The VLAN-aware bridge the three lab VLANs ride on.
 if ip link show "$BRIDGE" >/dev/null 2>&1; then
-  if ip -d link show "$BRIDGE" | grep -q 'vlan_filtering 1'; then ok "$BRIDGE is VLAN-aware"
+  if [ -n "$PEERS" ]; then ok "$BRIDGE exists (VXLAN between the nodes, so it need not be VLAN-aware)"
+  elif ip -d link show "$BRIDGE" | grep -q 'vlan_filtering 1'; then ok "$BRIDGE is VLAN-aware"
   else fail "$BRIDGE is not VLAN-aware: tick 'VLAN aware' on the bridge (Network tab) and apply"; fi
 else fail "bridge $BRIDGE does not exist (pass --bridge)"; fi
 
@@ -61,7 +66,10 @@ timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -q yes && ok "clo
   || warn "clock is not NTP-synchronized"
 
 if [ -n "$SDN" ]; then
-  pvesh get /cluster/sdn/zones/lab >/dev/null 2>&1 || pvesh create /cluster/sdn/zones --zone lab --type vlan --bridge "$BRIDGE" >/dev/null
+  if ! pvesh get /cluster/sdn/zones/lab >/dev/null 2>&1; then
+    if [ -n "$PEERS" ]; then pvesh create /cluster/sdn/zones --zone lab --type vxlan --peers "$PEERS" >/dev/null
+    else pvesh create /cluster/sdn/zones --zone lab --type vlan --bridge "$BRIDGE" >/dev/null; fi
+  fi
   for pair in $SDN; do
     name=${pair%%:*}; tag=${pair##*:}
     pvesh get "/cluster/sdn/vnets/$name" >/dev/null 2>&1 || pvesh create /cluster/sdn/vnets --vnet "$name" --zone lab --tag "$tag" >/dev/null

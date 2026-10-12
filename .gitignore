@@ -46,3 +46,7 @@ agent/sy-agent.exe
 ui/coverage/
 ui/test-results/
 ui/playwright-report/
+
+# two-host lab: local access details and run output
+deploy/lab/hosts/hosts.env
+deploy/lab/hosts/work/

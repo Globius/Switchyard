@@ -1,0 +1,12 @@
+# Run the telemetry stack beside the quickstart stack on the same machine (docs/quickstart.md, "Add monitoring"):
+#   docker compose -f compose.yaml -f compose.quickstart.yaml --env-file telemetry.env up -d
+# Prometheus joins the quickstart's Docker network and scrapes the API directly (CONTROLLER_SCHEME=http,
+# CONTROLLER_HOSTPORT=api:8000 in telemetry.env), so it needs no certificate for the TLS front. The service discovery
+# endpoint still hands it the engines' management addresses, which the host reaches like the API does.
+services:
+  prometheus:
+    networks: [default, quickstart]
+networks:
+  quickstart:
+    name: ${QUICKSTART_NETWORK:-switchyard-qs_default}
+    external: true

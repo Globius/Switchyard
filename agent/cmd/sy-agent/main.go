@@ -120,7 +120,18 @@ func main() {
 	}
 	grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 	pb.RegisterAgentServer(grpcServer, &server.Server{Applier: applier, Collector: collector, Root: *root})
-	go func() { <-ctx.Done(); grpcServer.GracefulStop() }()
+	go func() {
+		<-ctx.Done()
+		// Watch streams only end when the controller disconnects, so a graceful stop alone can wait until systemd
+		// kills the unit (90 seconds); give in-flight calls a few seconds, then close everything.
+		done := make(chan struct{})
+		go func() { grpcServer.GracefulStop(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			grpcServer.Stop()
+		}
+	}()
 	log.Printf("sy-agent %s listening on %s", status.Version, *listen)
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatal(err)

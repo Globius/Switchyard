@@ -1,16 +1,19 @@
 #!/bin/sh
 # Points the controller at your Proxmox cluster and checks that it can log in. Usage:
 #   sh connect-proxmox.sh --url https://pve1.example:8006 --token-id switchyard@pve!controller --secret SECRET [--ca pve-root-ca.pem]
+# --resolve NAME=ADDR makes NAME resolve to ADDR inside the controller containers (use it when the API address is not
+# routable from the container network; NAME must be in the Proxmox certificate, for example the node's hostname).
 # --ca is the Proxmox root CA (/etc/pve/pve-root-ca.pem on a node); without it the controller verifies against public CAs.
 set -eu
 cd "$(dirname "$0")"
-URL=""; TID=""; SEC=""; CA=""
+URL=""; TID=""; SEC=""; CA=""; RESOLVE=""
 while [ $# -gt 0 ]; do case "$1" in
-  --url) URL=$2; shift 2 ;; --token-id) TID=$2; shift 2 ;; --secret) SEC=$2; shift 2 ;; --ca) CA=$2; shift 2 ;;
+  --url) URL=$2; shift 2 ;; --token-id) TID=$2; shift 2 ;; --secret) SEC=$2; shift 2 ;; --ca) CA=$2; shift 2 ;; --resolve) RESOLVE=$2; shift 2 ;;
   *) echo "see the header of this script" >&2; exit 2 ;; esac; done
 [ -n "$URL" ] && [ -n "$TID" ] && [ -n "$SEC" ] || { echo "--url, --token-id and --secret are required" >&2; exit 2; }
 ENVSET() { grep -q "^$1=" .env && sed -i "s#^$1=.*#$1=$2#" .env || echo "$1=$2" >> .env; }
 ENVSET PVE_URL "$URL"; ENVSET PVE_TOKEN_ID "$TID"; ENVSET PVE_TOKEN_SECRET "$SEC"
+if [ -n "$RESOLVE" ]; then ENVSET PVE_NAME "${RESOLVE%%=*}"; ENVSET PVE_ADDR "${RESOLVE#*=}"; fi
 if [ -n "$CA" ]; then cp "$CA" secrets/pve-ca.pem; chmod 644 secrets/pve-ca.pem; ENVSET PVE_CA_FILE /secrets/pve-ca.pem; fi
 export MSYS_NO_PATHCONV=1
 docker compose --env-file .env up -d api worker >/dev/null

@@ -7,15 +7,6 @@ cd "$(dirname "$0")"
 . ./lib.sh
 mkdir -p work
 
-enroll_all() { # deploy-output.json kind
-  python -c "
-import json,sys
-for e in json.load(open(sys.argv[1]))['engines']:
-    if 'token' in e: print(e['pve_node'], e['vmid'], e['token']['token'])
-" "$1" | while read -r node vmid token; do
-    NODE_SSH="ssh -o BatchMode=yes $(eval echo \$SSH_$node)" sh $QS/enroll-engine.sh --kind "$2" --node "$node" --vmid "$vmid" --token "$token" >/dev/null \
-      || echo "enrollment of $vmid on $node reported an error (the guest may still be booting)" >&2
-  done; }
 reachable() { api status | getj "print(sum(1 for e in d if e['reachable']))"; }
 vrrp_master() { api status | getj "print(next((e['engine'] for e in d if e['agent'] and any(v['state']=='MASTER' for v in e['agent']['vrrp'])), ''))"; }
 engine_field() { python -c "import json,sys;print(next(e['$2'] for e in json.load(open('$3'))['engines'] if e['name']=='$1'))"; }

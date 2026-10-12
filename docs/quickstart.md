@@ -35,7 +35,16 @@ certificate, the bundle signing key and the Data Plane credentials, starts every
 Check it: `curl --cacert secrets/ca.pem https://<host>:8443/api/v1/healthz` answers `{"status":"ok"}`.
 
 Use another HTTPS port with `--port 9443`. Everything it generates is in `.env` and `secrets/` (git-ignored): keep them, they
-are the instance.
+are the instance. `--rebuild` rebuilds the controller image after a `git pull` (otherwise an existing image is reused).
+
+**IPv6 and several addresses.** `--host` takes a comma-separated list (`--host 192.0.2.10,2001:db8::10`): the first is what
+browsers and engines are told to use, every one is a name in the certificate, and an IPv6 literal is bracketed in URLs for
+you. `--ipv6` also publishes the front on the host's IPv6 addresses and gives the stack's Docker network IPv6 with NAT66
+(`compose.ipv6.yaml`), which the API and worker need to reach engines that have only an IPv6 management address. Docker 26
+needs IPv6 NAT switched on once (`/etc/docker/daemon.json`: `{"experimental": true, "ip6tables": true}`, then restart
+Docker); newer Docker needs nothing. If the host forwards IPv6 (it does once Docker has IPv6), also set
+`net.ipv6.conf.all.accept_ra=2`, or the host loses its default route. Add the engines' IPv6 range to `ENGINE_CIDRS` in
+`.env`. The support matrix and limits are in [ipv6.md](ipv6.md).
 
 ## 3. Sign in
 
@@ -109,7 +118,11 @@ sh enroll-engine.sh --kind lxc --node pve1 --vmid 100 --token <token>      # ssh
 ```
 
 The engine shows up as reachable within about a minute (UI: Infrastructure, engines; or `GET /tenants/lab/status/engines`).
-The token is single use and expires after an hour.
+The token is single use and expires after an hour. A VM answers "QEMU guest agent is not running" for its first seconds: run
+the script again. When the controller is on another machine than the one you run the script on, give it a copy of the
+controller's `secrets/ca.pem` and `dp_password` (`SECRETS_DIR=...`) and the address engines use (`HOST_ADDR=...`,
+`HTTPS_PORT=...`). `--vector-env FILE` also hands the engine its log-shipping settings (the five variables of
+[runbooks/telemetry.md](runbooks/telemetry.md)).
 
 ## 9. Publish a first service
 
@@ -117,14 +130,23 @@ UI: Virtual services, New. A minimal service is HTTP on port 80, a VIP from the 
 server you run. Review the change set, apply. The canary engine takes the change first; then the VIP answers:
 `curl http://<vip>/`.
 
-## 10. Day two
+## 10. Add monitoring (optional)
+
+Prometheus, Loki and Grafana beside this stack: in `deploy/telemetry/` copy `telemetry.env.example` to `telemetry.env` with
+`CONTROLLER_SCHEME=http` and `CONTROLLER_HOSTPORT=api:8000`, write the `METRICS_TOKEN` of the quickstart's `.env` into
+`secrets/metrics.token` (readable by everyone: the Prometheus container runs as `nobody`), and start it with
+`docker compose -f compose.yaml -f compose.quickstart.yaml --env-file telemetry.env up -d`. The override puts Prometheus on
+the quickstart's Docker network so it scrapes the API without the TLS front. The Proxmox dashboard
+(`--profile pve`) works with the same API token (it has the auditor role); see [runbooks/telemetry.md](runbooks/telemetry.md).
+
+## 11. Day two
 
 | | |
 | --- | --- |
 | Stop / start | `docker compose --env-file .env down` / `up -d` (OpenBao is unsealed again by a helper container) |
 | Logs | `docker compose logs -f api worker` |
 | Start over | `docker compose down -v && rm -rf .env secrets` (this deletes the database and all keys) |
-| Upgrade | `git pull`, rebuild the controller image, `sh bootstrap.sh` again (migrations run first) |
+| Upgrade | `git pull`, `sh bootstrap.sh --rebuild` (migrations run first) |
 
 ## Troubleshooting
 

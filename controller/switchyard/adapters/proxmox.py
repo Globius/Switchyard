@@ -10,6 +10,7 @@ Two implementations share :class:`Proxmox`:
 """
 
 import asyncio
+import ipaddress
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -183,6 +184,22 @@ class Proxmox(Protocol):
 
 
 Sleep = Callable[[float], Awaitable[None]]
+
+
+def _ip_option(cidr: str, gateway: str | None = None) -> str:
+    """The Proxmox option text for one address: ip=,gw= for IPv4 and ip6=,gw6= for IPv6.
+
+    Example:
+        >>> _ip_option("10.0.0.5/24", "10.0.0.1")
+        'ip=10.0.0.5/24,gw=10.0.0.1'
+        >>> _ip_option("fd00::5/64", "fd00::1")
+        'ip6=fd00::5/64,gw6=fd00::1'
+    """
+    v6 = ipaddress.ip_interface(cidr).version == 6
+    text = f"{'ip6' if v6 else 'ip'}={cidr}"
+    if gateway:
+        text += f",{'gw6' if v6 else 'gw'}={gateway}"
+    return text
 
 
 def _nic_address(spec: VmSpec, index: int) -> str | None:
@@ -361,28 +378,31 @@ class HttpProxmox:
             clone["pool"] = spec.pool
         path = f"/nodes/{spec.node}/{kind}/{spec.template_vmid}/clone"
         await self._task(spec.node, await self._call("POST", path, clone))
-        gateway = f",gw={spec.gateway}" if spec.gateway else ""
+        mgmt = _ip_option(spec.mgmt_ip_cidr, spec.gateway)
         config: dict[str, Any] = {"cores": spec.cores, "memory": spec.memory_mb}
         if lxc:
             bridge = spec.mgmt_bridge or "vmbr0"
-            config["net0"] = f"name=eth0,bridge={bridge},ip={spec.mgmt_ip_cidr}{gateway}"
+            config["net0"] = f"name=eth0,bridge={bridge},{mgmt}"
             for index, (nic, tag) in enumerate(spec.nics, start=1):
                 address = _nic_address(spec, index)
                 config[f"net{index}"] = (
                     f"name=eth{index},bridge={nic}"
                     + (f",tag={tag}" if tag else "")
-                    + (f",ip={address}" if address else "")
+                    + (f",{_ip_option(address)}" if address else "")
                 )
             if spec.ssh_public_keys:
                 config["ssh-public-keys"] = spec.ssh_public_keys
         else:
-            config["ipconfig0"] = f"ip={spec.mgmt_ip_cidr}{gateway}"
+            config["ipconfig0"] = mgmt
+            # Proxmox's cloud-init data upgrades packages on first boot by default. An engine must
+            # not need the internet to start, so keep that off: the template has what it needs.
+            config["ciupgrade"] = 0
             if spec.mgmt_bridge:
                 config["net0"] = f"virtio,bridge={spec.mgmt_bridge}"
             for index, (nic, tag) in enumerate(spec.nics, start=1):
                 config[f"net{index}"] = f"virtio,bridge={nic}" + (f",tag={tag}" if tag else "")
                 if address := _nic_address(spec, index):
-                    config[f"ipconfig{index}"] = f"ip={address}"
+                    config[f"ipconfig{index}"] = _ip_option(address)
             if spec.ssh_public_keys:
                 config["sshkeys"] = spec.ssh_public_keys
             if spec.user_data_snippet:

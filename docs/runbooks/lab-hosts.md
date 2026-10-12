@@ -29,8 +29,11 @@ Without a cluster the lab can still drive each host, but not deploy across both 
 
 ## 3. Network
 
-All three lab networks ride one **VLAN-aware bridge** (`vmbr0`) on each host: tick "VLAN aware" in Network, and trunk the
-VLANs between the hosts on the switch.
+All three lab networks (management, VIP, backend) have to exist on both hosts and carry client traffic, VRRP and BGP
+between them. Two ways to get that:
+
+**A switch that trunks VLANs.** Use one **VLAN-aware bridge** (`vmbr0`) on each host (tick "VLAN aware") and trunk the VLANs
+between the hosts on the switch.
 
 | Network | Used for | Suggested VLAN | Subnet |
 | --- | --- | --- | --- |
@@ -38,13 +41,28 @@ VLANs between the hosts on the switch.
 | VIP | client traffic to virtual IPs | 102 | 10.99.0.0/24 |
 | backend | engines to pool members | 103 | 10.98.0.0/24 |
 
-- VRRP (IP protocol 112) and multicast must pass between the hosts. If the switch does IGMP snooping, allow it or disable
-  it for these VLANs.
-- The machine that runs the controller (the quickstart stack) must be on the management VLAN or routed to it, with an address
-  in `CONTROLLER_ADDR`. Engines reach `https://<that address>:8443`.
-- A router, a spare VM or a laptop on the management network needs to hold the gateway address (`172.30.0.1`) the engines use
-  as their default route, with a route to the controller machine.
-- Outbound internet (or an apt mirror) from the hosts, to build the engine templates.
+**No switch support (cloud hosts, IPv6-only underlay).** Build an isolated overlay between the two hosts with
+`deploy/lab/hosts/overlay.sh`, one VXLAN per network under a plain bridge (`labmgmt`, `labvip`, `labbe`), which the lab
+then uses as its VNets. Run it on each node with the other's underlay address (IPv6 works):
+
+```sh
+sh overlay.sh --self 2001:db8::1 --peer 2001:db8::2 --addr labmgmt=172.30.0.1/24     # node 1: also the management gateway
+sh overlay.sh --self 2001:db8::2 --peer 2001:db8::1                                   # node 2
+```
+
+Give the bridges the gateway addresses you want (add `--addr labmgmt=fd30:0:0:1::1/64` and so on for the IPv6 lab, and
+set `net.ipv6.conf.all.forwarding=1` on that node). A VXLAN costs 70 bytes: the bridges get MTU 1430, VM NICs follow
+that, container NICs do not (set `LAB_MTU=1430` in `hosts.env` and the lab scripts lower them after deploy). Proxmox's own
+SDN VXLAN zone does not support an IPv6 underlay, which is why this script exists. Remove with `overlay.sh --remove`.
+
+- VRRP (IP protocol 112) and multicast must pass between the hosts. On a switch with IGMP snooping, allow it or disable
+  it for these VLANs. (A VXLAN carries it as is.)
+- The machine that runs the controller (the quickstart stack) must be on the management network or routed to it, with an
+  address in `CONTROLLER_ADDR`. Engines reach `https://<that address>:8443`. It may be a guest on the overlay (below).
+- A router, a spare VM or one of the hosts on the management network holds the gateway address (`172.30.0.1`) the engines
+  use as their default route.
+- The lab networks need **no internet**: engines boot offline (ADR 0079). Building templates does need it, from the
+  host's own network, not the lab networks.
 
 ## 4. Prepare each node
 
@@ -65,12 +83,16 @@ auditor) for convenience; production uses a narrower role ([production.md](../pr
 
 ## 5. Hand over the access details
 
-Fill in `deploy/lab/hosts/hosts.env.example` (copy it to `hosts.env`, do not commit it) and share it through the project
-thread, or the equivalent values:
+Fill in `deploy/lab/hosts/hosts.env.example` (copy it to `hosts.env`; it is git-ignored, never commit it) and share it through
+the project thread, or the equivalent values:
 
-- API URL, token id and secret, the Proxmox root CA (`/etc/pve/pve-root-ca.pem` from a node);
-- node names, and key-based root ssh to each node from the machine that runs the lab (the templates are built over ssh);
-- the three VNet or bridge names and the subnets above, the controller machine's address, and the template base id (default 9960).
+- API URL (an IPv6 address in brackets: `https://[2001:db8::1]:8006`), token id and secret, the Proxmox root CA
+  (`/etc/pve/pve-root-ca.pem` from a node);
+- node names, and key-based root ssh to each node from the machine that runs the lab (the templates are built over ssh;
+  `SSH_<node>=root@2001:db8::1` needs no brackets, `SSH_OPTS="-i KEY"` adds options);
+- the three VNet or bridge names and the subnets above, the controller machine's address, and the template base id (default 9960);
+- when the controller is a guest and not this machine: `CONTROLLER_EXEC` (how to run `api.sh` there, for example
+  `ssh -i KEY root@node pct exec 9980 -- /usr/local/bin/sy-api`) and `LAB_MTU` for an overlay (above).
 
 Check it: `sh deploy/lab/hosts/preflight.sh` prints `OK` / `WARN` / `FAIL` for the API login, both nodes online, quorum, the
 VNets, the templates (once built, they must be real Proxmox templates) and ssh, IPVS and KVM on every node.
@@ -93,10 +115,44 @@ BGP upstream), then runs `scenario.sh`:
 Templates live on local storage, so each node builds its own and the scenario deploys to a node with that node's template
 (one deploy request per node). With shared storage one template would do.
 
-The script has not run on real hardware yet. Expect to adjust it on the first run; results then go into
-[adr/0056](../adr/0056-end-to-end-lab.md) and [production.md](../production.md), section 10.
+`run.sh` assumes the controller runs on the machine that runs it. When the controller is a guest on the overlay (the case
+below), do the steps by hand in this order, using `lib.sh` (it reads `hosts.env`): the quickstart in the guest
+(`bootstrap.sh --host ADDRESS`), `connect-proxmox.sh` with `--resolve NAME=ADDR` when the node name is not resolvable
+from the guest, the templates, `adopt.sh tenant.yaml`, `helper.sh` on the first node, then `scenario.sh`.
+
+## 7. What was run, and what it showed
+
+Two Proxmox VE 9 nodes in a cluster, IPv6-only, no switch control, so the overlay above. The controller was the quickstart
+in a guest on the first node, connected to the cluster's real API ([adr/0079](../adr/0079-two-host-lab-findings.md) lists
+every fix this produced). On the IPv4 tenant:
+
+| | Result |
+| --- | --- |
+| Two KVM engines, one per host, from each host's template | deployed through the API, enrolled through the guest agent, canary-first apply, VIP answers |
+| VRRP failover between hosts | master VM stopped on one host, the VIP answered again from the other host after 4 s; failed back after restart |
+| UDP through IPVS | echo through the VIP; needed the nftables fix |
+| Unprivileged container | enrolled, applied, HAProxy and VRRP serve the VIP (one engine; BGP, IPVS and failover not tried) |
+| BGP ECMP, three container engines (two on one host, one on the other) | three equal-cost paths at the upstream, two with one HAProxy stopped, three after; two with an engine on the other host stopped |
+| Telemetry | Prometheus: controller, 6 HAProxy and 6 node targets up, plus the Proxmox exporter; 27 dashboard panels return data (the Proxmox guest panels too); Loki receives access logs from engines (after `enroll-engine.sh --vector-env`) |
+
+And the IPv6-only twin (`tenant6.yaml`, `helper6.sh`, tenant `lab6`; ULA networks `fd30:0:0:1..3::/64`, no IPv4 in the
+tenant, [ipv6.md](../ipv6.md)): two KVM engines enrolled over `https://[fd30:0:0:1::5]:8443` (one per host), VRRPv3
+failover in 5 s, IPVS UDP over IPv6, three container engines peering with the upstream over IPv6 with three equal-cost
+paths, and Prometheus scraping them at bracketed addresses. A stopped HAProxy does not withdraw its IPv6 VIP yet (the BGP
+renderer's `vips.json` lists IPv4 prefixes only; reported to Backend).
+
+Things this lab taught that are not in the scripts:
+
+- Container NICs ignore the bridge MTU. Over a VXLAN (MTU 1430) gRPC from the controller to a container silently times
+  out (`DEADLINE_EXCEEDED`, the TLS handshake completes with small packets only). Symptom: some engines reachable, some not.
+- Turning IPv6 forwarding on (a NAT66 gateway, a Docker host with IPv6) switches router advertisements off; set
+  `accept_ra=2` or the default route disappears.
+- Proxmox reboots a container gracefully with `pct reboot`; before the agent stopped within seconds on SIGTERM it took 90 s.
+- The guest agent is not ready for the first seconds of a VM boot: `enroll-engine.sh` fails with "QEMU guest agent is not
+  running" until it is. Run it again.
 
 ## Tearing down
 
 Delete the lab guests (ids in `hosts.env` and the engines the controller created), remove the SDN zone `lab`
-(`pvesh delete /cluster/sdn/zones/lab` after its VNets), and `pveum user token remove switchyard@pve controller`.
+(`pvesh delete /cluster/sdn/zones/lab` after its VNets) or the overlay (`overlay.sh --remove`), and
+`pveum user token remove switchyard@pve controller`.

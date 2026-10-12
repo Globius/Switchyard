@@ -587,9 +587,9 @@ class InfraService:
                 se_group_id=request.se_group_id,
                 name=name,
                 mgmt_ip=address,
-                dataplane_url=f"https://{address}:{request.dataplane_port}",
+                dataplane_url=f"https://{_host(address)}:{request.dataplane_port}",
                 credentials_ref=request.credentials_ref,
-                agent_url=f"{address}:{request.agent_port}",
+                agent_url=f"{_host(address)}:{request.agent_port}",
                 pve_node=node,
                 vmid=vmid,
                 guest_kind=request.guest_kind,
@@ -616,6 +616,16 @@ class InfraService:
                 log.error("cleanup of VM %s on %s failed: %s", vmid, node, exc)
             async with tenant_session(self._db.app, [tenant_id]) as session:
                 await session.execute(delete(ServiceEngineRow).where(ServiceEngineRow.id == row_id))
+
+
+def _host(address: str) -> str:
+    """An address as it appears before ``:port``: IPv6 literals need brackets.
+
+    Example:
+        >>> _host("10.0.0.5"), _host("fd00::5")
+        ('10.0.0.5', '[fd00::5]')
+    """
+    return f"[{address}]" if ":" in address else address
 
 
 def ipam_address(value: object) -> dm.IPAddress:

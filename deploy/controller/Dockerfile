@@ -1,7 +1,8 @@
 # Switchyard controller: one image, two entrypoints (`syctl serve`, `syctl worker`).
 # Build from the repository root: docker build -f deploy/controller/Dockerfile -t switchyard-controller .
 FROM python:3.12-slim-bookworm AS build
-COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /usr/local/bin/uv
+# uv from PyPI, not from ghcr.io: ghcr.io has no IPv6, so an IPv6-only build host could not fetch it.
+RUN pip install --no-cache-dir "uv>=0.12,<0.13"
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 COPY controller/pyproject.toml controller/uv.lock ./

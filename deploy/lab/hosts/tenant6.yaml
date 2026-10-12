@@ -1,0 +1,45 @@
+# The IPv6-only twin of tenant.yaml: management, VIP and backend networks are ULA /64s on the same SDN VNets (the bridges
+# carry both families), the helper guest is at ::fa on each, and the groups are `edge6` (VRRP) and `edge6-bgp` (BGP, ECMP).
+# No IPv4 anywhere in the tenant. Same object names as the IPv4 tenant, so the lab driver works on either (LAB_TENANT).
+tenants:
+  - {id: lab6, name: lab6}
+networks:
+  - {id: net6-mgmt, tenant_id: lab6, name: mgmt, cidr: "fd30:0:0:1::/64", gateway: "fd30:0:0:1::1", vnet: labmgmt}
+  - {id: net6-vip, tenant_id: lab6, name: vip, cidr: "fd30:0:0:2::/64", gateway: "fd30:0:0:2::1", vnet: labvip}
+  - {id: net6-be, tenant_id: lab6, name: backend, cidr: "fd30:0:0:3::/64", gateway: "fd30:0:0:3::1", vnet: labbe}
+vip_pools:
+  - {id: pool6-mgmt, tenant_id: lab6, name: mgmt-addrs, network_id: net6-mgmt, ranges: [{start: "fd30:0:0:1::100", end: "fd30:0:0:1::139"}]}
+  - {id: pool6-se-vip, tenant_id: lab6, name: se-vip-addrs, network_id: net6-vip, ranges: [{start: "fd30:0:0:2::100", end: "fd30:0:0:2::139"}]}
+  - {id: pool6-se-be, tenant_id: lab6, name: se-be-addrs, network_id: net6-be, ranges: [{start: "fd30:0:0:3::100", end: "fd30:0:0:3::139"}]}
+  - {id: pool6-vips, tenant_id: lab6, name: vips, network_id: net6-vip, ranges: [{start: "fd30:0:0:2::c8", end: "fd30:0:0:2::f9"}]}
+routing_profiles:
+  - {id: rp6-vrrp, tenant_id: lab6, name: vrrp, kind: vrrp, vrid: 61, interface: eth1}
+  - id: rp6-bgp
+    tenant_id: lab6
+    name: bgp
+    kind: bgp
+    asn: 65200
+    bfd: true
+    max_paths: 4
+    peers: [{peer_ip: "fd30:0:0:1::fa", remote_asn: 65000}]
+se_groups:
+  - id: sg6-vrrp
+    tenant_id: lab6
+    name: edge6
+    ha_mode: vrrp
+    routing_profile_id: rp6-vrrp
+    canary_seconds: 5
+    networks: [{network_id: net6-mgmt, role: mgmt}, {network_id: net6-vip, role: vip}, {network_id: net6-be, role: backend}]
+  - id: sg6-bgp
+    tenant_id: lab6
+    name: edge6-bgp
+    ha_mode: bgp
+    routing_profile_id: rp6-bgp
+    canary_seconds: 5
+    networks: [{network_id: net6-mgmt, role: mgmt}, {network_id: net6-vip, role: vip}, {network_id: net6-be, role: backend}]
+health_monitors:
+  - {id: hm6, tenant_id: lab6, name: web-up, type: http, http: {path: /, expect_status: [200]}}
+  - {id: hm6-udp, tenant_id: lab6, name: echo-udp, type: udp}
+pools:
+  - {id: pool6-web, tenant_id: lab6, name: web, health_monitor_id: hm6, members: [{address: "fd30:0:0:3::fa", port: 8001}]}
+  - {id: pool6-echo, tenant_id: lab6, name: echo, health_monitor_id: hm6-udp, members: [{address: "fd30:0:0:3::fa", port: 5301}]}
