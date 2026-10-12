@@ -91,3 +91,11 @@ Date: YYYY-MM-DD
 | [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
 | [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
 | [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |
+| [0130](0130-auth-service-architecture.md) | Authentication service: oauth2-proxy, loopback re-entry, closed by default | Accepted |
+| [0131](0131-access-rules-and-authorization.md) | Access rules and authorization | Accepted |
+| [0132](0132-identity-headers.md) | Identity headers to the origin | Accepted |
+| [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
+| [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
+| [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
+| [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
+| [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |

@@ -42,6 +42,7 @@ var Units = map[string]string{
 	"certs":      "haproxy",
 	"nftables":   "nftables",
 	"sysctl":     "systemd-sysctl",
+	"auth":       "sy-auth",
 }
 
 // verbs overrides the systemctl verb for units that cannot reload (default "reload"). The
@@ -52,6 +53,7 @@ var Units = map[string]string{
 var verbs = map[string]string{
 	"systemd-sysctl": "restart",
 	"nftables":       "restart",
+	"sy-auth":        "restart",
 }
 
 func verb(unit string) string {
@@ -65,9 +67,12 @@ func verb(unit string) string {
 // keeps its crt-lists in the same directory as the certificates, so only "*.pem" files (server
 // certificates and client CA bundles) and "*.crl" files (client CA revocation lists) there are the
 // agent's; everything else is left alone and never removed.
-var suffixOnly = map[string][]string{"certs": {".pem", ".crl"}}
+var suffixOnly = map[string][]string{"certs": {".pem", ".crl"}, "auth": {".cfg", ".env"}}
 
 // secretDirs hold private keys and are written with owner-only permissions.
+// The auth directory is not here: its files are group-readable (0640) because the proxies run as
+// their own user and the SE image makes the directory root:sy-auth 0750, which is what keeps them
+// private (including the "*.env" files that hold the secrets).
 var secretDirs = map[string]bool{"certs": true}
 
 func managedFile(rel string) bool {
@@ -179,6 +184,11 @@ func hasFiles(unit string, target map[string][]byte) bool {
 // run when they have something to do (the SE image skips them at boot until their config exists):
 // they are started when their files appear and stopped when they are gone.
 func (a *Applier) activate(ctx context.Context, unit string, target map[string][]byte) error {
+	if unit == "sy-auth" && !hasFiles(unit, target) {
+		// no access policy left: stop the authentication proxies
+		_, err := a.Runner.Run(ctx, "systemctl", "stop", unit)
+		return err
+	}
 	if unit == "keepalived" || unit == "frr" {
 		if !hasFiles(unit, target) {
 			_, err := a.Runner.Run(ctx, "systemctl", "stop", unit)

@@ -216,12 +216,16 @@ class PolicySetRow(TenantOwnedMixin, Base):
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         CheckConstraint(
-            "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit')",
+            "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages',"
+            " 'rate_limit', 'access', 'jwt', 'client_cert', 'directory')",
             name="kind",
         ),
         CheckConstraint(
-            "(kind <> 'allow_list' AND rules IS NOT NULL AND cidrs IS NULL)"
-            " OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL)",
+            "(kind NOT IN ('allow_list', 'access', 'client_cert', 'directory')"
+            " AND rules IS NOT NULL AND cidrs IS NULL AND config IS NULL)"
+            " OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL AND config IS NULL)"
+            " OR (kind IN ('access', 'client_cert', 'directory') AND config IS NOT NULL"
+            " AND rules IS NULL AND cidrs IS NULL)",
             name="payload_matches_kind",
         ),
         CheckConstraint("managed_by IS NULL OR managed_by = 'cloudflare'", name="managed_by"),
@@ -231,6 +235,7 @@ class PolicySetRow(TenantOwnedMixin, Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     rules: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
     cidrs: Mapped[list[str] | None] = mapped_column(ARRAY(CIDR))
+    config: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
     managed_by: Mapped[str | None] = mapped_column(Text)
 
 

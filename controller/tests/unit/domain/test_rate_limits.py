@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from switchyard.domain.changes import STICK_TABLE_QUOTA, quota_problems
 from switchyard.domain.loader import snapshot_from_mapping, symbolic_uuid
-from switchyard.domain.models import RateLimitRule
+from switchyard.domain.models import RateLimitPolicySet, RateLimitRule
 from switchyard.domain.snapshot import stick_table_entries, validate_snapshot
 from switchyard.render.escape import RenderError
 from switchyard.render.haproxy import render_haproxy
@@ -138,6 +138,7 @@ class TestRender:
             data_with(limits({"max_requests": 5, "key": "header", "header_name": "X-A"}))
         )
         policy = snap.policy_sets[0]
+        assert isinstance(policy, RateLimitPolicySet)
         rule = policy.rules[0].model_copy(update={"header_name": "X-A\nhttp-request deny"})
         evil = snap.model_copy(
             update={"policy_sets": (policy.model_copy(update={"rules": (rule,)}),)}

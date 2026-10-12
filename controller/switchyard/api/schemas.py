@@ -267,6 +267,10 @@ OBJECT_MODELS: dict[ObjectType, tuple[type[BaseModel], ...]] = {
         dm.RespondPolicySet,
         dm.ErrorPagesPolicySet,
         dm.RateLimitPolicySet,
+        dm.AccessPolicySet,
+        dm.JwtPolicySet,
+        dm.ClientCertPolicySet,
+        dm.DirectoryPolicySet,
     ),
     ObjectType.ROUTING_PROFILE: (dm.VrrpProfile, dm.BgpProfile),
 }
