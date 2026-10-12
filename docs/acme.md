@@ -79,6 +79,10 @@ checks without queueing and returns every finding with its field path:
 - **TLS-ALPN-01**: no wildcard, and each name resolves to a VIP of one of your HTTP services with a
   TLS listener on port 443 (names that already serve HTTPS give a warning, not an error).
 
+The request check and the job resolve names with **the controller's own resolver**, not with the
+public one the CA uses. If the two answer differently (split-horizon DNS, an internal zone), the check
+may pass while the CA looks at another address, or fail for a name the CA can reach.
+
 The job reports the stages `order`, `validate`, `finalize`, `store` and `change set`. The result is a
 `system:certs` change set, validated, audited, canaried and revertible like any other. A failure
 quotes the CA's error, and the log says whether the challenge records were removed.

@@ -7,7 +7,7 @@ Failures are injected with :meth:`FakeHaproxy.fail_next`.
 """
 
 import re
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Literal
 
 from switchyard.adapters.haproxy import (
@@ -63,6 +63,7 @@ class FakeHaproxy:
         self.map_entries: dict[str, dict[str, str]] = {}
         #: TLS-ALPN-01 certificates: ``crt-list -> name -> (sni, pem)``.
         self.challenge_certs: dict[str, dict[str, tuple[str, str]]] = {}
+        self.cert_loads: dict[str, int] = {}
         #: Called after every successful push; lets a test degrade the engine or touch other state.
         self.on_push: Callable[[FakeHaproxy], Awaitable[None]] | None = None
 
@@ -158,15 +159,28 @@ class FakeHaproxy:
         """Forget the entry."""
         self.map_entries.get(map_file, {}).pop(key, None)
 
-    async def set_challenge_certificate(self, crt_list: str, name: str, pem: str, sni: str) -> None:
-        """Record the challenge certificate; fails when the crt-list is not rendered."""
-        if crt_list not in self.files:
-            raise HaproxyError(f"{self._name}: crt-list {crt_list} is not loaded on this engine")
-        self.challenge_certs.setdefault(crt_list, {})[name] = (sni, pem)
+    async def set_challenge_certificate(
+        self, crt_lists: Sequence[str], name: str, pem: str, sni: str
+    ) -> None:
+        """Record the certificate once and its entry in every crt-list; all or nothing.
 
-    async def remove_challenge_certificate(self, crt_list: str, name: str) -> None:
-        """Forget the certificate."""
-        self.challenge_certs.get(crt_list, {}).pop(name, None)
+        Like the real engine it fails when a crt-list is not rendered. ``cert_loads`` counts how
+        often a certificate was loaded: once per call, however many crt-lists there are.
+        """
+        await self.remove_challenge_certificate(crt_lists, name)
+        for crt_list in crt_lists:
+            if crt_list not in self.files:
+                raise HaproxyError(
+                    f"{self._name}: crt-list {crt_list} is not loaded on this engine"
+                )
+        self.cert_loads[name] = self.cert_loads.get(name, 0) + 1
+        for crt_list in crt_lists:
+            self.challenge_certs.setdefault(crt_list, {})[name] = (sni, pem)
+
+    async def remove_challenge_certificate(self, crt_lists: Sequence[str], name: str) -> None:
+        """Forget the entries and the certificate."""
+        for crt_list in crt_lists:
+            self.challenge_certs.get(crt_list, {}).pop(name, None)
 
     async def set_server_state(self, backend: str, server: str, state: ServerAdminState) -> None:
         """Record the new admin state as the server's status."""

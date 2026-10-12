@@ -16,7 +16,7 @@ learned from the real API (contract tests in ``tests/integration/test_dataplane_
 import asyncio
 import ssl
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -367,35 +367,43 @@ class DataPlaneEngine:
     def _crt_list_name(crt_list: str) -> str:
         return f"/etc/switchyard/{crt_list}"
 
-    async def set_challenge_certificate(self, crt_list: str, name: str, pem: str, sni: str) -> None:
-        """Load the certificate and add it to the crt-list for ``sni``, for ``acme-tls/1`` only."""
+    async def set_challenge_certificate(
+        self, crt_lists: Sequence[str], name: str, pem: str, sni: str
+    ) -> None:
+        """Load the certificate once and add it to every crt-list for ``sni``, ``acme-tls/1`` only.
+
+        A leftover from an earlier failed run is removed first, so the call can be repeated.
+        """
+        await self.remove_challenge_certificate(crt_lists, name)
         quoted = quote(name, safe="")
-        steps: list[tuple[str, str, str, dict[str, str]]] = [
-            ("creating", "POST", f"{API}/runtime/ssl_certs", {}),
-            ("loading", "PUT", f"{API}/runtime/ssl_certs/{quoted}", {}),
-        ]
-        for what, method, path, _ in steps:
+        steps = (
+            ("creating", "POST", f"{API}/runtime/ssl_certs"),
+            ("loading", "PUT", f"{API}/runtime/ssl_certs/{quoted}"),
+        )
+        for what, method, path in steps:
             response = await self._send(method, path, files={"file_upload": (name, pem)})
             if response.status_code not in (200, 201):
-                await self.remove_challenge_certificate(crt_list, name)
+                await self.remove_challenge_certificate(crt_lists, name)
                 raise self._unexpected(f"{what} the challenge certificate {name}", response)
-        response = await self._send(
-            "POST",
-            f"{API}/runtime/ssl_crt_lists/entries",
-            params={"name": self._crt_list_name(crt_list)},
-            json={"file": name, "sni_filter": [sni], "ssl_bind_config": "alpn acme-tls/1"},
-        )
-        if response.status_code not in (200, 201):
-            await self.remove_challenge_certificate(crt_list, name)
-            raise self._unexpected(f"adding the challenge certificate to {crt_list}", response)
+        for crt_list in crt_lists:
+            response = await self._send(
+                "POST",
+                f"{API}/runtime/ssl_crt_lists/entries",
+                params={"name": self._crt_list_name(crt_list)},
+                json={"file": name, "sni_filter": [sni], "ssl_bind_config": "alpn acme-tls/1"},
+            )
+            if response.status_code not in (200, 201):
+                await self.remove_challenge_certificate(crt_lists, name)
+                raise self._unexpected(f"adding the challenge certificate to {crt_list}", response)
 
-    async def remove_challenge_certificate(self, crt_list: str, name: str) -> None:
-        """Take the challenge certificate out of the crt-list and unload it."""
-        await self._send(
-            "DELETE",
-            f"{API}/runtime/ssl_crt_lists/entries",
-            params={"name": self._crt_list_name(crt_list), "cert_file": name},
-        )
+    async def remove_challenge_certificate(self, crt_lists: Sequence[str], name: str) -> None:
+        """Take the challenge certificate out of the crt-lists and unload it (once)."""
+        for crt_list in crt_lists:
+            await self._send(
+                "DELETE",
+                f"{API}/runtime/ssl_crt_lists/entries",
+                params={"name": self._crt_list_name(crt_list), "cert_file": name},
+            )
         await self._send("DELETE", f"{API}/runtime/ssl_certs/{quote(name, safe='')}")
 
     async def set_server_state(self, backend: str, server: str, state: ServerAdminState) -> None:
