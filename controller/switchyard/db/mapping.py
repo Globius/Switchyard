@@ -224,6 +224,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 restore_client_ip_header=s.restore_client_ip_header,
                 compression=s.compression.model_dump(mode="json") if s.compression else None,
                 cache=s.cache.model_dump(mode="json") if s.cache else None,
+                forward_mode=s.forward_mode.value,
             )
         )
     # Child rows come after their parents so inserts satisfy the foreign keys.
@@ -503,6 +504,7 @@ def rows_to_snapshot(
                 "restore_client_ip_header": s.restore_client_ip_header,
                 "compression": s.compression,
                 "cache": s.cache,
+                "forward_mode": s.forward_mode,
                 "ports": [
                     {
                         "port": p.port,

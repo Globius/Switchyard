@@ -319,10 +319,12 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
         tenant_fk("allow_list_id", "policy_set"),
         tenant_fk("deny_list_id", "policy_set"),
         enum_check("protocol", dm.Protocol),
+        enum_check("forward_mode", dm.IpvsForward),
         CheckConstraint("version >= 1", name="version"),
     )
 
     se_group_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    forward_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'nat'"))
     protocol: Mapped[str] = mapped_column(Text, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     vip: Mapped[str] = mapped_column(INET, nullable=False)

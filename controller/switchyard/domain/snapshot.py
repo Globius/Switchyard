@@ -33,6 +33,7 @@ from switchyard.domain.models import (
     Entity,
     ErrorPagesPolicySet,
     HealthMonitor,
+    IpvsForward,
     JwtPolicySet,
     LdapConnector,
     LocalConnector,
@@ -426,6 +427,15 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
+            _check_ipvs_forwarding(s, group, networks, pools_by_id, base, problems)
+        elif s.forward_mode is not IpvsForward.NAT:
+            problems.append(
+                Problem(
+                    f"{base}.forward_mode",
+                    "forward_mode_not_allowed",
+                    "forward_mode is only valid on udp services",
+                )
+            )
 
         transport = "udp" if s.protocol is Protocol.UDP else "tcp"
         listeners += [v.Listener(s.name, s.vip, p.port, transport) for p in s.ports]
@@ -622,6 +632,60 @@ def _check_udp_service(s: VirtualService, base: str, problems: list[Problem]) ->
                         f"{field} is not valid on udp",
                     )
                 )
+
+
+def _check_ipvs_forwarding(
+    s: VirtualService,
+    group: SeGroup | None,
+    networks: Mapping[UUID, Network],
+    pools: Mapping[UUID, Pool],
+    base: str,
+    problems: list[Problem],
+) -> None:
+    """Check the members of a ``dr`` or ``tunnel`` UDP service (ADR 0192).
+
+    Neither method can change the destination port, so every member must listen on every service
+    port. Direct return also needs the member on a layer-2 segment of the SE: its address must be
+    in a backend network of the group.
+    """
+    if s.forward_mode is IpvsForward.NAT or s.default_pool_id is None:
+        return
+    pool = pools.get(s.default_pool_id)
+    if pool is None:
+        return
+    backend_cidrs = (
+        [
+            networks[gn.network_id].cidr
+            for gn in group.networks
+            if gn.role is NetworkRole.BACKEND and gn.network_id in networks
+        ]
+        if group is not None
+        else []
+    )
+    ports = {p.port for p in s.ports}
+    for member in pool.members:
+        path = f"pools.{pool.name}.members.{member.server_name}"
+        if member.port is not None and ports != {member.port}:
+            problems.append(
+                Problem(
+                    f"{path}.port",
+                    "ipvs_port_mismatch",
+                    f"forward_mode {s.forward_mode} cannot change the port: the member must use "
+                    f"the service port ({', '.join(str(p) for p in sorted(ports))}) and a service "
+                    "with several ports needs a pool per port",
+                )
+            )
+        if s.forward_mode is IpvsForward.DR and not any(
+            member.address in cidr for cidr in backend_cidrs
+        ):
+            problems.append(
+                Problem(
+                    f"{path}.address",
+                    "ipvs_dr_not_adjacent",
+                    f"{member.address} is not in a backend network of the group; direct return "
+                    "needs the member on the SE's layer-2 segment (use tunnel mode otherwise)",
+                )
+            )
 
 
 def _check_udp_pools(

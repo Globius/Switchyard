@@ -75,6 +75,21 @@ class NetworkRole(enum.StrEnum):
     MGMT = "mgmt"
 
 
+class IpvsForward(enum.StrEnum):
+    """How IPVS sends a UDP service's packets to a real server (ADR 0192).
+
+    ``nat`` rewrites the destination and masquerades the source, so replies return through the SE.
+    ``dr`` (direct return) rewrites only the MAC address: the real server must share a layer-2
+    segment with the SE, own the VIP on a loopback and answer the client directly. ``tunnel``
+    encapsulates the packet in IPIP: the real server needs an ``ipip`` interface that owns the VIP
+    and answers the client directly; no layer-2 adjacency is needed.
+    """
+
+    NAT = "nat"
+    DR = "dr"
+    TUNNEL = "tunnel"
+
+
 class Protocol(enum.StrEnum):
     """Virtual service protocol. ``udp`` renders to IPVS via Keepalived, not HAProxy (M6)."""
 
@@ -716,6 +731,8 @@ class VirtualService(TenantOwned):
             client address; honoured only when the connection source is in the allow list.
         compression: Response compression (``http`` only; ADR 0117).
         cache: Response cache (``http`` only; ADR 0117).
+        forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or
+            ``tunnel`` (ADR 0192). The last two need every member on the service port.
     """
 
     se_group_id: UUID
@@ -734,6 +751,7 @@ class VirtualService(TenantOwned):
     restore_client_ip_header: HeaderName | None = None
     compression: Compression | None = None
     cache: CacheSettings | None = None
+    forward_mode: IpvsForward = IpvsForward.NAT
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:

@@ -53,7 +53,7 @@ vrrp_instance {{ inst.name }} {
 virtual_server {{ vs.vip }} {{ vs.port }} {
     delay_loop {{ vs.delay_loop }}
     lb_algo {{ vs.scheduler }}
-    lb_kind NAT
+    lb_kind {{ vs.lb_kind }}
     protocol UDP
 {% for m in vs.members %}
     real_server {{ m.address }} {{ m.port }} {
