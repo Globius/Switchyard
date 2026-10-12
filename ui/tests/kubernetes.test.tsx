@@ -217,6 +217,6 @@ describe("kubernetes", () => {
     expect(await screen.findByText("Failing")).toBeInTheDocument();
     expect(screen.getByText("Disabled")).toBeInTheDocument();
     expect(screen.getByText("New")).toBeInTheDocument();
-    expect(screen.getByText("waiting for a change set to finish")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for a change set")).toBeInTheDocument();
   });
 });

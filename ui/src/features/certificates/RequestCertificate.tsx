@@ -460,7 +460,8 @@ export function RequestCertificate({
                       "One name, no wildcard. It must resolve to a VIP of this tenant with an HTTP service on port 80 (no allow list).",
                     )
                   : t(
-                      "One name, no wildcard, answered on port 443. While it runs, every HTTPS handshake for the name gets the challenge certificate, so a name that serves traffic blinks for a few seconds.",
+                      "{name} already serves HTTPS. While the CA validates it, the engines show a temporary certificate for a few seconds, so visitors in that moment may see a certificate warning. Use DNS-01 for busy names, or request it at a quiet time.",
+                      { name: sans[0] ?? t("The name") },
                     )}
             </p>
           </fieldset>

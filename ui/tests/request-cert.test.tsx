@@ -264,7 +264,7 @@ describe("request certificate", () => {
     );
     const dlg = await openRequest();
     await userEvent.click(dlg.getByRole("radio", { name: "TLS-ALPN-01" }));
-    expect(dlg.getByText(/blinks for a few seconds/)).toBeInTheDocument();
+    expect(dlg.getByText(/temporary certificate for a few seconds/)).toBeInTheDocument();
     expect(dlg.queryByRole("combobox", { name: "DNS credential" })).toBeNull();
     await userEvent.type(dlg.getByLabelText("Name"), "docs");
     await userEvent.type(dlg.getByRole("combobox", { name: "Names (SANs)" }), "docs.example.test,");

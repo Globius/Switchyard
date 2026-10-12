@@ -4,6 +4,7 @@
  * connector). The service-account token is write-only; saved live and audited.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -424,6 +425,13 @@ export function Kubernetes({ tenant }: { tenant: string }) {
         </Tip>
       </div>
       {sync.error && <ErrorState error={sync.error} />}
+      {items.flatMap((c) =>
+        (c.last_sync?.notes ?? []).map((n) => (
+          <p key={`${c.id}-${n}`} role="alert" className="text-sm text-status-degraded">
+            {c.name}: {n}
+          </p>
+        )),
+      )}
       <div className="overflow-x-auto rounded-lg border bg-card">
         {list.isPending ? (
           <TableSkeleton cols={6} />
@@ -480,9 +488,13 @@ export function Kubernetes({ tenant }: { tenant: string }) {
                       </span>
                     )}
                     {c.waiting_for_change_set && (
-                      <span className="block text-xs text-muted-foreground">
-                        {t("waiting for a change set to finish")}
-                      </span>
+                      <Link
+                        to="/t/$tenant/change-sets"
+                        params={{ tenant }}
+                        className="block text-xs text-primary hover:underline"
+                      >
+                        {t("Waiting for a change set")}
+                      </Link>
                     )}
                   </td>
                   <td className="px-4 py-3">
