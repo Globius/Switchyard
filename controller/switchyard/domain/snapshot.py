@@ -751,7 +751,7 @@ def stick_table_entries(snapshot: "Snapshot", tenant_id: UUID) -> int:
 def _check_protection(
     s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
 ) -> None:
-    """A service carries at most one protection set (``too_many_protection_sets``, ADR 0150)."""
+    """A service carries at most one protection set (``too_many_protection_sets``, ADR 0170)."""
     sets = [pid for pid in s.policy_set_ids if isinstance(policies.get(pid), ProtectionPolicySet)]
     if len(sets) > 1:
         problems.append(

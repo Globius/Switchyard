@@ -1748,7 +1748,7 @@ class ClientCertPolicySet(TenantOwned):
         return self
 
 
-#: User-agent substrings of well-known scanners and exploit tools (ADR 0150), lower case.
+#: User-agent substrings of well-known scanners and exploit tools (ADR 0170), lower case.
 KNOWN_SCANNERS = (
     "acunetix",
     "dirbuster",
@@ -1769,7 +1769,7 @@ UserAgentToken = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._/+-]{1,63}$")]
 
 
 class ProtectionPolicySet(TenantOwned):
-    """Bot and DDoS protection for a service (ADR 0150).
+    """Bot and DDoS protection for a service (ADR 0170).
 
     Per-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits
     stay in ``rate_limit`` sets.
