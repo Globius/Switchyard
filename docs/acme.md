@@ -3,7 +3,7 @@
 Switchyard orders certificates from any ACME certificate authority (Let's Encrypt, ZeroSSL, Google
 Trust Services, Buypass, Keyfactor, step-ca and others), validates names with **DNS-01** or
 **HTTP-01**, and renews them before they expire. Everything is set up in the web UI or the API; no
-configuration files are involved. The decision is in ADR 0079.
+configuration files are involved. The decision is in ADR 0080.
 
 Prerequisite: the controller needs OpenBao (the account keys, EAB keys, OAuth client secrets and DNS
 credentials are stored there; PostgreSQL keeps only references).

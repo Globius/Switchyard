@@ -2988,6 +2988,7 @@ def create_app(
         Changing the directory or the authentication means the account has to be registered again
         (run the test).
         """
+        require(who, "manage", "acme_provider")
         data = body.model_dump(exclude_unset=True, exclude_none=False)
         oauth = data.pop("oauth", None)
         if oauth is not None:
@@ -3017,6 +3018,7 @@ def create_app(
         if_match: Annotated[str | None, Header()] = None,
     ) -> Response:
         """Remove a provider that no certificate uses (`409` otherwise)."""
+        require(who, "manage", "acme_provider")
         await require_acme(svc).delete(
             who, provider, expected_version=_if_match(if_match), request_id=_rid()
         )
@@ -3140,6 +3142,7 @@ def create_app(
         if_match: Annotated[str | None, Header()] = None,
     ) -> dict[str, Any]:
         """Change zones, settings or secrets; omitted secrets keep their stored value."""
+        require(who, "manage", "dns_provider")
         view = await require_dns(svc).update(
             who,
             tenant.id,
@@ -3166,6 +3169,7 @@ def create_app(
         if_match: Annotated[str | None, Header()] = None,
     ) -> Response:
         """Remove a credential that no certificate names (`409` otherwise)."""
+        require(who, "manage", "dns_provider")
         await require_dns(svc).delete(
             who, tenant.id, provider, expected_version=_if_match(if_match), request_id=_rid()
         )

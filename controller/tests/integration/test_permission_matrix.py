@@ -14,6 +14,7 @@ import httpx
 import pytest
 import pytest_asyncio
 
+from switchyard.adapters.secrets import MemorySecrets
 from switchyard.api.app import build_services, create_app
 from switchyard.domain import permissions
 from switchyard.domain.workflow import Role
@@ -163,6 +164,33 @@ ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
 ROUTES[("GET", "/audit-actions")] = ANY
 ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
 ROUTES[("GET", "/principals")] = ("manage", "tenant")
+ROUTES[("GET", "/acme-provider-presets")] = ANY
+ROUTES[("GET", "/acme-providers")] = ANY
+ROUTES[("GET", "/acme-providers/{provider}")] = ANY
+ROUTES[("GET", "/dns-provider-types")] = ANY
+for _method, _path in (
+    ("POST", "/acme-providers"),
+    ("PATCH", "/acme-providers/{provider}"),
+    ("DELETE", "/acme-providers/{provider}"),
+    ("POST", "/acme-providers/{provider}/test"),
+):
+    ROUTES[(_method, _path)] = ("manage", "acme_provider")
+for _method, _path in (
+    ("POST", "/tenants/{t}/dns-providers"),
+    ("PATCH", "/tenants/{t}/dns-providers/{provider}"),
+    ("DELETE", "/tenants/{t}/dns-providers/{provider}"),
+    ("POST", "/tenants/{t}/dns-providers/{provider}/test"),
+):
+    ROUTES[(_method, _path)] = ("manage", "dns_provider")
+for _path in (
+    "/tenants/{t}/dns-providers",
+    "/tenants/{t}/dns-providers/match",
+    "/tenants/{t}/dns-providers/{provider}",
+    "/tenants/{t}/certificate-renewals",
+    "/tenants/{t}/certificates/{certificate}/renewals",
+):
+    ROUTES[("GET", _path)] = READ
+ROUTES[("POST", "/tenants/{t}/certificates/issue/check")] = ("manage", "certificate")
 ROUTES[("GET", "/system/settings")] = ("manage", "tenant")
 ROUTES[("PATCH", "/system/settings")] = ("manage", "tenant")
 ROUTES[("GET", "/audit-events/export")] = ("manage", "tenant")
@@ -206,6 +234,20 @@ BODIES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
+    ("POST", "/acme-providers"): {"name": "x", "preset": "letsencrypt", "terms_agreed": True},
+    ("PATCH", "/acme-providers/{provider}"): {},
+    ("POST", "/tenants/{t}/dns-providers"): {
+        "name": "x",
+        "type": "cloudflare",
+        "credentials": {"api_token": "t"},
+    },
+    ("PATCH", "/tenants/{t}/dns-providers/{provider}"): {},
+    ("POST", "/tenants/{t}/dns-providers/{provider}/test"): {},
+    ("POST", "/tenants/{t}/certificates/issue/check"): {
+        "name": "c2",
+        "source": "acme",
+        "sans": ["a.example.test"],
+    },
     ("POST", "/tenants/{t}/certificates/{certificate}/replace"): {"pem": "x"},
     ("POST", "/tenants/{t}/certificates/issue"): {
         "name": "c2",
@@ -300,6 +342,8 @@ def fill(path: str) -> str:
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
     for key in ("pool", "member", "group", "monitor_id", "pool_id"):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
+    if "/acme-providers/" in out or "/dns-providers/" in out:
+        out = out.replace("{provider}", str(uuid.uuid4()))
     return out.replace("{index}", "0").replace("{n}", "1").replace("{provider}", "nobody")
 
 
@@ -342,7 +386,7 @@ async def api(pg_url: str) -> AsyncIterator[Api]:
         sessions = SessionService(
             w.db, OidcClient(transport=httpx.MockTransport(lambda r: httpx.Response(404)))
         )
-        services = build_services(w.db, directory, sessions=sessions)
+        services = build_services(w.db, directory, MemorySecrets(), sessions=sessions)
         app = create_app(services)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://api"

@@ -728,7 +728,7 @@ def api_job(job_id: str, wait: bool = False) -> None:
     typer.echo(json.dumps(_api_run(go()), indent=2, sort_keys=True))
 
 
-# -- ACME providers, DNS credentials and certificate requests (ADR 0079) -----------------------
+# -- ACME providers, DNS credentials and certificate requests (ADR 0080) -----------------------
 
 acme_app = typer.Typer(help="ACME providers (system administrators).", no_args_is_help=True)
 dns_app = typer.Typer(help="A tenant's DNS credentials for DNS-01.", no_args_is_help=True)
