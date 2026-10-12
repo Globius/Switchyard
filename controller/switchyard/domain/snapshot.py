@@ -44,6 +44,7 @@ from switchyard.domain.models import (
     Pool,
     ProtectionPolicySet,
     Protocol,
+    RadiusConnector,
     RateLimitPolicySet,
     RateLimitRule,
     RoutingProfile,
@@ -477,6 +478,16 @@ def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
     """Access sets name a directory of their own tenant; local users have no groups."""
     directories = {p.id: p for p in snapshot.policy_sets if isinstance(p, DirectoryPolicySet)}
     for ps in snapshot.policy_sets:
+        if isinstance(ps, AccessPolicySet) and ps.oidc.directory_id is None:
+            if any(r.min_factors for r in ps.rules):
+                problems.append(
+                    Problem(
+                        f"policy_sets.{ps.name}.rules",
+                        "step_up_needs_flow",
+                        "min_factors needs a directory with a login flow, not an OIDC issuer",
+                    )
+                )
+            continue
         if not isinstance(ps, AccessPolicySet) or ps.oidc.directory_id is None:
             continue
         base = f"policy_sets.{ps.name}.oidc.directory_id"
@@ -489,6 +500,25 @@ def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
         if directory.tenant_id != ps.tenant_id:
             problems.append(
                 Problem(base, "wrong_tenant", "directory belongs to a different tenant")
+            )
+        wants = max((r.min_factors or 0 for r in ps.rules), default=0)
+        have = len(directory.flow.steps) if directory.flow else 0
+        if wants and not have:
+            problems.append(
+                Problem(
+                    f"policy_sets.{ps.name}.rules",
+                    "step_up_needs_flow",
+                    f"min_factors needs directory {directory.name} to have a login flow",
+                )
+            )
+        elif wants > have:
+            problems.append(
+                Problem(
+                    f"policy_sets.{ps.name}.rules",
+                    "step_up_too_deep",
+                    f"min_factors {wants} is more than the {have} steps of directory "
+                    f"{directory.name}",
+                )
             )
         if isinstance(directory.connector, LocalConnector) and any(
             r.mode == "groups" for r in ps.rules
@@ -516,6 +546,10 @@ def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
             where = f"policy_sets.{ps.name}.connector"
             if isinstance(conn, LdapConnector):
                 refs.append((f"{where}.bind_password_ref", ps.tenant_id, conn.bind_password_ref))
+            if isinstance(conn, RadiusConnector):
+                refs.append((f"{where}.signing_secret_ref", ps.tenant_id, conn.signing_secret_ref))
+                for i, srv in enumerate(conn.servers):
+                    refs.append((f"{where}.servers[{i}].secret_ref", ps.tenant_id, srv.secret_ref))
             if isinstance(conn, LocalConnector):
                 for i, user in enumerate(conn.users):
                     refs.append(

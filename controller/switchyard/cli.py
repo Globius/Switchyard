@@ -383,7 +383,7 @@ def create_system_token(
 
 
 broker_app = typer.Typer(
-    help="The login broker for LDAP, SAML and local users.", no_args_is_help=True
+    help="The login broker for LDAP, SAML, RADIUS and local users.", no_args_is_help=True
 )
 app.add_typer(broker_app, name="broker")
 
@@ -421,6 +421,24 @@ def broker_render(
         raise fail(str(exc), 2) from exc
     for rel in write_broker_files(files, out):
         typer.echo(rel)
+
+
+@broker_app.command("gate")
+def broker_gate(
+    directory: Annotated[
+        Path,
+        typer.Option("--dir", help="Directory with the gate/*.json files.", file_okay=False),
+    ],
+    port: Annotated[
+        int, typer.Option(help="Loopback port (the proxy routes RADIUS logins here).")
+    ] = 5599,
+) -> None:
+    """Run the login gate for RADIUS directories (ADR 0195); it follows changes to its files."""
+    import uvicorn
+
+    from switchyard.gate.app import build_app
+
+    uvicorn.run(build_app(directory), host="127.0.0.1", port=port, log_level="info")
 
 
 jwks_app = typer.Typer(help="Work with JSON Web Key Sets (JWT policy sets).", no_args_is_help=True)

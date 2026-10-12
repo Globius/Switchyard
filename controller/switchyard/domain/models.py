@@ -1627,6 +1627,9 @@ class AccessRule(Model):
         match: Requests the rule covers; the first rule that matches decides.
         mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of
             at least one of ``groups``) or ``email_domains`` (an address in one of the domains).
+        posture: Device conditions (ADR 0138).
+        min_factors: The person must have passed at least this many factors of the directory's
+            login flow (ADR 0196); a session with fewer is sent to complete the next one.
     """
 
     match: RouteMatch = RouteMatch()
@@ -1634,11 +1637,14 @@ class AccessRule(Model):
     groups: tuple[GroupName, ...] = Field(default=(), max_length=32)
     email_domains: tuple[Hostname, ...] = Field(default=(), max_length=32)
     posture: Posture | None = None
+    min_factors: int | None = Field(default=None, ge=2, le=4)
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         if self.posture is not None and self.mode == "public":
             raise ValueError("posture does not go with mode public")
+        if self.min_factors is not None and self.mode == "public":
+            raise ValueError("min_factors does not go with mode public")
         if self.mode == "groups" and not self.groups:
             raise ValueError("mode groups needs groups")
         if self.mode == "email_domains" and not self.email_domains:
@@ -2104,6 +2110,119 @@ class LocalConnector(Model):
         return self
 
 
+#: Groups the login gate adds to a person who passed N factors (``sy-factors-1``, ``sy-factors-2``,
+#: ...). Groups with this prefix that a RADIUS server returns are dropped (ADR 0195).
+FACTOR_GROUP_PREFIX = "sy-factors-"
+
+
+class RadiusServerSpec(Model):
+    """One RADIUS server a ``radius`` directory can ask (ADR 0195).
+
+    Attributes:
+        name: Name a flow step uses to pick this server.
+        host / port: Where the server listens (UDP, 1812 by default).
+        secret_ref: OpenBao path of the shared secret (never the secret).
+        timeout_s / retries: Per-attempt wait and number of retransmissions.
+    """
+
+    name: Name
+    host: Hostname
+    port: Port = 1812
+    secret_ref: SecretRef
+    timeout_s: int = Field(default=3, ge=1, le=10)
+    retries: int = Field(default=2, ge=0, le=5)
+
+
+class FlowCondition(Model):
+    """When a step applies (ADR 0196); everything given must hold.
+
+    Attributes:
+        groups_any: The person has at least one of these groups from the steps already passed.
+        source_in: The client address is inside one of these networks.
+        source_not_in: The client address is outside all of these networks.
+    """
+
+    groups_any: tuple[GroupName, ...] = Field(default=(), max_length=16)
+    source_in: tuple[IPNetwork, ...] = Field(default=(), max_length=16)
+    source_not_in: tuple[IPNetwork, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _something(self) -> Self:
+        if not (self.groups_any or self.source_in or self.source_not_in):
+            raise ValueError("a condition needs groups_any, source_in or source_not_in")
+        for group in self.groups_any:
+            if group.startswith(FACTOR_GROUP_PREFIX):
+                raise ValueError(f"groups starting with {FACTOR_GROUP_PREFIX} are reserved")
+        return self
+
+
+class FlowStep(Model):
+    """One factor of a login flow (ADR 0196).
+
+    Attributes:
+        name: Step name (unique in the flow).
+        kind: ``password`` asks for user name and password; ``code`` asks for one more secret
+            (a one-time code) for the user already named.
+        server: The RADIUS server that checks this step (default: the first one).
+        prompt: Text above the field; plain text.
+        when: Conditions under which the step is asked; the first step is always asked.
+    """
+
+    name: Name
+    kind: Literal["password", "code"] = "password"
+    server: Name | None = None
+    prompt: Annotated[str, Field(pattern=r"^[A-Za-z0-9 .,:;!?()'_/-]{1,80}$")] = "Password"
+    when: FlowCondition | None = None
+
+
+class LoginFlow(Model):
+    """Ordered factors with conditions, in the manner of Citrix nFactor (ADR 0196).
+
+    The steps run in order; a step whose ``when`` does not hold is skipped. After every passed
+    step the person holds ``sy-factors-<n>`` for n factors so far, so access rules can ask for a
+    stronger login with ``min_factors``.
+    """
+
+    steps: tuple[FlowStep, ...] = Field(min_length=1, max_length=4)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        names = [s.name for s in self.steps]
+        if len(set(names)) != len(names):
+            raise ValueError("step names must be unique")
+        if self.steps[0].kind != "password" or self.steps[0].when is not None:
+            raise ValueError("the first step must be a password step without a condition")
+        return self
+
+
+class RadiusConnector(Model):
+    """Sign in against RADIUS servers through the login gate (ADR 0195).
+
+    Attributes:
+        servers: Up to four servers (for instance a password server and an OTP server).
+        nas_identifier: Sent as NAS-Identifier.
+        group_attribute: Where the server returns groups: ``filter_id`` or ``class``.
+        email_domain: Users get the address ``<name>@<email_domain>`` (RADIUS has none).
+        signing_secret_ref: OpenBao path of the key that signs the gate's short-lived cookies.
+        login_timeout_s: How long a person has to finish all steps.
+    """
+
+    type: Literal["radius"] = "radius"
+    servers: tuple[RadiusServerSpec, ...] = Field(min_length=1, max_length=4)
+    nas_identifier: Annotated[str, Field(pattern=r"^[A-Za-z0-9._-]{1,64}$")] = "switchyard"
+    group_attribute: Literal["filter_id", "class"] = "filter_id"
+    email_domain: Hostname
+    signing_secret_ref: SecretRef
+    login_timeout_s: int = Field(default=300, ge=60, le=1800)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        names = [s.name for s in self.servers]
+        if len(set(names)) != len(names):
+            raise ValueError("server names must be unique")
+        return self
+
+
 class DirectoryPolicySet(TenantOwned):
     """A place users sign in that is not an OIDC provider of their own: LDAP, SAML or local users.
 
@@ -2114,8 +2233,22 @@ class DirectoryPolicySet(TenantOwned):
 
     kind: Literal["directory"] = "directory"
     connector: Annotated[
-        LdapConnector | SamlConnector | LocalConnector, Field(discriminator="type")
+        LdapConnector | SamlConnector | LocalConnector | RadiusConnector,
+        Field(discriminator="type"),
     ]
+    flow: LoginFlow | None = None
+
+    @model_validator(mode="after")
+    def _flow_matches(self) -> Self:
+        if self.flow is None:
+            return self
+        if not isinstance(self.connector, RadiusConnector):
+            raise ValueError("a login flow goes with a radius connector")
+        servers = {srv.name for srv in self.connector.servers}
+        for step in self.flow.steps:
+            if step.server is not None and step.server not in servers:
+                raise ValueError(f"step {step.name} names an unknown server {step.server}")
+        return self
 
 
 PolicySet = Annotated[
