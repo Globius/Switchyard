@@ -173,21 +173,21 @@ reuse:
 
 sbom-controller:
   extends: .sbom
-  script: [syft scan dir:controller --source-name switchyard-controller -o spdx-json=sbom/switchyard-controller.spdx.json]
+  script: [/syft scan dir:controller --source-name switchyard-controller -o spdx-json=sbom/switchyard-controller.spdx.json]
 
 sbom-ui:
   extends: .sbom
-  script: [syft scan dir:ui --source-name switchyard-ui -o spdx-json=sbom/switchyard-ui.spdx.json]
+  script: [/syft scan dir:ui --source-name switchyard-ui -o spdx-json=sbom/switchyard-ui.spdx.json]
 
 sbom-agent:
   extends: .sbom
   script:
-    - syft scan dir:agent --source-name sy-agent -o spdx-json=sbom/sy-agent.spdx.json
-    - syft scan dir:provider --source-name terraform-provider-switchyard -o spdx-json=sbom/switchyard-provider.spdx.json
+    - /syft scan dir:agent --source-name sy-agent -o spdx-json=sbom/sy-agent.spdx.json
+    - /syft scan dir:provider --source-name terraform-provider-switchyard -o spdx-json=sbom/switchyard-provider.spdx.json
 
 sbom-helm:
   extends: .sbom
-  script: [syft scan dir:deploy/helm --source-name switchyard-helm-chart -o spdx-json=sbom/switchyard-helm-chart.spdx.json]
+  script: [/syft scan dir:deploy/helm --source-name switchyard-helm-chart -o spdx-json=sbom/switchyard-helm-chart.spdx.json]
 
 # The SE image: build the image the se-image job tests (Debian 13 plus every binary) and scan it.
 sbom-se-image:
