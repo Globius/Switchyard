@@ -32,6 +32,8 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
       { label: "Networks and VIP pools", to: "networks" },
       { label: "SE groups", to: "se-groups" },
       { label: "Routing profiles", to: "routing-profiles" },
+      { label: "Kubernetes", to: "kubernetes" },
+      { label: "GSLB", to: "gslb" },
     ],
   },
   {
@@ -40,13 +42,15 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
       { label: "Change sets", to: "change-sets" },
       { label: "Revisions", to: "revisions" },
       { label: "Jobs", to: "jobs" },
+      { label: "Alerts", to: "alerts" },
+      { label: "Request logs", to: "logs" },
     ],
   },
   {
     heading: "Tenant",
     items: [
       { label: "Access and settings", to: "access" },
-      { label: "Alerts", to: "alerts" },
+      { label: "DNS credentials", to: "dns-credentials" },
     ],
   },
 ];

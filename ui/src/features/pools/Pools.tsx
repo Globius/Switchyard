@@ -15,10 +15,13 @@ import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
 import { usePools, type PoolRead } from "@/features/vs/detail-queries";
+import { useCertificates } from "@/features/vs/queries";
+import { PersistenceEditor } from "./PersistenceEditor";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type Member = PoolRead["members"][number];
+type PoolDiscovery = NonNullable<PoolRead["discovery"]>;
 export interface PoolForm {
   name: string;
   algorithm: PoolRead["algorithm"];
@@ -28,6 +31,11 @@ export interface PoolForm {
   persistence: NonNullable<PoolRead["persistence"]> | null;
   passive_check: PassiveCheck | null;
   slow_start_s: number | null;
+  discovery: PoolDiscovery | null;
+  send_proxy: "v1" | "v2" | null;
+  client_certificate_id: string | null;
+  backend_protocol: PoolRead["backend_protocol"];
+  tunnel_timeout_s: number | null;
   members: Member[];
 }
 export type PassiveCheck = {
@@ -55,6 +63,11 @@ export function emptyPool(): PoolForm {
     persistence: null,
     passive_check: null,
     slow_start_s: null,
+    discovery: null,
+    send_proxy: null,
+    client_certificate_id: null,
+    backend_protocol: "http1",
+    tunnel_timeout_s: null,
     members: [],
   };
 }
@@ -78,6 +91,11 @@ export function toForm(p: PoolRead): PoolForm {
       : null,
     passive_check: p.passive_check ? { ...p.passive_check } : null,
     slow_start_s: p.slow_start_s ?? null,
+    discovery: p.discovery ? { ...p.discovery } : null,
+    send_proxy: p.send_proxy ?? null,
+    client_certificate_id: p.client_certificate_id ?? null,
+    backend_protocol: p.backend_protocol ?? "http1",
+    tunnel_timeout_s: p.tunnel_timeout_s ?? null,
     members: structuredClone(p.members),
   };
 }
@@ -131,6 +149,7 @@ function PoolSheet({
   onClose: () => void;
 }) {
   const monitors = useMonitors(tenant);
+  const certs = useCertificates(tenant);
   const save = useSaveOp(tenant, "pool");
   const can = useCan(tenant);
   const write = can("write", "application");
@@ -279,66 +298,104 @@ function PoolSheet({
             </div>
           </div>
         </div>
+        <PersistenceEditor
+          value={f.persistence}
+          disabled={!write.allowed}
+          onChange={(p) => set({ persistence: p })}
+        />
         <fieldset className="space-y-3 rounded-lg border p-4">
-          <legend className="px-1 text-sm font-medium">{t("Persistence")}</legend>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <legend className="px-1 text-sm font-medium">{t("Connection to members")}</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="block space-y-1.5 text-sm font-medium">
-              {t("Type")}
+              {t("PROXY protocol")}
               <select
-                aria-label={t("Persistence type")}
+                aria-label={t("PROXY protocol")}
                 className={INPUT}
                 disabled={!write.allowed}
-                value={f.persistence?.type ?? "none"}
+                value={f.send_proxy ?? ""}
                 onChange={(e) =>
-                  set({
-                    persistence:
-                      e.target.value === "none"
-                        ? null
-                        : { type: "source_ip", table_size: 100000, timeout_s: 1800 },
-                  })
+                  set({ send_proxy: (e.target.value || null) as PoolForm["send_proxy"] })
                 }
               >
-                <option value="none">{t("None")}</option>
-                <option value="source_ip">{t("Source IP")}</option>
-                {f.persistence && f.persistence.type !== "source_ip" && (
-                  <option value={f.persistence.type} disabled>
-                    {persistenceLabel(f.persistence)} {t("(set through the API)")}
-                  </option>
-                )}
+                <option value="">{t("Off")}</option>
+                <option value="v1">v1</option>
+                <option value="v2">v2</option>
               </select>
+              <span className="block text-xs font-normal text-muted-foreground">
+                {t(
+                  "Sends the client address to members that understand the PROXY header. Health checks send it too.",
+                )}
+              </span>
             </label>
             <label className="block space-y-1.5 text-sm font-medium">
-              {t("Table size")}
-              <input
-                aria-label={t("Table size")}
-                type="number"
+              {t("Protocol to members")}
+              <select
+                aria-label={t("Backend protocol")}
                 className={INPUT}
-                disabled={!write.allowed || f.persistence?.type !== "source_ip"}
-                value={f.persistence?.type === "source_ip" ? f.persistence.table_size : ""}
+                disabled={!write.allowed}
+                value={f.backend_protocol ?? "http1"}
                 onChange={(e) =>
-                  f.persistence?.type === "source_ip" &&
-                  set({ persistence: { ...f.persistence, table_size: Number(e.target.value) } })
+                  set({ backend_protocol: e.target.value as PoolForm["backend_protocol"] })
                 }
-              />
+              >
+                <option value="http1">HTTP/1.1</option>
+                <option value="h2">{t("HTTP/2 over TLS (needs Backend TLS)")}</option>
+                <option value="h2c">{t("HTTP/2 without TLS")}</option>
+              </select>
+              <span className="block text-xs font-normal text-muted-foreground">
+                {t("gRPC backends need one of the HTTP/2 kinds. HTTP pools only.")}
+              </span>
+              {errors.backend_protocol && (
+                <span role="alert" className="block text-xs font-normal text-status-down">
+                  {errors.backend_protocol}
+                </span>
+              )}
             </label>
             <label className="block space-y-1.5 text-sm font-medium">
-              {t("Timeout (s)")}
+              {t("Idle tunnel timeout (s)")}
               <input
-                aria-label={t("Persistence timeout")}
+                aria-label={t("Tunnel timeout")}
                 type="number"
+                min={1}
+                max={86400}
                 className={INPUT}
-                disabled={!write.allowed || f.persistence?.type !== "source_ip"}
-                value={f.persistence?.type === "source_ip" ? f.persistence.timeout_s : ""}
+                disabled={!write.allowed}
+                placeholder={t("1 hour")}
+                value={f.tunnel_timeout_s ?? ""}
                 onChange={(e) =>
-                  f.persistence?.type === "source_ip" &&
-                  set({ persistence: { ...f.persistence, timeout_s: Number(e.target.value) } })
+                  set({ tunnel_timeout_s: e.target.value ? Number(e.target.value) : null })
                 }
               />
+              <span className="block text-xs font-normal text-muted-foreground">
+                {t("How long an idle WebSocket or long gRPC stream stays open.")}
+              </span>
             </label>
+            <div className="space-y-1.5">
+              <div className="text-sm font-medium">{t("Client certificate (mutual TLS)")}</div>
+              <Combobox
+                aria-label={t("Client certificate")}
+                disabled={!write.allowed || !f.tls}
+                value={f.client_certificate_id ?? ""}
+                onChange={(v) => set({ client_certificate_id: v || null })}
+                options={[
+                  { value: "", label: t("None") },
+                  ...(certs.data?.items ?? [])
+                    .filter((c) => c.purpose === "server")
+                    .map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
+              <span className="block text-xs text-muted-foreground">
+                {f.tls
+                  ? t("HAProxy presents this server certificate to members that ask for one.")
+                  : t("Needs Backend TLS.")}
+              </span>
+              {errors.client_certificate_id && (
+                <span role="alert" className="block text-xs text-status-down">
+                  {errors.client_certificate_id}
+                </span>
+              )}
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {t("Cookie, header and URI persistence are set through the API for now.")}
-          </p>
         </fieldset>
         <fieldset className="space-y-3 rounded-lg border p-4">
           <legend className="px-1 text-sm font-medium">{t("Passive check and slow start")}</legend>
@@ -445,6 +502,121 @@ function PoolSheet({
             </span>
           </label>
         </fieldset>
+        <section className="space-y-3 rounded-lg border p-3">
+          <div className="flex items-start gap-3">
+            <div className="flex-1 text-sm">
+              <div className="font-medium">{t("Discover members from Proxmox")}</div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Members follow the running guests that carry a Proxmox tag. A job checks every minute and opens a change set when the list changes.",
+                )}
+              </p>
+            </div>
+            <Switch
+              aria-label={t("Discover members from Proxmox")}
+              checked={f.discovery !== null}
+              disabled={!write.allowed}
+              onCheckedChange={(on) =>
+                set({
+                  discovery: on
+                    ? {
+                        source: "proxmox_tag",
+                        tag: `sy-${tenant}.`,
+                        cidr: "",
+                        port: 8080,
+                        weight: 100,
+                      }
+                    : null,
+                })
+              }
+            />
+          </div>
+          {f.discovery && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-1.5 text-sm font-medium">
+                  {t("Proxmox tag")}
+                  <input
+                    aria-label={t("Proxmox tag")}
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    value={f.discovery.tag}
+                    onChange={(e) => set({ discovery: { ...f.discovery!, tag: e.target.value } })}
+                  />
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {t(
+                      "Must start with sy-{tenant}. Tags are cluster-wide, so the prefix keeps tenants apart.",
+                      {
+                        tenant,
+                      },
+                    )}
+                  </span>
+                  {(errors["discovery.tag"] ?? errors.discovery) && (
+                    <span role="alert" className="block text-xs font-normal text-status-down">
+                      {errors["discovery.tag"] ?? errors.discovery}
+                    </span>
+                  )}
+                </label>
+                <label className="space-y-1.5 text-sm font-medium">
+                  {t("Network (CIDR)")}
+                  <input
+                    aria-label={t("Network (CIDR)")}
+                    className={cn(INPUT, "font-mono")}
+                    disabled={!write.allowed}
+                    placeholder="10.20.0.0/24"
+                    value={f.discovery.cidr}
+                    onChange={(e) => set({ discovery: { ...f.discovery!, cidr: e.target.value } })}
+                  />
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    {t(
+                      "A guest's address in this network becomes the member address (IPv4 or IPv6).",
+                    )}
+                  </span>
+                  {errors["discovery.cidr"] && (
+                    <span role="alert" className="block text-xs font-normal text-status-down">
+                      {errors["discovery.cidr"]}
+                    </span>
+                  )}
+                </label>
+                <label className="space-y-1.5 text-sm font-medium">
+                  {t("Member port")}
+                  <input
+                    aria-label={t("Member port")}
+                    type="number"
+                    min={1}
+                    max={65535}
+                    className={INPUT}
+                    disabled={!write.allowed}
+                    value={f.discovery.port}
+                    onChange={(e) =>
+                      set({ discovery: { ...f.discovery!, port: Number(e.target.value) } })
+                    }
+                  />
+                </label>
+                <label className="space-y-1.5 text-sm font-medium">
+                  {t("Weight of a new member")}
+                  <input
+                    aria-label={t("Weight of a new member")}
+                    type="number"
+                    min={0}
+                    max={256}
+                    className={INPUT}
+                    disabled={!write.allowed}
+                    value={f.discovery.weight}
+                    onChange={(e) =>
+                      set({ discovery: { ...f.discovery!, weight: Number(e.target.value) } })
+                    }
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Install the QEMU guest agent in the guests; a guest without an address is skipped. A pool is never emptied this way. Weight and admin state you set on a discovered member are kept.",
+                )}
+              </p>
+            </div>
+          )}
+        </section>
         <section className="space-y-2">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium">{t("Members")}</h3>
@@ -453,7 +625,7 @@ function PoolSheet({
               size="sm"
               variant="outline"
               className="ml-auto"
-              disabled={!write.allowed}
+              disabled={!write.allowed || f.discovery !== null}
               onClick={() =>
                 set({
                   members: [
@@ -479,7 +651,14 @@ function PoolSheet({
               {errors.members}
             </p>
           )}
-          <div className="rounded-lg border">
+          {f.discovery && (
+            <p role="note" className="rounded-md bg-muted p-3 text-xs">
+              {t(
+                "These members are managed by discovery. Typed members are replaced at the next change; turn discovery off to manage the list by hand.",
+              )}
+            </p>
+          )}
+          <fieldset disabled={f.discovery !== null} className="rounded-lg border">
             <div className="grid grid-cols-[1fr_1.2fr_5rem_5rem_6.5rem_auto] gap-2 border-b bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
               <span>{t("Name")}</span>
               <span>{t("Address")}</span>
@@ -552,6 +731,52 @@ function PoolSheet({
                   >
                     {t("Remove")}
                   </Button>
+                  <div className="col-span-6 flex flex-wrap items-center gap-4 text-xs">
+                    <label className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        aria-label={t("Member {n} backup", { n: i + 1 })}
+                        disabled={!write.allowed}
+                        checked={m.backup ?? false}
+                        onChange={(e) => setMember(i, { backup: e.target.checked })}
+                      />
+                      {t("Backup: takes traffic only when every other member is down")}
+                    </label>
+                    {m.admin_state === "drain" && (
+                      <label className="flex items-center gap-1.5">
+                        {t("Disable after (s)")}
+                        <input
+                          aria-label={t("Member {n} drain timeout", { n: i + 1 })}
+                          type="number"
+                          min={1}
+                          className={cn(INPUT, "h-8 w-24")}
+                          disabled={!write.allowed}
+                          placeholder={t("never")}
+                          value={m.drain_timeout_s ?? ""}
+                          onChange={(e) =>
+                            setMember(i, {
+                              drain_timeout_s: e.target.value ? Number(e.target.value) : null,
+                            })
+                          }
+                        />
+                      </label>
+                    )}
+                    <label className="flex items-center gap-1.5">
+                      {t("Max connections")}
+                      <input
+                        aria-label={t("Member {n} max connections", { n: i + 1 })}
+                        type="number"
+                        min={1}
+                        className={cn(INPUT, "h-8 w-24")}
+                        disabled={!write.allowed}
+                        placeholder={t("no limit")}
+                        value={m.maxconn ?? ""}
+                        onChange={(e) =>
+                          setMember(i, { maxconn: e.target.value ? Number(e.target.value) : null })
+                        }
+                      />
+                    </label>
+                  </div>
                   {Object.entries(errors)
                     .filter(([p]) => p.startsWith(`members.${i}`))
                     .map(([p, msg]) => (
@@ -562,7 +787,7 @@ function PoolSheet({
                 </div>
               );
             })}
-          </div>
+          </fieldset>
           <div className="flex gap-2 rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground">
             <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
             <p>

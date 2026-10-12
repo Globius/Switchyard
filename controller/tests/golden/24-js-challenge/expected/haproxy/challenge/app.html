@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Checking your browser</title></head>
+<body style="font-family:sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem">
+<h1>Checking your browser</h1>
+<p>This takes a moment. JavaScript must be enabled.</p>
+<noscript><p>Please enable JavaScript to continue.</p></noscript>
+<script>
+(async () => {
+  const ts = "%[date]", ip = "%[src]", salt = "3d9b3fb7d839e383", zeros = "0".repeat(4);
+  const enc = new TextEncoder();
+  for (let n = 0; ; n++) {
+    const v = ts + "-" + n;
+    const d = await crypto.subtle.digest("SHA-256", enc.encode(v + "|" + ip + "|" + salt));
+    const h = Array.from(new Uint8Array(d), b => b.toString(16).padStart(2, "0")).join("");
+    if (h.startsWith(zeros)) {
+      const secure = location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = "sy_chal=" + v + "; Path=/; Max-Age=1800; SameSite=Lax" + secure;
+      location.reload();
+      return;
+    }
+  }
+})();
+</script>
+</body></html>

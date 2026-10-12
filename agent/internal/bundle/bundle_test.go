@@ -309,6 +309,53 @@ func TestRunningKeepalivedIsReloadedAndStoppedWhenItsFilesGo(t *testing.T) {
 	}
 }
 
+func TestAuthSidecarIsOnDemandRestartedAndItsFilesAreNotWorldReadable(t *testing.T) {
+	a, priv, r := setup(t)
+	r.fail["systemctl is-active --quiet sy-auth"] = true // not running yet
+	resp := a.Apply(context.Background(), request(t, priv, "b1", map[string]string{
+		"auth/oauth2-proxy.cfg": "provider = \"oidc\"\n",
+		"auth/secrets.env":      "OAUTH2_PROXY_CLIENT_SECRET=x\n",
+	}))
+	if !resp.Ok {
+		t.Fatal(resp.Error)
+	}
+	if !contains(r.calls, "systemctl start sy-auth") || contains(r.calls, "systemctl restart sy-auth") {
+		t.Fatalf("a stopped sidecar is started: %v", r.calls)
+	}
+	if info, err := os.Stat(filepath.Join(a.Root, "auth", "secrets.env")); err != nil || (runtimeIsUnix() && info.Mode().Perm() != 0o640) {
+		t.Fatalf("auth files are not world-readable: %v %v", info, err)
+	}
+	r.calls, r.fail["systemctl is-active --quiet sy-auth"] = nil, false
+	a.Apply(context.Background(), request(t, priv, "b2", map[string]string{"auth/oauth2-proxy.cfg": "provider = \"oidc\"\nx = 1\n"}))
+	if !contains(r.calls, "systemctl restart sy-auth") {
+		t.Fatalf("a running sidecar is restarted (it cannot reload): %v", r.calls)
+	}
+	r.calls = nil
+	resp = a.Apply(context.Background(), request(t, priv, "b3", map[string]string{"frr/frr.conf": "x\n"}))
+	if !resp.Ok || !contains(r.calls, "systemctl stop sy-auth") {
+		t.Fatalf("removing the last auth file stops the sidecar: %v %v", resp, r.calls)
+	}
+}
+
+func TestCorazaIsOnDemandAndReloaded(t *testing.T) {
+	a, priv, r := setup(t)
+	r.fail["systemctl is-active --quiet coraza-spoa"] = true // not running yet
+	resp := a.Apply(context.Background(), request(t, priv, "b1", map[string]string{"coraza/config.yaml": "applications: {}\n"}))
+	if !resp.Ok || !contains(r.calls, "systemctl start coraza-spoa") {
+		t.Fatalf("a stopped WAF is started: %v %v", resp, r.calls)
+	}
+	r.calls, r.fail["systemctl is-active --quiet coraza-spoa"] = nil, false
+	a.Apply(context.Background(), request(t, priv, "b2", map[string]string{"coraza/config.yaml": "applications: {a: 1}\n"}))
+	if !contains(r.calls, "systemctl reload coraza-spoa") {
+		t.Fatalf("a running WAF reloads (SIGHUP) instead of restarting: %v", r.calls)
+	}
+	r.calls = nil
+	a.Apply(context.Background(), request(t, priv, "b3", map[string]string{"frr/frr.conf": "x\n"}))
+	if !contains(r.calls, "systemctl stop coraza-spoa") {
+		t.Fatalf("removing the last coraza file stops the WAF: %v", r.calls)
+	}
+}
+
 func contains(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {
@@ -423,5 +470,18 @@ func TestAuthProxyFilesAreFlatCfgAndEnvFiles(t *testing.T) {
 	}
 	if !contains(r.calls, "systemctl stop sy-auth") {
 		t.Fatalf("dropping the last access policy must stop the proxies: %v", r.calls)
+	}
+}
+
+func TestCertsDirectoryAlsoHoldsCaptchaSecrets(t *testing.T) {
+	for rel, want := range map[string]bool{
+		"certs/captcha-web.secret": true,
+		"certs/web.pem":            true,
+		"certs/web.crtlist":        false,
+		"certs/sub/x.secret":       false,
+	} {
+		if got := managedFile(rel); got != want {
+			t.Errorf("managedFile(%q) = %v, want %v", rel, got, want)
+		}
 	}
 }

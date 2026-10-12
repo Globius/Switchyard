@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createQueryClient } from "@/auth/session";
-import { ruleSummary, targetSummary } from "@/features/alerts/Alerts";
+import { detailText, firesIn, ruleSummary, targetSummary } from "@/features/alerts/Alerts";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
 
@@ -204,5 +204,19 @@ describe("alerts", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Add target" })).toBeDisabled());
     expect(screen.getByRole("button", { name: "Send test" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Add rule" })).toBeDisabled();
+  });
+});
+
+describe("pending alerts", () => {
+  it("says when a pending alert fires", () => {
+    const now = new Date("2026-10-12T10:00:00Z");
+    expect(firesIn("2026-10-12T10:04:10Z", now)).toBe("pending, fires in 5 min");
+    expect(firesIn("2026-10-12T09:59:00Z", now)).toBe("pending, fires now");
+  });
+
+  it("writes the value against the threshold", () => {
+    expect(detailText({ value: 92, threshold: 90, unit: "%" })).toBe("92 of 90 %");
+    expect(detailText({ value: 3 })).toBe("3");
+    expect(detailText({})).toBe("");
   });
 });

@@ -98,6 +98,7 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/{certificate}/renew"): ("manage", "certificate"),
     ("POST", "/tenants/{t}/certificates/{certificate}/replace"): ("manage", "certificate"),
     ("GET", "/tenants/{t}/status/engines"): READ,
+    ("GET", "/tenants/{t}/status/se-groups"): READ,
     ("GET", "/tenants/{t}/status/virtual-services"): READ,
     ("GET", "/tenants/{t}/status/stream"): READ,
     ("GET", "/tenants/{t}/jobs"): READ,
@@ -153,6 +154,10 @@ for _read in (
     ("GET", "/tenants/{t}/engines/{engine}"),
     ("GET", "/tenants/{t}/engines/{engine}/metrics"),
     ("GET", "/tenants/{t}/alert-targets"),
+    ("GET", "/tenants/{t}/gslb-zones"),
+    ("GET", "/tenants/{t}/gslb-zones/{zone}/ds"),
+    ("GET", "/tenants/{t}/wide-ips"),
+    ("GET", "/tenants/{t}/gslb/status"),
     ("GET", "/tenants/{t}/alert-rules"),
     ("GET", "/tenants/{t}/alerts"),
     ("GET", "/tenants/{t}/logs"),
@@ -169,6 +174,13 @@ for _read in (
 ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
 ROUTES[("POST", "/grafana/launch")] = ("manage", "tenant")
 ROUTES[("GET", "/alert-catalog")] = ANY
+ROUTES[("POST", "/tenants/{t}/gslb-zones")] = ("manage", "tenant")
+ROUTES[("DELETE", "/tenants/{t}/gslb-zones/{zone}")] = ("manage", "tenant")
+ROUTES[("POST", "/tenants/{t}/gslb-zones/{zone}/dnssec")] = INFRA
+ROUTES[("POST", "/tenants/{t}/gslb-zones/{zone}/wide-ips")] = INFRA
+ROUTES[("PATCH", "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}")] = INFRA
+ROUTES[("DELETE", "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}")] = INFRA
+ROUTES[("POST", "/tenants/{t}/gslb/sync")] = INFRA
 for _alert in ("targets", "rules"):
     ROUTES[("POST", f"/tenants/{{t}}/alert-{_alert}")] = INFRA
     ROUTES[("PATCH", f"/tenants/{{t}}/alert-{_alert}/{{name}}")] = INFRA
@@ -204,6 +216,24 @@ for _path in (
 ):
     ROUTES[("GET", _path)] = READ
 ROUTES[("POST", "/tenants/{t}/certificates/issue/check")] = ("manage", "certificate")
+ROUTES[("POST", "/tenants/{t}/imports/avi")] = DRAFT
+for _method, _path in (
+    ("POST", "/tenants/{t}/kubernetes-clusters"),
+    ("PATCH", "/tenants/{t}/kubernetes-clusters/{cluster}"),
+    ("DELETE", "/tenants/{t}/kubernetes-clusters/{cluster}"),
+    ("POST", "/tenants/{t}/kubernetes-clusters/{cluster}/test"),
+    ("POST", "/tenants/{t}/kubernetes-clusters/{cluster}/sync"),
+):
+    ROUTES[(_method, _path)] = ("manage", "kubernetes_cluster")
+for _path in (
+    "/tenants/{t}/kubernetes-clusters",
+    "/tenants/{t}/kubernetes-clusters/{cluster}",
+):
+    ROUTES[("GET", _path)] = READ
+ROUTES[("GET", "/system/controller")] = ("manage", "controller")
+ROUTES[("PUT", "/system/controller/pending")] = ("manage", "controller")
+ROUTES[("POST", "/system/controller/confirm")] = ("manage", "controller")
+ROUTES[("POST", "/system/controller/revert")] = ("manage", "controller")
 ROUTES[("GET", "/system/settings")] = ("manage", "tenant")
 ROUTES[("PATCH", "/system/settings")] = ("manage", "tenant")
 ROUTES[("GET", "/audit-events/export")] = ("manage", "tenant")
@@ -231,6 +261,15 @@ BODIES: dict[tuple[str, str], Any] = {
         "targets": ["ops"],
     },
     ("PATCH", "/tenants/{t}/alert-rules/{name}"): {"enabled": False},
+    ("POST", "/tenants/{t}/gslb-zones"): {
+        "name": "gslb.example.test",
+        "nameservers": ["ns1.example.test"],
+    },
+    ("POST", "/tenants/{t}/gslb-zones/{zone}/wide-ips"): {
+        "name": "shop",
+        "members": [{"address": "192.0.2.10"}],
+    },
+    ("PATCH", "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}"): {"ttl": 60},
     ("POST", "/tenants"): {"name": "newco"},
     ("PATCH", "/tenants/{t}"): {"require_approval": True},
     ("POST", "/tenants/{t}/change-sets"): {},
@@ -260,6 +299,16 @@ BODIES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
+    ("PUT", "/system/controller/pending"): {"fqdn": "sy.example.test"},
+    ("POST", "/tenants/{t}/imports/avi"): {"export": {}, "se_group": "edge"},
+    ("POST", "/tenants/{t}/kubernetes-clusters"): {
+        "name": "x",
+        "api_url": "https://k8s.example.test:6443",
+        "token": "t",
+        "se_group": "edge",
+        "vip_pool": "main",
+    },
+    ("PATCH", "/tenants/{t}/kubernetes-clusters/{cluster}"): {},
     ("POST", "/acme-providers"): {"name": "x", "preset": "letsencrypt", "terms_agreed": True},
     ("PATCH", "/acme-providers/{provider}"): {},
     ("POST", "/tenants/{t}/dns-providers"): {
@@ -363,6 +412,7 @@ def fill(path: str) -> str:
         "token",
         "certificate",
         "idp",
+        "cluster",
         "test_id",
     ):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
@@ -502,7 +552,8 @@ async def test_status_codes_follow_the_matrix(api: Api, role: Role) -> None:
                     or problem.get("required_role") != required.value
                 ):
                     failures.append(f"{where}: 403 without the matrix role: {problem}")
-        elif response.status_code == 403:
+        elif response.status_code == 403 and "reaching the new address" not in response.text:
+            # confirming a controller change is refused on any host but the new one (ADR 0081)
             failures.append(f"{where}: allowed by the matrix but got 403 {response.text}")
         elif response.status_code >= 500:
             failures.append(f"{where}: {response.status_code}")

@@ -17,6 +17,31 @@ systemd-analyze verify /etc/systemd/system/sy-agent.service /etc/systemd/system/
 dpkg -s frr-pythontools >/dev/null 2>&1 || fail "frr-pythontools missing (systemctl reload frr needs it)"
 command -v vector >/dev/null || fail "vector missing"
 VECTOR_DANGEROUSLY_ALLOW_ENV_VAR_INTERPOLATION=true LOKI_URL=http://loki:3100 TENANT_ID=t TENANT_NAME=t SE_GROUP=g ENGINE=e vector validate --no-environment /etc/switchyard/vector.yaml   || fail "vector config invalid"
+# Things the first real hosts showed missing (ADR 0079): nftables enabled with a config that includes the managed files,
+# the Vector drop-in replacing the packaged validate step, and the IPv6 sysctls the services need.
+[ -f /etc/nftables.conf ] && grep -q 'include "/etc/switchyard/nftables/\*.nft"' /etc/nftables.conf || fail "nftables.conf"
+ls /etc/systemd/system/*.wants/nftables.service >/dev/null 2>&1 || fail "nftables is not enabled"
+grep -q '^ExecStartPre=$' /etc/systemd/system/vector.service.d/switchyard.conf || fail "vector drop-in keeps the packaged ExecStartPre"
+for k in net.ipv6.ip_nonlocal_bind net.ipv6.conf.all.forwarding net.ipv6.conf.all.accept_ra; do
+  grep -q "^$k" /etc/sysctl.d/90-switchyard.conf || fail "sysctl $k"
+done
+# The auth sidecar slot (ADR 0083): idle unit, its user and directory; the binary only when the image was given one.
+id sy-auth >/dev/null 2>&1 || fail "user sy-auth"
+[ -d /etc/switchyard/auth ] || fail "/etc/switchyard/auth"
+[ -f /etc/systemd/system/sy-auth.service ] || fail "sy-auth unit"
+grep -q 'ConditionPathExistsGlob=/etc/switchyard/auth/\*.cfg' /etc/systemd/system/sy-auth.service || fail "sy-auth must wait for its config"
+[ -x /usr/local/sbin/sy-auth-run ] && bash -n /usr/local/sbin/sy-auth-run || fail "sy-auth-run"
+# The WAF slot (block P10): user, unit, config directory, and the binary and pinned Core Rule Set when supplied.
+id coraza >/dev/null 2>&1 || fail "user coraza"
+[ -d /etc/switchyard/coraza ] || fail "/etc/switchyard/coraza"
+grep -q 'ConditionPathExists=/etc/switchyard/coraza/config.yaml' /etc/systemd/system/coraza-spoa.service || fail "coraza-spoa must wait for its config"
+systemd-analyze verify /etc/systemd/system/coraza-spoa.service 2>&1 | grep -v -E 'not executable|coraza-spoa|ConditionPathExists' || true
+[ ! -x /usr/local/bin/coraza-spoa ] || /usr/local/bin/coraza-spoa --help >/dev/null 2>&1 || fail "coraza-spoa does not run"
+if [ -e /usr/share/coreruleset/current ]; then
+  [ -f /usr/share/coreruleset/current/crs-setup.conf.example ] && [ -d /usr/share/coreruleset/current/rules ] || fail "Core Rule Set"
+fi
+systemd-analyze verify /etc/systemd/system/sy-auth.service 2>&1 | grep -v -E 'not executable|oauth2-proxy|ConditionPathExists' || true
+[ ! -x /usr/local/bin/oauth2-proxy ] || /usr/local/bin/oauth2-proxy --version | grep -q 'oauth2-proxy' || fail "oauth2-proxy does not run"
 [ ! -s /etc/machine-id ] || fail "machine-id not cleared"
 echo "se-image checks passed"
 # Data Plane API answers over mTLS with the agent's certificate, and rejects clients without one.

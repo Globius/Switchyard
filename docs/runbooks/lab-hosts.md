@@ -168,6 +168,12 @@ with `drive.py vstls NAME GROUP VIP CERT`. Test from outside with the CA: `curl 
 add `--ssl-no-revoke`).
 The first TLS service used to fail validation because the certificate file reached the engine after the canary's check; the apply pipeline now sends certificates first (found by this lab, fixed in the pipeline).
 
+## Rolling upgrade, scale-out and live checks
+
+`deploy/lab/hosts/upgrade.sh` replaces every engine of a group one at a time (or adds engines with `--add`), gated on the group's
+health score ([rolling-upgrade.md](rolling-upgrade.md), ADR 0083). `deploy/lab/checks/live.sh` runs the PKCS#12 import and the
+412/428 conflict checks against the lab controller. Both use `hosts.env` and `lib.sh`; `LAB_TENANT` picks the tenant.
+
 ## Tearing down
 
 Delete the lab guests (ids in `hosts.env` and the engines the controller created), remove the SDN zone `lab`

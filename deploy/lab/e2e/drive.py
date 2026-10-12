@@ -7,6 +7,10 @@ Commands:
   status                  engine status (reachability, members, VRRP, BGP, drift)
   cert NAME               import the PEM (chain, then key) in the CERT_PEM environment variable as certificate NAME
   vstls NAME GROUP VIP CERT [PORT [POOL]]   create an HTTPS virtual service (TLS on PORT, default 443) using certificate CERT
+  retire ENGINE           retire the engine named ENGINE (destroys the guest) and wait for the job
+  repair GROUP            push the current desired state to the group again (POST /se-groups/{id}/reapply), canary first
+  engines GROUP           the engines of the group (name, node, vmid, kind, enrolled)
+  health                  health scores of the SE groups and their engines (GET /status/se-groups)
   reapply                 apply the newest failed change set again
   lastapply               log and result of the newest apply job
 Environment: SY_TOKEN (admin API token), TEMPLATE_VMID, LAB_TENANT (default lab). Prints one JSON document.
@@ -139,6 +143,40 @@ async def vstls(
     return {"state": "applied", "object": await lab.get(f"/virtual-services/{accepted['object_id']}")}
 
 
+async def retire(lab: Lab, engine_name: str) -> dict:
+    """Retire an engine: the controller destroys its guest and removes the record."""
+    engine = await lab.find("engines", engine_name)
+    accepted = await lab.request("POST", f"/tenants/{TENANT}/engines/{engine['id']}/retire")
+    await lab.wait_job(accepted["job_id"], timeout_s=600)
+    return {"retired": engine_name}
+
+
+async def repair(lab: Lab, group_name: str) -> dict:
+    group = await lab.find("se-groups", group_name)
+    accepted = await lab.request("POST", f"/tenants/{TENANT}/se-groups/{group['id']}/reapply")
+    await lab.wait_job(accepted["job_id"], timeout_s=600)
+    return {"repaired": group_name}
+
+
+async def engines(lab: Lab, group_name: str) -> list:
+    group = await lab.find("se-groups", group_name)
+    rows = await lab.items(f"/engines?se_group={group['id']}")
+    return [
+        {
+            "name": e["name"],
+            "pve_node": e["pve_node"],
+            "vmid": e["vmid"],
+            "guest_kind": e["guest_kind"],
+            "agent_enrolled": e["agent_enrolled"],
+        }
+        for e in rows
+    ]
+
+
+async def health(lab: Lab) -> list:
+    return await lab.get("/status/se-groups")
+
+
 async def recreate(lab: Lab, name: str, group_name: str, vip: str) -> dict:
     """Delete the virtual service and create it again (two rollouts: re-renders everything for the group)."""
     existing = await lab.find("virtual-services", name)
@@ -173,7 +211,7 @@ async def lastapply(lab: Lab) -> dict:
     return {"job": job, "log": await lab.get(f"/jobs/{job['id']}/log")}
 
 
-COMMANDS = {"cert": cert, "vstls": vstls, "deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
+COMMANDS = {"repair": repair, "engines": engines, "retire": retire, "health": health, "cert": cert, "vstls": vstls, "deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
 
 
 async def main() -> None:

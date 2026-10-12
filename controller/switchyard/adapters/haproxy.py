@@ -162,6 +162,23 @@ class HaproxyEngine(Protocol):
         """Remove one entry of a map at run time; a missing entry is not an error."""
         ...
 
+    async def set_challenge_certificate(self, crt_list: str, name: str, pem: str, sni: str) -> None:
+        """Present a TLS-ALPN-01 challenge certificate for ``sni`` at run time (no reload).
+
+        ``crt_list`` is the rendered path of the crt-list of a TLS service
+        (``certs/<service>.crtlist``); the certificate is added to it for ``sni`` and only for
+        clients that offer ``acme-tls/1``. ``pem`` holds the certificate and its key. Handshakes for
+        ``sni`` get this certificate until :meth:`remove_challenge_certificate`.
+
+        Raises:
+            HaproxyError: If the engine has no such crt-list loaded or refuses the certificate.
+        """
+        ...
+
+    async def remove_challenge_certificate(self, crt_list: str, name: str) -> None:
+        """Remove a certificate added by :meth:`set_challenge_certificate` (missing is fine)."""
+        ...
+
     async def close(self) -> None:
         """Release network resources."""
         ...

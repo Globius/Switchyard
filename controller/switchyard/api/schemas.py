@@ -267,6 +267,8 @@ OBJECT_MODELS: dict[ObjectType, tuple[type[BaseModel], ...]] = {
         dm.RespondPolicySet,
         dm.ErrorPagesPolicySet,
         dm.RateLimitPolicySet,
+        dm.WafPolicySet,
+        dm.ProtectionPolicySet,
         dm.AccessPolicySet,
         dm.JwtPolicySet,
         dm.ClientCertPolicySet,
@@ -556,6 +558,7 @@ PermissionObject = Literal[
     "break_glass",
     "certificate",
     "change_set",
+    "controller",
     "dns_provider",
     "draft",
     "engine",
@@ -564,6 +567,7 @@ PermissionObject = Literal[
     "infrastructure",
     "job",
     "job_own",
+    "kubernetes_cluster",
     "member",
     "quota",
     "require_approval",
@@ -1445,6 +1449,28 @@ class EngineStatusRead(ApiModel):
     observed_at: datetime
 
 
+class HealthRead(ApiModel):
+    """A health score (0 to 100) and why it is not 100."""
+
+    score: int = Field(ge=0, le=100)
+    reasons: list[str]
+
+
+class EngineHealthRead(HealthRead):
+    """Health of one engine."""
+
+    engine: str
+    engine_id: UUID
+
+
+class SeGroupHealthRead(HealthRead):
+    """Health of one SE group: the mean of its engines, capped at 50 without two healthy engines."""
+
+    se_group_id: UUID
+    name: str
+    engines: list[EngineHealthRead]
+
+
 class MonitorTestIn(ApiModel):
     """Body of `POST /health-monitors/{id}/test`: which member to probe, and optional overrides."""
 
@@ -1673,9 +1699,12 @@ class CertIssueIn(ApiModel):
         default=None,
         description="ACME provider name (`acme` only). The default provider when empty.",
     )
-    challenge: Literal["dns-01", "http-01"] | None = Field(
+    challenge: Literal["dns-01", "http-01", "tls-alpn-01"] | None = Field(
         default=None,
-        description="`dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.",
+        description="`dns-01` (default), `http-01` or `tls-alpn-01`. The last two cannot validate "
+        "wildcard names. TLS-ALPN-01 answers every HTTPS handshake for the name with the "
+        "challenge certificate while it runs, so a name that is serving traffic is interrupted "
+        "for a few seconds (see `warnings` in the check).",
     )
     dns_provider: str | None = Field(
         default=None,
@@ -2066,6 +2095,9 @@ class IssueCheckRead(ApiModel):
 
     ok: bool
     problems: list[IssueProblemRead]
+    warnings: list[IssueProblemRead] = Field(
+        description="Things to know that do not stop the request."
+    )
 
 
 class RenewalRead(ApiModel):
@@ -2100,3 +2132,275 @@ class RenewalStatusRead(ApiModel):
     last_error: str | None
     last_success_at: datetime | None
     failures_in_a_row: int
+
+
+# -- The controller's own address (ADR 0081) ------------------------------------------------------
+
+
+class ControllerPortRead(ApiModel):
+    """A port of the `controller` service."""
+
+    port: int
+    tls: bool
+    https_redirect_port: int | None
+
+
+class ControllerListenRead(ApiModel):
+    """Where the `controller` service answers."""
+
+    vip: str
+    ports: list[ControllerPortRead]
+
+
+class ControllerCertificateRead(ApiModel):
+    """The certificate the `controller` service presents."""
+
+    name: str
+    sans: list[str]
+    not_after: datetime
+
+
+class ControllerStateRead(ApiModel):
+    """The settings before or after a change."""
+
+    fqdn: str | None
+    public_url: str | None
+    vip: str | None = None
+    certificate: str | None = None
+
+
+class ControllerChangeRead(ApiModel):
+    """A change that waits for confirmation (or is still being applied)."""
+
+    state: Literal["applying", "waiting"]
+    proposed_by: str
+    proposed_at: datetime
+    window_s: int
+    expires_at: datetime | None = Field(description="Set once the change set has applied.")
+    seconds_left: int | None
+    before: ControllerStateRead
+    after: ControllerStateRead
+    change_set_id: UUID | None = Field(description="The management tenant's change set.")
+    revision_before: int | None
+    revision_after: int | None
+
+
+class ControllerResultRead(ApiModel):
+    """How the previous change ended."""
+
+    kind: Literal["confirmed", "reverted", "failed"]
+    at: datetime
+    by: str | None
+    reason: str | None = None
+    fqdn: str | None = None
+    restored: bool | None = None
+
+
+class IdpRedirectRead(ApiModel):
+    """The address an identity provider must allow for the new FQDN."""
+
+    provider: str
+    protocol: str
+    redirect_url: str
+
+
+class ControllerRead(ApiModel):
+    """The controller's address settings."""
+
+    managed: bool = Field(
+        description="The management tenant and its `controller` service exist. Without them only "
+        "the FQDN (public URL) can be set."
+    )
+    fqdn: str | None
+    public_url: str | None
+    listen: ControllerListenRead | None
+    certificate: ControllerCertificateRead | None
+    pending: ControllerChangeRead | None
+    last_result: ControllerResultRead | None
+    redirect_urls: list[IdpRedirectRead] = Field(
+        description="For a pending change: what each identity provider must allow first."
+    )
+    break_glass: str = Field(description="How to recover without the UI.")
+
+
+class ControllerChangeIn(ApiModel):
+    """Propose a change to the controller's address."""
+
+    fqdn: str = Field(
+        default="",
+        description="The host name users will open (not needed with `reset_to_default`).",
+    )
+    reset_to_default: bool = Field(
+        default=False,
+        description="Drop the confirmed public URL so the address from the environment applies "
+        "again. Needs confirmation like any other change.",
+    )
+    vip: str | None = Field(default=None, description="A new VIP for the `controller` service.")
+    certificate: str | None = Field(
+        default=None, description="Name of a server certificate in the management tenant."
+    )
+    confirm_within_s: int | None = Field(
+        default=None,
+        ge=30,
+        le=600,
+        description="Seconds to confirm before the change is reverted (default 120).",
+    )
+
+
+# -- Importing an Avi configuration (ADR 0150) ----------------------------------------------------
+
+
+class AviImportIn(ApiModel):
+    """Convert an Avi configuration export into a draft change set."""
+
+    export: dict[str, Any] = Field(
+        description="The decoded Avi configuration export (`POST /api/configuration/export`, or "
+        "the `avi_config.json` of a backup): an object with a list per object type."
+    )
+    se_group: str = Field(description="Name of the SE group the services will use.")
+    vip_pool: str | None = Field(
+        default=None, description="VIP pool the new VIPs are taken from, one per Avi VIP."
+    )
+    vip_map: dict[str, str] = Field(
+        default_factory=dict,
+        description="Fixed new addresses, keyed by the Avi VIP name or its old address.",
+    )
+    prefix: str = Field(default="", max_length=20, description="Put in front of every new name.")
+    include_unused: bool = Field(
+        default=False, description="Also convert pools and other objects no service uses."
+    )
+    only: list[str] = Field(
+        default_factory=list, description="Convert only these virtual services (Avi names)."
+    )
+    dry_run: bool = Field(
+        default=True,
+        description="Only report what would be created. Send `false` to create the draft.",
+    )
+
+
+class AviMappedRead(ApiModel):
+    """An Avi object and what it became."""
+
+    kind: str
+    avi_name: str
+    name: str
+
+
+class AviVipRead(ApiModel):
+    """An Avi VIP and the address that replaces it."""
+
+    avi_vsvip: str
+    address: str | None = Field(description="The address in the export.")
+    new_address: str | None = Field(description="The address it gets here, if one was found.")
+    services: list[str]
+
+
+class AviFindingRead(ApiModel):
+    """One decision of the conversion."""
+
+    level: Literal["info", "warning", "manual", "skipped"]
+    object: str
+    message: str
+
+
+class AviImportRead(ApiModel):
+    """What the import did or would do."""
+
+    dry_run: bool
+    change_set_id: UUID | None = Field(description="The draft change set; empty for a dry run.")
+    counts: dict[str, int]
+    objects: list[AviMappedRead]
+    vips: list[AviVipRead]
+    findings: list[AviFindingRead]
+
+
+# -- Kubernetes clusters (ADR 0151) ---------------------------------------------------------------
+
+
+class KubernetesClusterIn(ApiModel):
+    """Connect a Kubernetes cluster."""
+
+    name: str
+    api_url: str = Field(description="`https://host:port` of the API server.")
+    token: str = Field(
+        description="A service-account token with the access in docs/kubernetes.md. Write-only."
+    )
+    se_group: str = Field(description="Name of the SE group the services use.")
+    vip_pool: str = Field(description="Name of the VIP pool addresses are taken from.")
+    ca_pem: str | None = Field(default=None, description="PEM of the API server's CA, if private.")
+    mode: Literal["nodeport", "pods"] = Field(
+        default="nodeport",
+        description="`nodeport`: pools hold the ready nodes at the NodePort. `pods`: pools hold "
+        "the ready endpoints (the SEs must reach the pod network).",
+    )
+    class_name: str = Field(
+        default="switchyard.io/lb", description="`loadBalancerClass` of the Services that are ours."
+    )
+    gateway_class: str = Field(
+        default="switchyard", description="`gatewayClassName` of the Gateways that are ours."
+    )
+    enabled: bool = True
+
+
+class KubernetesClusterPatch(ApiModel):
+    """Change a cluster; send only what changes."""
+
+    api_url: str | None = None
+    token: str | None = Field(default=None, description="Replaces the stored token.")
+    ca_pem: str | None = None
+    se_group: str | None = None
+    vip_pool: str | None = None
+    mode: Literal["nodeport", "pods"] | None = None
+    class_name: str | None = None
+    gateway_class: str | None = None
+    enabled: bool | None = None
+
+
+class KubernetesSyncRead(ApiModel):
+    """The result of the last sync."""
+
+    planned_services: int | None = None
+    planned_pools: int | None = None
+    created: int | None = None
+    updated: int | None = None
+    deleted: int | None = None
+    change_set_id: UUID | None = None
+    addresses_written: int | None = None
+    skipped: str | None = None
+    notes: list[str] | None = None
+
+
+class KubernetesClusterRead(ApiModel):
+    """A connected cluster (never the token)."""
+
+    id: UUID
+    name: str
+    api_url: str
+    ca_set: bool
+    se_group: str
+    vip_pool: str
+    mode: Literal["nodeport", "pods"]
+    class_name: str
+    gateway_class: str
+    enabled: bool
+    waiting_for_change_set: UUID | None = Field(
+        description="The sync waits for this change set to finish before it plans again."
+    )
+    last_sync_at: datetime | None
+    last_sync_ok: bool | None
+    last_sync_error: str | None
+    last_sync: KubernetesSyncRead | None
+    version: int
+
+
+class KubernetesTestRead(ApiModel):
+    """What a connection test found."""
+
+    ok: bool
+    detail: str
+    version: str | None
+    nodes: int | None
+    services: int | None
+    gateway_api: bool | None = Field(description="The Gateway API CRDs are installed.")
+    permissions: dict[str, bool]
+    problems: list[str]

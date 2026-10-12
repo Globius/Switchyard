@@ -1,0 +1,84 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+policy_sets:
+- id: ps-limits
+  tenant_id: t-acme
+  name: login
+  kind: rate_limit
+  rules:
+  - match:
+      path_exact: /login
+      methods: [POST]
+    max_requests: 5
+    period_s: 60
+- id: ps-protect
+  tenant_id: t-acme
+  name: shield
+  kind: protection
+  max_connections_per_source: 100
+  max_new_connections_per_source: 50
+  connection_rate_period_s: 10
+  header_timeout_s: 5
+  client_timeout_s: 30
+  block_empty_user_agent: true
+  block_scanners: true
+  deny_user_agents: [bad-bot, evilcrawler/2]
+  exempt_cidrs: [198.51.100.0/24, 2001:db8:10::/48]
+  table_size: 50000
+- id: ps-bots-only
+  tenant_id: t-acme
+  name: bots
+  kind: protection
+  block_scanners: true
+  bot_action: silent_drop
+pools:
+- id: p-app
+  tenant_id: t-acme
+  name: app
+  members:
+  - address: 10.20.12.2
+    port: 8080
+virtual_services:
+- id: v-app
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: app
+  protocol: http
+  vip: 192.0.2.90
+  ports:
+  - port: 80
+  policy_set_ids: [ps-limits, ps-protect]
+  default_pool_id: p-app
+- id: v-bots
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: bots
+  protocol: http
+  vip: 192.0.2.91
+  ports:
+  - port: 80
+  policy_set_ids: [ps-bots-only]
+  default_pool_id: p-app

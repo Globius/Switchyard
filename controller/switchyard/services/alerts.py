@@ -453,13 +453,21 @@ class AlertService:
 
     # -- what is happening -----------------------------------------------------
 
+    @staticmethod
+    def _fires_at(rule: AlertRuleRow | None, state: AlertStateRow) -> datetime | None:
+        """When a pending metric alert fires if it keeps breaching; ``None`` otherwise."""
+        if rule is None or state.state != "pending":
+            return None
+        return state.since + timedelta(minutes=rule.spec.get("for_minutes", 5))
+
     async def status(
         self, principal: Principal, tenant_id: UUID, *, limit: int = 50
     ) -> dict[str, Any]:
         """What is firing now and the most recent deliveries (any role in the tenant)."""
         require(principal, "read", "tenant_data")
         async with tenant_session(self._db.app, [tenant_id]) as session:
-            rules = {r.id: r.name for r in (await session.execute(select(AlertRuleRow))).scalars()}
+            rule_rows = {r.id: r for r in (await session.execute(select(AlertRuleRow))).scalars()}
+            rules = {i: r.name for i, r in rule_rows.items()}
             states = (
                 await session.execute(
                     select(AlertStateRow)
@@ -480,6 +488,7 @@ class AlertService:
                         "state": s.state,
                         "since": s.since,
                         "details": s.details,
+                        "fires_at": self._fires_at(rule_rows.get(s.rule_id), s),
                     }
                     for s in states
                 ],
@@ -771,6 +780,8 @@ class AlertEvaluator:
                     session.add(state)
                 if state.state == "ok":
                     state.state, state.since = "pending", now
+                if state.state == "pending":
+                    state.details = facts  # shown while waiting: the value and the threshold
                 if state.state == "pending" and now - state.since >= wait:
                     state.state, state.notified_at = "firing", now
                     state.details = facts

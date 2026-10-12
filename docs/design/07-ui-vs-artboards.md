@@ -339,9 +339,101 @@ Built against what `openapi.json` has; the rest waits for the API (see the list 
 | Admin > System settings | Matches v52. Added the audit-log link in place of "changed by/when" (the API has neither). When the deployment forces containers on, the API returns the effective value only, so "the stored value" is not shown. |
 | Metrics on VS Overview | Built. Four single-series panels drawn in SVG from `GET …/virtual-services/{id}/metrics` (no iframe), range 15 m to 7 d, auto-refresh, refresh button, table view, gaps as gaps, "—" for missing numbers, states for loading, no data, no access (403 detail and role) and unavailable (the API reason). "Open in Grafana" stays a link. **Deviations:** no "Custom…" range (the API takes `window_s` only) and no retention sentence (the API does not say). |
 | Metrics for an engine | Built on the same section as the VS panels (ADR 0085): "Metrics" in the engine row's More menu on SE groups opens CPU, memory, HAProxy sessions and traffic in for that engine, from `GET /tenants/{t}/engines/{engine}/metrics`. "Open in Grafana" opens the tenant-scoped Grafana in a new tab when the controller proxies it. |
+| **GSLB** (no artboard, no UI yet) | not designed | Zones (system-admin creates) and wide IPs (algorithm, TTL, health check, members as address or virtual service with site, priority, weight, subnets), status per wide IP (in sync, drift with a Sync button, error), DNSSEC DS records. The API exists: [gslb.md](../gslb.md). | not designed | Artboards for GSLB. |
 | **Alerts** (no artboard) | new, not in the handoff | Tenant nav item "Alerts": firing now, targets (add, enable, send test, delete), rules (add, enable, delete) and recent deliveries with their error. Built from the shared table, sheet and state components, viewers read and cannot change; no change set (live and audited). Design should draw it, and the "tell me before my certificates expire" shortcut on Certificates. | not designed | Artboards for Alerts, the target and rule sheets, and a tenant-wide request log view (API exists: `GET /tenants/{t}/logs`). |
 | Certificates list | Expiry tiers (over 30 healthy, 30 or fewer neutral with a clock, 14 or fewer degraded, 7 or fewer or expired down), legend and expiry, issuer and name/SAN filters. The Issuer column shows the certificate source (Upload, ACME, Cloudflare Origin CA, Step CA); the API has no issuer name or ACME provider. The Renewal column shows Manual or Auto with days; "Renewal failed", "Requesting" and the history sheet need renewal status and history from the API. |
 | Request certificate | Not changed: today's `POST …/certificates/issue` takes `{name, source, sans}`. Provider, validation (DNS-01/HTTP-01), per-name credential, auto-renew fields wait for the API. |
 | Admin > ACME providers, Tenant > DNS credentials, Admin > Controller | Not built: no endpoints on main. Navigation entries are added with each screen. |
 
 Needed from the API: ACME providers CRUD, test, default flag and registration status; per-tenant DNS credentials with provider schemas, zones and a test; certificate request fields (provider, validation, credential per name, auto-renew); issuer, renewal status and renewal history on the certificate read; engine metrics; controller settings with a pending change, expiry, confirm and revert.
+
+## Design v52: ACME, DNS credentials, request sheet, renewal (API: ADR 0080, `docs/acme.md`)
+
+| Screen | Status |
+| --- | --- |
+| Admin > ACME providers | Built. List (Name, Type, Directory URL, Account, Default, Used by); live sheet with type cards from `GET /acme-provider-presets`, directory URL, contact email, account key (generated unless pasted; write-only), authentication (none, EAB, OAuth), trusted roots, default switch, terms checkbox, Test connection (directory, EAB, account, plus the CA's terms link), Delete disabled while certificates use the provider. |
+| Tenant > DNS credentials | Built. One schema-driven sheet from `GET /dns-provider-types`; provider locked on edit; write-only secrets with Set / Replace / Keep the current value; zones as chips; Test reports per zone; 422 zone clashes show on the zones field. Nav entry added to the Tenant group. |
+| Certificates > Request certificate | Built. ACME provider (default preselected; enabled providers only), names, DNS-01 or HTTP-01, credential picker, auto-renew with days. The request is checked on the server while you type (`issue/check`) and Request stays disabled with the reason. Progress shows the job stages; a failure quotes the CA error and offers Retry, Edit request and Open job; success links the `system:certs` change set. Cloudflare Origin CA keeps its own simple path. |
+| Certificates list | Issuer sub-line (the provider) and Renewal column from `GET …/certificate-renewals` (Auto / Manual, "Renewal failed", renewed and next dates). History sheet from `GET …/certificates/{id}/renewals` with the deadline, "Retry renewal now" and each attempt with the CA error. |
+
+### Differences from the v52 artboards (for Design to confirm)
+
+1. **One DNS credential per certificate.** The API takes a single `dns_provider`, so the sheet shows one credential picker listing the credentials that cover every name, not one picker per name. A name no credential covers is an inline error; if the names need different credentials, the request is blocked.
+2. **Provider type cards.** The API presets are Let's Encrypt (production, staging), ZeroSSL, Google Trust Services, Buypass, Keyfactor and Custom. There is no step-ca preset (use Custom). Cards come from the API, so there are more than the four drawn.
+3. **Progress stages.** The job reports five coarse stages (order, validate, finalize, store, change set), not the six drawn (TXT published and DNS propagated are not separate).
+4. **"TXT records were removed".** The API does not say whether the records were removed; the failure view points to the job log instead of claiming it.
+5. **"Requesting" in the Renewal column and expiry notifications** need data the API does not have yet (no running-renewal flag; expiry notifications are not built).
+6. **Test connection** works on a saved provider only (the API tests by id), so an unsaved edit says "Save first".
+7. **Account key** shows Set / Replace; the API does not return when or by whom it was set.
+8. **No TLS-ALPN-01**, per the backend.
+
+## Parity block P12: pool discovery by Proxmox tag (ADR 0145)
+
+| Item | Status |
+| --- | --- |
+| Discovery block on the pool form (switch, Proxmox tag, network CIDR, member port, weight of a new member) | Built **without an artboard**; Design to specify. The tag defaults to `sy-<tenant>.`; the 422 `discovery_tag_not_allowed` shows on the tag field. Turning the switch off sends `discovery: null`. |
+| Member list while discovery is on | Read-only with a note ("managed by discovery"); Add member is disabled. |
+| Pools list marker for discovered pools, and the `system:discovery` change sets | Not built; Design question: should a discovered pool show a badge and a "last discovered" time? The API has no last-run time. |
+
+## Admin > Controller (Design v52, Backend draft contract)
+
+Typed from `ControllerRead`, `ControllerChangeIn` and the confirm and revert calls (ADR 0081, !113). Pending states are `applying` (no window yet) and `waiting` (countdown); `last_result` and `break_glass` from the API are shown.
+
+| Item | Status |
+| --- | --- |
+| Serving now, listen address, certificate with expiry pill | Built. |
+| FQDN field, identity-provider redirect URL warning (concrete URLs from the API), Apply and confirm with a confirm dialog listing before and after | Built. |
+| Pending window: countdown (`role=timer`, polite announcement about every 10 s), progress bar, "Open https://<new> to confirm" on the old address, "Keep the new settings" on the new one, "Revert now", before/after table | Built. The page polls every 4 s while pending and re-syncs the countdown. |
+| Unmanaged controller (no management tenant) and values pinned by the environment | Built as notes; the form is read-only when pinned. |
+
+**Differences from the artboard (for Design):**
+1. The artboard has a chip list of listen addresses and Upload / ACME source radios. The contract has one `vip` and a certificate chosen from the management tenant, so the page has a single Listen address field and a Certificate picker (certificates that cover the FQDN), with the note that upload or an ACME request happens under Certificates in the management tenant first.
+2. After "reverted" or "confirmed" the API gives no history, so the artboard's confirmed and reverted states show only as the pending banner disappearing.
+
+## Parity blocks P1, P2, P6 and P11 (no artboards; Design to specify or confirm)
+
+| Block | What was built | Design questions |
+| --- | --- | --- |
+| P1 route match and policies (ADR 0100 to 0103) | "More conditions" on every route and redirect rule: methods, header rows (equals, present, absent, prefix, suffix, contains), query rows, source networks (IPv4 and IPv6), SNI. New policy kinds on the Policies screen: **Rewrite** (request or response phase; set, add or remove header with text or a variable; replace path prefix in the request phase), **Fixed response** (status, content type, body, Retry-After for 429 and 503) and **Error pages** (one page per generated status). Rules reorder with up and down. | Layout of a rule with many conditions; a variable picker with descriptions; a body editor with preview; the protected-header list is only enforced by the API (shown as a finding). |
+| P2 pool and health (ADR 0105 to 0108) | Persistence kinds (source IP, HTTP cookie, request header, URI by path or parameter) with their fields; PROXY protocol (v1, v2); backend client certificate (server certificates only; needs Backend TLS); per member Backup and Max connections; monitors: Body contains or a response header (one matcher), and TCP presets (Redis, SMTP, LDAP, MySQL). | Where member options sit in the member row; timed drain is not built (needs a job). |
+| P6 alerting | New **Alerts** screen with Status (firing, latest deliveries with the error), Rules (event, metric, certificate expiry) and Targets (webhook with an optional OpenBao signing secret reference, chat with Slack, Teams or Mattermost format, email with a warning when the controller has no email server; test message). New **Request logs** screen (service, status class, time, text; load older; unavailable state). Changing rules and targets needs tenant-admin. | Both screens are new; navigation placement (now under Changes); whether firing alerts should show on Tenant home. |
+| P11 TLS-ALPN-01 | Third validation option in Request certificate, with the "blinks for a few seconds" explanation and the server's warnings shown. | Copy of the warning. |
+
+## Parity blocks P3 and P4 (no artboards; Design to specify or confirm)
+
+| Block | What was built | Design questions |
+| --- | --- | --- |
+| P3 limits | **Rate limit** policy kind: per client address or header value; requests per period or requests in flight; over the limit answer an error (403, 429, 503), hold then answer, or drop silently; each rule has its own match. | Rule layout; whether to show the table size by default. |
+| P4 traffic | Port flags **HTTP/3** (needs TLS and HTTP/2) and **TLS passthrough**; **Compression** card (algorithms and content types, HTTP services); **weighted pool routes** (Pool, Split with weights and percentages, Redirect); SE group **persistence peers** (switch, port, engine name and backend-network address rows); pool **backend protocol** (HTTP/1.1, HTTP/2 over TLS, HTTP/2 without TLS) and **idle tunnel timeout**. | Split percentages next to weights; peers: could name and address come from the engine list? (engines have no backend-network address on the read yet). |
+| P4 failover and cache | **Priority groups**: a pool route has "If it is down, try…" fallback pools (up to three, each needs a health monitor); **Response cache** card (memory, largest object, longest age); **timed drain**: a draining pool member can have a "Disable after (s)". | Where fallback pools sit in the route row; the cache memory quota is checked by the API per SE group. |
+| P3 login, P8 and P9 identity, P10 WAF | Not built: the backend branches conflict with each other in the renderer and are being reconciled; the forms follow once the API tree is stable. | |
+
+## Parity blocks P8, P9, P10 and bot protection (no artboards; Design to specify or confirm)
+
+| Kind | What was built | Design questions |
+| --- | --- | --- |
+| Login (`access`, ADR 0130 to 0132) | OpenID Connect settings (issuer, client ID, **OpenBao paths** for the client and cookie secrets, never the secret), groups claim, scopes, cookie lifetimes; default mode; login path; identity headers (empty turns one off); rules by match with Public, any user, group, or email domain. | How a secret path is chosen or created; a link to the Identity providers screen. |
+| JWT tokens (ADR 0135) | Rules with issuer, audiences, required scopes, leeway, subject header and **public** signing keys (kid, algorithm, PEM). | A JWKS upload that converts in the browser (today: `syctl jwks convert`). |
+| Client certificate (ADR 0136) | User and groups headers; known certificates (common name or SHA-1, user, groups); rules (any valid certificate, a known one, a known one in a group). | Bulk import of certificates (the API allows 500). |
+| WAF (ADR 0140) | Mode (starts in Detect), fail open or closed, paranoia level, thresholds, time limit, body inspection, disabled rule IDs, paths not inspected. | A rule browser; a link from detected events to Request logs. |
+| Bot and DDoS protection (ADR 0150) | Connections per source, new connections per period, header and client timeouts, empty User-Agent and scanners, extra User-Agent text, bot action, exempt networks. | Defaults and warnings for low limits. |
+
+Created from the "New security policy…" menu on the Policies screen.
+
+## Kubernetes and GSLB (no artboards; Design to specify or confirm)
+
+| Screen | What was built | Design questions |
+| --- | --- | --- |
+| Kubernetes (Infrastructure) | List of connected clusters (API server, pools hold, SE group and VIP pool, last sync with created, updated and deleted counts or the error, status) with **Sync now**. A sheet connects or edits a cluster: API server URL, write-only service-account token (OpenBao), optional CA, **Ready nodes** or **Ready pods**, SE group, VIP pool, `loadBalancerClass`, `gatewayClassName`, Enabled; **Test connection** shows version, nodes, services, Gateway API and the problems found; Disconnect asks first. Live and audited, tenant-admin. | Placement of the test result; whether a "waiting for a change set" cluster should link to that change set. |
+| GSLB (Infrastructure) | Wide IPs table (answers with, members, TTL, state in sync, drift, pending, error, off, with the last error) and **Sync now**; a sheet creates or edits a wide IP: algorithm cards (failover, all healthy, weighted, by client subnet, nearest, lowest latency), TTL, enabled, TCP or HTTP health check, members by virtual service or address with site and, depending on the algorithm, priority, weight or client subnets. Zones list with DNSSEC enable and DS records; a system administrator adds and removes zones. | Algorithm picker as cards or a select; a map of sites; whether drift should offer a per-record rewrite (today **Sync now** rewrites every record). |
+
+## JavaScript challenge and CAPTCHA (no artboard; Design to specify or confirm)
+
+On the **Bot and DDoS protection** policy, a "Check new visitors" card: nothing, a JavaScript proof of work (difficulty 3 to 5, with the cost explained), or a CAPTCHA (Turnstile or hCaptcha, site key, OpenBao path of the secret, never the key). Both have how long a pass lasts, paths never checked and User-Agent text never checked. Design questions: whether this belongs on its own policy kind, and a preview of the challenge page.
+
+## Device posture, pending alerts, directory logins (no artboard)
+
+- **Device posture (ADR 0138):** every non-public rule of a Login policy has a "Device conditions" box: a switch for a client certificate the port accepts (with the Verify: optional hint) and claim checks (is present, is true, equals, is one of). Questions: placement inside a rule; whether the missing client CA should be flagged on the rule.
+- **Pending alerts:** the firing list shows "pending, fires in N min" and the value against the threshold. Questions: a progress bar to the fire time.
+- **Directory logins (ADR 0137):** the API has a `directory` policy kind (LDAP, SAML, local users). The Policies list shows it read-only; the editor is not built. Design is needed first.
+- **Controller:** the API now accepts "use the default address" (`reset_to_default`); the screen does not offer it yet.

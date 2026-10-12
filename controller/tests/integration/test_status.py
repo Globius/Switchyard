@@ -158,6 +158,11 @@ async def test_status_endpoints(pg_url: str) -> None:
             r = await client.get(f"/api/v1/tenants/{TENANT}/status/engines", headers=headers)
             assert r.status_code == 200, r.text
             assert [e["engine"] for e in r.json()] == ["se-a", "se-b"]
+            h = await client.get(f"/api/v1/tenants/{TENANT}/status/se-groups", headers=headers)
+            assert h.status_code == 200, h.text
+            group = h.json()[0]
+            assert [e["engine"] for e in group["engines"]] == ["se-a", "se-b"]
+            assert 0 <= group["score"] <= 100
             s = await client.get(
                 f"/api/v1/tenants/{TENANT}/status/stream?follow=false", headers=headers
             )

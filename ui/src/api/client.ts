@@ -87,6 +87,27 @@ export function unwrap<T>(r: { data?: T; error?: unknown; response: Response }):
   return r.data as T;
 }
 
+/** POST, PUT, PATCH or DELETE a path that is not in the typed client yet (JSON body optional). */
+export async function rawSend<T = unknown>(
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const r = await fetch(path, {
+    method,
+    credentials: "same-origin",
+    headers: {
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  const text = await r.text();
+  const parsed = text ? (JSON.parse(text) as unknown) : undefined;
+  if (!r.ok) throw new ApiError(r.status, parsed as Problem | undefined);
+  return parsed as T;
+}
+
 /** GET a path that is not in the typed client (for example one of nine object types by name). */
 export async function rawGet<T>(path: string): Promise<T> {
   const r = await fetch(path, { credentials: "same-origin" });

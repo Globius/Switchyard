@@ -32,6 +32,7 @@ from switchyard.adapters.grafana import HttpGrafana
 from switchyard.adapters.iplists import HttpIpLists
 from switchyard.adapters.notify import HttpNotifier, SmtpSettings
 from switchyard.adapters.pki import OpenBaoPki
+from switchyard.adapters.powerdns import HttpPowerDns
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
 from switchyard.adapters.secrets import EnvSecrets, OpenBaoSecrets, SecretsReader
@@ -53,18 +54,28 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
+from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
+from switchyard.services.gslb import (
+    PROBE_GSLB_JOB,
+    SYNC_GSLB_JOB,
+    GslbProber,
+    GslbService,
+    GslbSync,
+)
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
 from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
+from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
 from switchyard.services.status import StatusService
+from switchyard.services.tlsalpn import EngineTlsAlpnPublisher
 
 
 def databases() -> Databases:
@@ -168,6 +179,7 @@ def certificates(db: Databases, secrets: SecretsReader | None = None) -> Certifi
         acme_providers=AcmeProviders(db, store),
         dns_providers=DnsProviders(db, store),
         http_publisher=lambda tenant_id: EngineHttp01Publisher(db, engines, tenant_id),
+        alpn_publisher=lambda tenant_id: EngineTlsAlpnPublisher(db, engines, tenant_id),
         dns_wait_s=float(os.environ.get("SWITCHYARD_ACME_DNS_WAIT", "15")),
     )
 
@@ -255,6 +267,20 @@ def alert_service(db: Databases, secrets: SecretsReader | None = None) -> AlertS
         allow_http=os.environ.get("SWITCHYARD_ALERT_ALLOW_HTTP") == "1",
         allow_private=os.environ.get("SWITCHYARD_ALERT_ALLOW_PRIVATE") == "1",
     )
+
+
+def gslb_service(db: Databases) -> GslbService | None:
+    """GSLB on PowerDNS, if ``SWITCHYARD_POWERDNS_URL`` and ``SWITCHYARD_POWERDNS_API_KEY`` are set.
+
+    ``SWITCHYARD_POWERDNS_SERVER_ID`` is the PowerDNS server id (default ``localhost``). The server
+    must run with ``enable-lua-records=yes`` (docs/gslb.md).
+    """
+    url = os.environ.get("SWITCHYARD_POWERDNS_URL", "").strip()
+    key = os.environ.get("SWITCHYARD_POWERDNS_API_KEY", "").strip()
+    if not url or not key:
+        return None
+    server = os.environ.get("SWITCHYARD_POWERDNS_SERVER_ID", "localhost")
+    return GslbService(db, HttpPowerDns(url, key, server_id=server))
 
 
 def git_mirror() -> GitMirror | None:
@@ -408,17 +434,26 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         infra_service(db, secrets),
         certs,
         GarbageCollector(db),
+        ControllerSettings(db, ChangeSetService(db)),
+        KubernetesClusters(db, secrets, ChangeSetService(db)),
         MemberService(db, engines),
         discovery,
         AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
         iplists,
+        GslbSync(gslb, db) if (gslb := gslb_service(db)) is not None else None,
+        GslbProber(gslb, db) if gslb is not None else None,
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
         GC_JOB: timedelta(hours=1),
+        CONTROLLER_TICK_JOB: timedelta(seconds=10),
+        KUBERNETES_SYNC_JOB: timedelta(seconds=30),
         EXPIRE_DRAINS_JOB: timedelta(seconds=30),
         EVALUATE_ALERTS_JOB: timedelta(minutes=1),
     }
+    if gslb_service(db) is not None:
+        schedule[SYNC_GSLB_JOB] = timedelta(minutes=5)
+        schedule[PROBE_GSLB_JOB] = timedelta(minutes=1)
     if discovery is not None:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
     if iplists is not None:
