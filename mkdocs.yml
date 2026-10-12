@@ -42,6 +42,7 @@ nav:
   - Guides:
       - Quickstart - a test instance on its own machine: quickstart.md
       - Production guide: production.md
+      - Run on Kubernetes: deploy-kubernetes.md
       - Running and operating the controller: operating.md
       - The controller's own address, VIP and certificate: controller-settings.md
       - Signing in, roles and access: auth.md
@@ -124,3 +125,4 @@ nav:
   - Lab results:
       - Lab pass on two real Proxmox hosts, 2026-10-12: lab/2026-10-12-full-pass.md
       - Kubernetes connector on a real cluster (2026-10-12): lab/2026-10-12-kubernetes.md
+      - Controller on Kubernetes and Compose in LXC (2026-10-12): lab/2026-10-12-kubernetes-install.md

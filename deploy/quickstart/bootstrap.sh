@@ -108,7 +108,10 @@ PYEOF
 chmod 644 secrets/*.crt secrets/ca.pem secrets/*.key secrets/bundle.key   # read by the controller container (uid 10001)
 
 say "controller, UI and TLS front"
-dc up -d --build >/dev/null
+# The UI image is built from the sources; an image that is already there is reused unless --rebuild (the build needs
+# access to npm and Docker Hub, which a locked-down host may not have: `docker load` the image instead).
+PX=$(ENVGET PROXY_IMAGE); PX=${PX:-switchyard-proxy:latest}
+if [ -z "$REBUILD" ] && docker image inspect "$PX" >/dev/null 2>&1; then dc up -d >/dev/null; else dc up -d --build >/dev/null; fi
 PORT=$(ENVGET HTTPS_PORT); PORT=${PORT:-8443}
 n=0; until [ "$(curl -sk -o /dev/null -w '%{http_code}' "https://127.0.0.1:$PORT/api/v1/healthz")" = 200 ]; do
   n=$((n+1)); [ $n -lt 60 ] || { dc logs --tail 30 api; echo "the API did not come up" >&2; exit 1; }; sleep 3; done

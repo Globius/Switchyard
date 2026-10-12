@@ -1,0 +1,30 @@
+{{- if eq .Values.database.mode "cnpg" }}
+# PostgreSQL by CloudNativePG (the operator must be installed first). The controller connects with the superuser
+# secret the operator creates, as the other deployments do (docs/production.md); RLS is forced per table.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Release.Name }}-db
+  labels: {{- include "sy.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.database.cnpg.instances }}
+  enableSuperuserAccess: true
+  {{- with .Values.database.cnpg.imageName }}
+  imageName: {{ . }}
+  {{- end }}
+  storage:
+    size: {{ .Values.database.cnpg.storage.size }}
+    {{- with .Values.database.cnpg.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.database.name }}
+      owner: switchyard
+  {{- with .Values.database.cnpg.resources }}
+  resources: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.database.cnpg.extraSpec }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sy.name" . }}-api
+  labels: {{- include "sy.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "sy.selector" (dict "Release" .Release "component" "api") | nindent 4 }}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+# The entry point: the UI and /api (through the proxy), over TLS when tls.enabled.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "sy.name" . }}
+  labels: {{- include "sy.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- with .Values.service.loadBalancerClass }}
+  loadBalancerClass: {{ . }}
+  {{- end }}
+  {{- with .Values.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
+  {{- with .Values.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
+  selector: {{- include "sy.selector" (dict "Release" .Release "component" "proxy") | nindent 4 }}
+  ports:
+    {{- if .Values.tls.enabled }}
+    - name: https
+      port: {{ .Values.service.httpsPort }}
+      targetPort: https
+      {{- if and (eq .Values.service.type "NodePort") .Values.service.nodePort }}
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}
+    {{- end }}
+    - name: http
+      port: {{ .Values.service.httpPort }}
+      targetPort: http

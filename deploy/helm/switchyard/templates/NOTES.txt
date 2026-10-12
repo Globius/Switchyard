@@ -1,0 +1,8 @@
+Switchyard is installing.
+
+  Public URL:      {{ .Values.publicUrl }}
+  Entry point:     Service {{ include "sy.name" . }} ({{ .Values.service.type }})
+  Check:           kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+  First token:     kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "sy.name" . }}-api -- syctl token --name first
+
+The schema migration runs as Job {{ include "sy.name" . }}-migrate-{{ .Release.Revision }}; the API and worker pods wait for it.
