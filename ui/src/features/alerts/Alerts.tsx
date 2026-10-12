@@ -67,6 +67,21 @@ function hostOf(url: string | undefined): string {
 }
 
 /** One line that says what a target does, without showing its URL (chat URLs are secrets). */
+/** "pending, fires in N min" for a pending alert (`fires_at` is when the duration runs out). */
+export function firesIn(at: string, now = new Date()): string {
+  const min = Math.max(0, Math.ceil((new Date(at).getTime() - now.getTime()) / 60_000));
+  return min === 0 ? t("pending, fires now") : t("pending, fires in {n} min", { n: min });
+}
+
+/** "value 92 of 90 %" from the alert's details, when it carries them. */
+export function detailText(d: Record<string, unknown> | null | undefined): string {
+  if (!d || d.value === undefined || d.value === null) return "";
+  const unit = d.unit ? ` ${String(d.unit)}` : "";
+  return d.threshold === undefined || d.threshold === null
+    ? `${String(d.value)}${unit}`
+    : t("{v} of {th}{u}", { v: String(d.value), th: String(d.threshold), u: unit });
+}
+
 export function targetSummary(t_: Pick<Target, "kind" | "config">): string {
   const c = t_.config as { url?: string; format?: string; to?: string[] };
   if (t_.kind === "email") return (c.to ?? []).join(", ");
@@ -546,7 +561,15 @@ export function Alerts({ tenant }: { tenant: string }) {
                   </td>
                   <td className="px-4 py-2.5 font-mono">{f.rule}</td>
                   <td className="px-4 py-2.5 font-mono text-xs">{f.key}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{shortWhen(f.since)}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">
+                    {shortWhen(f.since)}
+                    {f.state === "pending" && f.fires_at && (
+                      <span className="block text-xs">{firesIn(f.fires_at)}</span>
+                    )}
+                    {detailText(f.details) && (
+                      <span className="block text-xs">{detailText(f.details)}</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

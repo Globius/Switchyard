@@ -17,6 +17,7 @@ import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Menu, MenuContent, MenuTrigger } from "@/components/ui/popover-menu";
 import { Sheet } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
 import { ReapplyButton } from "@/features/drift/ReapplyButton";
 import { RunningConfigButton } from "@/features/drift/RunningConfig";
@@ -1036,14 +1037,16 @@ function Settings({ tenant, group }: { tenant: string; group: Group }) {
       routing_profile_id: group.routing_profile_id ?? "",
       maxconn: group.maxconn,
       canary_seconds: group.canary_seconds,
+      peers: group.peers ?? null,
     }),
     [group],
   );
+  const groupEngines = (useEngines(tenant).data ?? []).filter((e) => e.se_group_id === group.id);
   const [f, setF] = useState(base);
   const [problem, setProblem] = useState<unknown>(null);
   const patch = Object.fromEntries(
     (Object.keys(f) as (keyof typeof f)[])
-      .filter((k) => f[k] !== base[k])
+      .filter((k) => JSON.stringify(f[k]) !== JSON.stringify(base[k]))
       .map((k) => [k, k === "routing_profile_id" && f[k] === "" ? null : f[k]]),
   );
   const dirty = Object.keys(patch).length > 0;
@@ -1108,6 +1111,132 @@ function Settings({ tenant, group }: { tenant: string; group: Group }) {
           />
           <span className="block text-xs font-normal text-muted-foreground">{t("seconds")}</span>
         </label>
+      </div>
+      <div className="space-y-2 rounded-lg border p-3">
+        <div className="flex items-start gap-3">
+          <div className="flex-1 text-sm">
+            <div className="font-medium">{t("Share persistence tables between engines")}</div>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Stick-table entries (source IP, cookie, header and URI persistence) are copied between the engines, so a client keeps its member when another engine answers.",
+              )}
+            </p>
+          </div>
+          <Switch
+            aria-label={t("Share persistence tables")}
+            checked={f.peers != null}
+            disabled={!write.allowed}
+            onCheckedChange={(on) =>
+              setF({
+                ...f,
+                peers: on
+                  ? {
+                      port: 10000,
+                      members:
+                        groupEngines.length >= 2
+                          ? groupEngines.map((e) => ({ name: e.name, address: "" }))
+                          : [
+                              { name: "", address: "" },
+                              { name: "", address: "" },
+                            ],
+                    }
+                  : null,
+              })
+            }
+          />
+        </div>
+        {f.peers && (
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              {t("Port")}
+              <input
+                aria-label={t("Peers port")}
+                type="number"
+                min={1}
+                max={65535}
+                className={cn(INPUT, "w-28")}
+                disabled={!write.allowed}
+                value={f.peers.port ?? 10000}
+                onChange={(e) =>
+                  setF({ ...f, peers: { ...f.peers!, port: Number(e.target.value) } })
+                }
+              />
+              <span className="text-xs text-muted-foreground">{t("on the backend network")}</span>
+            </label>
+            {f.peers.members.map((m, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  aria-label={t("Peer {n} name", { n: i + 1 })}
+                  placeholder={t("Engine host name")}
+                  className={cn(INPUT, "font-mono")}
+                  disabled={!write.allowed}
+                  value={m.name}
+                  onChange={(e) =>
+                    setF({
+                      ...f,
+                      peers: {
+                        ...f.peers!,
+                        members: f.peers!.members.map((x, j) =>
+                          j === i ? { ...x, name: e.target.value } : x,
+                        ),
+                      },
+                    })
+                  }
+                />
+                <input
+                  aria-label={t("Peer {n} address", { n: i + 1 })}
+                  placeholder={t("Backend-network address")}
+                  className={cn(INPUT, "font-mono")}
+                  disabled={!write.allowed}
+                  value={m.address}
+                  onChange={(e) =>
+                    setF({
+                      ...f,
+                      peers: {
+                        ...f.peers!,
+                        members: f.peers!.members.map((x, j) =>
+                          j === i ? { ...x, address: e.target.value } : x,
+                        ),
+                      },
+                    })
+                  }
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!write.allowed || f.peers!.members.length <= 2}
+                  aria-label={t("Remove peer {n}", { n: i + 1 })}
+                  onClick={() =>
+                    setF({
+                      ...f,
+                      peers: { ...f.peers!, members: f.peers!.members.filter((_, j) => j !== i) },
+                    })
+                  }
+                >
+                  ×
+                </Button>
+              </div>
+            ))}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!write.allowed || f.peers.members.length >= 16}
+              onClick={() =>
+                setF({
+                  ...f,
+                  peers: { ...f.peers!, members: [...f.peers!.members, { name: "", address: "" }] },
+                })
+              }
+            >
+              {t("Add engine")}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Name is the host name HAProxy sees as its own; two to sixteen engines. IPv4 or IPv6.",
+              )}
+            </p>
+          </div>
+        )}
       </div>
       <div>
         <div className="mb-1 text-sm font-medium">{t("Networks")}</div>

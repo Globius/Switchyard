@@ -11,12 +11,26 @@ import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
+import { emptyMatch, ExtraMatch } from "./MatchEditor";
+import { RULE_KIND_LABEL, RulePolicySheet, type RuleKind, type RulePolicy } from "./PolicyRules";
+import {
+  SECURITY_LABEL,
+  SecurityPolicySheet,
+  type SecurityKind,
+  type SecurityPolicy,
+} from "./SecurityPolicies";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type Policy =
-  components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"];
+  | components["schemas"]["RedirectPolicySetRead"]
+  | components["schemas"]["AllowListPolicySetRead"]
+  | RulePolicy
+  | SecurityPolicy
+  | components["schemas"]["DirectoryPolicySetRead"];
+type Kind = "redirect" | "allow_list" | RuleKind | SecurityKind;
+const SECURITY_KINDS: SecurityKind[] = ["access", "jwt", "client_cert", "waf", "protection"];
 type Rule = components["schemas"]["RedirectRule"];
 const CODES = [301, 302, 303, 307, 308] as const;
 const CODE_NAMES: Record<(typeof CODES)[number], string> = {
@@ -84,6 +98,8 @@ function useServices(tenant: string, cs?: string) {
   });
 }
 
+type ClassicPolicy = Extract<Policy, { kind: "redirect" | "allow_list" }>;
+
 function PolicySheet({
   tenant,
   policy,
@@ -92,7 +108,7 @@ function PolicySheet({
   onClose,
 }: {
   tenant: string;
-  policy: Policy | null;
+  policy: ClassicPolicy | null;
   kind: "redirect" | "allow_list";
   usedBy: string[];
   onClose: () => void;
@@ -105,7 +121,7 @@ function PolicySheet({
   const [rules, setRules] = useState<Rule[]>(
     policy?.kind === "redirect"
       ? structuredClone(policy.rules)
-      : [{ match: {}, redirect: { location: "", code: 301 } }],
+      : [{ match: emptyMatch(), redirect: { location: "", code: 301 } }],
   );
   const [cidrText, setCidrText] = useState(
     policy?.kind === "allow_list" ? policy.cidrs.join("\n") : "",
@@ -175,7 +191,7 @@ function PolicySheet({
     setRules(
       policy?.kind === "redirect"
         ? structuredClone(policy.rules)
-        : [{ match: {}, redirect: { location: "", code: 301 } }],
+        : [{ match: emptyMatch(), redirect: { location: "", code: 301 } }],
     );
     setCidrText(policy?.kind === "allow_list" ? policy.cidrs.join("\n") : "");
   }
@@ -209,7 +225,10 @@ function PolicySheet({
                 className="ml-auto"
                 disabled={dis}
                 onClick={() =>
-                  setRules([...rules, { match: {}, redirect: { location: "", code: 301 } }])
+                  setRules([
+                    ...rules,
+                    { match: emptyMatch(), redirect: { location: "", code: 301 } },
+                  ])
                 }
               >
                 {t("Add rule")}
@@ -397,6 +416,12 @@ function PolicySheet({
                           </select>
                         </label>
                       </div>
+                      <ExtraMatch
+                        id={`Rule ${i + 1}`}
+                        match={r.match}
+                        disabled={dis}
+                        onChange={(m) => setRule(i, { match: m })}
+                      />
                       {ruleErrors.map(([p, m]) => (
                         <p key={p} role="alert" className="text-xs text-status-down">
                           {m} · <span className="font-mono">{p}</span>
@@ -506,11 +531,8 @@ export function Policies({ tenant }: { tenant: string }) {
   const services = useServices(tenant, draft?.id);
   const can = useCan(tenant);
   const write = can("write", "application");
-  const [filter, setFilter] = useState<"all" | "redirect" | "allow_list">("all");
-  const [editing, setEditing] = useState<{
-    policy: Policy | null;
-    kind: "redirect" | "allow_list";
-  } | null>(null);
+  const [filter, setFilter] = useState<"all" | Kind>("all");
+  const [editing, setEditing] = useState<{ policy: Policy | null; kind: Kind } | null>(null);
   const usedBy = (id: string) =>
     (services.data?.items ?? [])
       .filter((v) => v.policy_set_ids.includes(id) || v.allow_list_id === id)
@@ -518,8 +540,7 @@ export function Policies({ tenant }: { tenant: string }) {
   const rows = (list.data?.items ?? []).filter((p) => filter === "all" || p.kind === filter);
   const first = rows[0];
   const picked =
-    editing ??
-    (first && list.data ? { policy: first, kind: first.kind as "redirect" | "allow_list" } : null);
+    editing ?? (first && list.data ? { policy: first, kind: first.kind as Kind } : null);
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -541,6 +562,60 @@ export function Policies({ tenant }: { tenant: string }) {
           </Tip>
           <Tip label={write.reason}>
             <Button
+              variant="outline"
+              disabled={!write.allowed}
+              onClick={() => setEditing({ policy: null, kind: "rewrite" })}
+            >
+              {t("New rewrite policy")}
+            </Button>
+          </Tip>
+          <Tip label={write.reason}>
+            <Button
+              variant="outline"
+              disabled={!write.allowed}
+              onClick={() => setEditing({ policy: null, kind: "respond" })}
+            >
+              {t("New fixed response")}
+            </Button>
+          </Tip>
+          <Tip label={write.reason}>
+            <Button
+              variant="outline"
+              disabled={!write.allowed}
+              onClick={() => setEditing({ policy: null, kind: "error_pages" })}
+            >
+              {t("New error pages")}
+            </Button>
+          </Tip>
+          <Tip label={write.reason}>
+            <Button
+              variant="outline"
+              disabled={!write.allowed}
+              onClick={() => setEditing({ policy: null, kind: "rate_limit" })}
+            >
+              {t("New rate limit")}
+            </Button>
+          </Tip>
+          <Tip label={write.reason}>
+            <select
+              aria-label={t("New security policy")}
+              className="h-9 rounded-md border border-input bg-card px-3 text-sm"
+              disabled={!write.allowed}
+              value=""
+              onChange={(e) =>
+                e.target.value && setEditing({ policy: null, kind: e.target.value as Kind })
+              }
+            >
+              <option value="">{t("New security policy…")}</option>
+              {SECURITY_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {t(SECURITY_LABEL[k])}
+                </option>
+              ))}
+            </select>
+          </Tip>
+          <Tip label={write.reason}>
+            <Button
               disabled={!write.allowed}
               onClick={() => setEditing({ policy: null, kind: "redirect" })}
             >
@@ -556,7 +631,18 @@ export function Policies({ tenant }: { tenant: string }) {
             aria-label={t("Kind")}
             className="inline-flex overflow-hidden rounded-md border"
           >
-            {(["all", "redirect", "allow_list"] as const).map((k) => (
+            {(
+              [
+                "all",
+                "redirect",
+                "allow_list",
+                "rewrite",
+                "respond",
+                "error_pages",
+                "rate_limit",
+                ...SECURITY_KINDS,
+              ] as const
+            ).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -564,7 +650,15 @@ export function Policies({ tenant }: { tenant: string }) {
                 onClick={() => setFilter(k)}
                 className="px-3 py-1.5 text-sm aria-pressed:bg-accent"
               >
-                {{ all: t("All"), redirect: t("Redirect"), allow_list: t("Allow list") }[k]}
+                {k === "all"
+                  ? t("All")
+                  : k === "redirect"
+                    ? t("Redirect")
+                    : k === "allow_list"
+                      ? t("Allow list")
+                      : k in RULE_KIND_LABEL
+                        ? t(RULE_KIND_LABEL[k as RuleKind])
+                        : t(SECURITY_LABEL[k as SecurityKind])}
               </button>
             ))}
           </div>
@@ -587,18 +681,32 @@ export function Policies({ tenant }: { tenant: string }) {
                 const summary =
                   p.kind === "redirect"
                     ? t("Redirect · {n} rules", { n: p.rules.length })
-                    : p.managed_by
-                      ? t("Allow list · managed")
-                      : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
+                    : p.kind === "rewrite"
+                      ? t("Rewrite · {n} rules", { n: p.rules.length })
+                      : p.kind === "respond"
+                        ? t("Fixed response · {n} rules", { n: p.rules.length })
+                        : p.kind === "error_pages"
+                          ? t("Error pages · {n}", { n: p.pages.length })
+                          : p.kind === "rate_limit"
+                            ? t("Rate limit · {n} rules", { n: p.rules.length })
+                            : p.kind === "access" ||
+                                p.kind === "jwt" ||
+                                p.kind === "client_cert" ||
+                                p.kind === "waf" ||
+                                p.kind === "protection"
+                              ? t(SECURITY_LABEL[p.kind])
+                              : p.kind === "directory"
+                                ? t("Directory login · {c}", { c: p.connector.type })
+                                : p.managed_by
+                                  ? t("Allow list · managed")
+                                  : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
                 return (
                   <li key={p.id}>
                     <button
                       type="button"
                       aria-label={p.name}
                       aria-current={active}
-                      onClick={() =>
-                        setEditing({ policy: p, kind: p.kind as "redirect" | "allow_list" })
-                      }
+                      onClick={() => setEditing({ policy: p, kind: p.kind as Kind })}
                       className={cn(
                         "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-accent/50",
                         active && "bg-accent",
@@ -627,7 +735,39 @@ export function Policies({ tenant }: { tenant: string }) {
             </ul>
           )}
         </div>
-        {picked && (
+        {picked &&
+          (picked.kind === "rewrite" ||
+            picked.kind === "respond" ||
+            picked.kind === "error_pages" ||
+            picked.kind === "rate_limit") && (
+            <RulePolicySheet
+              key={
+                picked.policy
+                  ? `${picked.policy.id}-${picked.policy.version}-${picked.policy.draft_status}`
+                  : picked.kind
+              }
+              tenant={tenant}
+              policy={picked.policy as RulePolicy | null}
+              kind={picked.kind}
+              usedBy={picked.policy ? usedBy(picked.policy.id) : []}
+              onClose={() => setEditing(null)}
+            />
+          )}
+        {picked && SECURITY_KINDS.includes(picked.kind as SecurityKind) && (
+          <SecurityPolicySheet
+            key={
+              picked.policy
+                ? `${picked.policy.id}-${picked.policy.version}-${picked.policy.draft_status}`
+                : picked.kind
+            }
+            tenant={tenant}
+            policy={picked.policy as SecurityPolicy | null}
+            kind={picked.kind as SecurityKind}
+            usedBy={picked.policy ? usedBy(picked.policy.id) : []}
+            onClose={() => setEditing(null)}
+          />
+        )}
+        {picked && (picked.kind === "redirect" || picked.kind === "allow_list") && (
           <PolicySheet
             key={
               picked.policy
@@ -635,7 +775,7 @@ export function Policies({ tenant }: { tenant: string }) {
                 : picked.kind
             }
             tenant={tenant}
-            policy={picked.policy}
+            policy={picked.policy as ClassicPolicy | null}
             kind={picked.kind}
             usedBy={picked.policy ? usedBy(picked.policy.id) : []}
             onClose={() => setEditing(null)}

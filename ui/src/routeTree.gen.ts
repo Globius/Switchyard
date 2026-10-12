@@ -13,7 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAcmeProvidersRouteImport } from './routes/admin.acme-providers'
 import { Route as AdminAuditLogRouteImport } from './routes/admin.audit-log'
+import { Route as AdminControllerRouteImport } from './routes/admin.controller'
 import { Route as AdminIdentityProvidersRouteImport } from './routes/admin.identity-providers'
 import { Route as AdminRoleMappingsRouteImport } from './routes/admin.role-mappings'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -29,8 +31,12 @@ import { Route as TTenantShellAccessRouteImport } from './routes/t.$tenant._shel
 import { Route as TTenantShellAlertsRouteImport } from './routes/t.$tenant._shell.alerts'
 import { Route as TTenantShellCertificatesRouteImport } from './routes/t.$tenant._shell.certificates'
 import { Route as TTenantShellChangeSetsRouteImport } from './routes/t.$tenant._shell.change-sets'
+import { Route as TTenantShellDnsCredentialsRouteImport } from './routes/t.$tenant._shell.dns-credentials'
+import { Route as TTenantShellGslbRouteImport } from './routes/t.$tenant._shell.gslb'
 import { Route as TTenantShellHealthMonitorsRouteImport } from './routes/t.$tenant._shell.health-monitors'
 import { Route as TTenantShellJobsRouteImport } from './routes/t.$tenant._shell.jobs'
+import { Route as TTenantShellKubernetesRouteImport } from './routes/t.$tenant._shell.kubernetes'
+import { Route as TTenantShellLogsRouteImport } from './routes/t.$tenant._shell.logs'
 import { Route as TTenantShellNetworksRouteImport } from './routes/t.$tenant._shell.networks'
 import { Route as TTenantShellPoliciesRouteImport } from './routes/t.$tenant._shell.policies'
 import { Route as TTenantShellPoolsRouteImport } from './routes/t.$tenant._shell.pools'
@@ -65,9 +71,19 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAcmeProvidersRoute = AdminAcmeProvidersRouteImport.update({
+  id: '/acme-providers',
+  path: '/acme-providers',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
   id: '/audit-log',
   path: '/audit-log',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminControllerRoute = AdminControllerRouteImport.update({
+  id: '/controller',
+  path: '/controller',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminIdentityProvidersRoute = AdminIdentityProvidersRouteImport.update({
@@ -145,6 +161,17 @@ const TTenantShellChangeSetsRoute = TTenantShellChangeSetsRouteImport.update({
   path: '/change-sets',
   getParentRoute: () => TTenantShellRoute,
 } as any)
+const TTenantShellDnsCredentialsRoute =
+  TTenantShellDnsCredentialsRouteImport.update({
+    id: '/dns-credentials',
+    path: '/dns-credentials',
+    getParentRoute: () => TTenantShellRoute,
+  } as any)
+const TTenantShellGslbRoute = TTenantShellGslbRouteImport.update({
+  id: '/gslb',
+  path: '/gslb',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
 const TTenantShellHealthMonitorsRoute =
   TTenantShellHealthMonitorsRouteImport.update({
     id: '/health-monitors',
@@ -154,6 +181,16 @@ const TTenantShellHealthMonitorsRoute =
 const TTenantShellJobsRoute = TTenantShellJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
+const TTenantShellKubernetesRoute = TTenantShellKubernetesRouteImport.update({
+  id: '/kubernetes',
+  path: '/kubernetes',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
+const TTenantShellLogsRoute = TTenantShellLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
   getParentRoute: () => TTenantShellRoute,
 } as any)
 const TTenantShellNetworksRoute = TTenantShellNetworksRouteImport.update({
@@ -233,7 +270,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
+  '/admin/acme-providers': typeof AdminAcmeProvidersRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -248,8 +287,12 @@ export interface FileRoutesByFullPath {
   '/t/$tenant/alerts': typeof TTenantShellAlertsRoute
   '/t/$tenant/certificates': typeof TTenantShellCertificatesRoute
   '/t/$tenant/change-sets': typeof TTenantShellChangeSetsRoute
+  '/t/$tenant/dns-credentials': typeof TTenantShellDnsCredentialsRoute
+  '/t/$tenant/gslb': typeof TTenantShellGslbRoute
   '/t/$tenant/health-monitors': typeof TTenantShellHealthMonitorsRoute
   '/t/$tenant/jobs': typeof TTenantShellJobsRoute
+  '/t/$tenant/kubernetes': typeof TTenantShellKubernetesRoute
+  '/t/$tenant/logs': typeof TTenantShellLogsRoute
   '/t/$tenant/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
@@ -268,7 +311,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/admin/acme-providers': typeof AdminAcmeProvidersRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -283,8 +328,12 @@ export interface FileRoutesByTo {
   '/t/$tenant/alerts': typeof TTenantShellAlertsRoute
   '/t/$tenant/certificates': typeof TTenantShellCertificatesRoute
   '/t/$tenant/change-sets': typeof TTenantShellChangeSetsRoute
+  '/t/$tenant/dns-credentials': typeof TTenantShellDnsCredentialsRoute
+  '/t/$tenant/gslb': typeof TTenantShellGslbRoute
   '/t/$tenant/health-monitors': typeof TTenantShellHealthMonitorsRoute
   '/t/$tenant/jobs': typeof TTenantShellJobsRoute
+  '/t/$tenant/kubernetes': typeof TTenantShellKubernetesRoute
+  '/t/$tenant/logs': typeof TTenantShellLogsRoute
   '/t/$tenant/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
@@ -303,7 +352,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
+  '/admin/acme-providers': typeof AdminAcmeProvidersRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -319,8 +370,12 @@ export interface FileRoutesById {
   '/t/$tenant/_shell/alerts': typeof TTenantShellAlertsRoute
   '/t/$tenant/_shell/certificates': typeof TTenantShellCertificatesRoute
   '/t/$tenant/_shell/change-sets': typeof TTenantShellChangeSetsRoute
+  '/t/$tenant/_shell/dns-credentials': typeof TTenantShellDnsCredentialsRoute
+  '/t/$tenant/_shell/gslb': typeof TTenantShellGslbRoute
   '/t/$tenant/_shell/health-monitors': typeof TTenantShellHealthMonitorsRoute
   '/t/$tenant/_shell/jobs': typeof TTenantShellJobsRoute
+  '/t/$tenant/_shell/kubernetes': typeof TTenantShellKubernetesRoute
+  '/t/$tenant/_shell/logs': typeof TTenantShellLogsRoute
   '/t/$tenant/_shell/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/_shell/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/_shell/pools': typeof TTenantShellPoolsRoute
@@ -342,7 +397,9 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/login'
+    | '/admin/acme-providers'
     | '/admin/audit-log'
+    | '/admin/controller'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -357,8 +414,12 @@ export interface FileRouteTypes {
     | '/t/$tenant/alerts'
     | '/t/$tenant/certificates'
     | '/t/$tenant/change-sets'
+    | '/t/$tenant/dns-credentials'
+    | '/t/$tenant/gslb'
     | '/t/$tenant/health-monitors'
     | '/t/$tenant/jobs'
+    | '/t/$tenant/kubernetes'
+    | '/t/$tenant/logs'
     | '/t/$tenant/networks'
     | '/t/$tenant/policies'
     | '/t/$tenant/pools'
@@ -377,7 +438,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/admin/acme-providers'
     | '/admin/audit-log'
+    | '/admin/controller'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -392,8 +455,12 @@ export interface FileRouteTypes {
     | '/t/$tenant/alerts'
     | '/t/$tenant/certificates'
     | '/t/$tenant/change-sets'
+    | '/t/$tenant/dns-credentials'
+    | '/t/$tenant/gslb'
     | '/t/$tenant/health-monitors'
     | '/t/$tenant/jobs'
+    | '/t/$tenant/kubernetes'
+    | '/t/$tenant/logs'
     | '/t/$tenant/networks'
     | '/t/$tenant/policies'
     | '/t/$tenant/pools'
@@ -411,7 +478,9 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/login'
+    | '/admin/acme-providers'
     | '/admin/audit-log'
+    | '/admin/controller'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -427,8 +496,12 @@ export interface FileRouteTypes {
     | '/t/$tenant/_shell/alerts'
     | '/t/$tenant/_shell/certificates'
     | '/t/$tenant/_shell/change-sets'
+    | '/t/$tenant/_shell/dns-credentials'
+    | '/t/$tenant/_shell/gslb'
     | '/t/$tenant/_shell/health-monitors'
     | '/t/$tenant/_shell/jobs'
+    | '/t/$tenant/_shell/kubernetes'
+    | '/t/$tenant/_shell/logs'
     | '/t/$tenant/_shell/networks'
     | '/t/$tenant/_shell/policies'
     | '/t/$tenant/_shell/pools'
@@ -482,11 +555,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/acme-providers': {
+      id: '/admin/acme-providers'
+      path: '/acme-providers'
+      fullPath: '/admin/acme-providers'
+      preLoaderRoute: typeof AdminAcmeProvidersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/audit-log': {
       id: '/admin/audit-log'
       path: '/audit-log'
       fullPath: '/admin/audit-log'
       preLoaderRoute: typeof AdminAuditLogRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/controller': {
+      id: '/admin/controller'
+      path: '/controller'
+      fullPath: '/admin/controller'
+      preLoaderRoute: typeof AdminControllerRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/identity-providers': {
@@ -594,6 +681,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTenantShellChangeSetsRouteImport
       parentRoute: typeof TTenantShellRoute
     }
+    '/t/$tenant/_shell/dns-credentials': {
+      id: '/t/$tenant/_shell/dns-credentials'
+      path: '/dns-credentials'
+      fullPath: '/t/$tenant/dns-credentials'
+      preLoaderRoute: typeof TTenantShellDnsCredentialsRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
+    '/t/$tenant/_shell/gslb': {
+      id: '/t/$tenant/_shell/gslb'
+      path: '/gslb'
+      fullPath: '/t/$tenant/gslb'
+      preLoaderRoute: typeof TTenantShellGslbRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
     '/t/$tenant/_shell/health-monitors': {
       id: '/t/$tenant/_shell/health-monitors'
       path: '/health-monitors'
@@ -606,6 +707,20 @@ declare module '@tanstack/react-router' {
       path: '/jobs'
       fullPath: '/t/$tenant/jobs'
       preLoaderRoute: typeof TTenantShellJobsRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
+    '/t/$tenant/_shell/kubernetes': {
+      id: '/t/$tenant/_shell/kubernetes'
+      path: '/kubernetes'
+      fullPath: '/t/$tenant/kubernetes'
+      preLoaderRoute: typeof TTenantShellKubernetesRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
+    '/t/$tenant/_shell/logs': {
+      id: '/t/$tenant/_shell/logs'
+      path: '/logs'
+      fullPath: '/t/$tenant/logs'
+      preLoaderRoute: typeof TTenantShellLogsRouteImport
       parentRoute: typeof TTenantShellRoute
     }
     '/t/$tenant/_shell/networks': {
@@ -703,7 +818,9 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminAcmeProvidersRoute: typeof AdminAcmeProvidersRoute
   AdminAuditLogRoute: typeof AdminAuditLogRoute
+  AdminControllerRoute: typeof AdminControllerRoute
   AdminIdentityProvidersRoute: typeof AdminIdentityProvidersRoute
   AdminRoleMappingsRoute: typeof AdminRoleMappingsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -714,7 +831,9 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAcmeProvidersRoute: AdminAcmeProvidersRoute,
   AdminAuditLogRoute: AdminAuditLogRoute,
+  AdminControllerRoute: AdminControllerRoute,
   AdminIdentityProvidersRoute: AdminIdentityProvidersRoute,
   AdminRoleMappingsRoute: AdminRoleMappingsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
@@ -756,8 +875,12 @@ interface TTenantShellRouteChildren {
   TTenantShellAlertsRoute: typeof TTenantShellAlertsRoute
   TTenantShellCertificatesRoute: typeof TTenantShellCertificatesRoute
   TTenantShellChangeSetsRoute: typeof TTenantShellChangeSetsRoute
+  TTenantShellDnsCredentialsRoute: typeof TTenantShellDnsCredentialsRoute
+  TTenantShellGslbRoute: typeof TTenantShellGslbRoute
   TTenantShellHealthMonitorsRoute: typeof TTenantShellHealthMonitorsRoute
   TTenantShellJobsRoute: typeof TTenantShellJobsRoute
+  TTenantShellKubernetesRoute: typeof TTenantShellKubernetesRoute
+  TTenantShellLogsRoute: typeof TTenantShellLogsRoute
   TTenantShellNetworksRoute: typeof TTenantShellNetworksRoute
   TTenantShellPoliciesRoute: typeof TTenantShellPoliciesRoute
   TTenantShellPoolsRoute: typeof TTenantShellPoolsRoute
@@ -775,8 +898,12 @@ const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellAlertsRoute: TTenantShellAlertsRoute,
   TTenantShellCertificatesRoute: TTenantShellCertificatesRoute,
   TTenantShellChangeSetsRoute: TTenantShellChangeSetsRoute,
+  TTenantShellDnsCredentialsRoute: TTenantShellDnsCredentialsRoute,
+  TTenantShellGslbRoute: TTenantShellGslbRoute,
   TTenantShellHealthMonitorsRoute: TTenantShellHealthMonitorsRoute,
   TTenantShellJobsRoute: TTenantShellJobsRoute,
+  TTenantShellKubernetesRoute: TTenantShellKubernetesRoute,
+  TTenantShellLogsRoute: TTenantShellLogsRoute,
   TTenantShellNetworksRoute: TTenantShellNetworksRoute,
   TTenantShellPoliciesRoute: TTenantShellPoliciesRoute,
   TTenantShellPoolsRoute: TTenantShellPoolsRoute,

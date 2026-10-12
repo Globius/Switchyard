@@ -5,9 +5,8 @@ import { useMemo, useState } from "react";
 import { api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
-import { ChipInput, validateHostname } from "@/components/sy/ChipInput";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
-import { DraftMarker, expiryStatus, ExpiryPill } from "@/components/sy/StatusPill";
+import { DraftMarker, expiryStatus, ExpiryPill, StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +17,8 @@ import { useSaveOp } from "@/features/objects/save";
 import { useDraft } from "@/features/shell/draft";
 import { useEnsureDraft } from "@/features/shell/draft-write";
 import { useCertificates } from "@/features/vs/queries";
+import { RenewalHistory, renewalSummary, useRenewalStatus } from "./RenewalHistory";
+import { RequestCertificate } from "./RequestCertificate";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { shortDate } from "@/lib/format";
@@ -597,130 +598,6 @@ function UsageSheet({
   );
 }
 
-function IssueSheet({ tenant, onClose }: { tenant: string; onClose: () => void }) {
-  const qc = useQueryClient();
-  const [source, setSource] = useState<"acme" | "cloudflare_origin">("acme");
-  const [name, setName] = useState("");
-  const [sans, setSans] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
-  const [problem, setProblem] = useState<unknown>(null);
-  async function submit() {
-    setBusy(true);
-    setProblem(null);
-    try {
-      unwrap(
-        await api.POST("/api/v1/tenants/{t}/certificates/issue", {
-          params: { path: { t: tenant } },
-          body: { name, source, sans },
-        }),
-      );
-      await qc.invalidateQueries({ queryKey: ["t", tenant] });
-      setDone(true);
-    } catch (e) {
-      setProblem(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Sheet
-      open
-      onOpenChange={(o) => !o && onClose()}
-      title={t("Issue certificate")}
-      centered
-      footer={
-        <>
-          <Button variant="ghost" className="ml-auto" onClick={onClose}>
-            {done ? t("Close") : t("Cancel")}
-          </Button>
-          {!done && (
-            <Button disabled={busy || !name || sans.length === 0} onClick={() => void submit()}>
-              {t("Start issuing")}
-            </Button>
-          )}
-        </>
-      }
-    >
-      {problem != null && <ErrorState error={problem} />}
-      {done ? (
-        <p role="status" className="text-sm">
-          {t(
-            "Issuing has started as a job. When it finishes it opens a system:certs change set that follows approval like any other.",
-          )}
-        </p>
-      ) : (
-        <>
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">{t("Issuer")}</legend>
-            <div className="grid grid-cols-2 gap-3">
-              {(
-                [
-                  ["acme", "ACME", "Publicly trusted. DNS-01 through Cloudflare."],
-                  [
-                    "cloudflare_origin",
-                    "Cloudflare Origin CA",
-                    "Trusted by Cloudflare only, for proxied hosts.",
-                  ],
-                ] as const
-              ).map(([k, label, help]) => (
-                <label
-                  key={k}
-                  className={cn(
-                    "flex cursor-pointer gap-3 rounded-lg border p-3",
-                    source === k && "border-primary bg-primary/10",
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="issuer"
-                    aria-label={label}
-                    checked={source === k}
-                    onChange={() => setSource(k)}
-                  />
-                  <span>
-                    <span className="font-medium">{label}</span>
-                    <span className="block text-sm text-muted-foreground">{t(help)}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <label className="block space-y-1.5 text-sm font-medium">
-            {t("Name")}
-            <input
-              aria-label={t("Name")}
-              className={INPUT}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <div className="space-y-1.5">
-            <div className="text-sm font-medium">{t("Names (SANs)")}</div>
-            <ChipInput
-              label={t("Names (SANs)")}
-              value={sans}
-              onChange={setSans}
-              freeText={{ validate: validateHostname }}
-              placeholder="docs.example.com"
-            />
-            <span className="block text-xs text-muted-foreground">
-              {t(
-                "Press Enter or comma to add a name. Each must be in a Cloudflare zone this tenant can edit.",
-              )}
-            </span>
-          </div>
-          <p className="rounded-md bg-muted p-3 text-sm">
-            {t(
-              "Runs as a job. The key is generated on the controller and stored in OpenBao. When the certificate is ready, a change set adds it; it waits for approval like any other.",
-            )}
-          </p>
-        </>
-      )}
-    </Sheet>
-  );
-}
-
 /** Certificates: source, SANs, expiry, renewal and which services use each. Keys live only in OpenBao. */
 export function Certificates({ tenant }: { tenant: string }) {
   const { draft } = useDraft(tenant);
@@ -734,6 +611,8 @@ export function Certificates({ tenant }: { tenant: string }) {
   const [sheet, setSheet] = useState<"import" | "import-ca" | "issue" | null>(null);
   const [replacing, setReplacing] = useState<{ id: string; name: string } | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
+  const [history, setHistory] = useState<{ id: string; name: string } | null>(null);
+  const renewals = useRenewalStatus(tenant);
   const [deleting, setDeleting] = useState<{ id: string; name: string; version: number } | null>(
     null,
   );
@@ -802,7 +681,7 @@ export function Certificates({ tenant }: { tenant: string }) {
           </Tip>
           <Tip label={runtime.reason}>
             <Button disabled={!runtime.allowed} onClick={() => setSheet("issue")}>
-              {t("Issue certificate")}
+              {t("Request certificate")}
             </Button>
           </Tip>
         </div>
@@ -889,6 +768,8 @@ export function Certificates({ tenant }: { tenant: string }) {
               {rows.map((c) => {
                 const ex = expiryStatus(c.not_after);
                 const users = usedBy.get(c.id) ?? [];
+                const rs = renewals.data?.find((x) => x.certificate_id === c.id);
+                const rsum = rs ? renewalSummary(rs) : null;
                 return (
                   <tr key={c.id}>
                     <td className="px-4 py-3">
@@ -909,6 +790,12 @@ export function Certificates({ tenant }: { tenant: string }) {
                     </td>
                     <td className="px-4 py-3">
                       {t(SOURCE[c.source] ?? c.source)}
+                      {rs &&
+                        rs.issuer &&
+                        rs.issuer !== c.source &&
+                        rs.issuer !== SOURCE[c.source] && (
+                          <span className="block text-xs text-muted-foreground">{rs.issuer}</span>
+                        )}
                       {c.purpose === "client_ca" && (
                         <span className="ml-1 text-xs text-muted-foreground">
                           · {t("client CA")}
@@ -924,20 +811,44 @@ export function Certificates({ tenant }: { tenant: string }) {
                         </span>
                       </span>
                     </td>
-                    <td className="px-4 py-3">{renewalLabel(c)}</td>
+                    <td className="px-4 py-3">
+                      {rsum ? (
+                        <>
+                          {rsum.failed && (
+                            <StatusPill status="down">{t("Renewal failed")}</StatusPill>
+                          )}
+                          <span className="block">{rsum.line}</span>
+                          {rsum.sub && (
+                            <span className="block text-xs text-muted-foreground">{rsum.sub}</span>
+                          )}
+                        </>
+                      ) : (
+                        renewalLabel(c)
+                      )}
+                    </td>
                     <td className="px-4 py-3">{users.length ? users.join(", ") : t("none")}</td>
                     <td className="px-4 py-3">
                       <span className="flex gap-1">
-                        <Tip label={runtime.reason}>
+                        {c.source === "upload" || c.source === "cloudflare_origin" ? (
+                          <Tip label={runtime.reason}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={!runtime.allowed || c.source === "upload"}
+                              onClick={() => void renew(c.id)}
+                            >
+                              {t("Renew now")}
+                            </Button>
+                          </Tip>
+                        ) : (
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={!runtime.allowed || c.source === "upload"}
-                            onClick={() => void renew(c.id)}
+                            onClick={() => setHistory({ id: c.id, name: c.name })}
                           >
-                            {t("Renew now")}
+                            {t("History")}
                           </Button>
-                        </Tip>
+                        )}
                         <Tip
                           label={
                             users.length
@@ -976,7 +887,22 @@ export function Certificates({ tenant }: { tenant: string }) {
       </p>
       {sheet === "import" && <ImportSheet tenant={tenant} onClose={() => setSheet(null)} />}
       {sheet === "import-ca" && <ImportCaSheet tenant={tenant} onClose={() => setSheet(null)} />}
-      {sheet === "issue" && <IssueSheet tenant={tenant} onClose={() => setSheet(null)} />}
+      {sheet === "issue" && (
+        <RequestCertificate
+          tenant={tenant}
+          onClose={() => setSheet(null)}
+          onDone={() => void qc.invalidateQueries({ queryKey: ["t", tenant] })}
+        />
+      )}
+      {history && (
+        <RenewalHistory
+          tenant={tenant}
+          cert={history}
+          canRenew={runtime.allowed}
+          renewReason={runtime.reason}
+          onClose={() => setHistory(null)}
+        />
+      )}
       {detail && (
         <UsageSheet
           tenant={tenant}

@@ -331,6 +331,199 @@ describe("pools", () => {
     });
   });
 
+  it("turns on discovery by Proxmox tag, locks the member list, and sends the discovery block", async () => {
+    hasDraft = false;
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "web");
+    await userEvent.click(screen.getByRole("switch", { name: "Discover members from Proxmox" }));
+    expect(screen.getByLabelText("Proxmox tag")).toHaveValue("sy-acme.");
+    await userEvent.type(screen.getByLabelText("Proxmox tag"), "web");
+    await userEvent.type(screen.getByLabelText("Network (CIDR)"), "2001:db8:20::/64");
+    expect(screen.getByRole("button", { name: "Add member" })).toBeDisabled();
+    expect(screen.getByText(/These members are managed by discovery/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect(posted?.ops[0]?.body).toMatchObject({
+        name: "web",
+        discovery: {
+          source: "proxmox_tag",
+          tag: "sy-acme.web",
+          cidr: "2001:db8:20::/64",
+          port: 8080,
+          weight: 100,
+        },
+      }),
+    );
+  });
+
+  it("shows the tag error on the tag field and clears discovery with null", async () => {
+    server.use(
+      http.post("*/api/v1/tenants/acme/change-sets/:cs/ops", () =>
+        HttpResponse.json(
+          {
+            title: "Invalid",
+            status: 422,
+            errors: [
+              {
+                path: "discovery.tag",
+                code: "discovery_tag_not_allowed",
+                message: "The tag must start with sy-acme.",
+              },
+            ],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "web");
+    await userEvent.click(screen.getByRole("switch", { name: "Discover members from Proxmox" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    expect(await screen.findByText("The tag must start with sy-acme.")).toBeInTheDocument();
+  });
+
+  it("sets cookie persistence, PROXY protocol, a client certificate and member options", async () => {
+    hasDraft = false;
+    server.use(
+      http.get("*/api/v1/tenants/acme/certificates", () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: "cert1",
+              name: "mtls-client",
+              purpose: "server",
+              sans: [],
+              not_after: "2027-01-01T00:00:00Z",
+              source: "upload",
+              renew_policy: "manual",
+              renew_before_days: 30,
+              draft_status: "unchanged",
+              changed_fields: [],
+              version: 1,
+              tenant_id: "t",
+              secret_ref: "x",
+              ocsp_stapling: false,
+            },
+            {
+              id: "ca1",
+              name: "private-ca",
+              purpose: "client_ca",
+              sans: [],
+              not_after: "2027-01-01T00:00:00Z",
+              source: "upload",
+              renew_policy: "manual",
+              renew_before_days: 30,
+              draft_status: "unchanged",
+              changed_fields: [],
+              version: 1,
+              tenant_id: "t",
+              secret_ref: "x",
+              ocsp_stapling: false,
+            },
+          ],
+          next_cursor: null,
+        }),
+      ),
+    );
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "secure");
+    await userEvent.selectOptions(screen.getByLabelText("Persistence type"), "http_cookie");
+    await userEvent.clear(screen.getByLabelText("Cookie name"));
+    await userEvent.type(screen.getByLabelText("Cookie name"), "SRV");
+    await userEvent.type(screen.getByLabelText("Cookie lifetime"), "3600");
+    await userEvent.click(screen.getByLabelText("Secure"));
+    await userEvent.selectOptions(screen.getByLabelText("PROXY protocol"), "v2");
+    await userEvent.click(screen.getByLabelText("Backend TLS"));
+    await pick(screen.getByLabelText("Client certificate"), "cert1");
+    await userEvent.click(screen.getByRole("button", { name: "Add member" }));
+    await userEvent.type(screen.getByLabelText("Member 1 address"), "10.9.0.1");
+    await userEvent.click(screen.getByLabelText("Member 1 backup"));
+    await userEvent.type(screen.getByLabelText("Member 1 max connections"), "50");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.action).toBe("create"));
+    const b = posted!.ops[0]!.body as { members: Record<string, unknown>[] };
+    expect(b).toMatchObject({
+      send_proxy: "v2",
+      client_certificate_id: "cert1",
+      persistence: {
+        type: "http_cookie",
+        name: "SRV",
+        mode: "insert",
+        ttl_s: 3600,
+        secure: true,
+        http_only: true,
+      },
+    });
+    expect(b.members[0]).toMatchObject({ backup: true, maxconn: 50 });
+  });
+
+  it("offers header and URI persistence with their own fields", async () => {
+    hasDraft = false;
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "sticky");
+    await userEvent.selectOptions(screen.getByLabelText("Persistence type"), "header");
+    await userEvent.type(screen.getByLabelText("Persistence header"), "X-Session");
+    await userEvent.selectOptions(screen.getByLabelText("Persistence type"), "uri");
+    await userEvent.selectOptions(screen.getByLabelText("URI source"), "url_param");
+    await userEvent.type(screen.getByLabelText("URI parameter"), "sid");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.action).toBe("create"));
+    expect(posted!.ops[0]!.body).toMatchObject({
+      persistence: {
+        type: "uri",
+        source: "url_param",
+        param: "sid",
+        table_size: 100000,
+        timeout_s: 1800,
+      },
+    });
+  });
+
+  it("sets the backend protocol and the tunnel timeout for gRPC and WebSocket pools", async () => {
+    hasDraft = false;
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "grpc");
+    await userEvent.click(screen.getByLabelText("Backend TLS"));
+    await userEvent.selectOptions(screen.getByLabelText("Backend protocol"), "h2");
+    await userEvent.type(screen.getByLabelText("Tunnel timeout"), "7200");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.action).toBe("create"));
+    expect(posted!.ops[0]!.body).toMatchObject({ backend_protocol: "h2", tunnel_timeout_s: 7200 });
+  });
+
+  it("sets a drain timeout on a draining member", async () => {
+    hasDraft = false;
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "draining");
+    await userEvent.click(screen.getByRole("button", { name: "Add member" }));
+    await userEvent.type(screen.getByLabelText("Member 1 address"), "10.9.0.1");
+    expect(screen.queryByLabelText("Member 1 drain timeout")).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Member 1 state"), "drain");
+    await userEvent.type(screen.getByLabelText("Member 1 drain timeout"), "300");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.action).toBe("create"));
+    const b = posted!.ops[0]!.body as { members: Record<string, unknown>[] };
+    expect(b.members[0]).toMatchObject({ admin_state: "drain", drain_timeout_s: 300 });
+  });
+
   it("maps 422 findings onto member fields and deletes after confirming", async () => {
     server.use(
       http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", () =>
@@ -442,6 +635,37 @@ describe("health monitors", () => {
       udp: { payload_hex: "ab", require_reply: true },
       http: null,
     });
+  });
+
+  it("adds a body or header expectation to an HTTP monitor, and a protocol preset to a TCP one", async () => {
+    renderAt("/t/acme/health-monitors");
+    const n = await screen.findByRole("button", { name: /New monitor/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "redis-check");
+    await userEvent.selectOptions(screen.getByLabelText("Protocol check"), "redis");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.action).toBe("create"));
+    expect(posted!.ops[0]!.body).toMatchObject({ type: "tcp", preset: "redis", http: null });
+  });
+
+  it("checks the response body, or one header, but not both", async () => {
+    renderAt("/t/acme/health-monitors");
+    const n = await screen.findByRole("button", { name: /New monitor/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "body-check");
+    await userEvent.click(screen.getByRole("radio", { name: "HTTP" }));
+    await userEvent.selectOptions(screen.getByLabelText("Also check"), "header");
+    await userEvent.type(screen.getByLabelText("Expected header name"), "X-Health");
+    await userEvent.type(screen.getByLabelText("Expected header value"), "ok");
+    await userEvent.selectOptions(screen.getByLabelText("Also check"), "body");
+    expect(screen.queryByLabelText("Expected header name")).toBeNull();
+    await userEvent.type(screen.getByLabelText("Expected body"), "status_ok");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.action).toBe("create"));
+    const http = (posted!.ops[0]!.body as { http: Record<string, unknown> }).http;
+    expect(http).toMatchObject({ expect_body: "status_ok", expect_header: null });
   });
 
   it("delete warns when pools still use the monitor", async () => {

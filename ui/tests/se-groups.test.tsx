@@ -431,6 +431,50 @@ describe("SE groups", () => {
     }
   });
 
+  it("shares persistence tables between engines and sends the peers", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/change-sets", () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: "cs1",
+              state: "draft",
+              author: "Miguel",
+              summary: "d",
+              base_revision: 1,
+              created_at: "2026-10-11T10:00:00Z",
+              op_count: 0,
+            },
+          ],
+          next_cursor: null,
+        }),
+      ),
+      http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", async ({ request }) => {
+        const b = (await request.json()) as { ops: { object_id: string; body: unknown }[] };
+        patched = { id: b.ops[0]!.object_id, body: b.ops[0]!.body };
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    renderAt("/t/acme/se-groups");
+    const sw = await screen.findByRole("switch", { name: "Share persistence tables" });
+    await waitFor(() => expect(sw).toBeEnabled());
+    await userEvent.click(sw);
+    expect(screen.getByLabelText("Peers port")).toHaveValue(10000);
+    await userEvent.type(screen.getByLabelText("Peer 1 address"), "10.20.0.5");
+    await userEvent.type(screen.getByLabelText("Peer 2 address"), "2001:db8:20::6");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect(patched).toMatchObject({
+        body: {
+          peers: {
+            port: 10000,
+            members: [{ address: "10.20.0.5" }, { address: "2001:db8:20::6" }],
+          },
+        },
+      }),
+    );
+  });
+
   it("registers an existing VM", async () => {
     let body: unknown = null;
     server.use(

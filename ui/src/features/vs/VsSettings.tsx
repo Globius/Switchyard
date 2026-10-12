@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { emptyMatch, ExtraMatch } from "@/features/policies/MatchEditor";
 import { Combobox } from "@/components/ui/combobox";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DropdownMenu } from "radix-ui";
@@ -212,17 +213,30 @@ function PortsSheet({
               onChange(ports.map((x, j) => (j === i ? { ...x, port: Number(e.target.value) } : x)))
             }
           />
-          {(["tls", "http2", "proxy_protocol"] as const).map((k) => (
+          {(["tls", "http2", "http3", "proxy_protocol", "tls_passthrough"] as const).map((k) => (
             <label key={k} className="flex items-center gap-1.5">
               <input
                 type="checkbox"
-                disabled={disabled || portForbidden.has(k)}
-                checked={p[k]}
+                disabled={
+                  disabled ||
+                  portForbidden.has(k) ||
+                  (k === "http3" && !(p.tls && p.http2)) ||
+                  (k !== "tls_passthrough" && k !== "proxy_protocol" && p.tls_passthrough)
+                }
+                checked={p[k] ?? false}
                 onChange={(e) =>
                   onChange(ports.map((x, j) => (j === i ? { ...x, [k]: e.target.checked } : x)))
                 }
               />
-              {k === "tls" ? "TLS" : k === "http2" ? "HTTP/2" : "PROXY"}
+              {k === "tls"
+                ? "TLS"
+                : k === "http2"
+                  ? "HTTP/2"
+                  : k === "http3"
+                    ? "HTTP/3"
+                    : k === "tls_passthrough"
+                      ? t("TLS passthrough")
+                      : "PROXY"}
             </label>
           ))}
           {p.tls && (
@@ -829,8 +843,10 @@ function SettingsForm({
                   ...form.routes,
                   {
                     order: form.routes.length + 1,
-                    match: { host: null, path_prefix: null, path_exact: null },
+                    match: emptyMatch(),
                     pool_id: null,
+                    pools: [],
+                    fallback_pool_ids: [],
                     redirect: null,
                   },
                 ])
@@ -865,6 +881,7 @@ function SettingsForm({
                         form.routes.map((x, j) => (j === i ? { ...x, ...patchR } : x)),
                       );
                     const redirect = r.redirect != null;
+                    const split = (r.pools ?? []).length > 0;
                     const exact = r.match.path_exact != null;
                     const msgs = messagesFor(errors, `routes.${i}`);
                     return (
@@ -928,16 +945,35 @@ function SettingsForm({
                               aria-label={t("Route {n} action", { n: i + 1 })}
                               className={cn(INPUT, "w-28")}
                               disabled={disabled}
-                              value={redirect ? "redirect" : "pool"}
+                              value={redirect ? "redirect" : split ? "split" : "pool"}
                               onChange={(e) =>
                                 upd(
                                   e.target.value === "redirect"
-                                    ? { pool_id: null, redirect: { location: "/", code: 301 } }
-                                    : { redirect: null },
+                                    ? {
+                                        pool_id: null,
+                                        pools: [],
+                                        redirect: { location: "/", code: 301 },
+                                      }
+                                    : e.target.value === "split"
+                                      ? {
+                                          redirect: null,
+                                          pool_id: null,
+                                          pools: r.pool_id
+                                            ? [
+                                                { pool_id: r.pool_id, weight: 90 },
+                                                { pool_id: "", weight: 10 },
+                                              ]
+                                            : [
+                                                { pool_id: "", weight: 50 },
+                                                { pool_id: "", weight: 50 },
+                                              ],
+                                        }
+                                      : { redirect: null, pools: [] },
                                 )
                               }
                             >
                               <option value="pool">{t("Pool")}</option>
+                              <option value="split">{t("Split")}</option>
                               <option value="redirect">{t("Redirect")}</option>
                             </select>
                           </td>
@@ -957,15 +993,113 @@ function SettingsForm({
                                   })
                                 }
                               />
+                            ) : split ? (
+                              <div className="space-y-1.5">
+                                {(r.pools ?? []).map((wp, k) => (
+                                  <div key={k} className="flex items-center gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <Combobox
+                                        aria-label={t("Route {n} split pool {k}", {
+                                          n: i + 1,
+                                          k: k + 1,
+                                        })}
+                                        placeholder={t("Pool")}
+                                        disabled={disabled}
+                                        value={wp.pool_id}
+                                        onChange={(v) =>
+                                          upd({
+                                            pools: (r.pools ?? []).map((x, j) =>
+                                              j === k ? { ...x, pool_id: v } : x,
+                                            ),
+                                          })
+                                        }
+                                        options={poolOptions.map((p) => ({
+                                          value: p.id,
+                                          label: p.name,
+                                        }))}
+                                      />
+                                    </div>
+                                    <input
+                                      aria-label={t("Route {n} split weight {k}", {
+                                        n: i + 1,
+                                        k: k + 1,
+                                      })}
+                                      type="number"
+                                      min={1}
+                                      max={1000}
+                                      className={cn(INPUT, "w-20")}
+                                      disabled={disabled}
+                                      value={wp.weight}
+                                      onChange={(e) =>
+                                        upd({
+                                          pools: (r.pools ?? []).map((x, j) =>
+                                            j === k ? { ...x, weight: Number(e.target.value) } : x,
+                                          ),
+                                        })
+                                      }
+                                    />
+                                    <span className="w-10 text-xs text-muted-foreground">
+                                      {Math.round(
+                                        (wp.weight /
+                                          Math.max(
+                                            1,
+                                            (r.pools ?? []).reduce((a, x) => a + x.weight, 0),
+                                          )) *
+                                          100,
+                                      )}
+                                      %
+                                    </span>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={disabled || (r.pools ?? []).length <= 2}
+                                      aria-label={t("Remove split pool {k}", { k: k + 1 })}
+                                      onClick={() =>
+                                        upd({ pools: (r.pools ?? []).filter((_, j) => j !== k) })
+                                      }
+                                    >
+                                      ×
+                                    </Button>
+                                  </div>
+                                ))}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={disabled}
+                                  onClick={() =>
+                                    upd({
+                                      pools: [...(r.pools ?? []), { pool_id: "", weight: 10 }],
+                                    })
+                                  }
+                                >
+                                  {t("Add pool")}
+                                </Button>
+                              </div>
                             ) : (
-                              <Combobox
-                                aria-label={t("Route {n} pool", { n: i + 1 })}
-                                placeholder={t("Pool")}
-                                disabled={disabled}
-                                value={r.pool_id ?? ""}
-                                onChange={(v) => upd({ pool_id: v || null })}
-                                options={poolOptions.map((p) => ({ value: p.id, label: p.name }))}
-                              />
+                              <div className="space-y-1.5">
+                                <Combobox
+                                  aria-label={t("Route {n} pool", { n: i + 1 })}
+                                  placeholder={t("Pool")}
+                                  disabled={disabled}
+                                  value={r.pool_id ?? ""}
+                                  onChange={(v) => upd({ pool_id: v || null })}
+                                  options={poolOptions.map((p) => ({ value: p.id, label: p.name }))}
+                                />
+                                {r.pool_id && (
+                                  <ChipInput
+                                    label={t("Route {n} fallback pools", { n: i + 1 })}
+                                    value={r.fallback_pool_ids ?? []}
+                                    onChange={(v) => upd({ fallback_pool_ids: v.slice(0, 3) })}
+                                    options={poolOptions
+                                      .filter((p) => p.id !== r.pool_id)
+                                      .map((p) => ({ value: p.id, label: p.name }))}
+                                    placeholder={t("If it is down, try…")}
+                                    disabled={disabled}
+                                  />
+                                )}
+                              </div>
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -1014,6 +1148,17 @@ function SettingsForm({
                                 ))}
                               </MenuContent>
                             </Menu>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td />
+                          <td colSpan={6} className="px-3 pb-2">
+                            <ExtraMatch
+                              id={`Route ${i + 1}`}
+                              match={r.match}
+                              disabled={disabled}
+                              onChange={(m) => upd({ match: m })}
+                            />
                           </td>
                         </tr>
                         {msgs.length > 0 && (
@@ -1122,6 +1267,145 @@ function SettingsForm({
           </Field>
         </div>
       </SettingsCard>
+
+      {v.protocol === "http" || form.cache != null ? (
+        <SettingsCard title={t("Response cache")}>
+          <div className="space-y-4 p-4" data-field="cache">
+            <div className="flex items-start gap-3">
+              <Switch
+                aria-label={t("Cache responses")}
+                disabled={disabled}
+                checked={form.cache != null}
+                onCheckedChange={(on) =>
+                  set("cache", on ? { size_mb: 16, max_object_kb: 1024, max_age_s: 60 } : null)
+                }
+              />
+              <div className="text-sm">
+                <div className="font-medium">{t("Cache responses")}</div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "Stores responses the origin marks cacheable, for GET and HEAD requests without Authorization. Rate limits and deny rules run first. The caches of one SE group share a memory quota.",
+                  )}
+                </p>
+              </div>
+            </div>
+            {form.cache && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {(
+                  [
+                    ["size_mb", "Memory (MB)", 1, 256],
+                    ["max_object_kb", "Largest object (KB)", 1, 8192],
+                    ["max_age_s", "Longest age (s)", 1, 86400],
+                  ] as const
+                ).map(([k, label, min, max]) => (
+                  <label key={k} className="space-y-1.5 text-sm font-medium">
+                    {t(label)}
+                    <input
+                      aria-label={t(label)}
+                      type="number"
+                      min={min}
+                      max={max}
+                      className={INPUT}
+                      disabled={disabled}
+                      value={form.cache![k] ?? ""}
+                      onChange={(e) =>
+                        set("cache", { ...form.cache!, [k]: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+            {er("cache").map((m) => (
+              <p key={m} role="alert" className="text-xs text-status-down">
+                {m}
+              </p>
+            ))}
+          </div>
+        </SettingsCard>
+      ) : null}
+      {v.protocol === "http" || form.compression != null ? (
+        <SettingsCard title={t("Compression")}>
+          <div className="space-y-4 p-4" data-field="compression">
+            <div className="flex items-start gap-3">
+              <Switch
+                aria-label={t("Compress responses")}
+                disabled={disabled}
+                checked={form.compression != null}
+                onCheckedChange={(on) =>
+                  set(
+                    "compression",
+                    on
+                      ? {
+                          algorithms: ["gzip"],
+                          content_types: [
+                            "text/html",
+                            "text/plain",
+                            "text/css",
+                            "text/javascript",
+                            "application/javascript",
+                            "application/json",
+                            "application/xml",
+                            "image/svg+xml",
+                          ],
+                        }
+                      : null,
+                  )
+                }
+              />
+              <div className="text-sm">
+                <div className="font-medium">{t("Compress responses")}</div>
+                <p className="text-xs text-muted-foreground">
+                  {t("For clients that accept it. Never images or archives.")}
+                </p>
+              </div>
+            </div>
+            {form.compression && (
+              <>
+                <div className="flex gap-4 text-sm">
+                  {(["gzip", "deflate"] as const).map((a) => (
+                    <label key={a} className="flex items-center gap-1.5">
+                      <input
+                        type="checkbox"
+                        aria-label={a}
+                        disabled={disabled}
+                        checked={form.compression!.algorithms.includes(a)}
+                        onChange={(e) =>
+                          set("compression", {
+                            ...form.compression!,
+                            algorithms: e.target.checked
+                              ? [...form.compression!.algorithms, a]
+                              : form.compression!.algorithms.filter((x) => x !== a),
+                          })
+                        }
+                      />
+                      {a}
+                    </label>
+                  ))}
+                </div>
+                <ChipInput
+                  label={t("Content types")}
+                  value={form.compression.content_types}
+                  onChange={(v) => set("compression", { ...form.compression!, content_types: v })}
+                  freeText={{
+                    validate: (x) =>
+                      /^[a-z]+\/[a-z0-9.+-]+$/i.test(x.trim())
+                        ? null
+                        : t("Use a media type such as text/html."),
+                  }}
+                  placeholder={t("Add a content type")}
+                  disabled={disabled}
+                />
+                {er("compression").map((m) => (
+                  <p key={m} role="alert" className="text-xs text-status-down">
+                    {m}
+                  </p>
+                ))}
+              </>
+            )}
+          </div>
+        </SettingsCard>
+      ) : null}
 
       <div className="flex items-center gap-3 pb-4">
         <span className="text-xs text-muted-foreground">
