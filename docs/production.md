@@ -11,6 +11,8 @@ says where something has **not** been proven yet. Read [design/02-backend-design
   and etcd under Docker Compose ([adr/0048](adr/0048-production-deployment-shape.md), `deploy/prod/`). The controller's own
   VIP comes from the management tenant's SE group. Each VM is also reachable on its management address, so recovery never
   depends on the controller's own VIP.
+- **Or on Kubernetes:** the same controller from a Helm chart with CloudNativePG instead of Patroni and etcd, in
+  [Deploying on Kubernetes](https://git.example.com/miguelr/switchyard/-/blob/main/docs/deploy-kubernetes.md) (section 2 lists what is and is not proven).
 - **Management tenant lock:** applying a change in `management` needs a system administrator and a reason, and the
   `controller` service and its SE group cannot be deleted or disabled ([adr/0051](adr/0051-management-tenant-lock-and-adopt.md)).
   Bring the first VMs in with `syctl adopt` (`deploy/prod/adopt/management.example.yaml`).
@@ -30,8 +32,8 @@ runs changes.
 | Option | What exists on main | Status |
 | --- | --- | --- |
 | [Docker Compose](#docker-compose) | `deploy/prod/compose.yaml`: etcd, Patroni (PostgreSQL 17), `migrate`, `api`, `worker`, `proxy`, one copy per node | supported; rehearsed on a three-node lab on one host |
-| [VMs or LXC containers on Proxmox](#vms-or-lxc-containers-on-proxmox) | the Compose option inside three Proxmox guests, adopted into the `management` tenant | VMs: the reference shape (ADR 0048). LXC: not proven |
-| [Kubernetes](#kubernetes) | nothing yet: no Helm chart or manifests | planned (ADR 0191, being built) |
+| [VMs or LXC containers on Proxmox](#vms-or-lxc-containers-on-proxmox) | the Compose option inside three Proxmox guests, adopted into the `management` tenant | VMs: the reference shape (ADR 0048). Privileged LXC: proven, including a reboot |
+| [Kubernetes](#kubernetes) | a Helm chart with CloudNativePG (ADR 0191, !132) | proven on a lab k3s; see the limits below |
 
 ### Docker Compose
 
@@ -56,19 +58,31 @@ controller's own VIP served by that tenant's SE group (section 1). Steps:
    (`deploy/prod/adopt/management.example.yaml`); `syctl serve` already created the empty `management` tenant (ADR 0155).
 4. Set the public address under Admin, Controller ([controller-settings.md](controller-settings.md)).
 
-**LXC containers.** Running the controller Compose inside privileged LXC containers (with nesting, for Docker) is expected to
-work but **has not been proven yet**; until it is, use VMs. Unprivileged containers are not supported for the controller.
+**LXC containers.** The Compose stack runs inside Proxmox LXC containers, and this has been proven in the lab, including a
+reboot. The container must be **privileged** with `nesting=1` and `keyctl=1` (Docker needs both), and Docker networks on an
+overlay need an explicit MTU (`--mtu`, or `com.docker.network.driver.mtu` in Compose) below the overlay's. Unprivileged
+containers are not supported for the controller.
 
 ### Kubernetes
 
-!!! note "Placeholder"
-    No Kubernetes deployment exists on main yet. A Helm chart is being built (ADR 0191). This section will describe it
-    (API and worker Deployments, the migrate Job, the UI proxy, PostgreSQL through an operator, OpenBao outside or through
-    its chart, Secrets for the bundle key and mTLS files, probes on `/api/v1/healthz`) once it has merged. Until then, run
-    the controller with Compose.
+A Helm chart installs the controller in a cluster: `api`, `worker` and `proxy` Deployments (two replicas each in the lab),
+a `migrate` Job per release revision, and PostgreSQL through the CloudNativePG operator. OpenBao stays outside the chart.
+Install steps, values and secrets: [Deploying on Kubernetes](https://git.example.com/miguelr/switchyard/-/blob/main/docs/deploy-kubernetes.md); decision:
+[ADR 0191](https://git.example.com/miguelr/switchyard/-/blob/main/docs/adr/0191-kubernetes-deployment.md); lab run: [Kubernetes install results](https://git.example.com/miguelr/switchyard/-/blob/main/docs/lab/2026-10-12-kubernetes-install.md).
+
+Proven on a lab k3s: install with two replicas each, the controller deploying and enrolling an LXC engine, a virtual
+service answering 200, and sign-in and the UI. **Not proven yet:** CloudNativePG failover, exposure through a
+LoadBalancer or Ingress, behaviour during an OpenBao outage, and an upgrade that includes a schema migration. Treat those as
+pilot items.
 
 Do not confuse this with the [Kubernetes connector](kubernetes.md), which publishes Services of an existing cluster through
 Switchyard engines and works with any deployment option.
+
+### Gotchas seen in the lab
+
+- A proxy configured for the Docker **client** (`~/.docker/config.json` `proxies`) is injected into every container and breaks
+  the API's calls to OpenBao. Remove it, or add the OpenBao address to `noProxy`.
+- `deploy/quickstart/bootstrap.sh` reuses the existing UI image; pass `--rebuild` after updating the source.
 
 ## 3. Network and ports
 
