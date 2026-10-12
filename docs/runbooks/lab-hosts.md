@@ -165,10 +165,8 @@ reachability, so BGP stays lab-only.
 **HTTPS with a managed certificate.** Issue a server certificate from the lab CA (OpenBao `pki/issue/internal`, with the VIP as
 an IP SAN), import it (`drive.py cert NAME`, the `certificates/import` API with the PEM in `CERT_PEM`) and create the service
 with `drive.py vstls NAME GROUP VIP CERT`. Test from outside with the CA: `curl --cacert ca.pem https://[VIP]/` (on Windows
-add `--ssl-no-revoke`). Known problem found doing this: the canary validates the new configuration on a live engine
-**before** it sends the certificate file, so a first TLS service fails with "unable to stat SSL certificate from file
-/etc/switchyard/certs/NAME.pem". The lab works around it by writing the same PEM to `/etc/switchyard/certs/NAME.pem` on the
-engines before creating the service; the bundle then manages the file as usual.
+add `--ssl-no-revoke`).
+The first TLS service used to fail validation because the certificate file reached the engine after the canary's check; the apply pipeline now sends certificates first (found by this lab, fixed in the pipeline).
 
 ## Tearing down
 
