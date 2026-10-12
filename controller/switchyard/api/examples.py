@@ -917,6 +917,7 @@ DNS_PROVIDER_TEST = {
 ISSUE_CHECK = {
     "ok": False,
     "problems": [{"path": "sans[1]", "message": "no DNS credential covers this name"}],
+    "warnings": [],
 }
 RENEWAL = {
     "id": "0192f1a2-0000-7000-8000-00000000e501",

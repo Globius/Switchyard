@@ -46,6 +46,8 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Engine host online state | done | `host_online` on `GET /engines` (ADR 0049) | |
 | Proxmox host layout and capacity (Placement) | done | `GET /se-groups/{group}/placement` (ADR 0049) | |
 | Certificates: import, PKCS#12 (ADR 0043), replace (ADR 0044), ACME DNS-01 (incl. step-ca), Origin CA, renew job (M5) | done | | |
+| TLS-ALPN-01 (RFC 8737) through HAProxy runtime certificates | done | ADR 0082 | Expiry notifications wait for the alerting block (P6) |
+| Controller FQDN, VIP and certificate from the UI, with confirm and automatic revert | done | ADR 0081, `docs/controller-settings.md` | |
 | ACME providers (several CAs, EAB, OAuth), DNS credentials per tenant (Cloudflare, Route 53, Azure, Google, RFC 2136, PowerDNS), HTTP-01, renewal history | done | ADR 0080, `docs/acme.md` | |
 | OCSP stapling, cipher and TLS-version profiles | done | `tls_profile` on ports, `ocsp_stapling` on certificates (ADR 0067) | |
 | mTLS: client certificate verification | done | `client_ca` certificates and `client_ca_id` on ports (ADR 0070) | |

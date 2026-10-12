@@ -69,3 +69,5 @@ Date: YYYY-MM-DD
 | [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
+| [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
+| [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |

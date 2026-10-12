@@ -861,3 +861,46 @@ async def test_the_http01_check_wants_a_port_80_service_the_name_leads_to(
     assert "sans" in {p for p, _ in await problems(sans=["a.example.test", "b.example.test"])}
     assert {p for p, _ in await problems(sans=["*.example.test"])} == {"sans[0]"}
     assert {p for p, _ in await problems(dns_provider="x")} == {"dns_provider"}
+
+
+async def test_the_tls_alpn_check_wants_an_https_service_and_warns_about_live_names(
+    rig: Rig, directory_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import ipaddress
+
+    from switchyard.services import cert_requests
+
+    await rig.create_acme(directory_url, default=True)
+    answers: dict[str, set[Any]] = {}
+
+    async def resolve(host: str) -> set[Any]:
+        return answers.get(host, set())
+
+    monkeypatch.setattr(cert_requests, "_addresses", resolve)
+    url = f"{V1}/tenants/{T}/certificates/issue/check"
+    vip = {ipaddress.ip_address("192.0.2.20")}
+    answers.update({"app.example.test": vip, "fresh.example.test": vip})
+
+    async def check(*names: str, **extra: Any) -> dict[str, Any]:
+        body = {
+            "name": "a",
+            "source": "acme",
+            "challenge": "tls-alpn-01",
+            "sans": list(names),
+        } | extra
+        got = await rig.client.post(url, json=body, headers=rig.operator)
+        return got.json()  # type: ignore[no-any-return]
+
+    fresh = await check("nobody.example.test")
+    assert [(p["path"], p["message"]) for p in fresh["problems"]] == [
+        ("sans[0]", "does not resolve from the controller")
+    ]
+    answers["nobody.example.test"] = vip
+    assert (await check("nobody.example.test"))["ok"] is True
+    wild = await check("*.example.test")
+    assert [p["path"] for p in wild["problems"]] == ["sans[0]"]
+    live = await check("app.example.test")  # the base data's wildcard certificate covers it
+    assert live["ok"] is True and [w["path"] for w in live["warnings"]] == ["sans[0]"]
+    assert "certificate error" in live["warnings"][0]["message"]
+    pinned = await check("nobody.example.test", dns_provider="x")
+    assert [p["path"] for p in pinned["problems"]] == ["dns_provider"]

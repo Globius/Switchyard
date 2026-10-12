@@ -75,7 +75,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Service `name` (http, tcp) | `frontend vs_<name>`, `mode http` or `mode tcp`, `option httplog` / `tcplog` |
 | Service `vip` + each port | one `bind <vip>:<port>` per port, sorted by port. IPv6 uses `bind ipv6@<addr>:<port>` |
 | Port `tls` | `ssl crt-list /etc/switchyard/certs/<name>.crtlist` on that bind |
-| Port `http2` | `alpn h2,http/1.1` (otherwise `alpn http/1.1` on an HTTP TLS port) |
+| Port `http2` | `alpn h2,http/1.1,acme-tls/1` (otherwise `alpn http/1.1,acme-tls/1` on an HTTP TLS port; `acme-tls/1` is for TLS-ALPN-01, ADR 0082) |
 | Port `proxy_protocol` | `accept-proxy` |
 | Port `https_redirect_port` | `http-request redirect prefix "https://%[var(txn.host)][:port]" code 301 if { dst_port <port> }` |
 | Service `default_pool_id` | `default_backend pool_<name>` |
@@ -139,7 +139,7 @@ The demo tenant (`controller/switchyard/examples/demo.yaml`) renders, for its HT
 frontend vs_web
     mode http
     bind 192.0.2.20:80
-    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/certs/web.crtlist alpn h2,http/1.1
+    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/certs/web.crtlist alpn h2,http/1.1,acme-tls/1
     option httplog
     option forwardfor
     http-request del-header X-Forwarded-For

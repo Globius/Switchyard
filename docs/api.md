@@ -184,6 +184,13 @@ expires. Read it with the certificate, change it with a normal update operation.
 - `GET /tenants/{t}/certificate-renewals` (status per certificate) and
   `GET /tenants/{t}/certificates/{id}/renewals` (history with the CA's error).
 
+## The controller's own address
+
+`GET /system/controller`, `PUT /system/controller/pending`, `POST /system/controller/confirm` and
+`POST /system/controller/revert` (system administrators). A proposal is applied to the `controller`
+service of the management tenant and reverted by the worker unless confirmed on the new FQDN in time;
+see `docs/controller-settings.md` and ADR 0081.
+
 ## Jobs
 
 `kind` is an enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert` (result

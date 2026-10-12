@@ -3869,8 +3869,12 @@ def create_app(
         credential that covers it (DNS-01), and an HTTP-01 name must lead to one of the tenant's
         HTTP services on port 80. Always answers `200`; `ok: false` lists the problems.
         """
-        problems = await svc.cert_requests.check(who, tenant.id, to_request(body))
-        return {"ok": not problems, "problems": [asdict(p) for p in problems]}
+        result = await svc.cert_requests.inspect(who, tenant.id, to_request(body))
+        return {
+            "ok": not result.problems,
+            "problems": [asdict(p) for p in result.problems],
+            "warnings": [asdict(p) for p in result.warnings],
+        }
 
     @router.get(
         "/tenants/{t}/certificate-renewals",

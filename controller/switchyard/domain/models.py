@@ -100,6 +100,7 @@ class AcmeChallenge(enum.StrEnum):
 
     DNS01 = "dns-01"
     HTTP01 = "http-01"
+    TLSALPN01 = "tls-alpn-01"
 
 
 class TlsProfile(enum.StrEnum):
@@ -679,10 +680,12 @@ class Certificate(TenantOwned):
             self.source is not CertSource.ACME
         ):
             raise ValueError("acme_provider, challenge and dns_provider only apply to source acme")
-        if self.dns_provider and self.challenge is AcmeChallenge.HTTP01:
+        if self.dns_provider and self.challenge in {AcmeChallenge.HTTP01, AcmeChallenge.TLSALPN01}:
             raise ValueError("dns_provider is only valid with the dns-01 challenge")
-        if self.challenge is AcmeChallenge.HTTP01 and any(s.startswith("*.") for s in self.sans):
-            raise ValueError("http-01 cannot validate wildcard names; use dns-01")
+        if self.challenge in {AcmeChallenge.HTTP01, AcmeChallenge.TLSALPN01} and any(
+            s.startswith("*.") for s in self.sans
+        ):
+            raise ValueError(f"{self.challenge.value} cannot validate wildcard names; use dns-01")
         if self.purpose == "server" and not self.sans:
             raise ValueError("a server certificate needs at least one name")
         if self.purpose == "client_ca" and (

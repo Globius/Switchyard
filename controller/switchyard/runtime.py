@@ -57,6 +57,7 @@ from switchyard.services.infra import InfraService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
 from switchyard.services.status import StatusService
+from switchyard.services.tlsalpn import EngineTlsAlpnPublisher
 
 
 def databases() -> Databases:
@@ -160,6 +161,7 @@ def certificates(db: Databases, secrets: SecretsReader | None = None) -> Certifi
         acme_providers=AcmeProviders(db, store),
         dns_providers=DnsProviders(db, store),
         http_publisher=lambda tenant_id: EngineHttp01Publisher(db, engines, tenant_id),
+        alpn_publisher=lambda tenant_id: EngineTlsAlpnPublisher(db, engines, tenant_id),
         dns_wait_s=float(os.environ.get("SWITCHYARD_ACME_DNS_WAIT", "15")),
     )
 

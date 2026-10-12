@@ -144,3 +144,84 @@ async def test_a_tenant_without_a_port_80_service_has_nothing_to_publish_on(pg_u
         publisher = EngineHttp01Publisher(w.db, directory, TENANT)
         with pytest.raises(Http01Error, match="port 80"):
             await publisher.publish("www.example.test", PATH, ANSWER)
+
+
+# -- TLS-ALPN-01 -------------------------------------------------------------------------------
+
+
+async def test_the_edge_presents_the_challenge_certificate_only_to_acme_tls(
+    pg_url: str, edge: Se
+) -> None:
+    from switchyard.adapters.acme import challenge_certificate
+    from switchyard.services.tlsalpn import EngineTlsAlpnPublisher
+
+    engine = DataPlaneEngine(edge.api_url, name=edge.name, username=API_USER, password=API_PASSWORD)
+
+    def handshake(alpn: str) -> str:
+        return edge.exec(
+            f"echo | openssl s_client -connect {EDGE}:443 -servername www.example.test "
+            f"-alpn {alpn} 2>/dev/null | openssl x509 -noout -subject -ext subjectAltName"
+        )
+
+    try:
+        await engine.push(rendered().files)
+        assert "CN=www.example.test" not in handshake("acme-tls/1")
+        async with world(pg_url) as w:
+            directory = StaticEngineDirectory({GROUP: [(record(edge.name), engine)]}, {})
+            publisher = EngineTlsAlpnPublisher(w.db, directory, TENANT)
+            try:
+                await publisher.publish(
+                    "www.example.test", challenge_certificate("www.example.test", "tok.thumb")
+                )
+                presented = handshake("acme-tls/1")
+                assert "CN=www.example.test" in presented, presented
+                assert "DNS:www.example.test" in presented
+            finally:
+                await publisher.close()
+        assert "CN=www.example.test" not in handshake("acme-tls/1"), "the certificate is gone again"
+    finally:
+        await engine.close()
+
+
+async def test_alpn_publisher_needs_the_rendered_alpn_token_and_a_443_service(
+    pg_url: str,
+) -> None:
+    from switchyard.services.tlsalpn import EngineTlsAlpnPublisher, TlsAlpnError
+
+    async with world(pg_url) as w:
+        old = FakeHaproxy("se-old")
+        await old.push({"haproxy/haproxy.cfg": "global\n    log stdout\n"})
+        directory = StaticEngineDirectory({GROUP: [(record("se-old"), old)]}, {})
+        with pytest.raises(TlsAlpnError, match="apply any change set"):
+            await EngineTlsAlpnPublisher(w.db, directory, TENANT).publish("x.example.test", "pem")
+
+        current = FakeHaproxy("se-new")
+        await current.push(rendered().files)
+        engines = StaticEngineDirectory(
+            {GROUP: [(record("se-new"), current), (record("se-off", EngineState.DISABLED), old)]},
+            {},
+        )
+        publisher = EngineTlsAlpnPublisher(w.db, engines, TENANT)
+        await publisher.publish("x.example.test", "pem")
+        [(sni, pem)] = current.challenge_certs["certs/web.crtlist"].values()
+        assert (sni, pem) == ("x.example.test", "pem")
+        await publisher.close()
+        assert current.challenge_certs["certs/web.crtlist"] == {}
+
+
+async def test_alpn_publisher_has_nothing_to_present_on_without_a_443_service(
+    pg_url: str,
+) -> None:
+    from switchyard.services.tlsalpn import EngineTlsAlpnPublisher, TlsAlpnError
+
+    data = copy.deepcopy(base_data())
+    for vs in data["virtual_services"]:
+        vs["ports"] = [
+            {k: v for k, v in p.items() if k != "https_redirect_port"}
+            for p in vs["ports"]
+            if not p.get("tls")
+        ]
+    async with world(pg_url, data) as w:
+        directory = StaticEngineDirectory({GROUP: [(record("se-a"), FakeHaproxy("se-a"))]}, {})
+        with pytest.raises(TlsAlpnError, match="port 443"):
+            await EngineTlsAlpnPublisher(w.db, directory, TENANT).publish("x.example.test", "pem")

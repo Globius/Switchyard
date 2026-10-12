@@ -67,3 +67,37 @@ async def test_dns_failure_is_reported_and_leaves_no_records(directory_url: str)
     with pytest.raises(AcmeError, match="injected failure"):
         await issuer.issue(csr_pem)
     assert dns.txt == {}
+
+
+class RecordingAlpnPublisher:
+    def __init__(self) -> None:
+        self.published: dict[str, str] = {}
+        self.withdrawn: list[str] = []
+
+    async def publish(self, domain: str, certificate_pem: str) -> None:
+        self.published[domain] = certificate_pem
+
+    async def withdraw(self, domain: str) -> None:
+        self.withdrawn.append(domain)
+
+    async def close(self) -> None:
+        return None
+
+
+async def test_tls_alpn_01_presents_a_challenge_certificate_per_name(directory_url: str) -> None:
+    from cryptography import x509
+
+    from switchyard.adapters.acme import TlsAlpn01Solver
+
+    publisher = RecordingAlpnPublisher()
+    issuer = AcmeIssuer(directory_url, new_account_key(), TlsAlpn01Solver(publisher), verify=False)
+    _, csr_pem = generate_key_and_csr(("alpn.example.test", "alpn2.example.test"))
+    assert "BEGIN CERTIFICATE" in await issuer.issue(csr_pem)
+    assert set(publisher.published) == {"alpn.example.test", "alpn2.example.test"}
+    assert sorted(publisher.withdrawn) == sorted(publisher.published), "all withdrawn again"
+    for domain, pem in publisher.published.items():
+        cert = x509.load_pem_x509_certificate(pem.encode())
+        names = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+        assert names.get_values_for_type(x509.DNSName) == [domain]
+        ext = cert.extensions.get_extension_for_oid(x509.ObjectIdentifier("1.3.6.1.5.5.7.1.31"))
+        assert ext.critical and len(ext.value.value) == 34, "an OCTET STRING of a SHA-256"

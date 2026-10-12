@@ -1621,9 +1621,12 @@ class CertIssueIn(ApiModel):
         default=None,
         description="ACME provider name (`acme` only). The default provider when empty.",
     )
-    challenge: Literal["dns-01", "http-01"] | None = Field(
+    challenge: Literal["dns-01", "http-01", "tls-alpn-01"] | None = Field(
         default=None,
-        description="`dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.",
+        description="`dns-01` (default), `http-01` or `tls-alpn-01`. The last two cannot validate "
+        "wildcard names. TLS-ALPN-01 answers every HTTPS handshake for the name with the "
+        "challenge certificate while it runs, so a name that is serving traffic is interrupted "
+        "for a few seconds (see `warnings` in the check).",
     )
     dns_provider: str | None = Field(
         default=None,
@@ -2014,6 +2017,9 @@ class IssueCheckRead(ApiModel):
 
     ok: bool
     problems: list[IssueProblemRead]
+    warnings: list[IssueProblemRead] = Field(
+        description="Things to know that do not stop the request."
+    )
 
 
 class RenewalRead(ApiModel):
