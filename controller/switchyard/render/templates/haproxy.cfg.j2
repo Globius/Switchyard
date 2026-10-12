@@ -31,6 +31,13 @@ peers {{ peers.name }}
 {% endfor %}
 
 {% endif %}
+{% for cache in caches %}
+cache {{ cache.name }}
+    total-max-size {{ cache.size_mb }}
+    max-object-size {{ cache.max_object }}
+    max-age {{ cache.max_age }}
+
+{% endfor %}
 # Local health endpoint for keepalived's check script and the agent's route-health watchdog.
 frontend sy_local_health
     mode http

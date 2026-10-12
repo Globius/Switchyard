@@ -19,8 +19,10 @@ Plan item C2: send part of the traffic of a route to another pool, for canary re
    reads `VsRoute.pool_ids`, so a pool that is only reachable through a weighted route is rendered, checked and monitored. Reference errors point
    at `routes[i].pools[j].pool_id`.
 5. `tcp` passthrough routes (ADR 0115) cannot be weighted (`passthrough_route_invalid`).
-6. Pool priority groups (the second half of the plan item) are not built: a `backup` member (ADR 0106) already gives failover inside a pool, and
-   cross-pool failover needs health-aware routing that HAProxy only offers through `use_backend` conditions on server counts. If needed it gets
-   its own ADR.
+6. Priority groups: `VsRoute.fallback_pool_ids` (up to three, with `pool_id` only, no repeats) turns the route target into an ordered chain. It
+   renders `use_backend <pool> if <match> { nbsrv(<pool>) gt 0 }` for every pool but the last, which takes the rest, so traffic moves to the next
+   pool only when every server of the previous one is down. `nbsrv` only drops when health checks mark servers down, so every pool but the last
+   needs a health monitor (`failover_needs_health_monitor`). A backup member (ADR 0106) still covers failover inside one pool. Fallback pools
+   are referenced everywhere `pool_ids` is read. Storage: `vs_route.fallback_pools` (JSON list).
 7. Storage: `vs_route.pool_weights` (JSON, null when unused), and the check constraint becomes "exactly one of `pool_id`, `redirect_location`,
    `pool_weights`" (migration 0028).

@@ -330,3 +330,97 @@ def test_tcp_routes_cannot_be_weighted() -> None:
         }
     )
     assert ("virtual_services.raw.routes[0]", "passthrough_route_invalid") in problems(d)
+
+
+# -- C2: priority groups -----------------------------------------------------------------------
+
+
+def chain_data(*, monitors: bool = True) -> dict[str, Any]:
+    route = {
+        "match": {"host": "split.example.test"},
+        "pool_id": "pool-0",
+        "fallback_pool_ids": ["pool-1", "pool-2"],
+    }
+    d = with_weighted_route(route)
+    d["health_monitors"] = [
+        {"id": "hm", "tenant_id": "t-acme", "name": "hm", "type": "tcp"},
+    ]
+    if monitors:
+        for pool in d["pools"]:
+            if pool["id"] in ("pool-0", "pool-1"):
+                pool["health_monitor_id"] = "hm"
+    return d
+
+
+def test_a_priority_chain_renders_nbsrv_conditions_in_order() -> None:
+    d = chain_data()
+    assert problems(d) == []
+    snap = snapshot_from_mapping(d)
+    cfg = render_haproxy(snap, snap.se_groups[0].id).files["haproxy/haproxy.cfg"]
+    lines = [line.strip() for line in cfg.splitlines() if "nbsrv" in line]
+    assert [x.split()[1] for x in lines] == ["pool_w0", "pool_w1"]
+    assert "{ nbsrv(pool_w0) gt 0 }" in lines[0]
+    last = next(line for line in cfg.splitlines() if "use_backend pool_w2" in line)
+    assert "nbsrv" not in last
+    group = snap.se_groups[0].id
+    assert {p.name for p in snap.for_se_group(group).pools} >= {"w0", "w1", "w2"}
+
+
+def test_a_chain_needs_health_monitors_on_all_but_the_last_pool() -> None:
+    got = problems(chain_data(monitors=False))
+    assert got == [
+        ("virtual_services.web.routes[1].fallback_pool_ids", "failover_needs_health_monitor"),
+        ("virtual_services.web.routes[1].fallback_pool_ids", "failover_needs_health_monitor"),
+    ]
+
+
+def test_chain_shape_is_validated() -> None:
+    one = "00000000-0000-0000-0000-000000000001"
+    two = "00000000-0000-0000-0000-000000000002"
+    match = {"host": "a.example.test"}
+    with pytest.raises(ValidationError, match="only once"):
+        dm.VsRoute.model_validate({"match": match, "pool_id": one, "fallback_pool_ids": [one]})
+    redirect = {"location": "https://x.example.test/", "code": 301}
+    with pytest.raises(ValidationError, match="needs pool_id"):
+        dm.VsRoute.model_validate(
+            {"match": match, "redirect": redirect, "fallback_pool_ids": [two]}
+        )
+    with pytest.raises(ValidationError):
+        dm.VsRoute.model_validate(
+            {"match": match, "pool_id": one, "fallback_pool_ids": [two, one, two, one]}
+        )
+
+
+# -- C5: cache ---------------------------------------------------------------------------------
+
+
+def test_cache_renders_a_section_and_the_lines_after_the_policies() -> None:
+    d = service(cache={"size_mb": 32, "max_object_kb": 256, "max_age_s": 30})
+    snap = snapshot_from_mapping(d)
+    assert validate_snapshot(snap) == []
+    cfg = render_haproxy(snap, snap.se_groups[0].id).files["haproxy/haproxy.cfg"]
+    assert (
+        "cache sy_cache_web\n    total-max-size 32\n    max-object-size 262144\n    max-age 30"
+        in cfg
+    )
+    assert cfg.index("http-request cache-use sy_cache_web") > cfg.index("set-var(txn.host)")
+    assert cfg.index("cache-use") < cfg.index("use_backend")
+
+
+@pytest.mark.parametrize(
+    "bad", [{"size_mb": 0}, {"size_mb": 257}, {"max_object_kb": 9000}, {"max_age_s": 0}]
+)
+def test_cache_bounds(bad: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        dm.CacheSettings.model_validate(bad)
+
+
+def test_cache_is_http_only_and_shares_a_group_quota() -> None:
+    with pytest.raises(ValidationError, match="cache"):
+        snapshot_from_mapping(data({}, {**TCP_SERVICE, "cache": {}}))
+    d = service(cache={"size_mb": 256})
+    for i in range(4):
+        extra = copy.deepcopy(d["virtual_services"][0])
+        extra.update(id=f"vs-c{i}", name=f"c{i}", vip=f"192.0.2.{30 + i}")
+        d["virtual_services"].append(extra)
+    assert problems(d) == [("se_groups.edge", "cache_quota_exceeded")]

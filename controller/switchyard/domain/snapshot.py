@@ -21,6 +21,7 @@ from switchyard.domain.errors import DomainValidationError, Problem
 from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDDEN_SERVICE_FIELDS
 from switchyard.domain.models import (
     ATTACHABLE_POLICY_KINDS,
+    CACHE_MAX_MB_PER_GROUP,
     HTTP_ONLY_PERSISTENCE,
     Algorithm,
     AllowListPolicySet,
@@ -320,6 +321,10 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 (f"{base}.routes[{i}].pools[{j}].pool_id", w.pool_id)
                 for j, w in enumerate(route.pools)
             ]
+            used_pools += [
+                (f"{base}.routes[{i}].fallback_pool_ids[{j}]", pid)
+                for j, pid in enumerate(route.fallback_pool_ids)
+            ]
         for path, pid in used_pools:
             if check_ref(path, s.tenant_id, "pool", pid, pools_by_id) is not None:
                 pool_protocols[pid].add(s.protocol)
@@ -396,6 +401,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         listeners += [v.Listener(s.name, s.vip, p.port, transport) for p in s.ports]
 
     _check_udp_pools(snapshot, pool_protocols, monitors, problems)
+    _check_failover(snapshot, problems)
+    _check_cache_quota(snapshot, problems)
 
     for first, second in v.find_port_collisions(listeners):
         problems.append(
@@ -756,6 +763,49 @@ def _check_rate_limits(
                 "tarpit rules of one service must use the same tarpit_s (one timeout per frontend)",
             )
         )
+
+
+def _check_failover(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """A priority chain needs health checks on all pools but the last.
+
+    Code: ``failover_needs_health_monitor``.
+
+    Without a check HAProxy counts a down server as up, so traffic would never move on.
+    """
+    pools = {p.id: p for p in snapshot.pools}
+    for s in snapshot.virtual_services:
+        for i, route in enumerate(s.routes):
+            if not route.fallback_pool_ids or route.pool_id is None:
+                continue
+            for pid in (route.pool_id, *route.fallback_pool_ids)[:-1]:
+                pool = pools.get(pid)
+                if pool is not None and pool.health_monitor_id is None:
+                    problems.append(
+                        Problem(
+                            f"virtual_services.{s.name}.routes[{i}].fallback_pool_ids",
+                            "failover_needs_health_monitor",
+                            f"pool {pool.name} needs a health monitor to fail over",
+                        )
+                    )
+
+
+def _check_cache_quota(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """The caches of one SE group share a memory quota (``cache_quota_exceeded``, ADR 0117)."""
+    for group in snapshot.se_groups:
+        total = sum(
+            s.cache.size_mb
+            for s in snapshot.virtual_services
+            if s.se_group_id == group.id and s.enabled and s.cache is not None
+        )
+        if total > CACHE_MAX_MB_PER_GROUP:
+            problems.append(
+                Problem(
+                    f"se_groups.{group.name}",
+                    "cache_quota_exceeded",
+                    f"caches of the group's services use {total} MB; the limit is "
+                    f"{CACHE_MAX_MB_PER_GROUP} MB",
+                )
+            )
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:

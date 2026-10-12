@@ -14,6 +14,7 @@ Traffic features:
 - ``virtual_service.compression`` (JSON).
 - ``vs_route.pool_weights`` (JSON list of ``{pool_id, weight}``); a route has exactly one of ``pool_id``,
   ``redirect_location`` and ``pool_weights``.
+- ``virtual_service.cache`` (JSON) and ``vs_route.fallback_pools`` (JSON list of pool ids).
 - ``se_group.peers`` (JSON, see ``PeerSync``).
 - ``pool.backend_protocol`` (``http1``, ``h2`` or ``h2c``) and ``pool.tunnel_timeout_s``.
 
@@ -81,6 +82,8 @@ def upgrade() -> None:
         "vs_route",
         "num_nonnulls(pool_id, redirect_location, pool_weights) = 1",
     )
+    op.add_column("virtual_service", sa.Column("cache", postgresql.JSONB(), nullable=True))
+    op.add_column("vs_route", sa.Column("fallback_pools", postgresql.JSONB(), nullable=True))
     op.add_column("se_group", sa.Column("peers", postgresql.JSONB(), nullable=True))
     op.add_column("pool", sa.Column("tunnel_timeout_s", sa.Integer(), nullable=True))
     op.add_column(
@@ -97,6 +100,8 @@ def downgrade() -> None:
     op.drop_column("pool", "backend_protocol")
     op.drop_column("pool", "tunnel_timeout_s")
     op.drop_column("se_group", "peers")
+    op.drop_column("vs_route", "fallback_pools")
+    op.drop_column("virtual_service", "cache")
     op.drop_constraint(op.f("ck_vs_route_one_target"), "vs_route", type_="check")
     op.create_check_constraint(
         op.f("ck_vs_route_pool_xor_redirect"),

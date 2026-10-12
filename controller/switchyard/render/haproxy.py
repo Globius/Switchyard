@@ -366,6 +366,7 @@ class _Renderer:
                 stick_counters=self.stick_counters if self.stick_counters > 3 else None,
                 fingerprint=fingerprint,
                 peers=self._peers(),
+                caches=self._caches(),
             )
 
         # The fingerprint covers every file; the config is hashed with a placeholder in its own
@@ -469,6 +470,10 @@ class _Renderer:
                 request_rules.insert(0, _acme_rule())
                 self.files[ACME_MAP_FILE] = _ACME_MAP_TEXT
             routing_rules = self._routing_rules(svc, name)
+            if svc.cache is not None:
+                cache = self._cache_name(svc)
+                request_rules.append(f"http-request cache-use {cache}")
+                response_rules.append(f"http-response cache-store {cache}")
         return {
             "name": name,
             "mode": mode,
@@ -484,6 +489,26 @@ class _Renderer:
                 self._backend_name(svc.default_pool_id) if svc.default_pool_id else None
             ),
         }
+
+    @staticmethod
+    @staticmethod
+    def _cache_name(svc: dm.VirtualService) -> str:
+        return f"sy_cache_{esc.ident(svc.name)}"
+
+    def _caches(self) -> list[dict[str, Any]]:
+        """The ``cache`` sections of the enabled HTTP services (ADR 0117)."""
+        out = []
+        for svc in sorted(self.snap.virtual_services, key=lambda s: s.name):
+            if svc.enabled and svc.cache is not None and svc.protocol is dm.Protocol.HTTP:
+                out.append(
+                    {
+                        "name": self._cache_name(svc),
+                        "size_mb": svc.cache.size_mb,
+                        "max_object": svc.cache.max_object_kb * 1024,
+                        "max_age": svc.cache.max_age_s,
+                    }
+                )
+        return out
 
     @staticmethod
     def _http_options(svc: dm.VirtualService, ports: list[dm.VsPort]) -> list[str]:
@@ -822,6 +847,18 @@ class _Renderer:
                 conds.append(f"{{ ssl_fc_sni -m str {esc.hostname(match.sni)} }}")
         return conds
 
+    def _failover_rules(self, route: dm.VsRoute, cond: str) -> list[str]:
+        """Send to the first pool of the chain that still has a server up (ADR 0119)."""
+        chain = [_need(route.pool_id, "route pool"), *route.fallback_pool_ids]
+        rules: list[str] = []
+        for i, pool_id in enumerate(chain):
+            backend = self._backend_name(pool_id)
+            if i == len(chain) - 1:
+                rules.append(f"use_backend {backend} if {cond}")
+            else:
+                rules.append(f"use_backend {backend} if {cond} {{ nbsrv({backend}) gt 0 }}")
+        return rules
+
     def _weighted_rules(self, route: dm.VsRoute, cond: str) -> list[str]:
         """Split a route over its pools by the request's draw in ``txn.pick`` (ADR 0119)."""
         rules: list[str] = []
@@ -841,19 +878,31 @@ class _Renderer:
         rules: list[str] = []
         pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_ids]
         # Weighted routes are conditional even on a bare host: the map files hold one pool per key.
-        path_routes = [(i, r) for i, r in pool_routes if r.pools or not r.match.is_host_only]
+        path_routes = [
+            (i, r)
+            for i, r in pool_routes
+            if r.pools or r.fallback_pool_ids or not r.match.is_host_only
+        ]
         for _, route in sorted(path_routes, key=lambda ir: (ir[1].order, ir[0])):
             cond = " ".join(self._conditions(route.match))
             if route.pools:
                 rules += self._weighted_rules(route, cond)
                 continue
             backend = self._backend_name(_need(route.pool_id, "route pool"))
+            if route.fallback_pool_ids:
+                rules += self._failover_rules(route, cond)
+                continue
             rules.append(f"use_backend {backend} if {cond}")
         exact: dict[str, str] = {}
         wild: dict[str, str] = {}
         for _, route in pool_routes:
             host = route.match.host
-            if host is None or route.pools or not route.match.is_host_only:
+            if (
+                host is None
+                or route.pools
+                or route.fallback_pool_ids
+                or not route.match.is_host_only
+            ):
                 continue
             target = self._backend_name(_need(route.pool_id, "route pool"))
             if _is_wild(host):

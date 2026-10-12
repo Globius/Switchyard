@@ -4845,6 +4845,39 @@ export interface components {
             pem: string;
         };
         /**
+         * CacheSettings
+         * @description HAProxy small-object cache for the responses of an ``http`` service (ADR 0117).
+         *
+         *     Only responses the origin marks cacheable are stored, for ``GET`` and ``HEAD`` requests without
+         *     ``Authorization``; ``Vary`` is honoured. Rate limits and deny rules run before the cache.
+         *
+         *     Attributes:
+         *         size_mb: Memory of the cache in megabytes (1 to 256).
+         *         max_object_kb: Largest response body kept, in kilobytes (1 to 8192).
+         *         max_age_s: Longest time an entry is served without asking the origin (1 to 86400).
+         *
+         *     Example:
+         *         >>> CacheSettings().size_mb
+         *         16
+         */
+        CacheSettings: {
+            /**
+             * Max Age S
+             * @default 60
+             */
+            max_age_s: number;
+            /**
+             * Max Object Kb
+             * @default 1024
+             */
+            max_object_kb: number;
+            /**
+             * Size Mb
+             * @default 16
+             */
+            size_mb: number;
+        };
+        /**
          * CertImportIn
          * @description Body of ``POST /certificates/import``.
          */
@@ -10788,10 +10821,12 @@ export interface components {
          *         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
          *             client address; honoured only when the connection source is in the allow list.
          *         compression: Response compression (``http`` only; ADR 0117).
+         *         cache: Response cache (``http`` only; ADR 0117).
          */
         VirtualService: {
             /** Allow List Id */
             allow_list_id?: string | null;
+            cache?: components["schemas"]["CacheSettings"] | null;
             /**
              * Certificate Ids
              * @default []
@@ -10856,6 +10891,7 @@ export interface components {
         VirtualServiceCreate: {
             /** Allow List Id */
             allow_list_id?: string | null;
+            cache?: components["schemas"]["CacheSettings"] | null;
             /**
              * Certificate Ids
              * @default []
@@ -10966,6 +11002,7 @@ export interface components {
         VirtualServicePatch: {
             /** Allow List Id */
             allow_list_id?: string | null;
+            cache?: components["schemas"]["CacheSettings"] | null;
             /** Certificate Ids */
             certificate_ids?: string[] | null;
             compression?: components["schemas"]["Compression"] | null;
@@ -11000,6 +11037,7 @@ export interface components {
         VirtualServiceRead: {
             /** Allow List Id */
             allow_list_id?: string | null;
+            cache?: components["schemas"]["CacheSettings"] | null;
             /**
              * Certificate Ids
              * @default []
@@ -11373,6 +11411,8 @@ export interface components {
          *         match: What the request must match. Must not be empty.
          *         pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.
          *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.
+         *         fallback_pool_ids: Priority groups: pools tried in order when every server of the pool
+         *             before them is down (``pool_id`` only; up to three; ADR 0119).
          *         pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each
          *             request is sent to one of them at random in that proportion (ADR 0119).
          *
@@ -11389,6 +11429,11 @@ export interface components {
          *         2
          */
         VsRoute: {
+            /**
+             * Fallback Pool Ids
+             * @default []
+             */
+            fallback_pool_ids: string[];
             match: components["schemas"]["RouteMatch"];
             /**
              * Order

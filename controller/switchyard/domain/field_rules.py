@@ -18,6 +18,7 @@ UDP_FORBIDDEN_SERVICE_FIELDS = (
     "restore_client_ip_header",
     "routes",
     "compression",
+    "cache",
 )
 #: Fields of a port that a UDP service cannot use.
 UDP_FORBIDDEN_PORT_FIELDS = (

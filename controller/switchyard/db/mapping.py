@@ -192,6 +192,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 enforce_allow_list=s.enforce_allow_list,
                 restore_client_ip_header=s.restore_client_ip_header,
                 compression=s.compression.model_dump(mode="json") if s.compression else None,
+                cache=s.cache.model_dump(mode="json") if s.cache else None,
             )
         )
     # Child rows come after their parents so inserts satisfy the foreign keys.
@@ -257,6 +258,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     redirect_location=r.redirect.location if r.redirect else None,
                     redirect_code=r.redirect.code if r.redirect else None,
                     pool_weights=[w.model_dump(mode="json") for w in r.pools] or None,
+                    fallback_pools=[str(p) for p in r.fallback_pool_ids] or None,
                 )
             )
         for i, cid in enumerate(s.certificate_ids):
@@ -468,6 +470,7 @@ def rows_to_snapshot(
                 "enforce_allow_list": s.enforce_allow_list,
                 "restore_client_ip_header": s.restore_client_ip_header,
                 "compression": s.compression,
+                "cache": s.cache,
                 "ports": [
                     {
                         "port": p.port,
@@ -513,6 +516,7 @@ def _route_to_dict(r: m.VsRouteRow) -> dict[str, Any]:
         },
         "pool_id": r.pool_id,
         "pools": r.pool_weights or [],
+        "fallback_pool_ids": r.fallback_pools or [],
         "redirect": (
             {"location": r.redirect_location, "code": r.redirect_code}
             if r.redirect_location is not None
