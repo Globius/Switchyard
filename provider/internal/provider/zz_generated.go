@@ -252,6 +252,15 @@ var Definitions = []Definition{
 					{Name: "source_cidrs", Kind: KindList, Elem: &Attr{Kind: KindString}},
 				}},
 				{Name: "mode", Kind: KindString, Enum: []string{"public", "login", "groups", "email_domains"}},
+				{Name: "posture", Kind: KindObject, Doc: "Device conditions a request must meet besides the login (ADR 0138).", Attrs: []Attr{
+					{Name: "claims", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+						{Name: "name", Kind: KindString, Required: true},
+						{Name: "op", Kind: KindString, Enum: []string{"present", "true", "equals", "in"}},
+						{Name: "value", Kind: KindString},
+						{Name: "values", Kind: KindList, Elem: &Attr{Kind: KindString}},
+					}}},
+					{Name: "device_certificate", Kind: KindBool},
+				}},
 			}}},
 		},
 	},

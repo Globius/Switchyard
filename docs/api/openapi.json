@@ -524,6 +524,16 @@
             ],
             "title": "Mode",
             "type": "string"
+          },
+          "posture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Posture"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "AccessRule",
@@ -4151,6 +4161,53 @@
           "op_count"
         ],
         "title": "ChangeSetSummary",
+        "type": "object"
+      },
+      "ClaimCheck": {
+        "additionalProperties": false,
+        "description": "A condition on a claim of the signed-in user's ID token (ADR 0138).\n\n``op`` is ``present``, ``true`` (a JSON ``true``), ``equals`` (``value``) or ``in``\n(``values``). The token was verified by the authentication proxy.",
+        "properties": {
+          "name": {
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "op": {
+            "default": "true",
+            "enum": [
+              "present",
+              "true",
+              "equals",
+              "in"
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "values": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ClaimCheck",
         "type": "object"
       },
       "ClientCertPolicySet": {
@@ -11623,6 +11680,28 @@
           "changed_fields"
         ],
         "title": "PoolRead",
+        "type": "object"
+      },
+      "Posture": {
+        "additionalProperties": false,
+        "description": "Device conditions a request must meet besides the login (ADR 0138).\n\nAttributes:\n    device_certificate: The connection presented a client certificate the port's client CA\n        accepted (the service needs a port with ``client_ca_id``).\n    claims: Conditions on ID-token claims, all of which must hold (for example a\n        ``device_compliant`` claim the identity provider issues).",
+        "properties": {
+          "claims": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ClaimCheck"
+            },
+            "maxItems": 8,
+            "title": "Claims",
+            "type": "array"
+          },
+          "device_certificate": {
+            "default": false,
+            "title": "Device Certificate",
+            "type": "boolean"
+          }
+        },
+        "title": "Posture",
         "type": "object"
       },
       "PrincipalNameRead": {

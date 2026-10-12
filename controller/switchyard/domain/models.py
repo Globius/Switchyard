@@ -1167,6 +1167,47 @@ class OidcSettings(Model):
         return self
 
 
+class ClaimCheck(Model):
+    """A condition on a claim of the signed-in user's ID token (ADR 0138).
+
+    ``op`` is ``present``, ``true`` (a JSON ``true``), ``equals`` (``value``) or ``in``
+    (``values``). The token was verified by the authentication proxy.
+    """
+
+    name: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
+    op: Literal["present", "true", "equals", "in"] = "true"
+    value: HeaderValue | None = None
+    values: tuple[HeaderValue, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.op == "equals") != (self.value is not None):
+            raise ValueError("value goes with op equals, and only with it")
+        if (self.op == "in") != bool(self.values):
+            raise ValueError("values go with op in, and only with it")
+        return self
+
+
+class Posture(Model):
+    """Device conditions a request must meet besides the login (ADR 0138).
+
+    Attributes:
+        device_certificate: The connection presented a client certificate the port's client CA
+            accepted (the service needs a port with ``client_ca_id``).
+        claims: Conditions on ID-token claims, all of which must hold (for example a
+            ``device_compliant`` claim the identity provider issues).
+    """
+
+    device_certificate: bool = False
+    claims: tuple[ClaimCheck, ...] = Field(default=(), max_length=8)
+
+    @model_validator(mode="after")
+    def _something(self) -> Self:
+        if not self.device_certificate and not self.claims:
+            raise ValueError("posture needs device_certificate or claims")
+        return self
+
+
 class AccessRule(Model):
     """What a request needs before it reaches the origin.
 
@@ -1180,9 +1221,12 @@ class AccessRule(Model):
     mode: Literal["public", "login", "groups", "email_domains"] = "login"
     groups: tuple[GroupName, ...] = Field(default=(), max_length=32)
     email_domains: tuple[Hostname, ...] = Field(default=(), max_length=32)
+    posture: Posture | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
+        if self.posture is not None and self.mode == "public":
+            raise ValueError("posture does not go with mode public")
         if self.mode == "groups" and not self.groups:
             raise ValueError("mode groups needs groups")
         if self.mode == "email_domains" and not self.email_domains:

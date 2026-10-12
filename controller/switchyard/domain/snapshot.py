@@ -757,6 +757,16 @@ def _check_access(
                 "a client-certificate policy set needs a port with client_ca_id",
             )
         )
+    if any(r.posture and r.posture.device_certificate for a in sets for r in a.rules) and not any(
+        p.client_ca_id for p in s.ports
+    ):
+        problems.append(
+            Problem(
+                f"{base}.ports",
+                "posture_needs_client_ca",
+                "a device-certificate posture rule needs a port with client_ca_id",
+            )
+        )
     if len(sets) > 1:
         problems.append(
             Problem(

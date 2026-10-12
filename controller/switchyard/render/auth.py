@@ -203,7 +203,9 @@ def render_instance(inst: AuthInstance, broker_url: str | None = None) -> str:
         True
     """
     oidc = inst.policy.oidc
-    wants_token = inst.policy.identity_headers.token is not None
+    wants_token = inst.policy.identity_headers.token is not None or any(
+        r.posture and r.posture.claims for r in inst.policy.rules
+    )
     lines = [
         "# Managed by Switchyard. Do not edit: changes are reported as drift.",
         f"# access set {esc.ident(inst.policy.name)} on service {esc.ident(inst.service.name)}",

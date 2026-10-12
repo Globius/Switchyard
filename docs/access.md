@@ -134,3 +134,20 @@ oidc:
 
 The broker needs `SWITCHYARD_AUTH_BROKER_URL` on the controller and the services in `deploy/prod/compose.broker.yaml`
 (`docs/runbooks/login-broker.md`).
+
+## Device posture
+
+An access rule can also require a managed device (ADR 0138):
+
+```yaml
+rules:
+  - match: {path_prefix: /secure}
+    mode: login
+    posture:
+      device_certificate: true            # needs a port with client_ca_id, client_verify: optional
+      claims:
+        - {name: device_compliant, op: "true"}
+        - {name: tier, op: in, values: [gold, silver]}
+```
+
+Claims come from the ID token and are re-read at each session refresh.

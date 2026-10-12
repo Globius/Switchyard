@@ -84,3 +84,4 @@ Date: YYYY-MM-DD
 | [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
 | [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
 | [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
+| [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |
