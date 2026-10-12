@@ -726,3 +726,270 @@ def api_job(job_id: str, wait: bool = False) -> None:
             await client.close()
 
     typer.echo(json.dumps(_api_run(go()), indent=2, sort_keys=True))
+
+
+# -- ACME providers, DNS credentials and certificate requests (ADR 0079) -----------------------
+
+acme_app = typer.Typer(help="ACME providers (system administrators).", no_args_is_help=True)
+dns_app = typer.Typer(help="A tenant's DNS credentials for DNS-01.", no_args_is_help=True)
+cert_app = typer.Typer(help="Request and check certificates.", no_args_is_help=True)
+api_app.add_typer(acme_app, name="acme")
+api_app.add_typer(dns_app, name="dns")
+api_app.add_typer(cert_app, name="cert")
+
+
+def _pairs(items: list[str] | None) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for item in items or []:
+        key, sep, value = item.partition("=")
+        if not sep or not key:
+            raise typer.BadParameter(f"{item!r} is not key=value")
+        out[key] = value
+    return out
+
+
+async def _call(
+    method: str, path: str, body: Any = None, headers: dict[str, str] | None = None
+) -> Any:
+    client = _api()
+    try:
+        return await client.request(method, path, json_body=body, headers=headers)
+    finally:
+        await client.close()
+
+
+async def _find(path: str, name: str) -> dict[str, Any]:
+    for item in await _call("GET", path):
+        if item["name"] == name or item["id"] == name:
+            return item  # type: ignore[no-any-return]
+    raise typer.BadParameter(f"nothing named {name} under {path}")
+
+
+def _etag(item: dict[str, Any]) -> dict[str, str]:
+    return {"If-Match": f'"{item["version"]}"'}
+
+
+@acme_app.command("presets")
+def acme_presets() -> None:
+    """List the known certificate authorities."""
+    for p in _api_run(_call("GET", "/acme-provider-presets")):
+        where = p["directory_url"] or "(enter it)"
+        typer.echo(f"{p['key']}\t{p['label']}\t{p['auth_mode']}\t{where}")
+
+
+@acme_app.command("list")
+def acme_list() -> None:
+    """List the ACME providers."""
+    for p in _api_run(_call("GET", "/acme-providers")):
+        flags = ("default " if p["default"] else "") + (
+            "registered" if p["account_registered"] else "untested"
+        )
+        typer.echo(
+            f"{p['name']}\t{p['preset']}\t{p['directory_url']}\t{flags}\tused by {p['used_by']}"
+        )
+
+
+@acme_app.command("add")
+def acme_add(
+    name: str,
+    preset: Annotated[str, typer.Option(help="letsencrypt, zerossl, google, keyfactor ...")] = (
+        "custom"
+    ),
+    directory_url: Annotated[
+        str | None, typer.Option(help="Needed for custom and keyfactor.")
+    ] = None,
+    email: Annotated[str | None, typer.Option(help="Contact address.")] = None,
+    eab_kid: Annotated[str | None, typer.Option(help="External Account Binding key id.")] = None,
+    eab_hmac_key: Annotated[str | None, typer.Option(help="EAB HMAC key (base64url).")] = None,
+    default: Annotated[bool, typer.Option(help="Use it when a certificate names none.")] = False,
+    terms_agreed: Annotated[bool, typer.Option(help="Accept the CA's terms of service.")] = False,
+) -> None:
+    """Register an ACME provider; the controller creates its account key."""
+    body = {
+        "name": name,
+        "preset": preset,
+        "directory_url": directory_url,
+        "email": email,
+        "eab_kid": eab_kid,
+        "eab_hmac_key": eab_hmac_key,
+        "default": default,
+        "terms_agreed": terms_agreed,
+    }
+    made = _api_run(
+        _call("POST", "/acme-providers", {k: v for k, v in body.items() if v is not None})
+    )
+    typer.echo(f"{made['name']}\t{made['id']}\tv{made['version']}")
+
+
+@acme_app.command("test")
+def acme_test(name: str) -> None:
+    """Contact the CA and register the account; prints each step."""
+
+    async def go() -> Any:
+        found = await _find("/acme-providers", name)
+        return await _call("POST", f"/acme-providers/{found['id']}/test")
+
+    result = _api_run(go())
+    for stage in result["stages"]:
+        typer.echo(f"{stage['name']}\t{'ok' if stage['ok'] else 'FAILED'}\t{stage['detail']}")
+    if not result["ok"]:
+        raise typer.Exit(1)
+
+
+@acme_app.command("delete")
+def acme_delete(name: str) -> None:
+    """Remove an ACME provider that no certificate uses."""
+
+    async def go() -> None:
+        found = await _find("/acme-providers", name)
+        await _call("DELETE", f"/acme-providers/{found['id']}", headers=_etag(found))
+
+    _api_run(go())
+
+
+@dns_app.command("types")
+def dns_types() -> None:
+    """List the provider types with their fields (secret fields are marked)."""
+    for t in _api_run(_call("GET", "/dns-provider-types")):
+        typer.echo(f"{t['type']}\t{t['label']}")
+        for f in t["fields"]:
+            kind = "secret" if f["secret"] else "setting"
+            typer.echo(f"  {f['key']}\t{kind}\t{'required' if f['required'] else 'optional'}")
+
+
+@dns_app.command("list")
+def dns_list(tenant: Tenant) -> None:
+    """List the tenant's DNS credentials."""
+    for p in _api_run(_call("GET", f"/tenants/{tenant}/dns-providers")):
+        zones = ",".join(p["zones"]) or "(any)"
+        typer.echo(f"{p['name']}\t{p['type']}\t{zones}\t{'on' if p['enabled'] else 'off'}")
+
+
+@dns_app.command("add")
+def dns_add(
+    name: str,
+    tenant: Tenant,
+    type_: Annotated[str, typer.Option("--type", help="cloudflare, route53, azure, google ...")],
+    zone: Annotated[list[str] | None, typer.Option(help="A zone this credential serves.")] = None,
+    config: Annotated[list[str] | None, typer.Option(help="key=value setting (repeat).")] = None,
+    secret: Annotated[list[str] | None, typer.Option(help="key=value credential (repeat).")] = None,
+) -> None:
+    """Add a DNS credential. Secrets go to the secrets backend and are never shown again."""
+    body = {
+        "name": name,
+        "type": type_,
+        "zones": zone or [],
+        "config": _pairs(config),
+        "credentials": _pairs(secret),
+    }
+    made = _api_run(_call("POST", f"/tenants/{tenant}/dns-providers", body))
+    typer.echo(f"{made['name']}\t{made['id']}\tv{made['version']}")
+
+
+@dns_app.command("test")
+def dns_test(name: str, tenant: Tenant) -> None:
+    """Publish and remove a TXT record in each zone of the credential."""
+
+    async def go() -> Any:
+        found = await _find(f"/tenants/{tenant}/dns-providers", name)
+        return await _call("POST", f"/tenants/{tenant}/dns-providers/{found['id']}/test", {})
+
+    result = _api_run(go())
+    for z in result["zones"]:
+        typer.echo(f"{z['zone']}\t{'ok' if z['ok'] else 'FAILED'}\t{z['detail']}")
+    if not result["ok"]:
+        raise typer.Exit(1)
+
+
+@dns_app.command("delete")
+def dns_delete(name: str, tenant: Tenant) -> None:
+    """Remove a DNS credential that no certificate names."""
+
+    async def go() -> None:
+        found = await _find(f"/tenants/{tenant}/dns-providers", name)
+        await _call(
+            "DELETE", f"/tenants/{tenant}/dns-providers/{found['id']}", headers=_etag(found)
+        )
+
+    _api_run(go())
+
+
+def _issue_body(
+    name: str,
+    san: list[str],
+    acme_provider: str | None,
+    challenge: str | None,
+    dns_provider: str | None,
+    renew_before_days: int | None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"name": name, "source": "acme", "sans": san}
+    for key, value in (
+        ("acme_provider", acme_provider),
+        ("challenge", challenge),
+        ("dns_provider", dns_provider),
+        ("renew_before_days", renew_before_days),
+    ):
+        if value is not None:
+            body[key] = value
+    return body
+
+
+@cert_app.command("check")
+def cert_check(
+    name: str,
+    tenant: Tenant,
+    san: Annotated[list[str], typer.Option(help="A name for the certificate (repeat).")],
+    acme_provider: Annotated[str | None, typer.Option()] = None,
+    challenge: Annotated[str | None, typer.Option(help="dns-01 or http-01.")] = None,
+    dns_provider: Annotated[str | None, typer.Option()] = None,
+) -> None:
+    """Check an ACME certificate request without queueing it."""
+    body = _issue_body(name, san, acme_provider, challenge, dns_provider, None)
+    result = _api_run(_call("POST", f"/tenants/{tenant}/certificates/issue/check", body))
+    for problem in result["problems"]:
+        typer.echo(f"{problem['path']}: {problem['message']}")
+    if not result["ok"]:
+        raise typer.Exit(1)
+    typer.echo("ok")
+
+
+@cert_app.command("issue")
+def cert_issue(
+    name: str,
+    tenant: Tenant,
+    san: Annotated[list[str], typer.Option(help="A name for the certificate (repeat).")],
+    acme_provider: Annotated[str | None, typer.Option()] = None,
+    challenge: Annotated[str | None, typer.Option(help="dns-01 or http-01.")] = None,
+    dns_provider: Annotated[str | None, typer.Option()] = None,
+    renew_before_days: Annotated[int | None, typer.Option()] = None,
+    wait: Annotated[bool, typer.Option(help="Wait for the job to finish.")] = True,
+) -> None:
+    """Request an ACME certificate (a job; it ends in a change set)."""
+    import json
+
+    async def go() -> Any:
+        client = _api()
+        try:
+            job = await client.request(
+                "POST",
+                f"/tenants/{tenant}/certificates/issue",
+                json_body=_issue_body(
+                    name, san, acme_provider, challenge, dns_provider, renew_before_days
+                ),
+            )
+            return await client.wait_job(job["job_id"]) if wait else job
+        finally:
+            await client.close()
+
+    typer.echo(json.dumps(_api_run(go()), indent=2, sort_keys=True))
+
+
+@cert_app.command("renewals")
+def cert_renewals(tenant: Tenant) -> None:
+    """Show when each certificate renews and how the last attempt went."""
+    for s in _api_run(_call("GET", f"/tenants/{tenant}/certificate-renewals")):
+        if s["last_ok"] is None:
+            last = "never tried"
+        else:
+            last = "ok" if s["last_ok"] else f"FAILED: {s['last_error']}"
+        typer.echo(f"{s['certificate']}\t{s['issuer']}\trenews {s['renew_due_at'][:10]}\t{last}")

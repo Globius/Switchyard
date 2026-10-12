@@ -166,6 +166,24 @@ validator reports `wrong_certificate_purpose` for mix-ups. See ADR 0070.
 Certificates carry `renew_before_days` (1 to 365, default 30): an `auto` certificate is renewed that many days before it
 expires. Read it with the certificate, change it with a normal update operation. See ADR 0064.
 
+## ACME providers, DNS credentials and certificate requests
+
+`docs/acme.md` explains the model; the OpenAPI document has every shape.
+
+- `GET /acme-provider-presets`, `GET|POST /acme-providers`, `GET|PATCH|DELETE /acme-providers/{id}`,
+  `POST /acme-providers/{id}/test`: certificate authorities (system administrators write; every
+  signed-in user reads). Secrets (`eab_hmac_key`, `oauth_client_secret`, `account_key`) are write-only.
+  Tests answer `200` with `ok` and the `stages` `directory`, `eab`, `account`.
+- `GET /dns-provider-types`: the provider types and the fields of each form.
+- `GET|POST /tenants/{t}/dns-providers`, `GET|PATCH|DELETE .../{id}`, `POST .../{id}/test`,
+  `GET .../match?names=`: a tenant's DNS credentials (tenant administrators write). `PATCH` and
+  `DELETE` need `If-Match`; secrets are never returned (`credentials_set`).
+- `POST /tenants/{t}/certificates/issue` takes `acme_provider`, `challenge` (`dns-01`, `http-01`),
+  `dns_provider`, `renew_policy` and `renew_before_days`; `POST .../issue/check` returns the same
+  checks as `{ok, problems:[{path, message}]}` without queueing.
+- `GET /tenants/{t}/certificate-renewals` (status per certificate) and
+  `GET /tenants/{t}/certificates/{id}/renewals` (history with the CA's error).
+
 ## Jobs
 
 `kind` is an enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert` (result
