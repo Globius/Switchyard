@@ -286,6 +286,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/grafana/launch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Grafana for every tenant
+         * @description Like the tenant form, for the administrator's own Grafana organization with the dashboards that span tenants. Requires the system-admin role.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["grafana_launch_all_api_v1_grafana_launch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/healthz": {
         parameters: {
             query?: never;
@@ -1365,6 +1387,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/engines/{engine}/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Metrics of a service engine
+         * @description CPU as a percentage of all vCPUs, memory in use, current HAProxy sessions and traffic received (bits per second) of one engine over the last `window_s` seconds (ending at `until` when given), one point per `step_s`, plus the latest value of each and the engine's vCPU count and memory. Read from Prometheus with the tenant and engine labels enforced. `available: false` (with a `reason`) when no backend is configured or it fails; a missing sample is a gap in the series, never zero. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["engine_metrics_api_v1_tenants__t__engines__engine__metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/engines/{engine}/retire": {
         parameters: {
             query?: never;
@@ -1425,6 +1469,28 @@ export interface paths {
          */
         put: operations["engine_state_api_v1_tenants__t__engines__engine__state_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/grafana/launch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Grafana for a tenant
+         * @description Returns a link that works once, for 60 seconds. Opening it in a new browser tab starts a Grafana session that can read this tenant's metrics and logs and nothing else: the controller scopes every query Grafana sends to Prometheus and Loki. The session ends 30 minutes after its last use (8 hours at most) and with the browser session. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        post: operations["grafana_launch_tenant_api_v1_tenants__t__grafana_launch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4262,6 +4328,42 @@ export interface components {
             name: string;
         };
         /**
+         * EngineMetrics
+         * @description Time series and headline numbers of one service engine.
+         */
+        EngineMetrics: {
+            /** Cpu Percent */
+            cpu_percent: components["schemas"]["MetricPoint"][];
+            /** Haproxy Sessions */
+            haproxy_sessions: components["schemas"]["MetricPoint"][];
+            /** Memory Used Bytes */
+            memory_used_bytes: components["schemas"]["MetricPoint"][];
+            /** Step S */
+            step_s: number;
+            summary: components["schemas"]["EngineSummary"];
+            /** Traffic In Bps */
+            traffic_in_bps: components["schemas"]["MetricPoint"][];
+            /** Window S */
+            window_s: number;
+        };
+        /**
+         * EngineMetricsRead
+         * @description Metrics of one service engine, or why there are none.
+         */
+        EngineMetricsRead: {
+            /**
+             * Available
+             * @description False when no metrics backend is configured or it cannot be reached.
+             */
+            available: boolean;
+            metrics?: components["schemas"]["EngineMetrics"] | null;
+            /**
+             * Reason
+             * @description Why `available` is false.
+             */
+            reason?: string | null;
+        };
+        /**
          * EngineRead
          * @description A service engine (SE VM) with where it runs and whether its agent has enrolled.
          *
@@ -4407,6 +4509,42 @@ export interface components {
             se_group_id: string;
         };
         /**
+         * EngineSummary
+         * @description The latest value of each headline metric of one service engine.
+         */
+        EngineSummary: {
+            /**
+             * Cpu Percent
+             * @description CPU used, as a percentage of all vCPUs (0 to 100).
+             */
+            cpu_percent?: number | null;
+            /**
+             * Haproxy Sessions
+             * @description Current HAProxy sessions on this engine.
+             */
+            haproxy_sessions?: number | null;
+            /**
+             * Memory Total Bytes
+             * @description Memory the engine has.
+             */
+            memory_total_bytes?: number | null;
+            /**
+             * Memory Used Bytes
+             * @description Memory in use.
+             */
+            memory_used_bytes?: number | null;
+            /**
+             * Traffic In Bps
+             * @description Bits per second received by HAProxy on this engine.
+             */
+            traffic_in_bps?: number | null;
+            /**
+             * Vcpus
+             * @description Number of vCPUs the engine sees.
+             */
+            vcpus?: number | null;
+        };
+        /**
          * EnrollIn
          * @description Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential).
          */
@@ -4515,6 +4653,40 @@ export interface components {
             server: string;
             /** Status */
             status: string;
+        };
+        /**
+         * GrafanaLaunchIn
+         * @description Where to land in the embedded Grafana.
+         */
+        GrafanaLaunchIn: {
+            /**
+             * Landing
+             * @description A path inside Grafana: empty (the tenant's home dashboard), `/d/<uid>[/<slug>]`, `/explore` or `/dashboards`, optionally with a query string.
+             * @default
+             */
+            landing: string;
+        };
+        /**
+         * GrafanaLaunchOut
+         * @description A one-time link to the embedded Grafana.
+         */
+        GrafanaLaunchOut: {
+            /**
+             * Expires At
+             * Format: date-time
+             * @description When the link stops working if it was not opened.
+             */
+            expires_at: string;
+            /**
+             * Tenant Id
+             * @description The tenant Grafana is scoped to; null for all.
+             */
+            tenant_id: string | null;
+            /**
+             * Url
+             * @description Open this path in a new browser tab within `expires_at`. It works once: Switchyard exchanges it for a short session cookie and redirects into Grafana.
+             */
+            url: string;
         };
         /**
          * GrantSourceRead
@@ -5237,6 +5409,12 @@ export interface components {
              * @description Base URL of Grafana (`SWITCHYARD_GRAFANA_URL`), or null when none is set.
              */
             grafana?: string | null;
+            /**
+             * Grafana Embedded
+             * @description Grafana is behind the controller: `POST /tenants/{t}/grafana/launch` returns a link that opens it in a new tab, scoped to the tenant (ADR 0080).
+             * @default false
+             */
+            grafana_embedded: boolean;
         };
         /**
          * MeSession
@@ -8787,7 +8965,8 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "links": {
-                     *         "grafana": "https://grafana.example.test"
+                     *         "grafana": "https://grafana.example.test",
+                     *         "grafana_embedded": true
                      *       },
                      *       "name": "Alice Example",
                      *       "principal": "user:authentik:alice",
@@ -9125,7 +9304,8 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "links": {
-                     *         "grafana": "https://grafana.example.test"
+                     *         "grafana": "https://grafana.example.test",
+                     *         "grafana_embedded": true
                      *       },
                      *       "name": "Alice Example",
                      *       "principal": "user:authentik:alice",
@@ -9381,6 +9561,81 @@ export interface operations {
             };
             /** @description Agent enrollment is not configured. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    grafana_launch_all_api_v1_grafana_launch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "landing": ""
+                 *     }
+                 */
+                "application/json": components["schemas"]["GrafanaLaunchIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "expires_at": "2026-10-10T08:30:00Z",
+                     *       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "url": "/grafana/launch?ticket=sygt_Qm9vdHN0cmFwLXRpY2tldC1leGFtcGxlLW9ubHk"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GrafanaLaunchOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10156,7 +10411,8 @@ export interface operations {
                      *       "id": "0192f3a0-0000-7000-8000-000000000031",
                      *       "is_system": false,
                      *       "links": {
-                     *         "grafana": "https://grafana.example.test"
+                     *         "grafana": "https://grafana.example.test",
+                     *         "grafana_embedded": true
                      *       },
                      *       "name": "Alice Example",
                      *       "principal": "user:authentik:alice",
@@ -14661,6 +14917,118 @@ export interface operations {
             };
         };
     };
+    engine_metrics_api_v1_tenants__t__engines__engine__metrics_get: {
+        parameters: {
+            query?: {
+                /** @description Seconds back from `until` (default: now). */
+                window_s?: number;
+                /** @description Seconds between points; default fits ~120 points. */
+                step_s?: number | null;
+                /** @description End of the range (RFC 3339); default now. Not more than five minutes ahead. */
+                until?: string | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Engine id. */
+                engine: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "available": true,
+                     *       "metrics": {
+                     *         "cpu_percent": [
+                     *           {
+                     *             "t": "2026-10-10T08:30:00Z",
+                     *             "v": 32
+                     *           }
+                     *         ],
+                     *         "haproxy_sessions": [
+                     *           {
+                     *             "t": "2026-10-10T08:30:00Z",
+                     *             "v": 1980
+                     *           }
+                     *         ],
+                     *         "memory_used_bytes": [
+                     *           {
+                     *             "t": "2026-10-10T08:30:00Z",
+                     *             "v": 2791728742
+                     *           }
+                     *         ],
+                     *         "step_s": 30,
+                     *         "summary": {
+                     *           "cpu_percent": 32,
+                     *           "haproxy_sessions": 1980,
+                     *           "memory_total_bytes": 8589934592,
+                     *           "memory_used_bytes": 2791728742,
+                     *           "traffic_in_bps": 147000000,
+                     *           "vcpus": 4
+                     *         },
+                     *         "traffic_in_bps": [
+                     *           {
+                     *             "t": "2026-10-10T08:30:00Z",
+                     *             "v": 147000000
+                     *           }
+                     *         ],
+                     *         "window_s": 3600
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["EngineMetricsRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     retire_engine_api_v1_tenants__t__engines__engine__retire_post: {
         parameters: {
             query?: never;
@@ -14863,6 +15231,93 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["EngineStateOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    grafana_launch_tenant_api_v1_tenants__t__grafana_launch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "landing": "/d/sy-tenant-services"
+                 *     }
+                 */
+                "application/json": components["schemas"]["GrafanaLaunchIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "expires_at": "2026-10-10T08:30:00Z",
+                     *       "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                     *       "url": "/grafana/launch?ticket=sygt_Qm9vdHN0cmFwLXRpY2tldC1leGFtcGxlLW9ubHk"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GrafanaLaunchOut"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -22782,10 +23237,12 @@ export interface operations {
     service_metrics_api_v1_tenants__t__virtual_services__object_id__metrics_get: {
         parameters: {
             query?: {
-                /** @description Seconds back from now. */
+                /** @description Seconds back from `until` (default: now). */
                 window_s?: number;
                 /** @description Seconds between points; default fits ~120 points. */
                 step_s?: number | null;
+                /** @description End of the range (RFC 3339); default now. Not more than five minutes ahead. */
+                until?: string | null;
             };
             header?: {
                 /** @description `Bearer <API token>`. Browsers send the session cookie instead. */

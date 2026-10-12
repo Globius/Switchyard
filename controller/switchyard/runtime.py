@@ -28,6 +28,7 @@ from switchyard.adapters.acme import AcmeIssuer, new_account_key
 from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
 from switchyard.adapters.git import GitLabMirror, GitMirror
+from switchyard.adapters.grafana import HttpGrafana
 from switchyard.adapters.pki import OpenBaoPki
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
@@ -50,6 +51,7 @@ from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
+from switchyard.services.grafana import GrafanaConfig, GrafanaService
 from switchyard.services.infra import InfraService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
@@ -175,6 +177,41 @@ def telemetry() -> Telemetry | None:
     if not prometheus:
         return None
     return HttpTelemetry(prometheus, os.environ.get("SWITCHYARD_LOKI_URL"))
+
+
+def grafana(db: Databases) -> GrafanaService | None:
+    """The embedded Grafana (ADR 0080), if every setting it needs is present.
+
+    ``SWITCHYARD_GRAFANA_INTERNAL_URL`` (Grafana, ``http://host:3000``, reachable from the
+    controller only), ``SWITCHYARD_GRAFANA_ADMIN_PASSWORD`` (and optionally
+    ``SWITCHYARD_GRAFANA_ADMIN_USER``, default ``admin``), ``SWITCHYARD_GRAFANA_DS_SECRET``
+    (at least 32 characters; derives the per-tenant data source tokens),
+    ``SWITCHYARD_GRAFANA_DS_URL`` (where *Grafana* reaches this controller's ``/internal/ds``) and
+    ``SWITCHYARD_PROMETHEUS_URL``; ``SWITCHYARD_LOKI_URL`` adds logs. Without them the UI keeps
+    the plain link from ``SWITCHYARD_GRAFANA_URL``.
+    """
+    names = (
+        "SWITCHYARD_GRAFANA_INTERNAL_URL",
+        "SWITCHYARD_GRAFANA_ADMIN_PASSWORD",
+        "SWITCHYARD_GRAFANA_DS_SECRET",
+        "SWITCHYARD_GRAFANA_DS_URL",
+        "SWITCHYARD_PROMETHEUS_URL",
+    )
+    values = [os.environ.get(n, "").strip() for n in names]
+    if not all(values):
+        return None
+    internal, password, ds_secret, ds_url, prometheus = values
+    config = GrafanaConfig(
+        internal_url=internal.rstrip("/"),
+        admin_user=os.environ.get("SWITCHYARD_GRAFANA_ADMIN_USER", "admin"),
+        admin_password=password,
+        ds_secret=ds_secret,
+        datasource_url=ds_url.rstrip("/"),
+        prometheus_url=prometheus.rstrip("/"),
+        loki_url=os.environ.get("SWITCHYARD_LOKI_URL") or None,
+    )
+    admin = HttpGrafana(config.internal_url, config.admin_user, config.admin_password)
+    return GrafanaService(db, config, admin)
 
 
 def git_mirror() -> GitMirror | None:

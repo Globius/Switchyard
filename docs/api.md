@@ -174,7 +174,7 @@ expires. Read it with the certificate, change it with a normal update operation.
 `cancelled`.
 
 `GET /permissions` gives every entry a `group` (eight names) for the grouped role matrix; `GET /me` returns
-`links.grafana` (from `SWITCHYARD_GRAFANA_URL`, else `null`). `GET /tenants/{t}/sdn/status` lists each managed network's SDN apply
+`links.grafana` (from `SWITCHYARD_GRAFANA_URL`, else `null`) and `links.grafana_embedded` (the controller embeds Grafana, ADR 0080). `GET /tenants/{t}/sdn/status` lists each managed network's SDN apply
 state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 
 ## Engine views
@@ -191,6 +191,10 @@ state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 `GET /system/settings` and `PATCH /system/settings` (`system-admin`) read and change controller-wide settings; today `allow_lxc_guests` (default
 `false`) with `allow_lxc_guests_forced` when `SWITCHYARD_ALLOW_LXC=1` forces it on. While it is off, a deploy with `guest_kind: lxc` answers `403`
 with code `lxc_disabled`. `GET /me` returns `features.lxc_guests` for the UI. See ADR 0076.
+
+## Embedded Grafana
+
+`POST /tenants/{t}/grafana/launch` (any role in the tenant) and `POST /grafana/launch` (system administrators, all tenants) return `{url, expires_at, tenant_id}`: a path that works once, for 60 seconds, that starts a Grafana session scoped to that tenant and redirects into Grafana (body `{landing}` picks the page: empty, `/d/<uid>`, `/explore` or `/dashboards`). Not enabled: `404`, code `not_enabled`. The routes `/grafana/**` (Grafana itself, cookie `sy_grafana`) and `/internal/ds/**` (Grafana's data source calls, bearer token, not public) are not part of the API contract. How it is secured: [adr/0080](adr/0080-grafana-behind-controller.md).
 
 ## Controller metrics and discovery
 

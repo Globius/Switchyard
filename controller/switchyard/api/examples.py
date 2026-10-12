@@ -547,7 +547,7 @@ ME = {
             "via": [{"provider": "authentik", "group": "acme-admins"}],
         }
     ],
-    "links": {"grafana": "https://grafana.example.test"},
+    "links": {"grafana": "https://grafana.example.test", "grafana_embedded": True},
     "features": {"lxc_guests": False},
 }
 PERMISSIONS = {
@@ -709,6 +709,12 @@ SUMMARY = {
     },
 }
 
+GRAFANA_LAUNCH = {
+    "url": "/grafana/launch?ticket=sygt_Qm9vdHN0cmFwLXRpY2tldC1leGFtcGxlLW9ubHk",
+    "expires_at": WHEN,
+    "tenant_id": TENANT,
+}
+
 METRICS = {
     "available": True,
     "reason": None,
@@ -727,6 +733,27 @@ METRICS = {
         "active_connections": [{"t": WHEN, "v": 42}],
     },
 }
+ENGINE_METRICS = {
+    "available": True,
+    "reason": None,
+    "metrics": {
+        "window_s": 3600,
+        "step_s": 30,
+        "summary": {
+            "cpu_percent": 32.0,
+            "vcpus": 4,
+            "memory_used_bytes": 2791728742,
+            "memory_total_bytes": 8589934592,
+            "haproxy_sessions": 1980,
+            "traffic_in_bps": 147000000,
+        },
+        "cpu_percent": [{"t": WHEN, "v": 32.0}],
+        "memory_used_bytes": [{"t": WHEN, "v": 2791728742}],
+        "haproxy_sessions": [{"t": WHEN, "v": 1980}],
+        "traffic_in_bps": [{"t": WHEN, "v": 147000000}],
+    },
+}
+
 METRICS_OVERVIEW = {
     "available": True,
     "reason": None,

@@ -158,7 +158,7 @@ person does it.
 
 ## Audit actions written by this area
 
-`auth.login`, `auth.login_failed`, `auth.login_denied`, `auth.logout`, `auth.session_revoked`,
+`auth.login`, `auth.login_failed`, `auth.login_denied`, `auth.logout`, `auth.session_revoked`, `grafana.launch`,
 `auth.break_glass_login`, `auth.break_glass_failed`, `role_mapping.create`, `role_mapping.update`,
 `role_mapping.delete`, `user.disable`, `user.enable`, `user.revoke_sessions`, `user.delete`,
 `tenant.oidc_group_dropped`, `idp.created`, `idp.updated`, `idp.deleted`, `idp.test_started`,

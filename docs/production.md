@@ -111,7 +111,7 @@ the quickstart use. Enable it only where you accept the shared kernel.
 Prometheus, Loki and Grafana from `deploy/telemetry/` ([adr/0052](adr/0052-telemetry-pipeline.md),
 [runbooks/telemetry.md](runbooks/telemetry.md)): scrape the controller (`/metrics`) and the per-engine HAProxy and node
 exporters through the service-discovery endpoint, ship access logs with Vector, and use the provided dashboards and alert
-rules (stale status poll, failed change sets, a down exporter). No Alertmanager is deployed; connect your own. Alert on
+rules (stale status poll, failed change sets, a down exporter). Grafana can be shown inside the UI, scoped per tenant by the controller ([adr/0080](adr/0080-grafana-behind-controller.md), [runbooks/telemetry.md](runbooks/telemetry.md)): keep Grafana reachable from the controller nodes only and its admin password and `GRAFANA_DS_SECRET` in your secret store. No Alertmanager is deployed; connect your own. Alert on
 `switchyard_status_age_seconds` growing, failed apply jobs, certificates near expiry and engines with drift.
 
 ## 9. Upgrades
