@@ -59,6 +59,7 @@ from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
+from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
@@ -390,17 +391,19 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         infra_service(db, secrets),
         certs,
         GarbageCollector(db),
+        ControllerSettings(db, ChangeSetService(db)),
+        KubernetesClusters(db, secrets, ChangeSetService(db)),
         MemberService(db, engines),
         discovery,
         AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
-        ControllerSettings(db, ChangeSetService(db)),
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
         GC_JOB: timedelta(hours=1),
+        CONTROLLER_TICK_JOB: timedelta(seconds=10),
+        KUBERNETES_SYNC_JOB: timedelta(seconds=30),
         EXPIRE_DRAINS_JOB: timedelta(seconds=30),
         EVALUATE_ALERTS_JOB: timedelta(minutes=1),
-        CONTROLLER_TICK_JOB: timedelta(seconds=10),
     }
     if discovery is not None:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)

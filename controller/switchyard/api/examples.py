@@ -1145,3 +1145,68 @@ CONTROLLER = {
         "database access; the break-glass login still works."
     ),
 }
+
+
+AVI_IMPORT = {
+    "dry_run": True,
+    "change_set_id": None,
+    "counts": {"health_monitor": 1, "pool": 2, "virtual_service": 1, "certificate": 1},
+    "objects": [
+        {"kind": "pool", "avi_name": "Keycloak Pool", "name": "keycloak-pool"},
+        {"kind": "virtual_service", "avi_name": "External-ParentSNI", "name": "external-parentsni"},
+    ],
+    "vips": [
+        {
+            "avi_vsvip": "vip-20",
+            "address": "10.60.3.20",
+            "new_address": "192.0.2.20",
+            "services": ["External-ParentSNI"],
+        }
+    ],
+    "findings": [
+        {
+            "level": "manual",
+            "object": "virtual_service:External-ParentSNI",
+            "message": "WAF policy detect-only is not converted (no WAF yet)",
+        }
+    ],
+}
+
+
+KUBERNETES_CLUSTER = {
+    "id": "0192f1a2-0000-7000-8000-00000000b701",
+    "name": "prod",
+    "api_url": "https://k8s.example.test:6443",
+    "ca_set": True,
+    "se_group": "edge",
+    "vip_pool": "main",
+    "mode": "nodeport",
+    "class_name": "switchyard.io/lb",
+    "gateway_class": "switchyard",
+    "enabled": True,
+    "waiting_for_change_set": None,
+    "last_sync_at": "2026-10-12T05:00:00Z",
+    "last_sync_ok": True,
+    "last_sync_error": None,
+    "last_sync": {
+        "planned_services": 3,
+        "planned_pools": 3,
+        "created": 1,
+        "updated": 0,
+        "deleted": 0,
+        "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+        "addresses_written": 2,
+        "notes": [],
+    },
+    "version": 2,
+}
+KUBERNETES_TEST = {
+    "ok": True,
+    "detail": "reachable, with the access the connector needs",
+    "version": "v1.31.2",
+    "nodes": 3,
+    "services": 42,
+    "gateway_api": True,
+    "permissions": {"list nodes": True, "list services": True, "patch services/status": True},
+    "problems": [],
+}

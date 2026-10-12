@@ -676,7 +676,7 @@ class _Renderer:
         if not port.http3:
             return [bind]
         # The same listener again over QUIC (UDP), with ALPN h3 instead of h2 and http/1.1.
-        quic = bind.replace("alpn h2,http/1.1", "alpn h3")
+        quic = bind.replace(",acme-tls/1", "").replace("alpn h2,http/1.1", "alpn h3")
         family = "quic6@" if svc.vip.version == 6 else "quic4@"
         address = f"[{svc.vip}]:{port.port}" if svc.vip.version == 6 else f"{svc.vip}:{port.port}"
         quic = quic.replace(

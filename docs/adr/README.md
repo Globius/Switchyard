@@ -82,6 +82,9 @@ Date: YYYY-MM-DD
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
 | [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
+| [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
+| [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |
+| [0150](0150-avi-importer.md) | Avi configuration importer | Accepted |
 | [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
 | [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
@@ -102,3 +105,4 @@ Date: YYYY-MM-DD
 | [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
 | [0137](0137-directory-logins-saml-ldap-radius-local.md) | Directory logins (SAML, LDAP, RADIUS, local users): not built, and why | Accepted |
 | [0150](0150-bot-and-ddos-protection.md) | Bot and DDoS protection set | Accepted |
+| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |

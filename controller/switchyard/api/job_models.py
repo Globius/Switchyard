@@ -34,10 +34,12 @@ class JobKind(StrEnum):
         POLL_STATUS: Scheduled engine status poll and drift detection.
         GIT_MIRROR: Pushes a revision to the Git mirror.
         GC: Scheduled housekeeping.
-        DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
-        EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
+        KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and
+            Gateways and applies the difference as a `system:k8s` change set.
         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
             confirmation; reverts it when the window runs out.
+        DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+        EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
 
     APPLY_CHANGE_SET = "apply_change_set"
@@ -51,9 +53,10 @@ class JobKind(StrEnum):
     POLL_STATUS = "poll_status"
     GIT_MIRROR = "git_mirror"
     GC = "gc"
+    CONTROLLER_TICK = "controller_tick"
+    KUBERNETES_SYNC = "kubernetes_sync"
     DISCOVER_POOL_MEMBERS = "discover_pool_members"
     EVALUATE_ALERTS = "evaluate_alerts"
-    CONTROLLER_TICK = "controller_tick"
 
 
 class JobStage(ApiModel):

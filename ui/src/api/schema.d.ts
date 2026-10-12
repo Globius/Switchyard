@@ -2205,6 +2205,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/imports/avi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an Avi configuration export
+         * @description Convert the export; with `dry_run: false` open a draft change set from it.
+         *
+         *     SNI parents and their children become one HTTP service with host routes. Pools, health
+         *     monitors, certificates (with keys, stored in the secrets backend), HTTP redirects and pool
+         *     switches are converted; WAF, DataScripts and other things are listed under `findings` as
+         *     `manual`. VIPs do not carry over: they come from `vip_pool` or `vip_map`. The draft is not
+         *     applied; review it like any change set.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["import_avi_api_v1_tenants__t__imports_avi_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/jobs": {
         parameters: {
             query?: never;
@@ -2309,6 +2337,118 @@ export interface paths {
          *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["retry_job_api_v1_tenants__t__jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's Kubernetes clusters
+         * @description Connected clusters by name, with the last sync result. The token is never shown.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_kubernetes_clusters_api_v1_tenants__t__kubernetes_clusters_get"];
+        put?: never;
+        /**
+         * Connect a Kubernetes cluster
+         * @description Connect a cluster.
+         *
+         *     Services of type `LoadBalancer` with the cluster's class and Gateways with its gateway
+         *     class become virtual services. The token is stored in the secrets backend; run the test
+         *     to check access.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a Kubernetes cluster
+         * @description One cluster with its version in the `ETag`.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["get_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect a Kubernetes cluster
+         * @description Forget the cluster; the objects it created stay until you delete them.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a Kubernetes cluster
+         * @description Change settings or replace the token; omitted fields stay.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync a Kubernetes cluster now
+         * @description Queue a sync of every cluster of the platform; the sync also runs every 30 seconds.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["sync_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a Kubernetes cluster connection
+         * @description Reach the API server, count nodes and services and check what the token may do.
+         *
+         *     Always answers `200`; `ok: false` lists the problems.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["test_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4731,6 +4871,129 @@ export interface components {
             break_glass: boolean;
             /** Providers */
             providers: components["schemas"]["AuthProvider"][];
+        };
+        /**
+         * AviFindingRead
+         * @description One decision of the conversion.
+         */
+        AviFindingRead: {
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "info" | "warning" | "manual" | "skipped";
+            /** Message */
+            message: string;
+            /** Object */
+            object: string;
+        };
+        /**
+         * AviImportIn
+         * @description Convert an Avi configuration export into a draft change set.
+         */
+        AviImportIn: {
+            /**
+             * Dry Run
+             * @description Only report what would be created. Send `false` to create the draft.
+             * @default true
+             */
+            dry_run: boolean;
+            /**
+             * Export
+             * @description The decoded Avi configuration export (`POST /api/configuration/export`, or the `avi_config.json` of a backup): an object with a list per object type.
+             */
+            export: {
+                [key: string]: unknown;
+            };
+            /**
+             * Include Unused
+             * @description Also convert pools and other objects no service uses.
+             * @default false
+             */
+            include_unused: boolean;
+            /**
+             * Only
+             * @description Convert only these virtual services (Avi names).
+             */
+            only?: string[];
+            /**
+             * Prefix
+             * @description Put in front of every new name.
+             * @default
+             */
+            prefix: string;
+            /**
+             * Se Group
+             * @description Name of the SE group the services will use.
+             */
+            se_group: string;
+            /**
+             * Vip Map
+             * @description Fixed new addresses, keyed by the Avi VIP name or its old address.
+             */
+            vip_map?: {
+                [key: string]: string;
+            };
+            /**
+             * Vip Pool
+             * @description VIP pool the new VIPs are taken from, one per Avi VIP.
+             */
+            vip_pool?: string | null;
+        };
+        /**
+         * AviImportRead
+         * @description What the import did or would do.
+         */
+        AviImportRead: {
+            /**
+             * Change Set Id
+             * @description The draft change set; empty for a dry run.
+             */
+            change_set_id: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Dry Run */
+            dry_run: boolean;
+            /** Findings */
+            findings: components["schemas"]["AviFindingRead"][];
+            /** Objects */
+            objects: components["schemas"]["AviMappedRead"][];
+            /** Vips */
+            vips: components["schemas"]["AviVipRead"][];
+        };
+        /**
+         * AviMappedRead
+         * @description An Avi object and what it became.
+         */
+        AviMappedRead: {
+            /** Avi Name */
+            avi_name: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * AviVipRead
+         * @description An Avi VIP and the address that replaces it.
+         */
+        AviVipRead: {
+            /**
+             * Address
+             * @description The address in the export.
+             */
+            address: string | null;
+            /** Avi Vsvip */
+            avi_vsvip: string;
+            /**
+             * New Address
+             * @description The address it gets here, if one was found.
+             */
+            new_address: string | null;
+            /** Services */
+            services: string[];
         };
         /**
          * BgpPeer
@@ -7569,13 +7832,15 @@ export interface components {
          *         POLL_STATUS: Scheduled engine status poll and drift detection.
          *         GIT_MIRROR: Pushes a revision to the Git mirror.
          *         GC: Scheduled housekeeping.
-         *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
-         *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
+         *         KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and
+         *             Gateways and applies the difference as a `system:k8s` change set.
          *         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
          *             confirmation; reverts it when the window runs out.
+         *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+         *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members" | "evaluate_alerts" | "controller_tick";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "evaluate_alerts";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -7801,6 +8066,187 @@ export interface components {
             required_scopes: string[];
             /** Subject Header */
             subject_header?: string | null;
+        };
+        /**
+         * KubernetesClusterIn
+         * @description Connect a Kubernetes cluster.
+         */
+        KubernetesClusterIn: {
+            /**
+             * Api Url
+             * @description `https://host:port` of the API server.
+             */
+            api_url: string;
+            /**
+             * Ca Pem
+             * @description PEM of the API server's CA, if private.
+             */
+            ca_pem?: string | null;
+            /**
+             * Class Name
+             * @description `loadBalancerClass` of the Services that are ours.
+             * @default switchyard.io/lb
+             */
+            class_name: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Gateway Class
+             * @description `gatewayClassName` of the Gateways that are ours.
+             * @default switchyard
+             */
+            gateway_class: string;
+            /**
+             * Mode
+             * @description `nodeport`: pools hold the ready nodes at the NodePort. `pods`: pools hold the ready endpoints (the SEs must reach the pod network).
+             * @default nodeport
+             * @enum {string}
+             */
+            mode: "nodeport" | "pods";
+            /** Name */
+            name: string;
+            /**
+             * Se Group
+             * @description Name of the SE group the services use.
+             */
+            se_group: string;
+            /**
+             * Token
+             * @description A service-account token with the access in docs/kubernetes.md. Write-only.
+             */
+            token: string;
+            /**
+             * Vip Pool
+             * @description Name of the VIP pool addresses are taken from.
+             */
+            vip_pool: string;
+        };
+        /**
+         * KubernetesClusterPatch
+         * @description Change a cluster; send only what changes.
+         */
+        KubernetesClusterPatch: {
+            /** Api Url */
+            api_url?: string | null;
+            /** Ca Pem */
+            ca_pem?: string | null;
+            /** Class Name */
+            class_name?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Gateway Class */
+            gateway_class?: string | null;
+            /** Mode */
+            mode?: ("nodeport" | "pods") | null;
+            /** Se Group */
+            se_group?: string | null;
+            /**
+             * Token
+             * @description Replaces the stored token.
+             */
+            token?: string | null;
+            /** Vip Pool */
+            vip_pool?: string | null;
+        };
+        /**
+         * KubernetesClusterRead
+         * @description A connected cluster (never the token).
+         */
+        KubernetesClusterRead: {
+            /** Api Url */
+            api_url: string;
+            /** Ca Set */
+            ca_set: boolean;
+            /** Class Name */
+            class_name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Gateway Class */
+            gateway_class: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            last_sync: components["schemas"]["KubernetesSyncRead"] | null;
+            /** Last Sync At */
+            last_sync_at: string | null;
+            /** Last Sync Error */
+            last_sync_error: string | null;
+            /** Last Sync Ok */
+            last_sync_ok: boolean | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "nodeport" | "pods";
+            /** Name */
+            name: string;
+            /** Se Group */
+            se_group: string;
+            /** Version */
+            version: number;
+            /** Vip Pool */
+            vip_pool: string;
+            /**
+             * Waiting For Change Set
+             * @description The sync waits for this change set to finish before it plans again.
+             */
+            waiting_for_change_set: string | null;
+        };
+        /**
+         * KubernetesSyncRead
+         * @description The result of the last sync.
+         */
+        KubernetesSyncRead: {
+            /** Addresses Written */
+            addresses_written?: number | null;
+            /** Change Set Id */
+            change_set_id?: string | null;
+            /** Created */
+            created?: number | null;
+            /** Deleted */
+            deleted?: number | null;
+            /** Notes */
+            notes?: string[] | null;
+            /** Planned Pools */
+            planned_pools?: number | null;
+            /** Planned Services */
+            planned_services?: number | null;
+            /** Skipped */
+            skipped?: string | null;
+            /** Updated */
+            updated?: number | null;
+        };
+        /**
+         * KubernetesTestRead
+         * @description What a connection test found.
+         */
+        KubernetesTestRead: {
+            /** Detail */
+            detail: string;
+            /**
+             * Gateway Api
+             * @description The Gateway API CRDs are installed.
+             */
+            gateway_api: boolean | null;
+            /** Nodes */
+            nodes: number | null;
+            /** Ok */
+            ok: boolean;
+            /** Permissions */
+            permissions: {
+                [key: string]: boolean;
+            };
+            /** Problems */
+            problems: string[];
+            /** Services */
+            services: number | null;
+            /** Version */
+            version: string | null;
         };
         /**
          * LatestRevision
@@ -8758,7 +9204,7 @@ export interface components {
              * Object
              * @enum {string}
              */
-            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
+            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "kubernetes_cluster" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
             /**
              * Verb
              * @enum {string}
@@ -23188,6 +23634,136 @@ export interface operations {
             };
         };
     };
+    import_avi_api_v1_tenants__t__imports_avi_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "dry_run": true,
+                 *       "export": {
+                 *         "Pool": [],
+                 *         "VirtualService": []
+                 *       },
+                 *       "prefix": "avi-",
+                 *       "se_group": "edge",
+                 *       "vip_map": {
+                 *         "vip-20": "192.0.2.20"
+                 *       },
+                 *       "vip_pool": "main"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AviImportIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "counts": {
+                     *         "certificate": 1,
+                     *         "health_monitor": 1,
+                     *         "pool": 2,
+                     *         "virtual_service": 1
+                     *       },
+                     *       "dry_run": true,
+                     *       "findings": [
+                     *         {
+                     *           "level": "manual",
+                     *           "message": "WAF policy detect-only is not converted (no WAF yet)",
+                     *           "object": "virtual_service:External-ParentSNI"
+                     *         }
+                     *       ],
+                     *       "objects": [
+                     *         {
+                     *           "avi_name": "Keycloak Pool",
+                     *           "kind": "pool",
+                     *           "name": "keycloak-pool"
+                     *         },
+                     *         {
+                     *           "avi_name": "External-ParentSNI",
+                     *           "kind": "virtual_service",
+                     *           "name": "external-parentsni"
+                     *         }
+                     *       ],
+                     *       "vips": [
+                     *         {
+                     *           "address": "10.60.3.20",
+                     *           "avi_vsvip": "vip-20",
+                     *           "new_address": "192.0.2.20",
+                     *           "services": [
+                     *             "External-ParentSNI"
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AviImportRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_jobs_api_v1_tenants__t__jobs_get: {
         parameters: {
             query?: {
@@ -23737,6 +24313,689 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_kubernetes_clusters_api_v1_tenants__t__kubernetes_clusters_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "api_url": "https://k8s.example.test:6443",
+                     *         "ca_set": true,
+                     *         "class_name": "switchyard.io/lb",
+                     *         "enabled": true,
+                     *         "gateway_class": "switchyard",
+                     *         "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *         "last_sync": {
+                     *           "addresses_written": 2,
+                     *           "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *           "created": 1,
+                     *           "deleted": 0,
+                     *           "notes": [],
+                     *           "planned_pools": 3,
+                     *           "planned_services": 3,
+                     *           "updated": 0
+                     *         },
+                     *         "last_sync_at": "2026-10-12T05:00:00Z",
+                     *         "last_sync_ok": true,
+                     *         "mode": "nodeport",
+                     *         "name": "prod",
+                     *         "se_group": "edge",
+                     *         "version": 2,
+                     *         "vip_pool": "main"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "api_url": "https://k8s.example.test:6443",
+                 *       "mode": "nodeport",
+                 *       "name": "prod",
+                 *       "se_group": "edge",
+                 *       "token": "eyJhbGciOi...",
+                 *       "vip_pool": "main"
+                 *     }
+                 */
+                "application/json": components["schemas"]["KubernetesClusterIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "mode": "pods"
+                 *     }
+                 */
+                "application/json": components["schemas"]["KubernetesClusterPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sync_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__sync_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job_id": "0192f3a0-0000-7000-8000-000000000021"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "detail": "reachable, with the access the connector needs",
+                     *       "gateway_api": true,
+                     *       "nodes": 3,
+                     *       "ok": true,
+                     *       "permissions": {
+                     *         "list nodes": true,
+                     *         "list services": true,
+                     *         "patch services/status": true
+                     *       },
+                     *       "problems": [],
+                     *       "services": 42,
+                     *       "version": "v1.31.2"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesTestRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */

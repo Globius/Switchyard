@@ -198,6 +198,11 @@ expires. Read it with the certificate, change it with a normal update operation.
 service of the management tenant and reverted by the worker unless confirmed on the new FQDN in time;
 see `docs/controller-settings.md` and ADR 0081.
 
+## Importing an Avi export
+
+`POST /tenants/{t}/imports/avi` converts an Avi configuration export into a draft change set (dry run by default)
+and lists every decision as a finding; see `docs/import-avi.md` and ADR 0150.
+
 ## Jobs
 
 `kind` is an enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert` (result

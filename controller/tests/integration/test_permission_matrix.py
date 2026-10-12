@@ -204,6 +204,20 @@ for _path in (
 ):
     ROUTES[("GET", _path)] = READ
 ROUTES[("POST", "/tenants/{t}/certificates/issue/check")] = ("manage", "certificate")
+ROUTES[("POST", "/tenants/{t}/imports/avi")] = DRAFT
+for _method, _path in (
+    ("POST", "/tenants/{t}/kubernetes-clusters"),
+    ("PATCH", "/tenants/{t}/kubernetes-clusters/{cluster}"),
+    ("DELETE", "/tenants/{t}/kubernetes-clusters/{cluster}"),
+    ("POST", "/tenants/{t}/kubernetes-clusters/{cluster}/test"),
+    ("POST", "/tenants/{t}/kubernetes-clusters/{cluster}/sync"),
+):
+    ROUTES[(_method, _path)] = ("manage", "kubernetes_cluster")
+for _path in (
+    "/tenants/{t}/kubernetes-clusters",
+    "/tenants/{t}/kubernetes-clusters/{cluster}",
+):
+    ROUTES[("GET", _path)] = READ
 ROUTES[("GET", "/system/controller")] = ("manage", "controller")
 ROUTES[("PUT", "/system/controller/pending")] = ("manage", "controller")
 ROUTES[("POST", "/system/controller/confirm")] = ("manage", "controller")
@@ -265,6 +279,15 @@ BODIES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
     ("PUT", "/system/controller/pending"): {"fqdn": "sy.example.test"},
+    ("POST", "/tenants/{t}/imports/avi"): {"export": {}, "se_group": "edge"},
+    ("POST", "/tenants/{t}/kubernetes-clusters"): {
+        "name": "x",
+        "api_url": "https://k8s.example.test:6443",
+        "token": "t",
+        "se_group": "edge",
+        "vip_pool": "main",
+    },
+    ("PATCH", "/tenants/{t}/kubernetes-clusters/{cluster}"): {},
     ("POST", "/acme-providers"): {"name": "x", "preset": "letsencrypt", "terms_agreed": True},
     ("PATCH", "/acme-providers/{provider}"): {},
     ("POST", "/tenants/{t}/dns-providers"): {
@@ -368,6 +391,7 @@ def fill(path: str) -> str:
         "token",
         "certificate",
         "idp",
+        "cluster",
         "test_id",
     ):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))

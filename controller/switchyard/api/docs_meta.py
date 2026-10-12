@@ -71,6 +71,14 @@ TAGS: list[dict[str, str]] = [
     {"name": "break-glass", "description": "The local emergency administrator and system tokens."},
     {"name": "system", "description": "Controller-wide settings (system administrators)."},
     {
+        "name": "kubernetes",
+        "description": "Kubernetes clusters whose Services and Gateways become virtual services.",
+    },
+    {
+        "name": "imports",
+        "description": "Convert another vendor's configuration into a draft change set.",
+    },
+    {
         "name": "acme providers",
         "description": "Certificate authorities (ACME) and their accounts; system administrators "
         "write, everyone signed in reads.",
@@ -93,6 +101,7 @@ PARAMS: dict[str, str] = {
     "cursor": "`next_cursor` of the previous page.",
     "limit": "Page size.",
     "object_id": "Object id.",
+    "cluster": "Kubernetes cluster id.",
     "cs": "Change set id.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
@@ -287,6 +296,7 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ),
     ("(POST|PATCH|DELETE)", r"/acme-providers(/.*)?", "system-admin", False),
     ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/dns-providers(/.*)?", "tenant-admin", False),
+    ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/kubernetes-clusters(/.*)?", "tenant-admin", False),
     (
         "(GET|POST|PATCH|PUT|DELETE)",
         r"/(identity-providers|role-mappings|system|users)(/.*)?",
@@ -441,6 +451,23 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "dns_provider": "cloudflare-main",
         "renew_policy": "auto",
         "renew_before_days": 30,
+    },
+    "POST /tenants/{t}/kubernetes-clusters": {
+        "name": "prod",
+        "api_url": "https://k8s.example.test:6443",
+        "token": "eyJhbGciOi...",
+        "se_group": "edge",
+        "vip_pool": "main",
+        "mode": "nodeport",
+    },
+    "PATCH /tenants/{t}/kubernetes-clusters/{cluster}": {"mode": "pods"},
+    "POST /tenants/{t}/imports/avi": {
+        "export": {"VirtualService": [], "Pool": []},
+        "se_group": "edge",
+        "vip_pool": "main",
+        "vip_map": {"vip-20": "192.0.2.20"},
+        "prefix": "avi-",
+        "dry_run": True,
     },
     "POST /tenants/{t}/certificates/issue/check": {
         "name": "web-example",
