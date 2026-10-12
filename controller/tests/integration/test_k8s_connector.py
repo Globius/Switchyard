@@ -435,6 +435,6 @@ async def test_a_sync_that_changes_nothing_keeps_the_counts_of_the_last_change(r
     await rig.settle()
     await rig.sync(cluster)
     row = await rig.clusters.get(ADMIN, TENANT, cluster.id)
-    assert row.last_sync["created"] == 0
-    assert row.last_sync["last_change"]["created"] == first["created"] > 0
-    assert row.last_sync["last_change"]["change_set_id"] == first["change_set_id"]
+    assert (row.last_sync or {})["created"] == 0
+    assert (row.last_sync or {})["last_change"]["created"] == first["created"] > 0
+    assert (row.last_sync or {})["last_change"]["change_set_id"] == first["change_set_id"]

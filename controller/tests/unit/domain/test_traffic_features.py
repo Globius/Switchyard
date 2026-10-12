@@ -155,6 +155,7 @@ def test_backend_lines() -> None:
 
 def test_compression_defaults_and_bounds() -> None:
     assert dm.Compression().algorithms == ("gzip",)
+    bad: dict[str, Any]
     for bad in (
         {"algorithms": []},
         {"algorithms": ["gzip", "gzip"]},

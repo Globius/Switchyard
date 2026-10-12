@@ -28,6 +28,12 @@ ROOT = principal(Role.SYSTEM_ADMIN, "root")
 OLD, NEW = "switchyard.example.test", "sy.example.test"
 
 
+def _d(value: dict[str, Any] | None) -> dict[str, Any]:
+    """The value, which the test expects to be set."""
+    assert value is not None
+    return value
+
+
 class Clock:
     def __init__(self) -> None:
         self.now = datetime.now(UTC).replace(microsecond=0)
@@ -120,8 +126,8 @@ async def test_a_change_applies_waits_and_is_confirmed_from_the_new_address(rig:
     view = await rig.controller.propose(
         ROOT, fqdn=NEW, vip="192.0.2.31", certificate="controller-new", confirm_within_s=120
     )
-    assert view.managed and view.pending["state"] == "applying"
-    assert view.pending["after"]["vip"] == "192.0.2.31"
+    assert view.managed and _d(view.pending)["state"] == "applying"
+    assert _d(view.pending)["after"]["vip"] == "192.0.2.31"
     assert str((await rig.vs()).vip) == str(before.vip), "nothing changed until the change set ran"
     await rig.run_change_set()
     assert str((await rig.vs()).vip) == "192.0.2.31"
@@ -132,14 +138,14 @@ async def test_a_change_applies_waits_and_is_confirmed_from_the_new_address(rig:
 
     assert await rig.controller.tick() == ["waiting"]
     view = await rig.controller.view(ROOT)
-    assert view.pending["state"] == "waiting" and view.pending["seconds_left"] == 120
-    assert view.pending["revision_after"] == view.pending["revision_before"] + 1
+    assert _d(view.pending)["state"] == "waiting" and _d(view.pending)["seconds_left"] == 120
+    assert _d(view.pending)["revision_after"] == _d(view.pending)["revision_before"] + 1
 
     with pytest.raises(PermissionDeniedError, match=NEW):
         await rig.controller.confirm(ROOT, request_host=OLD)
     done = await rig.controller.confirm(ROOT, request_host=f"{NEW}:443")
     assert done.pending is None and done.public_url == f"https://{NEW}"
-    assert done.last_result["kind"] == "confirmed"
+    assert _d(done.last_result)["kind"] == "confirmed"
     assert str((await rig.vs()).vip) == "192.0.2.31", "confirming keeps what was applied"
     assert await rig.controller.tick() == [], "nothing is left to watch"
     assert await rig.sql("SELECT count(*) FROM audit_event WHERE action LIKE 'controller.%'") == 2
@@ -163,8 +169,8 @@ async def test_an_unconfirmed_change_is_reverted_by_the_worker_and_keeps_other_e
     assert restored.certificate_ids == original.certificate_ids
     view = await rig.controller.view(ROOT)
     assert view.pending is None and view.public_url is None
-    assert view.last_result["kind"] == "reverted" and view.last_result["restored"] is True
-    assert "not confirmed" in view.last_result["reason"]
+    assert _d(view.last_result)["kind"] == "reverted" and _d(view.last_result)["restored"] is True
+    assert "not confirmed" in _d(view.last_result)["reason"]
 
 
 async def test_revert_now_and_the_command_line_do_the_same(rig: Rig) -> None:
@@ -173,7 +179,7 @@ async def test_revert_now_and_the_command_line_do_the_same(rig: Rig) -> None:
     await rig.run_change_set()
     await rig.controller.tick()
     view = await rig.controller.revert(ROOT)
-    assert view.pending is None and view.last_result["by"] == ROOT.actor
+    assert view.pending is None and _d(view.last_result)["by"] == ROOT.actor
     await rig.run_change_set()
     assert str((await rig.vs()).vip) == str(original.vip)
     with pytest.raises(ConflictError):
@@ -200,7 +206,7 @@ async def test_a_change_that_fails_to_apply_clears_itself(rig: Rig) -> None:
     assert not report.ok
     assert await rig.controller.tick() == ["failed"]
     view = await rig.controller.view(ROOT)
-    assert view.pending is None and view.last_result["kind"] == "failed"
+    assert view.pending is None and _d(view.last_result)["kind"] == "failed"
     assert str((await rig.vs()).vip) != "192.0.2.35"
 
 
@@ -262,13 +268,19 @@ async def test_without_a_management_tenant_only_the_public_url_can_change(pg_url
         with pytest.raises(FieldErrors):
             await controller.propose(ROOT, fqdn=NEW, vip="192.0.2.40")
         proposed = await controller.propose(ROOT, fqdn=NEW)
-        assert proposed.pending["state"] == "waiting" and proposed.pending["change_set_id"] is None
+        assert (
+            _d(proposed.pending)["state"] == "waiting"
+            and _d(proposed.pending)["change_set_id"] is None
+        )
         done = await controller.confirm(ROOT, request_host=NEW)
         assert done.public_url == f"https://{NEW}"
         with pytest.raises(FieldErrors):
             await controller.propose(ROOT, fqdn="", reset_to_default=True, vip="192.0.2.40")
         reset = await controller.propose(ROOT, reset_to_default=True)
-        assert reset.pending["state"] == "waiting" and reset.pending["after"]["public_url"] is None
+        assert (
+            _d(reset.pending)["state"] == "waiting"
+            and _d(reset.pending)["after"]["public_url"] is None
+        )
         back = await controller.confirm(ROOT, request_host="anything.test")
         assert back.public_url is None, "the environment's address applies again"
         shown = await controller.view(ROOT, env_public_url="http://localhost:8000")
@@ -351,13 +363,13 @@ async def test_an_ip_address_can_be_the_public_address_without_a_controller_serv
         with pytest.raises(FieldErrors):
             await controller.propose(ROOT, fqdn="not an address!")
         proposed = await controller.propose(ROOT, fqdn="2001:db8::5")
-        assert proposed.pending["after"]["public_url"] == "https://[2001:db8::5]"
+        assert _d(proposed.pending)["after"]["public_url"] == "https://[2001:db8::5]"
         with pytest.raises(PermissionDeniedError):
             await controller.confirm(ROOT, request_host="172.30.0.5:8443")
         done = await controller.confirm(ROOT, request_host="[2001:db8::5]:8443")
         assert done.public_url == "https://[2001:db8::5]" and done.fqdn == "2001:db8::5"
         again = await controller.propose(ROOT, fqdn="172.30.0.5")
-        assert again.pending["after"]["public_url"] == "https://172.30.0.5"
+        assert _d(again.pending)["after"]["public_url"] == "https://172.30.0.5"
 
 
 async def test_with_a_controller_service_an_ip_is_not_a_valid_fqdn(rig: Rig) -> None:

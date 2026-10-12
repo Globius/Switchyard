@@ -2,6 +2,7 @@
 
 import time
 from collections.abc import Iterator
+from typing import cast
 
 import httpx
 import pytest
@@ -100,4 +101,6 @@ async def test_tls_alpn_01_presents_a_challenge_certificate_per_name(directory_u
         names = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
         assert names.get_values_for_type(x509.DNSName) == [domain]
         ext = cert.extensions.get_extension_for_oid(x509.ObjectIdentifier("1.3.6.1.5.5.7.1.31"))
-        assert ext.critical and len(ext.value.value) == 34, "an OCTET STRING of a SHA-256"
+        assert ext.critical and len(cast(x509.UnrecognizedExtension, ext.value).value) == 34, (
+            "an OCTET STRING of a SHA-256"
+        )

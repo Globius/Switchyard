@@ -1,5 +1,7 @@
 """PEM inspection and CSR generation."""
 
+from typing import Any
+
 import pytest
 from cryptography import x509
 
@@ -144,7 +146,7 @@ def test_pkcs12_without_a_key_is_refused() -> None:
     assert err.value.code == "no_key"
 
 
-def serialization_none():  # type: ignore[no-untyped-def]
+def serialization_none() -> Any:
     from cryptography.hazmat.primitives import serialization
 
     return serialization.NoEncryption()

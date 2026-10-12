@@ -12,6 +12,7 @@ def test_every_rule_sits_in_the_family_its_id_belongs_to() -> None:
 
 
 def test_lookup_by_id() -> None:
-    assert crs.group_of(942100) is not None and crs.group_of(942100).name == "SQL injection"
+    group = crs.group_of(942100)
+    assert group is not None and group.name == "SQL injection"
     assert crs.find(920350) is not None
     assert crs.find(920999) is None and crs.group_of(100000) is None
