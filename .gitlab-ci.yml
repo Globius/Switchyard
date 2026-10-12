@@ -46,7 +46,10 @@ test:
     DOCKER_TLS_CERTDIR: ""
     TESTCONTAINERS_HOST_OVERRIDE: docker
   script:
-    - uv run pytest --cov --cov-report=term-missing --cov-report=xml
+    # The SDK-created test containers do not pull missing images, and dind starts empty.
+    - uv run python -m tests.ci_pull_images
+    # Bind mounts are resolved by dind: keep pytest's temporary files on the build volume it shares.
+    - uv run pytest --basetemp="$CI_PROJECT_DIR/.pytest-tmp" --cov --cov-report=term-missing --cov-report=xml
     - uv run coverage report --include="switchyard/domain/*,switchyard/render/*,switchyard/pipeline/*" --fail-under=85
   coverage: '/TOTAL.*\s+(\d+(?:\.\d+)?)%/'
   artifacts:
