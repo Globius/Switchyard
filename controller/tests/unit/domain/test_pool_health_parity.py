@@ -229,3 +229,62 @@ def test_the_renderer_refuses_an_unsafe_cookie_name_even_if_validation_was_bypas
     broken = snap.model_copy(update={"pools": (pool,)})
     with pytest.raises(RenderError, match="cookie name"):
         render_haproxy(broken, broken.se_groups[0].id)
+
+
+# -- rendered lines (also what the lab checks) --------------------------------------------------
+
+
+def render_pool(pool: dict[str, Any], monitor: dict[str, Any] | None = None) -> str:
+    d = data(pool)
+    if monitor is not None:
+        d["health_monitors"] = [{"id": "hm-x", "tenant_id": "t-acme", "name": "x", **monitor}]
+        d["pools"][0]["health_monitor_id"] = "hm-x"
+    snap = snapshot_from_mapping(d)
+    return render_haproxy(snap, snap.se_groups[0].id).files["haproxy/haproxy.cfg"]
+
+
+def test_cookie_values_are_opaque_and_never_carry_an_address() -> None:
+    cfg = render_pool(
+        {"persistence": {"type": "http_cookie", "name": "SY"}},
+    )
+    server = next(line for line in cfg.splitlines() if "server " in line and " cookie " in line)
+    value = server.split(" cookie ")[1].split()[0]
+    assert value.startswith("m") and len(value) == 13
+    assert "10-20-0-11" not in value and "10.20.0.11" not in value
+    assert render_pool({"persistence": {"type": "http_cookie", "name": "SY"}}) == cfg
+
+
+def test_header_and_uri_persistence_lines() -> None:
+    header = render_pool({"persistence": {"type": "header", "header": "X-Session"}})
+    assert "stick-table type string len 128 size 100000 expire 1800s" in header
+    assert "stick on req.hdr(X-Session)" in header
+    path = render_pool({"persistence": {"type": "uri", "source": "path"}})
+    assert "stick on path" in path
+    param = render_pool({"persistence": {"type": "uri", "source": "url_param", "param": "sid"}})
+    assert "stick on url_param(sid)" in param
+
+
+def test_send_proxy_backup_and_maxconn_lines() -> None:
+    d = data({"send_proxy": "v2"})
+    d["pools"][0]["members"][0].update(backup=True, maxconn=50)
+    snap = snapshot_from_mapping(d)
+    cfg = render_haproxy(snap, snap.se_groups[0].id).files["haproxy/haproxy.cfg"]
+    assert "send-proxy-v2 weight 100 maxconn 50 backup" in cfg
+    with_monitor = render_pool(
+        {"send_proxy": "v1"}, {"type": "tcp", "interval_s": 5, "timeout_s": 3, "rise": 2, "fall": 3}
+    )
+    assert "check check-send-proxy" in with_monitor
+    assert "send-proxy weight" in with_monitor
+
+
+@pytest.mark.parametrize(
+    ("preset", "line"),
+    [
+        ("redis", "option redis-check"),
+        ("smtp", "option smtpchk"),
+        ("ldap", "option ldap-check"),
+        ("mysql", "option mysql-check"),
+    ],
+)
+def test_monitor_presets_render_the_builtin_check(preset: str, line: str) -> None:
+    assert line in render_pool({}, {"type": "tcp", "preset": preset})

@@ -13,7 +13,8 @@ Pools only had source IP persistence. Avi parity (08 plan, A1) needs cookie pers
    `header` and `uri`. Stored in the same JSON column, so there is no migration; old rows load unchanged.
 2. `http_cookie`: `name`, `mode` (`insert`, `rewrite`, `prefix`), and for `insert` only `ttl_s` (`maxlife`), `secure` and `http_only`
    (default on). It renders `cookie <name> <mode>` (`insert` adds `indirect nocache`) and `cookie <server name>` on each server, so the cookie
-   value is the stable server name, never an address.
+   value is an opaque `m` plus 12 hex digits of a hash of the pool and member ids. It is stable across renders and never the server name, which
+   often encodes the member's address and would leak it to clients.
 3. `header` (`header`) and `uri` (`source` `path` or `url_param`, with `param` for the latter) use a `type string len 128` stick table and
    `stick on req.hdr(...)`, `path` or `url_param(...)`. Requests without the key fall back to the algorithm.
 4. Cookie, header and URI persistence need HTTP: `persistence_needs_http` for a pool a `tcp` service uses; `udp_field_not_allowed` for UDP

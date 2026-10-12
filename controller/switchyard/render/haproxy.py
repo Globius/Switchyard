@@ -256,6 +256,23 @@ def _map_text(entries: Mapping[str, str]) -> str:
     return "".join(f"{key} {entries[key]}\n" for key in sorted(entries))
 
 
+def _cookie_value(pool: dm.Pool, member: dm.PoolMember) -> str:
+    """Opaque, stable cookie value of a member (ADR 0105).
+
+    The server name often encodes the member's address, which must not reach clients, so the value
+    is a short hash of the pool and member ids.
+
+    Example:
+        >>> import uuid
+        >>> pool = dm.Pool(id=uuid.UUID(int=1), tenant_id=uuid.UUID(int=2), name="p")
+        >>> member = dm.PoolMember(id=uuid.UUID(int=3), address="10.0.0.5")
+        >>> _cookie_value(pool, member)
+        'm0d1b1f77b038'
+    """
+    digest = hashlib.sha256(f"{pool.id}/{member.id}".encode()).hexdigest()
+    return f"m{digest[:12]}"
+
+
 def _map_rule(converter: str, path: str) -> str:
     """Route by map lookup.
 
@@ -670,7 +687,7 @@ class _Renderer:
             target += f":{member.port}"
         parts = [f"server {esc.ident(member.server_name)} {target}"]
         if isinstance(pool.persistence, dm.PersistenceCookie):
-            parts.append(f"cookie {esc.ident(member.server_name)}")
+            parts.append(f"cookie {_cookie_value(pool, member)}")
         if monitor is not None:
             parts.append("check")
             if monitor.port is not None:

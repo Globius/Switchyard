@@ -87,7 +87,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
 | Pool `persistence` `source_ip` | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
-| Pool `persistence` `http_cookie` | `cookie <name> insert indirect nocache [maxlife <t>s] [secure] [httponly]` (or `rewrite`, `prefix`) and `cookie <server name>` on every server (ADR 0105) |
+| Pool `persistence` `http_cookie` | `cookie <name> insert indirect nocache [maxlife <t>s] [secure] [httponly]` (or `rewrite`, `prefix`) and `cookie m<12 hex>` on every server: an opaque hash of the pool and member ids, never the server name or address (ADR 0105) |
 | Pool `persistence` `header`, `uri` | `stick-table type string len 128 size <n> expire <t>s` and `stick on req.hdr(<H>)`, `stick on path` or `stick on url_param(<p>)` (ADR 0105); `http` pools only |
 | Port `tls_passthrough` + routes (`tcp` service) | `tcp-request inspect-delay 5s`, `tcp-request content accept if { req.ssl_hello_type 1 }`, and `use_backend %[req.ssl_sni,lower,map(...)]` over `haproxy/maps/<name>-sni.map` and `-sni-wild.map`; no certificate (ADR 0115) |
 | Port `http3` | a second `bind quic4@<vip>:<port> ssl crt-list ... alpn h3` (`quic6@` for IPv6) and `http-response set-header alt-svc 'h3=":<port>"; ma=86400'` (ADR 0116) |
@@ -106,7 +106,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Member `weight`, `admin_state` | `weight <n>`; `drain` and `disabled` both add the `disabled` keyword (see ADR 0006) |
 | Health monitor `tcp` | `check` on each server (`port <n>` when the monitor sets one) |
 | Health monitor `http` | `option httpchk`, `http-check send meth <m> uri <path> [ver HTTP/1.1 hdr Host <h>]`, `http-check expect status <codes>` |
-| Health monitor `http` `expect_body`, `expect_header` | `http-check expect string <text>` or `http-check expect hdr name <H> [value <v>]`; one of `expect_status`, `expect_body`, `expect_header` (ADR 0108) |
+| Health monitor `http` `expect_body`, `expect_header` | `http-check expect string <text>` or `http-check expect hdr name <H> [value <v>]`; one of `expect_status`, `expect_body`, `expect_header`; match text and header values may only use letters, digits and `._:/-` (ADR 0108) |
 | Health monitor `tcp` with `preset` | `option redis-check`, `option smtpchk`, `option ldap-check` or `option mysql-check` (ADR 0108) |
 | Monitor `interval_s`, `rise`, `fall`, `timeout_s` | `default-server inter <i>s fall <f> rise <r>` and `timeout check <t>s` |
 | Pool with a monitor and `tls` | `check-ssl` on the servers |
