@@ -12,10 +12,10 @@ tenant's path, then create the set and attach it. The step-by-step guide with ex
 
 **Limits.** Fails closed: if the sidecar is down, protected paths answer 503 and the origin is never reached without a login.
 Plain ports need `https_redirect_port`. One access set per service. Ending one user's session early is not built: rotate the
-cookie key (ends every session) or shorten the refresh interval. Device posture covers client certificates and ID-token
-claims, not an endpoint agent. The origin can trust identity headers only if it accepts traffic from the engines alone.
+cookie key (ends every session) or shorten the refresh interval. Device posture covers client certificates, ID-token
+claims and, with the `sy-posture` agent, the state of the laptop ([device posture](../device-posture.md)). The origin can trust identity headers only if it accepts traffic from the engines alone.
 
 **Decisions:** [0130](../adr/0130-auth-service-architecture.md), [0131](../adr/0131-access-rules-and-authorization.md),
 [0132](../adr/0132-identity-headers.md), [0133](../adr/0133-auth-events.md),
 [0137](../adr/0137-directory-logins-saml-ldap-local.md), [0138](../adr/0138-device-posture-signals.md),
-[0195](../adr/0195-radius-login-and-step-up-flows.md).
+[0195](../adr/0195-radius-login-and-step-up-flows.md), [0196](../adr/0196-device-posture-agent-and-device-certificates.md).

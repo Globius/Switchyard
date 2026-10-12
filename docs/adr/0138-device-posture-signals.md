@@ -28,8 +28,8 @@ An `access` rule (ADR 0131) may carry `posture`, in addition to its mode; it nev
 **Defaults.** No posture means no posture check. Claims are only as fresh as the session: they are re-read when the proxy refreshes
 the session (`cookie_refresh_s`, default 15 minutes), so a device marked non-compliant at the provider is cut off at the next refresh.
 
-**Not built.** Agent-based posture (disk encryption, patch level) and non-HTTP applications: they need a client and a posture
-service, a separate product decision. Nested claims and array claims other than `in` on a string value are not supported.
+**Not built here; built later in [0196](0196-device-posture-agent-and-device-certificates.md).** Agent-based posture (disk encryption,
+patch level) and non-HTTP applications need a client and a posture service. Nested claims and array claims other than `in` on a string value are not supported.
 
 ## Consequences
 

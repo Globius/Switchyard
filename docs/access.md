@@ -202,3 +202,6 @@ rules:
 ```
 
 Claims come from the ID token and are re-read at each session refresh.
+
+To check the laptop itself (disk encryption, firewall, patches), enroll it with the `sy-posture` agent and require the certificate it
+earns; see [Device posture and device certificates](device-posture.md).
