@@ -548,7 +548,7 @@ def _check_posture_roles(snapshot: Snapshot, problems: list[Problem]) -> None:
     for ps in snapshot.policy_sets:
         if isinstance(ps, PosturePolicySet) and ps.tenant_id in names:
             prefix = f"{names[ps.tenant_id]}-"
-            if not ps.pki_role.startswith(prefix) or ps.pki_role == prefix:
+            if not ps.pki_role.startswith(prefix):
                 problems.append(
                     Problem(
                         f"policy_sets.{ps.name}.pki_role",
