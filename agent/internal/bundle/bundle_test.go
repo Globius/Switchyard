@@ -393,10 +393,11 @@ func TestStoppedFRRIsStartedNotReloaded(t *testing.T) {
 	}
 }
 
-func TestAuthProxyConfigsAreSecretFlatCfgFilesRestartedAndStoppedWithTheirFiles(t *testing.T) {
+func TestAuthProxyFilesAreFlatCfgAndEnvFiles(t *testing.T) {
 	a, priv, r := setup(t)
 	resp := a.Apply(context.Background(), request(t, priv, "a1", map[string]string{
-		"auth/web-sso.cfg": "client_secret = \"x\"\n",
+		"auth/web-sso.cfg": "http_address = \"127.0.0.1:14000\"\n",
+		"auth/web-sso.env": "OAUTH2_PROXY_CLIENT_SECRET=x\n",
 	}))
 	if !resp.Ok {
 		t.Fatal(resp.Error)
@@ -404,10 +405,13 @@ func TestAuthProxyConfigsAreSecretFlatCfgFilesRestartedAndStoppedWithTheirFiles(
 	if !contains(r.calls, "systemctl restart sy-auth") {
 		t.Fatalf("the proxies must be restarted to read a new config: %v", r.calls)
 	}
-	if info, _ := os.Stat(filepath.Join(a.Root, "auth", "web-sso.cfg")); runtimeIsUnix() && info.Mode().Perm() != 0o600 {
-		t.Errorf("auth config mode %v, want 0600", info.Mode().Perm())
+	if info, _ := os.Stat(filepath.Join(a.Root, "auth", "web-sso.env")); runtimeIsUnix() && info.Mode().Perm() != 0o640 {
+		t.Errorf("auth env mode %v, want 0640 (the directory is root:sy-auth 0750)", info.Mode().Perm())
 	}
-	for _, bad := range []string{"auth/web.txt", "auth/sub/web.cfg"} {
+	if info, _ := os.Stat(filepath.Join(a.Root, "auth", "web-sso.cfg")); runtimeIsUnix() && info.Mode().Perm() != 0o640 {
+		t.Errorf("auth config mode %v, want 0640", info.Mode().Perm())
+	}
+	for _, bad := range []string{"auth/web.txt", "auth/sub/web.cfg", "auth/sub/web.env"} {
 		resp = a.Apply(context.Background(), request(t, priv, "a-bad", map[string]string{bad: "x"}))
 		if resp.Ok {
 			t.Errorf("%s must not be accepted", bad)

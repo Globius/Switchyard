@@ -340,12 +340,15 @@ class TestInstances:
         )
         assert auth_secret_refs(snap, GROUP) == sorted([CLIENT, COOKIE])
         files = render_auth_files(snap, GROUP, SECRETS)
-        assert list(files) == ["auth/web-sso.cfg"]
+        assert list(files) == ["auth/web-sso.cfg", "auth/web-sso.env"]
+        assert files["auth/web-sso.env"].splitlines() == [
+            "OAUTH2_PROXY_CLIENT_SECRET=client-secret-value",
+            "OAUTH2_PROXY_COOKIE_SECRET=0123456789abcdef",
+        ]
         text = files["auth/web-sso.cfg"]
+        assert "secret-value" not in text and "0123456789abcdef" not in text
         for line in (
             'oidc_issuer_url = "https://login.example.test/realms/acme"',
-            'client_secret = "client-secret-value"',
-            'cookie_secret = "0123456789abcdef"',
             f'http_address = "127.0.0.1:{AUTH_PORT_BASE}"',
             f'upstreams = ["http://127.0.0.1:{LOOP_PORT_BASE}"]',
             "cookie_secure = true",
@@ -395,7 +398,7 @@ class TestBundle:
             snap, snap.se_groups[0], slot, MemorySecrets({**SECRETS, CERT: PEM})
         )
         assert "auth/web-sso.cfg" in files
-        assert 'client_secret = "client-secret-value"' in files["auth/web-sso.cfg"]
+        assert "OAUTH2_PROXY_CLIENT_SECRET=client-secret-value" in files["auth/web-sso.env"]
 
     async def test_a_missing_secret_stops_the_rollout(self) -> None:
         from switchyard.adapters.secrets import MemorySecrets
@@ -410,3 +413,107 @@ class TestBundle:
             )
         with pytest.raises(BundleError, match="no secrets backend"):
             await engine_files(snap, snap.se_groups[0], slot, None)
+
+
+class TestPosture:
+    RULE = {
+        "match": {"path_prefix": "/secure"},
+        "mode": "login",
+        "posture": {
+            "device_certificate": True,
+            "claims": [
+                {"name": "device_compliant", "op": "true"},
+                {"name": "tier", "op": "in", "values": ["gold", "silver"]},
+                {"name": "mfa", "op": "present"},
+                {"name": "region", "op": "equals", "value": "eu"},
+            ],
+        },
+    }
+
+    def data(self, ca: bool = True) -> dict[str, Any]:
+        data = with_access(access(rules=[self.RULE]))
+        if ca:
+            data["certificates"].append(
+                {
+                    "id": "ca-1",
+                    "tenant_id": T,
+                    "name": "devices",
+                    "source": "upload",
+                    "purpose": "client_ca",
+                    "sans": [],
+                    "not_after": "2038-01-01T00:00:00+00:00",
+                    "secret_ref": "kv/tenants/acme/certs/devices/01",
+                }
+            )
+            data["virtual_services"][0]["ports"][0] = {
+                "port": 443,
+                "tls": True,
+                "client_ca_id": "ca-1",
+                "client_verify": "optional",
+            }
+        return data
+
+    def test_model_rules(self) -> None:
+        with pytest.raises(ValidationError):
+            AccessRule(mode="public", posture={"device_certificate": True})
+        with pytest.raises(ValidationError):
+            AccessRule(posture={})
+        for bad in (
+            {"name": "a", "op": "equals"},
+            {"name": "a", "op": "in"},
+            {"name": "a", "op": "true", "value": "x"},
+            {"name": "a.b", "op": "true"},
+            {"name": "a'b", "op": "present"},
+        ):
+            with pytest.raises(ValidationError):
+                AccessRule(posture={"claims": [bad]})
+
+    def test_a_device_certificate_rule_needs_a_client_ca(self) -> None:
+        assert codes(self.data()) == []
+        assert codes(self.data(ca=False)) == ["posture_needs_client_ca"]
+
+    def test_rendered_checks(self) -> None:
+        lines = frontend(self.data())
+        here = "{ var(txn.sy_loop) -m bool } { var(txn.sy_ad) -m int 2 }"
+        assert (
+            "http-request set-header X-Sy-Device 1 if !{ var(txn.sy_loop) -m bool } { ssl_c_used }"
+            in lines
+        )
+        assert (
+            "http-request set-var(txn.sy_idt) http_auth_bearer if { var(txn.sy_loop) -m bool }"
+            in lines
+        )
+        assert (
+            f"http-request return status 403 if {here} !{{ req.hdr(X-Sy-Device) -m str 1 }}"
+            in lines
+        )
+        fetch = "var(txn.sy_idt),jwt_payload_query('$.{}')"
+        assert (
+            f"http-request return status 403 if {here} !{{ {fetch.format('device_compliant')} -m str true }}"
+            in lines
+        )
+        assert (
+            f'http-request return status 403 if {here} !{{ {fetch.format("tier")} -m str "gold" "silver" }}'
+            in lines
+        )
+        assert (
+            f"http-request return status 403 if {here} !{{ {fetch.format('mfa')} -m found }}"
+            in lines
+        )
+        assert (
+            f'http-request return status 403 if {here} !{{ {fetch.format("region")} -m str "eu" }}'
+            in lines
+        )
+
+    def test_the_device_header_is_dropped_from_clients_and_the_origin(self) -> None:
+        lines = frontend(self.data())
+        assert "http-request del-header X-Sy-Device if !{ var(txn.sy_loop) -m bool }" in lines
+        assert "http-request del-header X-Sy-Device if { var(txn.sy_loop) -m bool }" in lines
+
+    def test_claims_make_the_proxy_pass_the_token(self) -> None:
+        snap = snapshot_from_mapping(self.data())
+        text = render_auth_files(snap, GROUP, SECRETS)["auth/web-sso.cfg"]
+        assert "pass_authorization_header = true" in text
+        assert "http-request del-header Authorization if { var(txn.sy_loop) -m bool }" in "\n".join(
+            frontend(self.data())
+        )

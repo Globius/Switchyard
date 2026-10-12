@@ -89,6 +89,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Route with `path_prefix` / `path_exact` | `use_backend pool_<n> if { var(txn.host) -m str <host> } { path_beg <path> }` (host condition only when set) |
 | Route with any other condition (`methods`, `headers`, `query`, `source_cidrs`, `sni`) | the same `use_backend ... if` line with one more `{ ... }` per condition (below); only a route that is a host and nothing else uses the maps |
 | Route `redirect` and policy-set redirect rule | `http-request redirect location <target> code <n> if <conditions>` |
+| Policy set `directory` | nothing on the engines; the login broker's Dex config `dex/<tenant>-<directory>.yaml`, written by `syctl broker render` (ADR 0137) |
 | Policy set `jwt` | per rule `set-var(txn.sy_j<n>)` lines, one per key: `jwt_verify(<alg>,certs/jwt-<set>-<rule>-<key>.pem)` plus the `iss`, `aud`, `scope` and `exp` checks, then `return status 401 hdr WWW-Authenticate Bearer` without the flag (ADR 0135) |
 | Policy set `client_cert` | maps `haproxy/maps/<set>-certsha1.map` and `-certcn.map` (`key user\|groups`), lookups on `ssl_c_sha1` and `ssl_c_s_dn(cn)`, `return status 403` per rule, identity headers (ADR 0136) |
 | Policy set `access` | a second `bind 127.0.0.1:<loop_port>`, a backend `auth_<service>-<set>` (one server, `127.0.0.1:<auth_port>`), `use_backend auth_... if !{ var(txn.sy_loop) -m bool } ...`, decision rules on `txn.sy_ad`, 401 and 403 checks and identity `set-header` lines on the loopback hop; the proxy's own config goes to `auth/<service>-<set>.cfg` in the agent bundle (ADR 0130) |
@@ -98,6 +99,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Policy set `rewrite`, request rule | `http-request set-header\|add-header <Name> "<value>"`, `del-header <Name>`, or `replace-path` / `set-path` for a prefix replacement, `if <conditions>` (ADR 0102) |
 | Policy set `rewrite`, response rule | `http-response set-header\|add-header\|del-header ...`; a rule with a match tests a flag set at request time: `http-request set-var(txn.sy_m<n>) bool(true) if <conditions>` then `http-response ... if { var(txn.sy_m<n>) -m bool }` |
 | Service `allow_list_id` + `enforce_allow_list` | `tcp-request session reject if !{ src -f <dir>/lists/<name>.cidr }` |
+| Service `deny_list_id` | HTTP: `http-request deny deny_status 403 if { src -f <dir>/lists/<name>.cidr }` after the client address is restored; TCP: `tcp-request session reject if { src -f ... }` |
 | Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
 | Pool `persistence` `source_ip` | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
@@ -135,7 +137,7 @@ Server names come from the member name or `<ip>-<port>` with dots and colons tur
 ## Request order in an HTTP frontend
 
 1. **Connection filter**: reject sources outside the allow list (only with `enforce_allow_list`).
-2. **Header hygiene**: restore the client address (below), delete any client `X-Forwarded-For`, set
+2. **Header hygiene**: restore the client address (below), then refuse the client if it is in the `deny_list_id` list (403), delete any client `X-Forwarded-For`, set
    `X-Forwarded-Proto`, store the lower-cased `Host` without port in `txn.host`. `option forwardfor`
    then adds the connection's source address.
 2b. **Rate limits**: `rate_limit` policy-set rules (ADR 0110): `track-sc` and the deny, tarpit or drop line per rule, with a stick-table backend `rl_<service>_<set>_<n>` each.

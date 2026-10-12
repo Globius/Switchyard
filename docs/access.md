@@ -96,4 +96,58 @@ rules:
 ```
 
 The origin gets `X-Cert-User` and `X-Cert-Groups`. Attach this set and an `access` set to the same service for certificate **and**
-login. SAML, LDAP, RADIUS and local-user logins are not built; federate them through an OIDC provider (ADR 0137).
+login.
+
+## LDAP, SAML and local users (`directory` policy set)
+
+No OIDC provider? Define a **directory** and let a central broker (Dex, next to the controller) present it as one (ADR 0137). Then
+point an access set at it with `directory_id` instead of `issuer`:
+
+```yaml
+kind: directory
+name: corp-ldap
+connector:
+  type: ldap                     # or saml, or local
+  host: ldap.example.test
+  security: ldaps                # or starttls (port 389)
+  bind_dn: cn=svc,dc=example,dc=test
+  bind_password_ref: kv/tenants/acme/auth/ldap-bind
+  user_base_dn: ou=people,dc=example,dc=test
+  group_base_dn: ou=groups,dc=example,dc=test      # omit for no groups
+---
+kind: access
+name: sso
+oidc:
+  directory_id: <id of corp-ldap>
+  redirect_hosts: [wiki.example.test]              # hosts users reach the service on
+  client_id: switchyard-wiki
+  client_secret_ref: kv/tenants/acme/auth/wiki-client   # any strong secret you choose; the broker and the engines share it
+  cookie_secret_ref: kv/tenants/acme/auth/wiki-cookie
+```
+
+- **SAML:** `connector: {type: saml, sso_url: https://idp.example.test/sso, ca_pem: <the provider's signing certificate>}`. Register
+  the callback `<broker URL>/<tenant>/<directory>/callback` at the provider.
+- **Local users:** `connector: {type: local, users: [{username, email, password_hash_ref}]}`; store a bcrypt hash
+  (`htpasswd -nbBC 10 "" 'password' | tr -d ':
+'`) in OpenBao. Local users have no groups, so use `login` or `email_domains` rules.
+- **RADIUS** is not offered (Dex has no connector); federate through an OIDC provider that has one.
+
+The broker needs `SWITCHYARD_AUTH_BROKER_URL` on the controller and the services in `deploy/prod/compose.broker.yaml`
+(`docs/runbooks/login-broker.md`).
+
+## Device posture
+
+An access rule can also require a managed device (ADR 0138):
+
+```yaml
+rules:
+  - match: {path_prefix: /secure}
+    mode: login
+    posture:
+      device_certificate: true            # needs a port with client_ca_id, client_verify: optional
+      claims:
+        - {name: device_compliant, op: "true"}
+        - {name: tier, op: in, values: [gold, silver]}
+```
+
+Claims come from the ID token and are re-read at each session refresh.

@@ -46,11 +46,11 @@ controller: sessions are signed cookies, the IdP is reached from the engine, and
 **Configuration and secrets.** The access set holds the OIDC settings (`issuer`, `client_id`, `client_secret_ref`,
 `cookie_secret_ref`, scopes, groups claim, cookie name, lifetime and refresh interval). Secrets are OpenBao references checked
 against the tenant's namespace (ADR 0071); the controller resolves them when it builds the engine bundle and writes
-`auth/<service>-<set>.cfg` (owner-only) in the signed agent bundle. They never go into PostgreSQL, `haproxy.cfg` or the rendered
+`auth/<service>-<set>.env` (`OAUTH2_PROXY_CLIENT_SECRET`, `OAUTH2_PROXY_COOKIE_SECRET`) in the signed agent bundle, next to the non-secret `auth/<service>-<set>.cfg`. The agent writes every file under `auth/` as 0640 in a root:sy-auth 0750 directory (SE image, block P7) and `sy-auth-run`, which runs as `sy-auth`, sources the `.env`. They never go into PostgreSQL, `haproxy.cfg` or the rendered
 views (which show `REDACTED`). A missing or malformed secret stops the rollout (`BundleError`), because an unauthenticated
 proxy must never start.
 
-**Agent.** `auth` is a new managed directory mapped to the unit `sy-auth` (flat `*.cfg` files, mode 0600). A change restarts the
+**Agent.** `auth` is a new managed directory mapped to the unit `sy-auth` (flat `*.cfg` and `*.env` files, mode 0640). A change restarts the
 unit (oauth2-proxy reads its config at start; sessions survive in the cookies); removing the last file stops it. The SE image
 (plan block P7) installs oauth2-proxy and ships `sy-auth.service`, which starts one process per file in `/etc/switchyard/auth/`.
 That unit and the package are the only image work this record asks for.

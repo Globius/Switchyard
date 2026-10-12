@@ -80,6 +80,9 @@ Date: YYYY-MM-DD
 | [0119](0119-weighted-pool-routes.md) | Weighted pool routes (canary and blue-green) | Accepted |
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
+| [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0147](0147-country-and-reputation-ip-lists.md) | Country and reputation IP lists | Accepted |
 | [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
 | [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
 | [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |
@@ -97,4 +100,5 @@ Date: YYYY-MM-DD
 | [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
 | [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
 | [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
-| [0137](0137-directory-logins-saml-ldap-radius-local.md) | Directory logins (SAML, LDAP, RADIUS, local users): not built, and why | Accepted |
+| [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
+| [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |

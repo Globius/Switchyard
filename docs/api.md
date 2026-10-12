@@ -69,6 +69,7 @@ Policy sets and routing profiles are unions on `kind`:
 | | `respond` | `rules[]` (`match`, `status`, `content_type`, `body`, `retry_after_s`), ADR 0103 |
 | | `error_pages` | `pages[]` (`status`, `content_type`, `body`), ADR 0103 |
 | | `access` | `oidc`, `default_mode`, `rules[]` (`match`, `mode`, `groups`, `email_domains`), `identity_headers`, `auth_path`, ADR 0130 to 0132 |
+| | `directory` | `connector` (`type`: `ldap`, `saml` or `local`, with its settings), ADR 0137; an access set names it in `oidc.directory_id` |
 | | `jwt` | `rules[]` (`match`, `issuer`, `audiences`, `required_scopes`, `leeway_s`, `keys[]` (`kid`, `alg`, `public_key_pem`), `subject_header`), ADR 0135 |
 | | `client_cert` | `identities[]` (`by`, `value`, `user`, `groups`), `rules[]` (`match`, `mode`, `groups`), `user_header`, `groups_header`, ADR 0136 |
 | | `rate_limit` | `rules[]` (`match`, `key`, `header_name`, `max_requests`, `period_s`, `max_concurrent`, `action`, `deny_status`, `tarpit_s`, `table_size`), ADR 0110 |

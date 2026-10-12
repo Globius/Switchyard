@@ -72,6 +72,10 @@ policy_sets:
       path_prefix: /staff
     mode: email_domains
     email_domains: [example.test, corp.example.test]
+    posture:
+      claims:
+      - {name: device_compliant, op: 'true'}
+      - {name: tier, op: in, values: [gold, silver]}
   identity_headers:
     user: X-Auth-User
     email: X-Auth-Email

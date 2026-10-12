@@ -276,6 +276,8 @@ PROXY_HEADERS = (
     "X-Forwarded-Preferred-Username",
     "X-Forwarded-Access-Token",
 )
+#: Tells the second hop that the first saw a verified client certificate (ADR 0138).
+DEVICE_HEADER = "X-Sy-Device"
 #: Carries the access decision from the first hop to the loopback hop.
 ACCESS_HEADER = "X-Sy-Access"
 #: Frontend rules by stage, filled while the policy sets of a service are rendered.
@@ -470,6 +472,13 @@ class _Renderer:
                 connection_rules.append(
                     f"tcp-request session reject if !{{ src -f {lst} }}{exempt}"
                 )
+        deny = _allow_list(self.policies[svc.deny_list_id]) if svc.deny_list_id else None
+        if deny is not None:
+            self.files[f"haproxy/lists/{esc.ident(deny.name)}.cidr"] = self._allow_list_text(deny)
+            if mode != "http":
+                connection_rules.append(
+                    f"tcp-request session reject if {{ src -f {self._list_path(deny)} }}"
+                )
         request_rules: list[str] = []
         tarpit_s: int | None = None
         response_rules: list[str] = []
@@ -484,7 +493,7 @@ class _Renderer:
             routing_rules = self._sni_rules(svc, name)
         if mode == "http":
             options = self._http_options(svc, ports)
-            request_rules = self._request_rules(svc, ports, allow, inst)
+            request_rules = self._request_rules(svc, ports, allow, deny, inst)
             tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
@@ -951,7 +960,7 @@ class _Renderer:
         """Headers a client may never send: ours, and the proxy's own (ADR 0132)."""
         ours = inst.policy.identity_headers
         names = [n for n in (ours.user, ours.email, ours.groups, ours.token) if n]
-        return [*names, *PROXY_HEADERS, ACCESS_HEADER]
+        return [*names, *PROXY_HEADERS, ACCESS_HEADER, DEVICE_HEADER]
 
     def _auth_hygiene(self, inst: AuthInstance) -> list[str]:
         """Drop client-supplied identity headers; only the loopback hop may carry them."""
@@ -1003,6 +1012,7 @@ class _Renderer:
                 continue
             here = f"{LOOP_ON} {{ var(txn.sy_ad) -m int {k + 2} }}"
             rules.append(f"http-request return status 403 if {here} {test}")
+        rules += self._posture_rules(policy)
         ours = policy.identity_headers
         for name, source in (
             (ours.user, "X-Forwarded-User"),
@@ -1019,10 +1029,43 @@ class _Renderer:
                 f"http-request set-header {esc.header_name(ours.token)} "
                 f"\"%[req.hdr(Authorization),regsub('^Bearer ',)]\" if {LOOP_ON}"
             )
+        if ours.token or any(r.posture and r.posture.claims for r in policy.rules):
             rules.append(f"http-request del-header Authorization if {LOOP_ON}")
         rules += [
-            f"http-request del-header {n} if {LOOP_ON}" for n in (*PROXY_HEADERS, ACCESS_HEADER)
+            f"http-request del-header {n} if {LOOP_ON}"
+            for n in (*PROXY_HEADERS, ACCESS_HEADER, DEVICE_HEADER)
         ]
+        return rules
+
+    @staticmethod
+    def _posture_rules(policy: dm.AccessPolicySet) -> list[str]:
+        """Device conditions on the second hop: the client certificate flag and ID-token claims."""
+        rules: list[str] = []
+        if any(r.posture and r.posture.device_certificate for r in policy.rules):
+            rules.append(
+                f"http-request set-header {DEVICE_HEADER} 1 if {LOOP_OFF} {{ ssl_c_used }}"
+            )
+        if any(r.posture and r.posture.claims for r in policy.rules):
+            rules.append(f"http-request set-var(txn.sy_idt) http_auth_bearer if {LOOP_ON}")
+        for k, rule in enumerate(policy.rules):
+            if rule.posture is None:
+                continue
+            here = f"{LOOP_ON} {{ var(txn.sy_ad) -m int {k + 2} }}"
+            if rule.posture.device_certificate:
+                test = f"!{{ req.hdr({DEVICE_HEADER}) -m str 1 }}"
+                rules.append(f"http-request return status 403 if {here} {test}")
+            for claim in rule.posture.claims:
+                fetch = f"var(txn.sy_idt),jwt_payload_query('$.{claim.name}')"
+                if claim.op == "present":
+                    test = f"!{{ {fetch} -m found }}"
+                elif claim.op == "true":
+                    test = f"!{{ {fetch} -m str true }}"
+                elif claim.op == "equals":
+                    test = f"!{{ {fetch} -m str {esc.quoted(claim.value or '')} }}"
+                else:
+                    options = " ".join(esc.quoted(v) for v in sorted(claim.values))
+                    test = f"!{{ {fetch} -m str {options} }}"
+                rules.append(f"http-request return status 403 if {here} {test}")
         return rules
 
     @staticmethod
@@ -1039,6 +1082,7 @@ class _Renderer:
         svc: dm.VirtualService,
         ports: list[dm.VsPort],
         allow: dm.AllowListPolicySet | None,
+        deny: dm.AllowListPolicySet | None = None,
         inst: AuthInstance | None = None,
     ) -> list[str]:
         rules: list[str] = []
@@ -1055,6 +1099,12 @@ class _Renderer:
                 f"if {{ var(txn.trusted) -m bool }} {{ hdr({header}) -m found }}",
                 f"http-request del-header {header} if !{{ var(txn.trusted) -m bool }}",
             ]
+        if deny is not None:
+            # After the client address is restored (behind a CDN ``src`` is the real client), and
+            # before anything else touches the request.
+            rules.append(
+                f"http-request deny deny_status 403 if {{ src -f {self._list_path(deny)} }}"
+            )
         rules += [
             "http-request del-header X-Forwarded-For",
             f"http-request set-header X-Forwarded-Proto https if {{ ssl_fc }}{self._g()}",
