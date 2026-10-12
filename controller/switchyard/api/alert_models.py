@@ -99,6 +99,11 @@ class AlertFiring(ApiModel):
     state: Literal["firing", "pending"]
     since: datetime
     details: dict[str, Any]
+    fires_at: datetime | None = Field(
+        default=None,
+        description="`pending` only: when the alert fires if the value stays past the threshold "
+        "(`since` plus the rule's `for_minutes`).",
+    )
 
 
 class AlertDeliveryRead(ApiModel):

@@ -4440,6 +4440,11 @@ export interface components {
             details: {
                 [key: string]: unknown;
             };
+            /**
+             * Fires At
+             * @description `pending` only: when the alert fires if the value stays past the threshold (`since` plus the rule's `for_minutes`).
+             */
+            fires_at?: string | null;
             /** Key */
             key: string;
             /** Rule */

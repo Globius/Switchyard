@@ -1125,6 +1125,19 @@
             "title": "Details",
             "type": "object"
           },
+          "fires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`pending` only: when the alert fires if the value stays past the threshold (`since` plus the rule's `for_minutes`).",
+            "title": "Fires At"
+          },
           "key": {
             "title": "Key",
             "type": "string"

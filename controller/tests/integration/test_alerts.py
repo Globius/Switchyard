@@ -267,6 +267,12 @@ async def test_metric_rules_wait_out_their_duration_and_report_recovery(env: Env
     assert (await env.evaluator.run())["sent"] == 0  # pending
     status = (await env.client.get(f"{V1}/alerts", headers=env.h())).json()
     assert status["firing"][0]["state"] == "pending"
+    waiting = status["firing"][0]
+    assert waiting["details"]["value"] == 250.0 and waiting["details"]["threshold"] == 100
+    assert waiting["fires_at"] is not None
+    assert datetime.fromisoformat(waiting["fires_at"]) - datetime.fromisoformat(
+        waiting["since"]
+    ) == timedelta(minutes=5)
     env.clock[0] += timedelta(minutes=3)
     assert (await env.evaluator.run())["sent"] == 0
     env.clock[0] += timedelta(minutes=3)
