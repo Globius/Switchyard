@@ -98,21 +98,19 @@ class EngineTlsAlpnPublisher:
         name = self._name(domain)
         self._published[domain] = name
         for record, engine, paths in await self._connect():
-            for path in paths:
-                try:
-                    await engine.set_challenge_certificate(path, name, certificate_pem, domain)
-                except HaproxyError as exc:
-                    raise TlsAlpnError(f"engine {record.name}: {exc}") from exc
+            try:
+                await engine.set_challenge_certificate(paths, name, certificate_pem, domain)
+            except HaproxyError as exc:
+                raise TlsAlpnError(f"engine {record.name}: {exc}") from exc
 
     async def withdraw(self, domain: str) -> None:
         """Stop presenting it (every engine is tried; failures are logged)."""
         name = self._published.pop(domain, self._name(domain))
         for record, engine, paths in self._engines or []:
-            for path in paths:
-                try:
-                    await engine.remove_challenge_certificate(path, name)
-                except HaproxyError as exc:
-                    log.warning("engine %s: could not remove %s: %s", record.name, name, exc)
+            try:
+                await engine.remove_challenge_certificate(paths, name)
+            except HaproxyError as exc:
+                log.warning("engine %s: could not remove %s: %s", record.name, name, exc)
 
     async def close(self) -> None:
         """Remove anything still published and close the engine connections."""

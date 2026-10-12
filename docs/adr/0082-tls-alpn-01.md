@@ -32,3 +32,8 @@ authorization in a critical `acmeIdentifier` extension. The `acme` library no lo
 - Services that are plain TCP with TLS (no HTTP mode) are not covered.
 - Engines need the rendered `acme-tls/1`; one that runs an older configuration asks for an apply first.
 - Entries added at run time are lost on a reload, which is what a failed cleanup needs.
+- **One certificate per engine, an entry per crt-list.** A group with several TLS services has one
+  crt-list each. The challenge certificate is loaded into the engine **once** and added to every
+  crt-list; loading it per crt-list made HAProxy answer "Certificate ... already exists" and the
+  order failed. A repeated call replaces what an earlier failed run left, and a failure unloads
+  everything it loaded.

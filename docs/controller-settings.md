@@ -4,7 +4,9 @@ In production the controller is reached through the `controller` virtual service
 `management` tenant, served by the management SE group (ADR 0051, `deploy/prod/README.md`). Changing its
 host name, VIP or certificate can cut you off from the screen you used, so the change is a transaction
 with a way back (ADR 0081). System administrators do it under **Admin > Controller**, with
-`PUT /system/controller/pending`, or by hand as below.
+`PUT /system/controller/pending`, or by hand as below. To go **back to the address from the
+environment** (`SWITCHYARD_PUBLIC_URL`), propose `{"reset_to_default": true}` instead of an `fqdn` (see
+"Going back to the default address" below, or `syctl api controller-reset`).
 
 ## The flow
 

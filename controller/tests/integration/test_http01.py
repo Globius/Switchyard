@@ -225,3 +225,86 @@ async def test_alpn_publisher_has_nothing_to_present_on_without_a_443_service(
         directory = StaticEngineDirectory({GROUP: [(record("se-a"), FakeHaproxy("se-a"))]}, {})
         with pytest.raises(TlsAlpnError, match="port 443"):
             await EngineTlsAlpnPublisher(w.db, directory, TENANT).publish("x.example.test", "pem")
+
+
+def three_tls_services(data: dict[str, Any], *, http3: bool = False) -> None:
+    """Two more HTTPS services (the second with HTTP/3) next to ``web``: three crt-lists."""
+    for i, (name, vip) in enumerate((("api", "192.0.2.21"), ("shop", "192.0.2.22"))):
+        extra = copy.deepcopy(data["virtual_services"][0])
+        extra.update({"id": f"vs-{name}", "name": name, "vip": vip})
+        extra["routes"] = [{"match": {"host": f"{name}.example.test"}, "pool_id": "pool-web"}]
+        if i == 1 and http3:
+            extra["ports"][0]["http3"] = True
+        data["virtual_services"].append(extra)
+
+
+async def test_one_challenge_certificate_per_engine_for_every_crt_list(pg_url: str) -> None:
+    """Three TLS services mean three crt-lists, but the certificate is loaded once (not 3 times)."""
+    from switchyard.services.tlsalpn import EngineTlsAlpnPublisher
+
+    data = copy.deepcopy(base_data())
+    three_tls_services(data)
+    async with world(pg_url, data) as w:
+        engine = FakeHaproxy("se-a")
+        await engine.push(
+            render_haproxy(snapshot_from_mapping(data), UUID(symbolic_uuid("seg-1"))).files
+        )
+        directory = StaticEngineDirectory({GROUP: [(record("se-a"), engine)]}, {})
+        publisher = EngineTlsAlpnPublisher(w.db, directory, TENANT)
+        await publisher.publish("x.example.test", "pem")
+        lists = sorted(engine.challenge_certs)
+        assert lists == ["certs/api.crtlist", "certs/shop.crtlist", "certs/web.crtlist"]
+        assert all(len(engine.challenge_certs[c]) == 1 for c in lists)
+        assert list(engine.cert_loads.values()) == [1], "loaded once on the engine"
+        await publisher.publish("x.example.test", "pem")  # repeating is fine
+        assert len(engine.cert_loads) == 1 and all(
+            len(engine.challenge_certs[c]) == 1 for c in lists
+        )
+        await publisher.close()
+        assert all(not v for v in engine.challenge_certs.values())
+
+
+async def test_a_missing_crt_list_leaves_nothing_loaded(pg_url: str) -> None:
+    from switchyard.services.tlsalpn import EngineTlsAlpnPublisher, TlsAlpnError
+
+    data = copy.deepcopy(base_data())
+    three_tls_services(data)
+    async with world(pg_url, data) as w:
+        engine = FakeHaproxy("se-a")
+        files = render_haproxy(snapshot_from_mapping(data), UUID(symbolic_uuid("seg-1"))).files
+        del files["certs/shop.crtlist"]
+        await engine.push(files)
+        directory = StaticEngineDirectory({GROUP: [(record("se-a"), engine)]}, {})
+        publisher = EngineTlsAlpnPublisher(w.db, directory, TENANT)
+        with pytest.raises(TlsAlpnError, match=r"shop\.crtlist"):
+            await publisher.publish("x.example.test", "pem")
+        assert all(not v for v in engine.challenge_certs.values()) and not engine.cert_loads
+        await publisher.close()
+
+
+async def test_a_real_edge_with_three_tls_services_takes_the_challenge_certificate(
+    pg_url: str, edge: Se
+) -> None:
+    from switchyard.adapters.acme import challenge_certificate
+    from switchyard.services.tlsalpn import EngineTlsAlpnPublisher
+
+    engine = DataPlaneEngine(edge.api_url, name=edge.name, username=API_USER, password=API_PASSWORD)
+    data = copy.deepcopy(base_data())
+    three_tls_services(data)
+    h3 = copy.deepcopy(base_data())
+    three_tls_services(h3, http3=True)
+    try:
+        await engine.push(
+            render_haproxy(snapshot_from_mapping(h3), UUID(symbolic_uuid("seg-1"))).files
+        )
+        async with world(pg_url, data) as w:
+            directory = StaticEngineDirectory({GROUP: [(record(edge.name), engine)]}, {})
+            publisher = EngineTlsAlpnPublisher(w.db, directory, TENANT)
+            pem = challenge_certificate("www.example.test", "tok.thumb")
+            try:
+                await publisher.publish("www.example.test", pem)
+                await publisher.publish("www.example.test", pem)  # a retry after a failed run
+            finally:
+                await publisher.close()
+    finally:
+        await engine.close()
