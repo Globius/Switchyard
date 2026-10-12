@@ -28,7 +28,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1fswitchyard/agent/v1/agent.proto\x12\x13switchyard.agent.v1\"\xce\x01\n\x0cProbeRequest\x12\x10\n\x08protocol\x18\x01 \x01(\t\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\r\x12\x12\n\ntimeout_ms\x18\x04 \x01(\r\x12\x13\n\x0bhttp_method\x18\x05 \x01(\t\x12\x11\n\thttp_path\x18\x06 \x01(\t\x12\x11\n\thttp_host\x18\x07 \x01(\t\x12\x15\n\rexpect_status\x18\x08 \x03(\r\x12\x13\n\x0budp_payload\x18\t \x01(\x0c\x12\x12\n\nudp_expect\x18\n \x01(\x0c\"P\n\rProbeResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x12\n\nlatency_ms\x18\x02 \x01(\r\x12\x0e\n\x06\x64\x65tail\x18\x03 \x01(\t\x12\x0f\n\x07refused\x18\x04 \x01(\x08\"%\n\x04\x46ile\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\x0c\"`\n\x06\x42undle\x12\n\n\x02id\x18\x01 \x01(\t\x12(\n\x05\x66iles\x18\x02 \x03(\x0b\x32\x19.switchyard.agent.v1.File\x12\x0e\n\x06\x65ngine\x18\x03 \x01(\t\x12\x10\n\x08sequence\x18\x04 \x01(\x04\"7\n\x12\x41pplyBundleRequest\x12\x0e\n\x06\x62undle\x18\x01 \x01(\x0c\x12\x11\n\tsignature\x18\x02 \x01(\x0c\"z\n\x13\x41pplyBundleResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12\x15\n\rchanged_files\x18\x03 \x03(\t\x12\x16\n\x0ereloaded_units\x18\x04 \x03(\t\x12\x19\n\x11restored_previous\x18\x05 \x01(\x08\"\x12\n\x10GetStatusRequest\"\x0e\n\x0cWatchRequest\"=\n\nBgpSession\x12\x0c\n\x04peer\x18\x01 \x01(\t\x12\r\n\x05state\x18\x02 \x01(\t\x12\x12\n\nremote_asn\x18\x03 \x01(\r\"+\n\x0cVrrpInstance\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05state\x18\x02 \x01(\t\"\xfd\x01\n\x0eIpvsRealServer\x12\x0f\n\x07service\x18\x01 \x01(\t\x12\x0b\n\x03vip\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\r\x12\x0f\n\x07\x61\x64\x64ress\x18\x04 \x01(\t\x12\x13\n\x0bmember_port\x18\x05 \x01(\r\x12\r\n\x05state\x18\x06 \x01(\t\x12\x0e\n\x06weight\x18\x07 \x01(\r\x12\x14\n\x0c\x61\x63tive_conns\x18\x08 \x01(\x04\x12\x16\n\x0einactive_conns\x18\t \x01(\x04\x12\x12\n\nin_packets\x18\n \x01(\x04\x12\x13\n\x0bout_packets\x18\x0b \x01(\x04\x12\x10\n\x08in_bytes\x18\x0c \x01(\x04\x12\x11\n\tout_bytes\x18\r \x01(\x04\"\xe9\x03\n\x06Status\x12\x15\n\ragent_version\x18\x01 \x01(\t\x12\x11\n\tbundle_id\x18\x02 \x01(\t\x12@\n\x0b\x66ile_hashes\x18\x03 \x03(\x0b\x32+.switchyard.agent.v1.Status.FileHashesEntry\x12,\n\x03\x62gp\x18\x04 \x03(\x0b\x32\x1f.switchyard.agent.v1.BgpSession\x12/\n\x04vrrp\x18\x05 \x03(\x0b\x32!.switchyard.agent.v1.VrrpInstance\x12\x17\n\x0fhaproxy_healthy\x18\x06 \x01(\x08\x12\x18\n\x10routes_withdrawn\x18\x07 \x01(\x08\x12\x18\n\x10observed_at_unix\x18\x08 \x01(\x03\x12\x31\n\x04ipvs\x18\t \x03(\x0b\x32#.switchyard.agent.v1.IpvsRealServer\x12\x1a\n\x12keepalived_running\x18\n \x01(\x08\x12\x1a\n\x12withdrawn_prefixes\x18\x0b \x03(\t\x12\x14\n\x0cwaf_expected\x18\x0c \x01(\x08\x12\x13\n\x0bwaf_running\x18\r \x01(\x08\x1a\x31\n\x0f\x46ileHashesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32\xdb\x02\n\x05\x41gent\x12`\n\x0b\x41pplyBundle\x12\'.switchyard.agent.v1.ApplyBundleRequest\x1a(.switchyard.agent.v1.ApplyBundleResponse\x12O\n\tGetStatus\x12%.switchyard.agent.v1.GetStatusRequest\x1a\x1b.switchyard.agent.v1.Status\x12I\n\x05Watch\x12!.switchyard.agent.v1.WatchRequest\x1a\x1b.switchyard.agent.v1.Status0\x01\x12T\n\x0bProbeMember\x12!.switchyard.agent.v1.ProbeRequest\x1a\".switchyard.agent.v1.ProbeResponseB2Z0switchyard/agent/gen/switchyard/agent/v1;agentv1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1fswitchyard/agent/v1/agent.proto\x12\x13switchyard.agent.v1\"\x8b\x01\n\x0e\x43\x61ptureRequest\x12\x11\n\tinterface\x18\x01 \x01(\t\x12\x10\n\x08protocol\x18\x02 \x01(\t\x12\x0c\n\x04host\x18\x03 \x01(\t\x12\x0c\n\x04port\x18\x04 \x01(\r\x12\x12\n\nduration_s\x18\x05 \x01(\r\x12\x13\n\x0bmax_packets\x18\x06 \x01(\r\x12\x0f\n\x07snaplen\x18\x07 \x01(\r\"]\n\x0c\x43\x61ptureChunk\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x0c\n\x04\x64one\x18\x02 \x01(\x08\x12\x0f\n\x07packets\x18\x03 \x01(\x04\x12\x11\n\ttruncated\x18\x04 \x01(\x08\x12\r\n\x05\x65rror\x18\x05 \x01(\t\"\xce\x01\n\x0cProbeRequest\x12\x10\n\x08protocol\x18\x01 \x01(\t\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\r\x12\x12\n\ntimeout_ms\x18\x04 \x01(\r\x12\x13\n\x0bhttp_method\x18\x05 \x01(\t\x12\x11\n\thttp_path\x18\x06 \x01(\t\x12\x11\n\thttp_host\x18\x07 \x01(\t\x12\x15\n\rexpect_status\x18\x08 \x03(\r\x12\x13\n\x0budp_payload\x18\t \x01(\x0c\x12\x12\n\nudp_expect\x18\n \x01(\x0c\"P\n\rProbeResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\x12\n\nlatency_ms\x18\x02 \x01(\r\x12\x0e\n\x06\x64\x65tail\x18\x03 \x01(\t\x12\x0f\n\x07refused\x18\x04 \x01(\x08\"%\n\x04\x46ile\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\x0c\"`\n\x06\x42undle\x12\n\n\x02id\x18\x01 \x01(\t\x12(\n\x05\x66iles\x18\x02 \x03(\x0b\x32\x19.switchyard.agent.v1.File\x12\x0e\n\x06\x65ngine\x18\x03 \x01(\t\x12\x10\n\x08sequence\x18\x04 \x01(\x04\"7\n\x12\x41pplyBundleRequest\x12\x0e\n\x06\x62undle\x18\x01 \x01(\x0c\x12\x11\n\tsignature\x18\x02 \x01(\x0c\"z\n\x13\x41pplyBundleResponse\x12\n\n\x02ok\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12\x15\n\rchanged_files\x18\x03 \x03(\t\x12\x16\n\x0ereloaded_units\x18\x04 \x03(\t\x12\x19\n\x11restored_previous\x18\x05 \x01(\x08\"\x12\n\x10GetStatusRequest\"\x0e\n\x0cWatchRequest\"=\n\nBgpSession\x12\x0c\n\x04peer\x18\x01 \x01(\t\x12\r\n\x05state\x18\x02 \x01(\t\x12\x12\n\nremote_asn\x18\x03 \x01(\r\"+\n\x0cVrrpInstance\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05state\x18\x02 \x01(\t\"\xfd\x01\n\x0eIpvsRealServer\x12\x0f\n\x07service\x18\x01 \x01(\t\x12\x0b\n\x03vip\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\r\x12\x0f\n\x07\x61\x64\x64ress\x18\x04 \x01(\t\x12\x13\n\x0bmember_port\x18\x05 \x01(\r\x12\r\n\x05state\x18\x06 \x01(\t\x12\x0e\n\x06weight\x18\x07 \x01(\r\x12\x14\n\x0c\x61\x63tive_conns\x18\x08 \x01(\x04\x12\x16\n\x0einactive_conns\x18\t \x01(\x04\x12\x12\n\nin_packets\x18\n \x01(\x04\x12\x13\n\x0bout_packets\x18\x0b \x01(\x04\x12\x10\n\x08in_bytes\x18\x0c \x01(\x04\x12\x11\n\tout_bytes\x18\r \x01(\x04\"\xe9\x03\n\x06Status\x12\x15\n\ragent_version\x18\x01 \x01(\t\x12\x11\n\tbundle_id\x18\x02 \x01(\t\x12@\n\x0b\x66ile_hashes\x18\x03 \x03(\x0b\x32+.switchyard.agent.v1.Status.FileHashesEntry\x12,\n\x03\x62gp\x18\x04 \x03(\x0b\x32\x1f.switchyard.agent.v1.BgpSession\x12/\n\x04vrrp\x18\x05 \x03(\x0b\x32!.switchyard.agent.v1.VrrpInstance\x12\x17\n\x0fhaproxy_healthy\x18\x06 \x01(\x08\x12\x18\n\x10routes_withdrawn\x18\x07 \x01(\x08\x12\x18\n\x10observed_at_unix\x18\x08 \x01(\x03\x12\x31\n\x04ipvs\x18\t \x03(\x0b\x32#.switchyard.agent.v1.IpvsRealServer\x12\x1a\n\x12keepalived_running\x18\n \x01(\x08\x12\x1a\n\x12withdrawn_prefixes\x18\x0b \x03(\t\x12\x14\n\x0cwaf_expected\x18\x0c \x01(\x08\x12\x13\n\x0bwaf_running\x18\r \x01(\x08\x1a\x31\n\x0f\x46ileHashesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x32\xb0\x03\n\x05\x41gent\x12`\n\x0b\x41pplyBundle\x12\'.switchyard.agent.v1.ApplyBundleRequest\x1a(.switchyard.agent.v1.ApplyBundleResponse\x12O\n\tGetStatus\x12%.switchyard.agent.v1.GetStatusRequest\x1a\x1b.switchyard.agent.v1.Status\x12I\n\x05Watch\x12!.switchyard.agent.v1.WatchRequest\x1a\x1b.switchyard.agent.v1.Status0\x01\x12T\n\x0bProbeMember\x12!.switchyard.agent.v1.ProbeRequest\x1a\".switchyard.agent.v1.ProbeResponse\x12S\n\x07\x43\x61pture\x12#.switchyard.agent.v1.CaptureRequest\x1a!.switchyard.agent.v1.CaptureChunk0\x01\x42\x32Z0switchyard/agent/gen/switchyard/agent/v1;agentv1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -38,32 +38,36 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'Z0switchyard/agent/gen/switchyard/agent/v1;agentv1'
   _globals['_STATUS_FILEHASHESENTRY']._loaded_options = None
   _globals['_STATUS_FILEHASHESENTRY']._serialized_options = b'8\001'
-  _globals['_PROBEREQUEST']._serialized_start=57
-  _globals['_PROBEREQUEST']._serialized_end=263
-  _globals['_PROBERESPONSE']._serialized_start=265
-  _globals['_PROBERESPONSE']._serialized_end=345
-  _globals['_FILE']._serialized_start=347
-  _globals['_FILE']._serialized_end=384
-  _globals['_BUNDLE']._serialized_start=386
-  _globals['_BUNDLE']._serialized_end=482
-  _globals['_APPLYBUNDLEREQUEST']._serialized_start=484
-  _globals['_APPLYBUNDLEREQUEST']._serialized_end=539
-  _globals['_APPLYBUNDLERESPONSE']._serialized_start=541
-  _globals['_APPLYBUNDLERESPONSE']._serialized_end=663
-  _globals['_GETSTATUSREQUEST']._serialized_start=665
-  _globals['_GETSTATUSREQUEST']._serialized_end=683
-  _globals['_WATCHREQUEST']._serialized_start=685
-  _globals['_WATCHREQUEST']._serialized_end=699
-  _globals['_BGPSESSION']._serialized_start=701
-  _globals['_BGPSESSION']._serialized_end=762
-  _globals['_VRRPINSTANCE']._serialized_start=764
-  _globals['_VRRPINSTANCE']._serialized_end=807
-  _globals['_IPVSREALSERVER']._serialized_start=810
-  _globals['_IPVSREALSERVER']._serialized_end=1063
-  _globals['_STATUS']._serialized_start=1066
-  _globals['_STATUS']._serialized_end=1555
-  _globals['_STATUS_FILEHASHESENTRY']._serialized_start=1506
-  _globals['_STATUS_FILEHASHESENTRY']._serialized_end=1555
-  _globals['_AGENT']._serialized_start=1558
-  _globals['_AGENT']._serialized_end=1905
+  _globals['_CAPTUREREQUEST']._serialized_start=57
+  _globals['_CAPTUREREQUEST']._serialized_end=196
+  _globals['_CAPTURECHUNK']._serialized_start=198
+  _globals['_CAPTURECHUNK']._serialized_end=291
+  _globals['_PROBEREQUEST']._serialized_start=294
+  _globals['_PROBEREQUEST']._serialized_end=500
+  _globals['_PROBERESPONSE']._serialized_start=502
+  _globals['_PROBERESPONSE']._serialized_end=582
+  _globals['_FILE']._serialized_start=584
+  _globals['_FILE']._serialized_end=621
+  _globals['_BUNDLE']._serialized_start=623
+  _globals['_BUNDLE']._serialized_end=719
+  _globals['_APPLYBUNDLEREQUEST']._serialized_start=721
+  _globals['_APPLYBUNDLEREQUEST']._serialized_end=776
+  _globals['_APPLYBUNDLERESPONSE']._serialized_start=778
+  _globals['_APPLYBUNDLERESPONSE']._serialized_end=900
+  _globals['_GETSTATUSREQUEST']._serialized_start=902
+  _globals['_GETSTATUSREQUEST']._serialized_end=920
+  _globals['_WATCHREQUEST']._serialized_start=922
+  _globals['_WATCHREQUEST']._serialized_end=936
+  _globals['_BGPSESSION']._serialized_start=938
+  _globals['_BGPSESSION']._serialized_end=999
+  _globals['_VRRPINSTANCE']._serialized_start=1001
+  _globals['_VRRPINSTANCE']._serialized_end=1044
+  _globals['_IPVSREALSERVER']._serialized_start=1047
+  _globals['_IPVSREALSERVER']._serialized_end=1300
+  _globals['_STATUS']._serialized_start=1303
+  _globals['_STATUS']._serialized_end=1792
+  _globals['_STATUS_FILEHASHESENTRY']._serialized_start=1743
+  _globals['_STATUS_FILEHASHESENTRY']._serialized_end=1792
+  _globals['_AGENT']._serialized_start=1795
+  _globals['_AGENT']._serialized_end=2227
 # @@protoc_insertion_point(module_scope)

@@ -10,24 +10,29 @@ import (
 	"path/filepath"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	pb "switchyard/agent/gen/switchyard/agent/v1"
 	"switchyard/agent/internal/bundle"
+	"switchyard/agent/internal/capture"
 	"switchyard/agent/internal/probe"
-	"switchyard/agent/internal/status"
+	agentstatus "switchyard/agent/internal/status"
 )
 
 // Server implements pb.AgentServer.
 type Server struct {
 	pb.UnimplementedAgentServer
 	Applier   *bundle.Applier
-	Collector *status.Collector
+	Collector *agentstatus.Collector
 	// Root is the managed directory (/etc/switchyard); probes may only target its configured members.
 	Root string
 	// Interval is how often Watch re-checks; Heartbeat forces a send even without changes.
 	Interval  time.Duration
 	Heartbeat time.Duration
+	// Capturer runs packet captures; nil answers Capture with Unimplemented.
+	Capturer *capture.Capturer
 }
 
 // ApplyBundle verifies and applies a bundle.
@@ -64,6 +69,30 @@ func (s *Server) ProbeMember(ctx context.Context, req *pb.ProbeRequest) (*pb.Pro
 		Detail:    res.Detail,
 		Refused:   res.Refused,
 	}, nil
+}
+
+// Capture runs one bounded tcpdump and streams the pcap file back (ADR 0194).
+func (s *Server) Capture(req *pb.CaptureRequest, stream pb.Agent_CaptureServer) error {
+	if s.Capturer == nil {
+		return grpcstatus.Error(codes.Unimplemented, "packet capture is not enabled on this engine")
+	}
+	res, err := s.Capturer.Run(stream.Context(), capture.Request{
+		Interface:  req.Interface,
+		Protocol:   req.Protocol,
+		Host:       req.Host,
+		Port:       req.Port,
+		Duration:   time.Duration(req.DurationS) * time.Second,
+		MaxPackets: req.MaxPackets,
+		Snaplen:    req.Snaplen,
+	}, func(b []byte) error { return stream.Send(&pb.CaptureChunk{Data: b}) })
+	switch {
+	case capture.IsBusy(err):
+		return grpcstatus.Error(codes.ResourceExhausted, err.Error())
+	case err != nil:
+		// Report the reason in the stream so the controller shows it; the RPC itself succeeded.
+		return stream.Send(&pb.CaptureChunk{Done: true, Error: err.Error()})
+	}
+	return stream.Send(&pb.CaptureChunk{Done: true, Packets: res.Packets, Truncated: res.Truncated})
 }
 
 func comparable(st *pb.Status) *pb.Status {

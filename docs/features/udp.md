@@ -1,6 +1,6 @@
 # UDP services
 
-**What.** `protocol: udp` services are served by Keepalived and IPVS in NAT mode with source NAT on the engine, so backends
+**What.** `protocol: udp` services are served by Keepalived and IPVS, by default in NAT mode with source NAT on the engine, so backends
 need no change. Health checks are `udp` monitors.
 
 **How to use.** A UDP service takes a name, the SE group, a VIP, ports and `default_pool_id`. Pools use `roundrobin`,
@@ -17,6 +17,11 @@ default_pool_id: <pool id>
 
 In VRRP mode Keepalived holds the VIP. In BGP mode FRR announces it, and the agent withdraws the route when Keepalived is
 down or the service has no healthy real server.
+
+**Forwarding method.** `forward_mode` is `nat` (default), `dr` (direct return: replies skip the engine; members on the
+engine's backend network, VIP on their loopback) or `tunnel` (IPIP to routed members). `dr` and `tunnel` keep the member on the
+service port. Member setup and the exact rules are in [render.md](../render.md#forwarding-method-forward_mode) and
+[ADR 0192](../adr/0192-ipvs-direct-return-and-tunnel.md).
 
 **Limits.** Every HTTP, TLS or policy field is refused with a field error, and so are `random`, PROXY protocol and backup
 members. There is no connection-state sync between engines, so a failover resets UDP flows. No protocol-aware probes (DNS,

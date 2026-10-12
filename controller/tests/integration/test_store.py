@@ -344,3 +344,46 @@ async def test_limit_access_token_and_certificate_policy_sets_round_trip(
         "cc": "client_cert",
         "dir": "directory",
     }
+
+
+async def test_forwarding_mode_and_dns_publication_round_trip(admin_engine: AsyncEngine) -> None:
+    """``forward_mode`` (ADR 0192) and ``dns`` (ADR 0193) survive PostgreSQL."""
+    data = base_data()
+    data["pools"].append(
+        {
+            "id": "pool-dr",
+            "tenant_id": "t-acme",
+            "name": "media",
+            "members": [{"address": "10.20.0.60", "port": 5004}],
+        }
+    )
+    data["virtual_services"][0]["dns"] = {
+        "names": ["app.example.test"],
+        "ttl": 120,
+        "proxied": True,
+        "credential": "cf",
+    }
+    data["virtual_services"].append(
+        {
+            "id": "vs-media",
+            "tenant_id": "t-acme",
+            "se_group_id": "seg-1",
+            "name": "media",
+            "protocol": "udp",
+            "forward_mode": "dr",
+            "vip": "192.0.2.41",
+            "ports": [{"port": 5004}],
+            "default_pool_id": "pool-dr",
+        }
+    )
+    snap = snapshot_from_mapping(data)
+    async with admin_session(admin_engine) as s:
+        await add_snapshot(s, snap)
+    async with admin_session(admin_engine) as s:
+        loaded = await load_snapshot(s)
+    assert canonical(loaded) == canonical(snap)
+    by_name = {v.name: v for v in loaded.virtual_services}
+    assert by_name["media"].forward_mode == "dr"
+    assert by_name["web"].forward_mode == "nat"
+    assert by_name["web"].dns is not None and by_name["web"].dns.proxied is True
+    assert by_name["media"].dns is None

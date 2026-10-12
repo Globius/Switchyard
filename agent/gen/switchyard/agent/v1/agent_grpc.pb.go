@@ -23,6 +23,7 @@ const (
 	Agent_GetStatus_FullMethodName   = "/switchyard.agent.v1.Agent/GetStatus"
 	Agent_Watch_FullMethodName       = "/switchyard.agent.v1.Agent/Watch"
 	Agent_ProbeMember_FullMethodName = "/switchyard.agent.v1.Agent/ProbeMember"
+	Agent_Capture_FullMethodName     = "/switchyard.agent.v1.Agent/Capture"
 )
 
 // AgentClient is the client API for Agent service.
@@ -40,6 +41,10 @@ type AgentClient interface {
 	// Runs one health probe from this engine against a pool member that is in the applied
 	// configuration. Anything else is refused: this is not a general network tool.
 	ProbeMember(ctx context.Context, in *ProbeRequest, opts ...grpc.CallOption) (*ProbeResponse, error)
+	// Captures packets with tcpdump for a bounded time and streams the pcap file back. The filter is
+	// built from structured fields (never accepted as text), one capture runs at a time, and
+	// duration, packets and bytes are capped. Anything outside those limits is refused.
+	Capture(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CaptureChunk], error)
 }
 
 type agentClient struct {
@@ -99,6 +104,25 @@ func (c *agentClient) ProbeMember(ctx context.Context, in *ProbeRequest, opts ..
 	return out, nil
 }
 
+func (c *agentClient) Capture(ctx context.Context, in *CaptureRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CaptureChunk], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Agent_ServiceDesc.Streams[1], Agent_Capture_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[CaptureRequest, CaptureChunk]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Agent_CaptureClient = grpc.ServerStreamingClient[CaptureChunk]
+
 // AgentServer is the server API for Agent service.
 // All implementations must embed UnimplementedAgentServer
 // for forward compatibility.
@@ -114,6 +138,10 @@ type AgentServer interface {
 	// Runs one health probe from this engine against a pool member that is in the applied
 	// configuration. Anything else is refused: this is not a general network tool.
 	ProbeMember(context.Context, *ProbeRequest) (*ProbeResponse, error)
+	// Captures packets with tcpdump for a bounded time and streams the pcap file back. The filter is
+	// built from structured fields (never accepted as text), one capture runs at a time, and
+	// duration, packets and bytes are capped. Anything outside those limits is refused.
+	Capture(*CaptureRequest, grpc.ServerStreamingServer[CaptureChunk]) error
 	mustEmbedUnimplementedAgentServer()
 }
 
@@ -135,6 +163,9 @@ func (UnimplementedAgentServer) Watch(*WatchRequest, grpc.ServerStreamingServer[
 }
 func (UnimplementedAgentServer) ProbeMember(context.Context, *ProbeRequest) (*ProbeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ProbeMember not implemented")
+}
+func (UnimplementedAgentServer) Capture(*CaptureRequest, grpc.ServerStreamingServer[CaptureChunk]) error {
+	return status.Errorf(codes.Unimplemented, "method Capture not implemented")
 }
 func (UnimplementedAgentServer) mustEmbedUnimplementedAgentServer() {}
 func (UnimplementedAgentServer) testEmbeddedByValue()               {}
@@ -222,6 +253,17 @@ func _Agent_ProbeMember_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Agent_Capture_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(CaptureRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServer).Capture(m, &grpc.GenericServerStream[CaptureRequest, CaptureChunk]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Agent_CaptureServer = grpc.ServerStreamingServer[CaptureChunk]
+
 // Agent_ServiceDesc is the grpc.ServiceDesc for Agent service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -246,6 +288,11 @@ var Agent_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Watch",
 			Handler:       _Agent_Watch_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Capture",
+			Handler:       _Agent_Capture_Handler,
 			ServerStreams: true,
 		},
 	},

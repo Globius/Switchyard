@@ -6,6 +6,38 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class CaptureRequest(_message.Message):
+    __slots__ = ("interface", "protocol", "host", "port", "duration_s", "max_packets", "snaplen")
+    INTERFACE_FIELD_NUMBER: _ClassVar[int]
+    PROTOCOL_FIELD_NUMBER: _ClassVar[int]
+    HOST_FIELD_NUMBER: _ClassVar[int]
+    PORT_FIELD_NUMBER: _ClassVar[int]
+    DURATION_S_FIELD_NUMBER: _ClassVar[int]
+    MAX_PACKETS_FIELD_NUMBER: _ClassVar[int]
+    SNAPLEN_FIELD_NUMBER: _ClassVar[int]
+    interface: str
+    protocol: str
+    host: str
+    port: int
+    duration_s: int
+    max_packets: int
+    snaplen: int
+    def __init__(self, interface: _Optional[str] = ..., protocol: _Optional[str] = ..., host: _Optional[str] = ..., port: _Optional[int] = ..., duration_s: _Optional[int] = ..., max_packets: _Optional[int] = ..., snaplen: _Optional[int] = ...) -> None: ...
+
+class CaptureChunk(_message.Message):
+    __slots__ = ("data", "done", "packets", "truncated", "error")
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    DONE_FIELD_NUMBER: _ClassVar[int]
+    PACKETS_FIELD_NUMBER: _ClassVar[int]
+    TRUNCATED_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    data: bytes
+    done: bool
+    packets: int
+    truncated: bool
+    error: str
+    def __init__(self, data: _Optional[bytes] = ..., done: _Optional[bool] = ..., packets: _Optional[int] = ..., truncated: _Optional[bool] = ..., error: _Optional[str] = ...) -> None: ...
+
 class ProbeRequest(_message.Message):
     __slots__ = ("protocol", "address", "port", "timeout_ms", "http_method", "http_path", "http_host", "expect_status", "udp_payload", "udp_expect")
     PROTOCOL_FIELD_NUMBER: _ClassVar[int]

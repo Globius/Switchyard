@@ -136,3 +136,18 @@ func TestUnhealthyVIPs(t *testing.T) {
 		t.Fatalf("no server up must flag the VIP: %v", bad)
 	}
 }
+
+// Direct-return ("Route") and tunnel ("Tunnel") real servers list the same way as NAT ones (ADR 0192).
+func TestParseTableDirectReturnAndTunnel(t *testing.T) {
+	listing := "UDP  192.0.2.22:5004 rr\n  -> 10.20.0.60:5004   Route   100    2          1\n" +
+		"UDP  192.0.2.23:5005 rr\n  -> 10.99.4.10:5005   Tunnel  50     0          0\n"
+	table := ParseTable([]byte(listing), nil)
+	dr := table[key{"192.0.2.22", 5004, "10.20.0.60", 5004}]
+	tun := table[key{"192.0.2.23", 5005, "10.99.4.10", 5005}]
+	if dr == nil || dr.Weight != 100 || dr.Active != 2 || dr.Inactive != 1 {
+		t.Fatalf("direct return entry wrong: %+v", dr)
+	}
+	if tun == nil || tun.Weight != 50 {
+		t.Fatalf("tunnel entry wrong: %+v", tun)
+	}
+}

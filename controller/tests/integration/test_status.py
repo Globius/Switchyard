@@ -91,6 +91,23 @@ async def test_agent_bundle_drift_is_detected(pg_url: str) -> None:
         assert {"agent_file", "agent_unexpected_file"} <= kinds
 
 
+async def test_the_connection_load_is_stored_with_the_agent_status(pg_url: str) -> None:
+    """The autoscaler (ADR 0194) reads the load from the stored agent status."""
+    async with world(pg_url, vrrp_data()) as w:
+        w.use_engines("se-a", "se-b", agents=True)
+        await w.prime()
+        await prime_bundles(w)
+        healthy_vrrp(w)
+        w.engines["se-a"].curr_conns, w.engines["se-a"].max_conn = 300, 1000
+        svc = service(w)
+        await svc.poll_all()
+        rows = {r.name: r for r in await svc.list_status(principal(), TENANT)}
+        agent_a, agent_b = rows["se-a"].agent, rows["se-b"].agent
+        assert agent_a is not None and agent_b is not None
+        assert agent_a["load"] == {"conns": 300, "max_conn": 1000}
+        assert "load" not in agent_b  # that engine did not report one
+
+
 async def test_status_requires_tenant_access(pg_url: str) -> None:
     from switchyard.services.errors import PermissionDeniedError
 

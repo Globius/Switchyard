@@ -122,6 +122,54 @@ class HttpCloudflare:
             if "404" not in str(exc):
                 raise
 
+    async def upsert_address(
+        self, name: str, address: str, *, ttl: int, proxied: bool, handle: str | None
+    ) -> str:
+        """Create or update an ``A``/``AAAA`` record (ADR 0193).
+
+        A record found by name that this controller did not create is adopted only when its
+        content already equals ``address``; otherwise the call fails and nothing is changed.
+        """
+        zone = await self._zone_id(name)
+        rtype = "AAAA" if ":" in address else "A"
+        body = {
+            "type": rtype,
+            "name": name,
+            "content": address,
+            "ttl": 1 if proxied else max(ttl, 60),
+            "proxied": proxied,
+        }
+        if handle is not None:
+            zone_id, _, rid = handle.partition("/")
+            try:
+                record = await self._call("PUT", f"/zones/{zone_id}/dns_records/{rid}", body=body)
+            except CloudflareError as exc:
+                if "404" not in str(exc):
+                    raise
+                handle = None  # deleted by hand; fall through and look again
+            else:
+                return f"{zone_id}/{record['id']}"
+        found = await self._call(
+            "GET", f"/zones/{zone}/dns_records", params={"type": rtype, "name": name}
+        )
+        if found:
+            existing = found[0]
+            if existing.get("content") != address:
+                raise CloudflareError(
+                    f"{name} already has a {rtype} record with another value "
+                    f"({existing.get('content')}) that this controller did not create"
+                )
+            record = await self._call(
+                "PUT", f"/zones/{zone}/dns_records/{existing['id']}", body=body
+            )
+            return f"{zone}/{record['id']}"
+        record = await self._call("POST", f"/zones/{zone}/dns_records", body=body)
+        return f"{zone}/{record['id']}"
+
+    async def delete_address(self, name: str, handle: str) -> None:
+        """Delete a record created by :meth:`upsert_address`."""
+        await self.delete_txt(name, handle)
+
     async def issue_origin_ca(self, hostnames: tuple[str, ...], csr_pem: str) -> str:
         """Request an ECDSA Origin CA certificate valid for 15 years."""
         result = await self._call(
@@ -157,6 +205,9 @@ class FakeCloudflare:
             plug in a signer.
         ranges: What :meth:`ip_ranges` returns.
         fail_on: Operation names that raise once.
+        addresses: Address records as ``record id -> (name, type, content, ttl, proxied)``; a test
+            can add one by hand to stand for a record the controller did not create.
+        owned: The ids in ``addresses`` that :meth:`upsert_address` created.
     """
 
     txt: dict[str, tuple[str, str]] = field(default_factory=dict)
@@ -164,6 +215,8 @@ class FakeCloudflare:
     origin_ca: Any = None
     ranges: IpRanges = IpRanges(("192.0.2.0/24",), ("2001:db8::/32",))
     fail_on: set[str] = field(default_factory=set)
+    addresses: dict[str, tuple[str, str, str, int, bool]] = field(default_factory=dict)
+    owned: set[str] = field(default_factory=set)
     _n: int = 0
 
     def _check(self, op: str) -> None:
@@ -184,6 +237,33 @@ class FakeCloudflare:
         """Forget the record."""
         self._check("delete_txt")
         self.txt.pop(record_id, None)
+
+    async def upsert_address(
+        self, name: str, address: str, *, ttl: int, proxied: bool, handle: str | None
+    ) -> str:
+        """Create or update an address record; refuse a foreign record with another value."""
+        self._check("upsert_address")
+        rtype = "AAAA" if ":" in address else "A"
+        if handle is not None and handle in self.addresses:
+            self.addresses[handle] = (name, rtype, address, ttl, proxied)
+            return handle
+        for rid, (n, t, content, _, _) in self.addresses.items():
+            if (n, t) == (name, rtype) and rid not in self.owned:
+                if content != address:
+                    raise CloudflareError(f"{name} already has a {rtype} record with another value")
+                self.addresses[rid] = (name, rtype, address, ttl, proxied)
+                return rid
+        self._n += 1
+        rid = f"addr{self._n}"
+        self.addresses[rid] = (name, rtype, address, ttl, proxied)
+        self.owned.add(rid)
+        return rid
+
+    async def delete_address(self, name: str, handle: str) -> None:
+        """Forget the record."""
+        self._check("delete_address")
+        self.addresses.pop(handle, None)
+        self.owned.discard(handle)
 
     async def issue_origin_ca(self, hostnames: tuple[str, ...], csr_pem: str) -> str:
         """Sign through the configured callable."""

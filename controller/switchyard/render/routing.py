@@ -94,6 +94,14 @@ _SCHEDULER = {
 }
 
 
+#: Keepalived ``lb_kind`` by forwarding method (ADR 0192).
+_LB_KIND = {
+    dm.IpvsForward.NAT: "NAT",
+    dm.IpvsForward.DR: "DR",
+    dm.IpvsForward.TUNNEL: "TUN",
+}
+
+
 @dataclass(frozen=True)
 class IpvsServer:
     """One IPVS virtual server: a UDP service port with its real servers.
@@ -108,6 +116,7 @@ class IpvsServer:
     scheduler: str
     monitor: dm.HealthMonitor | None
     members: tuple[tuple[str, int, int], ...]
+    forward: dm.IpvsForward = dm.IpvsForward.NAT
 
 
 def _ipvs_servers(snapshot: Snapshot, group: dm.SeGroup) -> list[IpvsServer]:
@@ -148,7 +157,7 @@ def _ipvs_servers(snapshot: Snapshot, group: dm.SeGroup) -> list[IpvsServer]:
         )
         scheduler = weighted if len({w for _, _, w in members}) > 1 else plain
         out += [
-            IpvsServer(svc.name, svc.vip, port, scheduler, monitor, members)
+            IpvsServer(svc.name, svc.vip, port, scheduler, monitor, members, svc.forward_mode)
             for port in sorted(p.port for p in svc.ports)
         ]
     return sorted(out, key=lambda s: (s.vip.version, int(s.vip), s.port))
@@ -166,6 +175,7 @@ def _virtual_servers(servers: list[IpvsServer]) -> list[dict[str, object]]:
                 "vip": str(s.vip),
                 "port": s.port,
                 "scheduler": s.scheduler,
+                "lb_kind": _LB_KIND[s.forward],
                 "delay_loop": monitor.interval_s if monitor else 5,
                 "checked": monitor is not None,
                 "retry": monitor.fall if monitor else 3,
@@ -180,7 +190,12 @@ def _virtual_servers(servers: list[IpvsServer]) -> list[dict[str, object]]:
 
 
 def _udp_host_files(servers: list[IpvsServer]) -> dict[str, str]:
-    """The sysctls and the masquerade rule IPVS NAT needs on the SE (none without UDP)."""
+    """The sysctls and the masquerade rule IPVS NAT needs on the SE.
+
+    Only ``nat`` services need them: direct return and tunnel replies bypass the SE, so a group
+    with only those renders no host files.
+    """
+    servers = [s for s in servers if s.forward is dm.IpvsForward.NAT]
     if not servers:
         return {}
     targets: dict[int, set[tuple[int, int]]] = {4: set(), 6: set()}

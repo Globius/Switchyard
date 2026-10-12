@@ -59,6 +59,24 @@ def _server_status(row: dict[str, Any]) -> ServerStatus:
     )
 
 
+def _optional_int(info: Mapping[str, Any], *keys: str) -> int | None:
+    """The first of ``keys`` present in ``info`` as an integer (or ``None``).
+
+    Example:
+        >>> _optional_int({"CurrConns": "12"}, "curr_conns", "CurrConns")
+        12
+        >>> _optional_int({}, "curr_conns") is None
+        True
+    """
+    for key in keys:
+        if info.get(key) is not None:
+            try:
+                return int(info[key])
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
 class DataPlaneEngine:
     """A :class:`~switchyard.adapters.haproxy.HaproxyEngine` backed by the Data Plane API."""
 
@@ -310,7 +328,12 @@ class DataPlaneEngine:
         if response.status_code != 200:
             raise self._unexpected("reading runtime info", response)
         info = response.json().get("info", {})
-        return EngineInfo(pid=int(info.get("pid", 0)), uptime_s=int(info.get("uptime", 0)))
+        return EngineInfo(
+            pid=int(info.get("pid", 0)),
+            uptime_s=int(info.get("uptime", 0)),
+            curr_conns=_optional_int(info, "curr_conns", "CurrConns"),
+            max_conn=_optional_int(info, "max_conn", "Maxconn", "MaxConn"),
+        )
 
     async def fingerprint(self) -> str | None:
         """Return the render fingerprint in the running configuration."""

@@ -7,19 +7,24 @@ package server
 import (
 	"context"
 	"crypto/ed25519"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
 	pb "switchyard/agent/gen/switchyard/agent/v1"
 	"switchyard/agent/internal/bundle"
-	"switchyard/agent/internal/status"
+	"switchyard/agent/internal/capture"
+	agentstatus "switchyard/agent/internal/status"
 )
 
 type okRunner struct{ bgp string }
@@ -39,7 +44,7 @@ func start(t *testing.T) (pb.AgentClient, ed25519.PrivateKey, string) {
 	os.WriteFile(filepath.Join(state, "vrrp-edge.state"), []byte("master\n"), 0o600)
 	run := okRunner{bgp: `{"ipv4Unicast":{"peers":{"10.0.0.2":{"remoteAs":65001,"state":"Established"}}}}`}
 	applier := &bundle.Applier{Root: root, PubKey: pub, Runner: run, AllowUnbound: true}
-	collector := &status.Collector{
+	collector := &agentstatus.Collector{
 		Runner: run, StateDir: state, Hashes: applier.Hashes, BundleID: applier.LastBundleID,
 		Health: func() (bool, bool) { return true, false }, Now: time.Now,
 	}
@@ -133,5 +138,77 @@ func TestRejectedBundleChangesNothingOverGRPC(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "frr")); !os.IsNotExist(err) {
 		t.Fatal("nothing may be written")
+	}
+}
+
+func captureClient(t *testing.T, c *capture.Capturer) pb.AgentClient {
+	t.Helper()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := grpc.NewServer()
+	pb.RegisterAgentServer(s, &Server{Capturer: c})
+	go s.Serve(lis)
+	t.Cleanup(s.Stop)
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	return pb.NewAgentClient(conn)
+}
+
+func fakeCapturer(data string, stderr string) *capture.Capturer {
+	return &capture.Capturer{
+		Interfaces: func() ([]string, error) { return []string{"eth0"}, nil },
+		Start: func(_ context.Context, _ []string) (io.ReadCloser, func() string, func() error, error) {
+			return io.NopCloser(strings.NewReader(data)), func() string { return stderr }, func() error { return nil }, nil
+		},
+	}
+}
+
+func collect(t *testing.T, c pb.AgentClient, req *pb.CaptureRequest) ([]byte, *pb.CaptureChunk, error) {
+	t.Helper()
+	stream, err := c.Capture(context.Background(), req)
+	if err != nil {
+		return nil, nil, err
+	}
+	var data []byte
+	var last *pb.CaptureChunk
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			return data, last, nil
+		}
+		if err != nil {
+			return data, last, err
+		}
+		data = append(data, chunk.Data...)
+		last = chunk
+	}
+}
+
+func TestCaptureStreamsThePcapAndTheTotals(t *testing.T) {
+	c := captureClient(t, fakeCapturer("PCAP", "7 packets captured\n"))
+	data, last, err := collect(t, c, &pb.CaptureRequest{Interface: "eth0", Protocol: "udp", Port: 53, DurationS: 5, MaxPackets: 10})
+	if err != nil || string(data) != "PCAP" || last == nil || !last.Done || last.Packets != 7 || last.Error != "" {
+		t.Fatalf("data=%q last=%+v err=%v", data, last, err)
+	}
+}
+
+func TestCaptureReportsARefusedRequestInTheStream(t *testing.T) {
+	c := captureClient(t, fakeCapturer("", ""))
+	_, last, err := collect(t, c, &pb.CaptureRequest{Interface: "eth0;reboot", DurationS: 5, MaxPackets: 10})
+	if err != nil || last == nil || !last.Done || !strings.Contains(last.Error, "not a valid interface name") {
+		t.Fatalf("last=%+v err=%v", last, err)
+	}
+}
+
+func TestCaptureIsUnimplementedWithoutACapturer(t *testing.T) {
+	c := captureClient(t, nil)
+	_, _, err := collect(t, c, &pb.CaptureRequest{Interface: "any", DurationS: 5, MaxPackets: 10})
+	if status.Code(err) != codes.Unimplemented {
+		t.Fatalf("err=%v", err)
 	}
 }

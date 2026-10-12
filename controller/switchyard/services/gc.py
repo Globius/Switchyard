@@ -28,6 +28,7 @@ from switchyard.db.ops_models import (
 )
 from switchyard.db.tenancy import admin_session
 from switchyard.domain.workflow import ChangeSetState, JobState
+from switchyard.services.captures import expire as expire_captures
 from switchyard.services.context import Clock, Databases, utcnow
 
 GC_JOB = "gc"
@@ -121,6 +122,7 @@ class GarbageCollector:
                 )
             )
             done["enrollment_tokens_deleted"] = tokens.rowcount  # type: ignore[attr-defined]
+            done["captures_deleted"] = await expire_captures(self._db, now)
             if any(done.values()):
                 await audit_log.record(
                     session, tenant_id=None, actor="system:gc", action="gc.run", diff=dict(done)

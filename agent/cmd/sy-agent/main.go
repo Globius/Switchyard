@@ -31,6 +31,7 @@ import (
 
 	pb "switchyard/agent/gen/switchyard/agent/v1"
 	"switchyard/agent/internal/bundle"
+	"switchyard/agent/internal/capture"
 	"switchyard/agent/internal/enroll"
 	"switchyard/agent/internal/ipvs"
 	"switchyard/agent/internal/runner"
@@ -124,7 +125,7 @@ func main() {
 		log.Fatal(err)
 	}
 	grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
-	pb.RegisterAgentServer(grpcServer, &server.Server{Applier: applier, Collector: collector, Root: *root})
+	pb.RegisterAgentServer(grpcServer, &server.Server{Applier: applier, Collector: collector, Root: *root, Capturer: capture.New()})
 	go func() {
 		<-ctx.Done()
 		// Watch streams only end when the controller disconnects, so a graceful stop alone can wait until systemd
