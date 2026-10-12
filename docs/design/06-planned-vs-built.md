@@ -1,5 +1,8 @@
 # Planned vs built
 
+> **Superseded** by [../audit/2026-10-12-planned-vs-built.md](../audit/2026-10-12-planned-vs-built.md). Most rows marked missing
+> below have since been built. Kept as the record of 2026-10-10.
+
 Date: 2026-10-10. Audit of `origin/main` (6eb0464) against the plan: 01 to 05, the ADRs and Design's v46 handoff
 (`docs/design/ui-handoff`, kept out of Git). Built means what is on `main`: `controller/`, `agent/`, `proto/`, `syctl`,
 `ui/`, `docs/ui/README.md`, `docs/api.md` and `docs/api/openapi.json` (105 paths).
