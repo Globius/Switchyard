@@ -124,6 +124,7 @@ nav:
       - Parity work blocks: design/09-parity-work-blocks.md
       - UI handoff: design/ui-handoff/README.md
       - UI: ui/README.md
+      - FIPS 140-3 assessment: research/fips-assessment.md
       - Backend security review: security/backend-review.md
       - UI security review: security/ui-review.md
   - Lab results:
