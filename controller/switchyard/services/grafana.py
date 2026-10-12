@@ -1,4 +1,4 @@
-"""Embedded Grafana: launch tickets, proxy sessions and per-tenant Grafana organizations (ADR 0080).
+"""Embedded Grafana: launch tickets, proxy sessions and per-tenant Grafana organizations (ADR 0085).
 
 The flow, in one place:
 

@@ -24,7 +24,6 @@ from logging.handlers import SysLogHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
-from switchyard.adapters.acme import AcmeIssuer, new_account_key
 from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
 from switchyard.adapters.git import GitLabMirror, GitMirror
@@ -42,6 +41,7 @@ from switchyard.jobs.scheduler import Scheduler
 from switchyard.jobs.worker import Worker
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
+from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.certificates import (
     RENEW_CERTS_JOB,
     SYNC_CLOUDFLARE_IPS_JOB,
@@ -49,9 +49,11 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
+from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
+from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
@@ -141,31 +143,26 @@ def cloudflare() -> Cloudflare | None:
     return HttpCloudflare(token) if token else None
 
 
-def acme(dns: Cloudflare | None) -> AcmeIssuer | None:
-    """The ACME issuer, if a directory, an account key file and DNS are configured.
-
-    A missing account key file is created (mode 0600) on first use.
-    """
-    directory_url = os.environ.get("SWITCHYARD_ACME_DIRECTORY")
-    key_file = os.environ.get("SWITCHYARD_ACME_ACCOUNT_KEY_FILE")
-    if not directory_url or not key_file or dns is None:
-        return None
-    path = Path(key_file)
-    if not path.exists():
-        path.write_text(new_account_key())
-        path.chmod(0o600)
-    return AcmeIssuer(
-        directory_url, path.read_text(), dns, email=os.environ.get("SWITCHYARD_ACME_EMAIL")
-    )
-
-
 def certificates(db: Databases, secrets: SecretsReader | None = None) -> CertificateService | None:
-    """Certificate service, if the secrets backend can store key material (OpenBao)."""
+    """Certificate service, if the secrets backend can store key material (OpenBao).
+
+    ``SWITCHYARD_ACME_DNS_WAIT`` is the pause (seconds, default 15) after DNS-01 records are
+    published, so resolvers see them before the CA checks.
+    """
     store = secrets or secrets_backend()
     if not isinstance(store, OpenBaoSecrets):
         return None
-    dns = cloudflare()
-    return CertificateService(db, store, ChangeSetService(db), cloudflare=dns, acme=acme(dns))
+    engines = directory(db)
+    return CertificateService(
+        db,
+        store,
+        ChangeSetService(db),
+        cloudflare=cloudflare(),
+        acme_providers=AcmeProviders(db, store),
+        dns_providers=DnsProviders(db, store),
+        http_publisher=lambda tenant_id: EngineHttp01Publisher(db, engines, tenant_id),
+        dns_wait_s=float(os.environ.get("SWITCHYARD_ACME_DNS_WAIT", "15")),
+    )
 
 
 def telemetry() -> Telemetry | None:
@@ -180,7 +177,7 @@ def telemetry() -> Telemetry | None:
 
 
 def grafana(db: Databases) -> GrafanaService | None:
-    """The embedded Grafana (ADR 0080), if every setting it needs is present.
+    """The embedded Grafana (ADR 0085), if every setting it needs is present.
 
     ``SWITCHYARD_GRAFANA_INTERNAL_URL`` (Grafana, ``http://host:3000``, reachable from the
     controller only), ``SWITCHYARD_GRAFANA_ADMIN_PASSWORD`` (and optionally

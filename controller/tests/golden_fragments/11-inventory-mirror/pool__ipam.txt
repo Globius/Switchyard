@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 98-106)
+==> haproxy/haproxy.cfg (haproxy, lines 99-107)
 backend pool_ipam
     mode http
     balance roundrobin

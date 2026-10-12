@@ -1,4 +1,4 @@
-# 0080. Grafana behind the controller, scoped per tenant
+# 0085. Grafana behind the controller, scoped per tenant
 
 Status: Accepted
 Date: 2026-10-12

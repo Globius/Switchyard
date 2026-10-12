@@ -26,6 +26,7 @@ def test_example_renders_both_service_kinds() -> None:
     assert sorted(result.files) == [
         "certs/web.crtlist",
         "haproxy/haproxy.cfg",
+        "haproxy/maps/acme-http01.map",
         "haproxy/maps/web-host.map",
     ]
 

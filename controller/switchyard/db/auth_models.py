@@ -270,7 +270,7 @@ class GrafanaGrantRow(Base):
 
     The ticket and the proxy session cookie are stored only as SHA-256. ``tenant_id`` is the one
     tenant the session may see; null means a system administrator's unscoped organization. The
-    grant dies with its tenant and when the browser session that created it ends (ADR 0080).
+    grant dies with its tenant and when the browser session that created it ends (ADR 0085).
     """
 
     __tablename__ = "grafana_grant"

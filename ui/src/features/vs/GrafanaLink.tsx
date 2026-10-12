@@ -3,7 +3,7 @@
  *
  * When the controller proxies Grafana (`links.grafana_embedded`), a click asks for a one-time link
  * scoped to the tenant and opens it in a new tab: the person lands in a Grafana that can read only
- * this tenant's metrics and logs (ADR 0080). Otherwise it is a plain link to `links.grafana`, and
+ * this tenant's metrics and logs (ADR 0085). Otherwise it is a plain link to `links.grafana`, and
  * with neither it renders nothing.
  */
 import { ExternalLink } from "lucide-react";

@@ -1,4 +1,4 @@
-"""Embedded Grafana: single-use tickets and the proxy sessions they turn into (ADR 0080).
+"""Embedded Grafana: single-use tickets and the proxy sessions they turn into (ADR 0085).
 
 - ``grafana_grant``: SHA-256 of the ticket and of the proxy cookie, the tenant the session is
   scoped to, the browser session it came from, and the Grafana login and organization it maps to.

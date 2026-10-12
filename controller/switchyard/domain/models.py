@@ -95,6 +95,13 @@ class CertSource(enum.StrEnum):
     STEP_CA = "step_ca"
 
 
+class AcmeChallenge(enum.StrEnum):
+    """How an ACME certificate authority checks control of a name."""
+
+    DNS01 = "dns-01"
+    HTTP01 = "http-01"
+
+
 class TlsProfile(enum.StrEnum):
     """Protocol versions and ciphers a TLS port offers (Mozilla's server-side TLS guidelines).
 
@@ -646,6 +653,11 @@ class Certificate(TenantOwned):
         purpose: ``server`` (a certificate with a key that a port presents) or ``client_ca``
             (trusted CA certificates, no key, that a port uses to check client certificates).
         crl_secret_ref: OpenBao path of a PEM certificate revocation list (``client_ca`` only).
+        acme_provider: Name of the ACME provider that issues and renews it (``acme`` only; the
+            default provider when empty).
+        challenge: ``dns-01`` (the default) or ``http-01`` (``acme`` only; no wildcard names).
+        dns_provider: Name of the DNS credential that publishes the DNS-01 records (``dns-01``
+            only; chosen by zone when empty).
     """
 
     source: CertSource
@@ -657,9 +669,20 @@ class Certificate(TenantOwned):
     ocsp_stapling: bool = False
     purpose: Literal["server", "client_ca"] = "server"
     crl_secret_ref: SecretRef | None = None
+    acme_provider: Name | None = None
+    challenge: AcmeChallenge | None = None
+    dns_provider: Name | None = None
 
     @model_validator(mode="after")
     def _checked(self) -> Self:
+        if (self.acme_provider or self.challenge or self.dns_provider) and (
+            self.source is not CertSource.ACME
+        ):
+            raise ValueError("acme_provider, challenge and dns_provider only apply to source acme")
+        if self.dns_provider and self.challenge is AcmeChallenge.HTTP01:
+            raise ValueError("dns_provider is only valid with the dns-01 challenge")
+        if self.challenge is AcmeChallenge.HTTP01 and any(s.startswith("*.") for s in self.sans):
+            raise ValueError("http-01 cannot validate wildcard names; use dns-01")
         if self.purpose == "server" and not self.sans:
             raise ValueError("a server certificate needs at least one name")
         if self.purpose == "client_ca" and (

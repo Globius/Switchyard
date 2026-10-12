@@ -1,4 +1,4 @@
-"""Tenant scoping of Prometheus and Loki requests (ADR 0080).
+"""Tenant scoping of Prometheus and Loki requests (ADR 0085).
 
 Grafana runs queries as itself, so the tenant boundary cannot live in Grafana. Every request a
 tenant's Grafana organization sends to a data source goes through the controller, which rewrites

@@ -22,7 +22,7 @@ x-controller-env: &controller-env
   SWITCHYARD_PROMETHEUS_URL: ${PROMETHEUS_URL:-}
   SWITCHYARD_LOKI_URL: ${LOKI_URL:-}
   SWITCHYARD_GRAFANA_URL: ${GRAFANA_URL:-}
-  # Grafana inside the UI, behind the controller (ADR 0080). Needs all four; the controller proxies Grafana and
+  # Grafana inside the UI, behind the controller (ADR 0085). Needs all four; the controller proxies Grafana and
   # scopes every query it sends to Prometheus and Loki to one tenant. GRAFANA_DS_URL is where *Grafana* reaches the API.
   SWITCHYARD_GRAFANA_INTERNAL_URL: ${GRAFANA_INTERNAL_URL:-}
   SWITCHYARD_GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}

@@ -166,6 +166,24 @@ validator reports `wrong_certificate_purpose` for mix-ups. See ADR 0070.
 Certificates carry `renew_before_days` (1 to 365, default 30): an `auto` certificate is renewed that many days before it
 expires. Read it with the certificate, change it with a normal update operation. See ADR 0064.
 
+## ACME providers, DNS credentials and certificate requests
+
+`docs/acme.md` explains the model; the OpenAPI document has every shape.
+
+- `GET /acme-provider-presets`, `GET|POST /acme-providers`, `GET|PATCH|DELETE /acme-providers/{id}`,
+  `POST /acme-providers/{id}/test`: certificate authorities (system administrators write; every
+  signed-in user reads). Secrets (`eab_hmac_key`, `oauth_client_secret`, `account_key`) are write-only.
+  Tests answer `200` with `ok` and the `stages` `directory`, `eab`, `account`.
+- `GET /dns-provider-types`: the provider types and the fields of each form.
+- `GET|POST /tenants/{t}/dns-providers`, `GET|PATCH|DELETE .../{id}`, `POST .../{id}/test`,
+  `GET .../match?names=`: a tenant's DNS credentials (tenant administrators write). `PATCH` and
+  `DELETE` need `If-Match`; secrets are never returned (`credentials_set`).
+- `POST /tenants/{t}/certificates/issue` takes `acme_provider`, `challenge` (`dns-01`, `http-01`),
+  `dns_provider`, `renew_policy` and `renew_before_days`; `POST .../issue/check` returns the same
+  checks as `{ok, problems:[{path, message}]}` without queueing.
+- `GET /tenants/{t}/certificate-renewals` (status per certificate) and
+  `GET /tenants/{t}/certificates/{id}/renewals` (history with the CA's error).
+
 ## Jobs
 
 `kind` is an enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert` (result
@@ -174,7 +192,7 @@ expires. Read it with the certificate, change it with a normal update operation.
 `cancelled`.
 
 `GET /permissions` gives every entry a `group` (eight names) for the grouped role matrix; `GET /me` returns
-`links.grafana` (from `SWITCHYARD_GRAFANA_URL`, else `null`) and `links.grafana_embedded` (the controller embeds Grafana, ADR 0080). `GET /tenants/{t}/sdn/status` lists each managed network's SDN apply
+`links.grafana` (from `SWITCHYARD_GRAFANA_URL`, else `null`) and `links.grafana_embedded` (the controller embeds Grafana, ADR 0085). `GET /tenants/{t}/sdn/status` lists each managed network's SDN apply
 state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 
 ## Engine views
@@ -194,7 +212,7 @@ with code `lxc_disabled`. `GET /me` returns `features.lxc_guests` for the UI. Se
 
 ## Embedded Grafana
 
-`POST /tenants/{t}/grafana/launch` (any role in the tenant) and `POST /grafana/launch` (system administrators, all tenants) return `{url, expires_at, tenant_id}`: a path that works once, for 60 seconds, that starts a Grafana session scoped to that tenant and redirects into Grafana (body `{landing}` picks the page: empty, `/d/<uid>`, `/explore` or `/dashboards`). Not enabled: `404`, code `not_enabled`. The routes `/grafana/**` (Grafana itself, cookie `sy_grafana`) and `/internal/ds/**` (Grafana's data source calls, bearer token, not public) are not part of the API contract. How it is secured: [adr/0080](adr/0080-grafana-behind-controller.md).
+`POST /tenants/{t}/grafana/launch` (any role in the tenant) and `POST /grafana/launch` (system administrators, all tenants) return `{url, expires_at, tenant_id}`: a path that works once, for 60 seconds, that starts a Grafana session scoped to that tenant and redirects into Grafana (body `{landing}` picks the page: empty, `/d/<uid>`, `/explore` or `/dashboards`). Not enabled: `404`, code `not_enabled`. The routes `/grafana/**` (Grafana itself, cookie `sy_grafana`) and `/internal/ds/**` (Grafana's data source calls, bearer token, not public) are not part of the API contract. How it is secured: [adr/0085](adr/0085-grafana-behind-controller.md).
 
 ## Controller metrics and discovery
 

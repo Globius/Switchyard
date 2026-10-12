@@ -1,4 +1,4 @@
-"""Tenant scoping of PromQL, LogQL and the data source APIs (ADR 0080)."""
+"""Tenant scoping of PromQL, LogQL and the data source APIs (ADR 0085)."""
 
 from uuid import UUID
 

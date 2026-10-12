@@ -222,7 +222,7 @@ Still missing for a UI build, one ticket each (status is updated in this table a
 
 | Gap | Ticket | Milestone |
 | --- | --- | --- |
-| G4 | Metrics and logs endpoints (Prometheus/Loki adapter, tenant-label enforced) + Grafana proxy | U2 — API done; Grafana proxy done (ADR 0080) |
+| G4 | Metrics and logs endpoints (Prometheus/Loki adapter, tenant-label enforced) + Grafana proxy | U2 — API done; Grafana proxy done (ADR 0085) |
 | G5 | Finer SSE events (`member_status`, `vs_health`, `bgp_session`, `revision_applied`) and a typed catalog | U2 — done |
 | G8 | Conflict (three-way) response on stale `expected_version`; diff "impact" section | U1/U2 — done |
 | G9 | VIP allocations/usage/release; health-monitor test; cert issue/renew; SE deploy | U3–U4 — VIP allocations, cert issue/renew, SE deploy done; monitor test done (A3) |

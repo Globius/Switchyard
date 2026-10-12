@@ -1,4 +1,4 @@
-"""Embedded Grafana against the real Prometheus, Loki and Grafana images (ADR 0080).
+"""Embedded Grafana against the real Prometheus, Loki and Grafana images (ADR 0085).
 
 Opt-in because it pulls three images: ``SWITCHYARD_STACK_TESTS=1 pytest tests/integration/test_grafana_stack.py``.
 The controller runs in this process on a real socket; Grafana (in Docker) sends its data source

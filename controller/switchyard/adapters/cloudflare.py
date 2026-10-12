@@ -10,10 +10,13 @@ from typing import Any, Protocol
 
 import httpx
 
+from switchyard.adapters.dns.base import DnsError
+from switchyard.adapters.dns.zones import zone_candidates
+
 API = "https://api.cloudflare.com/client/v4"
 
 
-class CloudflareError(Exception):
+class CloudflareError(DnsError):
     """A Cloudflare call failed."""
 
 
@@ -52,17 +55,6 @@ class Cloudflare(Protocol):
     async def close(self) -> None:
         """Release connections."""
         ...
-
-
-def zone_candidates(name: str) -> list[str]:
-    """Return the parent domains of ``name`` to try as zones, longest first (at least 2 labels).
-
-    Example:
-        >>> zone_candidates("_acme-challenge.a.example.co.uk")
-        ['a.example.co.uk', 'example.co.uk', 'co.uk']
-    """
-    labels = name.strip(".").split(".")
-    return [".".join(labels[i:]) for i in range(1, len(labels) - 1)]
 
 
 class HttpCloudflare:

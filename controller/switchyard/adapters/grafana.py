@@ -1,4 +1,4 @@
-"""Grafana administration for the embedded dashboards (ADR 0080).
+"""Grafana administration for the embedded dashboards (ADR 0085).
 
 The controller keeps one Grafana organization per tenant, with the tenant's own data sources (which
 point back at the controller's scoped data source proxy) and the standard dashboards, and one

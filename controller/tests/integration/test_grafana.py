@@ -1,4 +1,4 @@
-"""Embedded Grafana: tickets, the proxy session, tenant scoping of data source queries (ADR 0080)."""
+"""Embedded Grafana: tickets, the proxy session, tenant scoping of data source queries (ADR 0085)."""
 
 import uuid
 from collections.abc import AsyncIterator
