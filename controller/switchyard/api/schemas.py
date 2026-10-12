@@ -1402,6 +1402,28 @@ class EngineStatusRead(ApiModel):
     observed_at: datetime
 
 
+class HealthRead(ApiModel):
+    """A health score (0 to 100) and why it is not 100."""
+
+    score: int = Field(ge=0, le=100)
+    reasons: list[str]
+
+
+class EngineHealthRead(HealthRead):
+    """Health of one engine."""
+
+    engine: str
+    engine_id: UUID
+
+
+class SeGroupHealthRead(HealthRead):
+    """Health of one SE group: the mean of its engines, capped at 50 without two healthy engines."""
+
+    se_group_id: UUID
+    name: str
+    engines: list[EngineHealthRead]
+
+
 class MonitorTestIn(ApiModel):
     """Body of `POST /health-monitors/{id}/test`: which member to probe, and optional overrides."""
 

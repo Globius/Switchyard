@@ -114,6 +114,7 @@ from switchyard.api.schemas import (
     RoleMappingRead,
     RunningConfigRead,
     SdnApplyRead,
+    SeGroupHealthRead,
     ServiceEngineRead,
     SessionsRevoked,
     StateOut,
@@ -4000,6 +4001,52 @@ def create_app(
     )
     async def engine_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
         return [status_json(s, who) for s in await svc.status.list_status(who, tenant.id)]
+
+    @router.get(
+        "/tenants/{t}/status/se-groups",
+        tags=["status"],
+        summary="Health score of every SE group and engine",
+        description=(
+            "A score from 0 to 100 per engine and per SE group, with the reasons for every "
+            "deduction (unreachable, drift, pool members down, HAProxy, BGP or VRRP trouble). A "
+            "group with fewer than two healthy engines is capped at 50. Computed from the last "
+            "observed status. Requires any role in the tenant."
+        ),
+        response_model=list[SeGroupHealthRead],
+        responses=_ok([ex.SE_GROUP_HEALTH]),
+    )
+    async def se_group_health(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        from switchyard.db.repository import load_snapshot
+        from switchyard.services.health import engine_health, group_health
+
+        statuses = await svc.status.list_status(who, tenant.id)
+        async with tenant_session(svc.db.app, [tenant.id]) as session:
+            snapshot = await load_snapshot(session)
+        out = []
+        for group in sorted(snapshot.se_groups, key=lambda g: g.name):
+            rows = [s for s in statuses if s.se_group_id == group.id]
+            scored = [
+                (s, engine_health(status_json(s, who))) for s in sorted(rows, key=lambda r: r.name)
+            ]
+            overall = group_health([h for _, h in scored])
+            out.append(
+                {
+                    "se_group_id": group.id,
+                    "name": group.name,
+                    "score": overall.score,
+                    "reasons": list(overall.reasons),
+                    "engines": [
+                        {
+                            "engine": s.name,
+                            "engine_id": s.engine_id,
+                            "score": h.score,
+                            "reasons": list(h.reasons),
+                        }
+                        for s, h in scored
+                    ],
+                }
+            )
+        return out
 
     @router.get(
         "/tenants/{t}/status/virtual-services",
