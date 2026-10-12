@@ -7,7 +7,7 @@ file's URL on the repository's main branch. Links inside ``docs/`` are untouched
 
 Example:
     In ``docs/production.md``, ``[x](../deploy/prod/README.md)`` becomes
-    ``[x](https://git.example.com/miguelr/switchyard/-/blob/main/deploy/prod/README.md)``.
+    ``[x](https://git.example.com/globius-oss/switchyard/-/blob/main/deploy/prod/README.md)``.
 """
 
 from __future__ import annotations

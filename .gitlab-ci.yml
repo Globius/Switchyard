@@ -7,6 +7,8 @@ workflow:
 
 stages: [check, deploy]
 
+# Docker Hub images come through the globius-oss group's Dependency Proxy (a cache, so no Docker Hub rate limit).
+# ghcr.io and quay.io images are pulled directly.
 default:
   image: ghcr.io/astral-sh/uv:python3.12-bookworm
   # The Kubernetes runner: privileged pods (docker:dind for the test job) and no host Docker socket needed.
@@ -48,11 +50,13 @@ test:
   extends: .controller
   # Docker-backed tests (PostgreSQL, HAProxy) need a Docker daemon; use the dind service.
   services:
-    - docker:27-dind
+    - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27-dind
+      alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
     TESTCONTAINERS_HOST_OVERRIDE: docker
+    TESTCONTAINERS_RYUK_DISABLED: "true"   # the pod is thrown away anyway; saves a Docker Hub pull
   before_script:
     - cd controller
     - uv sync --frozen
@@ -102,7 +106,7 @@ openapi-breaking:
 # se-image/test/check.sh (units, sysctls, the auth sidecar slot, Data Plane API over mTLS).
 agent:
   stage: check
-  image: golang:1.26
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26
   script:
     - cd agent
     - test -z "$(gofmt -l .)"
@@ -111,9 +115,10 @@ agent:
 
 se-image:
   stage: check
-  image: docker:27
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27
   services:
-    - docker:27-dind
+    - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27-dind
+      alias: docker
   variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
@@ -121,7 +126,8 @@ se-image:
     - changes: [se-image/**/*, agent/**/*]
   script:
     - for i in $(seq 60); do docker info >/dev/null 2>&1 && break; sleep 2; done  # dind starts after the job
-    - docker build -q -f se-image/test/Dockerfile -t sy-se-image-test .
+    - echo "$CI_DEPENDENCY_PROXY_PASSWORD" | docker login -u "$CI_DEPENDENCY_PROXY_USER" --password-stdin "$CI_DEPENDENCY_PROXY_SERVER"
+    - docker build -q --build-arg REGISTRY="$CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/" -f se-image/test/Dockerfile -t sy-se-image-test .
 
 # The live checks (.p12 import, 412/428 conflict responses: deploy/lab/checks/live.sh) need a running stack and the lab
 # scripts; they are run by hand, see docs/runbooks/lab-hosts.md.

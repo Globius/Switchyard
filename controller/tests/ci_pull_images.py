@@ -4,12 +4,18 @@ Several tests create containers with the Docker SDK, which does not pull a missi
 developer machine the images are already there; a CI job starts with an empty Docker daemon. Run with
 ``uv run python -m tests.ci_pull_images`` from ``controller/``.
 
+In GitLab CI, Docker Hub images are pulled through the group's Dependency Proxy (a cache, so pipelines do not
+hit Docker Hub's rate limit) and tagged with their usual names, so the tests find them unchanged. Images on
+other registries (``ghcr.io``, ``quay.io``) are pulled directly.
+
 Example:
     $ uv run python -m tests.ci_pull_images
     pulled haproxy:3.2
 """
 
 from __future__ import annotations
+
+import os
 
 import docker
 
@@ -32,13 +38,30 @@ IMAGES = (
 )
 
 
+def _on_docker_hub(image: str) -> bool:
+    """True when ``image`` has no registry host, so it comes from Docker Hub."""
+    first = image.split("/", 1)[0]
+    return "/" not in image or not ("." in first or ":" in first or first == "localhost")
+
+
 def main() -> None:
-    """Pull each image in ``IMAGES``."""
+    """Pull each image in ``IMAGES``, through the Dependency Proxy when CI provides one."""
     client = docker.from_env()
+    proxy = os.environ.get("CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX")
+    auth = None
+    if proxy:
+        auth = {
+            "username": os.environ["CI_DEPENDENCY_PROXY_USER"],
+            "password": os.environ["CI_DEPENDENCY_PROXY_PASSWORD"],
+        }
     for image in IMAGES:
-        repo, tag = image.rsplit(":", 1)
-        client.images.pull(repo, tag=tag)
-        print(f"pulled {image}")  # noqa: T201 - progress in the CI log
+        source = f"{proxy}/{image}" if proxy and _on_docker_hub(image) else image
+        repo, tag = source.rsplit(":", 1)
+        pulled = client.images.pull(repo, tag=tag, auth_config=auth if source != image else None)
+        if source != image:
+            name, name_tag = image.rsplit(":", 1)
+            pulled.tag(name, tag=name_tag)
+        print(f"pulled {image} from {source}")  # noqa: T201 - progress in the CI log
 
 
 if __name__ == "__main__":
