@@ -10161,7 +10161,7 @@
         "title": "OpsIn",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
@@ -10173,6 +10173,7 @@
                   "client_cert": "#/components/schemas/ClientCertPolicySetRead",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                   "jwt": "#/components/schemas/JwtPolicySetRead",
+                  "protection": "#/components/schemas/ProtectionPolicySetRead",
                   "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                   "redirect": "#/components/schemas/RedirectPolicySetRead",
                   "respond": "#/components/schemas/RespondPolicySetRead",
@@ -10204,6 +10205,9 @@
                   "$ref": "#/components/schemas/WafPolicySetRead"
                 },
                 {
+                  "$ref": "#/components/schemas/ProtectionPolicySetRead"
+                },
+                {
                   "$ref": "#/components/schemas/AccessPolicySetRead"
                 },
                 {
@@ -10233,7 +10237,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -12047,6 +12051,640 @@
           "detail"
         ],
         "title": "ProblemOut",
+        "type": "object"
+      },
+      "ProtectionPolicySet": {
+        "additionalProperties": false,
+        "description": "Bot and DDoS protection for a service (ADR 0150).\n\nPer-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits\nstay in ``rate_limit`` sets.\n\nAttributes:\n    max_connections_per_source: Connections one address may hold open; more are refused.\n    max_new_connections_per_source: New connections one address may open per\n        ``connection_rate_period_s``; more are refused.\n    connection_rate_period_s: Window of the connection rate.\n    header_timeout_s: How long a client has to send the whole request head (``timeout\n        http-request``); the answer to slow-header attacks.\n    client_timeout_s: Idle time allowed on a client connection (``timeout client``).\n    block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.\n    block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).\n    deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.\n    bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.\n    exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).\n    table_size: Addresses the connection table holds.\n\nExample:\n    >>> ProtectionPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"p\",\n    ...      \"block_scanners\": True}\n    ... ).bot_action\n    'deny'",
+        "properties": {
+          "block_empty_user_agent": {
+            "default": false,
+            "title": "Block Empty User Agent",
+            "type": "boolean"
+          },
+          "block_scanners": {
+            "default": false,
+            "title": "Block Scanners",
+            "type": "boolean"
+          },
+          "bot_action": {
+            "default": "deny",
+            "enum": [
+              "deny",
+              "silent_drop"
+            ],
+            "title": "Bot Action",
+            "type": "string"
+          },
+          "client_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Timeout S"
+          },
+          "connection_rate_period_s": {
+            "default": 10,
+            "enum": [
+              1,
+              10,
+              60
+            ],
+            "title": "Connection Rate Period S",
+            "type": "integer"
+          },
+          "deny_user_agents": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Deny User Agents",
+            "type": "array"
+          },
+          "exempt_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 32,
+            "title": "Exempt Cidrs",
+            "type": "array"
+          },
+          "header_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Timeout S"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "protection",
+            "default": "protection",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Connections Per Source"
+          },
+          "max_new_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max New Connections Per Source"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 1000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name"
+        ],
+        "title": "ProtectionPolicySet",
+        "type": "object"
+      },
+      "ProtectionPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "block_empty_user_agent": {
+            "default": false,
+            "title": "Block Empty User Agent",
+            "type": "boolean"
+          },
+          "block_scanners": {
+            "default": false,
+            "title": "Block Scanners",
+            "type": "boolean"
+          },
+          "bot_action": {
+            "default": "deny",
+            "enum": [
+              "deny",
+              "silent_drop"
+            ],
+            "title": "Bot Action",
+            "type": "string"
+          },
+          "client_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Timeout S"
+          },
+          "connection_rate_period_s": {
+            "default": 10,
+            "enum": [
+              1,
+              10,
+              60
+            ],
+            "title": "Connection Rate Period S",
+            "type": "integer"
+          },
+          "deny_user_agents": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Deny User Agents",
+            "type": "array"
+          },
+          "exempt_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 32,
+            "title": "Exempt Cidrs",
+            "type": "array"
+          },
+          "header_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Timeout S"
+          },
+          "kind": {
+            "const": "protection",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Connections Per Source"
+          },
+          "max_new_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max New Connections Per Source"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 1000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "ProtectionPolicySetCreate",
+        "type": "object"
+      },
+      "ProtectionPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "block_empty_user_agent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Empty User Agent"
+          },
+          "block_scanners": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Scanners"
+          },
+          "bot_action": {
+            "anyOf": [
+              {
+                "enum": [
+                  "deny",
+                  "silent_drop"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Action"
+          },
+          "client_timeout_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Timeout S"
+          },
+          "connection_rate_period_s": {
+            "anyOf": [
+              {
+                "enum": [
+                  1,
+                  10,
+                  60
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Rate Period S"
+          },
+          "deny_user_agents": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deny User Agents"
+          },
+          "exempt_cidrs": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "format": "ipv4network",
+                      "type": "string"
+                    },
+                    {
+                      "format": "ipv6network",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exempt Cidrs"
+          },
+          "header_timeout_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Timeout S"
+          },
+          "kind": {
+            "const": "protection",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_connections_per_source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Connections Per Source"
+          },
+          "max_new_connections_per_source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max New Connections Per Source"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "table_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Size"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ProtectionPolicySetPatch",
+        "type": "object"
+      },
+      "ProtectionPolicySetRead": {
+        "additionalProperties": false,
+        "description": "ProtectionPolicySet as returned by the API.",
+        "properties": {
+          "block_empty_user_agent": {
+            "default": false,
+            "title": "Block Empty User Agent",
+            "type": "boolean"
+          },
+          "block_scanners": {
+            "default": false,
+            "title": "Block Scanners",
+            "type": "boolean"
+          },
+          "bot_action": {
+            "default": "deny",
+            "enum": [
+              "deny",
+              "silent_drop"
+            ],
+            "title": "Bot Action",
+            "type": "string"
+          },
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "client_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Timeout S"
+          },
+          "connection_rate_period_s": {
+            "default": 10,
+            "enum": [
+              1,
+              10,
+              60
+            ],
+            "title": "Connection Rate Period S",
+            "type": "integer"
+          },
+          "deny_user_agents": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Deny User Agents",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "exempt_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 32,
+            "title": "Exempt Cidrs",
+            "type": "array"
+          },
+          "header_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Timeout S"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "protection",
+            "default": "protection",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Connections Per Source"
+          },
+          "max_new_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max New Connections Per Source"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 1000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "ProtectionPolicySetRead",
         "type": "object"
       },
       "Protocol": {
@@ -15376,6 +16014,7 @@
                   "client_cert": "#/components/schemas/ClientCertPolicySet",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySet",
                   "jwt": "#/components/schemas/JwtPolicySet",
+                  "protection": "#/components/schemas/ProtectionPolicySet",
                   "rate_limit": "#/components/schemas/RateLimitPolicySet",
                   "redirect": "#/components/schemas/RedirectPolicySet",
                   "respond": "#/components/schemas/RespondPolicySet",
@@ -15405,6 +16044,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/WafPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/ProtectionPolicySet"
                 },
                 {
                   "$ref": "#/components/schemas/AccessPolicySet"
@@ -36127,7 +36769,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -36297,6 +36939,7 @@
                     "client_cert": "#/components/schemas/ClientCertPolicySetCreate",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
                     "jwt": "#/components/schemas/JwtPolicySetCreate",
+                    "protection": "#/components/schemas/ProtectionPolicySetCreate",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetCreate",
                     "redirect": "#/components/schemas/RedirectPolicySetCreate",
                     "respond": "#/components/schemas/RespondPolicySetCreate",
@@ -36326,6 +36969,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/WafPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProtectionPolicySetCreate"
                   },
                   {
                     "$ref": "#/components/schemas/AccessPolicySetCreate"
@@ -36693,6 +37339,7 @@
                       "client_cert": "#/components/schemas/ClientCertPolicySetRead",
                       "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                       "jwt": "#/components/schemas/JwtPolicySetRead",
+                      "protection": "#/components/schemas/ProtectionPolicySetRead",
                       "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                       "redirect": "#/components/schemas/RedirectPolicySetRead",
                       "respond": "#/components/schemas/RespondPolicySetRead",
@@ -36722,6 +37369,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/WafPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProtectionPolicySetRead"
                     },
                     {
                       "$ref": "#/components/schemas/AccessPolicySetRead"
@@ -36900,6 +37550,7 @@
                     "client_cert": "#/components/schemas/ClientCertPolicySetPatch",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
                     "jwt": "#/components/schemas/JwtPolicySetPatch",
+                    "protection": "#/components/schemas/ProtectionPolicySetPatch",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetPatch",
                     "redirect": "#/components/schemas/RedirectPolicySetPatch",
                     "respond": "#/components/schemas/RespondPolicySetPatch",
@@ -36929,6 +37580,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/WafPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProtectionPolicySetPatch"
                   },
                   {
                     "$ref": "#/components/schemas/AccessPolicySetPatch"

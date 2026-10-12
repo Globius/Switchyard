@@ -156,7 +156,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 )
             )
         else:
-            if isinstance(ps, dm.WafPolicySet):
+            if isinstance(ps, dm.WafPolicySet | dm.ProtectionPolicySet):
                 settings = ps.model_dump(
                     mode="json", exclude={"id", "version", "tenant_id", "name", "kind"}
                 )
@@ -166,7 +166,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                         version=ps.version,
                         tenant_id=ps.tenant_id,
                         name=ps.name,
-                        kind="waf",
+                        kind=ps.kind,
                         rules=[settings],
                     )
                 )
@@ -568,7 +568,7 @@ def _policy_to_dict(ps: m.PolicySetRow) -> dict[str, Any]:
         base |= ps.config or {}
     elif ps.kind == "error_pages":
         base["pages"] = ps.rules
-    elif ps.kind == "waf":
+    elif ps.kind in ("waf", "protection"):
         base.update((ps.rules or [{}])[0])
     else:
         base["rules"] = ps.rules

@@ -8228,10 +8228,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -8990,6 +8990,272 @@ export interface components {
              * @default about:blank
              */
             type: string;
+        };
+        /**
+         * ProtectionPolicySet
+         * @description Bot and DDoS protection for a service (ADR 0150).
+         *
+         *     Per-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits
+         *     stay in ``rate_limit`` sets.
+         *
+         *     Attributes:
+         *         max_connections_per_source: Connections one address may hold open; more are refused.
+         *         max_new_connections_per_source: New connections one address may open per
+         *             ``connection_rate_period_s``; more are refused.
+         *         connection_rate_period_s: Window of the connection rate.
+         *         header_timeout_s: How long a client has to send the whole request head (``timeout
+         *             http-request``); the answer to slow-header attacks.
+         *         client_timeout_s: Idle time allowed on a client connection (``timeout client``).
+         *         block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.
+         *         block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).
+         *         deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.
+         *         bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.
+         *         exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).
+         *         table_size: Addresses the connection table holds.
+         *
+         *     Example:
+         *         >>> ProtectionPolicySet.model_validate(
+         *         ...     {"id": "00000000-0000-0000-0000-000000000001",
+         *         ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "p",
+         *         ...      "block_scanners": True}
+         *         ... ).bot_action
+         *         'deny'
+         */
+        ProtectionPolicySet: {
+            /**
+             * Block Empty User Agent
+             * @default false
+             */
+            block_empty_user_agent: boolean;
+            /**
+             * Block Scanners
+             * @default false
+             */
+            block_scanners: boolean;
+            /**
+             * Bot Action
+             * @default deny
+             * @enum {string}
+             */
+            bot_action: "deny" | "silent_drop";
+            /** Client Timeout S */
+            client_timeout_s?: number | null;
+            /**
+             * Connection Rate Period S
+             * @default 10
+             * @enum {integer}
+             */
+            connection_rate_period_s: 1 | 10 | 60;
+            /**
+             * Deny User Agents
+             * @default []
+             */
+            deny_user_agents: string[];
+            /**
+             * Exempt Cidrs
+             * @default []
+             */
+            exempt_cidrs: (string)[];
+            /** Header Timeout S */
+            header_timeout_s?: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "protection";
+            /** Max Connections Per Source */
+            max_connections_per_source?: number | null;
+            /** Max New Connections Per Source */
+            max_new_connections_per_source?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ProtectionPolicySetCreate */
+        ProtectionPolicySetCreate: {
+            /**
+             * Block Empty User Agent
+             * @default false
+             */
+            block_empty_user_agent: boolean;
+            /**
+             * Block Scanners
+             * @default false
+             */
+            block_scanners: boolean;
+            /**
+             * Bot Action
+             * @default deny
+             * @enum {string}
+             */
+            bot_action: "deny" | "silent_drop";
+            /** Client Timeout S */
+            client_timeout_s?: number | null;
+            /**
+             * Connection Rate Period S
+             * @default 10
+             * @enum {integer}
+             */
+            connection_rate_period_s: 1 | 10 | 60;
+            /**
+             * Deny User Agents
+             * @default []
+             */
+            deny_user_agents: string[];
+            /**
+             * Exempt Cidrs
+             * @default []
+             */
+            exempt_cidrs: (string)[];
+            /** Header Timeout S */
+            header_timeout_s?: number | null;
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "protection";
+            /** Max Connections Per Source */
+            max_connections_per_source?: number | null;
+            /** Max New Connections Per Source */
+            max_new_connections_per_source?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+        };
+        /** ProtectionPolicySetPatch */
+        ProtectionPolicySetPatch: {
+            /** Block Empty User Agent */
+            block_empty_user_agent?: boolean | null;
+            /** Block Scanners */
+            block_scanners?: boolean | null;
+            /** Bot Action */
+            bot_action?: ("deny" | "silent_drop") | null;
+            /** Client Timeout S */
+            client_timeout_s?: number | null;
+            /** Connection Rate Period S */
+            connection_rate_period_s?: (1 | 10 | 60) | null;
+            /** Deny User Agents */
+            deny_user_agents?: string[] | null;
+            /** Exempt Cidrs */
+            exempt_cidrs?: (string)[] | null;
+            /** Header Timeout S */
+            header_timeout_s?: number | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "protection";
+            /** Max Connections Per Source */
+            max_connections_per_source?: number | null;
+            /** Max New Connections Per Source */
+            max_new_connections_per_source?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Table Size */
+            table_size?: number | null;
+        };
+        /**
+         * ProtectionPolicySetRead
+         * @description ProtectionPolicySet as returned by the API.
+         */
+        ProtectionPolicySetRead: {
+            /**
+             * Block Empty User Agent
+             * @default false
+             */
+            block_empty_user_agent: boolean;
+            /**
+             * Block Scanners
+             * @default false
+             */
+            block_scanners: boolean;
+            /**
+             * Bot Action
+             * @default deny
+             * @enum {string}
+             */
+            bot_action: "deny" | "silent_drop";
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** Client Timeout S */
+            client_timeout_s?: number | null;
+            /**
+             * Connection Rate Period S
+             * @default 10
+             * @enum {integer}
+             */
+            connection_rate_period_s: 1 | 10 | 60;
+            /**
+             * Deny User Agents
+             * @default []
+             */
+            deny_user_agents: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Exempt Cidrs
+             * @default []
+             */
+            exempt_cidrs: (string)[];
+            /** Header Timeout S */
+            header_timeout_s?: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "protection";
+            /** Max Connections Per Source */
+            max_connections_per_source?: number | null;
+            /** Max New Connections Per Source */
+            max_new_connections_per_source?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * Protocol
@@ -10540,7 +10806,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["ProtectionPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -23552,7 +23818,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -23643,7 +23909,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["ProtectionPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"];
             };
         };
         responses: {
@@ -23760,7 +24026,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -23938,7 +24204,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["ProtectionPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"];
             };
         };
         responses: {

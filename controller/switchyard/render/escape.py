@@ -27,6 +27,7 @@ _LOCATION = re.compile(r"[A-Za-z0-9._~/%:@+,;=?&*-]+")
 _HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
 _MATCH = re.compile(r"[A-Za-z0-9._:/-]{1,128}")
 _MEDIA = re.compile(r"[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/[a-z0-9][a-z0-9!#$&^_.+-]{0,62}")
+_UA = re.compile(r"[a-z0-9][a-z0-9._/+-]{1,63}")
 _COOKIE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _HEADER = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?")
 _VALUE = re.compile(r"[A-Za-z0-9 ._~/:@+,;=*()&!'-]+")
@@ -123,6 +124,22 @@ def media_type(value: str) -> str:
     """
     if not _MEDIA.fullmatch(value):
         raise RenderError(f"unsafe media type {value!r}")
+    return value
+
+
+def user_agent_token(value: str) -> str:
+    """Return ``value`` if it is a safe lower-case user-agent substring, else raise.
+
+    Example:
+        >>> user_agent_token("sqlmap")
+        'sqlmap'
+        >>> user_agent_token("a b")
+        Traceback (most recent call last):
+            ...
+        switchyard.render.escape.RenderError: unsafe user agent token 'a b'
+    """
+    if not _UA.fullmatch(value):
+        raise RenderError(f"unsafe user agent token {value!r}")
     return value
 
 

@@ -47,7 +47,12 @@ from uuid import UUID
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
 from switchyard.domain import models as dm
-from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
+from switchyard.domain.snapshot import (
+    Snapshot,
+    ensure_valid,
+    protection_set,
+    rate_limit_rules,
+)
 from switchyard.render import escape as esc
 from switchyard.render import waf
 from switchyard.render.auth import AuthInstance, auth_instances
@@ -487,7 +492,13 @@ class _Renderer:
             routing_rules = self._sni_rules(svc, name)
         if mode == "http":
             options = self._http_options(svc, ports)
+            protection = protection_set(svc, self.policies)
+            if protection is not None:
+                connection_rules = self._connection_protection(svc, protection) + connection_rules
+                options += self._timeout_options(protection)
             request_rules = self._request_rules(svc, ports, allow, inst)
+            if protection is not None:
+                request_rules += self._bot_rules(protection)
             tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
@@ -554,6 +565,75 @@ class _Renderer:
                     }
                 )
         return out
+
+    def _connection_protection(
+        self, svc: dm.VirtualService, protection: dm.ProtectionPolicySet
+    ) -> list[str]:
+        """Per-source connection limits, tracked at connection time (ADR 0150)."""
+        rules: list[str] = []
+        if protection.exempt_cidrs:
+            rules.append(f"tcp-request connection accept if {self._exempt(protection)}")
+        if not protection.tracks_connections:
+            return rules
+        slot = len(rate_limit_rules(svc, self.policies))
+        table = f"pt_{esc.ident(svc.name)}"
+        period = protection.connection_rate_period_s
+        self.limit_backends.append(
+            {
+                "name": table,
+                "lines": [
+                    f"stick-table type ipv6 size {protection.table_size} expire 60s "
+                    f"store conn_cur,conn_rate({period}s)"
+                ],
+                "servers": [],
+            }
+        )
+        self.stick_counters = max(self.stick_counters, slot + 1)
+        rules.append(f"tcp-request connection track-sc{slot} src table {table}")
+        if protection.max_connections_per_source:
+            limit = protection.max_connections_per_source
+            rules.append(
+                f"tcp-request connection reject if {{ sc_conn_cur({slot},{table}) gt {limit} }}"
+            )
+        if protection.max_new_connections_per_source:
+            limit = protection.max_new_connections_per_source
+            rules.append(
+                f"tcp-request connection reject if {{ sc_conn_rate({slot},{table}) gt {limit} }}"
+            )
+        return rules
+
+    @staticmethod
+    def _exempt(protection: dm.ProtectionPolicySet) -> str:
+        nets = sorted(protection.exempt_cidrs, key=lambda n: (n.version, int(n.network_address)))
+        return "{ src " + " ".join(str(n) for n in nets) + " }"
+
+    @staticmethod
+    def _timeout_options(protection: dm.ProtectionPolicySet) -> list[str]:
+        options = []
+        if protection.header_timeout_s is not None:
+            options.append(f"timeout http-request {protection.header_timeout_s}s")
+        if protection.client_timeout_s is not None:
+            options.append(f"timeout client {protection.client_timeout_s}s")
+        return options
+
+    def _bot_rules(self, protection: dm.ProtectionPolicySet) -> list[str]:
+        """User-agent rules: empty agents, known scanners, and the tenant's own list."""
+        action = (
+            "http-request deny deny_status 403"
+            if protection.bot_action == "deny"
+            else "http-request silent-drop"
+        )
+        exempt = f" !{self._exempt(protection)}" if protection.exempt_cidrs else ""
+        rules: list[str] = []
+        if protection.block_empty_user_agent:
+            rules.append(f"{action} if !{{ req.hdr(user-agent) -m found }}{exempt}")
+            rules.append(f"{action} if {{ req.hdr(user-agent) -m len 0 }}{exempt}")
+        tokens = list(dm.KNOWN_SCANNERS) if protection.block_scanners else []
+        tokens += sorted(set(protection.deny_user_agents) - set(tokens))
+        if tokens:
+            words = " ".join(esc.user_agent_token(t) for t in tokens)
+            rules.append(f"{action} if {{ req.hdr(user-agent),lower -m sub {words} }}{exempt}")
+        return rules
 
     @staticmethod
     def _http_options(svc: dm.VirtualService, ports: list[dm.VsPort]) -> list[str]:

@@ -125,6 +125,7 @@ UNION_TAGS = frozenset(
         "error_pages",
         "rate_limit",
         "waf",
+        "protection",
         "access",
         "jwt",
         "client_cert",

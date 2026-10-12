@@ -99,3 +99,4 @@ Date: YYYY-MM-DD
 | [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
 | [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
 | [0137](0137-directory-logins-saml-ldap-radius-local.md) | Directory logins (SAML, LDAP, RADIUS, local users): not built, and why | Accepted |
+| [0150](0150-bot-and-ddos-protection.md) | Bot and DDoS protection set | Accepted |

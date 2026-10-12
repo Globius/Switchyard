@@ -268,6 +268,7 @@ OBJECT_MODELS: dict[ObjectType, tuple[type[BaseModel], ...]] = {
         dm.ErrorPagesPolicySet,
         dm.RateLimitPolicySet,
         dm.WafPolicySet,
+        dm.ProtectionPolicySet,
         dm.AccessPolicySet,
         dm.JwtPolicySet,
         dm.ClientCertPolicySet,

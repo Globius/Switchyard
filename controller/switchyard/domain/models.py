@@ -1748,6 +1748,91 @@ class ClientCertPolicySet(TenantOwned):
         return self
 
 
+#: User-agent substrings of well-known scanners and exploit tools (ADR 0150), lower case.
+KNOWN_SCANNERS = (
+    "acunetix",
+    "dirbuster",
+    "gobuster",
+    "havij",
+    "masscan",
+    "netsparker",
+    "nikto",
+    "nmap",
+    "nessus",
+    "nuclei",
+    "openvas",
+    "sqlmap",
+    "wpscan",
+    "zgrab",
+)
+UserAgentToken = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._/+-]{1,63}$")]
+
+
+class ProtectionPolicySet(TenantOwned):
+    """Bot and DDoS protection for a service (ADR 0150).
+
+    Per-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits
+    stay in ``rate_limit`` sets.
+
+    Attributes:
+        max_connections_per_source: Connections one address may hold open; more are refused.
+        max_new_connections_per_source: New connections one address may open per
+            ``connection_rate_period_s``; more are refused.
+        connection_rate_period_s: Window of the connection rate.
+        header_timeout_s: How long a client has to send the whole request head (``timeout
+            http-request``); the answer to slow-header attacks.
+        client_timeout_s: Idle time allowed on a client connection (``timeout client``).
+        block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.
+        block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).
+        deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.
+        bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.
+        exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).
+        table_size: Addresses the connection table holds.
+
+    Example:
+        >>> ProtectionPolicySet.model_validate(
+        ...     {"id": "00000000-0000-0000-0000-000000000001",
+        ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "p",
+        ...      "block_scanners": True}
+        ... ).bot_action
+        'deny'
+    """
+
+    kind: Literal["protection"] = "protection"
+    max_connections_per_source: int | None = Field(default=None, ge=1, le=100_000)
+    max_new_connections_per_source: int | None = Field(default=None, ge=1, le=100_000)
+    connection_rate_period_s: Literal[1, 10, 60] = 10
+    header_timeout_s: int | None = Field(default=None, ge=1, le=60)
+    client_timeout_s: int | None = Field(default=None, ge=1, le=3600)
+    block_empty_user_agent: bool = False
+    block_scanners: bool = False
+    deny_user_agents: tuple[UserAgentToken, ...] = Field(default=(), max_length=32)
+    bot_action: Literal["deny", "silent_drop"] = "deny"
+    exempt_cidrs: tuple[IPNetwork, ...] = Field(default=(), max_length=32)
+    table_size: int = Field(default=100_000, ge=1_000, le=1_000_000)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if len(set(self.deny_user_agents)) != len(self.deny_user_agents):
+            raise ValueError("deny_user_agents must be unique")
+        if not (
+            self.max_connections_per_source
+            or self.max_new_connections_per_source
+            or self.header_timeout_s
+            or self.client_timeout_s
+            or self.block_empty_user_agent
+            or self.block_scanners
+            or self.deny_user_agents
+        ):
+            raise ValueError("a protection set needs at least one protection")
+        return self
+
+    @property
+    def tracks_connections(self) -> bool:
+        """True when the set needs a per-source connection table."""
+        return bool(self.max_connections_per_source or self.max_new_connections_per_source)
+
+
 PolicySet = Annotated[
     RedirectPolicySet
     | AllowListPolicySet
@@ -1756,6 +1841,7 @@ PolicySet = Annotated[
     | ErrorPagesPolicySet
     | RateLimitPolicySet
     | WafPolicySet
+    | ProtectionPolicySet
     | AccessPolicySet
     | JwtPolicySet
     | ClientCertPolicySet,
@@ -1769,6 +1855,7 @@ ATTACHABLE_POLICY_KINDS = (
     ErrorPagesPolicySet,
     RateLimitPolicySet,
     WafPolicySet,
+    ProtectionPolicySet,
     AccessPolicySet,
     JwtPolicySet,
     ClientCertPolicySet,
