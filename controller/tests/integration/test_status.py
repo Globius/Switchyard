@@ -98,8 +98,10 @@ async def test_the_connection_load_is_stored_with_the_agent_status(pg_url: str) 
         svc = service(w)
         await svc.poll_all()
         rows = {r.name: r for r in await svc.list_status(principal(), TENANT)}
-        assert rows["se-a"].agent["load"] == {"conns": 300, "max_conn": 1000}
-        assert "load" not in rows["se-b"].agent  # that engine did not report one
+        agent_a, agent_b = rows["se-a"].agent, rows["se-b"].agent
+        assert agent_a is not None and agent_b is not None
+        assert agent_a["load"] == {"conns": 300, "max_conn": 1000}
+        assert "load" not in agent_b  # that engine did not report one
 
 
 async def test_status_requires_tenant_access(pg_url: str) -> None:

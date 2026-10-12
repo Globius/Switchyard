@@ -98,7 +98,10 @@ class AddressApi:
         path = request.url.path.removeprefix("/client/v4")
         body = json.loads(request.content) if request.content else None
         self.requests.append((request.method, path, body))
-        ok = lambda result: httpx.Response(200, json={"success": True, "result": result})  # noqa: E731
+
+        def ok(result: object) -> httpx.Response:
+            return httpx.Response(200, json={"success": True, "result": result})
+
         if path == "/zones":
             return ok([{"id": "z1"}] if request.url.params["name"] == "example.test" else [])
         if path == "/zones/z1/dns_records" and request.method == "GET":
@@ -111,11 +114,11 @@ class AddressApi:
                 ]
             )
         if path == "/zones/z1/dns_records" and request.method == "POST":
-            self.records["new"] = {"id": "new", **(body or {})}  # type: ignore[dict-item]
+            self.records["new"] = {"id": "new", **(body or {})}
             return ok({"id": "new"})
         rid = path.rsplit("/", 1)[-1]
         if request.method == "PUT" and rid in self.records:
-            self.records[rid] = {"id": rid, **(body or {})}  # type: ignore[dict-item]
+            self.records[rid] = {"id": rid, **(body or {})}
             return ok({"id": rid})
         return httpx.Response(404, json={"success": False, "errors": [{"message": "gone"}]})
 

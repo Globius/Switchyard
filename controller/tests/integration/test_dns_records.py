@@ -31,7 +31,7 @@ class FakeProviders(DnsProviders):
         self.cloudflare = cloudflare
 
     async def build(self, row: Any) -> DnsProvider:
-        return self.cloudflare  # type: ignore[return-value]
+        return self.cloudflare
 
 
 class Rig:

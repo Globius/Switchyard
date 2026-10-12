@@ -227,7 +227,7 @@ async def test_the_whole_path_from_load_to_a_joined_engine(rig: Rig) -> None:
     await rig.tick()  # not up yet: the token is not sent again
     assert len(rig.pve.guest_commands) == sent
 
-    rig.directory._agents[new_id] = FakeAgent("edge-3")  # type: ignore[attr-defined]
+    rig.directory._agents[new_id] = FakeAgent("edge-3")
     rig.clock.advance(seconds=30)  # the agent has enrolled and answers
     assert (await rig.tick())["joined"] == 1
     async with admin_session(rig.w.db.admin) as s:
@@ -245,7 +245,7 @@ async def test_the_cooldown_and_the_limit_stop_further_scale_out(rig: Rig) -> No
     await rig.scale_out()
     new_id = await rig.run_deploy()
     await rig.tick()
-    rig.directory._agents[new_id] = FakeAgent("edge-3")  # type: ignore[attr-defined]
+    rig.directory._agents[new_id] = FakeAgent("edge-3")
     await rig.tick()  # joined
     await rig.set_load(90)
     await rig.set_max(5)
