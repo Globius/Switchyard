@@ -162,4 +162,20 @@ describe("request logs", () => {
     renderIt();
     expect(await screen.findByText("WAF denied")).toBeInTheDocument();
   });
+
+  it("expands a row to its raw line", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/logs", () =>
+        HttpResponse.json({
+          available: true,
+          reason: null,
+          next_cursor: null,
+          entries: [ENTRY({ raw: "raw haproxy line" })],
+        }),
+      ),
+    );
+    renderIt();
+    await userEvent.click(await screen.findByText("/api/items"));
+    expect(await screen.findByLabelText("Raw log line")).toHaveTextContent("raw haproxy line");
+  });
 });

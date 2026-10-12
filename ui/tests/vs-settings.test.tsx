@@ -316,7 +316,7 @@ describe("virtual service settings", () => {
     await enabled("Port 1");
     await userEvent.click(screen.getByRole("button", { name: "Add port" }));
     expect(screen.getByLabelText("Port 2")).toHaveValue(80);
-    const boxes = screen.getAllByRole("checkbox", { name: "PROXY" });
+    const boxes = screen.getAllByRole("switch", { name: "PROXY" });
     await userEvent.click(boxes[1]!);
     expect(boxes[1]).toBeChecked();
     expect(screen.getByText("2 unsaved fields".replace("2", "1"))).toBeInTheDocument();
@@ -355,10 +355,10 @@ describe("virtual service settings", () => {
     };
     renderAt("/t/acme/virtual-services/v1/settings");
     await userEvent.click(await screen.findByRole("button", { name: "Edit ports" }));
-    const h3 = await screen.findByRole("checkbox", { name: "HTTP/3" });
+    const h3 = await screen.findByRole("switch", { name: "HTTP/3" });
     expect(h3).toBeDisabled();
-    await userEvent.click(screen.getByRole("checkbox", { name: "TLS" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "HTTP/2" }));
+    await userEvent.click(screen.getByRole("switch", { name: "TLS" }));
+    await userEvent.click(screen.getByRole("switch", { name: "HTTP/2" }));
     expect(h3).toBeEnabled();
     await userEvent.click(h3);
     await userEvent.click(screen.getByRole("button", { name: "Done" }));
@@ -393,6 +393,7 @@ describe("virtual service settings", () => {
     await userEvent.type(screen.getByLabelText("Route 1 split weight 1"), "80");
     await userEvent.click(screen.getByRole("button", { name: "Add pool" }));
     await userEvent.click(screen.getByRole("button", { name: "Remove split pool 3" }));
+    expect(screen.getByText(/^Total/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
     await waitFor(() => {
       const r = (seen.body as { routes: { pools: { pool_id: string; weight: number }[] }[] })

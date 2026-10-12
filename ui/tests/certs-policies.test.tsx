@@ -1072,13 +1072,18 @@ describe("security policies", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
     await userEvent.selectOptions(screen.getByLabelText("Rule 1 mode"), "groups");
     await userEvent.type(screen.getByRole("combobox", { name: "Rule 1 groups" }), "staff,");
+    await userEvent.type(screen.getByLabelText("Provider CA"), "-----BEGIN CERTIFICATE-----");
     await userEvent.clear(screen.getByLabelText("Header for token"));
     await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
     await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
     expect(posted!.ops[0]!.body).toMatchObject({
       kind: "access",
       name: "staff-login",
-      oidc: { issuer: "https://idp.example.test", client_secret_ref: "kv/tenants/acme/oidc" },
+      oidc: {
+        issuer: "https://idp.example.test",
+        client_secret_ref: "kv/tenants/acme/oidc",
+        provider_ca_pem: "-----BEGIN CERTIFICATE-----",
+      },
       identity_headers: { token: null, user: "X-Auth-User" },
       rules: [{ mode: "groups", groups: ["staff"], match: {} }],
     });

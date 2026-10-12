@@ -196,6 +196,8 @@ function PoolSheet({
         badge={
           pool !== "new" && pool.draft_status !== "unchanged" ? (
             <DraftMarker status={pool.draft_status} />
+          ) : pool !== "new" && pool.discovery ? (
+            <span className="rounded bg-muted px-1.5 py-0.5 text-xs">{t("Discovered")}</span>
           ) : undefined
         }
         footer={
@@ -934,6 +936,11 @@ export function Pools({ tenant, q = "" }: { tenant: string; q?: string }) {
                         >
                           {p.name}
                         </button>
+                        {p.discovery && (
+                          <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                            {t("Discovered")}
+                          </span>
+                        )}
                       </span>
                     </td>
                     <td className="px-4 py-3">{t(ALGO[p.algorithm] ?? p.algorithm)}</td>

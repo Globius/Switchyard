@@ -701,6 +701,7 @@ export function securityBody(kind: SecurityKind, name: string, cfg: Obj): Obj {
   if (kind === "access") {
     for (const k of Object.keys(c.identity_headers))
       c.identity_headers[k] = nz(c.identity_headers[k]);
+    c.oidc = { ...c.oidc, provider_ca_pem: nz(c.oidc.provider_ca_pem) };
     c.rules = c.rules.map((r: Obj) => ({
       ...r,
       match: cleanMatch(r.match),
@@ -944,6 +945,23 @@ export function SecurityPolicySheet({
                   />
                 </Field>
                 <PutSecretCard tenant={tenant} />
+                <div className="sm:col-span-2">
+                  <Field
+                    label={t("Provider CA (PEM, optional)")}
+                    help={t(
+                      "Only when the provider's TLS certificate is signed by a private CA. Public certificates, not keys.",
+                    )}
+                  >
+                    <textarea
+                      aria-label={t("Provider CA")}
+                      className={cn(MONO, "h-24 py-2 text-xs")}
+                      placeholder="-----BEGIN CERTIFICATE-----"
+                      disabled={dis}
+                      value={cfg.oidc.provider_ca_pem ?? ""}
+                      onChange={(e) => oidc({ provider_ca_pem: e.target.value })}
+                    />
+                  </Field>
+                </div>
                 <Field label={t("Groups claim")}>
                   <input
                     aria-label={t("Groups claim")}

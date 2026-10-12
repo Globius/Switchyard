@@ -140,7 +140,7 @@ export function Home({ tenant }: { tenant: string }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {alerts.data && (
+        {Array.isArray(alerts.data?.firing) && alerts.data && (
           <Stat
             label={t("Alerts firing")}
             value={alerts.data.firing.filter((a) => a.state === "firing").length}

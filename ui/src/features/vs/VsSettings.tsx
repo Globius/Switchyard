@@ -213,22 +213,9 @@ function PortsSheet({
               onChange(ports.map((x, j) => (j === i ? { ...x, port: Number(e.target.value) } : x)))
             }
           />
-          {(["tls", "http2", "http3", "proxy_protocol", "tls_passthrough"] as const).map((k) => (
-            <label key={k} className="flex items-center gap-1.5">
-              <input
-                type="checkbox"
-                disabled={
-                  disabled ||
-                  portForbidden.has(k) ||
-                  (k === "http3" && !(p.tls && p.http2)) ||
-                  (k !== "tls_passthrough" && k !== "proxy_protocol" && p.tls_passthrough)
-                }
-                checked={p[k] ?? false}
-                onChange={(e) =>
-                  onChange(ports.map((x, j) => (j === i ? { ...x, [k]: e.target.checked } : x)))
-                }
-              />
-              {k === "tls"
+          {(["tls", "http2", "http3", "proxy_protocol", "tls_passthrough"] as const).map((k) => {
+            const name =
+              k === "tls"
                 ? "TLS"
                 : k === "http2"
                   ? "HTTP/2"
@@ -236,9 +223,32 @@ function PortsSheet({
                     ? "HTTP/3"
                     : k === "tls_passthrough"
                       ? t("TLS passthrough")
-                      : "PROXY"}
-            </label>
-          ))}
+                      : "PROXY";
+            const rule =
+              k === "http3"
+                ? t("Needs TLS and HTTP/2")
+                : k === "tls_passthrough"
+                  ? t("Routes by SNI without terminating TLS")
+                  : undefined;
+            return (
+              <label key={k} className="flex items-center gap-1.5" title={rule}>
+                <Switch
+                  aria-label={name}
+                  disabled={
+                    disabled ||
+                    portForbidden.has(k) ||
+                    (k === "http3" && !(p.tls && p.http2)) ||
+                    (k !== "tls_passthrough" && k !== "proxy_protocol" && p.tls_passthrough)
+                  }
+                  checked={p[k] ?? false}
+                  onCheckedChange={(v) =>
+                    onChange(ports.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
+                  }
+                />
+                {name}
+              </label>
+            );
+          })}
           {p.tls && (
             <label className="flex items-center gap-1.5">
               {t("TLS profile")}
@@ -1076,6 +1086,7 @@ function SettingsForm({
                                 >
                                   {t("Add pool")}
                                 </Button>
+                                <SplitBar weights={(r.pools ?? []).map((x) => x.weight)} />
                               </div>
                             ) : (
                               <div className="space-y-1.5">
@@ -1087,6 +1098,11 @@ function SettingsForm({
                                   onChange={(v) => upd({ pool_id: v || null })}
                                   options={poolOptions.map((p) => ({ value: p.id, label: p.name }))}
                                 />
+                                {r.pool_id && (
+                                  <p className="text-xs font-medium text-muted-foreground">
+                                    {t("If it's down, try:")}
+                                  </p>
+                                )}
                                 {r.pool_id && (
                                   <ChipInput
                                     label={t("Route {n} fallback pools", { n: i + 1 })}
@@ -1460,5 +1476,33 @@ function renumber<T extends { order: number }>(a: T[]): T[] {
 function flatFindings(errors: Record<string, string[]>) {
   return Object.entries(errors).flatMap(([path, msgs]) =>
     msgs.map((message) => ({ path, message })),
+  );
+}
+
+/** A bar of each pool's share and the total; weights are relative, so 100 reads as percent. */
+export function SplitBar({ weights }: { weights: number[] }) {
+  const total = weights.reduce((a, x) => a + x, 0);
+  return (
+    <div className="space-y-1">
+      <div className="flex h-2 overflow-hidden rounded bg-muted" aria-hidden>
+        {weights.map((w, i) => (
+          <div
+            key={i}
+            className={i % 2 === 0 ? "bg-primary" : "bg-primary/50"}
+            style={{ width: `${(w / Math.max(1, total)) * 100}%` }}
+          />
+        ))}
+      </div>
+      <p
+        role="status"
+        className={cn("text-xs", total === 100 ? "text-status-healthy" : "text-muted-foreground")}
+      >
+        {total === 100
+          ? t("Total 100 %")
+          : t("Total {n}. Weights are relative; make them add up to 100 to read them as %.", {
+              n: total,
+            })}
+      </p>
+    </div>
   );
 }
