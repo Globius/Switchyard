@@ -42,7 +42,13 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
       { label: "Jobs", to: "jobs" },
     ],
   },
-  { heading: "Tenant", items: [{ label: "Access and settings", to: "access" }] },
+  {
+    heading: "Tenant",
+    items: [
+      { label: "Access and settings", to: "access" },
+      { label: "Alerts", to: "alerts" },
+    ],
+  },
 ];
 
 function StreamIndicator({ s }: { s: StreamState }) {
