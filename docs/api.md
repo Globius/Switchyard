@@ -210,6 +210,16 @@ state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 `false`) with `allow_lxc_guests_forced` when `SWITCHYARD_ALLOW_LXC=1` forces it on. While it is off, a deploy with `guest_kind: lxc` answers `403`
 with code `lxc_disabled`. `GET /me` returns `features.lxc_guests` for the UI. See ADR 0076.
 
+## Alerts and the tenant log
+
+`GET/POST /tenants/{t}/alert-targets`, `PATCH/DELETE .../alert-targets/{name}` and `POST .../alert-targets/{name}/test`;
+`GET/POST /tenants/{t}/alert-rules`, `PATCH/DELETE .../alert-rules/{name}`; `GET /tenants/{t}/alerts` (firing and the latest
+deliveries); `GET /alert-catalog` (metrics, audit actions, chat formats, whether email works). Any role in the tenant reads,
+`tenant-admin` writes; writes apply live and are audited. `config` and `spec` depend on `kind` and are validated field by
+field (`errors[].path` is `config.url`, `spec.days`, `targets[0]` ...): see [alerting.md](alerting.md). Alerting not wired on
+a controller answers `404` with code `not_enabled`. `GET /tenants/{t}/logs` is the request log of the whole tenant (or of one
+`service`), with the filters and paging of the per-service log (ADR 0123).
+
 ## Embedded Grafana
 
 `POST /tenants/{t}/grafana/launch` (any role in the tenant) and `POST /grafana/launch` (system administrators, all tenants) return `{url, expires_at, tenant_id}`: a path that works once, for 60 seconds, that starts a Grafana session scoped to that tenant and redirects into Grafana (body `{landing}` picks the page: empty, `/d/<uid>`, `/explore` or `/dashboards`). Not enabled: `404`, code `not_enabled`. The routes `/grafana/**` (Grafana itself, cookie `sy_grafana`) and `/internal/ds/**` (Grafana's data source calls, bearer token, not public) are not part of the API contract. How it is secured: [adr/0085](adr/0085-grafana-behind-controller.md).
