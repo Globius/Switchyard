@@ -220,6 +220,14 @@ see `docs/controller-settings.md` and ADR 0081.
 A cluster reads back with `last_sync` (`created`, `updated`, `deleted`, `change_set_id`,
 `addresses_written`), `last_sync_ok`, `last_sync_error` and `waiting_for_change_set`. The token is never returned.
 
+## v53 additions
+
+- `GET /waf/crs-rules`: CRS families and commonly disabled rules (`complete` is false; any id is accepted). ADR 0152.
+- JWT rules take `jwks_url` (https); `keys` may be empty with it. The `sync_jwks` job refreshes the keys every five minutes as `system:jwks`. ADR 0153.
+- Access log entries carry `waf` and `waf_action` (`deny` or `drop`, block mode only). ADR 0154.
+- `POST .../kubernetes-clusters/{cluster}/test` also reports `list gateways` and `list httproutes` when the Gateway API is installed.
+- Wide IP reads carry `members[].latency_ms` and `latency_order`.
+
 ## Importing an Avi export
 
 `POST /tenants/{t}/imports/avi` converts an Avi configuration export into a draft change set (dry run by default)

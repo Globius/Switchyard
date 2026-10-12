@@ -75,6 +75,11 @@ def _zone_json(row: GslbZoneRow) -> dict[str, Any]:
 
 
 def _wide_json(row: GslbWideIpRow, zone: str) -> dict[str, Any]:
+    ms = (row.measurements or {}).get("ms", {})
+    members = [
+        {**m, "latency_ms": round(ms[str(i)], 1) if str(i) in ms else None}
+        for i, m in enumerate(row.spec["members"])
+    ]
     return {
         "id": row.id,
         "name": row.name,
@@ -83,7 +88,8 @@ def _wide_json(row: GslbWideIpRow, zone: str) -> dict[str, Any]:
         "algorithm": row.spec["algorithm"],
         "ttl": row.spec["ttl"],
         "health": row.spec["health"],
-        "members": row.spec["members"],
+        "members": members,
+        "latency_order": (row.measurements or {}).get("order") or [],
         "enabled": row.enabled,
         "version": row.version,
         "applied_at": row.applied_at,

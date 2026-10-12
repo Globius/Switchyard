@@ -42,6 +42,7 @@ class JobKind(StrEnum):
             confirmation; reverts it when the window runs out.
         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
         SYNC_IP_LISTS: Refreshes country and reputation lists from their sources.
+        SYNC_JWKS: Refreshes the keys of JWT rules that name a `jwks_url`.
         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
 
@@ -60,6 +61,7 @@ class JobKind(StrEnum):
     KUBERNETES_SYNC = "kubernetes_sync"
     DISCOVER_POOL_MEMBERS = "discover_pool_members"
     SYNC_IP_LISTS = "sync_ip_lists"
+    SYNC_JWKS = "sync_jwks"
     EVALUATE_ALERTS = "evaluate_alerts"
     SYNC_GSLB = "sync_gslb"
     PROBE_GSLB = "probe_gslb"

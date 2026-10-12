@@ -374,3 +374,17 @@ async def test_the_api_round_trip(rig: Rig) -> None:
         gone = await c.delete(url, headers=admin | {"If-Match": '"2"'})
         assert gone.status_code == 204
         assert (await c.get(url, headers=admin)).status_code == 404
+
+
+async def test_the_test_checks_gateway_access_only_when_the_gateway_api_is_installed(
+    rig: Rig,
+) -> None:
+    cluster = await rig.create()
+    plain = await rig.clusters.test(ADMIN, TENANT, cluster.id)
+    assert plain.gateway_api is False and "list gateways" not in plain.permissions
+    rig.kube.gateway_list = []
+    rig.kube.denied.add("list/httproutes/")
+    found = await rig.clusters.test(ADMIN, TENANT, cluster.id)
+    assert found.gateway_api is True and found.permissions["list gateways"] is True
+    assert found.permissions["list httproutes"] is False
+    assert not found.ok and "may not list httproutes" in found.detail

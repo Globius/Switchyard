@@ -116,6 +116,24 @@
           "status": {
             "title": "Status",
             "type": "integer"
+          },
+          "waf": {
+            "default": false,
+            "description": "The web application firewall refused or dropped this request (the line carries its verdict).",
+            "title": "Waf",
+            "type": "boolean"
+          },
+          "waf_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The WAF verdict on the line: `deny` or `drop`.",
+            "title": "Waf Action"
           }
         },
         "required": [
@@ -5516,6 +5534,97 @@
         "title": "ControllerStateRead",
         "type": "object"
       },
+      "CrsCatalogueRead": {
+        "additionalProperties": false,
+        "description": "The rule catalogue of the CRS release a WAF policy uses.",
+        "properties": {
+          "complete": {
+            "description": "False: the list holds the families and the commonly disabled rules. Any numeric id may still be put in `disabled_rule_ids`.",
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "crs_version": {
+            "title": "Crs Version",
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/CrsGroupRead"
+            },
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "crs_version",
+          "complete",
+          "groups"
+        ],
+        "title": "CrsCatalogueRead",
+        "type": "object"
+      },
+      "CrsGroupRead": {
+        "additionalProperties": false,
+        "description": "A family of rules.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prefix": {
+            "description": "First three digits of the family's ids (942: 942000-942999).",
+            "title": "Prefix",
+            "type": "integer"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/CrsRuleRead"
+            },
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "prefix",
+          "name",
+          "description",
+          "rules"
+        ],
+        "title": "CrsGroupRead",
+        "type": "object"
+      },
+      "CrsRuleRead": {
+        "additionalProperties": false,
+        "description": "One OWASP Core Rule Set rule.",
+        "properties": {
+          "id": {
+            "description": "The rule id as the audit log shows it.",
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "description": "What the rule detects.",
+            "title": "Name",
+            "type": "string"
+          },
+          "paranoia_level": {
+            "description": "The lowest paranoia level (1 to 4) that runs it.",
+            "title": "Paranoia Level",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "paranoia_level"
+        ],
+        "title": "CrsRuleRead",
+        "type": "object"
+      },
       "DeployIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /se-groups/{id}/deploy``.",
@@ -9451,7 +9560,7 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.\n    SYNC_GSLB: Follows virtual service VIP moves in GSLB records.\n    KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and\n        Gateways and applies the difference as a `system:k8s` change set.\n    CONTROLLER_TICK: Scheduled check of a controller settings change that waits for\n        confirmation; reverts it when the window runs out.\n    DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.\n    SYNC_IP_LISTS: Refreshes country and reputation lists from their sources.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.\n    SYNC_GSLB: Follows virtual service VIP moves in GSLB records.\n    KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and\n        Gateways and applies the difference as a `system:k8s` change set.\n    CONTROLLER_TICK: Scheduled check of a controller settings change that waits for\n        confirmation; reverts it when the window runs out.\n    DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.\n    SYNC_IP_LISTS: Refreshes country and reputation lists from their sources.\n    SYNC_JWKS: Refreshes the keys of JWT rules that name a `jwks_url`.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
         "enum": [
           "apply_change_set",
           "reapply_se_group",
@@ -9468,6 +9577,7 @@
           "kubernetes_sync",
           "discover_pool_members",
           "sync_ip_lists",
+          "sync_jwks",
           "evaluate_alerts",
           "sync_gslb",
           "probe_gslb"
@@ -9891,7 +10001,7 @@
       },
       "JwtRule": {
         "additionalProperties": false,
-        "description": "Require a valid bearer token on the requests ``match`` selects.\n\nA token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``\ncontains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and\nevery ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is\nanswered 401.\n\nAttributes:\n    match: Requests the rule covers (empty: all).\n    issuer: The expected ``iss`` claim.\n    audiences: Accepted ``aud`` values (a string claim or an element of an array claim).\n    required_scopes: Scopes the token must carry.\n    leeway_s: Clock difference tolerated on ``exp``.\n    keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).\n    subject_header: Request header that receives the ``sub`` claim of a valid token;\n        client copies of it are removed first.",
+        "description": "Require a valid bearer token on the requests ``match`` selects.\n\nA token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``\ncontains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and\nevery ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is\nanswered 401.\n\nAttributes:\n    match: Requests the rule covers (empty: all).\n    issuer: The expected ``iss`` claim.\n    audiences: Accepted ``aud`` values (a string claim or an element of an array claim).\n    required_scopes: Scopes the token must carry.\n    leeway_s: Clock difference tolerated on ``exp``.\n    keys: The issuer's public keys (up to 8; several keep tokens valid across a key\n        rotation). With ``jwks_url`` the controller keeps them in step with the issuer.\n    jwks_url: Where the issuer publishes its JWKS (``https``). The controller fetches it\n        every few minutes and replaces ``keys`` when they changed (ADR 0153). Until the\n        first fetch has been applied the rule has no keys and answers 401.\n    subject_header: Request header that receives the ``sub`` claim of a valid token;\n        client copies of it are removed first.",
         "properties": {
           "audiences": {
             "default": [],
@@ -9907,12 +10017,23 @@
             "title": "Issuer",
             "type": "string"
           },
+          "jwks_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jwks Url"
+          },
           "keys": {
+            "default": [],
             "items": {
               "$ref": "#/components/schemas/JwtKey"
             },
             "maxItems": 8,
-            "minItems": 1,
             "title": "Keys",
             "type": "array"
           },
@@ -9955,8 +10076,7 @@
           }
         },
         "required": [
-          "issuer",
-          "keys"
+          "issuer"
         ],
         "title": "JwtRule",
         "type": "object"
@@ -21785,6 +21905,86 @@
         "title": "WideIpMember",
         "type": "object"
       },
+      "WideIpMemberRead": {
+        "additionalProperties": false,
+        "description": "A member as read back, with what the latency probe measured.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An IPv4 or IPv6 address.",
+            "title": "Address"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`latency` only: smoothed connect time to the member in milliseconds, or null when it was never measured or did not answer.",
+            "title": "Latency Ms"
+          },
+          "priority": {
+            "default": 1,
+            "description": "`failover` only: 1 is tried first.",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "site": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A label for the site (a lab host, a data centre).",
+            "title": "Site"
+          },
+          "subnets": {
+            "description": "`subnet` only: clients in these CIDR blocks get this member.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Subnets",
+            "type": "array"
+          },
+          "virtual_service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Instead of `address`: a virtual service; its VIP is followed.",
+            "title": "Virtual Service"
+          },
+          "weight": {
+            "default": 1,
+            "description": "`weighted` only.",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "title": "WideIpMemberRead",
+        "type": "object"
+      },
       "WideIpPatch": {
         "additionalProperties": false,
         "description": "Fields of a wide IP that can change; omitted fields stay as they are.",
@@ -21916,9 +22116,17 @@
             ],
             "title": "Last Error"
           },
+          "latency_order": {
+            "description": "`latency` only: member indexes from fastest to slowest, as last answered.",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Latency Order",
+            "type": "array"
+          },
           "members": {
             "items": {
-              "$ref": "#/components/schemas/WideIpMember"
+              "$ref": "#/components/schemas/WideIpMemberRead"
             },
             "title": "Members",
             "type": "array"
@@ -54130,6 +54338,106 @@
           "access"
         ],
         "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/waf/crs-rules": {
+      "get": {
+        "description": "Rule families and the rules most often disabled, for picking `disabled_rule_ids`.\n\nNot the whole rule set (`complete` is false): any numeric id is accepted in a policy.\n\n**Access:** Any authenticated caller.",
+        "operationId": "crs_rules_api_v1_waf_crs_rules_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "complete": false,
+                  "crs_version": "4.8.0",
+                  "groups": [
+                    {
+                      "description": "SQL injection into queries.",
+                      "name": "SQL injection",
+                      "prefix": 942,
+                      "rules": [
+                        {
+                          "id": 942100,
+                          "name": "SQL injection attack detected via libinjection",
+                          "paranoia_level": 1
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CrsCatalogueRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "OWASP Core Rule Set catalogue",
+        "tags": [
+          "policy-sets"
+        ],
+        "x-required-role": "authenticated"
       }
     }
   },

@@ -4007,6 +4007,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/waf/crs-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * OWASP Core Rule Set catalogue
+         * @description Rule families and the rules most often disabled, for picking `disabled_rule_ids`.
+         *
+         *     Not the whole rule set (`complete` is false): any numeric id is accepted in a policy.
+         *
+         *     **Access:** Any authenticated caller.
+         */
+        get: operations["crs_rules_api_v1_waf_crs_rules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4064,6 +4088,17 @@ export interface components {
             server: string;
             /** Status */
             status: number;
+            /**
+             * Waf
+             * @description The web application firewall refused or dropped this request (the line carries its verdict).
+             * @default false
+             */
+            waf: boolean;
+            /**
+             * Waf Action
+             * @description The WAF verdict on the line: `deny` or `drop`.
+             */
+            waf_action?: string | null;
         };
         /**
          * AccessLogs
@@ -6538,6 +6573,59 @@ export interface components {
             vip?: string | null;
         };
         /**
+         * CrsCatalogueRead
+         * @description The rule catalogue of the CRS release a WAF policy uses.
+         */
+        CrsCatalogueRead: {
+            /**
+             * Complete
+             * @description False: the list holds the families and the commonly disabled rules. Any numeric id may still be put in `disabled_rule_ids`.
+             */
+            complete: boolean;
+            /** Crs Version */
+            crs_version: string;
+            /** Groups */
+            groups: components["schemas"]["CrsGroupRead"][];
+        };
+        /**
+         * CrsGroupRead
+         * @description A family of rules.
+         */
+        CrsGroupRead: {
+            /** Description */
+            description: string;
+            /** Name */
+            name: string;
+            /**
+             * Prefix
+             * @description First three digits of the family's ids (942: 942000-942999).
+             */
+            prefix: number;
+            /** Rules */
+            rules: components["schemas"]["CrsRuleRead"][];
+        };
+        /**
+         * CrsRuleRead
+         * @description One OWASP Core Rule Set rule.
+         */
+        CrsRuleRead: {
+            /**
+             * Id
+             * @description The rule id as the audit log shows it.
+             */
+            id: number;
+            /**
+             * Name
+             * @description What the rule detects.
+             */
+            name: string;
+            /**
+             * Paranoia Level
+             * @description The lowest paranoia level (1 to 4) that runs it.
+             */
+            paranoia_level: number;
+        };
+        /**
          * DeployIn
          * @description Body of ``POST /se-groups/{id}/deploy``.
          */
@@ -8382,10 +8470,11 @@ export interface components {
          *             confirmation; reverts it when the window runs out.
          *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
          *         SYNC_IP_LISTS: Refreshes country and reputation lists from their sources.
+         *         SYNC_JWKS: Refreshes the keys of JWT rules that name a `jwks_url`.
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "sync_ip_lists" | "evaluate_alerts" | "sync_gslb" | "probe_gslb";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "sync_ip_lists" | "sync_jwks" | "evaluate_alerts" | "sync_gslb" | "probe_gslb";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -8619,7 +8708,11 @@ export interface components {
          *         audiences: Accepted ``aud`` values (a string claim or an element of an array claim).
          *         required_scopes: Scopes the token must carry.
          *         leeway_s: Clock difference tolerated on ``exp``.
-         *         keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).
+         *         keys: The issuer's public keys (up to 8; several keep tokens valid across a key
+         *             rotation). With ``jwks_url`` the controller keeps them in step with the issuer.
+         *         jwks_url: Where the issuer publishes its JWKS (``https``). The controller fetches it
+         *             every few minutes and replaces ``keys`` when they changed (ADR 0153). Until the
+         *             first fetch has been applied the rule has no keys and answers 401.
          *         subject_header: Request header that receives the ``sub`` claim of a valid token;
          *             client copies of it are removed first.
          */
@@ -8631,7 +8724,12 @@ export interface components {
             audiences: string[];
             /** Issuer */
             issuer: string;
-            /** Keys */
+            /** Jwks Url */
+            jwks_url?: string | null;
+            /**
+             * Keys
+             * @default []
+             */
             keys: components["schemas"]["JwtKey"][];
             /**
              * Leeway S
@@ -14059,6 +14157,49 @@ export interface components {
             weight: number;
         };
         /**
+         * WideIpMemberRead
+         * @description A member as read back, with what the latency probe measured.
+         */
+        WideIpMemberRead: {
+            /**
+             * Address
+             * @description An IPv4 or IPv6 address.
+             */
+            address?: string | null;
+            /**
+             * Latency Ms
+             * @description `latency` only: smoothed connect time to the member in milliseconds, or null when it was never measured or did not answer.
+             */
+            latency_ms?: number | null;
+            /**
+             * Priority
+             * @description `failover` only: 1 is tried first.
+             * @default 1
+             */
+            priority: number;
+            /**
+             * Site
+             * @description A label for the site (a lab host, a data centre).
+             */
+            site?: string | null;
+            /**
+             * Subnets
+             * @description `subnet` only: clients in these CIDR blocks get this member.
+             */
+            subnets?: string[];
+            /**
+             * Virtual Service
+             * @description Instead of `address`: a virtual service; its VIP is followed.
+             */
+            virtual_service?: string | null;
+            /**
+             * Weight
+             * @description `weighted` only.
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
          * WideIpPatch
          * @description Fields of a wide IP that can change; omitted fields stay as they are.
          */
@@ -14101,8 +14242,13 @@ export interface components {
             id: string;
             /** Last Error */
             last_error: string | null;
+            /**
+             * Latency Order
+             * @description `latency` only: member indexes from fastest to slowest, as last answered.
+             */
+            latency_order?: number[];
             /** Members */
-            members: components["schemas"]["WideIpMember"][];
+            members: components["schemas"]["WideIpMemberRead"][];
             /** Name */
             name: string;
             /** Ttl */
@@ -34604,6 +34750,85 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["SessionsRevoked"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    crs_rules_api_v1_waf_crs_rules_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "complete": false,
+                     *       "crs_version": "4.8.0",
+                     *       "groups": [
+                     *         {
+                     *           "description": "SQL injection into queries.",
+                     *           "name": "SQL injection",
+                     *           "prefix": 942,
+                     *           "rules": [
+                     *             {
+                     *               "id": 942100,
+                     *               "name": "SQL injection attack detected via libinjection",
+                     *               "paranoia_level": 1
+                     *             }
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CrsCatalogueRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */

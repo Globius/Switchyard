@@ -87,4 +87,12 @@ class AccessLogEntry(Model):
     duration_ms: int = Field(description="Total time of the request (HAProxy `Tt`).")
     method: str | None = None
     path: str | None = None
+    waf: bool = Field(
+        default=False,
+        description="The web application firewall refused or dropped this request "
+        "(the line carries its verdict).",
+    )
+    waf_action: str | None = Field(
+        default=None, description="The WAF verdict on the line: `deny` or `drop`."
+    )
     raw: str = Field(description="The log line as stored.")
