@@ -661,7 +661,7 @@ function SettingsForm({
                     onChange={(e) => set("vip", e.target.value)}
                   />
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {t("must be inside a network of the SE group")}
+                    {t("IPv4 or IPv6, inside a network of the SE group")}
                   </div>
                 </div>
               </div>

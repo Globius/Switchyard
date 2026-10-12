@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { cidrProblem, isIPv4 } from "@/lib/ip";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
@@ -28,9 +29,6 @@ const CODE_NAMES: Record<(typeof CODES)[number], string> = {
 const INPUT =
   "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-const V4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}(\/(\d|[12]\d|3[0-2]))?$/;
-const V6 = /^[0-9a-fA-F:]+(\/(\d{1,2}|1[01]\d|12[0-8]))?$/;
-
 /** One CIDR per line; returns the cleaned list and the first problem with its 1-based line, if any. */
 export function parseCidrs(text: string): {
   cidrs: string[];
@@ -41,13 +39,19 @@ export function parseCidrs(text: string): {
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i]!;
     if (!l) continue;
-    if (!(V4.test(l) || (l.includes(":") && V6.test(l)))) {
-      const bad = /^\d+\.\d+\.\d+\.\d+\/(\d+)$/.exec(l);
+    const problem = cidrProblem(l);
+    if (problem) {
+      const v4 = isIPv4(l.split("/")[0] ?? "");
       return {
         cidrs,
         error: {
           line: i + 1,
-          message: bad ? "prefix length must be 0–32 for IPv4" : "not a valid address or range",
+          message:
+            problem === "prefix"
+              ? v4
+                ? "prefix length must be 0–32 for IPv4"
+                : "prefix length must be 0–128 for IPv6"
+              : "not a valid address or range",
         },
       };
     }

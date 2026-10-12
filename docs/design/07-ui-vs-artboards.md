@@ -313,3 +313,19 @@ Checked on 2026-10-11 against a local controller, signed in as the break-glass s
 | Container option in the deploy sheet only when `GET /me` `features.lxc_guests` is true | Done. While it is off the Guest type choice is hidden and the request sends `guest_kind: qemu`. |
 | `403 lxc_disabled` | Done. The deploy sheet shows a plain explanation that points to Admin > System settings. |
 | Admin > System settings with the `allow_lxc_guests` toggle | Built without an artboard, following the other Admin screens (card, switch, confirm before enabling, read-only note when `allow_lxc_guests_forced`). **Deviation: Design to specify or confirm.** |
+
+## IPv6 and dual-stack audit
+
+Shared helpers in `ui/src/lib/ip.ts` (`isIPv4`, `isIPv6`, `cidrProblem`, `hostPort`, `compareIp`).
+
+| Area | Result |
+| --- | --- |
+| Allow-list CIDR input | Fixed. IPv6 was accepted with a loose pattern (`::::` passed) and the prefix error only knew IPv4. Now validated per family, prefix 0 to 32 or 0 to 128. |
+| Wizard VIP and member address | Fixed. Anything containing a colon was accepted; now a real IPv4 or IPv6 address is required. |
+| `address:port` display (pool members in overview, review, diffs, monitor test picker) | Fixed. IPv6 hosts are bracketed (`[2001:db8::1]:443`). |
+| Sorting addresses (VIP pool allocations) | Fixed. Numeric order across families (IPv4 first); the old string compare mis-ordered IPv6. |
+| Long addresses | Engine address lines, network CIDR and gateway cells wrap instead of overflowing. The phone-width browser check now runs with a full-length IPv6 VIP. |
+| Forms | CIDR and gateway fields say IPv4 or IPv6 and same family; the VS fixed VIP help does too. |
+| Rendered config highlighting | Bracketed IPv6 (`[::]:443`) is highlighted like IPv4. |
+| Per-family VRRP instances | Not shown anywhere in the UI today, so nothing to fix. If Design adds them to engine status, they need a row per family. |
+| Not changed | Network, pool range and BGP peer inputs have no client-side validation (the API reports field errors), so IPv6 values pass through unchanged. |

@@ -96,7 +96,9 @@ export function NicAddresses({
                       {vip ? t("VIP") : t("Backend")}
                     </span>
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground">{net?.cidr ?? ""}</span>
+                  <span className="font-mono text-xs break-all text-muted-foreground">
+                    {net?.cidr ?? ""}
+                  </span>
                 </span>
                 <span className="flex flex-col gap-0.5">
                   <Combobox

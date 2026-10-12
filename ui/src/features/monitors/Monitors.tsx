@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { hostPort } from "@/lib/ip";
 import { Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ApiError, api, unwrap } from "@/api/client";
@@ -134,7 +135,8 @@ function TestBox({ tenant, monitor }: { tenant: string; monitor: Monitor }) {
           <option value="">{t("Member to test")}</option>
           {options.map(({ pool, member }) => (
             <option key={member.id} value={member.id}>
-              {member.name ?? member.address} · {member.address}:{member.port} ({pool.name})
+              {member.name ?? member.address} · {hostPort(member.address, member.port)} ({pool.name}
+              )
             </option>
           ))}
         </select>

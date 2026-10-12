@@ -34,6 +34,24 @@ const filled = (o: Partial<WizardState> = {}): WizardState => ({
 });
 
 describe("wizard model", () => {
+  it("accepts IPv6 VIPs and members, and rejects loose text containing a colon", () => {
+    const ok = filled({
+      vipMode: "fixed",
+      vip: "2001:db8:12::6",
+      members: [{ address: "2001:db8:30::5", port: "8080", weight: 1 }],
+    });
+    expect(validateStep(2, ok, new Set())).toEqual({});
+    expect(validateStep(4, ok, new Set())).toEqual({});
+    expect(validateStep(2, filled({ vipMode: "fixed", vip: "a:b" }), new Set()).vip).toBeDefined();
+    expect(
+      validateStep(
+        4,
+        filled({ members: [{ address: "not:an:ip", port: "80", weight: 1 }] }),
+        new Set(),
+      ),
+    ).toHaveProperty("members.0.address");
+  });
+
   it("validates basics", () => {
     expect(validateStep(1, initialState(), new Set())).toMatchObject({
       name: expect.any(String),

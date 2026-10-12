@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { hostPort } from "@/lib/ip";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -54,7 +55,7 @@ export function describeRoute(r: RouteLike, labels: Labels): string {
 }
 
 function describeMember(m: Member): string {
-  return `${m.address}${m.port ? `:${m.port}` : ""} · weight ${m.weight ?? "—"} · ${m.admin_state ?? "enabled"}`;
+  return `${hostPort(m.address, m.port)} · weight ${m.weight ?? "—"} · ${m.admin_state ?? "enabled"}`;
 }
 
 function describePort(p: Port): string {
