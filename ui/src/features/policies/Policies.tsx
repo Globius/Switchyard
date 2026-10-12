@@ -13,6 +13,12 @@ import { Tip } from "@/components/ui/tooltip";
 import { useSaveOp } from "@/features/objects/save";
 import { emptyMatch, ExtraMatch } from "./MatchEditor";
 import { RULE_KIND_LABEL, RulePolicySheet, type RuleKind, type RulePolicy } from "./PolicyRules";
+import {
+  SECURITY_LABEL,
+  SecurityPolicySheet,
+  type SecurityKind,
+  type SecurityPolicy,
+} from "./SecurityPolicies";
 import { useDraft } from "@/features/shell/draft";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -20,8 +26,10 @@ import { cn } from "@/lib/utils";
 type Policy =
   | components["schemas"]["RedirectPolicySetRead"]
   | components["schemas"]["AllowListPolicySetRead"]
-  | RulePolicy;
-type Kind = "redirect" | "allow_list" | RuleKind;
+  | RulePolicy
+  | SecurityPolicy;
+type Kind = "redirect" | "allow_list" | RuleKind | SecurityKind;
+const SECURITY_KINDS: SecurityKind[] = ["access", "jwt", "client_cert", "waf", "protection"];
 type Rule = components["schemas"]["RedirectRule"];
 const CODES = [301, 302, 303, 307, 308] as const;
 const CODE_NAMES: Record<(typeof CODES)[number], string> = {
@@ -89,7 +97,7 @@ function useServices(tenant: string, cs?: string) {
   });
 }
 
-type ClassicPolicy = Exclude<Policy, RulePolicy>;
+type ClassicPolicy = Exclude<Policy, RulePolicy | SecurityPolicy>;
 
 function PolicySheet({
   tenant,
@@ -588,6 +596,24 @@ export function Policies({ tenant }: { tenant: string }) {
             </Button>
           </Tip>
           <Tip label={write.reason}>
+            <select
+              aria-label={t("New security policy")}
+              className="h-9 rounded-md border border-input bg-card px-3 text-sm"
+              disabled={!write.allowed}
+              value=""
+              onChange={(e) =>
+                e.target.value && setEditing({ policy: null, kind: e.target.value as Kind })
+              }
+            >
+              <option value="">{t("New security policy…")}</option>
+              {SECURITY_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {t(SECURITY_LABEL[k])}
+                </option>
+              ))}
+            </select>
+          </Tip>
+          <Tip label={write.reason}>
             <Button
               disabled={!write.allowed}
               onClick={() => setEditing({ policy: null, kind: "redirect" })}
@@ -613,6 +639,7 @@ export function Policies({ tenant }: { tenant: string }) {
                 "respond",
                 "error_pages",
                 "rate_limit",
+                ...SECURITY_KINDS,
               ] as const
             ).map((k) => (
               <button
@@ -628,7 +655,9 @@ export function Policies({ tenant }: { tenant: string }) {
                     ? t("Redirect")
                     : k === "allow_list"
                       ? t("Allow list")
-                      : t(RULE_KIND_LABEL[k])}
+                      : k in RULE_KIND_LABEL
+                        ? t(RULE_KIND_LABEL[k as RuleKind])
+                        : t(SECURITY_LABEL[k as SecurityKind])}
               </button>
             ))}
           </div>
@@ -659,9 +688,15 @@ export function Policies({ tenant }: { tenant: string }) {
                           ? t("Error pages · {n}", { n: p.pages.length })
                           : p.kind === "rate_limit"
                             ? t("Rate limit · {n} rules", { n: p.rules.length })
-                            : p.managed_by
-                              ? t("Allow list · managed")
-                              : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
+                            : p.kind === "access" ||
+                                p.kind === "jwt" ||
+                                p.kind === "client_cert" ||
+                                p.kind === "waf" ||
+                                p.kind === "protection"
+                              ? t(SECURITY_LABEL[p.kind])
+                              : p.managed_by
+                                ? t("Allow list · managed")
+                                : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
                 return (
                   <li key={p.id}>
                     <button
@@ -715,6 +750,20 @@ export function Policies({ tenant }: { tenant: string }) {
               onClose={() => setEditing(null)}
             />
           )}
+        {picked && SECURITY_KINDS.includes(picked.kind as SecurityKind) && (
+          <SecurityPolicySheet
+            key={
+              picked.policy
+                ? `${picked.policy.id}-${picked.policy.version}-${picked.policy.draft_status}`
+                : picked.kind
+            }
+            tenant={tenant}
+            policy={picked.policy as SecurityPolicy | null}
+            kind={picked.kind as SecurityKind}
+            usedBy={picked.policy ? usedBy(picked.policy.id) : []}
+            onClose={() => setEditing(null)}
+          />
+        )}
         {picked && (picked.kind === "redirect" || picked.kind === "allow_list") && (
           <PolicySheet
             key={

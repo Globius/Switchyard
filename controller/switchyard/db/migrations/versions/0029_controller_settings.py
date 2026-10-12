@@ -3,16 +3,16 @@
 - ``controller_settings``: the public URL and the change waiting for confirmation.
 - ``certificate.challenge`` may now be ``tls-alpn-01``.
 
-Revision ID: 0033
-Revises: 0032
+Revision ID: 0029
+Revises: 0028
 """
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "0033"
-down_revision = "0032"
+revision = "0029"
+down_revision = "0028"
 branch_labels = None
 depends_on = None
 

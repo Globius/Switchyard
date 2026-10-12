@@ -1035,3 +1035,103 @@ describe("rate limit policies", () => {
     expect(rule).not.toHaveProperty("deny_status");
   });
 });
+
+describe("security policies", () => {
+  async function open(kind: string) {
+    renderAt("/t/acme/policies");
+    const sel = await screen.findByLabelText("New security policy");
+    await waitFor(() => expect(sel).toBeEnabled());
+    await userEvent.selectOptions(sel, kind);
+    return screen.findByLabelText("Name");
+  }
+
+  it("creates a login policy with a group rule and no secrets typed", async () => {
+    await userEvent.type(await open("access"), "staff-login");
+    await userEvent.type(screen.getByLabelText("Issuer URL"), "https://idp.example.test");
+    await userEvent.type(screen.getByLabelText("Client ID"), "sy");
+    await userEvent.type(screen.getByLabelText("Client secret reference"), "kv/sy/oidc");
+    await userEvent.type(screen.getByLabelText("Cookie secret reference"), "kv/sy/cookie");
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 mode"), "groups");
+    await userEvent.type(screen.getByRole("combobox", { name: "Rule 1 groups" }), "staff,");
+    await userEvent.clear(screen.getByLabelText("Header for token"));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "access",
+      name: "staff-login",
+      oidc: { issuer: "https://idp.example.test", client_secret_ref: "kv/sy/oidc" },
+      identity_headers: { token: null, user: "X-Auth-User" },
+      rules: [{ mode: "groups", groups: ["staff"], match: {} }],
+    });
+  });
+
+  it("creates a JWT policy from a public key", async () => {
+    await userEvent.type(await open("jwt"), "api-jwt");
+    await userEvent.type(screen.getByLabelText("Rule 1 issuer"), "https://idp.example.test");
+    await userEvent.type(screen.getByLabelText("Rule 1 key 1 kid"), "k1");
+    await userEvent.type(screen.getByLabelText("Rule 1 key 1 public key"), "PEM");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "jwt",
+      rules: [
+        {
+          issuer: "https://idp.example.test",
+          leeway_s: 30,
+          keys: [{ kid: "k1", alg: "RS256", public_key_pem: "PEM" }],
+        },
+      ],
+    });
+  });
+
+  it("creates a client certificate policy with a known certificate", async () => {
+    await userEvent.type(await open("client_cert"), "cert-id");
+    await userEvent.click(screen.getByRole("button", { name: "Add certificate" }));
+    await userEvent.type(screen.getByLabelText("Identity 1 value"), "sam");
+    await userEvent.type(screen.getByLabelText("Identity 1 user"), "sam.o");
+    await userEvent.type(screen.getByRole("combobox", { name: "Identity 1 groups" }), "ops,dev,");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 mode"), "identity");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "client_cert",
+      identities: [{ by: "cn", value: "sam", user: "sam.o", groups: ["ops", "dev"] }],
+      rules: [{ mode: "identity" }],
+    });
+  });
+
+  it("creates a WAF policy in detect mode with disabled rules and excluded paths", async () => {
+    await userEvent.type(await open("waf"), "shop-waf");
+    expect(screen.getByLabelText("WAF mode")).toHaveValue("detect");
+    await userEvent.selectOptions(screen.getByLabelText("Paranoia level"), "2");
+    await userEvent.type(screen.getByRole("combobox", { name: "Disabled rule IDs" }), "942100,");
+    await userEvent.type(screen.getByRole("combobox", { name: "Paths not inspected" }), "/health,");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "waf",
+      mode: "detect",
+      fail_mode: "open",
+      paranoia_level: 2,
+      disabled_rule_ids: [942100],
+      excluded_paths: ["/health"],
+    });
+  });
+
+  it("creates a protection policy with connection limits and exempt networks", async () => {
+    await userEvent.type(await open("protection"), "guard");
+    await userEvent.type(screen.getByLabelText("Connections per source"), "50");
+    await userEvent.click(screen.getByRole("switch", { name: "Refuse known scanners" }));
+    await userEvent.type(screen.getByLabelText("Exempt networks"), "10.0.0.0/8");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "protection",
+      max_connections_per_source: 50,
+      block_scanners: true,
+      exempt_cidrs: ["10.0.0.0/8"],
+      bot_action: "deny",
+    });
+  });
+});

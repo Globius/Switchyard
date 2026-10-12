@@ -405,3 +405,15 @@ Typed from `ControllerRead`, `ControllerChangeIn` and the confirm and revert cal
 | P4 traffic | Port flags **HTTP/3** (needs TLS and HTTP/2) and **TLS passthrough**; **Compression** card (algorithms and content types, HTTP services); **weighted pool routes** (Pool, Split with weights and percentages, Redirect); SE group **persistence peers** (switch, port, engine name and backend-network address rows); pool **backend protocol** (HTTP/1.1, HTTP/2 over TLS, HTTP/2 without TLS) and **idle tunnel timeout**. | Split percentages next to weights; peers: could name and address come from the engine list? (engines have no backend-network address on the read yet). |
 | P4 failover and cache | **Priority groups**: a pool route has "If it is down, try…" fallback pools (up to three, each needs a health monitor); **Response cache** card (memory, largest object, longest age); **timed drain**: a draining pool member can have a "Disable after (s)". | Where fallback pools sit in the route row; the cache memory quota is checked by the API per SE group. |
 | P3 login, P8 and P9 identity, P10 WAF | Not built: the backend branches conflict with each other in the renderer and are being reconciled; the forms follow once the API tree is stable. | |
+
+## Parity blocks P8, P9, P10 and bot protection (no artboards; Design to specify or confirm)
+
+| Kind | What was built | Design questions |
+| --- | --- | --- |
+| Login (`access`, ADR 0130 to 0132) | OpenID Connect settings (issuer, client ID, **OpenBao paths** for the client and cookie secrets, never the secret), groups claim, scopes, cookie lifetimes; default mode; login path; identity headers (empty turns one off); rules by match with Public, any user, group, or email domain. | How a secret path is chosen or created; a link to the Identity providers screen. |
+| JWT tokens (ADR 0135) | Rules with issuer, audiences, required scopes, leeway, subject header and **public** signing keys (kid, algorithm, PEM). | A JWKS upload that converts in the browser (today: `syctl jwks convert`). |
+| Client certificate (ADR 0136) | User and groups headers; known certificates (common name or SHA-1, user, groups); rules (any valid certificate, a known one, a known one in a group). | Bulk import of certificates (the API allows 500). |
+| WAF (ADR 0140) | Mode (starts in Detect), fail open or closed, paranoia level, thresholds, time limit, body inspection, disabled rule IDs, paths not inspected. | A rule browser; a link from detected events to Request logs. |
+| Bot and DDoS protection (ADR 0150) | Connections per source, new connections per period, header and client timeouts, empty User-Agent and scanners, extra User-Agent text, bot action, exempt networks. | Defaults and warnings for low limits. |
+
+Created from the "New security policy…" menu on the Policies screen.
