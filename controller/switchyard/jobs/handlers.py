@@ -38,6 +38,7 @@ from switchyard.services.infra import (
     DeployRequest,
     InfraService,
 )
+from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
 
@@ -58,6 +59,7 @@ def build_handlers(
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
     controller: ControllerSettings | None = None,
+    kubernetes: KubernetesClusters | None = None,
     members: MemberService | None = None,
     discovery: DiscoveryService | None = None,
     alerts: AlertEvaluator | None = None,
@@ -70,6 +72,8 @@ def build_handlers(
         members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
+        kubernetes: Syncs the tenants' Kubernetes clusters; ``None`` skips the ``kubernetes_sync``
+            kind.
         controller: Checks controller settings changes that wait for confirmation; ``None`` skips
             the ``controller_tick`` kind.
         alerts: The alert evaluator; ``None`` skips the ``evaluate_alerts`` kind.
@@ -101,6 +105,12 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}
+    if kubernetes is not None:
+
+        async def kubernetes_sync(job: Job) -> dict[str, Any]:
+            return {"clusters": await kubernetes.sync_all()}
+
+        handlers[KUBERNETES_SYNC_JOB] = kubernetes_sync
     if controller is not None:
 
         async def controller_tick(job: Job) -> dict[str, Any]:

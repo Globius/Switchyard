@@ -108,6 +108,10 @@ from switchyard.api.schemas import (
     IssueCheckRead,
     JobAccepted,
     JobRead,
+    KubernetesClusterIn,
+    KubernetesClusterPatch,
+    KubernetesClusterRead,
+    KubernetesTestRead,
     Me,
     MemberStateIn,
     MemberStateResult,
@@ -202,6 +206,7 @@ from switchyard.services.identity_providers import (
 from switchyard.services.importers import AviImportService
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.jobs import JobService
+from switchyard.services.kubernetes import KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.probes import MonitorTestService
 from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
@@ -260,6 +265,7 @@ class ApiServices:
     dns_providers: DnsProviders | None = None
     controller: ControllerSettings = None  # type: ignore[assignment]
     avi_import: AviImportService = None  # type: ignore[assignment]
+    kubernetes: KubernetesClusters | None = None
 
 
 def build_services(
@@ -329,6 +335,9 @@ def build_services(
         dns_providers=DnsProviders(db, secrets) if writer is not None else None,
         controller=ControllerSettings(db, ChangeSetService(db)),
         avi_import=AviImportService(db, ChangeSetService(db), certs),
+        kubernetes=KubernetesClusters(db, secrets, ChangeSetService(db))
+        if writer is not None
+        else None,
     )
 
 
@@ -3572,6 +3581,142 @@ def create_app(
         Always answers `200`; `ok: false` carries the reason. A success sets `account_registered`.
         """
         return asdict(await require_acme(svc).test(who, provider, request_id=_rid()))
+
+    def require_k8s(svc: ApiServices) -> KubernetesClusters:
+        if svc.kubernetes is None:
+            raise ApiError(503, "Kubernetes clusters need a writable secrets backend (OpenBao)")
+        return svc.kubernetes
+
+    @router.get(
+        "/tenants/{t}/kubernetes-clusters",
+        tags=["kubernetes"],
+        summary="List the tenant's Kubernetes clusters",
+        response_model=list[KubernetesClusterRead],
+        responses=_ok([ex.KUBERNETES_CLUSTER]),
+    )
+    async def list_kubernetes_clusters(
+        tenant: Tenant, who: Who, svc: Services
+    ) -> list[dict[str, Any]]:
+        """Connected clusters by name, with the last sync result. The token is never shown."""
+        return [asdict(c) for c in await require_k8s(svc).list_clusters(who, tenant.id)]
+
+    @router.post(
+        "/tenants/{t}/kubernetes-clusters",
+        status_code=201,
+        tags=["kubernetes"],
+        summary="Connect a Kubernetes cluster",
+        response_model=KubernetesClusterRead,
+        responses=_ok(ex.KUBERNETES_CLUSTER, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_kubernetes_cluster(
+        body: KubernetesClusterIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Connect a cluster.
+
+        Services of type `LoadBalancer` with the cluster's class and Gateways with its gateway
+        class become virtual services. The token is stored in the secrets backend; run the test
+        to check access.
+        """
+        view = await require_k8s(svc).create(who, tenant.id, request_id=_rid(), **body.model_dump())
+        return asdict(view)
+
+    @router.get(
+        "/tenants/{t}/kubernetes-clusters/{cluster}",
+        tags=["kubernetes"],
+        summary="Get a Kubernetes cluster",
+        response_model=KubernetesClusterRead,
+        responses=_ok(ex.KUBERNETES_CLUSTER, headers=ETAG_HEADER),
+    )
+    async def get_kubernetes_cluster(
+        cluster: UUID, tenant: Tenant, response: Response, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """One cluster with its version in the `ETag`."""
+        view = await require_k8s(svc).get(who, tenant.id, cluster)
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.patch(
+        "/tenants/{t}/kubernetes-clusters/{cluster}",
+        tags=["kubernetes"],
+        summary="Change a Kubernetes cluster",
+        response_model=KubernetesClusterRead,
+        responses=_ok(ex.KUBERNETES_CLUSTER) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def patch_kubernetes_cluster(
+        cluster: UUID,
+        body: KubernetesClusterPatch,
+        tenant: Tenant,
+        response: Response,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Change settings or replace the token; omitted fields stay."""
+        require(who, "manage", "kubernetes_cluster")
+        view = await require_k8s(svc).update(
+            who,
+            tenant.id,
+            cluster,
+            expected_version=_if_match(if_match),
+            request_id=_rid(),
+            **body.model_dump(exclude_unset=True),
+        )
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.delete(
+        "/tenants/{t}/kubernetes-clusters/{cluster}",
+        status_code=204,
+        tags=["kubernetes"],
+        summary="Disconnect a Kubernetes cluster",
+        responses=IF_MATCH_RESPONSES,
+    )
+    async def delete_kubernetes_cluster(
+        cluster: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Forget the cluster; the objects it created stay until you delete them."""
+        require(who, "manage", "kubernetes_cluster")
+        await require_k8s(svc).delete(
+            who, tenant.id, cluster, expected_version=_if_match(if_match), request_id=_rid()
+        )
+        return Response(status_code=204)
+
+    @router.post(
+        "/tenants/{t}/kubernetes-clusters/{cluster}/test",
+        tags=["kubernetes"],
+        summary="Test a Kubernetes cluster connection",
+        response_model=KubernetesTestRead,
+        responses=_ok(ex.KUBERNETES_TEST),
+    )
+    async def test_kubernetes_cluster(
+        cluster: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Reach the API server, count nodes and services and check what the token may do.
+
+        Always answers `200`; `ok: false` lists the problems.
+        """
+        return asdict(await require_k8s(svc).test(who, tenant.id, cluster, request_id=_rid()))
+
+    @router.post(
+        "/tenants/{t}/kubernetes-clusters/{cluster}/sync",
+        status_code=202,
+        tags=["kubernetes"],
+        summary="Sync a Kubernetes cluster now",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202),
+    )
+    async def sync_kubernetes_cluster(
+        cluster: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Queue a sync of every cluster of the platform; the sync also runs every 30 seconds."""
+        require(who, "manage", "kubernetes_cluster")
+        await require_k8s(svc).get(who, tenant.id, cluster)
+        job = await require_k8s(svc).request_sync(who, tenant.id, request_id=_rid())
+        return {"job_id": str(job)}
 
     @router.get(
         "/dns-provider-types",

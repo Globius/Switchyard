@@ -1171,3 +1171,42 @@ AVI_IMPORT = {
         }
     ],
 }
+
+
+KUBERNETES_CLUSTER = {
+    "id": "0192f1a2-0000-7000-8000-00000000b701",
+    "name": "prod",
+    "api_url": "https://k8s.example.test:6443",
+    "ca_set": True,
+    "se_group": "edge",
+    "vip_pool": "main",
+    "mode": "nodeport",
+    "class_name": "switchyard.io/lb",
+    "gateway_class": "switchyard",
+    "enabled": True,
+    "waiting_for_change_set": None,
+    "last_sync_at": "2026-10-12T05:00:00Z",
+    "last_sync_ok": True,
+    "last_sync_error": None,
+    "last_sync": {
+        "planned_services": 3,
+        "planned_pools": 3,
+        "created": 1,
+        "updated": 0,
+        "deleted": 0,
+        "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+        "addresses_written": 2,
+        "notes": [],
+    },
+    "version": 2,
+}
+KUBERNETES_TEST = {
+    "ok": True,
+    "detail": "reachable, with the access the connector needs",
+    "version": "v1.31.2",
+    "nodes": 3,
+    "services": 42,
+    "gateway_api": True,
+    "permissions": {"list nodes": True, "list services": True, "patch services/status": True},
+    "problems": [],
+}

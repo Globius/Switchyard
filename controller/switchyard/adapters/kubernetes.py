@@ -249,6 +249,11 @@ class FakeKube:
         """Record the address."""
         self._check("status")
         self.statuses[(namespace, name)] = address
+        for item in self.service_list:
+            meta = item["metadata"]
+            if (meta["namespace"], meta["name"]) == (namespace, name):
+                ingress = [{"ip": address}] if address else []
+                item["status"] = {"loadBalancer": {"ingress": ingress}}
 
     async def can(self, verb: str, resource: str, group: str = "", subresource: str = "") -> bool:
         """Allowed unless listed in ``denied``."""

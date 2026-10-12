@@ -11,13 +11,14 @@ A pure function over the JSON the API server returns. It reads:
   hostname and match, pools per backend Service port. An HTTPS listener needs the annotation
   ``switchyard.io/certificate: <certificate name>``; Secrets are never read.
 
-Everything it plans is named ``k8s-<cluster>-...``, which is how the connector recognises (and may
+Everything it plans is named ``k8s-<cluster>--...`` (two dashes, so that the cluster ``prod`` never
+claims what the cluster ``prod-2`` owns), which is how the connector recognises (and may
 delete) what it created. Anything it cannot map becomes a finding.
 
 Example:
-    >>> object_name("k8s-prod-", "web", "frontend", "443")
-    'k8s-prod-web-frontend-443'
-    >>> len(object_name("k8s-prod-", "n" * 40, "s" * 40, "80")) <= 63
+    >>> object_name("k8s-prod--", "web", "frontend", "443")
+    'k8s-prod--web-frontend-443'
+    >>> len(object_name("k8s-prod--", "n" * 40, "s" * 40, "80")) <= 63
     True
 """
 
@@ -51,7 +52,7 @@ class ClusterSpec:
     @property
     def prefix(self) -> str:
         """Prefix of every object name the connector owns."""
-        return f"k8s-{self.name}-"
+        return f"k8s-{self.name}--"
 
 
 @dataclass

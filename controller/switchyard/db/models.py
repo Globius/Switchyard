@@ -34,6 +34,7 @@ from switchyard.db import (
     acme_models,  # noqa: F401  (registers the ACME and DNS provider tables)
     alert_models,  # noqa: F401  (registers the alerting tables)
     auth_models,  # noqa: F401  (registers the login tables)
+    k8s_models,  # noqa: F401  (registers the Kubernetes cluster table)
     ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
 )
 from switchyard.db.base import (

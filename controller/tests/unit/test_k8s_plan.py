@@ -46,17 +46,17 @@ def test_only_services_of_our_class_and_type_are_planned() -> None:
 
 def test_nodeport_mode_pools_hold_the_ready_nodes_at_the_nodeport() -> None:
     result = plan(ClusterSpec("prod"), NODES, [WEB], SLICES)
-    assert result.pools["k8s-prod-shop-web-80"].members == [
+    assert result.pools["k8s-prod--shop-web-80"].members == [
         ("10.0.0.1", 30080),
         ("10.0.0.2", 30080),
     ]
-    svc = result.services["k8s-prod-shop-web-80"]
+    svc = result.services["k8s-prod--shop-web-80"]
     assert (svc.protocol, svc.ports, svc.default_pool) == (
         "tcp",
         [{"port": 80}],
-        "k8s-prod-shop-web-80",
+        "k8s-prod--shop-web-80",
     )
-    assert result.services["k8s-prod-shop-web-53"].protocol == "udp"
+    assert result.services["k8s-prod--shop-web-53"].protocol == "udp"
     assert {s.vip_key for s in result.services.values()} == {"svc/shop/web"}, "one VIP per Service"
     assert result.status_targets == {"svc/shop/web": ("shop", "web")}
     assert any("SCTP is not supported" in n for n in notes(result))
@@ -65,7 +65,7 @@ def test_nodeport_mode_pools_hold_the_ready_nodes_at_the_nodeport() -> None:
 def test_the_local_traffic_policy_keeps_only_nodes_that_host_endpoints() -> None:
     local = service("shop", "web", WEB["spec"]["ports"][:1], policy="Local")
     result = plan(ClusterSpec("prod"), NODES, [local], SLICES)
-    assert result.pools["k8s-prod-shop-web-80"].members == [
+    assert result.pools["k8s-prod--shop-web-80"].members == [
         ("10.0.0.1", 30080),
         ("10.0.0.2", 30080),
     ]
@@ -73,14 +73,17 @@ def test_the_local_traffic_policy_keeps_only_nodes_that_host_endpoints() -> None
         endpoint_slice("shop", "web", [{"name": "http", "port": 8080}], [("10.1.0.6", "n2", True)])
     ]
     result = plan(ClusterSpec("prod"), NODES, [local], only_n2)
-    assert result.pools["k8s-prod-shop-web-80"].members == [("10.0.0.2", 30080)]
+    assert result.pools["k8s-prod--shop-web-80"].members == [("10.0.0.2", 30080)]
 
 
 def test_pods_mode_uses_ready_endpoints_and_resolves_named_target_ports() -> None:
     result = plan(ClusterSpec("prod", mode="pods"), NODES, [WEB], SLICES)
-    assert result.pools["k8s-prod-shop-web-80"].members == [("10.1.0.5", 8080), ("10.1.0.6", 8080)]
-    assert result.pools["k8s-prod-shop-web-443"].members == [("10.1.0.5", 8443), ("10.1.0.6", 8443)]
-    assert result.pools["k8s-prod-shop-web-53"].members == [("10.1.0.5", 5353), ("10.1.0.6", 5353)]
+    assert result.pools["k8s-prod--shop-web-80"].members == [("10.1.0.5", 8080), ("10.1.0.6", 8080)]
+    assert result.pools["k8s-prod--shop-web-443"].members == [
+        ("10.1.0.5", 8443),
+        ("10.1.0.6", 8443),
+    ]
+    assert result.pools["k8s-prod--shop-web-53"].members == [("10.1.0.5", 5353), ("10.1.0.6", 5353)]
 
 
 def test_a_service_without_a_nodeport_is_explained_in_nodeport_mode() -> None:
@@ -92,7 +95,7 @@ def test_a_service_without_a_nodeport_is_explained_in_nodeport_mode() -> None:
 
 def test_an_empty_pool_is_planned_and_flagged() -> None:
     result = plan(ClusterSpec("prod", mode="pods"), NODES, [WEB], [])
-    assert result.pools["k8s-prod-shop-web-80"].members == []
+    assert result.pools["k8s-prod--shop-web-80"].members == []
     assert any("no ready backend" in n for n in notes(result))
 
 
@@ -131,15 +134,15 @@ def test_gateway_and_routes_become_one_http_service_with_ordered_routes() -> Non
         )
     ]
     result = plan(ClusterSpec("prod"), NODES, [BACKEND], [], [GATEWAY], routes)
-    svc = result.services["k8s-prod-gw-infra-edge"]
+    svc = result.services["k8s-prod--gw-infra-edge"]
     assert svc.protocol == "http" and svc.ports == [{"port": 80}] and svc.vip_key == "gw/infra/edge"
     assert [r["match"] for r in svc.routes] == [
         {"path_exact": "/health", "host": "shop.example.test"},
         {"path_prefix": "/api", "host": "shop.example.test"},
         {"path_prefix": "/", "host": "shop.example.test"},
     ]
-    assert svc.routes[0]["pool"] == "k8s-prod-gw-shop-web-80"
-    assert result.pools["k8s-prod-gw-shop-web-80"].members == [
+    assert svc.routes[0]["pool"] == "k8s-prod--gw-shop-web-80"
+    assert result.pools["k8s-prod--gw-shop-web-80"].members == [
         ("10.0.0.1", 30080),
         ("10.0.0.2", 30080),
     ]
@@ -195,10 +198,10 @@ def test_https_listeners_need_the_certificate_annotation_and_odd_matches_are_fla
         parent_namespace="infra",
     )
     first = plan(ClusterSpec("prod"), NODES, [BACKEND], [], [no_cert], [route])
-    assert first.services["k8s-prod-gw-infra-edge"].ports == [{"port": 80}]
+    assert first.services["k8s-prod--gw-infra-edge"].ports == [{"port": 80}]
     assert any("needs the annotation" in n for n in notes(first))
     second = plan(ClusterSpec("prod"), NODES, [BACKEND], [], [with_cert], [route])
-    svc = second.services["k8s-prod-gw-infra-edge"]
+    svc = second.services["k8s-prod--gw-infra-edge"]
     assert (
         svc.ports == [{"port": 443, "tls": True}, {"port": 80}] and svc.certificate == "shop-cert"
     )
@@ -215,7 +218,7 @@ def test_https_listeners_need_the_certificate_annotation_and_odd_matches_are_fla
 
 
 def test_names_stay_valid_and_unique_when_long() -> None:
-    a = object_name("k8s-prod-", "n" * 50, "s" * 50, "80")
-    b = object_name("k8s-prod-", "n" * 50, "s" * 50, "81")
+    a = object_name("k8s-prod--", "n" * 50, "s" * 50, "80")
+    b = object_name("k8s-prod--", "n" * 50, "s" * 50, "81")
     assert len(a) <= 63 and len(b) <= 63 and a != b
-    assert object_name("k8s-p-", "Shop", "web.v2", "80") == "k8s-p-shop-web-v2-80"
+    assert object_name("k8s-p--", "Shop", "web.v2", "80") == "k8s-p--shop-web-v2-80"

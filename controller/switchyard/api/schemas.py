@@ -561,6 +561,7 @@ PermissionObject = Literal[
     "infrastructure",
     "job",
     "job_own",
+    "kubernetes_cluster",
     "member",
     "quota",
     "require_approval",
@@ -2275,3 +2276,95 @@ class AviImportRead(ApiModel):
     objects: list[AviMappedRead]
     vips: list[AviVipRead]
     findings: list[AviFindingRead]
+
+
+# -- Kubernetes clusters (ADR 0151) ---------------------------------------------------------------
+
+
+class KubernetesClusterIn(ApiModel):
+    """Connect a Kubernetes cluster."""
+
+    name: str
+    api_url: str = Field(description="`https://host:port` of the API server.")
+    token: str = Field(
+        description="A service-account token with the access in docs/kubernetes.md. Write-only."
+    )
+    se_group: str = Field(description="Name of the SE group the services use.")
+    vip_pool: str = Field(description="Name of the VIP pool addresses are taken from.")
+    ca_pem: str | None = Field(default=None, description="PEM of the API server's CA, if private.")
+    mode: Literal["nodeport", "pods"] = Field(
+        default="nodeport",
+        description="`nodeport`: pools hold the ready nodes at the NodePort. `pods`: pools hold "
+        "the ready endpoints (the SEs must reach the pod network).",
+    )
+    class_name: str = Field(
+        default="switchyard.io/lb", description="`loadBalancerClass` of the Services that are ours."
+    )
+    gateway_class: str = Field(
+        default="switchyard", description="`gatewayClassName` of the Gateways that are ours."
+    )
+    enabled: bool = True
+
+
+class KubernetesClusterPatch(ApiModel):
+    """Change a cluster; send only what changes."""
+
+    api_url: str | None = None
+    token: str | None = Field(default=None, description="Replaces the stored token.")
+    ca_pem: str | None = None
+    se_group: str | None = None
+    vip_pool: str | None = None
+    mode: Literal["nodeport", "pods"] | None = None
+    class_name: str | None = None
+    gateway_class: str | None = None
+    enabled: bool | None = None
+
+
+class KubernetesSyncRead(ApiModel):
+    """The result of the last sync."""
+
+    planned_services: int | None = None
+    planned_pools: int | None = None
+    created: int | None = None
+    updated: int | None = None
+    deleted: int | None = None
+    change_set_id: UUID | None = None
+    addresses_written: int | None = None
+    skipped: str | None = None
+    notes: list[str] | None = None
+
+
+class KubernetesClusterRead(ApiModel):
+    """A connected cluster (never the token)."""
+
+    id: UUID
+    name: str
+    api_url: str
+    ca_set: bool
+    se_group: str
+    vip_pool: str
+    mode: Literal["nodeport", "pods"]
+    class_name: str
+    gateway_class: str
+    enabled: bool
+    waiting_for_change_set: UUID | None = Field(
+        description="The sync waits for this change set to finish before it plans again."
+    )
+    last_sync_at: datetime | None
+    last_sync_ok: bool | None
+    last_sync_error: str | None
+    last_sync: KubernetesSyncRead | None
+    version: int
+
+
+class KubernetesTestRead(ApiModel):
+    """What a connection test found."""
+
+    ok: bool
+    detail: str
+    version: str | None
+    nodes: int | None
+    services: int | None
+    gateway_api: bool | None = Field(description="The Gateway API CRDs are installed.")
+    permissions: dict[str, bool]
+    problems: list[str]

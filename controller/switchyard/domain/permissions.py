@@ -147,6 +147,13 @@ MATRIX: tuple[Permission, ...] = (
     _p(
         13,
         "manage",
+        "kubernetes_cluster",
+        T,
+        "Connect, change, test and remove the tenant's Kubernetes clusters.",
+    ),
+    _p(
+        13,
+        "manage",
         "dns_provider",
         T,
         "Add, change, test and remove the tenant's DNS credentials.",
