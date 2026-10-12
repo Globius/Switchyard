@@ -20,7 +20,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from switchyard.adapters.acme import AcmeError, AcmeIssuer
+from switchyard.adapters.acme import AcmeError, Dns01Solver, Http01Solver, HttpPublisher, Solver
 from switchyard.adapters.cloudflare import Cloudflare, CloudflareError
 from switchyard.adapters.secrets import SecretBackendError, SecretsReader, SecretsWriter
 from switchyard.db import audit_log
@@ -33,6 +33,7 @@ from switchyard.domain.snapshot import Snapshot
 from switchyard.domain.workflow import Role
 from switchyard.ids import uuid7
 from switchyard.jobs import queue
+from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.certs import (
     CertificateError,
     CertInfo,
@@ -45,6 +46,7 @@ from switchyard.services.certs import (
 )
 from switchyard.services.changesets import ChangeSetService, require
 from switchyard.services.context import Databases, Principal
+from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.errors import FieldErrors, NotFoundError, PermissionDeniedError
 
 log = logging.getLogger("switchyard.certificates")
@@ -70,6 +72,21 @@ def _system(tenant_id: UUID) -> Principal:
     return Principal("system:certs", Role.OPERATOR, frozenset({tenant_id}))
 
 
+@dataclass(frozen=True)
+class IssueSettings:
+    """How an ACME certificate is obtained and renewed.
+
+    Attributes:
+        acme_provider: Provider name; the default provider when ``None``.
+        challenge: ``dns-01`` or ``http-01``.
+        dns_provider: DNS credential name; chosen by zone when ``None`` (``dns-01`` only).
+    """
+
+    acme_provider: str | None = None
+    challenge: dm.AcmeChallenge = dm.AcmeChallenge.DNS01
+    dns_provider: str | None = None
+
+
 class CertificateJobs:
     """Queues certificate jobs (the API side, which holds no issuer credentials)."""
 
@@ -85,9 +102,16 @@ class CertificateJobs:
         name: str,
         source: dm.CertSource,
         sans: tuple[str, ...],
+        acme_provider: str | None = None,
+        challenge: dm.AcmeChallenge | None = None,
+        dns_provider: str | None = None,
         request_id: str | None = None,
     ) -> UUID:
-        """Queue issuance (or reissue) of a certificate and return the job id."""
+        """Queue issuance (or reissue) of a certificate and return the job id.
+
+        ``acme_provider``, ``challenge`` and ``dns_provider`` only apply to ``acme`` certificates;
+        what is left out is taken from the existing certificate, then from the defaults.
+        """
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
         require(principal, "manage", "certificate")
@@ -100,6 +124,9 @@ class CertificateJobs:
                     "name": name,
                     "source": source.value,
                     "sans": list(sans),
+                    "acme_provider": acme_provider,
+                    "challenge": challenge.value if challenge else None,
+                    "dns_provider": dns_provider,
                 },
                 tenant_id=tenant_id,
                 max_attempts=2,
@@ -129,6 +156,9 @@ class CertificateJobs:
             name=cert.name,
             source=cert.source,
             sans=cert.sans,
+            acme_provider=cert.acme_provider,
+            challenge=cert.challenge,
+            dns_provider=cert.dns_provider,
             request_id=request_id,
         )
 
@@ -143,14 +173,32 @@ class CertificateService:
         change_sets: ChangeSetService,
         *,
         cloudflare: Cloudflare | None = None,
-        acme: AcmeIssuer | None = None,
+        acme_providers: AcmeProviders | None = None,
+        dns_providers: DnsProviders | None = None,
+        http_publisher: HttpPublisher | None = None,
+        dns_wait_s: float = 15.0,
     ) -> None:
-        """Create the service; issuers are optional and checked when used."""
+        """Create the service; issuers are optional and checked when used.
+
+        Args:
+            db: Database access.
+            secrets: Backend for key material.
+            change_sets: Change set service for the automated writes.
+            cloudflare: The deployment-wide Cloudflare client (Origin CA, IP ranges, and DNS-01
+                for tenants that have no DNS credential of their own).
+            acme_providers: The ACME providers.
+            dns_providers: The tenants' DNS credentials.
+            http_publisher: Makes the engines answer HTTP-01 challenges.
+            dns_wait_s: Pause after publishing DNS records.
+        """
         self._db = db
         self._secrets = secrets
         self._change_sets = change_sets
         self._cloudflare = cloudflare
-        self._acme = acme
+        self._acme_providers = acme_providers
+        self._dns_providers = dns_providers
+        self._http_publisher = http_publisher
+        self._dns_wait = dns_wait_s
 
     # -- storing material -------------------------------------------------------------------------
 
@@ -173,14 +221,26 @@ class CertificateService:
         return Issued(info, ref)
 
     @staticmethod
-    def _body(issued: Issued, source: dm.CertSource, renew: dm.RenewPolicy) -> dict[str, Any]:
-        return {
+    def _body(
+        issued: Issued,
+        source: dm.CertSource,
+        renew: dm.RenewPolicy,
+        how: "IssueSettings | None" = None,
+    ) -> dict[str, Any]:
+        body: dict[str, Any] = {
             "source": source.value,
             "sans": list(issued.info.sans),
             "not_after": issued.info.not_after.isoformat(),
             "secret_ref": issued.secret_ref,
             "renew_policy": renew.value,
         }
+        if source is dm.CertSource.ACME and how is not None:
+            body |= {
+                "acme_provider": how.acme_provider,
+                "challenge": how.challenge.value,
+                "dns_provider": how.dns_provider,
+            }
+        return body
 
     async def import_pem(
         self, principal: Principal, tenant_id: UUID, name: str, pem: str
@@ -326,13 +386,42 @@ class CertificateService:
 
     # -- issuing ----------------------------------------------------------------------------------
 
-    async def _obtain(self, source: dm.CertSource, sans: tuple[str, ...]) -> str:
+    async def _acme_chain(
+        self, tenant_id: UUID, csr_pem: str, how: IssueSettings, sans: tuple[str, ...]
+    ) -> str:
+        if self._acme_providers is None:
+            raise CertificateError("ACME is not configured")
+        resolver = None
+        solver: Solver
+        if how.challenge is dm.AcmeChallenge.HTTP01:
+            if self._http_publisher is None:
+                raise CertificateError("HTTP-01 is not configured")
+            if any(name.startswith("*.") for name in sans):
+                raise CertificateError("HTTP-01 cannot validate wildcard names; use DNS-01")
+            solver = Http01Solver(self._http_publisher)
+        else:
+            if self._dns_providers is None:
+                raise CertificateError("DNS-01 needs DNS credentials, which are not configured")
+            resolver = self._dns_providers.resolver(tenant_id, how.dns_provider, self._cloudflare)
+            solver = Dns01Solver(resolver.resolve, wait_s=self._dns_wait)
+        try:
+            issuer = await self._acme_providers.issuer(how.acme_provider, solver)
+            return await issuer.issue(csr_pem)
+        finally:
+            if resolver is not None:
+                await resolver.close()
+
+    async def _obtain(
+        self,
+        tenant_id: UUID,
+        source: dm.CertSource,
+        sans: tuple[str, ...],
+        how: IssueSettings,
+    ) -> str:
         key_pem, csr_pem = generate_key_and_csr(sans)
         try:
             if source is dm.CertSource.ACME:
-                if self._acme is None:
-                    raise CertificateError("ACME is not configured")
-                return await self._acme.issue(csr_pem) + key_pem
+                return await self._acme_chain(tenant_id, csr_pem, how, sans) + key_pem
             if source is dm.CertSource.CLOUDFLARE_ORIGIN:
                 if self._cloudflare is None:
                     raise CertificateError("Cloudflare is not configured")
@@ -366,6 +455,9 @@ class CertificateService:
         sans: tuple[str, ...],
         *,
         renew: dm.RenewPolicy = dm.RenewPolicy.AUTO,
+        acme_provider: str | None = None,
+        challenge: dm.AcmeChallenge | None = None,
+        dns_provider: str | None = None,
     ) -> UUID:
         """Obtain a certificate and create or update the ``certificate`` object.
 
@@ -375,12 +467,18 @@ class CertificateService:
         Raises:
             CertificateError: If issuance or storing fails (nothing is changed).
         """
-        pem = await self._obtain(source, sans)
-        issued = await self._store(tenant_id, name, pem)
         existing = next(
             (c for c in (await self._snapshot(tenant_id)).certificates if c.name == name), None
         )
-        body = self._body(issued, source, renew)
+        # what the caller leaves out comes from the existing certificate, then the defaults
+        how = IssueSettings(
+            acme_provider or (existing.acme_provider if existing else None),
+            challenge or (existing.challenge if existing else None) or dm.AcmeChallenge.DNS01,
+            dns_provider or (existing.dns_provider if existing else None),
+        )
+        pem = await self._obtain(tenant_id, source, sans, how)
+        issued = await self._store(tenant_id, name, pem)
+        body = self._body(issued, source, renew, how)
         if existing is None:
             op = ChangeOp(
                 object_type=ObjectType.CERTIFICATE,
@@ -420,7 +518,15 @@ class CertificateService:
                 if not due:
                     continue
                 try:
-                    await self.issue(tenant_id, cert.name, cert.source, cert.sans)
+                    await self.issue(
+                        tenant_id,
+                        cert.name,
+                        cert.source,
+                        cert.sans,
+                        acme_provider=cert.acme_provider,
+                        challenge=cert.challenge,
+                        dns_provider=cert.dns_provider,
+                    )
                     renewed.append(f"{tenant_name}/{cert.name}")
                 except (CertificateError, ValueError, PermissionError) as exc:
                     log.error("renewing %s/%s failed: %s", tenant_name, cert.name, exc)

@@ -1,0 +1,90 @@
+"""Tables for certificate authorities (ACME) and DNS credentials (ADR 0079).
+
+``acme_provider`` is system-wide (a system administrator manages it; it has no tenant).
+``dns_provider`` belongs to a tenant and has row-level security like every tenant table. Neither
+stores a secret: the account key, the EAB key and the DNS credentials are in the secrets backend and
+these rows hold the references.
+"""
+
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKeyConstraint,
+    Index,
+    Text,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP
+from sqlalchemy.orm import Mapped, mapped_column
+
+from switchyard.db.base import Base, EntityMixin, TenantOwnedMixin, tenant_unique
+
+
+class AcmeProviderRow(EntityMixin, Base):
+    """``acme_provider``: an ACME certificate authority and the account the controller uses."""
+
+    __tablename__ = "acme_provider"
+    __table_args__ = (
+        UniqueConstraint("name"),
+        CheckConstraint("version >= 1", name="version"),
+        CheckConstraint("auth_mode IN ('none', 'eab', 'oauth')", name="auth_mode"),
+        Index(
+            "uq_acme_provider_one_default",
+            "is_default",
+            unique=True,
+            postgresql_where=text("is_default"),
+        ),
+    )
+
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    preset: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'custom'"))
+    directory_url: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str | None] = mapped_column(Text)
+    #: ``none``, ``eab`` (static External Account Binding) or ``oauth`` (bearer token).
+    auth_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'none'"))
+    #: OAuth settings without the secret: token_url, client_id, scope, audience, bearer_on_acme,
+    #: eab_url.
+    oauth: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    oauth_secret_ref: Mapped[str | None] = mapped_column(Text)
+    eab_kid: Mapped[str | None] = mapped_column(Text)
+    eab_hmac_ref: Mapped[str | None] = mapped_column(Text)
+    account_key_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    account_registered: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+
+class DnsProviderRow(TenantOwnedMixin, Base):
+    """``dns_provider``: a tenant's DNS credential for publishing DNS-01 records."""
+
+    __tablename__ = "dns_provider"
+    __table_args__ = (
+        *tenant_unique(),
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
+        CheckConstraint("version >= 1", name="version"),
+    )
+
+    type: Mapped[str] = mapped_column(Text, nullable=False)
+    zones: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=text("'{}'::text[]")
+    )
+    config: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    secret_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+
+__all__ = ["AcmeProviderRow", "DnsProviderRow"]

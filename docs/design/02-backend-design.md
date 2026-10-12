@@ -144,7 +144,7 @@ Roles are `viewer < operator < tenant-admin < system-admin`. They **nest**: each
 | access | role mappings of own tenant, for roles `viewer` and `operator` | – | – | ✅ | ✅ |
 | access | role mappings for `tenant-admin` or `system-admin`; any other tenant's | – | – | – | ✅ |
 | access | list users with a grant in own tenant (`GET /tenants/{t}/users`) | – | – | ✅ | ✅ |
-| system | create or delete tenants; identity providers; users and their sessions; system tokens; break-glass | – | – | – | ✅ |
+| system | create or delete tenants; identity providers; ACME providers; users and their sessions; system tokens; break-glass | – | – | – | ✅ |
 
 Note on jobs: retry and cancel need the role of the action that created the job, so an operator can retry or cancel an apply of their own change set but not a deployment, retirement or SDN job (today any operator can; G1 tightens it). The matrix says who may *try*, not whether a change is valid: an operator allowed to delete a pool still gets a `problem` if the pool is in use.
 

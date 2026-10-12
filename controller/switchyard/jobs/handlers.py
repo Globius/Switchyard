@@ -101,6 +101,9 @@ def build_handlers(
                 p["name"],
                 dm.CertSource(p["source"]),
                 tuple(p["sans"]),
+                acme_provider=p.get("acme_provider"),
+                challenge=dm.AcmeChallenge(p["challenge"]) if p.get("challenge") else None,
+                dns_provider=p.get("dns_provider"),
             )
             return {"change_set_id": str(change_set)}
 

@@ -508,10 +508,12 @@ PermissionVerb = Literal[
     "write",
 ]
 PermissionObject = Literal[
+    "acme_provider",
     "application",
     "break_glass",
     "certificate",
     "change_set",
+    "dns_provider",
     "draft",
     "engine",
     "enrollment_token",
@@ -1614,6 +1616,18 @@ class CertIssueIn(ApiModel):
     name: str
     source: Literal["acme", "cloudflare_origin"]
     sans: list[str] = Field(min_length=1, max_length=50)
+    acme_provider: str | None = Field(
+        default=None,
+        description="ACME provider name (`acme` only). The default provider when empty.",
+    )
+    challenge: Literal["dns-01", "http-01"] | None = Field(
+        default=None,
+        description="`dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.",
+    )
+    dns_provider: str | None = Field(
+        default=None,
+        description="DNS credential name for `dns-01`. Chosen by zone when empty.",
+    )
 
 
 #: A Proxmox node name: it becomes a path segment of every Proxmox call.
@@ -1722,3 +1736,198 @@ class EngineIn(ApiModel):
     credentials_ref: str | None = None
     mgmt_ip: str | None = None
     agent_url: str | None = None
+
+
+# -- ACME providers and DNS credentials (ADR 0079) -------------------------------------------------
+
+
+class DnsFieldRead(ApiModel):
+    """One field of a DNS provider type's form."""
+
+    key: str = Field(description="Name in `config`, or in `credentials` when `secret`.")
+    label: str
+    kind: Literal["text", "select", "textarea"]
+    required: bool
+    secret: bool = Field(description="Write-only: sent in `credentials`, never returned.")
+    help: str
+    options: list[str] = Field(description="Allowed values of a `select`.")
+    default: str | None = Field(description="Used when the field is left empty.")
+
+
+class DnsProviderTypeRead(ApiModel):
+    """A kind of DNS provider and the form it needs."""
+
+    type: str
+    label: str
+    fields: list[DnsFieldRead]
+    supports_zone_discovery: bool = Field(
+        description="The provider finds the zone of a name itself; `zones` then only chooses "
+        "between credentials."
+    )
+
+
+class DnsProviderIn(ApiModel):
+    """Create a DNS credential."""
+
+    name: str
+    type: str = Field(description="One of the types from `GET /dns-provider-types`.")
+    zones: list[str] = Field(
+        default_factory=list,
+        description="Domains this credential serves, for example `example.test`. The longest "
+        "match wins; a credential without zones serves every name nobody else claims.",
+    )
+    config: dict[str, str] = Field(default_factory=dict, description="The non-secret fields.")
+    credentials: dict[str, str] = Field(
+        default_factory=dict, description="The secret fields. Stored in the secrets backend."
+    )
+    enabled: bool = True
+
+
+class DnsProviderPatch(ApiModel):
+    """Change a DNS credential; send only what changes."""
+
+    zones: list[str] | None = None
+    config: dict[str, str] | None = Field(
+        default=None, description="Settings to set (merged with the stored ones)."
+    )
+    credentials: dict[str, str] | None = Field(
+        default=None,
+        description="Secret fields to replace; the others keep their stored value.",
+    )
+    enabled: bool | None = None
+
+
+class DnsProviderRead(ApiModel):
+    """A DNS credential (never any secret)."""
+
+    id: UUID
+    name: str
+    type: str
+    zones: list[str]
+    config: dict[str, str]
+    credentials_set: bool
+    enabled: bool
+    version: int
+
+
+class DnsProviderTestIn(ApiModel):
+    """Optionally name the zone to test in."""
+
+    zone: str | None = Field(
+        default=None, description="Defaults to the credential's zone setting or first zone."
+    )
+
+
+class DnsProviderTestRead(ApiModel):
+    """Result of publishing and removing a test TXT record."""
+
+    ok: bool
+    detail: str
+    zone: str | None
+
+
+class AcmePresetRead(ApiModel):
+    """A well-known certificate authority."""
+
+    key: str
+    label: str
+    directory_url: str | None = Field(description="Empty when the administrator must enter it.")
+    auth_mode: Literal["none", "eab", "oauth"]
+    eab_required: bool
+    note: str
+
+
+class AcmeOauthIn(ApiModel):
+    """OAuth settings for a CA behind an identity provider (client-credentials grant)."""
+
+    token_url: str | None = None
+    client_id: str | None = None
+    scope: str | None = None
+    audience: str | None = None
+    bearer_on_acme: bool | None = Field(
+        default=None, description="Send the token on every ACME request."
+    )
+    eab_url: str | None = Field(
+        default=None,
+        description="Endpoint that returns a fresh EAB key (JSON with a key id and an HMAC key) "
+        "when called with the bearer token.",
+    )
+
+
+class AcmeOauthRead(ApiModel):
+    """The stored OAuth settings (the client secret is never returned)."""
+
+    token_url: str | None = None
+    client_id: str | None = None
+    scope: str | None = None
+    audience: str | None = None
+    bearer_on_acme: bool | None = None
+    eab_url: str | None = None
+
+
+class AcmeProviderIn(ApiModel):
+    """Register an ACME provider."""
+
+    name: str
+    preset: str = Field(default="custom", description="A key from `GET /acme-provider-presets`.")
+    directory_url: str | None = Field(
+        default=None, description="Required for presets without a fixed directory."
+    )
+    email: str | None = Field(default=None, description="Contact address for the ACME account.")
+    auth_mode: Literal["none", "eab", "oauth"] | None = Field(
+        default=None, description="Defaults to what the preset usually needs."
+    )
+    eab_kid: str | None = None
+    eab_hmac_key: str | None = Field(
+        default=None, description="Base64url HMAC key of the EAB credentials. Write-only."
+    )
+    oauth: AcmeOauthIn | None = None
+    oauth_client_secret: str | None = Field(default=None, description="Write-only.")
+    enabled: bool = True
+    default: bool = Field(
+        default=False, description="Use this provider when a certificate names none."
+    )
+
+
+class AcmeProviderPatch(ApiModel):
+    """Change an ACME provider; send only what changes."""
+
+    directory_url: str | None = None
+    email: str | None = None
+    auth_mode: Literal["none", "eab", "oauth"] | None = None
+    eab_kid: str | None = None
+    eab_hmac_key: str | None = None
+    oauth: AcmeOauthIn | None = None
+    oauth_client_secret: str | None = None
+    enabled: bool | None = None
+    default: bool | None = None
+
+
+class AcmeProviderRead(ApiModel):
+    """An ACME provider (never any secret)."""
+
+    id: UUID
+    name: str
+    preset: str
+    directory_url: str
+    email: str | None
+    auth_mode: Literal["none", "eab", "oauth"]
+    eab_kid: str | None
+    eab_configured: bool
+    oauth: AcmeOauthRead | None
+    oauth_secret_set: bool
+    account_registered: bool = Field(
+        description="True after a successful test (the CA accepted the account)."
+    )
+    enabled: bool
+    default: bool
+    version: int
+
+
+class AcmeProviderTestRead(ApiModel):
+    """Result of registering the account at the CA."""
+
+    ok: bool
+    detail: str
+    tos_url: str | None
+    external_account_required: bool

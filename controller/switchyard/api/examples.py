@@ -872,3 +872,71 @@ SYSTEM_TOKEN_CREATED = {
     "role": "system-admin",
     "expires_at": "2026-11-09T12:00:00Z",
 }
+
+
+DNS_PROVIDER_TYPES = [
+    {
+        "type": "cloudflare",
+        "label": "Cloudflare",
+        "supports_zone_discovery": True,
+        "fields": [
+            {
+                "key": "api_token",
+                "label": "API token",
+                "kind": "text",
+                "required": True,
+                "secret": True,
+                "help": "A token with Zone:Read and DNS:Edit on the zones you validate.",
+                "options": [],
+                "default": None,
+            }
+        ],
+    }
+]
+DNS_PROVIDER = {
+    "id": "0192f1a2-0000-7000-8000-00000000d501",
+    "name": "cloudflare-main",
+    "type": "cloudflare",
+    "zones": ["example.test"],
+    "config": {},
+    "credentials_set": True,
+    "enabled": True,
+    "version": 1,
+}
+DNS_PROVIDER_TEST = {
+    "ok": True,
+    "detail": "published and removed a TXT record at _switchyard-test.example.test",
+    "zone": "example.test",
+}
+ACME_PRESETS = [
+    {
+        "key": "letsencrypt",
+        "label": "Let's Encrypt",
+        "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+        "auth_mode": "none",
+        "eab_required": False,
+        "note": "Free certificates, rate limited; use staging for tests.",
+    }
+]
+ACME_PROVIDER = {
+    "id": "0192f1a2-0000-7000-8000-00000000a501",
+    "name": "letsencrypt",
+    "preset": "letsencrypt",
+    "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+    "email": "pki@example.test",
+    "auth_mode": "none",
+    "eab_kid": None,
+    "eab_configured": False,
+    "oauth": None,
+    "oauth_secret_set": False,
+    "account_registered": True,
+    "enabled": True,
+    "default": True,
+    "version": 1,
+}
+ACME_PROVIDER_TEST = {
+    "ok": True,
+    "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+    "tos_url": "https://letsencrypt.org/documents/LE-SA-v1.5.pdf",
+    "external_account_required": False,
+}

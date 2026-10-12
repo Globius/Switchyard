@@ -62,6 +62,16 @@ TAGS: list[dict[str, str]] = [
     {"name": "identity providers", "description": "OIDC and SAML providers, with test sign-in."},
     {"name": "break-glass", "description": "The local emergency administrator and system tokens."},
     {"name": "system", "description": "Controller-wide settings (system administrators)."},
+    {
+        "name": "acme providers",
+        "description": "Certificate authorities (ACME) and their accounts; system administrators "
+        "write, everyone signed in reads.",
+    },
+    {
+        "name": "dns providers",
+        "description": "A tenant's DNS credentials for DNS-01 validation, and the catalogue of "
+        "provider types with their forms.",
+    },
 ]
 
 PARAMS: dict[str, str] = {
@@ -262,6 +272,14 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("(GET|POST)", r"/auth/refresh|/permissions", "authenticated", False),
     ("POST", r"/auth/refresh", "authenticated", False),
     (
+        "GET",
+        r"/(acme-providers(/\{provider\})?|acme-provider-presets|dns-provider-types)",
+        "authenticated",
+        False,
+    ),
+    ("(POST|PATCH|DELETE)", r"/acme-providers(/.*)?", "system-admin", False),
+    ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/dns-providers(/.*)?", "tenant-admin", False),
+    (
         "(GET|POST|PATCH|PUT|DELETE)",
         r"/(identity-providers|role-mappings|system|users)(/.*)?",
         "system-admin",
@@ -387,7 +405,26 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "name": "web-example",
         "source": "acme",
         "sans": ["www.example.test"],
+        "acme_provider": "letsencrypt",
+        "challenge": "dns-01",
+        "dns_provider": "cloudflare-main",
     },
+    "POST /tenants/{t}/dns-providers": {
+        "name": "cloudflare-main",
+        "type": "cloudflare",
+        "zones": ["example.test"],
+        "config": {},
+        "credentials": {"api_token": "example-token"},
+    },
+    "PATCH /tenants/{t}/dns-providers/{provider}": {"zones": ["example.test", "example.org"]},
+    "POST /tenants/{t}/dns-providers/{provider}/test": {"zone": "example.test"},
+    "POST /acme-providers": {
+        "name": "letsencrypt",
+        "preset": "letsencrypt",
+        "email": "pki@example.test",
+        "default": True,
+    },
+    "PATCH /acme-providers/{provider}": {"email": "certs@example.test", "default": True},
     "POST /tenants/{t}/change-sets": {"summary": "Add the shop service"},
     "POST /tenants/{t}/change-sets/{cs}/apply": {"break_glass_reason": None},
     "POST /tenants/{t}/change-sets/{cs}/reject": {"comment": "Please also cover www2."},
