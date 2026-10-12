@@ -3167,6 +3167,62 @@
         "title": "CacheSettings",
         "type": "object"
       },
+      "CaptchaGate": {
+        "additionalProperties": false,
+        "description": "Ask new clients to pass a CAPTCHA from a provider before they get any answer (ADR 0172).\n\nThe page shows the provider's widget; a Lua service on the engine asks the provider to verify\nthe answer, then sets a signed cookie. The provider's secret key is kept in OpenBao.\n\nAttributes:\n    provider: ``turnstile`` (Cloudflare) or ``hcaptcha``.\n    site_key: The public site key of the widget.\n    secret_ref: OpenBao path of the provider's secret key (never the key itself).\n    valid_for_s: How long a passed CAPTCHA lasts.\n    skip_paths: Paths that are never gated (``path_beg``), such as an API.\n    skip_user_agents: Lower-case ``User-Agent`` substrings that are never gated.\n\nExample:\n    >>> CaptchaGate(provider=\"hcaptcha\", site_key=\"10000000-ffff-ffff-ffff-000000000001\",\n    ...             secret_ref=\"tenants/acme/captcha\").valid_for_s\n    3600",
+        "properties": {
+          "provider": {
+            "enum": [
+              "turnstile",
+              "hcaptcha"
+            ],
+            "title": "Provider",
+            "type": "string"
+          },
+          "secret_ref": {
+            "title": "Secret Ref",
+            "type": "string"
+          },
+          "site_key": {
+            "pattern": "^[A-Za-z0-9_-]{8,128}$",
+            "title": "Site Key",
+            "type": "string"
+          },
+          "skip_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Skip Paths",
+            "type": "array"
+          },
+          "skip_user_agents": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Skip User Agents",
+            "type": "array"
+          },
+          "valid_for_s": {
+            "default": 3600,
+            "maximum": 86400.0,
+            "minimum": 300.0,
+            "title": "Valid For S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "site_key",
+          "secret_ref"
+        ],
+        "title": "CaptchaGate",
+        "type": "object"
+      },
       "CertIdentity": {
         "additionalProperties": false,
         "description": "Map a client certificate to a user and groups (ADR 0136).\n\nAttributes:\n    by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,\n        for individual certificates).\n    value: The common name, or 40 hex digits.\n    user: The user name written to the user header.\n    groups: Groups written to the groups header.",
@@ -12096,7 +12152,7 @@
       },
       "ProtectionPolicySet": {
         "additionalProperties": false,
-        "description": "Bot and DDoS protection for a service (ADR 0170).\n\nPer-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits\nstay in ``rate_limit`` sets.\n\nAttributes:\n    max_connections_per_source: Connections one address may hold open; more are refused.\n    max_new_connections_per_source: New connections one address may open per\n        ``connection_rate_period_s``; more are refused.\n    connection_rate_period_s: Window of the connection rate.\n    header_timeout_s: How long a client has to send the whole request head (``timeout\n        http-request``); the answer to slow-header attacks.\n    client_timeout_s: Idle time allowed on a client connection (``timeout client``).\n    block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.\n    block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).\n    deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.\n    bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.\n    exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).\n    challenge: A JavaScript proof-of-work challenge for new clients (ADR 0171).\n    table_size: Addresses the connection table holds.\n\nExample:\n    >>> ProtectionPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"p\",\n    ...      \"block_scanners\": True}\n    ... ).bot_action\n    'deny'",
+        "description": "Bot and DDoS protection for a service (ADR 0170).\n\nPer-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits\nstay in ``rate_limit`` sets.\n\nAttributes:\n    max_connections_per_source: Connections one address may hold open; more are refused.\n    max_new_connections_per_source: New connections one address may open per\n        ``connection_rate_period_s``; more are refused.\n    connection_rate_period_s: Window of the connection rate.\n    header_timeout_s: How long a client has to send the whole request head (``timeout\n        http-request``); the answer to slow-header attacks.\n    client_timeout_s: Idle time allowed on a client connection (``timeout client``).\n    block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.\n    block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).\n    deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.\n    bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.\n    exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).\n    challenge: A JavaScript proof-of-work challenge for new clients (ADR 0171).\n    captcha: A CAPTCHA from a provider instead (ADR 0172); not together with ``challenge``.\n    table_size: Addresses the connection table holds.\n\nExample:\n    >>> ProtectionPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"p\",\n    ...      \"block_scanners\": True}\n    ... ).bot_action\n    'deny'",
         "properties": {
           "block_empty_user_agent": {
             "default": false,
@@ -12116,6 +12172,16 @@
             ],
             "title": "Bot Action",
             "type": "string"
+          },
+          "captcha": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptchaGate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "challenge": {
             "anyOf": [
@@ -12280,6 +12346,16 @@
             ],
             "title": "Bot Action",
             "type": "string"
+          },
+          "captcha": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptchaGate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "challenge": {
             "anyOf": [
@@ -12446,6 +12522,16 @@
             ],
             "title": "Bot Action"
           },
+          "captcha": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptchaGate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "challenge": {
             "anyOf": [
               {
@@ -12611,6 +12697,16 @@
             ],
             "title": "Bot Action",
             "type": "string"
+          },
+          "captcha": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptchaGate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "challenge": {
             "anyOf": [

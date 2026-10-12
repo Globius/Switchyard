@@ -67,7 +67,7 @@ func verb(unit string) string {
 // keeps its crt-lists in the same directory as the certificates, so only "*.pem" files (server
 // certificates and client CA bundles) and "*.crl" files (client CA revocation lists) there are the
 // agent's; everything else is left alone and never removed.
-var suffixOnly = map[string][]string{"certs": {".pem", ".crl"}, "auth": {".cfg"}}
+var suffixOnly = map[string][]string{"certs": {".pem", ".crl", ".secret"}, "auth": {".cfg"}}
 
 // secretDirs hold private keys and are written with owner-only permissions.
 var secretDirs = map[string]bool{"certs": true, "auth": true}

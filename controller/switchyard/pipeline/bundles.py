@@ -11,6 +11,7 @@ from uuid import UUID
 from switchyard.adapters.secrets import SecretsReader
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
+from switchyard.render import captcha
 from switchyard.render import escape as esc
 from switchyard.render.auth import auth_secret_refs, render_auth_files
 from switchyard.render.escape import RenderError
@@ -128,6 +129,36 @@ async def _ca_files(cert: dm.Certificate, secrets: SecretsReader | None) -> dict
     return files
 
 
+async def _captcha_files(
+    snapshot: Snapshot, group: dm.SeGroup, secrets: SecretsReader | None
+) -> dict[str, str]:
+    """The provider secrets of the group's CAPTCHA gates, one file per protected service."""
+    view = snapshot.for_se_group(group.id)
+    policies = {p.id: p for p in view.policy_sets}
+    files: dict[str, str] = {}
+    for svc in view.virtual_services:
+        if not svc.enabled:
+            continue
+        for pid in svc.policy_set_ids:
+            policy = policies.get(pid)
+            if isinstance(policy, dm.ProtectionPolicySet) and policy.captcha is not None:
+                if secrets is None:
+                    raise BundleError(
+                        "a CAPTCHA gate is in use but no secrets backend is available"
+                    )
+                try:
+                    secret = await secrets.get(policy.captcha.secret_ref)
+                except LookupError as exc:
+                    raise BundleError(
+                        f"secret {policy.captcha.secret_ref} (CAPTCHA of {svc.name}) not found"
+                    ) from exc
+                value = secret.strip()
+                if not value or "\n" in value:
+                    raise BundleError(f"the CAPTCHA secret of {svc.name} must be one line")
+                files[captcha.bundle_path(svc)] = value + "\n"
+    return files
+
+
 async def engine_files(
     snapshot: Snapshot, group: dm.SeGroup, slot: EngineSlot, secrets: SecretsReader | None
 ) -> dict[str, str]:
@@ -144,6 +175,7 @@ async def engine_files(
         except RenderError as exc:
             raise BundleError(str(exc)) from exc
     files |= render_waf_files(snapshot, group.id)
+    files |= await _captcha_files(snapshot, group, secrets)
     files |= await _auth_files(snapshot, group, secrets)
     files |= jwt_key_files(snapshot, group.id)
     for cert in referenced_certs(snapshot, group.id):

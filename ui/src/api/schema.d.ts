@@ -4989,6 +4989,52 @@ export interface components {
             size_mb: number;
         };
         /**
+         * CaptchaGate
+         * @description Ask new clients to pass a CAPTCHA from a provider before they get any answer (ADR 0172).
+         *
+         *     The page shows the provider's widget; a Lua service on the engine asks the provider to verify
+         *     the answer, then sets a signed cookie. The provider's secret key is kept in OpenBao.
+         *
+         *     Attributes:
+         *         provider: ``turnstile`` (Cloudflare) or ``hcaptcha``.
+         *         site_key: The public site key of the widget.
+         *         secret_ref: OpenBao path of the provider's secret key (never the key itself).
+         *         valid_for_s: How long a passed CAPTCHA lasts.
+         *         skip_paths: Paths that are never gated (``path_beg``), such as an API.
+         *         skip_user_agents: Lower-case ``User-Agent`` substrings that are never gated.
+         *
+         *     Example:
+         *         >>> CaptchaGate(provider="hcaptcha", site_key="10000000-ffff-ffff-ffff-000000000001",
+         *         ...             secret_ref="tenants/acme/captcha").valid_for_s
+         *         3600
+         */
+        CaptchaGate: {
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "turnstile" | "hcaptcha";
+            /** Secret Ref */
+            secret_ref: string;
+            /** Site Key */
+            site_key: string;
+            /**
+             * Skip Paths
+             * @default []
+             */
+            skip_paths: string[];
+            /**
+             * Skip User Agents
+             * @default []
+             */
+            skip_user_agents: string[];
+            /**
+             * Valid For S
+             * @default 3600
+             */
+            valid_for_s: number;
+        };
+        /**
          * CertIdentity
          * @description Map a client certificate to a user and groups (ADR 0136).
          *
@@ -9055,6 +9101,7 @@ export interface components {
          *         bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.
          *         exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).
          *         challenge: A JavaScript proof-of-work challenge for new clients (ADR 0171).
+         *         captcha: A CAPTCHA from a provider instead (ADR 0172); not together with ``challenge``.
          *         table_size: Addresses the connection table holds.
          *
          *     Example:
@@ -9082,6 +9129,7 @@ export interface components {
              * @enum {string}
              */
             bot_action: "deny" | "silent_drop";
+            captcha?: components["schemas"]["CaptchaGate"] | null;
             challenge?: components["schemas"]["JsChallenge"] | null;
             /** Client Timeout S */
             client_timeout_s?: number | null;
@@ -9153,6 +9201,7 @@ export interface components {
              * @enum {string}
              */
             bot_action: "deny" | "silent_drop";
+            captcha?: components["schemas"]["CaptchaGate"] | null;
             challenge?: components["schemas"]["JsChallenge"] | null;
             /** Client Timeout S */
             client_timeout_s?: number | null;
@@ -9199,6 +9248,7 @@ export interface components {
             block_scanners?: boolean | null;
             /** Bot Action */
             bot_action?: ("deny" | "silent_drop") | null;
+            captcha?: components["schemas"]["CaptchaGate"] | null;
             challenge?: components["schemas"]["JsChallenge"] | null;
             /** Client Timeout S */
             client_timeout_s?: number | null;
@@ -9245,6 +9295,7 @@ export interface components {
              * @enum {string}
              */
             bot_action: "deny" | "silent_drop";
+            captcha?: components["schemas"]["CaptchaGate"] | null;
             challenge?: components["schemas"]["JsChallenge"] | null;
             /**
              * Changed Fields

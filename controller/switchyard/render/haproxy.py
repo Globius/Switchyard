@@ -53,8 +53,8 @@ from switchyard.domain.snapshot import (
     protection_set,
     rate_limit_rules,
 )
+from switchyard.render import captcha, waf
 from switchyard.render import escape as esc
-from switchyard.render import waf
 from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
 from switchyard.render.tokens import key_file
@@ -395,6 +395,7 @@ class _Renderer:
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
         self.uses_waf = False
+        self.lua_loads: list[str] = []
         self.limit_backends: list[dict[str, Any]] = []
         self.instances = {i.service.id: i for i in auth_instances(snapshot, self.group.id)}
         self.guard = ""
@@ -428,6 +429,7 @@ class _Renderer:
                 fingerprint=fingerprint,
                 peers=self._peers(),
                 caches=self._caches(),
+                lua_loads=self.lua_loads,
                 waf_backend=waf.backend_lines() if self.uses_waf else [],
             )
 
@@ -537,6 +539,7 @@ class _Renderer:
             if protection is not None:
                 request_rules += self._bot_rules(protection)
                 request_rules += self._challenge_rules(svc, protection)
+                request_rules += self._captcha_rules(svc, protection)
             tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
@@ -682,6 +685,37 @@ class _Renderer:
             f" {{ var(txn.sy_age) -m int le {gate.valid_for_s} }}",
             "http-request return status 200 content-type text/html hdr cache-control no-store"
             f" lf-file {page} if {{ method GET HEAD }} {unsolved}",
+            f"http-request deny deny_status 403 if {unsolved}",
+        ]
+
+    def _captcha_rules(
+        self, svc: dm.VirtualService, protection: dm.ProtectionPolicySet
+    ) -> list[str]:
+        """The CAPTCHA gate: Lua check, Lua verify service, page for the unverified (ADR 0172)."""
+        gate = protection.captcha
+        if gate is None:
+            return []
+        name = esc.ident(svc.name)
+        ident = captcha.lua_id(svc)
+        self.files[f"haproxy/captcha/{name}.lua"] = captcha.render_lua(svc, gate)
+        self.files[f"haproxy/captcha/{name}.html"] = captcha.render_page(gate)
+        self.lua_loads.append(f"{BASE_DIR}/captcha/{name}.lua")
+        skips = []
+        if protection.exempt_cidrs:
+            skips.append(f"!{self._exempt(protection)}")
+        if gate.skip_paths:
+            paths = " ".join(esc.arg(p) for p in sorted(gate.skip_paths))
+            skips.append(f"!{{ path_beg {paths} }}")
+        if gate.skip_user_agents:
+            words = " ".join(esc.user_agent_token(t) for t in sorted(gate.skip_user_agents))
+            skips.append(f"!{{ req.hdr(user-agent),lower -m sub {words} }}")
+        unsolved = " ".join([*skips, "!{ var(txn.sy_pass) -m bool }"])
+        return [
+            f"http-request lua.sy_cap_check_{ident}",
+            f"http-request use-service lua.sy_cap_{ident} if {{ path {captcha.SUBMIT_PATH} }}"
+            " { method POST }",
+            "http-request return status 200 content-type text/html hdr cache-control no-store"
+            f" lf-file {BASE_DIR}/captcha/{name}.html if {{ method GET HEAD }} {unsolved}",
             f"http-request deny deny_status 403 if {unsolved}",
         ]
 

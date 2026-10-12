@@ -1803,6 +1803,42 @@ class JsChallenge(Model):
         return self
 
 
+class CaptchaGate(Model):
+    """Ask new clients to pass a CAPTCHA from a provider before they get any answer (ADR 0172).
+
+    The page shows the provider's widget; a Lua service on the engine asks the provider to verify
+    the answer, then sets a signed cookie. The provider's secret key is kept in OpenBao.
+
+    Attributes:
+        provider: ``turnstile`` (Cloudflare) or ``hcaptcha``.
+        site_key: The public site key of the widget.
+        secret_ref: OpenBao path of the provider's secret key (never the key itself).
+        valid_for_s: How long a passed CAPTCHA lasts.
+        skip_paths: Paths that are never gated (``path_beg``), such as an API.
+        skip_user_agents: Lower-case ``User-Agent`` substrings that are never gated.
+
+    Example:
+        >>> CaptchaGate(provider="hcaptcha", site_key="10000000-ffff-ffff-ffff-000000000001",
+        ...             secret_ref="tenants/acme/captcha").valid_for_s
+        3600
+    """
+
+    provider: Literal["turnstile", "hcaptcha"]
+    site_key: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{8,128}$")]
+    secret_ref: SecretRef
+    valid_for_s: int = Field(default=3600, ge=300, le=86_400)
+    skip_paths: tuple[UrlPath, ...] = Field(default=(), max_length=16)
+    skip_user_agents: tuple[UserAgentToken, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        if len(set(self.skip_paths)) != len(self.skip_paths):
+            raise ValueError("skip_paths must be unique")
+        if len(set(self.skip_user_agents)) != len(self.skip_user_agents):
+            raise ValueError("skip_user_agents must be unique")
+        return self
+
+
 class ProtectionPolicySet(TenantOwned):
     """Bot and DDoS protection for a service (ADR 0170).
 
@@ -1823,6 +1859,7 @@ class ProtectionPolicySet(TenantOwned):
         bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.
         exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).
         challenge: A JavaScript proof-of-work challenge for new clients (ADR 0171).
+        captcha: A CAPTCHA from a provider instead (ADR 0172); not together with ``challenge``.
         table_size: Addresses the connection table holds.
 
     Example:
@@ -1846,12 +1883,15 @@ class ProtectionPolicySet(TenantOwned):
     bot_action: Literal["deny", "silent_drop"] = "deny"
     exempt_cidrs: tuple[IPNetwork, ...] = Field(default=(), max_length=32)
     challenge: JsChallenge | None = None
+    captcha: CaptchaGate | None = None
     table_size: int = Field(default=100_000, ge=1_000, le=1_000_000)
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
         if len(set(self.deny_user_agents)) != len(self.deny_user_agents):
             raise ValueError("deny_user_agents must be unique")
+        if self.challenge is not None and self.captcha is not None:
+            raise ValueError("use either challenge or captcha, not both")
         if not (
             self.max_connections_per_source
             or self.max_new_connections_per_source
@@ -1861,6 +1901,7 @@ class ProtectionPolicySet(TenantOwned):
             or self.block_scanners
             or self.deny_user_agents
             or self.challenge
+            or self.captcha
         ):
             raise ValueError("a protection set needs at least one protection")
         return self

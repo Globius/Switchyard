@@ -464,6 +464,10 @@ def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
             base = f"policy_sets.{ps.name}.oidc"
             refs.append((f"{base}.client_secret_ref", ps.tenant_id, ps.oidc.client_secret_ref))
             refs.append((f"{base}.cookie_secret_ref", ps.tenant_id, ps.oidc.cookie_secret_ref))
+        if isinstance(ps, ProtectionPolicySet) and ps.captcha is not None:
+            refs.append(
+                (f"policy_sets.{ps.name}.captcha.secret_ref", ps.tenant_id, ps.captcha.secret_ref)
+            )
     for profile in snapshot.routing_profiles:
         if isinstance(profile, BgpProfile):
             for i, peer in enumerate(profile.peers):
