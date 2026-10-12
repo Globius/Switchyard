@@ -1,7 +1,7 @@
 """Labels on virtual services and pools (ADR 0198).
 
 Revision ID: 0039
-Revises: 0032
+Revises: 0035
 """
 
 import sqlalchemy as sa
@@ -9,7 +9,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "0039"
-down_revision = "0032"
+down_revision = "0035"
 branch_labels = None
 depends_on = None
 

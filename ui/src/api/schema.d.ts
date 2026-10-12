@@ -1433,6 +1433,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/autoscale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Autoscaler state of the SE groups
+         * @description For each SE group with an `autoscale` block: its engine count, the average connection load the autoscaler measured and its last decision (`idle`, `busy`, `scaling`, `cooldown`, `at_max`, `blocked` with the reason, or `off`). The autoscaler only adds engines. 404 when the controller has no Proxmox client or agent enrollment. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_autoscale_api_v1_tenants__t__autoscale_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Packet captures
+         * @description The tenant's captures, newest first, without the pcap data. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        get: operations["list_captures_api_v1_tenants__t__captures_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/captures/{capture}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One packet capture
+         * @description State, packet count and size of a capture. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        get: operations["get_capture_api_v1_tenants__t__captures__capture__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/captures/{capture}/pcap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a packet capture
+         * @description The pcap file, for Wireshark or `tcpdump -r`. Audited. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        get: operations["download_capture_api_v1_tenants__t__captures__capture__pcap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/certificate-renewals": {
         parameters: {
             query?: never;
@@ -2040,6 +2128,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/dns-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DNS records published for virtual services
+         * @description The `A`/`AAAA` records the controller created from the `dns` block of virtual services, with their state (`published`, `pending` or `error` with the reason). Records the controller did not create are never listed or changed. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_dns_records_api_v1_tenants__t__dns_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/dns-records/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish DNS records now
+         * @description Reconciles the records of every virtual service with a `dns` block through the tenant's DNS credential: creates or updates the records, deletes the ones whose service, name or `dns` block is gone. A scheduled job does the same every minute. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["sync_dns_records_api_v1_tenants__t__dns_records_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/engines": {
         parameters: {
             query?: never;
@@ -2085,6 +2217,28 @@ export interface paths {
          *     **Access:** `tenant-admin` or higher in the tenant.
          */
         delete: operations["remove_engine_api_v1_tenants__t__engines__engine__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/engines/{engine}/captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capture packets on an engine
+         * @description Queues a bounded `tcpdump` on the engine: an interface (or `any`), an optional protocol, host and port, up to 60 seconds and 20000 packets. The agent builds the filter from these fields; free text is never accepted. One capture runs per engine at a time. Poll `GET /captures/{id}` until it is `done`, then download the pcap. A capture holds real traffic: it needs `tenant-admin`, is audited, and is deleted after 24 hours.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["request_capture_api_v1_tenants__t__engines__engine__captures_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5384,6 +5538,147 @@ export interface components {
             providers: components["schemas"]["AuthProvider"][];
         };
         /**
+         * Autoscale
+         * @description Add service engines to a group by itself when it is busy (ADR 0194). Scale-out only.
+         *
+         *     The group counts as busy while the engines' current connections, averaged over the reachable
+         *     ones, stay at ``scale_out_at`` percent of the group's ``maxconn`` or more for ``sustain_s``.
+         *     The autoscaler then deploys one more engine (never above ``max_engines``, never while an
+         *     earlier one is still enrolling, never within ``cooldown_s`` of the last), enrolls it, and
+         *     brings it into the group with a canary-first reapply. It never removes an engine.
+         *
+         *     Attributes:
+         *         enabled: Turn the autoscaler off without losing the settings.
+         *         max_engines: Upper limit for the group's engine count.
+         *         scale_out_at: Percent of ``maxconn`` that counts as busy.
+         *         sustain_s: How long the group must stay busy before an engine is added.
+         *         cooldown_s: Minimum time between two scale-outs.
+         *         deploy: What to clone.
+         *         enroll: How the new engine finds the controller.
+         */
+        Autoscale: {
+            /**
+             * Cooldown S
+             * @default 900
+             */
+            cooldown_s: number;
+            deploy: components["schemas"]["AutoscaleDeploy"];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            enroll: components["schemas"]["AutoscaleEnroll"];
+            /**
+             * Max Engines
+             * @default 8
+             */
+            max_engines: number;
+            /**
+             * Scale Out At
+             * @default 70
+             */
+            scale_out_at: number;
+            /**
+             * Sustain S
+             * @default 300
+             */
+            sustain_s: number;
+        };
+        /**
+         * AutoscaleDeploy
+         * @description What the autoscaler clones when it adds an engine (the arguments of a deploy).
+         *
+         *     Attributes:
+         *         nodes: Proxmox nodes to place new engines on, round-robin.
+         *         template_vmid: The SE template to clone (a QEMU template with the guest agent).
+         *         mgmt_pool_id: VIP pool on the group's management network that addresses come from.
+         *         credentials_ref: OpenBao reference of the Data Plane API login (``user:password``).
+         *         pool: Proxmox resource pool for the VMs, if any.
+         *         nic_pools: Pool each data NIC takes its address from, by network id.
+         *         dataplane_port: Data Plane API port.
+         *         agent_port: ``sy-agent`` gRPC port.
+         *         ssh_public_keys: Operator keys for cloud-init.
+         */
+        AutoscaleDeploy: {
+            /**
+             * Agent Port
+             * @default 7443
+             */
+            agent_port: number;
+            /** Credentials Ref */
+            credentials_ref: string;
+            /**
+             * Dataplane Port
+             * @default 5556
+             */
+            dataplane_port: number;
+            /**
+             * Mgmt Pool Id
+             * Format: uuid
+             */
+            mgmt_pool_id: string;
+            /** Nic Pools */
+            nic_pools?: {
+                [key: string]: string;
+            };
+            /** Nodes */
+            nodes: string[];
+            /** Pool */
+            pool?: string | null;
+            /** Ssh Public Keys */
+            ssh_public_keys?: string | null;
+            /** Template Vmid */
+            template_vmid: number;
+        };
+        /**
+         * AutoscaleEnroll
+         * @description How a new engine reaches the controller to enroll (ADR 0194).
+         *
+         *     Attributes:
+         *         controller_url: ``https://`` address the agent enrolls to.
+         *         controller_cn: Name in the controller's certificate.
+         *         ca_ref: OpenBao reference of the controller CA certificate (PEM) the agent trusts.
+         */
+        AutoscaleEnroll: {
+            /** Ca Ref */
+            ca_ref: string;
+            /**
+             * Controller Cn
+             * @default switchyard-controller
+             */
+            controller_cn: string;
+            /** Controller Url */
+            controller_url: string;
+        };
+        /**
+         * AutoscaleRead
+         * @description What the autoscaler last saw and did for one SE group.
+         */
+        AutoscaleRead: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "off" | "idle" | "busy" | "at_max" | "cooldown" | "blocked" | "scaling" | "scale_out";
+            /** Enabled */
+            enabled: boolean;
+            /** Engines */
+            engines: number;
+            /** Last Scaled At */
+            last_scaled_at: string | null;
+            /** Max Engines */
+            max_engines: number;
+            /** Reason */
+            reason: string | null;
+            /** Scale Out At */
+            scale_out_at: number;
+            /** Se Group */
+            se_group: string;
+            /** Utilization */
+            utilization: number | null;
+        };
+        /**
          * AviFindingRead
          * @description One decision of the conversion.
          */
@@ -5910,6 +6205,100 @@ export interface components {
              * @default 3600
              */
             valid_for_s: number;
+        };
+        /**
+         * CaptureIn
+         * @description What to capture on an engine. The agent builds the filter from these fields.
+         */
+        CaptureIn: {
+            /**
+             * Duration S
+             * @description Stop after this many seconds (1 to 60).
+             * @default 10
+             */
+            duration_s: number;
+            /**
+             * Host
+             * @description Only packets to or from this IP address.
+             * @default
+             */
+            host: string;
+            /**
+             * Interface
+             * @description `any`, or the name of an interface of the engine (`eth0`).
+             * @default any
+             */
+            interface: string;
+            /**
+             * Max Packets
+             * @description Stop after this many packets (1 to 20000).
+             * @default 1000
+             */
+            max_packets: number;
+            /**
+             * Port
+             * @description Only this port (tcp or udp), 0 for any.
+             * @default 0
+             */
+            port: number;
+            /**
+             * Protocol
+             * @description Only this protocol; empty captures every protocol.
+             * @default
+             * @enum {string}
+             */
+            protocol: "" | "tcp" | "udp" | "icmp";
+            /**
+             * Snaplen
+             * @description Bytes kept per packet (64 to 262144); 0 keeps whole packets.
+             * @default 0
+             */
+            snaplen: number;
+        };
+        /**
+         * CaptureRead
+         * @description A packet capture and how it went (the pcap itself is downloaded separately).
+         */
+        CaptureRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Engine */
+            engine: string;
+            /** Error */
+            error: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             * @description The capture is deleted at this time.
+             */
+            expires_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Packets */
+            packets: number | null;
+            /** Requested By */
+            requested_by: string;
+            /** Size Bytes */
+            size_bytes: number | null;
+            spec: components["schemas"]["CaptureIn"];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "done" | "failed";
+            /**
+             * Truncated
+             * @description The size limit (16 MiB) ended the capture early.
+             */
+            truncated: boolean;
         };
         /**
          * CertIdentity
@@ -7422,6 +7811,83 @@ export interface components {
             type: string;
         };
         /**
+         * DnsPublication
+         * @description Publish a service's VIP as DNS address records (ADR 0193).
+         *
+         *     Attributes:
+         *         names: Host names that should resolve to the VIP (an ``A`` record for an IPv4 VIP, an
+         *             ``AAAA`` record for IPv6). No wildcards.
+         *         ttl: Record TTL in seconds; Cloudflare treats ``1`` as automatic.
+         *         proxied: Send the name through Cloudflare's proxy (the orange cloud). Not for UDP.
+         *         credential: Name of the tenant's DNS credential; empty picks the one whose zones cover
+         *             the name.
+         *
+         *     Example:
+         *         >>> DnsPublication(names=("app.example.test",)).ttl
+         *         300
+         */
+        DnsPublication: {
+            /** Credential */
+            credential?: string | null;
+            /** Names */
+            names: string[];
+            /**
+             * Proxied
+             * @default false
+             */
+            proxied: boolean;
+            /**
+             * Ttl
+             * @default 300
+             */
+            ttl: number;
+        };
+        /**
+         * DnsRecordRead
+         * @description An address record the controller publishes for a virtual service.
+         */
+        DnsRecordRead: {
+            /** Content */
+            content: string;
+            /** Hostname */
+            hostname: string;
+            /** Last Error */
+            last_error: string | null;
+            /** Proxied */
+            proxied: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "published" | "error";
+            /** Ttl */
+            ttl: number;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "A" | "AAAA";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Virtual Service */
+            virtual_service: string | null;
+        };
+        /**
+         * DnsRecordSyncResult
+         * @description What a sync did.
+         */
+        DnsRecordSyncResult: {
+            /** Deleted */
+            deleted: number;
+            /** Failed */
+            failed: number;
+            /** Written */
+            written: number;
+        };
+        /**
          * DnsZoneTestRead
          * @description The test in one zone.
          */
@@ -8623,6 +9089,18 @@ export interface components {
             start: string;
         };
         /**
+         * IpvsForward
+         * @description How IPVS sends a UDP service's packets to a real server (ADR 0192).
+         *
+         *     ``nat`` rewrites the destination and masquerades the source, so replies return through the SE.
+         *     ``dr`` (direct return) rewrites only the MAC address: the real server must share a layer-2
+         *     segment with the SE, own the VIP on a loopback and answer the client directly. ``tunnel``
+         *     encapsulates the packet in IPIP: the real server needs an ``ipip`` interface that owns the VIP
+         *     and answers the client directly; no layer-2 adjacency is needed.
+         * @enum {string}
+         */
+        IpvsForward: "nat" | "dr" | "tunnel";
+        /**
          * IpvsRealServerStatus
          * @description One IPVS real server of a UDP virtual service, with its counters.
          */
@@ -8804,7 +9282,7 @@ export interface components {
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "sync_ip_lists" | "sync_jwks" | "evaluate_alerts" | "sync_gslb" | "probe_gslb";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "sync_ip_lists" | "sync_jwks" | "evaluate_alerts" | "sync_gslb" | "probe_gslb" | "sync_dns_records" | "autoscale_se_groups" | "packet_capture";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -12603,8 +13081,10 @@ export interface components {
          *         canary_seconds: How long the canary SE is watched after a push before the rest of the
          *             group is updated (0 skips the wait).
          *         peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
+         *         autoscale: Adds engines by itself when the group is busy (ADR 0194).
          */
         SeGroup: {
+            autoscale?: components["schemas"]["Autoscale"] | null;
             /**
              * Canary Seconds
              * @default 30
@@ -12641,6 +13121,7 @@ export interface components {
         };
         /** SeGroupCreate */
         SeGroupCreate: {
+            autoscale?: components["schemas"]["Autoscale"] | null;
             /**
              * Canary Seconds
              * @default 30
@@ -12693,6 +13174,7 @@ export interface components {
         };
         /** SeGroupPatch */
         SeGroupPatch: {
+            autoscale?: components["schemas"]["Autoscale"] | null;
             /** Canary Seconds */
             canary_seconds?: number | null;
             ha_mode?: components["schemas"]["HaMode"] | null;
@@ -12711,6 +13193,7 @@ export interface components {
          * @description SeGroup as returned by the API.
          */
         SeGroupRead: {
+            autoscale?: components["schemas"]["Autoscale"] | null;
             /**
              * Canary Seconds
              * @default 30
@@ -13585,6 +14068,9 @@ export interface components {
          *         compression: Response compression (``http`` only; ADR 0117).
          *         cache: Response cache (``http`` only; ADR 0117).
          *         labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.
+         *         forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or
+         *             ``tunnel`` (ADR 0192). The last two need every member on the service port.
+         *         dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).
          */
         VirtualService: {
             /** Allow List Id */
@@ -13600,6 +14086,7 @@ export interface components {
             default_pool_id?: string | null;
             /** Deny List Id */
             deny_list_id?: string | null;
+            dns?: components["schemas"]["DnsPublication"] | null;
             /**
              * Enabled
              * @default true
@@ -13610,6 +14097,8 @@ export interface components {
              * @default false
              */
             enforce_allow_list: boolean;
+            /** @default nat */
+            forward_mode: components["schemas"]["IpvsForward"];
             /**
              * Id
              * Format: uuid
@@ -13671,6 +14160,7 @@ export interface components {
             default_pool_id?: string | null;
             /** Deny List Id */
             deny_list_id?: string | null;
+            dns?: components["schemas"]["DnsPublication"] | null;
             /**
              * Enabled
              * @default true
@@ -13681,6 +14171,8 @@ export interface components {
              * @default false
              */
             enforce_allow_list: boolean;
+            /** @default nat */
+            forward_mode: components["schemas"]["IpvsForward"];
             /** Labels */
             labels?: {
                 [key: string]: string;
@@ -13785,10 +14277,12 @@ export interface components {
             default_pool_id?: string | null;
             /** Deny List Id */
             deny_list_id?: string | null;
+            dns?: components["schemas"]["DnsPublication"] | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Enforce Allow List */
             enforce_allow_list?: boolean | null;
+            forward_mode?: components["schemas"]["IpvsForward"] | null;
             /** Labels */
             labels?: {
                 [key: string]: string;
@@ -13834,6 +14328,7 @@ export interface components {
             default_pool_id?: string | null;
             /** Deny List Id */
             deny_list_id?: string | null;
+            dns?: components["schemas"]["DnsPublication"] | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
             /**
@@ -13846,6 +14341,8 @@ export interface components {
              * @default false
              */
             enforce_allow_list: boolean;
+            /** @default nat */
+            forward_mode: components["schemas"]["IpvsForward"];
             /**
              * Id
              * Format: uuid
@@ -21413,6 +21910,319 @@ export interface operations {
             };
         };
     };
+    list_autoscale_api_v1_tenants__t__autoscale_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "decision": "idle",
+                     *         "enabled": true,
+                     *         "engines": 3,
+                     *         "max_engines": 6,
+                     *         "scale_out_at": 70,
+                     *         "se_group": "edge",
+                     *         "utilization": 41
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["AutoscaleRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_captures_api_v1_tenants__t__captures_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-10-10T08:30:00Z",
+                     *         "engine": "edge-1",
+                     *         "expires_at": "2026-10-10T08:30:00Z",
+                     *         "finished_at": "2026-10-10T08:30:00Z",
+                     *         "id": "0192f9a0-0000-7000-8000-000000000042",
+                     *         "packets": 214,
+                     *         "requested_by": "user:alice",
+                     *         "size_bytes": 48210,
+                     *         "spec": {
+                     *           "duration_s": 10,
+                     *           "host": "192.0.2.20",
+                     *           "interface": "any",
+                     *           "max_packets": 1000,
+                     *           "port": 443,
+                     *           "protocol": "tcp",
+                     *           "snaplen": 0
+                     *         },
+                     *         "state": "done",
+                     *         "truncated": false
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["CaptureRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_capture_api_v1_tenants__t__captures__capture__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Id of a packet capture (`id` in the capture list). */
+                capture: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "engine": "edge-1",
+                     *       "expires_at": "2026-10-10T08:30:00Z",
+                     *       "finished_at": "2026-10-10T08:30:00Z",
+                     *       "id": "0192f9a0-0000-7000-8000-000000000042",
+                     *       "packets": 214,
+                     *       "requested_by": "user:alice",
+                     *       "size_bytes": 48210,
+                     *       "spec": {
+                     *         "duration_s": 10,
+                     *         "host": "192.0.2.20",
+                     *         "interface": "any",
+                     *         "max_packets": 1000,
+                     *         "port": 443,
+                     *         "protocol": "tcp",
+                     *         "snaplen": 0
+                     *       },
+                     *       "state": "done",
+                     *       "truncated": false
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CaptureRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    download_capture_api_v1_tenants__t__captures__capture__pcap_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Id of a packet capture (`id` in the capture list). */
+                capture: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description pcap */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.tcpdump.pcap": unknown;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     renewal_status_api_v1_tenants__t__certificate_renewals_get: {
         parameters: {
             query?: never;
@@ -24407,6 +25217,160 @@ export interface operations {
             };
         };
     };
+    list_dns_records_api_v1_tenants__t__dns_records_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "content": "192.0.2.20",
+                     *         "hostname": "app.example.test",
+                     *         "proxied": false,
+                     *         "state": "published",
+                     *         "ttl": 300,
+                     *         "type": "A",
+                     *         "updated_at": "2026-10-10T08:30:00Z",
+                     *         "virtual_service": "web"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["DnsRecordRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sync_dns_records_api_v1_tenants__t__dns_records_sync_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "deleted": 0,
+                     *       "failed": 0,
+                     *       "written": 2
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DnsRecordSyncResult"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_tenant_engines_api_v1_tenants__t__engines_get: {
         parameters: {
             query?: {
@@ -24629,6 +25593,116 @@ export interface operations {
                 };
             };
             /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    request_capture_api_v1_tenants__t__engines__engine__captures_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Engine id. */
+                engine: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "duration_s": 10,
+                 *       "host": "192.0.2.20",
+                 *       "interface": "any",
+                 *       "max_packets": 1000,
+                 *       "port": 443,
+                 *       "protocol": "tcp"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CaptureIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "engine": "edge-1",
+                     *       "expires_at": "2026-10-10T08:30:00Z",
+                     *       "finished_at": "2026-10-10T08:30:00Z",
+                     *       "id": "0192f9a0-0000-7000-8000-000000000042",
+                     *       "packets": 214,
+                     *       "requested_by": "user:alice",
+                     *       "size_bytes": 48210,
+                     *       "spec": {
+                     *         "duration_s": 10,
+                     *         "host": "192.0.2.20",
+                     *         "interface": "any",
+                     *         "max_packets": 1000,
+                     *         "port": 443,
+                     *         "protocol": "tcp",
+                     *         "snaplen": 0
+                     *       },
+                     *       "state": "done",
+                     *       "truncated": false
+                     *     }
+                     */
+                    "application/json": components["schemas"]["CaptureRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;

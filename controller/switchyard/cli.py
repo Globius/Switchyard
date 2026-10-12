@@ -190,6 +190,7 @@ def serve(
         grafana=runtime.grafana(db),
         alerts=runtime.alert_service(db, secrets),
         gslb=runtime.gslb_service(db),
+        autoscaler=runtime.autoscaler(db, runtime.directory(db), secrets),
         email_configured=runtime.smtp_settings() is not None,
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")

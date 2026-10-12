@@ -109,6 +109,7 @@ PARAMS: dict[str, str] = {
     "cursor": "`next_cursor` of the previous page.",
     "limit": "Page size.",
     "object_id": "Object id.",
+    "capture": "Id of a packet capture (`id` in the capture list).",
     "zone": "Zone name, for example `gslb.example.test` (a filter on the list route).",
     "cluster": "Kubernetes cluster id.",
     "request": "Quota request id.",
@@ -349,6 +350,13 @@ ACCESS: list[tuple[str, str, str, bool]] = [
         False,
     ),
     ("POST", r"/tenants/\{t\}/gslb/sync", "tenant-admin", False),
+    ("POST", r"/tenants/\{t\}/dns-records/sync", "tenant-admin", False),
+    (
+        "(GET|POST)",
+        r"/tenants/\{t\}/(engines/\{engine\}/)?captures(/.*)?",
+        "tenant-admin",
+        False,
+    ),
     ("POST", r"/tenants/\{t\}/grafana/launch", "viewer", False),
     (
         "(POST|PATCH|DELETE)",
@@ -424,6 +432,14 @@ def _patch_example(slug: str) -> dict[str, Any] | None:
 
 
 REQUEST_EXAMPLES: dict[str, Any] = {
+    "POST /tenants/{t}/engines/{engine}/captures": {
+        "interface": "any",
+        "protocol": "tcp",
+        "host": "192.0.2.20",
+        "port": 443,
+        "duration_s": 10,
+        "max_packets": 1000,
+    },
     "POST /tenants/{t}/gslb-zones": {
         "name": "gslb.example.test",
         "nameservers": ["ns1.example.test"],

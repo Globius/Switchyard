@@ -55,6 +55,11 @@ class AgentStub:
                 request_serializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeRequest.SerializeToString,
                 response_deserializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeResponse.FromString,
                 _registered_method=True)
+        self.Capture = channel.unary_stream(
+                '/switchyard.agent.v1.Agent/Capture',
+                request_serializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.CaptureRequest.SerializeToString,
+                response_deserializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.CaptureChunk.FromString,
+                _registered_method=True)
 
 
 class AgentServicer:
@@ -90,6 +95,15 @@ class AgentServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Capture(self, request, context):
+        """Captures packets with tcpdump for a bounded time and streams the pcap file back. The filter is
+        built from structured fields (never accepted as text), one capture runs at a time, and
+        duration, packets and bytes are capped. Anything outside those limits is refused.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AgentServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -112,6 +126,11 @@ def add_AgentServicer_to_server(servicer, server):
                     servicer.ProbeMember,
                     request_deserializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeRequest.FromString,
                     response_serializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeResponse.SerializeToString,
+            ),
+            'Capture': grpc.unary_stream_rpc_method_handler(
+                    servicer.Capture,
+                    request_deserializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.CaptureRequest.FromString,
+                    response_serializer=switchyard_dot_agent_dot_v1_dot_agent__pb2.CaptureChunk.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -223,6 +242,33 @@ class Agent:
             '/switchyard.agent.v1.Agent/ProbeMember',
             switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeRequest.SerializeToString,
             switchyard_dot_agent_dot_v1_dot_agent__pb2.ProbeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Capture(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/switchyard.agent.v1.Agent/Capture',
+            switchyard_dot_agent_dot_v1_dot_agent__pb2.CaptureRequest.SerializeToString,
+            switchyard_dot_agent_dot_v1_dot_agent__pb2.CaptureChunk.FromString,
             options,
             channel_credentials,
             insecure,

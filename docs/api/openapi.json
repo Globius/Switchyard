@@ -2567,6 +2567,250 @@
         "title": "AuthProviders",
         "type": "object"
       },
+      "Autoscale": {
+        "additionalProperties": false,
+        "description": "Add service engines to a group by itself when it is busy (ADR 0194). Scale-out only.\n\nThe group counts as busy while the engines' current connections, averaged over the reachable\nones, stay at ``scale_out_at`` percent of the group's ``maxconn`` or more for ``sustain_s``.\nThe autoscaler then deploys one more engine (never above ``max_engines``, never while an\nearlier one is still enrolling, never within ``cooldown_s`` of the last), enrolls it, and\nbrings it into the group with a canary-first reapply. It never removes an engine.\n\nAttributes:\n    enabled: Turn the autoscaler off without losing the settings.\n    max_engines: Upper limit for the group's engine count.\n    scale_out_at: Percent of ``maxconn`` that counts as busy.\n    sustain_s: How long the group must stay busy before an engine is added.\n    cooldown_s: Minimum time between two scale-outs.\n    deploy: What to clone.\n    enroll: How the new engine finds the controller.",
+        "properties": {
+          "cooldown_s": {
+            "default": 900,
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Cooldown S",
+            "type": "integer"
+          },
+          "deploy": {
+            "$ref": "#/components/schemas/AutoscaleDeploy"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "enroll": {
+            "$ref": "#/components/schemas/AutoscaleEnroll"
+          },
+          "max_engines": {
+            "default": 8,
+            "maximum": 16.0,
+            "minimum": 2.0,
+            "title": "Max Engines",
+            "type": "integer"
+          },
+          "scale_out_at": {
+            "default": 70,
+            "maximum": 95.0,
+            "minimum": 30.0,
+            "title": "Scale Out At",
+            "type": "integer"
+          },
+          "sustain_s": {
+            "default": 300,
+            "maximum": 3600.0,
+            "minimum": 30.0,
+            "title": "Sustain S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deploy",
+          "enroll"
+        ],
+        "title": "Autoscale",
+        "type": "object"
+      },
+      "AutoscaleDeploy": {
+        "additionalProperties": false,
+        "description": "What the autoscaler clones when it adds an engine (the arguments of a deploy).\n\nAttributes:\n    nodes: Proxmox nodes to place new engines on, round-robin.\n    template_vmid: The SE template to clone (a QEMU template with the guest agent).\n    mgmt_pool_id: VIP pool on the group's management network that addresses come from.\n    credentials_ref: OpenBao reference of the Data Plane API login (``user:password``).\n    pool: Proxmox resource pool for the VMs, if any.\n    nic_pools: Pool each data NIC takes its address from, by network id.\n    dataplane_port: Data Plane API port.\n    agent_port: ``sy-agent`` gRPC port.\n    ssh_public_keys: Operator keys for cloud-init.",
+        "properties": {
+          "agent_port": {
+            "default": 7443,
+            "title": "Agent Port",
+            "type": "integer"
+          },
+          "credentials_ref": {
+            "title": "Credentials Ref",
+            "type": "string"
+          },
+          "dataplane_port": {
+            "default": 5556,
+            "title": "Dataplane Port",
+            "type": "integer"
+          },
+          "mgmt_pool_id": {
+            "format": "uuid",
+            "title": "Mgmt Pool Id",
+            "type": "string"
+          },
+          "nic_pools": {
+            "additionalProperties": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "propertyNames": {
+              "format": "uuid"
+            },
+            "title": "Nic Pools",
+            "type": "object"
+          },
+          "nodes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Nodes",
+            "type": "array"
+          },
+          "pool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pool"
+          },
+          "ssh_public_keys": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssh Public Keys"
+          },
+          "template_vmid": {
+            "minimum": 100.0,
+            "title": "Template Vmid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "nodes",
+          "template_vmid",
+          "mgmt_pool_id",
+          "credentials_ref"
+        ],
+        "title": "AutoscaleDeploy",
+        "type": "object"
+      },
+      "AutoscaleEnroll": {
+        "additionalProperties": false,
+        "description": "How a new engine reaches the controller to enroll (ADR 0194).\n\nAttributes:\n    controller_url: ``https://`` address the agent enrolls to.\n    controller_cn: Name in the controller's certificate.\n    ca_ref: OpenBao reference of the controller CA certificate (PEM) the agent trusts.",
+        "properties": {
+          "ca_ref": {
+            "title": "Ca Ref",
+            "type": "string"
+          },
+          "controller_cn": {
+            "default": "switchyard-controller",
+            "title": "Controller Cn",
+            "type": "string"
+          },
+          "controller_url": {
+            "pattern": "^https://[A-Za-z0-9.\\-\\[\\]:]{1,253}(:\\d{1,5})?/?$",
+            "title": "Controller Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "controller_url",
+          "ca_ref"
+        ],
+        "title": "AutoscaleEnroll",
+        "type": "object"
+      },
+      "AutoscaleRead": {
+        "additionalProperties": false,
+        "description": "What the autoscaler last saw and did for one SE group.",
+        "properties": {
+          "decision": {
+            "enum": [
+              "off",
+              "idle",
+              "busy",
+              "at_max",
+              "cooldown",
+              "blocked",
+              "scaling",
+              "scale_out"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "engines": {
+            "title": "Engines",
+            "type": "integer"
+          },
+          "last_scaled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scaled At"
+          },
+          "max_engines": {
+            "title": "Max Engines",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "scale_out_at": {
+            "title": "Scale Out At",
+            "type": "integer"
+          },
+          "se_group": {
+            "title": "Se Group",
+            "type": "string"
+          },
+          "utilization": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Utilization"
+          }
+        },
+        "required": [
+          "se_group",
+          "enabled",
+          "engines",
+          "max_engines",
+          "scale_out_at",
+          "utilization",
+          "decision",
+          "reason",
+          "last_scaled_at"
+        ],
+        "title": "AutoscaleRead",
+        "type": "object"
+      },
       "AviFindingRead": {
         "additionalProperties": false,
         "description": "One decision of the conversion.",
@@ -3609,6 +3853,171 @@
           "secret_ref"
         ],
         "title": "CaptchaGate",
+        "type": "object"
+      },
+      "CaptureIn": {
+        "additionalProperties": false,
+        "description": "What to capture on an engine. The agent builds the filter from these fields.",
+        "properties": {
+          "duration_s": {
+            "default": 10,
+            "description": "Stop after this many seconds (1 to 60).",
+            "title": "Duration S",
+            "type": "integer"
+          },
+          "host": {
+            "default": "",
+            "description": "Only packets to or from this IP address.",
+            "title": "Host",
+            "type": "string"
+          },
+          "interface": {
+            "default": "any",
+            "description": "`any`, or the name of an interface of the engine (`eth0`).",
+            "title": "Interface",
+            "type": "string"
+          },
+          "max_packets": {
+            "default": 1000,
+            "description": "Stop after this many packets (1 to 20000).",
+            "title": "Max Packets",
+            "type": "integer"
+          },
+          "port": {
+            "default": 0,
+            "description": "Only this port (tcp or udp), 0 for any.",
+            "title": "Port",
+            "type": "integer"
+          },
+          "protocol": {
+            "default": "",
+            "description": "Only this protocol; empty captures every protocol.",
+            "enum": [
+              "",
+              "tcp",
+              "udp",
+              "icmp"
+            ],
+            "title": "Protocol",
+            "type": "string"
+          },
+          "snaplen": {
+            "default": 0,
+            "description": "Bytes kept per packet (64 to 262144); 0 keeps whole packets.",
+            "title": "Snaplen",
+            "type": "integer"
+          }
+        },
+        "title": "CaptureIn",
+        "type": "object"
+      },
+      "CaptureRead": {
+        "additionalProperties": false,
+        "description": "A packet capture and how it went (the pcap itself is downloaded separately).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "expires_at": {
+            "description": "The capture is deleted at this time.",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "packets": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packets"
+          },
+          "requested_by": {
+            "title": "Requested By",
+            "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CaptureIn"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "The size limit (16 MiB) ended the capture early.",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "engine",
+          "requested_by",
+          "spec",
+          "state",
+          "packets",
+          "size_bytes",
+          "truncated",
+          "error",
+          "created_at",
+          "finished_at",
+          "expires_at"
+        ],
+        "title": "CaptureRead",
         "type": "object"
       },
       "CertIdentity": {
@@ -6944,6 +7353,153 @@
         "title": "DnsProviderTypeRead",
         "type": "object"
       },
+      "DnsPublication": {
+        "additionalProperties": false,
+        "description": "Publish a service's VIP as DNS address records (ADR 0193).\n\nAttributes:\n    names: Host names that should resolve to the VIP (an ``A`` record for an IPv4 VIP, an\n        ``AAAA`` record for IPv6). No wildcards.\n    ttl: Record TTL in seconds; Cloudflare treats ``1`` as automatic.\n    proxied: Send the name through Cloudflare's proxy (the orange cloud). Not for UDP.\n    credential: Name of the tenant's DNS credential; empty picks the one whose zones cover\n        the name.\n\nExample:\n    >>> DnsPublication(names=(\"app.example.test\",)).ttl\n    300",
+        "properties": {
+          "credential": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential"
+          },
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Names",
+            "type": "array"
+          },
+          "proxied": {
+            "default": false,
+            "title": "Proxied",
+            "type": "boolean"
+          },
+          "ttl": {
+            "default": 300,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Ttl",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "title": "DnsPublication",
+        "type": "object"
+      },
+      "DnsRecordRead": {
+        "additionalProperties": false,
+        "description": "An address record the controller publishes for a virtual service.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "hostname": {
+            "title": "Hostname",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "proxied": {
+            "title": "Proxied",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "published",
+              "error"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "ttl": {
+            "title": "Ttl",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "A",
+              "AAAA"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "virtual_service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Virtual Service"
+          }
+        },
+        "required": [
+          "hostname",
+          "type",
+          "content",
+          "ttl",
+          "proxied",
+          "state",
+          "virtual_service",
+          "last_error",
+          "updated_at"
+        ],
+        "title": "DnsRecordRead",
+        "type": "object"
+      },
+      "DnsRecordSyncResult": {
+        "additionalProperties": false,
+        "description": "What a sync did.",
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "written",
+          "deleted",
+          "failed"
+        ],
+        "title": "DnsRecordSyncResult",
+        "type": "object"
+      },
       "DnsZoneTestRead": {
         "additionalProperties": false,
         "description": "The test in one zone.",
@@ -9595,6 +10151,16 @@
         "title": "IpRange",
         "type": "object"
       },
+      "IpvsForward": {
+        "description": "How IPVS sends a UDP service's packets to a real server (ADR 0192).\n\n``nat`` rewrites the destination and masquerades the source, so replies return through the SE.\n``dr`` (direct return) rewrites only the MAC address: the real server must share a layer-2\nsegment with the SE, own the VIP on a loopback and answer the client directly. ``tunnel``\nencapsulates the packet in IPIP: the real server needs an ``ipip`` interface that owns the VIP\nand answers the client directly; no layer-2 adjacency is needed.",
+        "enum": [
+          "nat",
+          "dr",
+          "tunnel"
+        ],
+        "title": "IpvsForward",
+        "type": "string"
+      },
       "IpvsRealServerStatus": {
         "additionalProperties": false,
         "description": "One IPVS real server of a UDP virtual service, with its counters.",
@@ -9926,7 +10492,10 @@
           "sync_jwks",
           "evaluate_alerts",
           "sync_gslb",
-          "probe_gslb"
+          "probe_gslb",
+          "sync_dns_records",
+          "autoscale_se_groups",
+          "packet_capture"
         ],
         "title": "JobKind",
         "type": "string"
@@ -18427,8 +18996,18 @@
       },
       "SeGroup": {
         "additionalProperties": false,
-        "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).\n    peers: Persistence table sync between the group's engines; ``None`` keeps each table local.",
+        "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).\n    peers: Persistence table sync between the group's engines; ``None`` keeps each table local.\n    autoscale: Adds engines by itself when the group is busy (ADR 0194).",
         "properties": {
+          "autoscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Autoscale"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canary_seconds": {
             "default": 30,
             "maximum": 600.0,
@@ -18510,6 +19089,16 @@
       "SeGroupCreate": {
         "additionalProperties": false,
         "properties": {
+          "autoscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Autoscale"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canary_seconds": {
             "default": 30,
             "maximum": 600.0,
@@ -18637,6 +19226,16 @@
       "SeGroupPatch": {
         "additionalProperties": false,
         "properties": {
+          "autoscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Autoscale"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canary_seconds": {
             "anyOf": [
               {
@@ -18724,6 +19323,16 @@
         "additionalProperties": false,
         "description": "SeGroup as returned by the API.",
         "properties": {
+          "autoscale": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Autoscale"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "canary_seconds": {
             "default": 30,
             "maximum": 600.0,
@@ -20427,7 +21036,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).\n    labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).\n    labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.\n    forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or\n        ``tunnel`` (ADR 0192). The last two need every member on the service port.\n    dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -20494,6 +21103,16 @@
             ],
             "title": "Deny List Id"
           },
+          "dns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsPublication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -20503,6 +21122,10 @@
             "default": false,
             "title": "Enforce Allow List",
             "type": "boolean"
+          },
+          "forward_mode": {
+            "$ref": "#/components/schemas/IpvsForward",
+            "default": "nat"
           },
           "id": {
             "format": "uuid",
@@ -20681,6 +21304,16 @@
             ],
             "title": "Deny List Id"
           },
+          "dns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsPublication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -20690,6 +21323,10 @@
             "default": false,
             "title": "Enforce Allow List",
             "type": "boolean"
+          },
+          "forward_mode": {
+            "$ref": "#/components/schemas/IpvsForward",
+            "default": "nat"
           },
           "labels": {
             "additionalProperties": {
@@ -20971,6 +21608,16 @@
             ],
             "title": "Deny List Id"
           },
+          "dns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsPublication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "enabled": {
             "anyOf": [
               {
@@ -20992,6 +21639,16 @@
               }
             ],
             "title": "Enforce Allow List"
+          },
+          "forward_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IpvsForward"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "labels": {
             "anyOf": [
@@ -21203,6 +21860,16 @@
             ],
             "title": "Deny List Id"
           },
+          "dns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsPublication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
             "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
@@ -21216,6 +21883,10 @@
             "default": false,
             "title": "Enforce Allow List",
             "type": "boolean"
+          },
+          "forward_mode": {
+            "$ref": "#/components/schemas/IpvsForward",
+            "default": "nat"
           },
           "id": {
             "format": "uuid",
@@ -32549,6 +33220,455 @@
         "x-required-role": "viewer"
       }
     },
+    "/api/v1/tenants/{t}/autoscale": {
+      "get": {
+        "description": "For each SE group with an `autoscale` block: its engine count, the average connection load the autoscaler measured and its last decision (`idle`, `busy`, `scaling`, `cooldown`, `at_max`, `blocked` with the reason, or `off`). The autoscaler only adds engines. 404 when the controller has no Proxmox client or agent enrollment. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_autoscale_api_v1_tenants__t__autoscale_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "decision": "idle",
+                    "enabled": true,
+                    "engines": 3,
+                    "max_engines": 6,
+                    "scale_out_at": 70,
+                    "se_group": "edge",
+                    "utilization": 41
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AutoscaleRead"
+                  },
+                  "title": "Response List Autoscale Api V1 Tenants  T  Autoscale Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Autoscaler state of the SE groups",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/captures": {
+      "get": {
+        "description": "The tenant's captures, newest first, without the pcap data. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "list_captures_api_v1_tenants__t__captures_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-10T08:30:00Z",
+                    "engine": "edge-1",
+                    "expires_at": "2026-10-10T08:30:00Z",
+                    "finished_at": "2026-10-10T08:30:00Z",
+                    "id": "0192f9a0-0000-7000-8000-000000000042",
+                    "packets": 214,
+                    "requested_by": "user:alice",
+                    "size_bytes": 48210,
+                    "spec": {
+                      "duration_s": 10,
+                      "host": "192.0.2.20",
+                      "interface": "any",
+                      "max_packets": 1000,
+                      "port": 443,
+                      "protocol": "tcp",
+                      "snaplen": 0
+                    },
+                    "state": "done",
+                    "truncated": false
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CaptureRead"
+                  },
+                  "title": "Response List Captures Api V1 Tenants  T  Captures Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Packet captures",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/captures/{capture}": {
+      "get": {
+        "description": "State, packet count and size of a capture. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "get_capture_api_v1_tenants__t__captures__capture__get",
+        "parameters": [
+          {
+            "description": "Id of a packet capture (`id` in the capture list).",
+            "in": "path",
+            "name": "capture",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Capture",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "engine": "edge-1",
+                  "expires_at": "2026-10-10T08:30:00Z",
+                  "finished_at": "2026-10-10T08:30:00Z",
+                  "id": "0192f9a0-0000-7000-8000-000000000042",
+                  "packets": 214,
+                  "requested_by": "user:alice",
+                  "size_bytes": 48210,
+                  "spec": {
+                    "duration_s": 10,
+                    "host": "192.0.2.20",
+                    "interface": "any",
+                    "max_packets": 1000,
+                    "port": 443,
+                    "protocol": "tcp",
+                    "snaplen": 0
+                  },
+                  "state": "done",
+                  "truncated": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One packet capture",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/captures/{capture}/pcap": {
+      "get": {
+        "description": "The pcap file, for Wireshark or `tcpdump -r`. Audited. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "download_capture_api_v1_tenants__t__captures__capture__pcap_get",
+        "parameters": [
+          {
+            "description": "Id of a packet capture (`id` in the capture list).",
+            "in": "path",
+            "name": "capture",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Capture",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.tcpdump.pcap": {}
+            },
+            "description": "pcap"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download a packet capture",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
     "/api/v1/tenants/{t}/certificate-renewals": {
       "get": {
         "description": "For each server certificate: issuer, expiry, when renewal starts and the last result.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
@@ -37175,6 +38295,221 @@
         "x-required-role": "tenant-admin"
       }
     },
+    "/api/v1/tenants/{t}/dns-records": {
+      "get": {
+        "description": "The `A`/`AAAA` records the controller created from the `dns` block of virtual services, with their state (`published`, `pending` or `error` with the reason). Records the controller did not create are never listed or changed. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_dns_records_api_v1_tenants__t__dns_records_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "content": "192.0.2.20",
+                    "hostname": "app.example.test",
+                    "proxied": false,
+                    "state": "published",
+                    "ttl": 300,
+                    "type": "A",
+                    "updated_at": "2026-10-10T08:30:00Z",
+                    "virtual_service": "web"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DnsRecordRead"
+                  },
+                  "title": "Response List Dns Records Api V1 Tenants  T  Dns Records Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "DNS records published for virtual services",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/dns-records/sync": {
+      "post": {
+        "description": "Reconciles the records of every virtual service with a `dns` block through the tenant's DNS credential: creates or updates the records, deletes the ones whose service, name or `dns` block is gone. A scheduled job does the same every minute. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "sync_dns_records_api_v1_tenants__t__dns_records_sync_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "deleted": 0,
+                  "failed": 0,
+                  "written": 2
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DnsRecordSyncResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Publish DNS records now",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
     "/api/v1/tenants/{t}/engines": {
       "get": {
         "description": "All service engines across SE groups, by group then name, with Proxmox placement (`pve_node`, `vmid`) and agent enrollment. Filter with `se_group` and `state`. Live health is in `GET /status/engines`. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
@@ -37555,6 +38890,158 @@
           "engines"
         ],
         "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/engines/{engine}/captures": {
+      "post": {
+        "description": "Queues a bounded `tcpdump` on the engine: an interface (or `any`), an optional protocol, host and port, up to 60 seconds and 20000 packets. The agent builds the filter from these fields; free text is never accepted. One capture runs per engine at a time. Poll `GET /captures/{id}` until it is `done`, then download the pcap. A capture holds real traffic: it needs `tenant-admin`, is audited, and is deleted after 24 hours.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "request_capture_api_v1_tenants__t__engines__engine__captures_post",
+        "parameters": [
+          {
+            "description": "Engine id.",
+            "in": "path",
+            "name": "engine",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engine",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "duration_s": 10,
+                "host": "192.0.2.20",
+                "interface": "any",
+                "max_packets": 1000,
+                "port": 443,
+                "protocol": "tcp"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CaptureIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "engine": "edge-1",
+                  "expires_at": "2026-10-10T08:30:00Z",
+                  "finished_at": "2026-10-10T08:30:00Z",
+                  "id": "0192f9a0-0000-7000-8000-000000000042",
+                  "packets": 214,
+                  "requested_by": "user:alice",
+                  "size_bytes": 48210,
+                  "spec": {
+                    "duration_s": 10,
+                    "host": "192.0.2.20",
+                    "interface": "any",
+                    "max_packets": 1000,
+                    "port": 443,
+                    "protocol": "tcp",
+                    "snaplen": 0
+                  },
+                  "state": "done",
+                  "truncated": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capture packets on an engine",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "tenant-admin"
       }
     },
     "/api/v1/tenants/{t}/engines/{engine}/enrollment-token": {

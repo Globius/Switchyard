@@ -6,6 +6,19 @@ files in `docs/adr/`, the parity plan and work blocks (08, 09), the ticket lists
 three lab reports in `docs/lab/`. This replaces [06-planned-vs-built.md](../design/06-planned-vs-built.md) (2026-10-10), which is out
 of date.
 
+## Update: four missing items built
+
+Since this audit, four rows of the "Missing" list below are built and tested (not lab-tested; none was run on the Proxmox lab):
+
+| Item | Now | Where |
+| --- | --- | --- |
+| IPVS direct-return / tunnel modes | built, not lab-tested | [ADR 0192](../adr/0192-ipvs-direct-return-and-tunnel.md), `render/routing.py`, `golden_routing/08` |
+| Cloudflare DNS record created from a virtual service | built, not lab-tested | [ADR 0193](../adr/0193-dns-records-from-virtual-services.md), `services/dns_records.py`, [dns-records.md](../dns-records.md) |
+| Automatic SE scale-out | built, not lab-tested | [ADR 0194](../adr/0194-autoscale-and-packet-capture.md), `services/autoscale.py`, [autoscale.md](../autoscale.md) |
+| Packet capture job | built, not lab-tested | [ADR 0194](../adr/0194-autoscale-and-packet-capture.md), `agent/internal/capture`, `services/captures.py`, [packet-capture.md](../packet-capture.md) |
+
+The counts and tables below are as of the audit and are not rewritten.
+
 ## How to read this
 
 Status words:

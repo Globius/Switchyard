@@ -19,6 +19,8 @@ from switchyard.jobs.queue import Job
 from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator
+from switchyard.services.autoscale import AUTOSCALE_JOB, Autoscaler
+from switchyard.services.captures import PACKET_CAPTURE_JOB, PacketCaptures
 from switchyard.services.certificates import (
     ISSUE_CERT_JOB,
     RENEW_CERTS_JOB,
@@ -30,6 +32,7 @@ from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
+from switchyard.services.dns_records import SYNC_DNS_RECORDS_JOB, DnsRecordSync
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.gslb import PROBE_GSLB_JOB, SYNC_GSLB_JOB, GslbProber, GslbSync
 from switchyard.services.infra import (
@@ -70,6 +73,9 @@ def build_handlers(
     gslb: GslbSync | None = None,
     prober: GslbProber | None = None,
     jwks: JwksSync | None = None,
+    dns_records: DnsRecordSync | None = None,
+    autoscaler: Autoscaler | None = None,
+    captures: PacketCaptures | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -78,6 +84,10 @@ def build_handlers(
         pipeline: The apply pipeline.
         members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
         iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
+        dns_records: Publishes virtual services as DNS address records; ``None`` skips the
+            ``sync_dns_records`` kind.
+        captures: Packet captures on engines; ``None`` skips the ``packet_capture`` kind.
+        autoscaler: Adds engines to busy SE groups; ``None`` skips the ``autoscale_se_groups`` kind.
         jwks: Refreshes JWT keys from ``jwks_url``; ``None`` skips the ``sync_jwks`` kind.
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
@@ -170,6 +180,26 @@ def build_handlers(
             return dict(await gslb.run())
 
         handlers[SYNC_GSLB_JOB] = sync_gslb
+    if captures is not None:
+
+        async def packet_capture(job: Job) -> dict[str, Any]:
+            return dict(
+                await captures.run(UUID(job.payload["tenant_id"]), UUID(job.payload["capture_id"]))
+            )
+
+        handlers[PACKET_CAPTURE_JOB] = packet_capture
+    if autoscaler is not None:
+
+        async def autoscale_se_groups(job: Job) -> dict[str, Any]:
+            return dict(await autoscaler.run())
+
+        handlers[AUTOSCALE_JOB] = autoscale_se_groups
+    if dns_records is not None:
+
+        async def sync_dns_records(job: Job) -> dict[str, Any]:
+            return dict(await dns_records.run())
+
+        handlers[SYNC_DNS_RECORDS_JOB] = sync_dns_records
     if prober is not None:
 
         async def probe_gslb(job: Job) -> dict[str, Any]:

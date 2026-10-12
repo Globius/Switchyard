@@ -131,6 +131,7 @@ class SeGroupRow(TenantOwnedMixin, Base):
     maxconn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20000"))
     canary_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("30"))
     peers: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    autoscale: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class SeGroupNetworkRow(Base):
@@ -324,10 +325,12 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
         tenant_fk("allow_list_id", "policy_set"),
         tenant_fk("deny_list_id", "policy_set"),
         enum_check("protocol", dm.Protocol),
+        enum_check("forward_mode", dm.IpvsForward),
         CheckConstraint("version >= 1", name="version"),
     )
 
     se_group_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    forward_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'nat'"))
     protocol: Mapped[str] = mapped_column(Text, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     vip: Mapped[str] = mapped_column(INET, nullable=False)
@@ -344,6 +347,7 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
     labels: Mapped[dict[str, str]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
+    dns: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class VsPortRow(Base):

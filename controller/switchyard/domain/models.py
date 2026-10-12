@@ -76,6 +76,21 @@ class NetworkRole(enum.StrEnum):
     MGMT = "mgmt"
 
 
+class IpvsForward(enum.StrEnum):
+    """How IPVS sends a UDP service's packets to a real server (ADR 0192).
+
+    ``nat`` rewrites the destination and masquerades the source, so replies return through the SE.
+    ``dr`` (direct return) rewrites only the MAC address: the real server must share a layer-2
+    segment with the SE, own the VIP on a loopback and answer the client directly. ``tunnel``
+    encapsulates the packet in IPIP: the real server needs an ``ipip`` interface that owns the VIP
+    and answers the client directly; no layer-2 adjacency is needed.
+    """
+
+    NAT = "nat"
+    DR = "dr"
+    TUNNEL = "tunnel"
+
+
 class Protocol(enum.StrEnum):
     """Virtual service protocol. ``udp`` renders to IPVS via Keepalived, not HAProxy (M6)."""
 
@@ -268,6 +283,74 @@ class PeerSync(Model):
         return self
 
 
+class AutoscaleDeploy(Model):
+    """What the autoscaler clones when it adds an engine (the arguments of a deploy).
+
+    Attributes:
+        nodes: Proxmox nodes to place new engines on, round-robin.
+        template_vmid: The SE template to clone (a QEMU template with the guest agent).
+        mgmt_pool_id: VIP pool on the group's management network that addresses come from.
+        credentials_ref: OpenBao reference of the Data Plane API login (``user:password``).
+        pool: Proxmox resource pool for the VMs, if any.
+        nic_pools: Pool each data NIC takes its address from, by network id.
+        dataplane_port: Data Plane API port.
+        agent_port: ``sy-agent`` gRPC port.
+        ssh_public_keys: Operator keys for cloud-init.
+    """
+
+    nodes: tuple[str, ...] = Field(min_length=1, max_length=8)
+    template_vmid: int = Field(ge=100)
+    mgmt_pool_id: UUID
+    credentials_ref: SecretRef
+    pool: str | None = None
+    nic_pools: dict[UUID, UUID] = Field(default_factory=dict)
+    dataplane_port: Port = 5556
+    agent_port: Port = 7443
+    ssh_public_keys: str | None = None
+
+
+class AutoscaleEnroll(Model):
+    """How a new engine reaches the controller to enroll (ADR 0194).
+
+    Attributes:
+        controller_url: ``https://`` address the agent enrolls to.
+        controller_cn: Name in the controller's certificate.
+        ca_ref: OpenBao reference of the controller CA certificate (PEM) the agent trusts.
+    """
+
+    controller_url: str = Field(pattern=r"^https://[A-Za-z0-9.\-\[\]:]{1,253}(:\d{1,5})?/?$")
+    controller_cn: Hostname = "switchyard-controller"
+    ca_ref: SecretRef
+
+
+class Autoscale(Model):
+    """Add service engines to a group by itself when it is busy (ADR 0194). Scale-out only.
+
+    The group counts as busy while the engines' current connections, averaged over the reachable
+    ones, stay at ``scale_out_at`` percent of the group's ``maxconn`` or more for ``sustain_s``.
+    The autoscaler then deploys one more engine (never above ``max_engines``, never while an
+    earlier one is still enrolling, never within ``cooldown_s`` of the last), enrolls it, and
+    brings it into the group with a canary-first reapply. It never removes an engine.
+
+    Attributes:
+        enabled: Turn the autoscaler off without losing the settings.
+        max_engines: Upper limit for the group's engine count.
+        scale_out_at: Percent of ``maxconn`` that counts as busy.
+        sustain_s: How long the group must stay busy before an engine is added.
+        cooldown_s: Minimum time between two scale-outs.
+        deploy: What to clone.
+        enroll: How the new engine finds the controller.
+    """
+
+    enabled: bool = True
+    max_engines: int = Field(default=8, ge=2, le=16)
+    scale_out_at: int = Field(default=70, ge=30, le=95)
+    sustain_s: int = Field(default=300, ge=30, le=3600)
+    cooldown_s: int = Field(default=900, ge=60, le=86_400)
+    deploy: AutoscaleDeploy
+    enroll: AutoscaleEnroll
+
+
 class SeGroup(TenantOwned):
     """A set of HAProxy service engines that serve the same virtual services.
 
@@ -280,6 +363,7 @@ class SeGroup(TenantOwned):
         canary_seconds: How long the canary SE is watched after a push before the rest of the
             group is updated (0 skips the wait).
         peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
+        autoscale: Adds engines by itself when the group is busy (ADR 0194).
     """
 
     ha_mode: HaMode
@@ -288,6 +372,7 @@ class SeGroup(TenantOwned):
     canary_seconds: int = Field(default=30, ge=0, le=600)
     routing_profile_id: UUID | None = None
     peers: PeerSync | None = None
+    autoscale: Autoscale | None = None
 
 
 InterfaceName = Annotated[str, AfterValidator(v.validate_interface)]
@@ -635,6 +720,36 @@ class VsPort(Model):
         return self
 
 
+class DnsPublication(Model):
+    """Publish a service's VIP as DNS address records (ADR 0193).
+
+    Attributes:
+        names: Host names that should resolve to the VIP (an ``A`` record for an IPv4 VIP, an
+            ``AAAA`` record for IPv6). No wildcards.
+        ttl: Record TTL in seconds; Cloudflare treats ``1`` as automatic.
+        proxied: Send the name through Cloudflare's proxy (the orange cloud). Not for UDP.
+        credential: Name of the tenant's DNS credential; empty picks the one whose zones cover
+            the name.
+
+    Example:
+        >>> DnsPublication(names=("app.example.test",)).ttl
+        300
+    """
+
+    names: tuple[Hostname, ...] = Field(min_length=1, max_length=16)
+    ttl: int = Field(default=300, ge=1, le=86400)
+    proxied: bool = False
+    credential: str | None = None
+
+    @model_validator(mode="after")
+    def _names(self) -> Self:
+        if len({n.lower() for n in self.names}) != len(self.names):
+            raise ValueError("names must be unique")
+        if any(n.startswith("*") for n in self.names):
+            raise ValueError("wildcard names are not published")
+        return self
+
+
 class Compression(Model):
     """Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
 
@@ -718,6 +833,9 @@ class VirtualService(TenantOwned):
         compression: Response compression (``http`` only; ADR 0117).
         cache: Response cache (``http`` only; ADR 0117).
         labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.
+        forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or
+            ``tunnel`` (ADR 0192). The last two need every member on the service port.
+        dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).
     """
 
     se_group_id: UUID
@@ -737,6 +855,8 @@ class VirtualService(TenantOwned):
     compression: Compression | None = None
     cache: CacheSettings | None = None
     labels: Labels = Field(default_factory=dict)
+    forward_mode: IpvsForward = IpvsForward.NAT
+    dns: DnsPublication | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:

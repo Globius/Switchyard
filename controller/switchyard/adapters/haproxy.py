@@ -58,10 +58,14 @@ class EngineInfo:
     Attributes:
         pid: Worker process id. A successful reload starts a new worker, so the pid changes.
         uptime_s: Seconds since the worker started.
+        curr_conns: Connections open now, when the Data Plane API reports them.
+        max_conn: HAProxy's connection limit (``global maxconn``), when reported.
     """
 
     pid: int
     uptime_s: int
+    curr_conns: int | None = None
+    max_conn: int | None = None
 
 
 @dataclass(frozen=True)

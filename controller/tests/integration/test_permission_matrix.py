@@ -158,6 +158,8 @@ for _read in (
     ("GET", "/tenants/{t}/gslb-zones/{zone}/ds"),
     ("GET", "/tenants/{t}/wide-ips"),
     ("GET", "/tenants/{t}/gslb/status"),
+    ("GET", "/tenants/{t}/dns-records"),
+    ("GET", "/tenants/{t}/autoscale"),
     ("GET", "/tenants/{t}/alert-rules"),
     ("GET", "/tenants/{t}/alerts"),
     ("GET", "/tenants/{t}/logs"),
@@ -181,6 +183,14 @@ ROUTES[("POST", "/tenants/{t}/gslb-zones/{zone}/wide-ips")] = INFRA
 ROUTES[("PATCH", "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}")] = INFRA
 ROUTES[("DELETE", "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}")] = INFRA
 ROUTES[("POST", "/tenants/{t}/gslb/sync")] = INFRA
+ROUTES[("POST", "/tenants/{t}/dns-records/sync")] = INFRA
+for _capture in (
+    ("POST", "/tenants/{t}/engines/{engine}/captures"),
+    ("GET", "/tenants/{t}/captures"),
+    ("GET", "/tenants/{t}/captures/{capture}"),
+    ("GET", "/tenants/{t}/captures/{capture}/pcap"),
+):
+    ROUTES[_capture] = ("manage", "engine")
 for _alert in ("targets", "rules"):
     ROUTES[("POST", f"/tenants/{{t}}/alert-{_alert}")] = INFRA
     ROUTES[("PATCH", f"/tenants/{{t}}/alert-{_alert}/{{name}}")] = INFRA
@@ -258,6 +268,7 @@ ROUTES.pop(("GET", "/tenants/{t}/routing-profiles/{object_id}/rendered"), None)
 # valid request bodies, so the role check (not body validation) decides the status
 NOW = "2038-01-01T00:00:00+00:00"
 BODIES: dict[tuple[str, str], Any] = {
+    ("POST", "/tenants/{t}/engines/{engine}/captures"): {"interface": "any", "duration_s": 5},
     ("POST", "/tenants/{t}/health-monitors/{monitor_id}/test"): {
         "pool_id": "{uuid}",
         "member_id": "{uuid}",
@@ -443,6 +454,7 @@ def fill(path: str) -> str:
         "controller_member",
         "request",
         "test_id",
+        "capture",
     ):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
     for key in ("pool", "member", "group", "monitor_id", "pool_id"):

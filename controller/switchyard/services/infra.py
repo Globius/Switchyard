@@ -29,6 +29,7 @@ from switchyard.domain import ipam
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
 from switchyard.domain.validators import check_secret_ref_scope
+from switchyard.domain.workflow import EngineState
 from switchyard.ids import uuid7
 from switchyard.jobs import queue
 from switchyard.pipeline.locks import PgGroupLocks
@@ -94,6 +95,8 @@ class DeployRequest:
             network without an entry leaves its NIC unaddressed). One address per engine per NIC.
         guest_kind: ``qemu`` (cloud-init VMs, the default) or ``lxc`` (containers: lighter, no
             cloud-init, so enrollment material is delivered out of band; ADR 0054).
+        staged: Register the new engines ``disabled`` so no rollout or poll touches them before
+            they are enrolled; the autoscaler enables them (ADR 0194).
     """
 
     tenant_id: UUID
@@ -109,6 +112,7 @@ class DeployRequest:
     ssh_public_keys: str | None = None
     guest_kind: str = "qemu"
     nic_pools: dict[UUID, UUID] = field(default_factory=dict)
+    staged: bool = False
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "DeployRequest":
@@ -127,6 +131,7 @@ class DeployRequest:
             ssh_public_keys=payload.get("ssh_public_keys"),
             guest_kind=str(payload.get("guest_kind", "qemu")),
             nic_pools={UUID(k): UUID(v) for k, v in (payload.get("nic_pools") or {}).items()},
+            staged=bool(payload.get("staged", False)),
         )
 
     def as_payload(self) -> dict[str, Any]:
@@ -142,6 +147,7 @@ class DeployRequest:
             "agent_port": self.agent_port,
             "guest_kind": self.guest_kind,
             "nic_pools": {str(k): str(v) for k, v in self.nic_pools.items()},
+            "staged": self.staged,
         }
         for key in ("pool", "credentials_ref", "ssh_public_keys"):
             if getattr(self, key) is not None:
@@ -594,6 +600,7 @@ class InfraService:
                 vmid=vmid,
                 guest_kind=request.guest_kind,
                 data_ips=data_ips,
+                state=EngineState.DISABLED.value if request.staged else EngineState.ENABLED.value,
             )
             session.add(row)
             await session.flush()

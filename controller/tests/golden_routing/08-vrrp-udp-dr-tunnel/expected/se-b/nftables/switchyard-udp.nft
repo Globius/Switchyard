@@ -1,0 +1,14 @@
+# Managed by Switchyard. Do not edit: changes are reported as drift.
+# Source NAT for UDP that IPVS sends to real servers, so replies return through this SE.
+table ip sy_udp {
+    set backends {
+        type ipv4_addr . inet_service
+        elements = {
+            10.20.0.70 . 514
+        }
+    }
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        ip daddr . udp dport @backends masquerade
+    }
+}

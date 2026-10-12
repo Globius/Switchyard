@@ -74,6 +74,7 @@ async def test_old_things_are_expired_and_the_rest_is_untouched(pg_url: str) -> 
             "grafana_grants_deleted": 0,
             "sessions_deleted": 1,
             "enrollment_tokens_deleted": 0,
+            "captures_deleted": 0,
         }
         assert await scalar(w, "SELECT count(*) FROM job WHERE state='queued'") == 1
         assert await scalar(w, "SELECT count(*) FROM change_set WHERE state='discarded'") == 1

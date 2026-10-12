@@ -88,6 +88,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 canary_seconds=g.canary_seconds,
                 routing_profile_id=g.routing_profile_id,
                 peers=g.peers.model_dump(mode="json") if g.peers else None,
+                autoscale=g.autoscale.model_dump(mode="json") if g.autoscale else None,
             )
         )
     for hm in snapshot.health_monitors:
@@ -226,6 +227,8 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 compression=s.compression.model_dump(mode="json") if s.compression else None,
                 cache=s.cache.model_dump(mode="json") if s.cache else None,
                 labels=dict(s.labels),
+                forward_mode=s.forward_mode.value,
+                dns=s.dns.model_dump(mode="json") if s.dns else None,
             )
         )
     # Child rows come after their parents so inserts satisfy the foreign keys.
@@ -393,6 +396,7 @@ def rows_to_snapshot(
                 "maxconn": g.maxconn,
                 "canary_seconds": g.canary_seconds,
                 "peers": g.peers,
+                "autoscale": g.autoscale,
                 "routing_profile_id": g.routing_profile_id,
                 "networks": [
                     {"network_id": gn.network_id, "role": gn.role}
@@ -507,6 +511,8 @@ def rows_to_snapshot(
                 "compression": s.compression,
                 "cache": s.cache,
                 "labels": s.labels or {},
+                "forward_mode": s.forward_mode,
+                "dns": s.dns,
                 "ports": [
                     {
                         "port": p.port,

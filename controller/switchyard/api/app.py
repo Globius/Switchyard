@@ -22,7 +22,7 @@ import httpx
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from switchyard.adapters.agent import AgentError
+from switchyard.adapters.agent import AgentError, CaptureSpec
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.proxmox import Proxmox
 from switchyard.adapters.secrets import SecretsReader, SecretsWriter
@@ -40,12 +40,15 @@ from switchyard.api.alert_models import (
     AlertTargetRead,
     AlertTargetTest,
 )
+from switchyard.api.autoscale_models import AutoscaleRead
+from switchyard.api.capture_models import CaptureIn, CaptureRead
 from switchyard.api.controller_member_models import (
     ControllerMemberIn,
     ControllerMemberPatch,
     ControllerMemberRead,
     ControllerMembersRead,
 )
+from switchyard.api.dns_record_models import DnsRecordRead, DnsRecordSyncResult
 from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
 from switchyard.api.gslb_models import (
     GslbDsRead,
@@ -206,7 +209,9 @@ from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
 from switchyard.services import principals
 from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.alerts import EVENT_ACTIONS, AlertService
+from switchyard.services.autoscale import Autoscaler
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
+from switchyard.services.captures import PacketCaptures
 from switchyard.services.cert_requests import CertificateRequests, IssueRequest
 from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import (
@@ -219,6 +224,7 @@ from switchyard.services.context import Databases, Principal
 from switchyard.services.controller_members import ControllerMembers
 from switchyard.services.controller_settings import ControllerSettings
 from switchyard.services.dns_providers import DnsProviders
+from switchyard.services.dns_records import DnsRecordSync
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.grafana import GrafanaLaunchError, GrafanaService
@@ -295,6 +301,9 @@ class ApiServices:
     kubernetes: KubernetesClusters | None = None
     quota_requests: QuotaRequests = None  # type: ignore[assignment]
     controller_members: ControllerMembers = None  # type: ignore[assignment]
+    dns_records: DnsRecordSync | None = None
+    autoscaler: Autoscaler | None = None
+    captures: PacketCaptures = None  # type: ignore[assignment]
 
 
 def build_services(
@@ -313,6 +322,7 @@ def build_services(
     alerts: AlertService | None = None,
     email_configured: bool = False,
     gslb: GslbService | None = None,
+    autoscaler: Autoscaler | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles.
 
@@ -335,6 +345,7 @@ def build_services(
             forced=sessions.break_glass_enabled,
         )
     engines = EngineService(db)
+    dns_providers = DnsProviders(db, secrets) if writer is not None else None
     return ApiServices(
         db=db,
         tenants=TenantService(db),
@@ -363,7 +374,10 @@ def build_services(
         gslb=gslb,
         email_configured=email_configured,
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
-        dns_providers=DnsProviders(db, secrets) if writer is not None else None,
+        dns_providers=dns_providers,
+        dns_records=DnsRecordSync(db, dns_providers) if dns_providers is not None else None,
+        autoscaler=autoscaler,
+        captures=PacketCaptures(db, directory),
         controller=ControllerSettings(db, ChangeSetService(db)),
         avi_import=AviImportService(db, ChangeSetService(db), certs),
         kubernetes=KubernetesClusters(db, secrets, ChangeSetService(db))
@@ -2529,6 +2543,123 @@ def create_app(
         return await need_gslb(svc, who).sync(  # type: ignore[no-any-return]
             who, tenant.id, force=True, request_id=_rid()
         )
+
+    # Packet captures on engines (ADR 0194)
+    @router.post(
+        "/tenants/{t}/engines/{engine}/captures",
+        status_code=202,
+        tags=["engines"],
+        summary="Capture packets on an engine",
+        description="Queues a bounded `tcpdump` on the engine: an interface (or `any`), an "
+        "optional protocol, host and port, up to 60 seconds and 20000 packets. The agent builds "
+        "the filter from these fields; free text is never accepted. One capture runs per engine "
+        "at a time. Poll `GET /captures/{id}` until it is `done`, then download the pcap. A "
+        "capture holds real traffic: it needs `tenant-admin`, is audited, and is deleted after "
+        "24 hours.",
+        response_model=CaptureRead,
+        responses=_ok(ex.CAPTURE, 202),
+    )
+    async def request_capture(
+        engine: UUID, body: CaptureIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await svc.captures.request(
+            who, tenant.id, engine, CaptureSpec(**body.model_dump()), request_id=_rid()
+        )
+
+    @router.get(
+        "/tenants/{t}/captures",
+        tags=["engines"],
+        summary="Packet captures",
+        description="The tenant's captures, newest first, without the pcap data. Requires "
+        "`tenant-admin`.",
+        response_model=list[CaptureRead],
+        responses=_ok([ex.CAPTURE]),
+    )
+    async def list_captures(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return await svc.captures.list_captures(who, tenant.id)
+
+    @router.get(
+        "/tenants/{t}/captures/{capture}",
+        tags=["engines"],
+        summary="One packet capture",
+        description="State, packet count and size of a capture. Requires `tenant-admin`.",
+        response_model=CaptureRead,
+        responses=_ok(ex.CAPTURE),
+    )
+    async def get_capture(capture: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        return await svc.captures.get(who, tenant.id, capture)
+
+    @router.get(
+        "/tenants/{t}/captures/{capture}/pcap",
+        tags=["engines"],
+        summary="Download a packet capture",
+        description="The pcap file, for Wireshark or `tcpdump -r`. Audited. Requires "
+        "`tenant-admin`.",
+        response_class=Response,
+        responses={200: {"content": {"application/vnd.tcpdump.pcap": {}}, "description": "pcap"}},
+    )
+    async def download_capture(capture: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
+        name, data = await svc.captures.download(who, tenant.id, capture, request_id=_rid())
+        return Response(
+            data,
+            media_type="application/vnd.tcpdump.pcap",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        )
+
+    @router.get(
+        "/tenants/{t}/autoscale",
+        tags=["se-groups"],
+        summary="Autoscaler state of the SE groups",
+        description="For each SE group with an `autoscale` block: its engine count, the average "
+        "connection load the autoscaler measured and its last decision (`idle`, `busy`, "
+        "`scaling`, `cooldown`, `at_max`, `blocked` with the reason, or `off`). The autoscaler "
+        "only adds engines. 404 when the controller has no Proxmox client or agent enrollment. "
+        "Requires any role in the tenant.",
+        response_model=list[AutoscaleRead],
+        responses=_ok([ex.AUTOSCALE]),
+    )
+    async def list_autoscale(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        require(who, "read", "tenant_data")  # who may ask is decided before whether it is on
+        if svc.autoscaler is None:
+            raise ApiError(
+                404, "autoscaling needs Proxmox and agent enrollment", code="not_enabled"
+            )
+        return await svc.autoscaler.list_states(who, tenant.id)
+
+    # DNS address records of virtual services (ADR 0193)
+    @router.get(
+        "/tenants/{t}/dns-records",
+        tags=["virtual-services"],
+        summary="DNS records published for virtual services",
+        description="The `A`/`AAAA` records the controller created from the `dns` block of virtual "
+        "services, with their state (`published`, `pending` or `error` with the reason). Records "
+        "the controller did not create are never listed or changed. Requires any role in the "
+        "tenant.",
+        response_model=list[DnsRecordRead],
+        responses=_ok([ex.DNS_RECORD]),
+    )
+    async def list_dns_records(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        require(who, "read", "tenant_data")
+        if svc.dns_records is None:
+            raise ApiError(404, "DNS records need OpenBao credentials", code="not_enabled")
+        return await svc.dns_records.list_records(who, tenant.id)
+
+    @router.post(
+        "/tenants/{t}/dns-records/sync",
+        tags=["virtual-services"],
+        summary="Publish DNS records now",
+        description="Reconciles the records of every virtual service with a `dns` block through "
+        "the tenant's DNS credential: creates or updates the records, deletes the ones whose "
+        "service, name or `dns` block is gone. A scheduled job does the same every minute. "
+        "Requires `tenant-admin`.",
+        response_model=DnsRecordSyncResult,
+        responses=_ok({"written": 2, "deleted": 0, "failed": 0}),
+    )
+    async def sync_dns_records(tenant: Tenant, who: Who, svc: Services) -> dict[str, int]:
+        require(who, "write", "infrastructure")
+        if svc.dns_records is None:
+            raise ApiError(404, "DNS records need OpenBao credentials", code="not_enabled")
+        return await svc.dns_records.sync(who, tenant.id, request_id=_rid())
 
     # telemetry
     async def _service_name(svc: ApiServices, tenant: TenantRecord, service_id: UUID) -> str:

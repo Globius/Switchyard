@@ -16,6 +16,8 @@ addresses from VIP pools, enrols their agent, and retires them.
 - Scale out by deploying more, then `POST .../se-groups/{group}/reapply`. Replace an image with the
   [rolling upgrade](../runbooks/rolling-upgrade.md) runbook; retire with `POST .../engines/{engine}/retire`.
 - `GET .../status/se-groups` gives a health score per group with the reasons.
+- A busy group can add engines by itself: [Automatic scale-out](../autoscale.md).
+- Capture packets on an engine for a few seconds and download the pcap: [Packet capture](../packet-capture.md).
 
 **Limits.** Only guests flagged as Proxmox templates are cloned. VM engines are the supported default; privileged LXC
 containers work and need the system setting `allow_lxc_guests`; unprivileged containers were only tried for VRRP. The
@@ -25,4 +27,5 @@ units.
 **Decisions:** [0009](../adr/0009-infrastructure-jobs.md), [0011](../adr/0011-agent-enrollment.md),
 [0049](../adr/0049-proxmox-host-state-and-placement.md), [0050](../adr/0050-se-image-recipe.md),
 [0055](../adr/0055-guest-kind-vm-or-lxc.md), [0075](../adr/0075-deploy-hardening.md),
-[0076](../adr/0076-lxc-guests-setting.md), [0083](../adr/0083-se-image-sidecar-slot-and-rolling-operations.md).
+[0076](../adr/0076-lxc-guests-setting.md), [0083](../adr/0083-se-image-sidecar-slot-and-rolling-operations.md),
+[0194](../adr/0194-autoscale-and-packet-capture.md).

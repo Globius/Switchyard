@@ -853,6 +853,53 @@ WIDE_IP_STATE = {
     "applied_at": WHEN,
 }
 
+CAPTURE = {
+    "id": "0192f9a0-0000-7000-8000-000000000042",
+    "engine": "edge-1",
+    "requested_by": "user:alice",
+    "spec": {
+        "interface": "any",
+        "protocol": "tcp",
+        "host": "192.0.2.20",
+        "port": 443,
+        "duration_s": 10,
+        "max_packets": 1000,
+        "snaplen": 0,
+    },
+    "state": "done",
+    "packets": 214,
+    "size_bytes": 48210,
+    "truncated": False,
+    "error": None,
+    "created_at": WHEN,
+    "finished_at": WHEN,
+    "expires_at": WHEN,
+}
+
+AUTOSCALE = {
+    "se_group": "edge",
+    "enabled": True,
+    "engines": 3,
+    "max_engines": 6,
+    "scale_out_at": 70,
+    "utilization": 41,
+    "decision": "idle",
+    "reason": None,
+    "last_scaled_at": None,
+}
+
+DNS_RECORD = {
+    "hostname": "app.example.test",
+    "type": "A",
+    "content": "192.0.2.20",
+    "ttl": 300,
+    "proxied": False,
+    "state": "published",
+    "virtual_service": "web",
+    "last_error": None,
+    "updated_at": WHEN,
+}
+
 METRICS = {
     "available": True,
     "reason": None,
