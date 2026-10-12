@@ -14,9 +14,10 @@ from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal, cast
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlencode
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
@@ -27,6 +28,7 @@ from switchyard.adapters.secrets import SecretsReader, SecretsWriter
 from switchyard.adapters.telemetry import Telemetry, TelemetryError
 from switchyard.api import docs_meta, job_models, overview
 from switchyard.api import examples as ex
+from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
 from switchyard.api.overview import SearchResults, TenantSummary
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.api.rendered_models import RenderedConfig, RenderedFragment
@@ -70,6 +72,7 @@ from switchyard.api.schemas import (
     DnsProviderTestRead,
     DnsProviderTypeRead,
     EngineIn,
+    EngineMetricsRead,
     EngineRead,
     EngineRenderedRead,
     EngineStateOut,
@@ -77,6 +80,8 @@ from switchyard.api.schemas import (
     EnrollIn,
     EnrollmentToken,
     EnrollOut,
+    GrafanaLaunchIn,
+    GrafanaLaunchOut,
     Health,
     IdentityProviderIn,
     IdentityProviderPatch,
@@ -170,6 +175,7 @@ from switchyard.services.context import Databases, Principal
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
+from switchyard.services.grafana import GrafanaLaunchError, GrafanaService
 from switchyard.services.hosts import HostService
 from switchyard.services.identity_providers import (
     IdentityProviderRecord,
@@ -228,6 +234,7 @@ class ApiServices:
     break_glass: BreakGlassService | None = None
     hosts: HostService | None = None
     settings: SystemSettings = None  # type: ignore[assignment]
+    grafana: GrafanaService | None = None
     acme_providers: AcmeProviders | None = None
     dns_providers: DnsProviders | None = None
 
@@ -244,6 +251,7 @@ def build_services(
     identity_providers: IdentityProviderService | None = None,
     break_glass: BreakGlassService | None = None,
     proxmox: Proxmox | None = None,
+    grafana: GrafanaService | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles.
 
@@ -289,6 +297,7 @@ def build_services(
         break_glass=break_glass,
         hosts=HostService(db, engines, proxmox),
         settings=SystemSettings(db),
+        grafana=grafana,
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
         dns_providers=DnsProviders(db, secrets) if writer is not None else None,
     )
@@ -306,6 +315,35 @@ Services = Annotated[ApiServices, Depends(_services)]
 
 
 SESSION_COOKIE = "sy_session"
+
+#: Metric queries: seconds back from the end of the range (up to the 30 days Prometheus keeps).
+WindowS = Annotated[
+    int, Query(ge=60, le=2592000, description="Seconds back from `until` (default: now).")
+]
+StepS = Annotated[
+    int | None,
+    Query(ge=5, le=3600, description="Seconds between points; default fits ~120 points."),
+]
+UntilQ = Annotated[
+    datetime | None,
+    Query(
+        description="End of the range (RFC 3339); default now. Not more than five minutes ahead.",
+    ),
+]
+
+
+def _until(value: datetime | None) -> datetime | None:
+    """The end of a metric range, checked: timezone-aware and not in the future."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    if value > datetime.now(UTC) + timedelta(minutes=5):
+        raise ApiError(422, "`until` is in the future")
+    return value
+
+
+DEFAULT_LAUNCH = GrafanaLaunchIn()
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -1229,6 +1267,7 @@ def create_app(
     public_url: str | None = None,
     metrics_token: str | None = None,
     grafana_url: str | None = None,
+    grafana_client: httpx.AsyncClient | None = None,
 ) -> FastAPI:
     """Build the application over ready-made services.
 
@@ -1237,6 +1276,7 @@ def create_app(
         public_url: External base URL (``https://switchyard.example.test``), used to build login
             redirect URIs and to decide whether cookies are ``Secure``.
         grafana_url: Base URL of Grafana, shown to the UI as ``links.grafana`` on ``GET /me``.
+        grafana_client: HTTP client for Grafana and the data source backends (tests inject one).
         metrics_token: Bearer token that may read ``/metrics`` and the Prometheus
             service-discovery list; without it only system administrators can.
     """
@@ -1256,6 +1296,12 @@ def create_app(
     app.state.services = services
     app.state.public_url = public_url
     app.state.metrics_token = metrics_token
+    grafana_service: GrafanaService | None = getattr(services, "grafana", None)
+    grafana_proxy = (
+        GrafanaProxy(grafana_service, grafana_client) if grafana_service is not None else None
+    )
+    if grafana_proxy is not None:
+        app.router.on_shutdown.append(grafana_proxy.aclose)
     install_handlers(app)
 
     @app.middleware("http")
@@ -1592,7 +1638,7 @@ def create_app(
                 }
                 for t in tenants
             ],
-            "links": {"grafana": grafana_url},
+            "links": {"grafana": grafana_url, "grafana_embedded": svc.grafana is not None},
             "features": {"lxc_guests": await svc.settings.lxc_allowed()},
         }
 
@@ -1770,6 +1816,147 @@ def create_app(
             raise ApiError(502, str(exc)) from exc
         return MonitorTestOut(**result.__dict__)
 
+    # embedded Grafana (ADR 0085)
+    def grafana_launch_out(launch_url: str, expires_at: datetime, tenant_id: UUID | None) -> Any:
+        return {"url": launch_url, "expires_at": expires_at, "tenant_id": tenant_id}
+
+    async def grafana_launch(
+        request: Request,
+        svc: ApiServices,
+        who: Principal,
+        tenant_id: UUID | None,
+        body: GrafanaLaunchIn,
+    ) -> Any:
+        # who may ask is decided before whether the feature is on (the same answer everywhere)
+        if tenant_id is None:
+            require(who, "manage", "tenant")  # system administrators only
+        else:
+            require(who, "read", "tenant_data")
+        if svc.grafana is None:
+            raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
+        session = getattr(request.state, "session", None)
+        try:
+            launch = await svc.grafana.launch(
+                who,
+                tenant_id,
+                user_session_id=session.id if session is not None else None,
+                landing=body.landing,
+                request_id=_rid(),
+            )
+        except GrafanaLaunchError as exc:
+            raise ApiError(422, str(exc)) from exc
+        return grafana_launch_out(
+            "/grafana/launch?" + urlencode({"ticket": launch.ticket}),
+            launch.expires_at,
+            launch.tenant_id,
+        )
+
+    @router.post(
+        "/tenants/{t}/grafana/launch",
+        tags=["grafana"],
+        summary="Open Grafana for a tenant",
+        description=(
+            "Returns a link that works once, for 60 seconds. Opening it in a new browser tab "
+            "starts a Grafana session that can read this tenant's metrics and logs and nothing "
+            "else: the controller scopes every query Grafana sends to Prometheus and Loki. The "
+            "session ends 30 minutes after its last use (8 hours at most) and with the browser "
+            "session. Requires any role in the tenant."
+        ),
+        response_model=GrafanaLaunchOut,
+        responses=_ok(ex.GRAFANA_LAUNCH),
+    )
+    async def grafana_launch_tenant(
+        request: Request,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        body: GrafanaLaunchIn = DEFAULT_LAUNCH,
+    ) -> Any:
+        return await grafana_launch(request, svc, who, tenant.id, body)
+
+    @router.post(
+        "/grafana/launch",
+        tags=["grafana"],
+        summary="Open Grafana for every tenant",
+        description=(
+            "Like the tenant form, for the administrator's own Grafana organization with the "
+            "dashboards that span tenants. Requires the system-admin role."
+        ),
+        response_model=GrafanaLaunchOut,
+        responses=_ok(ex.GRAFANA_LAUNCH),
+    )
+    async def grafana_launch_all(
+        request: Request, who: Who, svc: Services, body: GrafanaLaunchIn = DEFAULT_LAUNCH
+    ) -> Any:
+        return await grafana_launch(request, svc, who, None, body)
+
+    def grafana_secure(request: Request) -> bool:
+        return (request.app.state.public_url or str(request.base_url)).startswith("https") or (
+            request.headers.get("x-forwarded-proto") == "https"
+        )
+
+    def set_grafana_cookie(
+        request: Request, response: Response, cookie: str, expires_at: datetime
+    ) -> None:
+        response.set_cookie(
+            PROXY_COOKIE,
+            cookie,
+            max_age=max(1, int((expires_at - datetime.now(UTC)).total_seconds())),
+            httponly=True,
+            samesite="strict",
+            secure=grafana_secure(request),
+            path="/grafana",
+        )
+
+    @app.get("/grafana/launch", include_in_schema=False)
+    async def grafana_redeem(request: Request, ticket: str) -> Response:
+        """Spend a ticket: set the proxy cookie, then redirect into Grafana."""
+        if grafana_service is None:
+            raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
+        try:
+            started = await grafana_service.redeem(ticket)
+        except GrafanaLaunchError as exc:
+            raise ApiError(403, str(exc), code="grafana_ticket") from exc
+        response = Response(
+            status_code=303, headers={"Location": "/grafana/" + started.landing.lstrip("/")}
+        )
+        set_grafana_cookie(request, response, started.cookie, started.expires_at)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.api_route(
+        "/grafana/{path:path}",
+        methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        include_in_schema=False,
+    )
+    async def grafana_forward(request: Request, path: str) -> Response:
+        """Carry a browser request to Grafana as the user the proxy cookie stands for."""
+        if grafana_service is None or grafana_proxy is None:
+            raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
+        cookie = request.cookies.get(PROXY_COOKIE, "")
+        grant = await grafana_service.authenticate(cookie)
+        if grant is None:
+            raise ApiError(
+                401,
+                "open Grafana from Switchyard to start a session",
+                code="grafana_session",
+            )
+        response = await grafana_proxy.forward(request, path, grant)
+        if grant.renewed:  # the session was used again: keep the browser's cookie as long
+            set_grafana_cookie(request, response, cookie, grant.expires_at)
+        return response
+
+    @app.api_route(
+        "/internal/ds/{kind}/{path:path}",
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+        include_in_schema=False,
+    )
+    async def grafana_datasource(request: Request, kind: str, path: str) -> Response:
+        """Grafana's data source requests, scoped to the tenant of their token (not public)."""
+        if grafana_proxy is None:
+            raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
+        return await grafana_proxy.datasource(request, kind, path)
+
     # telemetry
     async def _service_name(svc: ApiServices, tenant: TenantRecord, service_id: UUID) -> str:
         from switchyard.db.repository import load_snapshot
@@ -1801,23 +1988,64 @@ def create_app(
         tenant: Tenant,
         who: Who,
         svc: Services,
-        window_s: Annotated[
-            int, Query(ge=60, le=604800, description="Seconds back from now.")
-        ] = 3600,
-        step_s: Annotated[
-            int | None,
-            Query(ge=5, le=3600, description="Seconds between points; default fits ~120 points."),
-        ] = None,
+        window_s: WindowS = 3600,
+        step_s: StepS = None,
+        until: UntilQ = None,
     ) -> MetricsRead:
         name = await _service_name(svc, tenant, object_id)
         if svc.telemetry is None:
             return MetricsRead(available=False, reason="no metrics backend is configured")
         step = step_s or max(5, window_s // 120)
         try:
-            found = await svc.telemetry.metrics(tenant.id, name, window_s=window_s, step_s=step)
-        except TelemetryError as exc:
+            found = await svc.telemetry.metrics(
+                tenant.id, name, window_s=window_s, step_s=step, until=_until(until)
+            )
+        except (TelemetryError, RenderError) as exc:
             return MetricsRead(available=False, reason=str(exc))
         return MetricsRead(available=True, metrics=found)
+
+    @router.get(
+        "/tenants/{t}/engines/{engine}/metrics",
+        tags=["engines"],
+        summary="Metrics of a service engine",
+        description=(
+            "CPU as a percentage of all vCPUs, memory in use, current HAProxy sessions and "
+            "traffic received (bits per second) of one engine over the last `window_s` seconds "
+            "(ending at `until` when given), one point per `step_s`, plus the latest value of "
+            "each and the engine's vCPU count and memory. Read from Prometheus with the tenant "
+            "and engine labels enforced. `available: false` (with a `reason`) when no backend "
+            "is configured or it fails; a missing sample is a gap in the series, never zero. "
+            "Requires any role in the tenant."
+        ),
+        response_model=EngineMetricsRead,
+        responses=_ok(ex.ENGINE_METRICS),
+    )
+    async def engine_metrics(
+        engine: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        window_s: WindowS = 3600,
+        step_s: StepS = None,
+        until: UntilQ = None,
+    ) -> EngineMetricsRead:
+        found_engine = await svc.engines.describe(who, tenant.id, engine_id=engine)
+        if not found_engine:
+            raise ApiError(404, f"engine {engine} not found")
+        if svc.telemetry is None:
+            return EngineMetricsRead(available=False, reason="no metrics backend is configured")
+        step = step_s or max(5, window_s // 120)
+        try:
+            found = await svc.telemetry.engine_metrics(
+                tenant.id,
+                found_engine[0].record.name,
+                window_s=window_s,
+                step_s=step,
+                until=_until(until),
+            )
+        except (TelemetryError, RenderError) as exc:
+            return EngineMetricsRead(available=False, reason=str(exc))
+        return EngineMetricsRead(available=True, metrics=found)
 
     @router.get(
         "/tenants/{t}/metrics/virtual-services",

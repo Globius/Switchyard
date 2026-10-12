@@ -31,6 +31,10 @@ TAGS: list[dict[str, str]] = [
     {"name": "se-groups", "description": "Groups of service engines serving the same services."},
     {"name": "routing-profiles", "description": "VRRP and BGP settings for announcing VIPs."},
     {"name": "virtual-services", "description": "Listeners: VIP, ports, TLS, routes."},
+    {
+        "name": "grafana",
+        "description": "Grafana embedded in the UI: one-time launch links, scoped to a tenant.",
+    },
     {"name": "pools", "description": "Backend pools and members; runtime member state."},
     {"name": "health-monitors", "description": "Active health checks for pools."},
     {"name": "certificates", "description": "Certificates: import, issue, renew."},
@@ -309,6 +313,8 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("(GET|POST)", r"/tenants/\{t\}/tokens(/\{token\})?", "tenant-admin", False),
     ("DELETE", r"/tenants/\{t\}/tokens/\{token\}", "tenant-admin", False),
     ("POST", r"/tenants/\{t\}/vip-pools/\{pool_id\}/next-free", "viewer", False),
+    ("POST", r"/tenants/\{t\}/grafana/launch", "viewer", False),
+    ("POST", r"/grafana/launch", "system-admin", False),
     ("POST", r"/tenants/\{t\}/health-monitors/\{monitor_id\}/test", "operator", False),
     ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/[a-z-]+(/\{object_id\})?", "operator", False),
     (
@@ -376,6 +382,8 @@ def _patch_example(slug: str) -> dict[str, Any] | None:
 
 
 REQUEST_EXAMPLES: dict[str, Any] = {
+    "POST /tenants/{t}/grafana/launch": {"landing": "/d/sy-tenant-services"},
+    "POST /grafana/launch": {"landing": ""},
     "POST /auth/break-glass": {
         "username": "breakglass",
         "password": "example-password",

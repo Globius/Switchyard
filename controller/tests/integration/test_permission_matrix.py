@@ -151,6 +151,8 @@ for _slug in COLLECTIONS_APP + COLLECTIONS_INFRA:
 for _read in (
     ("GET", "/tenants/{t}/engines"),
     ("GET", "/tenants/{t}/engines/{engine}"),
+    ("GET", "/tenants/{t}/engines/{engine}/metrics"),
+    ("POST", "/tenants/{t}/grafana/launch"),
     ("GET", "/tenants/{t}/metrics/virtual-services"),
     ("GET", "/tenants/{t}/search"),
     ("GET", "/tenants/{t}/summary"),
@@ -161,6 +163,7 @@ for _read in (
 ):
     ROUTES[_read] = READ
 ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
+ROUTES[("POST", "/grafana/launch")] = ("manage", "tenant")
 ROUTES[("GET", "/audit-actions")] = ANY
 ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
 ROUTES[("GET", "/principals")] = ("manage", "tenant")
