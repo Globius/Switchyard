@@ -9,8 +9,8 @@ policies (rewrites, fixed responses, rate limits, persistence kinds, HTTP/3 and 
 protection, alerting, telemetry, GSLB on PowerDNS, a Kubernetes connector, pool discovery from Proxmox tags, an Avi importer
 and an OpenTofu provider. The [feature notes](docs/features/index.md) list what each does and where it stops; the
 [lab results](docs/lab/2026-10-12-full-pass.md) show what was run on real Proxmox hosts. Not built: multi-site with remote
-engines ([ADR 0180](docs/adr/0180-multi-site-and-remote-engines.md), proposed) and a Kubernetes deployment of the controller
-(in progress).
+engines ([ADR 0180](docs/adr/0180-multi-site-and-remote-engines.md), proposed). The controller runs on Docker Compose, in Proxmox VMs or
+privileged LXC containers, or on Kubernetes with a Helm chart; see the [production guide](docs/production.md).
 
 ## Screenshots
 
