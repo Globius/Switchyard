@@ -29,7 +29,10 @@ const WIDE = {
   ttl: 30,
   enabled: true,
   health: { kind: "tcp", port: 443, timeout_ms: 1000 },
-  members: [{ address: "2001:db8::1", site: "pve1", priority: 1, weight: 1, subnets: [] }],
+  latency_order: [0],
+  members: [
+    { address: "2001:db8::1", site: "pve1", priority: 1, weight: 1, subnets: [], latency_ms: 12 },
+  ],
   version: 1,
   applied_at: "2026-10-12T10:00:00Z",
   last_error: null,
@@ -240,5 +243,12 @@ describe("gslb", () => {
     await userEvent.type(screen.getByLabelText("Member 1 address"), "2001:db8::1");
     await userEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(await screen.findByText("Not a DNS label")).toBeInTheDocument();
+  });
+
+  it("shows measured latency for a latency wide IP", async () => {
+    renderIt();
+    await userEvent.click(await screen.findByRole("button", { name: "shop.gslb.example.com" }));
+    await userEvent.click(screen.getByLabelText("Lowest latency"));
+    expect(screen.getByLabelText("Member 1 latency")).toHaveTextContent("12 ms · fastest");
   });
 });

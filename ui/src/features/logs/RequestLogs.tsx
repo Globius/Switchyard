@@ -170,6 +170,11 @@ export function RequestLogs({ tenant }: { tenant: string }) {
                   </td>
                   <td className="px-4 py-2">
                     <StatusPill status={statusTone(e.status)}>{e.status}</StatusPill>
+                    {e.waf && (
+                      <StatusPill status="degraded">
+                        {e.waf_action === "drop" ? t("WAF dropped") : t("WAF denied")}
+                      </StatusPill>
+                    )}
                   </td>
                   <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
                     {e.duration_ms} ms

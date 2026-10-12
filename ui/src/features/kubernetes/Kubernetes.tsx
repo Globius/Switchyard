@@ -356,6 +356,15 @@ function ClusterSheet({
                   .filter(Boolean)
                   .join(" · ")}
               </p>
+              {Object.keys(test.permissions).length > 0 && (
+                <ul aria-label={t("Permissions")} className="space-y-0.5 text-xs">
+                  {Object.entries(test.permissions).map(([k, ok]) => (
+                    <li key={k} className={ok ? "text-status-healthy" : "text-status-down"}>
+                      {ok ? "✓" : "✗"} {k}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {test.problems.map((p) => (
                 <p key={p} role="alert" className="text-xs text-status-down">
                   {p}

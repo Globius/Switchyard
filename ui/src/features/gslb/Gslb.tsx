@@ -406,6 +406,18 @@ function WideIpSheet({
                   onChange={(e) => setMember(i, { site: e.target.value })}
                 />
               </label>
+              {algorithm === "latency" && wide && (
+                <div className="space-y-1" aria-label={t("Member {n} latency", { n: i + 1 })}>
+                  {t("Latency")}
+                  <div className="font-mono text-sm">
+                    {wide.members[i]?.latency_ms != null
+                      ? `${wide.members[i]!.latency_ms} ms${
+                          wide.latency_order?.[0] === i ? ` · ${t("fastest")}` : ""
+                        }`
+                      : t("not measured")}
+                  </div>
+                </div>
+              )}
               {usesPriority && (
                 <label className="space-y-1">
                   {t("Priority")}

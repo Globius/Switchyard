@@ -85,6 +85,20 @@ let issued: unknown = null;
 let renewed: string | null = null;
 let importStatus = 202;
 const server = setupServer(
+  http.get("*/api/v1/waf/crs-rules", () =>
+    HttpResponse.json({
+      complete: false,
+      crs_version: "4.8.0",
+      groups: [
+        {
+          name: "SQL injection",
+          description: "",
+          prefix: 942,
+          rules: [{ id: 942100, name: "libinjection SQLi", paranoia_level: 1 }],
+        },
+      ],
+    }),
+  ),
   http.get("*/api/v1/me", () =>
     HttpResponse.json({
       auth: "session",
@@ -1334,6 +1348,24 @@ describe("security policies", () => {
         },
         { mode: "public", posture: null },
       ],
+    });
+  });
+
+  it("suggests CRS rules for the WAF and keeps a JWKS URL on a JWT rule", async () => {
+    await userEvent.type(await open("waf"), "crs");
+    await userEvent.click(screen.getByRole("combobox", { name: "Disabled rule IDs" }));
+    expect(await screen.findByText(/942100 libinjection SQLi/)).toBeInTheDocument();
+  });
+
+  it("saves the JWKS URL of a JWT rule", async () => {
+    await userEvent.type(await open("jwt"), "jw");
+    await userEvent.type(screen.getByLabelText("Rule 1 issuer"), "https://i.test");
+    await userEvent.type(screen.getByLabelText("Rule 1 JWKS URL"), "https://i.test/jwks.json");
+    await userEvent.type(screen.getByLabelText("Rule 1 key 1 public key"), "PEM");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      rules: [{ jwks_url: "https://i.test/jwks.json" }],
     });
   });
 });

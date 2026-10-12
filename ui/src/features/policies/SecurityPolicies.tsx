@@ -6,7 +6,8 @@
  */
 import { X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { ApiError } from "@/api/client";
+import { useQuery } from "@tanstack/react-query";
+import { ApiError, api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
 import { ChipInput } from "@/components/sy/ChipInput";
@@ -120,6 +121,7 @@ export function defaults(kind: SecurityKind): Obj {
             required_scopes: [],
             leeway_s: 30,
             subject_header: "",
+            jwks_url: "",
             keys: [{ kid: "", alg: "RS256", public_key_pem: "" }],
           },
         ],
@@ -450,6 +452,7 @@ export function securityBody(kind: SecurityKind, name: string, cfg: Obj): Obj {
       ...r,
       match: cleanMatch(r.match),
       subject_header: nz(r.subject_header),
+      jwks_url: nz(r.jwks_url),
       keys: r.keys.map((k: Obj) => ({ ...k, kid: nz(k.kid) })),
     }));
   if (kind === "client_cert") {
@@ -542,6 +545,19 @@ export function SecurityPolicySheet({
     }
   }
 
+  const crs = useQuery({
+    queryKey: ["waf", "crs-rules"],
+    enabled: kind === "waf",
+    staleTime: 3_600_000,
+    queryFn: async () => unwrap(await api.GET("/api/v1/waf/crs-rules")),
+  });
+  const crsOptions = (crs.data?.groups ?? []).flatMap((g) =>
+    g.rules.map((r) => ({
+      value: String(r.id),
+      label: `${r.id} ${r.name}`,
+      hint: `${g.name} · PL${r.paranoia_level}`,
+    })),
+  );
   const exempt = ((cfg.exempt_cidrs ?? []) as string[]).join("\n");
   const exemptBad = (cfg.exempt_cidrs ?? []).some((c: string) => cidrProblem(c));
 
@@ -876,6 +892,21 @@ export function SecurityPolicySheet({
                         set={(n) => upd({ leeway_s: n ?? 30 })}
                         min={0}
                         max={300}
+                      />
+                    </Field>
+                    <Field
+                      label={t("JWKS URL (optional)")}
+                      help={t(
+                        "The issuer's key set. Keys arrive within a few minutes; until then the rule answers 401.",
+                      )}
+                    >
+                      <input
+                        aria-label={`Rule ${i + 1} JWKS URL`}
+                        className={MONO}
+                        placeholder="https://idp.example.com/.well-known/jwks.json"
+                        disabled={dis}
+                        value={r.jwks_url ?? ""}
+                        onChange={(e) => upd({ jwks_url: e.target.value })}
                       />
                     </Field>
                     <Field label={t("Subject header (optional)")}>
@@ -1270,6 +1301,7 @@ export function SecurityPolicySheet({
               <div className="text-sm font-medium">{t("Disabled rule IDs")}</div>
               <ChipInput
                 label={t("Disabled rule IDs")}
+                options={crsOptions}
                 value={(cfg.disabled_rule_ids as number[]).map(String)}
                 onChange={(v) => set({ disabled_rule_ids: v.map(Number) })}
                 freeText={{
@@ -1280,7 +1312,16 @@ export function SecurityPolicySheet({
                 disabled={dis}
               />
               <p className="text-xs text-muted-foreground">
-                {t("Switch off one rule that blocks legitimate traffic.")}
+                {t("Switch off one rule that blocks legitimate traffic.")}{" "}
+                <a
+                  href="https://coreruleset.org/docs/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline"
+                  aria-label={t("OWASP Core Rule Set documentation")}
+                >
+                  ?
+                </a>
               </p>
             </div>
             <div className="space-y-1.5">

@@ -147,4 +147,19 @@ describe("request logs", () => {
     renderIt();
     expect(await screen.findByText("No requests in this range")).toBeInTheDocument();
   });
+
+  it("marks requests the WAF refused", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/logs", () =>
+        HttpResponse.json({
+          available: true,
+          reason: null,
+          next_cursor: null,
+          entries: [ENTRY({ waf: true, waf_action: "deny", status: 403 })],
+        }),
+      ),
+    );
+    renderIt();
+    expect(await screen.findByText("WAF denied")).toBeInTheDocument();
+  });
 });
