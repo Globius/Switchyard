@@ -87,3 +87,5 @@ Date: YYYY-MM-DD
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
 | [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
 | [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
+| [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
+| [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |

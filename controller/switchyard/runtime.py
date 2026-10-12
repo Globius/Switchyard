@@ -51,6 +51,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
+from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
@@ -62,6 +63,7 @@ from switchyard.services.members import MemberService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
 from switchyard.services.status import StatusService
+from switchyard.services.tlsalpn import EngineTlsAlpnPublisher
 
 
 def databases() -> Databases:
@@ -165,6 +167,7 @@ def certificates(db: Databases, secrets: SecretsReader | None = None) -> Certifi
         acme_providers=AcmeProviders(db, store),
         dns_providers=DnsProviders(db, store),
         http_publisher=lambda tenant_id: EngineHttp01Publisher(db, engines, tenant_id),
+        alpn_publisher=lambda tenant_id: EngineTlsAlpnPublisher(db, engines, tenant_id),
         dns_wait_s=float(os.environ.get("SWITCHYARD_ACME_DNS_WAIT", "15")),
     )
 
@@ -390,12 +393,14 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         MemberService(db, engines),
         discovery,
         AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
+        ControllerSettings(db, ChangeSetService(db)),
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
         GC_JOB: timedelta(hours=1),
         EXPIRE_DRAINS_JOB: timedelta(seconds=30),
         EVALUATE_ALERTS_JOB: timedelta(minutes=1),
+        CONTROLLER_TICK_JOB: timedelta(seconds=10),
     }
     if discovery is not None:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)

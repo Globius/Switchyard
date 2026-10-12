@@ -300,6 +300,51 @@ def set_setting(
     typer.echo(f"{key} = {str(value).lower()}")
 
 
+controller_app = typer.Typer(
+    help="The controller's own address, with database access only (recovery).",
+    no_args_is_help=True,
+)
+app.add_typer(controller_app, name="controller")
+
+
+def _controller_run(url: str, action: str) -> Any:
+    from switchyard import runtime
+    from switchyard.services.changesets import ChangeSetService
+    from switchyard.services.context import Databases
+    from switchyard.services.controller_settings import ControllerSettings
+
+    async def go() -> Any:
+        db = (
+            runtime.databases()
+            if url == DEFAULT_DATABASE_URL
+            else Databases(
+                app=make_engine(url, role=APP_ROLE), admin=make_engine(url, role=ADMIN_ROLE)
+            )
+        )
+        try:
+            service = ControllerSettings(db, ChangeSetService(db))
+            if action == "revert":
+                return await service.reset()
+            return await service.status_text()
+        finally:
+            await db.dispose()
+
+    return run(go())
+
+
+@controller_app.command("status")
+def controller_status(url: DatabaseUrl = DEFAULT_DATABASE_URL) -> None:
+    """Show the public URL and any change that waits for confirmation."""
+    typer.echo(_controller_run(url, "status"))
+
+
+@controller_app.command("revert")
+def controller_revert(url: DatabaseUrl = DEFAULT_DATABASE_URL) -> None:
+    """Revert a change that waits for confirmation, without the API (the worker applies it)."""
+    done = _controller_run(url, "revert")
+    typer.echo("reverted" if done else "nothing waits for confirmation")
+
+
 @app.command("token")
 def create_system_token(
     name: Annotated[str, typer.Option(help="Token name.")] = "bootstrap",

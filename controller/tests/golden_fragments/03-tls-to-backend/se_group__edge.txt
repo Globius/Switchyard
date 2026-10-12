@@ -4,7 +4,7 @@
 ==> haproxy/haproxy.cfg (haproxy, whole file)
 # Managed by Switchyard. Do not edit: changes are reported as drift.
 # SE group: edge
-# switchyard-render: sha256:acdeb97e2d471ce0e6996fa87419e2aa38067130869d45f781dd20a6f588f2a1
+# switchyard-render: sha256:9a270fcfe498cca037e854d9d77842c530b79186c41cad5a687c1b92adcfea42
 
 global
     log /dev/log local0
@@ -34,7 +34,7 @@ frontend sy_local_health
 
 frontend vs_tls-backends
     mode http
-    bind 192.0.2.22:443 ssl crt-list /etc/switchyard/certs/tls-backends.crtlist alpn h2,http/1.1
+    bind 192.0.2.22:443 ssl crt-list /etc/switchyard/certs/tls-backends.crtlist alpn h2,http/1.1,acme-tls/1
     option httplog
     option forwardfor
     http-request del-header X-Forwarded-For
