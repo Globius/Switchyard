@@ -503,7 +503,7 @@
       },
       "AccessRule": {
         "additionalProperties": false,
-        "description": "What a request needs before it reaches the origin.\n\nAttributes:\n    match: Requests the rule covers; the first rule that matches decides.\n    mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of\n        at least one of ``groups``) or ``email_domains`` (an address in one of the domains).\n    posture: Device conditions (ADR 0138).\n    min_factors: The person must have passed at least this many factors of the directory's\n        login flow (ADR 0196); a session with fewer is sent to complete the next one.",
+        "description": "What a request needs before it reaches the origin.\n\nAttributes:\n    match: Requests the rule covers; the first rule that matches decides.\n    mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of\n        at least one of ``groups``) or ``email_domains`` (an address in one of the domains).\n    posture: Device conditions (ADR 0138).\n    min_factors: The person must have passed at least this many factors of the directory's\n        login flow (ADR 0195); a session with fewer is sent to complete the next one.",
         "properties": {
           "email_domains": {
             "default": [],
@@ -2342,6 +2342,179 @@
           "changed_fields"
         ],
         "title": "AllowListPolicySetRead",
+        "type": "object"
+      },
+      "ApiOperation": {
+        "additionalProperties": false,
+        "description": "One request the API accepts: a method and a path template (ADR 0197).\n\nAttributes:\n    method: HTTP method.\n    path: Path template such as ``/pets/{id}``; each ``{name}`` is a path parameter.\n    path_params: Types of the ``{name}`` parts (default: any non-empty segment without ``/``).\n    query: The query parameters the operation accepts; any other one is a violation unless the\n        schema allows unknown ones.\n    content_types: Media types a request body may have (empty: no check).\n    max_body_bytes: Largest ``Content-Length``; a chunked body is refused when this is set\n        (empty: the schema default).",
+        "properties": {
+          "content_types": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Content Types",
+            "type": "array"
+          },
+          "max_body_bytes": {
+            "anyOf": [
+              {
+                "maximum": 1073741824.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Body Bytes"
+          },
+          "method": {
+            "enum": [
+              "GET",
+              "HEAD",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "OPTIONS"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "pattern": "^(/([A-Za-z0-9._~-]{1,64}|\\{[A-Za-z_][A-Za-z0-9_]{0,31}\\})){1,16}$",
+            "title": "Path",
+            "type": "string"
+          },
+          "path_params": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ApiParam"
+            },
+            "maxItems": 16,
+            "title": "Path Params",
+            "type": "array"
+          },
+          "query": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ApiParam"
+            },
+            "maxItems": 32,
+            "title": "Query",
+            "type": "array"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ],
+        "title": "ApiOperation",
+        "type": "object"
+      },
+      "ApiParam": {
+        "additionalProperties": false,
+        "description": "A parameter of an API operation: a query parameter, or a ``{name}`` of the path (ADR 0197).\n\nAttributes:\n    name: Parameter name.\n    kind: ``string`` (up to ``max_length`` characters), ``integer``, ``number``, ``boolean``,\n        ``uuid`` or ``enum`` (one of ``values``).\n    required: Query parameters only: the request must carry it (path parameters always do).\n    values: The allowed values of an ``enum``.\n    max_length: Longest accepted ``string`` value.",
+        "properties": {
+          "kind": {
+            "default": "string",
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "uuid",
+              "enum"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_length": {
+            "default": 256,
+            "maximum": 2048.0,
+            "minimum": 1.0,
+            "title": "Max Length",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "values": {
+            "default": [],
+            "items": {
+              "pattern": "^[A-Za-z0-9._~-]{1,64}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ApiParam",
+        "type": "object"
+      },
+      "ApiSchema": {
+        "additionalProperties": false,
+        "description": "The requests an API accepts, as a positive security model for the WAF (ADR 0197).\n\nA request is checked in HAProxy before the WAF sees it: its method and path must match an\noperation, its query string may contain only that operation's parameters with values of the\nright type, its body type and size must fit. Everything else is a violation.\n\nAttributes:\n    mode: ``detect`` records the violation in the access log and lets the request through;\n        ``block`` refuses it (404 unknown path, 405 wrong method, 400 bad parameters, 411 or\n        413 body size, 415 body type).\n    operations: The accepted operations (at most 500).\n    base_path: Prefix of every operation (for example ``/v1``); requests outside it are\n        unknown operations.\n    allow_unknown_query: Accept query parameters the operation does not list.\n    max_body_bytes: Default largest body for operations that set none.",
+        "properties": {
+          "allow_unknown_query": {
+            "default": false,
+            "title": "Allow Unknown Query",
+            "type": "boolean"
+          },
+          "base_path": {
+            "default": "",
+            "pattern": "^(/[A-Za-z0-9._~-]{1,64}){0,4}$",
+            "title": "Base Path",
+            "type": "string"
+          },
+          "max_body_bytes": {
+            "anyOf": [
+              {
+                "maximum": 1073741824.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Body Bytes"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/ApiOperation"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "title": "ApiSchema",
         "type": "object"
       },
       "ApplyIn": {
@@ -7911,7 +8084,7 @@
       },
       "FlowCondition": {
         "additionalProperties": false,
-        "description": "When a step applies (ADR 0196); everything given must hold.\n\nAttributes:\n    groups_any: The person has at least one of these groups from the steps already passed.\n    source_in: The client address is inside one of these networks.\n    source_not_in: The client address is outside all of these networks.",
+        "description": "When a step applies (ADR 0195); everything given must hold.\n\nAttributes:\n    groups_any: The person has at least one of these groups from the steps already passed.\n    source_in: The client address is inside one of these networks.\n    source_not_in: The client address is outside all of these networks.",
         "properties": {
           "groups_any": {
             "default": [],
@@ -7964,7 +8137,7 @@
       },
       "FlowStep": {
         "additionalProperties": false,
-        "description": "One factor of a login flow (ADR 0196).\n\nAttributes:\n    name: Step name (unique in the flow).\n    kind: ``password`` asks for user name and password; ``code`` asks for one more secret\n        (a one-time code) for the user already named.\n    server: The RADIUS server that checks this step (default: the first one).\n    prompt: Text above the field; plain text.\n    when: Conditions under which the step is asked; the first step is always asked.",
+        "description": "One factor of a login flow (ADR 0195).\n\nAttributes:\n    name: Step name (unique in the flow).\n    kind: ``password`` asks for user name and password; ``code`` asks for one more secret\n        (a one-time code) for the user already named.\n    server: The RADIUS server that checks this step (default: the first one).\n    prompt: Text above the field; plain text.\n    when: Conditions under which the step is asked; the first step is always asked.",
         "properties": {
           "kind": {
             "default": "password",
@@ -11033,7 +11206,7 @@
       },
       "LoginFlow": {
         "additionalProperties": false,
-        "description": "Ordered factors with conditions, in the manner of Citrix nFactor (ADR 0196).\n\nThe steps run in order; a step whose ``when`` does not hold is skipped. After every passed\nstep the person holds ``sy-factors-<n>`` for n factors so far, so access rules can ask for a\nstronger login with ``min_factors``.",
+        "description": "Ordered factors with conditions, in the manner of Citrix nFactor (ADR 0195).\n\nThe steps run in order; a step whose ``when`` does not hold is skipped. After every passed\nstep the person holds ``sy-factors-<n>`` for n factors so far, so access rules can ask for a\nstronger login with ``min_factors``.",
         "properties": {
           "steps": {
             "items": {
@@ -21526,8 +21699,18 @@
       },
       "WafPolicySet": {
         "additionalProperties": false,
-        "description": "Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).\n\nNew policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,\nso a tenant can read the logs before turning blocking on. A service can carry one WAF policy.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.\n    crs_version: CRS release to use; must be one the SE image ships.\n    paranoia_level: CRS paranoia level 1 (fewest rules) to 4.\n    inbound_threshold: Anomaly score at which a request counts as an attack.\n    outbound_threshold: Anomaly score at which a response counts as a leak.\n    disabled_rule_ids: CRS rules to switch off (for false positives).\n    excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.\n    inspect_body: Send the request body (up to the engine buffer size) to the WAF too.\n    fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503 (ADR 0142).\n    timeout_ms: How long HAProxy waits for the WAF's verdict.\n\nExample:\n    >>> WafPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"w\"}\n    ... ).mode\n    'detect'",
+        "description": "Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).\n\nNew policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,\nso a tenant can read the logs before turning blocking on. A service can carry one WAF policy.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.\n    crs_version: CRS release to use; must be one the SE image ships.\n    paranoia_level: CRS paranoia level 1 (fewest rules) to 4.\n    inbound_threshold: Anomaly score at which a request counts as an attack.\n    outbound_threshold: Anomaly score at which a response counts as a leak.\n    disabled_rule_ids: CRS rules to switch off (for false positives).\n    excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.\n    inspect_body: Send the request body (up to the engine buffer size) to the WAF too.\n    fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503 (ADR 0142).\n    timeout_ms: How long HAProxy waits for the WAF's verdict.\n    api: An API schema (ADR 0197): requests that are not among its operations are violations.\n\nExample:\n    >>> WafPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"w\"}\n    ... ).mode\n    'detect'",
         "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crs_version": {
             "const": "4.8.0",
             "default": "4.8.0",
@@ -21641,6 +21824,16 @@
       "WafPolicySetCreate": {
         "additionalProperties": false,
         "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crs_version": {
             "const": "4.8.0",
             "default": "4.8.0",
@@ -21737,6 +21930,16 @@
       "WafPolicySetPatch": {
         "additionalProperties": false,
         "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crs_version": {
             "anyOf": [
               {
@@ -21890,6 +22093,16 @@
         "additionalProperties": false,
         "description": "WafPolicySet as returned by the API.",
         "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "changed_fields": {
             "description": "Fields a draft changed; empty outside a draft.",
             "items": {

@@ -461,6 +461,51 @@ def jwks_convert(
     typer.echo(json.dumps(keys, indent=2))
 
 
+waf_app = typer.Typer(help="Web application firewall helpers.", no_args_is_help=True)
+app.add_typer(waf_app, name="waf")
+
+
+@waf_app.command("api-schema")
+def waf_api_schema(
+    file: Annotated[
+        Path, typer.Argument(help="An OpenAPI 3.x or Swagger 2.0 file (YAML or JSON).")
+    ],
+    mode: Annotated[str, typer.Option(help="detect (log only) or block.")] = "detect",
+    base_path: Annotated[
+        str | None, typer.Option(help="Prefix of every path; default: from the file.")
+    ] = None,
+    allow_unknown_query: Annotated[
+        bool, typer.Option(help="Accept query parameters the file does not list.")
+    ] = False,
+    max_body_bytes: Annotated[
+        int | None, typer.Option(help="Largest request body for operations that set none.")
+    ] = None,
+) -> None:
+    """Print the ``api`` part of a ``waf`` policy set made from an OpenAPI file (ADR 0197).
+
+    Operations the schema cannot hold are listed on stderr and left out; start in detect mode.
+    """
+    import json
+
+    from switchyard.importers.openapi import OpenApiError, api_schema_from_openapi
+
+    if mode not in ("detect", "block"):
+        raise fail("--mode must be detect or block", 2)
+    try:
+        schema, warnings = api_schema_from_openapi(
+            file.read_text("utf-8"),
+            mode=mode,
+            base_path=base_path,
+            allow_unknown_query=allow_unknown_query,
+            max_body_bytes=max_body_bytes,
+        )
+    except (OpenApiError, OSError) as exc:
+        raise fail(str(exc), 2) from exc
+    for warning in warnings:
+        typer.secho(f"warning: {warning}", fg=typer.colors.YELLOW, err=True)
+    typer.echo(json.dumps({"api": schema.model_dump(mode="json", exclude_defaults=True)}, indent=2))
+
+
 idp_app = typer.Typer(help="Identity providers for user login (OIDC).", no_args_is_help=True)
 app.add_typer(idp_app, name="idp")
 

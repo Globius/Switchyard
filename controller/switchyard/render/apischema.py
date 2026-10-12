@@ -174,10 +174,10 @@ def request_lines(schema: dm.ApiSchema) -> list[str]:
     for number, (_, op) in enumerate(ordered, start=1):
         here = f"{{ var({OP_VAR}) -m int {number} }}"
         if not op.query and not schema.allow_unknown_query:
-            violation("query", f"{here} {{ query -m reg . }}")
+            violation("query", f"{here} {{ query -m reg '.' }}")
         elif op.query and not schema.allow_unknown_query:
             violation(
-                "query", f"{here} {{ query -m reg . }} !{{ query -m reg {_q(query_regex(op))} }}"
+                "query", f"{here} {{ query -m reg '.' }} !{{ query -m reg {_q(query_regex(op))} }}"
             )
         for param in op.query:
             fetch = f"url_param({esc.arg(param.name)})"
