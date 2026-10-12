@@ -23,12 +23,12 @@ grow() { node=$1
   new=$(getj "print(next(e['name'] for e in d['engines'] if 'token' in e))" < work/up-deploy.json | tr -d '\r')
   [ "$KIND" = lxc ] && lxc_mtu_all work/up-deploy.json
   enroll_all work/up-deploy.json "$KIND"
-  wait_for "$new reachable" "is_reachable $new" 40
+  wait_for "$new reachable" "is_reachable $new" 60
   api repair "$GROUP" >/dev/null   # the new engine gets the group's current configuration (a canary-first apply)
-  wait_for "$new and the group healthy" "[ \"\$(score_ok)\" = 1 ]" 60
-  echo "$new"; }
+  wait_for "$new and the group healthy" "[ \"\$(score_ok)\" = 1 ]" 120
+  echo "$new" > work/up-new.txt; }
 if [ -n "$ADD" ]; then
-  i=0; while [ $i -lt "$COUNT" ]; do for p in $MAP; do step "scale out: +1 engine on ${p%%=*}"; grow "${p%%=*}" >/dev/null; done; i=$((i+1)); done
+  i=0; while [ $i -lt "$COUNT" ]; do for p in $MAP; do step "scale out: +1 engine on ${p%%=*}"; grow "${p%%=*}"; done; i=$((i+1)); done
   api health | getj "g=next(x for x in d if x['name']=='$GROUP');print('group', g['name'], 'score', g['score'], 'engines', len(g['engines']))"
   exit 0
 fi
@@ -39,9 +39,10 @@ wait_for "group healthy before the upgrade" "[ \"\$(score_ok)\" = 1 ]" 20
 exec 5< work/up-old.list
 while read -r old node <&5; do
   step "replace $old on $node"
-  new=$(grow "$node" | tail -1)
+  grow "$node"   # not in a subshell: a failed gate must stop the whole script before anything is retired
+  new=$(cat work/up-new.txt)
   api retire "$old" >/dev/null
-  wait_for "group healthy after retiring $old" "[ \"\$(score_ok)\" = 1 ]" 60
+  wait_for "group healthy after retiring $old" "[ \"\$(score_ok)\" = 1 ]" 120
   echo "   $old -> $new"
 done
 exec 5<&-
