@@ -858,6 +858,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/controller": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The controller's address, VIP and certificate
+         * @description The public URL in effect and where the `controller` service answers.
+         *
+         *     Also its certificate, the change that waits for confirmation (with the seconds left) and
+         *     the redirect addresses each identity provider must allow for the new FQDN.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_controller_api_v1_system_controller_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep the new controller settings
+         * @description Make the pending FQDN the public URL.
+         *
+         *     The request has to arrive on the new FQDN (`403` otherwise): reaching it is the proof it
+         *     works. `409` when nothing waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["confirm_controller_api_v1_system_controller_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Propose a new FQDN, VIP or certificate
+         * @description Validate, then apply the change to the `controller` service.
+         *
+         *     It is a change set of the management tenant with a recorded reason. When it has applied,
+         *     a confirmation window starts.
+         *
+         *     Update the identity providers' redirect addresses first (`redirect_urls`). The worker
+         *     reverts the change if it is not confirmed in time; nothing depends on this API. `409`
+         *     while another change waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["propose_controller_api_v1_system_controller_pending_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert the pending controller change now
+         * @description Put the previous VIP and certificate back with another change set.
+         *
+         *     Works from either address. `409` when nothing waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["revert_controller_api_v1_system_controller_revert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/settings": {
         parameters: {
             query?: never;
@@ -3612,7 +3715,7 @@ export interface components {
          * @description How an ACME certificate authority checks control of a name.
          * @enum {string}
          */
-        AcmeChallenge: "dns-01" | "http-01";
+        AcmeChallenge: "dns-01" | "http-01" | "tls-alpn-01";
         /**
          * AcmeOauthIn
          * @description OAuth settings for a CA behind an identity provider (client-credentials grant).
@@ -4776,9 +4879,9 @@ export interface components {
             acme_provider?: string | null;
             /**
              * Challenge
-             * @description `dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.
+             * @description `dns-01` (default), `http-01` or `tls-alpn-01`. The last two cannot validate wildcard names. TLS-ALPN-01 answers every HTTPS handshake for the name with the challenge certificate while it runs, so a name that is serving traffic is interrupted for a few seconds (see `warnings` in the check).
              */
-            challenge?: ("dns-01" | "http-01") | null;
+            challenge?: ("dns-01" | "http-01" | "tls-alpn-01") | null;
             /**
              * Dns Provider
              * @description DNS credential name for `dns-01`. Chosen by zone when empty.
@@ -5147,6 +5250,174 @@ export interface components {
             state: components["schemas"]["ChangeSetState"];
             /** Summary */
             summary: string;
+        };
+        /**
+         * ControllerCertificateRead
+         * @description The certificate the `controller` service presents.
+         */
+        ControllerCertificateRead: {
+            /** Name */
+            name: string;
+            /**
+             * Not After
+             * Format: date-time
+             */
+            not_after: string;
+            /** Sans */
+            sans: string[];
+        };
+        /**
+         * ControllerChangeIn
+         * @description Propose a change to the controller's address.
+         */
+        ControllerChangeIn: {
+            /**
+             * Certificate
+             * @description Name of a server certificate in the management tenant.
+             */
+            certificate?: string | null;
+            /**
+             * Confirm Within S
+             * @description Seconds to confirm before the change is reverted (default 120).
+             */
+            confirm_within_s?: number | null;
+            /**
+             * Fqdn
+             * @description The host name users will open.
+             */
+            fqdn: string;
+            /**
+             * Vip
+             * @description A new VIP for the `controller` service.
+             */
+            vip?: string | null;
+        };
+        /**
+         * ControllerChangeRead
+         * @description A change that waits for confirmation (or is still being applied).
+         */
+        ControllerChangeRead: {
+            after: components["schemas"]["ControllerStateRead"];
+            before: components["schemas"]["ControllerStateRead"];
+            /**
+             * Change Set Id
+             * @description The management tenant's change set.
+             */
+            change_set_id: string | null;
+            /**
+             * Expires At
+             * @description Set once the change set has applied.
+             */
+            expires_at: string | null;
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /** Proposed By */
+            proposed_by: string;
+            /** Revision After */
+            revision_after: number | null;
+            /** Revision Before */
+            revision_before: number | null;
+            /** Seconds Left */
+            seconds_left: number | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "applying" | "waiting";
+            /** Window S */
+            window_s: number;
+        };
+        /**
+         * ControllerListenRead
+         * @description Where the `controller` service answers.
+         */
+        ControllerListenRead: {
+            /** Ports */
+            ports: components["schemas"]["ControllerPortRead"][];
+            /** Vip */
+            vip: string;
+        };
+        /**
+         * ControllerPortRead
+         * @description A port of the `controller` service.
+         */
+        ControllerPortRead: {
+            /** Https Redirect Port */
+            https_redirect_port: number | null;
+            /** Port */
+            port: number;
+            /** Tls */
+            tls: boolean;
+        };
+        /**
+         * ControllerRead
+         * @description The controller's address settings.
+         */
+        ControllerRead: {
+            /**
+             * Break Glass
+             * @description How to recover without the UI.
+             */
+            break_glass: string;
+            certificate: components["schemas"]["ControllerCertificateRead"] | null;
+            /** Fqdn */
+            fqdn: string | null;
+            last_result: components["schemas"]["ControllerResultRead"] | null;
+            listen: components["schemas"]["ControllerListenRead"] | null;
+            /**
+             * Managed
+             * @description The management tenant and its `controller` service exist. Without them only the FQDN (public URL) can be set.
+             */
+            managed: boolean;
+            pending: components["schemas"]["ControllerChangeRead"] | null;
+            /** Public Url */
+            public_url: string | null;
+            /**
+             * Redirect Urls
+             * @description For a pending change: what each identity provider must allow first.
+             */
+            redirect_urls: components["schemas"]["IdpRedirectRead"][];
+        };
+        /**
+         * ControllerResultRead
+         * @description How the previous change ended.
+         */
+        ControllerResultRead: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** By */
+            by: string | null;
+            /** Fqdn */
+            fqdn?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "confirmed" | "reverted" | "failed";
+            /** Reason */
+            reason?: string | null;
+            /** Restored */
+            restored?: boolean | null;
+        };
+        /**
+         * ControllerStateRead
+         * @description The settings before or after a change.
+         */
+        ControllerStateRead: {
+            /** Certificate */
+            certificate?: string | null;
+            /** Fqdn */
+            fqdn: string | null;
+            /** Public Url */
+            public_url: string | null;
+            /** Vip */
+            vip?: string | null;
         };
         /**
          * DeployIn
@@ -6496,6 +6767,18 @@ export interface components {
          */
         HttpMethod: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
         /**
+         * IdpRedirectRead
+         * @description The address an identity provider must allow for the new FQDN.
+         */
+        IdpRedirectRead: {
+            /** Protocol */
+            protocol: string;
+            /** Provider */
+            provider: string;
+            /** Redirect Url */
+            redirect_url: string;
+        };
+        /**
          * IdpTestIn
          * @description Start a test sign-in.
          */
@@ -6644,6 +6927,11 @@ export interface components {
             ok: boolean;
             /** Problems */
             problems: components["schemas"]["IssueProblemRead"][];
+            /**
+             * Warnings
+             * @description Things to know that do not stop the request.
+             */
+            warnings: components["schemas"]["IssueProblemRead"][];
         };
         /**
          * IssueProblemRead
@@ -6764,9 +7052,11 @@ export interface components {
          *         GC: Scheduled housekeeping.
          *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
+         *         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
+         *             confirmation; reverts it when the window runs out.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members" | "evaluate_alerts";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members" | "evaluate_alerts" | "controller_tick";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -7697,7 +7987,7 @@ export interface components {
              * Object
              * @enum {string}
              */
-            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
+            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
             /**
              * Verb
              * @enum {string}
@@ -14426,6 +14716,514 @@ export interface operations {
             };
         };
     };
+    get_controller_api_v1_system_controller_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    confirm_controller_api_v1_system_controller_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    propose_controller_api_v1_system_controller_pending_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "certificate": "controller-new",
+                 *       "confirm_within_s": 120,
+                 *       "fqdn": "sy.example.test",
+                 *       "vip": "192.0.2.11"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ControllerChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    revert_controller_api_v1_system_controller_revert_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_system_settings_api_v1_system_settings_get: {
         parameters: {
             query?: never;
@@ -16932,7 +17730,8 @@ export interface operations {
                      *           "message": "no DNS credential covers this name",
                      *           "path": "sans[1]"
                      *         }
-                     *       ]
+                     *       ],
+                     *       "warnings": []
                      *     }
                      */
                     "application/json": components["schemas"]["IssueCheckRead"];

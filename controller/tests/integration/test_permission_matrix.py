@@ -204,6 +204,10 @@ for _path in (
 ):
     ROUTES[("GET", _path)] = READ
 ROUTES[("POST", "/tenants/{t}/certificates/issue/check")] = ("manage", "certificate")
+ROUTES[("GET", "/system/controller")] = ("manage", "controller")
+ROUTES[("PUT", "/system/controller/pending")] = ("manage", "controller")
+ROUTES[("POST", "/system/controller/confirm")] = ("manage", "controller")
+ROUTES[("POST", "/system/controller/revert")] = ("manage", "controller")
 ROUTES[("GET", "/system/settings")] = ("manage", "tenant")
 ROUTES[("PATCH", "/system/settings")] = ("manage", "tenant")
 ROUTES[("GET", "/audit-events/export")] = ("manage", "tenant")
@@ -260,6 +264,7 @@ BODIES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
+    ("PUT", "/system/controller/pending"): {"fqdn": "sy.example.test"},
     ("POST", "/acme-providers"): {"name": "x", "preset": "letsencrypt", "terms_agreed": True},
     ("PATCH", "/acme-providers/{provider}"): {},
     ("POST", "/tenants/{t}/dns-providers"): {
@@ -502,7 +507,8 @@ async def test_status_codes_follow_the_matrix(api: Api, role: Role) -> None:
                     or problem.get("required_role") != required.value
                 ):
                     failures.append(f"{where}: 403 without the matrix role: {problem}")
-        elif response.status_code == 403:
+        elif response.status_code == 403 and "reaching the new address" not in response.text:
+            # confirming a controller change is refused on any host but the new one (ADR 0081)
             failures.append(f"{where}: allowed by the matrix but got 403 {response.text}")
         elif response.status_code >= 500:
             failures.append(f"{where}: {response.status_code}")

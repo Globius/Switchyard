@@ -182,7 +182,8 @@
         "description": "How an ACME certificate authority checks control of a name.",
         "enum": [
           "dns-01",
-          "http-01"
+          "http-01",
+          "tls-alpn-01"
         ],
         "title": "AcmeChallenge",
         "type": "string"
@@ -2864,7 +2865,8 @@
               {
                 "enum": [
                   "dns-01",
-                  "http-01"
+                  "http-01",
+                  "tls-alpn-01"
                 ],
                 "type": "string"
               },
@@ -2872,7 +2874,7 @@
                 "type": "null"
               }
             ],
-            "description": "`dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.",
+            "description": "`dns-01` (default), `http-01` or `tls-alpn-01`. The last two cannot validate wildcard names. TLS-ALPN-01 answers every HTTPS handshake for the name with the challenge certificate while it runs, so a name that is serving traffic is interrupted for a few seconds (see `warnings` in the check).",
             "title": "Challenge"
           },
           "dns_provider": {
@@ -3762,6 +3764,477 @@
           "op_count"
         ],
         "title": "ChangeSetSummary",
+        "type": "object"
+      },
+      "ControllerCertificateRead": {
+        "additionalProperties": false,
+        "description": "The certificate the `controller` service presents.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "not_after": {
+            "format": "date-time",
+            "title": "Not After",
+            "type": "string"
+          },
+          "sans": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sans",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "sans",
+          "not_after"
+        ],
+        "title": "ControllerCertificateRead",
+        "type": "object"
+      },
+      "ControllerChangeIn": {
+        "additionalProperties": false,
+        "description": "Propose a change to the controller's address.",
+        "properties": {
+          "certificate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Name of a server certificate in the management tenant.",
+            "title": "Certificate"
+          },
+          "confirm_within_s": {
+            "anyOf": [
+              {
+                "maximum": 600.0,
+                "minimum": 30.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Seconds to confirm before the change is reverted (default 120).",
+            "title": "Confirm Within S"
+          },
+          "fqdn": {
+            "description": "The host name users will open.",
+            "title": "Fqdn",
+            "type": "string"
+          },
+          "vip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A new VIP for the `controller` service.",
+            "title": "Vip"
+          }
+        },
+        "required": [
+          "fqdn"
+        ],
+        "title": "ControllerChangeIn",
+        "type": "object"
+      },
+      "ControllerChangeRead": {
+        "additionalProperties": false,
+        "description": "A change that waits for confirmation (or is still being applied).",
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/ControllerStateRead"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ControllerStateRead"
+          },
+          "change_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The management tenant's change set.",
+            "title": "Change Set Id"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set once the change set has applied.",
+            "title": "Expires At"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "revision_after": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision After"
+          },
+          "revision_before": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision Before"
+          },
+          "seconds_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds Left"
+          },
+          "state": {
+            "enum": [
+              "applying",
+              "waiting"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "window_s": {
+            "title": "Window S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "proposed_by",
+          "proposed_at",
+          "window_s",
+          "expires_at",
+          "seconds_left",
+          "before",
+          "after",
+          "change_set_id",
+          "revision_before",
+          "revision_after"
+        ],
+        "title": "ControllerChangeRead",
+        "type": "object"
+      },
+      "ControllerListenRead": {
+        "additionalProperties": false,
+        "description": "Where the `controller` service answers.",
+        "properties": {
+          "ports": {
+            "items": {
+              "$ref": "#/components/schemas/ControllerPortRead"
+            },
+            "title": "Ports",
+            "type": "array"
+          },
+          "vip": {
+            "title": "Vip",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vip",
+          "ports"
+        ],
+        "title": "ControllerListenRead",
+        "type": "object"
+      },
+      "ControllerPortRead": {
+        "additionalProperties": false,
+        "description": "A port of the `controller` service.",
+        "properties": {
+          "https_redirect_port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Https Redirect Port"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "tls": {
+            "title": "Tls",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "port",
+          "tls",
+          "https_redirect_port"
+        ],
+        "title": "ControllerPortRead",
+        "type": "object"
+      },
+      "ControllerRead": {
+        "additionalProperties": false,
+        "description": "The controller's address settings.",
+        "properties": {
+          "break_glass": {
+            "description": "How to recover without the UI.",
+            "title": "Break Glass",
+            "type": "string"
+          },
+          "certificate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ControllerCertificateRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fqdn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fqdn"
+          },
+          "last_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ControllerResultRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "listen": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ControllerListenRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "managed": {
+            "description": "The management tenant and its `controller` service exist. Without them only the FQDN (public URL) can be set.",
+            "title": "Managed",
+            "type": "boolean"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ControllerChangeRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Url"
+          },
+          "redirect_urls": {
+            "description": "For a pending change: what each identity provider must allow first.",
+            "items": {
+              "$ref": "#/components/schemas/IdpRedirectRead"
+            },
+            "title": "Redirect Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "managed",
+          "fqdn",
+          "public_url",
+          "listen",
+          "certificate",
+          "pending",
+          "last_result",
+          "redirect_urls",
+          "break_glass"
+        ],
+        "title": "ControllerRead",
+        "type": "object"
+      },
+      "ControllerResultRead": {
+        "additionalProperties": false,
+        "description": "How the previous change ended.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "fqdn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fqdn"
+          },
+          "kind": {
+            "enum": [
+              "confirmed",
+              "reverted",
+              "failed"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "restored": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "by"
+        ],
+        "title": "ControllerResultRead",
+        "type": "object"
+      },
+      "ControllerStateRead": {
+        "additionalProperties": false,
+        "description": "The settings before or after a change.",
+        "properties": {
+          "certificate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate"
+          },
+          "fqdn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fqdn"
+          },
+          "public_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Url"
+          },
+          "vip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vip"
+          }
+        },
+        "required": [
+          "fqdn",
+          "public_url"
+        ],
+        "title": "ControllerStateRead",
         "type": "object"
       },
       "DeployIn": {
@@ -6671,6 +7144,31 @@
         "title": "HttpMethod",
         "type": "string"
       },
+      "IdpRedirectRead": {
+        "additionalProperties": false,
+        "description": "The address an identity provider must allow for the new FQDN.",
+        "properties": {
+          "protocol": {
+            "title": "Protocol",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "redirect_url": {
+            "title": "Redirect Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "protocol",
+          "redirect_url"
+        ],
+        "title": "IdpRedirectRead",
+        "type": "object"
+      },
       "IdpTestIn": {
         "additionalProperties": false,
         "description": "Start a test sign-in.",
@@ -7013,11 +7511,20 @@
             },
             "title": "Problems",
             "type": "array"
+          },
+          "warnings": {
+            "description": "Things to know that do not stop the request.",
+            "items": {
+              "$ref": "#/components/schemas/IssueProblemRead"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
           "ok",
-          "problems"
+          "problems",
+          "warnings"
         ],
         "title": "IssueCheckRead",
         "type": "object"
@@ -7224,7 +7731,7 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.\n    CONTROLLER_TICK: Scheduled check of a controller settings change that waits for\n        confirmation; reverts it when the window runs out.",
         "enum": [
           "apply_change_set",
           "reapply_se_group",
@@ -7238,7 +7745,8 @@
           "git_mirror",
           "gc",
           "discover_pool_members",
-          "evaluate_alerts"
+          "evaluate_alerts",
+          "controller_tick"
         ],
         "title": "JobKind",
         "type": "string"
@@ -9458,6 +9966,7 @@
               "break_glass",
               "certificate",
               "change_set",
+              "controller",
               "dns_provider",
               "draft",
               "engine",
@@ -21517,6 +22026,602 @@
         "x-required-role": "system-admin"
       }
     },
+    "/api/v1/system/controller": {
+      "get": {
+        "description": "The public URL in effect and where the `controller` service answers.\n\nAlso its certificate, the change that waits for confirmation (with the seconds left) and\nthe redirect addresses each identity provider must allow for the new FQDN.\n\n**Access:** `system-admin` only.",
+        "operationId": "get_controller_api_v1_system_controller_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                  "certificate": {
+                    "name": "controller",
+                    "not_after": "2027-01-10T02:01:00Z",
+                    "sans": [
+                      "switchyard.example.test"
+                    ]
+                  },
+                  "fqdn": "switchyard.example.test",
+                  "last_result": {
+                    "at": "2026-10-01T09:00:00Z",
+                    "by": "user:root",
+                    "fqdn": "switchyard.example.test",
+                    "kind": "confirmed"
+                  },
+                  "listen": {
+                    "ports": [
+                      {
+                        "port": 443,
+                        "tls": true
+                      },
+                      {
+                        "https_redirect_port": 443,
+                        "port": 80,
+                        "tls": false
+                      }
+                    ],
+                    "vip": "192.0.2.10"
+                  },
+                  "managed": true,
+                  "pending": {
+                    "after": {
+                      "certificate": "controller-new",
+                      "fqdn": "sy.example.test",
+                      "public_url": "https://sy.example.test",
+                      "vip": "192.0.2.11"
+                    },
+                    "before": {
+                      "certificate": "controller",
+                      "fqdn": "switchyard.example.test",
+                      "public_url": "https://switchyard.example.test",
+                      "vip": "192.0.2.10"
+                    },
+                    "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                    "expires_at": "2026-10-12T05:02:20Z",
+                    "proposed_at": "2026-10-12T05:00:00Z",
+                    "proposed_by": "user:root",
+                    "revision_after": 8,
+                    "revision_before": 7,
+                    "seconds_left": 95,
+                    "state": "waiting",
+                    "window_s": 120
+                  },
+                  "public_url": "https://switchyard.example.test",
+                  "redirect_urls": [
+                    {
+                      "protocol": "oidc",
+                      "provider": "authentik",
+                      "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The controller's address, VIP and certificate",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/controller/confirm": {
+      "post": {
+        "description": "Make the pending FQDN the public URL.\n\nThe request has to arrive on the new FQDN (`403` otherwise): reaching it is the proof it\nworks. `409` when nothing waits.\n\n**Access:** `system-admin` only.",
+        "operationId": "confirm_controller_api_v1_system_controller_confirm_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                  "certificate": {
+                    "name": "controller",
+                    "not_after": "2027-01-10T02:01:00Z",
+                    "sans": [
+                      "switchyard.example.test"
+                    ]
+                  },
+                  "fqdn": "switchyard.example.test",
+                  "last_result": {
+                    "at": "2026-10-01T09:00:00Z",
+                    "by": "user:root",
+                    "fqdn": "switchyard.example.test",
+                    "kind": "confirmed"
+                  },
+                  "listen": {
+                    "ports": [
+                      {
+                        "port": 443,
+                        "tls": true
+                      },
+                      {
+                        "https_redirect_port": 443,
+                        "port": 80,
+                        "tls": false
+                      }
+                    ],
+                    "vip": "192.0.2.10"
+                  },
+                  "managed": true,
+                  "pending": {
+                    "after": {
+                      "certificate": "controller-new",
+                      "fqdn": "sy.example.test",
+                      "public_url": "https://sy.example.test",
+                      "vip": "192.0.2.11"
+                    },
+                    "before": {
+                      "certificate": "controller",
+                      "fqdn": "switchyard.example.test",
+                      "public_url": "https://switchyard.example.test",
+                      "vip": "192.0.2.10"
+                    },
+                    "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                    "expires_at": "2026-10-12T05:02:20Z",
+                    "proposed_at": "2026-10-12T05:00:00Z",
+                    "proposed_by": "user:root",
+                    "revision_after": 8,
+                    "revision_before": 7,
+                    "seconds_left": 95,
+                    "state": "waiting",
+                    "window_s": 120
+                  },
+                  "public_url": "https://switchyard.example.test",
+                  "redirect_urls": [
+                    {
+                      "protocol": "oidc",
+                      "provider": "authentik",
+                      "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Keep the new controller settings",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/controller/pending": {
+      "put": {
+        "description": "Validate, then apply the change to the `controller` service.\n\nIt is a change set of the management tenant with a recorded reason. When it has applied,\na confirmation window starts.\n\nUpdate the identity providers' redirect addresses first (`redirect_urls`). The worker\nreverts the change if it is not confirmed in time; nothing depends on this API. `409`\nwhile another change waits.\n\n**Access:** `system-admin` only.",
+        "operationId": "propose_controller_api_v1_system_controller_pending_put",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "certificate": "controller-new",
+                "confirm_within_s": 120,
+                "fqdn": "sy.example.test",
+                "vip": "192.0.2.11"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ControllerChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                  "certificate": {
+                    "name": "controller",
+                    "not_after": "2027-01-10T02:01:00Z",
+                    "sans": [
+                      "switchyard.example.test"
+                    ]
+                  },
+                  "fqdn": "switchyard.example.test",
+                  "last_result": {
+                    "at": "2026-10-01T09:00:00Z",
+                    "by": "user:root",
+                    "fqdn": "switchyard.example.test",
+                    "kind": "confirmed"
+                  },
+                  "listen": {
+                    "ports": [
+                      {
+                        "port": 443,
+                        "tls": true
+                      },
+                      {
+                        "https_redirect_port": 443,
+                        "port": 80,
+                        "tls": false
+                      }
+                    ],
+                    "vip": "192.0.2.10"
+                  },
+                  "managed": true,
+                  "pending": {
+                    "after": {
+                      "certificate": "controller-new",
+                      "fqdn": "sy.example.test",
+                      "public_url": "https://sy.example.test",
+                      "vip": "192.0.2.11"
+                    },
+                    "before": {
+                      "certificate": "controller",
+                      "fqdn": "switchyard.example.test",
+                      "public_url": "https://switchyard.example.test",
+                      "vip": "192.0.2.10"
+                    },
+                    "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                    "expires_at": "2026-10-12T05:02:20Z",
+                    "proposed_at": "2026-10-12T05:00:00Z",
+                    "proposed_by": "user:root",
+                    "revision_after": 8,
+                    "revision_before": 7,
+                    "seconds_left": 95,
+                    "state": "waiting",
+                    "window_s": 120
+                  },
+                  "public_url": "https://switchyard.example.test",
+                  "redirect_urls": [
+                    {
+                      "protocol": "oidc",
+                      "provider": "authentik",
+                      "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Propose a new FQDN, VIP or certificate",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/controller/revert": {
+      "post": {
+        "description": "Put the previous VIP and certificate back with another change set.\n\nWorks from either address. `409` when nothing waits.\n\n**Access:** `system-admin` only.",
+        "operationId": "revert_controller_api_v1_system_controller_revert_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                  "certificate": {
+                    "name": "controller",
+                    "not_after": "2027-01-10T02:01:00Z",
+                    "sans": [
+                      "switchyard.example.test"
+                    ]
+                  },
+                  "fqdn": "switchyard.example.test",
+                  "last_result": {
+                    "at": "2026-10-01T09:00:00Z",
+                    "by": "user:root",
+                    "fqdn": "switchyard.example.test",
+                    "kind": "confirmed"
+                  },
+                  "listen": {
+                    "ports": [
+                      {
+                        "port": 443,
+                        "tls": true
+                      },
+                      {
+                        "https_redirect_port": 443,
+                        "port": 80,
+                        "tls": false
+                      }
+                    ],
+                    "vip": "192.0.2.10"
+                  },
+                  "managed": true,
+                  "pending": {
+                    "after": {
+                      "certificate": "controller-new",
+                      "fqdn": "sy.example.test",
+                      "public_url": "https://sy.example.test",
+                      "vip": "192.0.2.11"
+                    },
+                    "before": {
+                      "certificate": "controller",
+                      "fqdn": "switchyard.example.test",
+                      "public_url": "https://switchyard.example.test",
+                      "vip": "192.0.2.10"
+                    },
+                    "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                    "expires_at": "2026-10-12T05:02:20Z",
+                    "proposed_at": "2026-10-12T05:00:00Z",
+                    "proposed_by": "user:root",
+                    "revision_after": 8,
+                    "revision_before": 7,
+                    "seconds_left": 95,
+                    "state": "waiting",
+                    "window_s": 120
+                  },
+                  "public_url": "https://switchyard.example.test",
+                  "redirect_urls": [
+                    {
+                      "protocol": "oidc",
+                      "provider": "authentik",
+                      "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Revert the pending controller change now",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
     "/api/v1/system/settings": {
       "get": {
         "description": "The settings in effect: today `allow_lxc_guests` (default off) and whether the deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`). Requires `system-admin`; every signed-in user can read what they need from `GET /me` `features`.\n\n**Access:** `system-admin` only.",
@@ -25367,7 +26472,8 @@
                       "message": "no DNS credential covers this name",
                       "path": "sans[1]"
                     }
-                  ]
+                  ],
+                  "warnings": []
                 },
                 "schema": {
                   "$ref": "#/components/schemas/IssueCheckRead"

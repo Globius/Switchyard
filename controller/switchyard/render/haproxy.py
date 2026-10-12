@@ -454,7 +454,11 @@ class _Renderer:
                     parts.append(f"ciphers {ciphers}")
                 parts.append(f"ciphersuites {suites}")
             if mode == "http":
-                parts.append("alpn h2,http/1.1" if port.http2 else "alpn http/1.1")
+                # acme-tls/1 lets the controller answer TLS-ALPN-01 challenges (ADR 0082); no
+                # browser or API client offers it, so it changes nothing for them.
+                parts.append(
+                    "alpn h2,http/1.1,acme-tls/1" if port.http2 else "alpn http/1.1,acme-tls/1"
+                )
         if port.proxy_protocol:
             parts.append("accept-proxy")
         return " ".join(parts)

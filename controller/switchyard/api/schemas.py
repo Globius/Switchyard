@@ -551,6 +551,7 @@ PermissionObject = Literal[
     "break_glass",
     "certificate",
     "change_set",
+    "controller",
     "dns_provider",
     "draft",
     "engine",
@@ -1668,9 +1669,12 @@ class CertIssueIn(ApiModel):
         default=None,
         description="ACME provider name (`acme` only). The default provider when empty.",
     )
-    challenge: Literal["dns-01", "http-01"] | None = Field(
+    challenge: Literal["dns-01", "http-01", "tls-alpn-01"] | None = Field(
         default=None,
-        description="`dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.",
+        description="`dns-01` (default), `http-01` or `tls-alpn-01`. The last two cannot validate "
+        "wildcard names. TLS-ALPN-01 answers every HTTPS handshake for the name with the "
+        "challenge certificate while it runs, so a name that is serving traffic is interrupted "
+        "for a few seconds (see `warnings` in the check).",
     )
     dns_provider: str | None = Field(
         default=None,
@@ -2061,6 +2065,9 @@ class IssueCheckRead(ApiModel):
 
     ok: bool
     problems: list[IssueProblemRead]
+    warnings: list[IssueProblemRead] = Field(
+        description="Things to know that do not stop the request."
+    )
 
 
 class RenewalRead(ApiModel):
@@ -2095,3 +2102,108 @@ class RenewalStatusRead(ApiModel):
     last_error: str | None
     last_success_at: datetime | None
     failures_in_a_row: int
+
+
+# -- The controller's own address (ADR 0081) ------------------------------------------------------
+
+
+class ControllerPortRead(ApiModel):
+    """A port of the `controller` service."""
+
+    port: int
+    tls: bool
+    https_redirect_port: int | None
+
+
+class ControllerListenRead(ApiModel):
+    """Where the `controller` service answers."""
+
+    vip: str
+    ports: list[ControllerPortRead]
+
+
+class ControllerCertificateRead(ApiModel):
+    """The certificate the `controller` service presents."""
+
+    name: str
+    sans: list[str]
+    not_after: datetime
+
+
+class ControllerStateRead(ApiModel):
+    """The settings before or after a change."""
+
+    fqdn: str | None
+    public_url: str | None
+    vip: str | None = None
+    certificate: str | None = None
+
+
+class ControllerChangeRead(ApiModel):
+    """A change that waits for confirmation (or is still being applied)."""
+
+    state: Literal["applying", "waiting"]
+    proposed_by: str
+    proposed_at: datetime
+    window_s: int
+    expires_at: datetime | None = Field(description="Set once the change set has applied.")
+    seconds_left: int | None
+    before: ControllerStateRead
+    after: ControllerStateRead
+    change_set_id: UUID | None = Field(description="The management tenant's change set.")
+    revision_before: int | None
+    revision_after: int | None
+
+
+class ControllerResultRead(ApiModel):
+    """How the previous change ended."""
+
+    kind: Literal["confirmed", "reverted", "failed"]
+    at: datetime
+    by: str | None
+    reason: str | None = None
+    fqdn: str | None = None
+    restored: bool | None = None
+
+
+class IdpRedirectRead(ApiModel):
+    """The address an identity provider must allow for the new FQDN."""
+
+    provider: str
+    protocol: str
+    redirect_url: str
+
+
+class ControllerRead(ApiModel):
+    """The controller's address settings."""
+
+    managed: bool = Field(
+        description="The management tenant and its `controller` service exist. Without them only "
+        "the FQDN (public URL) can be set."
+    )
+    fqdn: str | None
+    public_url: str | None
+    listen: ControllerListenRead | None
+    certificate: ControllerCertificateRead | None
+    pending: ControllerChangeRead | None
+    last_result: ControllerResultRead | None
+    redirect_urls: list[IdpRedirectRead] = Field(
+        description="For a pending change: what each identity provider must allow first."
+    )
+    break_glass: str = Field(description="How to recover without the UI.")
+
+
+class ControllerChangeIn(ApiModel):
+    """Propose a change to the controller's address."""
+
+    fqdn: str = Field(description="The host name users will open.")
+    vip: str | None = Field(default=None, description="A new VIP for the `controller` service.")
+    certificate: str | None = Field(
+        default=None, description="Name of a server certificate in the management tenant."
+    )
+    confirm_within_s: int | None = Field(
+        default=None,
+        ge=30,
+        le=600,
+        description="Seconds to confirm before the change is reverted (default 120).",
+    )

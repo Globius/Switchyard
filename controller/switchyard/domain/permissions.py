@@ -178,6 +178,7 @@ MATRIX: tuple[Permission, ...] = (
     _p(19, "list", "tenant_user", T, "List the people with a grant in your tenant."),
     _p(20, "manage", "tenant", S, "Create and delete tenants."),
     _p(20, "manage", "identity_provider", S, "Manage identity providers and test sign-in."),
+    _p(20, "manage", "controller", S, "Change the controller's address, VIP and certificate."),
     _p(20, "manage", "acme_provider", S, "Manage ACME certificate authorities and their accounts."),
     _p(20, "manage", "user", S, "List users, disable or delete them and end their sessions."),
     _p(20, "manage", "system_token", S, "Manage system API tokens."),

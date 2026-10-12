@@ -507,8 +507,8 @@ class TestTls:
         ]
         assert binds == [
             "bind 192.0.2.20:80",
-            f"bind 192.0.2.20:443 ssl crt-list {CRT} alpn h2,http/1.1",
-            f"bind 192.0.2.20:8443 ssl crt-list {CRT} alpn http/1.1",
+            f"bind 192.0.2.20:443 ssl crt-list {CRT} alpn h2,http/1.1,acme-tls/1",
+            f"bind 192.0.2.20:8443 ssl crt-list {CRT} alpn http/1.1,acme-tls/1",
         ]
 
     def test_tcp_service_with_tls_and_proxy_protocol(self) -> None:

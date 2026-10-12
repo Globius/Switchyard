@@ -18,7 +18,9 @@ it, and used to fetch a fresh EAB key from a management endpoint, as Keyfactor d
 """
 
 import asyncio
+import base64
 import datetime
+import hashlib
 import logging
 import ssl
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -28,8 +30,11 @@ from typing import Any, Protocol
 
 import httpx
 from acme import challenges, client, errors, messages
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.x509.oid import NameOID
+from josepy.json_util import JSONObjectWithFields
 from josepy.jwk import JWKRSA
 
 from switchyard.adapters.dns.base import DnsError, DnsProvider
@@ -91,7 +96,15 @@ ISSUE_STAGES = ("order", "validate", "finalize")
 class Solver(Protocol):
     """Proves control of a name for one challenge type."""
 
-    challenge_type: type[challenges.KeyAuthorizationChallenge]
+    typ: str
+
+    def select(self, offered: list[Any]) -> Any | None:
+        """The challenge of this type among those the CA offers, if there is one."""
+        ...
+
+    def answer(self, challenge: Any, key: JWKRSA) -> Any:
+        """The response that tells the CA the proof is in place."""
+        ...
 
     async def present(
         self, domain: str, challenge: Any, key: JWKRSA
@@ -107,7 +120,15 @@ class Solver(Protocol):
 class Dns01Solver:
     """DNS-01: TXT records at ``_acme-challenge.<name>``, through the provider of each name."""
 
-    challenge_type = challenges.DNS01
+    typ = "dns-01"
+
+    def select(self, offered: list[Any]) -> Any | None:
+        """The DNS-01 challenge, if offered."""
+        return next((c for c in offered if isinstance(c.chall, challenges.DNS01)), None)
+
+    def answer(self, challenge: Any, key: JWKRSA) -> Any:
+        """The key authorization response."""
+        return challenge.response(key)
 
     def __init__(
         self,
@@ -168,7 +189,15 @@ class HttpPublisher(Protocol):
 class Http01Solver:
     """HTTP-01: the engines answer ``/.well-known/acme-challenge/<token>`` on port 80."""
 
-    challenge_type = challenges.HTTP01
+    typ = "http-01"
+
+    def select(self, offered: list[Any]) -> Any | None:
+        """The HTTP-01 challenge, if offered."""
+        return next((c for c in offered if isinstance(c.chall, challenges.HTTP01)), None)
+
+    def answer(self, challenge: Any, key: JWKRSA) -> Any:
+        """The key authorization response."""
+        return challenge.response(key)
 
     def __init__(self, publisher: HttpPublisher) -> None:
         """Create the solver around the publisher that talks to the engines."""
@@ -191,6 +220,126 @@ class Http01Solver:
 
     async def settle(self) -> None:
         """Nothing to wait for: the publisher returns when the engines serve the answer."""
+
+
+class TlsAlpnPublisher(Protocol):
+    """Makes the engines present a challenge certificate to ``acme-tls/1`` handshakes."""
+
+    async def publish(self, domain: str, certificate_pem: str) -> None:
+        """Present ``certificate_pem`` (certificate and key) for ``domain``."""
+        ...
+
+    async def withdraw(self, domain: str) -> None:
+        """Stop presenting it."""
+        ...
+
+    async def close(self) -> None:
+        """Remove anything still published and release connections."""
+        ...
+
+
+#: The ``id-pe-acmeIdentifier`` extension of RFC 8737.
+ACME_IDENTIFIER_OID = "1.3.6.1.5.5.7.1.31"
+
+
+def challenge_certificate(domain: str, key_authorization: str) -> str:
+    """The self-signed certificate RFC 8737 asks a server to present for ``domain``.
+
+    It names only ``domain`` and carries the SHA-256 of the key authorization in a critical
+    ``acmeIdentifier`` extension. Returned as PEM: certificate, then its (throwaway) key.
+
+    Example:
+        >>> pem = challenge_certificate("a.example.test", "token.thumbprint")
+        >>> pem.count("BEGIN CERTIFICATE"), "PRIVATE KEY" in pem
+        (1, True)
+    """
+    key = ec.generate_private_key(ec.SECP256R1())
+    digest = hashlib.sha256(key_authorization.encode()).digest()
+    extension = x509.UnrecognizedExtension(
+        x509.ObjectIdentifier(ACME_IDENTIFIER_OID), b"\x04\x20" + digest
+    )
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, domain)])
+    now = datetime.datetime.now(datetime.UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(minutes=5))
+        .not_valid_after(now + datetime.timedelta(days=1))
+        .add_extension(x509.SubjectAlternativeName([x509.DNSName(domain)]), critical=False)
+        .add_extension(extension, critical=True)
+        .sign(key, hashes.SHA256())
+    )
+    return (
+        cert.public_bytes(serialization.Encoding.PEM).decode()
+        + key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ).decode()
+    )
+
+
+class _EmptyResponse(JSONObjectWithFields):
+    """The answer to a tls-alpn-01 challenge: an empty JSON object (RFC 8555, 7.5.1)."""
+
+    def __bool__(self) -> bool:
+        """True, so the library sends ``{}`` and not an empty body (a POST-as-GET)."""
+        return True
+
+    def to_partial_json(self) -> dict[str, Any]:
+        """Nothing to send but the request itself."""
+        return {}
+
+
+class TlsAlpn01Solver:
+    """TLS-ALPN-01: the engines present a challenge certificate to ``acme-tls/1`` handshakes."""
+
+    typ = "tls-alpn-01"
+
+    def __init__(self, publisher: TlsAlpnPublisher) -> None:
+        """Create the solver around the publisher that talks to the engines."""
+        self._publisher = publisher
+
+    def select(self, offered: list[Any]) -> Any | None:
+        """The tls-alpn-01 challenge, if offered (the library does not know the type)."""
+        return next(
+            (
+                c
+                for c in offered
+                if isinstance(c.chall, challenges.UnrecognizedChallenge)
+                and c.chall.jobj.get("type") == self.typ
+            ),
+            None,
+        )
+
+    def answer(self, challenge: Any, key: JWKRSA) -> Any:
+        """An empty response."""
+        return _EmptyResponse()
+
+    async def present(
+        self, domain: str, challenge: Any, key: JWKRSA
+    ) -> Callable[[], Awaitable[None]]:
+        """Build the challenge certificate and hand it to the engines."""
+        token = str(challenge.chall.jobj["token"])
+        thumbprint = base64.urlsafe_b64encode(key.thumbprint()).rstrip(b"=").decode()
+        key_authorization = f"{token}.{thumbprint}"
+        await self._publisher.publish(domain, challenge_certificate(domain, key_authorization))
+
+        async def remove() -> None:
+            try:
+                await self._publisher.withdraw(domain)
+            except Exception as exc:
+                log.warning(
+                    "could not withdraw the TLS-ALPN-01 certificate for %s: %s", domain, exc
+                )
+
+        return remove
+
+    async def settle(self) -> None:
+        """Nothing to wait for: the engines present it as soon as the publisher returns."""
 
 
 @dataclass(frozen=True)
@@ -472,25 +621,16 @@ class AcmeIssuer:
                 for authz in order.authorizations:
                     if authz.body.status == messages.STATUS_VALID:
                         continue  # the CA remembers an earlier validation of this name
-                    challenge = next(
-                        (
-                            c
-                            for c in authz.body.challenges
-                            if isinstance(c.chall, self._solver.challenge_type)
-                        ),
-                        None,
-                    )
+                    challenge = self._solver.select(list(authz.body.challenges))
                     if challenge is None:
-                        raise AcmeError(
-                            f"the CA offers no {self._solver.challenge_type.typ} challenge"
-                        )
+                        raise AcmeError(f"the CA offers no {self._solver.typ} challenge")
                     domain = authz.body.identifier.value
                     cleanups.append(await self._solver.present(domain, challenge, self._key))
                     pending.append(challenge)
                 await self._solver.settle()
                 for challenge in pending:
                     await self._call(
-                        acme.answer_challenge, challenge, challenge.response(self._key)
+                        acme.answer_challenge, challenge, self._solver.answer(challenge, self._key)
                     )
                 deadline = datetime.datetime.now() + datetime.timedelta(seconds=self._timeout)
                 order = await self._call(acme.poll_authorizations, order, deadline)
