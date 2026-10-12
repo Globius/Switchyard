@@ -32,6 +32,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from switchyard.db import (
     acme_models,  # noqa: F401  (registers the ACME and DNS provider tables)
+    alert_models,  # noqa: F401  (registers the alerting tables)
     auth_models,  # noqa: F401  (registers the login tables)
     ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
 )

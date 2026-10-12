@@ -715,6 +715,62 @@ GRAFANA_LAUNCH = {
     "tenant_id": TENANT,
 }
 
+ALERT_TARGET = {
+    "id": "0192f3a0-0000-7000-8000-0000000000a1",
+    "name": "ops-chat",
+    "kind": "chat",
+    "config": {"url": "https://hooks.example.test/services/T000/B000/XXXX", "format": "slack"},
+    "secret_ref": None,
+    "enabled": True,
+    "version": 1,
+    "created_by": "user:authentik:alice",
+    "created_at": WHEN,
+}
+
+ALERT_RULE = {
+    "id": "0192f3a0-0000-7000-8000-0000000000a2",
+    "name": "certs-expiring",
+    "kind": "cert_expiry",
+    "spec": {"days": [30, 14, 7]},
+    "targets": ["ops-chat"],
+    "enabled": True,
+    "version": 1,
+    "created_by": "user:authentik:alice",
+    "created_at": WHEN,
+}
+
+ALERT_STATUS = {
+    "firing": [
+        {
+            "rule": "certs-expiring",
+            "key": "cert:shop-example",
+            "state": "firing",
+            "since": WHEN,
+            "details": {"tier": 14, "not_after": WHEN},
+        }
+    ],
+    "deliveries": [
+        {
+            "rule": "certs-expiring",
+            "target": "ops-chat",
+            "key": "cert:shop-example",
+            "kind": "firing",
+            "status": "sent",
+            "error": None,
+            "at": WHEN,
+        }
+    ],
+}
+
+ALERT_CATALOG = {
+    "metrics": [
+        {"name": "vs_5xx_ratio", "label": "Share of 5xx responses", "unit": "%", "scope": "vs"}
+    ],
+    "event_actions": ["change_set.failed", "drift.detected"],
+    "chat_formats": ["slack", "teams", "mattermost"],
+    "email_configured": False,
+}
+
 METRICS = {
     "available": True,
     "reason": None,

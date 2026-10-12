@@ -28,6 +28,7 @@ from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
 from switchyard.adapters.git import GitLabMirror, GitMirror
 from switchyard.adapters.grafana import HttpGrafana
+from switchyard.adapters.notify import HttpNotifier, SmtpSettings
 from switchyard.adapters.pki import OpenBaoPki
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
@@ -42,6 +43,7 @@ from switchyard.jobs.worker import Worker
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
 from switchyard.services.acme_providers import AcmeProviders
+from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator, AlertService
 from switchyard.services.certificates import (
     RENEW_CERTS_JOB,
     SYNC_CLOUDFLARE_IPS_JOB,
@@ -212,6 +214,45 @@ def grafana(db: Databases) -> GrafanaService | None:
     return GrafanaService(db, config, admin)
 
 
+def smtp_settings() -> SmtpSettings | None:
+    """Mail server for email alert targets, from ``SWITCHYARD_SMTP_HOST`` (and friends).
+
+    ``SWITCHYARD_SMTP_PORT`` (587), ``SWITCHYARD_SMTP_USER``, ``SWITCHYARD_SMTP_PASSWORD``,
+    ``SWITCHYARD_SMTP_FROM`` and ``SWITCHYARD_SMTP_STARTTLS`` (``0`` turns STARTTLS off).
+    Without a host, email targets cannot send.
+    """
+    host = os.environ.get("SWITCHYARD_SMTP_HOST", "").strip()
+    if not host:
+        return None
+    return SmtpSettings(
+        host=host,
+        port=int(os.environ.get("SWITCHYARD_SMTP_PORT", "587")),
+        user=os.environ.get("SWITCHYARD_SMTP_USER") or None,
+        password=os.environ.get("SWITCHYARD_SMTP_PASSWORD") or None,
+        sender=os.environ.get("SWITCHYARD_SMTP_FROM", "switchyard@localhost"),
+        starttls=os.environ.get("SWITCHYARD_SMTP_STARTTLS", "1") != "0",
+    )
+
+
+def alert_notifier() -> HttpNotifier:
+    """The alert sender; `SWITCHYARD_ALERT_ALLOW_PRIVATE=1` lets webhooks name private IPs."""
+    return HttpNotifier(
+        smtp=smtp_settings(),
+        allow_private=os.environ.get("SWITCHYARD_ALERT_ALLOW_PRIVATE") == "1",
+    )
+
+
+def alert_service(db: Databases, secrets: SecretsReader | None = None) -> AlertService:
+    """The tenant-facing alert service (targets, rules, test messages)."""
+    return AlertService(
+        db,
+        alert_notifier(),
+        secrets or secrets_backend(),
+        allow_http=os.environ.get("SWITCHYARD_ALERT_ALLOW_HTTP") == "1",
+        allow_private=os.environ.get("SWITCHYARD_ALERT_ALLOW_PRIVATE") == "1",
+    )
+
+
 def git_mirror() -> GitMirror | None:
     """The GitLab mirror, if configured."""
     url = os.environ.get("SWITCHYARD_GITLAB_URL")
@@ -346,8 +387,13 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         certs,
         GarbageCollector(db),
         discovery,
+        AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
     )
-    schedule = {POLL_STATUS_JOB: timedelta(seconds=10), GC_JOB: timedelta(hours=1)}
+    schedule = {
+        POLL_STATUS_JOB: timedelta(seconds=10),
+        GC_JOB: timedelta(hours=1),
+        EVALUATE_ALERTS_JOB: timedelta(minutes=1),
+    }
     if discovery is not None:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
     if certs is not None:

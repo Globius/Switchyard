@@ -152,6 +152,10 @@ for _read in (
     ("GET", "/tenants/{t}/engines"),
     ("GET", "/tenants/{t}/engines/{engine}"),
     ("GET", "/tenants/{t}/engines/{engine}/metrics"),
+    ("GET", "/tenants/{t}/alert-targets"),
+    ("GET", "/tenants/{t}/alert-rules"),
+    ("GET", "/tenants/{t}/alerts"),
+    ("GET", "/tenants/{t}/logs"),
     ("POST", "/tenants/{t}/grafana/launch"),
     ("GET", "/tenants/{t}/metrics/virtual-services"),
     ("GET", "/tenants/{t}/search"),
@@ -164,6 +168,12 @@ for _read in (
     ROUTES[_read] = READ
 ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
 ROUTES[("POST", "/grafana/launch")] = ("manage", "tenant")
+ROUTES[("GET", "/alert-catalog")] = ANY
+for _alert in ("targets", "rules"):
+    ROUTES[("POST", f"/tenants/{{t}}/alert-{_alert}")] = INFRA
+    ROUTES[("PATCH", f"/tenants/{{t}}/alert-{_alert}/{{name}}")] = INFRA
+    ROUTES[("DELETE", f"/tenants/{{t}}/alert-{_alert}/{{name}}")] = INFRA
+ROUTES[("POST", "/tenants/{t}/alert-targets/{name}/test")] = INFRA
 ROUTES[("GET", "/audit-actions")] = ANY
 ROUTES[("GET", "/audit-events")] = ("manage", "tenant")
 ROUTES[("GET", "/principals")] = ("manage", "tenant")
@@ -208,6 +218,19 @@ BODIES: dict[tuple[str, str], Any] = {
         "pool_id": "{uuid}",
         "member_id": "{uuid}",
     },
+    ("POST", "/tenants/{t}/alert-targets"): {
+        "name": "ops",
+        "kind": "webhook",
+        "config": {"url": "https://hooks.example.test/in"},
+    },
+    ("PATCH", "/tenants/{t}/alert-targets/{name}"): {"enabled": False},
+    ("POST", "/tenants/{t}/alert-rules"): {
+        "name": "expiry",
+        "kind": "cert_expiry",
+        "spec": {},
+        "targets": ["ops"],
+    },
+    ("PATCH", "/tenants/{t}/alert-rules/{name}"): {"enabled": False},
     ("POST", "/tenants"): {"name": "newco"},
     ("PATCH", "/tenants/{t}"): {"require_approval": True},
     ("POST", "/tenants/{t}/change-sets"): {},
