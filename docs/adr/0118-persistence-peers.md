@@ -21,4 +21,4 @@ HAProxy's `peers` section replicates the tables between engines.
    engines on that network; the SE image's firewall allows the group's backend network.
 5. The engine list is set through the API or by the deploy job rather than derived at render time, because the renderer is pure and the same
    bytes go to every engine.
-6. Table: `se_group.peers` (JSON, migration 0030). The sandbox `haproxy -c` runs with the first peer's name as its host name.
+6. Table: `se_group.peers` (JSON, migration 0028). The sandbox `haproxy -c` runs with the first peer's name as its host name.

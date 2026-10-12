@@ -23,4 +23,4 @@ Plan item C2: send part of the traffic of a route to another pool, for canary re
    cross-pool failover needs health-aware routing that HAProxy only offers through `use_backend` conditions on server counts. If needed it gets
    its own ADR.
 7. Storage: `vs_route.pool_weights` (JSON, null when unused), and the check constraint becomes "exactly one of `pool_id`, `redirect_location`,
-   `pool_weights`" (migration 0030).
+   `pool_weights`" (migration 0028).
