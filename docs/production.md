@@ -12,7 +12,7 @@ says where something has **not** been proven yet. Read [design/02-backend-design
   VIP comes from the management tenant's SE group. Each VM is also reachable on its management address, so recovery never
   depends on the controller's own VIP.
 - **Or on Kubernetes:** the same controller from a Helm chart with CloudNativePG instead of Patroni and etcd, in
-  [Deploying on Kubernetes](https://git.example.com/globius-oss/switchyard/-/blob/main/docs/deploy-kubernetes.md) (section 2 lists what is and is not proven).
+  [Deploying on Kubernetes](deploy-kubernetes.md) (section 2 lists what is and is not proven).
 - **Management tenant lock:** applying a change in `management` needs a system administrator and a reason, and the
   `controller` service and its SE group cannot be deleted or disabled ([adr/0051](adr/0051-management-tenant-lock-and-adopt.md)).
   Bring the first VMs in with `syctl adopt` (`deploy/prod/adopt/management.example.yaml`).
@@ -67,8 +67,8 @@ containers are not supported for the controller.
 
 A Helm chart installs the controller in a cluster: `api`, `worker` and `proxy` Deployments (two replicas each in the lab),
 a `migrate` Job per release revision, and PostgreSQL through the CloudNativePG operator. OpenBao stays outside the chart.
-Install steps, values and secrets: [Deploying on Kubernetes](https://git.example.com/globius-oss/switchyard/-/blob/main/docs/deploy-kubernetes.md); decision:
-[ADR 0191](https://git.example.com/globius-oss/switchyard/-/blob/main/docs/adr/0191-kubernetes-deployment.md); lab run: [Kubernetes install results](https://git.example.com/globius-oss/switchyard/-/blob/main/docs/lab/2026-10-12-kubernetes-install.md).
+Install steps, values and secrets: [Deploying on Kubernetes](deploy-kubernetes.md); decision:
+[ADR 0191](adr/0191-kubernetes-deployment.md); lab run: [Kubernetes install results](lab/2026-10-12-kubernetes-install.md).
 
 Proven on a lab k3s: install with two replicas each, the controller deploying and enrolling an LXC engine, a virtual
 service answering 200, and sign-in and the UI. **Not proven yet:** CloudNativePG failover, exposure through a
