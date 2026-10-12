@@ -31,7 +31,7 @@ from switchyard.services.context import Databases
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.gc import GC_JOB, GarbageCollector
-from switchyard.services.gslb import SYNC_GSLB_JOB, GslbSync
+from switchyard.services.gslb import PROBE_GSLB_JOB, SYNC_GSLB_JOB, GslbProber, GslbSync
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
     DEPLOY_SE_GROUP_JOB,
@@ -65,6 +65,7 @@ def build_handlers(
     discovery: DiscoveryService | None = None,
     alerts: AlertEvaluator | None = None,
     gslb: GslbSync | None = None,
+    prober: GslbProber | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -80,6 +81,7 @@ def build_handlers(
             the ``controller_tick`` kind.
         alerts: The alert evaluator; ``None`` skips the ``evaluate_alerts`` kind.
         gslb: The GSLB sync; ``None`` skips the ``sync_gslb`` kind.
+        prober: The latency prober; ``None`` skips the ``probe_gslb`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
@@ -150,6 +152,12 @@ def build_handlers(
             return dict(await gslb.run())
 
         handlers[SYNC_GSLB_JOB] = sync_gslb
+    if prober is not None:
+
+        async def probe_gslb(job: Job) -> dict[str, Any]:
+            return dict(await prober.run())
+
+        handlers[PROBE_GSLB_JOB] = probe_gslb
     if certs is not None:
 
         async def issue_cert(job: Job) -> dict[str, Any]:

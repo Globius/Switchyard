@@ -17,7 +17,7 @@ Example:
     ...     {"algorithm": "failover", "members": [first, second]}, resolve=lambda name: None
     ... )
     >>> print(render_rrsets("shop.example.test.", w)[0].records[0])
-    A "ifportup(443, {{'192.0.2.10'}, {'192.0.2.20'}})"
+    A "ifportup(443, {{'192.0.2.10'}, {'192.0.2.20'}}, {timeout=1000})"
 """
 
 import ipaddress
@@ -26,7 +26,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-ALGORITHMS = ("failover", "weighted", "all", "subnet", "geo")
+ALGORITHMS = ("failover", "weighted", "all", "subnet", "geo", "latency")
+#: A faster member must beat the current first choice by this share before the order changes.
+LATENCY_MARGIN = 0.25
 HEALTH_KINDS = ("tcp", "http")
 MIN_TTL, MAX_TTL = 5, 3600
 MAX_MEMBERS = 32
@@ -245,8 +247,41 @@ def _check_call(health: dict[str, Any], addresses: str, options: str, fqdn: str)
     return f"ifportup({health['port']}, {addresses}, {{{options}}})"
 
 
+def next_order(
+    current: list[int], ms: dict[int, float | None], margin: float = LATENCY_MARGIN
+) -> list[int]:
+    """The members ordered fastest first, without flapping.
+
+    ``ms`` is the smoothed round-trip time per member index (``None``: not reachable). The current
+    first choice keeps its place unless it is unreachable or the best member is at least ``margin``
+    faster, so two members of similar speed do not trade places on every measurement. Members that
+    cannot be reached go last.
+
+    Example:
+        >>> next_order([0, 1], {0: 52.0, 1: 48.0})   # 1 is only 8% faster: no change
+        [0, 1]
+        >>> next_order([0, 1], {0: 100.0, 1: 40.0})  # 60% faster: switch
+        [1, 0]
+        >>> next_order([0, 1], {0: None, 1: 40.0})
+        [1, 0]
+    """
+    measured = sorted((i for i, v in ms.items() if v is not None), key=lambda i: (ms[i] or 0, i))
+    dead = sorted(i for i, v in ms.items() if v is None)
+    if not measured:
+        return current or sorted(ms)
+    first = measured[0]
+    keep = current[0] if current and current[0] in measured else None
+    if keep is not None and keep != first and (ms[first] or 0) > (ms[keep] or 0) * (1 - margin):
+        first = keep
+    return [first] + [i for i in measured if i != first] + dead
+
+
 def render_rrsets(
-    fqdn: str, wide: dict[str, Any], *, addresses: dict[int, str] | None = None
+    fqdn: str,
+    wide: dict[str, Any],
+    *,
+    addresses: dict[int, str] | None = None,
+    order: list[int] | None = None,
 ) -> list[Rrset]:
     """The record sets that make ``fqdn`` answer as the wide IP says.
 
@@ -254,17 +289,24 @@ def render_rrsets(
     with an ``address`` need no entry. The one ``LUA`` record set has a record per address family
     (PowerDNS keeps all the LUA records of a name in one set).
 
+    ``order`` is, for the ``latency`` algorithm, the member indexes fastest first (see
+    :func:`next_order`); each rank becomes its own failover tier, and members not listed come last.
+
     Raises:
         GslbInvalid: A member names a service and no address was given for it.
     """
     members = []
+    ranks = {i: r + 1 for r, i in enumerate(order or [])}
     for i, m in enumerate(wide["members"]):
         address = m.get("address") or (addresses or {}).get(i)
         if address is None:
             raise GslbInvalid(
                 [{"path": f"members[{i}]", "code": "unresolved", "message": "no address"}]
             )
-        members.append({**m, "address": address})
+        member = {**m, "address": address}
+        if wide["algorithm"] == "latency":
+            member["priority"] = ranks.get(i, len(ranks) + 1)
+        members.append(member)
     health = wide["health"] or {"kind": "tcp", "port": 443}
     records: list[str] = []
     for version, rtype in ((4, "A"), (6, "AAAA")):
@@ -283,7 +325,7 @@ def _expression(
     if algorithm == "geo":
         everyone = _ips([m["address"] for m in group])
         return _check_call(health, everyone, "selector='pickclosest'", fqdn)
-    if algorithm == "failover":
+    if algorithm in ("failover", "latency"):
         tiers: dict[int, list[str]] = {}
         for m in sorted(group, key=lambda m: (m["priority"], m["address"])):
             tiers.setdefault(m["priority"], []).append(m["address"])

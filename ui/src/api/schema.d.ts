@@ -8114,11 +8114,12 @@ export interface components {
          *         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
          *             confirmation; reverts it when the window runs out.
          *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+         *         PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.
          *         SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "evaluate_alerts" | "sync_gslb";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "evaluate_alerts" | "sync_gslb" | "probe_gslb";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -13466,7 +13467,7 @@ export interface components {
              * @default failover
              * @enum {string}
              */
-            algorithm: "failover" | "weighted" | "all" | "subnet" | "geo";
+            algorithm: "failover" | "weighted" | "all" | "subnet" | "geo" | "latency";
             /**
              * Enabled
              * @default true
@@ -13530,7 +13531,7 @@ export interface components {
          */
         WideIpPatch: {
             /** Algorithm */
-            algorithm?: ("failover" | "weighted" | "all" | "subnet" | "geo") | null;
+            algorithm?: ("failover" | "weighted" | "all" | "subnet" | "geo" | "latency") | null;
             /** Enabled */
             enabled?: boolean | null;
             health?: components["schemas"]["WideIpHealth"] | null;

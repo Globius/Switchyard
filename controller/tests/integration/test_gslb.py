@@ -283,3 +283,61 @@ async def test_gslb_not_wired_answers_404_after_the_role_check(pg_url: str) -> N
                 f"{V1}/gslb/sync", headers={"Authorization": f"Bearer {admin}"}
             )
             assert ok_role.status_code == 404
+
+
+async def test_latency_follows_measured_round_trips_with_hysteresis(env: Env) -> None:
+    from switchyard.services.gslb import GslbProber
+
+    times: dict[str, float | None] = {"192.0.2.10": 80.0, "192.0.2.20": 20.0}
+    asked: list[tuple[str, int, float]] = []
+
+    async def connect(address: str, port: int, timeout: float) -> float | None:
+        asked.append((address, port, timeout))
+        return times[address]
+
+    await env.zone()
+    made = await env.wide(algorithm="latency", health={"port": 8443, "timeout_ms": 500})
+    assert made.status_code == 201, made.text
+    await env.wide(name="plain")  # a failover wide IP is not probed
+    prober = GslbProber(env.svc, env.w.db, connect=connect)
+
+    assert await prober.run() == {"probed": 1, "rewritten": 1}
+    assert {a[1] for a in asked} == {8443} and {a[2] for a in asked} == {0.5}
+    assert len(asked) == 6  # three samples per member
+    records = {r.name: r.records[0] for r in await env.dns.get_rrsets(ZONE)}
+    # the faster member answers first, the slower is the backup tier
+    assert "{{'192.0.2.20'}, {'192.0.2.10'}}" in records["shop.gslb.example.test."]
+
+    times.update({"192.0.2.10": 18.0})  # now 10% faster than the leader: noise
+    assert (await prober.run())["rewritten"] == 0
+    times.update({"192.0.2.10": 4.0})  # the smoothed time keeps falling until it clearly wins
+    for _ in range(4):
+        await prober.run()
+    records = {r.name: r.records[0] for r in await env.dns.get_rrsets(ZONE)}
+    assert "{{'192.0.2.10'}, {'192.0.2.20'}}" in records["shop.gslb.example.test."]
+
+    times["192.0.2.10"] = None  # unreachable: the other one leads again
+    for _ in range(2):
+        await prober.run()
+    records = {r.name: r.records[0] for r in await env.dns.get_rrsets(ZONE)}
+    assert "{{'192.0.2.20'}, {'192.0.2.10'}}" in records["shop.gslb.example.test."]
+    assert (await env.client.get(f"{V1}/gslb/status", headers=env.h())).json()[0]["state"] in {
+        "in_sync",
+        "drift",
+    }
+
+
+async def test_a_real_connect_is_timed_and_a_closed_port_is_none() -> None:
+    import asyncio
+
+    from switchyard.services.gslb import tcp_connect_ms
+
+    server = await asyncio.start_server(lambda r, w: w.close(), "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    try:
+        took = await tcp_connect_ms("127.0.0.1", port, 1.0)
+        assert took is not None and 0 <= took < 1000
+    finally:
+        server.close()
+        await server.wait_closed()
+    assert await tcp_connect_ms("127.0.0.1", port, 0.5) is None

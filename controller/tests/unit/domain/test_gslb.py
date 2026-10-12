@@ -165,3 +165,33 @@ def test_names() -> None:
     for bad in ("", "Shop", "a..b", "a b", "*", "a'b"):
         with pytest.raises(GslbInvalid):
             validate_label(bad)
+
+
+def test_next_order_keeps_the_leader_unless_clearly_beaten() -> None:
+    from switchyard.domain.gslb import next_order
+
+    assert next_order([0, 1], {0: 52.0, 1: 48.0}) == [0, 1]  # 8% faster is noise
+    assert next_order([0, 1], {0: 100.0, 1: 40.0}) == [1, 0]
+    assert next_order([0, 1], {0: 100.0, 1: 76.0}) == [0, 1]  # 24% faster: just under the margin
+    assert next_order([0, 1], {0: 100.0, 1: 74.0}) == [1, 0]  # 26%: over it
+    assert next_order([1, 0], {0: 100.0, 1: 90.0}) == [1, 0]
+    assert next_order([0, 1], {0: None, 1: 40.0}) == [1, 0]  # the leader is unreachable
+    assert next_order([], {0: 30.0, 1: 20.0, 2: None}) == [1, 0, 2]
+    assert next_order([2, 0, 1], {0: None, 1: None, 2: None}) == [
+        2,
+        0,
+        1,
+    ]  # nothing measured: unchanged
+
+
+def test_latency_renders_one_tier_per_rank_and_unmeasured_members_last() -> None:
+    spec = wide(
+        algorithm="latency",
+        members=[{"address": "192.0.2.1"}, {"address": "192.0.2.2"}, {"address": "192.0.2.3"}],
+    )
+    (rrset,) = render_rrsets("w.z.example.test.", spec, order=[2, 0])
+    assert rrset.records == [
+        "A \"ifportup(443, {{'192.0.2.3'}, {'192.0.2.1'}, {'192.0.2.2'}}, {timeout=1000})\""
+    ]
+    (first,) = render_rrsets("w.z.example.test.", spec)  # nothing measured yet: one tier
+    assert first.records[0].count("{'") == 1

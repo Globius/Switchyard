@@ -9,9 +9,9 @@ members that follow VIP moves; atomic writes; drift status and sync; DNSSEC sign
 (`deploy/dns/`); API, audit events and docs. Checked against a real PowerDNS 5 for everything except `geo`.
 
 Not built, on purpose:
-- **dnsdist** (DNS firewall, rate limiting, DoS): a separate project in 08 (E10 class); PowerDNS answers directly.
-- **Latency-based selection** (no measurement source) and **geo without a GeoIP database** (the operator installs one:
-  `geoip-database-files` in PowerDNS).
+- **dnsdist** was deferred here and is now built: [ADR 0164](0164-dnsdist-in-front-of-powerdns.md).
+- **Latency-based selection** was deferred here and is now built ([ADR 0165](0165-gslb-latency-selection.md)); **geo without a GeoIP
+  database** (the operator installs one: `geoip-database-files` in PowerDNS).
 - **Health visibility in the API.** PowerDNS does not expose per-target health; `status` is about records, not members. A
   per-member view would need PowerDNS's `/metrics` or a probe from the controller.
 - **UI.** The API and the audit trail are the interface for now; wide IPs and zones need artboards (flagged in

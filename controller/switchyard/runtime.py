@@ -58,7 +58,13 @@ from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
-from switchyard.services.gslb import SYNC_GSLB_JOB, GslbService, GslbSync
+from switchyard.services.gslb import (
+    PROBE_GSLB_JOB,
+    SYNC_GSLB_JOB,
+    GslbProber,
+    GslbService,
+    GslbSync,
+)
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
 from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
@@ -413,6 +419,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         discovery,
         AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
         GslbSync(gslb, db) if (gslb := gslb_service(db)) is not None else None,
+        GslbProber(gslb, db) if gslb is not None else None,
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
@@ -426,6 +433,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
     if gslb_service(db) is not None:
         schedule[SYNC_GSLB_JOB] = timedelta(minutes=5)
+        schedule[PROBE_GSLB_JOB] = timedelta(minutes=1)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

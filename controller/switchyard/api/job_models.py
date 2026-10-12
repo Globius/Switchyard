@@ -39,6 +39,7 @@ class JobKind(StrEnum):
         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
             confirmation; reverts it when the window runs out.
         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+        PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.
         SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
@@ -59,6 +60,7 @@ class JobKind(StrEnum):
     DISCOVER_POOL_MEMBERS = "discover_pool_members"
     EVALUATE_ALERTS = "evaluate_alerts"
     SYNC_GSLB = "sync_gslb"
+    PROBE_GSLB = "probe_gslb"
 
 
 class JobStage(ApiModel):

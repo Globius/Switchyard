@@ -43,6 +43,7 @@ with a CNAME. `name: "@"` publishes at the zone apex.
 | `weighted` | one member that is up, picked by `weight` (0 is never answered); all members if none is up | `weight` |
 | `subnet` | the members whose `subnets` contain the client's address; members without `subnets` are the default | `subnets` |
 | `geo` | the member closest to the client (PowerDNS needs a GeoIP database) | |
+| `latency` | the member with the lowest round trip measured from the controller, the rest as backup; changes only when another is 25 % faster ([ADR 0165](adr/0165-gslb-latency-selection.md)) | |
 
 A member is an `address` (IPv4 or IPv6) or a `virtual_service` (its VIP is followed when it moves; the sync job rewrites the
 record, no more than five minutes later). `site` is a free label. IPv4 and IPv6 members answer `A` and `AAAA` from the same name.
@@ -74,6 +75,13 @@ Answers are cached for the TTL, so a change is seen within one TTL (default 30 s
 Run PowerDNS at each site, answer the zone from all of them, and make the others secondaries of the one the controller writes
 to (`secondary` zones with `primary` set to it; `allow-axfr-ips`/`also-notify` on the primary). Each site then evaluates the records
 and runs the health checks from its own network. [runbooks/gslb-lab.md](runbooks/gslb-lab.md) is the two-host lab check.
+
+## dnsdist (DNS firewall)
+
+`deploy/dns/` puts dnsdist in front of PowerDNS: `ANY`, `AXFR` and `IXFR` are refused, each client network is rate limited
+(`DNSDIST_QPS_LIMIT`, default 50 per second, burst 100; over the limit queries are dropped) and abusive networks are blocked for
+a minute. Only dnsdist is published on port 53; PowerDNS listens on 5300 inside it. Zone transfers between your own servers use
+5300. See [ADR 0164](adr/0164-dnsdist-in-front-of-powerdns.md).
 
 ## Safety
 

@@ -67,6 +67,8 @@ class GslbWideIpRow(TenantOwnedMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     #: Hash of the records last written to PowerDNS; the sync job writes again only when it changes.
     applied_hash: Mapped[str | None] = mapped_column(Text)
+    #: ``latency`` only: smoothed round-trip times in ms by member index, and the order they imply.
+    measurements: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     applied_at: Mapped[datetime | None] = _timestamp()
     last_error: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
