@@ -1,0 +1,22 @@
+#!/bin/bash
+# Runs one oauth2-proxy per /etc/switchyard/auth/<name>.cfg, each with the secrets in <name>.env if that file exists.
+# Started by sy-auth.service when the agent has written auth configuration (ADR 0081). If any instance exits the script
+# exits, and systemd restarts them all: a half-running auth service would fail open or closed unpredictably.
+set -u
+shopt -s nullglob
+pids=()
+for cfg in /etc/switchyard/auth/*.cfg; do
+  env_file="${cfg%.cfg}.env"
+  (
+    if [ -f "$env_file" ]; then set -a; . "$env_file"; set +a; fi
+    exec /usr/local/bin/oauth2-proxy --config="$cfg"
+  ) &
+  pids+=($!)
+done
+[ ${#pids[@]} -gt 0 ] || { echo "no auth configuration" >&2; exit 1; }
+trap 'kill "${pids[@]}" 2>/dev/null; wait; exit 0' TERM INT
+wait -n
+status=$?
+kill "${pids[@]}" 2>/dev/null
+wait
+exit $((status == 0 ? 1 : status))

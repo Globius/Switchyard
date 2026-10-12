@@ -13,21 +13,29 @@ checked binaries.
 
 ## Decision
 
-- **A sidecar slot in the image.** `sy-auth.service` runs `/usr/local/bin/oauth2-proxy` as the unprivileged user `sy-auth`
-  under a strict sandbox (no capabilities, read-only filesystem, no new privileges, a system-call filter, memory cap). It
-  is enabled but has `ConditionPathExists=/etc/switchyard/auth/oauth2-proxy.cfg`, so an engine without an auth
-  configuration carries no idle daemon, and one with it comes back after a reboot without the controller. The service gets
-  its configuration through `LoadCredential=` (the agent writes the files owner-only for root) and its secrets as
-  environment variables from `/etc/switchyard/auth/secrets.env`, never on a command line. The listening port is not part of
-  this ADR: the auth contract with HAProxy (P8) fixes it.
-- **The agent runs the slot.** `auth/` is a managed directory (unit `sy-auth`, files owner-only) and the unit is
-  *on demand* like Keepalived and FRR: started when the first file appears, restarted on change (oauth2-proxy cannot
-  reload), stopped when the last file goes. This generalizes the former Keepalived and FRR special case into one set
-  (`onDemand`). The Coraza slot of P10 joins the same set.
-- **Pinned, checked binaries.** `se-image/versions.env` holds the HAProxy series, the Go and Data Plane API images and the
-  oauth2-proxy release with its SHA-256. `fetch-binaries.sh` downloads the release, verifies the pinned checksum and
-  records the binary's own checksum next to it; `provision.sh` verifies that file before installing. The image test
-  (`se-image/test/`) provisions with the sidecar and asserts the slot and the regressions of ADR 0079.
+- **Sidecar slots in the image.** Two sidecars have a slot, and both follow one contract:
+  - *Auth (P8).* `sy-auth.service` runs `/usr/local/sbin/sy-auth-run` as the unprivileged user `sy-auth`, which starts one
+    oauth2-proxy per `/etc/switchyard/auth/<name>.cfg`, with `<name>.env` loaded into that instance's environment when it
+    exists (secrets never on a command line). If one instance exits, all restart. Each configuration sets its own
+    listener (loopback only; the P8 ADR allocates ports).
+  - *WAF (P10).* `coraza-spoa.service` (user `coraza`) runs `coraza-spoa` on `127.0.0.1:9000` from
+    `/etc/switchyard/coraza/config.yaml` and reloads on SIGHUP. The pinned OWASP Core Rule Set is unpacked at
+    `/usr/share/coreruleset/<version>` (`rules/`, `crs-setup.conf.example`) with a `current` link.
+  - *Contract.* The agent writes the bundle files of `auth/` and `coraza/` as root, group = the sidecar's group, mode 0640, so
+    the sidecar reads them and nothing else on the engine does. The unit is enabled but conditional on its configuration
+    (`ConditionPathExists[Glob]`), so an engine without the feature carries no idle daemon and one with it comes back after a
+    reboot without the controller. Units are sandboxed (no capabilities, read-only filesystem, no new privileges).
+    HAProxy's side (the calls, the failure mode) is each block's ADR; the image guarantees the processes and paths.
+- **The agent runs the slots.** `auth/` and `coraza/` are managed directories (units `sy-auth` and `coraza-spoa`) and both units
+  are *on demand* like Keepalived and FRR: started when the first file appears, restarted (auth: oauth2-proxy cannot reload)
+  or reloaded (coraza) on change, stopped when the last file goes. This generalizes the Keepalived and FRR special case
+  into one set (`onDemand`).
+- **Pinned, checked binaries.** `se-image/versions.env` holds the HAProxy series, the Go and Data Plane API images, the
+  oauth2-proxy release with its SHA-256, the coraza-spoa tag (no binary releases exist, so `fetch-binaries.sh` builds it with
+  the Go image, verified by the module checksum database) and the Core Rule Set tarball with its SHA-256. `fetch-binaries.sh`
+  verifies what it downloads and records the binaries' checksums beside them; `provision.sh` verifies again before
+  installing. The image test (`se-image/test/`) provisions with all sidecars and asserts the slots and the regressions of
+  ADR 0079.
 - **Health score.** `GET /tenants/{t}/status/se-groups` returns a 0 to 100 score for each SE group and engine, with the
   reasons ([services/health.py](../../controller/switchyard/services/health.py)): unreachable is 0; drift, pool members
   down, an unhealthy HAProxy, withdrawn routes, BGP sessions not established and a VRRP fault subtract fixed amounts; a group
@@ -45,8 +53,8 @@ checked binaries.
 
 ## Consequences
 
-- P8 and P10 add a controller renderer for `auth/` (and `coraza/`) bundle files and the HAProxy side; the image, agent
-  allowlist, secrets handling and checksum chain are already there.
+- P8 and P10 add a controller renderer for `auth/` and `coraza/` bundle files and the HAProxy side; the image, agent
+  allowlist, file ownership and checksum chain are already there.
 - Templates must be rebuilt to carry the slot ([runbooks/build-se-template.md](../runbooks/build-se-template.md)). Roll the
   image and agent before a controller that sends `auth/` files.
 - The score's weights are a first estimate, kept in one module so they can change with experience.

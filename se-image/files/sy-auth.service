@@ -1,20 +1,18 @@
 [Unit]
-Description=Switchyard auth sidecar (oauth2-proxy)
+Description=Switchyard auth sidecar (one oauth2-proxy per configuration)
 Documentation=https://github.com/oauth2-proxy/oauth2-proxy
 After=network.target
 # Runs only on engines that have an auth configuration: the agent writes /etc/switchyard/auth/ from the signed bundle,
 # starts this unit when the first file appears and stops it when the last one is gone (agent/internal/bundle, ADR 0081).
-ConditionPathExists=/etc/switchyard/auth/oauth2-proxy.cfg
+ConditionPathExistsGlob=/etc/switchyard/auth/*.cfg
 ConditionPathExists=/usr/local/bin/oauth2-proxy
 
 [Service]
 User=sy-auth
 Group=sy-auth
-# The agent writes the files owner-only for root; systemd hands the service its own copy, so the sidecar needs no access
-# to /etc/switchyard. Secrets (client secret, cookie secret) come as environment variables, never on the command line.
-LoadCredential=oauth2-proxy.cfg:/etc/switchyard/auth/oauth2-proxy.cfg
-EnvironmentFile=-/etc/switchyard/auth/secrets.env
-ExecStart=/usr/local/bin/oauth2-proxy --config=%d/oauth2-proxy.cfg
+# One process per <name>.cfg, secrets from <name>.env (never on a command line). The agent hands the files to the sy-auth
+# group, so the sidecar needs no other access to /etc/switchyard.
+ExecStart=/usr/local/sbin/sy-auth-run
 Restart=on-failure
 RestartSec=2
 NoNewPrivileges=true
@@ -31,7 +29,7 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 RestrictNamespaces=true
 LockPersonality=true
 SystemCallFilter=@system-service
-MemoryMax=256M
+MemoryMax=512M
 TasksMax=256
 
 [Install]

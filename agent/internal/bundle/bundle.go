@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"sort"
@@ -59,7 +60,7 @@ var verbs = map[string]string{
 // onDemand units run only while they have files: they are started when the first file appears and stopped
 // when the last one is gone. The SE image skips them at boot until their configuration exists, so an engine
 // without that feature carries no idle daemon, and one that has it comes back after a reboot without the controller.
-var onDemand = map[string]bool{"keepalived": true, "frr": true, "sy-auth": true}
+var onDemand = map[string]bool{"keepalived": true, "frr": true, "sy-auth": true, "coraza-spoa": true}
 
 func verb(unit string) string {
 	if v, ok := verbs[unit]; ok {
@@ -75,7 +76,12 @@ func verb(unit string) string {
 var suffixOnly = map[string][]string{"certs": {".pem", ".crl"}}
 
 // secretDirs hold private keys and are written with owner-only permissions.
-var secretDirs = map[string]bool{"certs": true, "auth": true}
+var secretDirs = map[string]bool{"certs": true}
+
+// groupDirs name the group that may read a managed directory: the sidecar that runs from it. The
+// agent writes the files 0640 and, when the group exists on the engine, hands them to it (and the
+// directory with them), so the sidecar needs no other access to /etc/switchyard.
+var groupDirs = map[string]string{"auth": "sy-auth", "coraza": "coraza"}
 
 func managedFile(rel string) bool {
 	prefix, rest, ok := strings.Cut(rel, "/")
@@ -270,7 +276,25 @@ func (a *Applier) write(rel string, data []byte) error {
 	if err := os.Chmod(name, mode); err != nil {
 		return err
 	}
+	if group, ok := groupDirs[strings.SplitN(rel, "/", 2)[0]]; ok {
+		shareWithGroup(name, group)
+		shareWithGroup(filepath.Dir(target), group)
+	}
 	return os.Rename(name, target)
+}
+
+// shareWithGroup makes path belong to group (best effort: the group exists only on engines whose image has the sidecar,
+// and on systems without numeric groups the call is a no-op).
+func shareWithGroup(path, group string) {
+	g, err := user.LookupGroup(group)
+	if err != nil {
+		return
+	}
+	gid, err := strconv.Atoi(g.Gid)
+	if err != nil {
+		return
+	}
+	_ = os.Chown(path, -1, gid)
 }
 
 func (a *Applier) remove(rel string) error {

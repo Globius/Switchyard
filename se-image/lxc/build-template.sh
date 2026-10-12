@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds the SE *container* template on a Proxmox node (run as root on the node). Usage:
 #   [BUILD_BRIDGE=vmbr0] [BUILD_NET_IP="ip=dhcp"|"ip=manual,ip6=auto" for an IPv6-only network] build-template.sh VMID AGENT_BIN DATAPLANE_BIN [STORAGE]
-# Optional: AUTH_PROXY_BIN=path to oauth2-proxy (the auth sidecar slot, ADR 0081).
+# Optional: SIDECAR_DIR=se-image/dist installs the sidecars found there (oauth2-proxy, coraza-spoa, coreruleset.tar.gz; ADR 0081).
 # Creates a privileged Debian 13 container, runs provision.sh inside it, stops it and converts it to a
 # template. Clone it with VmSpec kind "lxc" (deploy request guest_kind: "lxc"; ADR 0055).
 #
@@ -24,12 +24,15 @@ for f in "$HERE"/files/*; do pct push "$VMID" "$f" "/opt/build/se-image/files/$(
 pct push "$VMID" "$AGENT" /opt/build/sy-agent --perms 755
 pct push "$VMID" "$DP" /opt/build/dataplaneapi --perms 755
 AUTHENV=""
-if [ -n "${AUTH_PROXY_BIN:-}" ]; then   # the auth sidecar slot (ADR 0081); optional
-  pct push "$VMID" "$AUTH_PROXY_BIN" /opt/build/oauth2-proxy --perms 755
-  [ ! -f "$AUTH_PROXY_BIN.sha256" ] || pct push "$VMID" "$AUTH_PROXY_BIN.sha256" /opt/build/oauth2-proxy.sha256
-  AUTHENV="AUTH_PROXY_BIN=/opt/build/oauth2-proxy"
+if [ -n "${SIDECAR_DIR:-}" ]; then   # sidecar slots (ADR 0081): whatever fetch-binaries.sh put in SIDECAR_DIR (se-image/dist)
+  for f in oauth2-proxy oauth2-proxy.sha256 coraza-spoa coraza-spoa.sha256 coreruleset.tar.gz; do
+    [ ! -f "$SIDECAR_DIR/$f" ] || pct push "$VMID" "$SIDECAR_DIR/$f" "/opt/build/$f" --perms 755
+  done
+  [ ! -f "$SIDECAR_DIR/oauth2-proxy" ] || AUTHENV="$AUTHENV AUTH_PROXY_BIN=/opt/build/oauth2-proxy"
+  [ ! -f "$SIDECAR_DIR/coraza-spoa" ] || AUTHENV="$AUTHENV CORAZA_SPOA_BIN=/opt/build/coraza-spoa"
+  [ ! -f "$SIDECAR_DIR/coreruleset.tar.gz" ] || AUTHENV="$AUTHENV CRS_TARBALL=/opt/build/coreruleset.tar.gz"
 fi
-pct exec "$VMID" -- sh -c "AGENT_BIN=/opt/build/sy-agent DATAPLANE_BIN=/opt/build/dataplaneapi $AUTHENV /opt/build/se-image/provision.sh && rm -f /opt/build/sy-agent /opt/build/dataplaneapi /opt/build/oauth2-proxy*"
+pct exec "$VMID" -- sh -c "AGENT_BIN=/opt/build/sy-agent DATAPLANE_BIN=/opt/build/dataplaneapi $AUTHENV /opt/build/se-image/provision.sh && rm -f /opt/build/sy-agent /opt/build/dataplaneapi /opt/build/oauth2-proxy* /opt/build/coraza-spoa* /opt/build/coreruleset.tar.gz"
 pct shutdown "$VMID" --timeout 60 || pct stop "$VMID"
 pct template "$VMID"
 echo "container template $VMID ready"

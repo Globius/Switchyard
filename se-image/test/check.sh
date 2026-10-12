@@ -29,7 +29,17 @@ done
 id sy-auth >/dev/null 2>&1 || fail "user sy-auth"
 [ -d /etc/switchyard/auth ] || fail "/etc/switchyard/auth"
 [ -f /etc/systemd/system/sy-auth.service ] || fail "sy-auth unit"
-grep -q 'ConditionPathExists=/etc/switchyard/auth/oauth2-proxy.cfg' /etc/systemd/system/sy-auth.service || fail "sy-auth must wait for its config"
+grep -q 'ConditionPathExistsGlob=/etc/switchyard/auth/\*.cfg' /etc/systemd/system/sy-auth.service || fail "sy-auth must wait for its config"
+[ -x /usr/local/sbin/sy-auth-run ] && bash -n /usr/local/sbin/sy-auth-run || fail "sy-auth-run"
+# The WAF slot (block P10): user, unit, config directory, and the binary and pinned Core Rule Set when supplied.
+id coraza >/dev/null 2>&1 || fail "user coraza"
+[ -d /etc/switchyard/coraza ] || fail "/etc/switchyard/coraza"
+grep -q 'ConditionPathExists=/etc/switchyard/coraza/config.yaml' /etc/systemd/system/coraza-spoa.service || fail "coraza-spoa must wait for its config"
+systemd-analyze verify /etc/systemd/system/coraza-spoa.service 2>&1 | grep -v -E 'not executable|coraza-spoa|ConditionPathExists' || true
+[ ! -x /usr/local/bin/coraza-spoa ] || /usr/local/bin/coraza-spoa --help >/dev/null 2>&1 || fail "coraza-spoa does not run"
+if [ -e /usr/share/coreruleset/current ]; then
+  [ -f /usr/share/coreruleset/current/crs-setup.conf.example ] && [ -d /usr/share/coreruleset/current/rules ] || fail "Core Rule Set"
+fi
 systemd-analyze verify /etc/systemd/system/sy-auth.service 2>&1 | grep -v -E 'not executable|oauth2-proxy|ConditionPathExists' || true
 [ ! -x /usr/local/bin/oauth2-proxy ] || /usr/local/bin/oauth2-proxy --version | grep -q 'oauth2-proxy' || fail "oauth2-proxy does not run"
 [ ! -s /etc/machine-id ] || fail "machine-id not cleared"
