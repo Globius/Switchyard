@@ -23,7 +23,7 @@ from switchyard.db import migrate
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
 from switchyard.domain.errors import DomainValidationError
 from switchyard.render.escape import RenderError
-from switchyard.services.adopt import adopt
+from switchyard.services.adopt import adopt, load_controller_members
 from switchyard.services.errors import AlreadyExistsError, NotFoundError
 from switchyard.services.render import render_se_group
 from switchyard.services.seed import seed_example
@@ -213,7 +213,12 @@ def serve(
 
 @app.command("adopt")
 def adopt_command(
-    file: Annotated[Path, typer.Argument(help="Adoption file (snapshot YAML plus `engines`).")],
+    file: Annotated[
+        Path,
+        typer.Argument(
+            help="Adoption file (snapshot YAML plus `engines` and `controller_members`)."
+        ),
+    ],
     url: DatabaseUrl = DEFAULT_DATABASE_URL,
 ) -> None:
     """Adopt infrastructure built outside the controller, such as the management tenant."""
@@ -224,9 +229,11 @@ def adopt_command(
             snapshot, engines = await adopt(engine, file)
         finally:
             await engine.dispose()
+        members = len(load_controller_members(file.read_text("utf-8")))
         return (
             f"adopted tenant {snapshot.tenants[0].name!r}: {len(snapshot.se_groups)} SE groups, "
-            f"{len(snapshot.virtual_services)} virtual services, {engines} engines"
+            f"{len(snapshot.virtual_services)} virtual services, {engines} engines, "
+            f"{members} controller members"
         )
 
     try:

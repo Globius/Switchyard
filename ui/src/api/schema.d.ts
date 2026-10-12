@@ -974,6 +974,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/controller/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The controller's cluster members
+         * @description The controller VMs, including the external one on ESXi, with what Patroni reports.
+         *
+         *     The state comes from the first member whose `patroni_url` answers. A member Patroni does
+         *     not list has `in_cluster: false`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_controller_members_api_v1_system_controller_members_get"];
+        put?: never;
+        /**
+         * List a controller cluster member
+         * @description Record a controller VM. This only describes it; nothing is deployed or joined.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_controller_member_api_v1_system_controller_members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/members/{controller_member}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget a controller cluster member
+         * @description Remove it from the list. The VM, etcd and Patroni are not touched.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_controller_member_api_v1_system_controller_members__controller_member__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a controller cluster member
+         * @description Change the listed fields; omitted ones stay.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        patch: operations["patch_controller_member_api_v1_system_controller_members__controller_member__patch"];
+        trace?: never;
+    };
     "/api/v1/system/controller/pending": {
         parameters: {
             query?: never;
@@ -6625,6 +6684,136 @@ export interface components {
             vip: string;
         };
         /**
+         * ControllerMemberIn
+         * @description A controller VM to list.
+         */
+        ControllerMemberIn: {
+            /**
+             * Address
+             * @description The VM's IP address or host name.
+             */
+            address: string;
+            /**
+             * External
+             * @description Not managed by this platform. Default: true unless `platform` is `proxmox`.
+             */
+            external?: boolean | null;
+            /**
+             * Host
+             * @description A label for the hypervisor host, for example `esxi-01`.
+             */
+            host?: string | null;
+            /**
+             * Name
+             * @description The Patroni member name (`PATRONI_NAME`). Status is matched on it.
+             */
+            name: string;
+            /**
+             * Nofailover
+             * @description The member never becomes the primary (Patroni tag `nofailover`). Patroni's own report wins when it is reachable.
+             * @default false
+             */
+            nofailover: boolean;
+            /**
+             * Patroni Url
+             * @description Patroni's REST API, for example `http://10.0.0.13:8008`. Status is read from the first listed member that answers.
+             */
+            patroni_url?: string | null;
+            /**
+             * Platform
+             * @description What the VM runs on.
+             * @enum {string}
+             */
+            platform: "proxmox" | "esxi" | "other";
+        };
+        /**
+         * ControllerMemberPatch
+         * @description Fields to change; `name` is fixed. Send the `ETag` in `If-Match`.
+         */
+        ControllerMemberPatch: {
+            /** Address */
+            address?: string | null;
+            /** External */
+            external?: boolean | null;
+            /** Host */
+            host?: string | null;
+            /** Nofailover */
+            nofailover?: boolean | null;
+            /** Patroni Url */
+            patroni_url?: string | null;
+            /** Platform */
+            platform?: ("proxmox" | "esxi" | "other") | null;
+        };
+        /**
+         * ControllerMemberRead
+         * @description A controller cluster member.
+         */
+        ControllerMemberRead: {
+            /** Address */
+            address: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /**
+             * External
+             * @description Not managed by the platform (for example on ESXi).
+             */
+            external: boolean;
+            /** Host */
+            host: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * In Cluster
+             * @description Whether Patroni lists it; null when no cluster view could be read.
+             */
+            in_cluster: boolean | null;
+            /** Name */
+            name: string;
+            /** Nofailover */
+            nofailover: boolean;
+            /** Patroni Url */
+            patroni_url: string | null;
+            /**
+             * Platform
+             * @enum {string}
+             */
+            platform: "proxmox" | "esxi" | "other";
+            status: components["schemas"]["MemberStatusRead"];
+            /** Version */
+            version: number;
+        };
+        /**
+         * ControllerMembersRead
+         * @description The members and the cluster view they were matched with.
+         */
+        ControllerMembersRead: {
+            /**
+             * Cluster Error
+             * @description Why no Patroni answered.
+             */
+            cluster_error: string | null;
+            /**
+             * Cluster Reachable
+             * @description Whether a Patroni answered; null when no member has a `patroni_url`.
+             */
+            cluster_reachable: boolean | null;
+            /**
+             * Leader
+             * @description The member that holds the primary role.
+             */
+            leader: string | null;
+            /** Members */
+            members: components["schemas"]["ControllerMemberRead"][];
+        };
+        /**
          * ControllerPortRead
          * @description A port of the `controller` service.
          */
@@ -9388,6 +9577,34 @@ export interface components {
              * @description HAProxy status, for example `UP`, `DOWN`, `MAINT`.
              */
             status: string;
+        };
+        /**
+         * MemberStatusRead
+         * @description What Patroni reports; every field is null when it could not be read.
+         */
+        MemberStatusRead: {
+            /**
+             * Database Role
+             * @description `leader`, `standby_leader`, `sync_standby` or `replica`.
+             */
+            database_role: string | null;
+            /**
+             * Database State
+             * @description For example `running` or `streaming`.
+             */
+            database_state: string | null;
+            /**
+             * Lag Bytes
+             * @description Replication lag; null for the leader or unknown.
+             */
+            lag_bytes: number | null;
+            /**
+             * Nofailover
+             * @description Patroni's `nofailover` tag.
+             */
+            nofailover: boolean | null;
+            /** Timeline */
+            timeline: number | null;
         };
         /**
          * MetricPoint
@@ -18672,6 +18889,386 @@ export interface operations {
             };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_controller_members_api_v1_system_controller_members_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "cluster_reachable": true,
+                     *       "leader": "ctl-1",
+                     *       "members": [
+                     *         {
+                     *           "address": "10.0.0.13",
+                     *           "created_at": "2026-10-12T09:00:00Z",
+                     *           "created_by": "user:miguel@example.test",
+                     *           "external": true,
+                     *           "host": "esxi-01",
+                     *           "id": "0192f1a2-0000-7000-8000-00000000e701",
+                     *           "in_cluster": true,
+                     *           "name": "ctl-esxi",
+                     *           "nofailover": true,
+                     *           "patroni_url": "http://10.0.0.13:8008",
+                     *           "platform": "esxi",
+                     *           "status": {
+                     *             "database_role": "replica",
+                     *             "database_state": "streaming",
+                     *             "lag_bytes": 0,
+                     *             "nofailover": true,
+                     *             "timeline": 4
+                     *           },
+                     *           "version": 1
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerMembersRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_controller_member_api_v1_system_controller_members_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "address": "10.0.0.13",
+                 *       "host": "esxi-01",
+                 *       "name": "ctl-esxi",
+                 *       "nofailover": true,
+                 *       "patroni_url": "http://10.0.0.13:8008",
+                 *       "platform": "esxi"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ControllerMemberIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "address": "10.0.0.13",
+                     *       "created_at": "2026-10-12T09:00:00Z",
+                     *       "created_by": "user:miguel@example.test",
+                     *       "external": true,
+                     *       "host": "esxi-01",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000e701",
+                     *       "in_cluster": true,
+                     *       "name": "ctl-esxi",
+                     *       "nofailover": true,
+                     *       "patroni_url": "http://10.0.0.13:8008",
+                     *       "platform": "esxi",
+                     *       "status": {
+                     *         "database_role": "replica",
+                     *         "database_state": "streaming",
+                     *         "lag_bytes": 0,
+                     *         "nofailover": true,
+                     *         "timeline": 4
+                     *       },
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerMemberRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_controller_member_api_v1_system_controller_members__controller_member__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Controller cluster member id. */
+                controller_member: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_controller_member_api_v1_system_controller_members__controller_member__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Controller cluster member id. */
+                controller_member: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "host": "esxi-02"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ControllerMemberPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "address": "10.0.0.13",
+                     *       "created_at": "2026-10-12T09:00:00Z",
+                     *       "created_by": "user:miguel@example.test",
+                     *       "external": true,
+                     *       "host": "esxi-01",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000e701",
+                     *       "in_cluster": true,
+                     *       "name": "ctl-esxi",
+                     *       "nofailover": true,
+                     *       "patroni_url": "http://10.0.0.13:8008",
+                     *       "platform": "esxi",
+                     *       "status": {
+                     *         "database_role": "replica",
+                     *         "database_state": "streaming",
+                     *         "lag_bytes": 0,
+                     *         "nofailover": true,
+                     *         "timeline": 4
+                     *       },
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerMemberRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };

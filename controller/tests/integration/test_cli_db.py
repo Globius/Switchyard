@@ -86,7 +86,10 @@ def test_adopt_management_example_then_refuses_second_run(
     example = Path(__file__).parents[3] / "deploy/prod/adopt/management.example.yaml"
     code, out, err = syctl(pg_url, "adopt", str(example))
     assert code == 0, err
-    assert "adopted tenant 'management': 1 SE groups, 1 virtual services, 2 engines" in out
+    assert (
+        "adopted tenant 'management': 1 SE groups, 1 virtual services, 2 engines, "
+        "3 controller members"
+    ) in out
     code, _, err = syctl(pg_url, "adopt", str(example))
     assert code == 1
     assert "already exists" in err

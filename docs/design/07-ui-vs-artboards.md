@@ -462,3 +462,8 @@ API and the ADRs and need a design pass.
   "Quota requests" with a waiting count and Approve (grant between the current and requested limit, optional note) and Deny
   (note required) dialogs. Deviation: there is no artboard, so the layout reuses the tables and dialogs of Access and the
   Tenants admin page; the meter is the only new element and always comes with a word, never colour alone.
+- **External controller member (ADR 0051 update).** The Controller page in Admin gets a "Cluster members" table under the
+  address settings: name with an *External* badge, where it runs, address, Patroni role, state, lag and "Never primary" or "Can
+  take over", with Add, Edit and Remove. There is no artboard, so it reuses the table, sheet and confirmation patterns of the
+  other admin pages. Deviation: 02 says the member is "shown in the UI as an external member" without saying where; it is on the
+  Controller page because that is where an administrator looks when the controller misbehaves, and the page is system-admin only.

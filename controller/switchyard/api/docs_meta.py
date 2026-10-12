@@ -112,6 +112,7 @@ PARAMS: dict[str, str] = {
     "zone": "Zone name, for example `gslb.example.test` (a filter on the list route).",
     "cluster": "Kubernetes cluster id.",
     "request": "Quota request id.",
+    "controller_member": "Controller cluster member id.",
     "cs": "Change set id.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
@@ -502,6 +503,15 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     },
     "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
     "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
+    "POST /system/controller/members": {
+        "name": "ctl-esxi",
+        "address": "10.0.0.13",
+        "platform": "esxi",
+        "host": "esxi-01",
+        "nofailover": True,
+        "patroni_url": "http://10.0.0.13:8008",
+    },
+    "PATCH /system/controller/members/{controller_member}": {"host": "esxi-02"},
     "POST /tenants/{t}/imports/avi": {
         "export": {"VirtualService": [], "Pool": []},
         "se_group": "edge",

@@ -25,7 +25,9 @@ members:
   `disabled` reaches every engine through the HAProxy Runtime API. See [health checks and drain](health-checks.md).
 - A pool can be filled automatically from [Proxmox tags](pool-discovery.md) or a [Kubernetes cluster](kubernetes.md).
 
-**Labels.** Virtual services and pools carry up to 20 free labels (`env: prod`, `team: payments`; keys and values are
+### Labels
+
+Virtual services and pools carry up to 20 free labels (`env: prod`, `team: payments`; keys and values are
 `a-z`, `0-9`, `-`, `_`, `.`, at most 63 characters, a value may be empty). They are for finding objects: they never reach
 a configuration file, so changing one does not touch the engines. Filter a list with `?label=env=prod`; repeat the
 parameter to require all of them, and use `key`, `!key` or `key!=value` for has, has not and is not. An update replaces the

@@ -46,7 +46,7 @@ view and are longer than the counts because they split grouped rows.
 | Cloudflare DNS record created from a virtual service | 01 phase 2; 06 | Adapter exists; no service or job flow calls it |
 | Automatic SE scale-out | 01 risks ("v3"); 08 C9 | Manual deploy, add-engine and a documented rolling replace exist; nothing scales by itself |
 | Packet capture job | 01 phase 3; 08 D5 | |
-| Tenant self-service portal | 01 phase 3; 08 D8 | |
+| Tenant self-service portal | 01 phase 3; 08 D8 | **Built afterwards** (same day): "Usage and requests" page and quota requests, ADR 0199 |
 | Multi-site and remote engines | ADR 0180 (Proposed) | |
 | CrowdSec / bouncer | 01 mapping; 08 C11 | Reputation feeds are supported through `SWITCHYARD_REPUTATION_FEEDS`; no CrowdSec integration |
 | Lua actions | 01 DataScripts; 08 D6 | Out of scope on purpose (ADR 0130) |
@@ -56,8 +56,8 @@ view and are longer than the counts because they split grouped rows.
 | Step-up / conditional flows (nFactor style) | 08 E8 | Device-posture conditions exist (ADR 0138); ordered multi-step flows do not |
 | ZTNA gateway, agent-based device posture | 08 E9; ADR 0138 | Stated "Not built" in ADR 0138 line 31 |
 | WAF API-schema protection | 08 D5 | |
-| Object labels and the `?label=` filter | 04 / 05 A7 | Dropped by decision; the UI control is disabled (`ui/src/features/vs/VirtualServicesPage.tsx:154`) |
-| External (ESXi) controller member shown in the UI | 06 section 2 | Adopt supports it (ADR 0051 line 26); nothing in `ui/src` mentions it |
+| Object labels and the `?label=` filter | 04 / 05 A7 | Dropped by decision; the UI control was disabled. **Built afterwards** (same day): labels on virtual services and pools, ADR 0198 |
+| External (ESXi) controller member shown in the UI | 06 section 2 | ADR 0051 left the design open (the audit read it as supported). **Built afterwards** (same day): Admin > Controller > Cluster members and `controller_members` in the adoption file, ADR 0051 update |
 
 ### Partial
 

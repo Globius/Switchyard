@@ -40,6 +40,12 @@ from switchyard.api.alert_models import (
     AlertTargetRead,
     AlertTargetTest,
 )
+from switchyard.api.controller_member_models import (
+    ControllerMemberIn,
+    ControllerMemberPatch,
+    ControllerMemberRead,
+    ControllerMembersRead,
+)
 from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
 from switchyard.api.gslb_models import (
     GslbDsRead,
@@ -210,6 +216,7 @@ from switchyard.services.changesets import (
     require,
 )
 from switchyard.services.context import Databases, Principal
+from switchyard.services.controller_members import ControllerMembers
 from switchyard.services.controller_settings import ControllerSettings
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.engines import EngineDetail, EngineService
@@ -287,6 +294,7 @@ class ApiServices:
     avi_import: AviImportService = None  # type: ignore[assignment]
     kubernetes: KubernetesClusters | None = None
     quota_requests: QuotaRequests = None  # type: ignore[assignment]
+    controller_members: ControllerMembers = None  # type: ignore[assignment]
 
 
 def build_services(
@@ -362,6 +370,7 @@ def build_services(
         if writer is not None
         else None,
         quota_requests=QuotaRequests(db),
+        controller_members=ControllerMembers(db),
     )
 
 
@@ -4275,6 +4284,83 @@ def create_app(
             reached_at=f"{proto}://{host}" if host else None,
         )
         return asdict(view)
+
+    @router.get(
+        "/system/controller/members",
+        tags=["system"],
+        summary="The controller's cluster members",
+        response_model=ControllerMembersRead,
+        responses=_ok(ex.CONTROLLER_MEMBERS),
+    )
+    async def list_controller_members(who: Who, svc: Services) -> dict[str, Any]:
+        """The controller VMs, including the external one on ESXi, with what Patroni reports.
+
+        The state comes from the first member whose `patroni_url` answers. A member Patroni does
+        not list has `in_cluster: false`.
+        """
+        return asdict(await svc.controller_members.list_members(who))
+
+    @router.post(
+        "/system/controller/members",
+        status_code=201,
+        tags=["system"],
+        summary="List a controller cluster member",
+        response_model=ControllerMemberRead,
+        responses=_ok(ex.CONTROLLER_MEMBER, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_controller_member(
+        body: ControllerMemberIn, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Record a controller VM. This only describes it; nothing is deployed or joined."""
+        view = await svc.controller_members.create(who, request_id=_rid(), **body.model_dump())
+        return asdict(view)
+
+    @router.patch(
+        "/system/controller/members/{controller_member}",
+        tags=["system"],
+        summary="Change a controller cluster member",
+        response_model=ControllerMemberRead,
+        responses=_ok(ex.CONTROLLER_MEMBER, headers=ETAG_HEADER)
+        | IF_MATCH_RESPONSES
+        | VALIDATION_RESPONSE,
+    )
+    async def patch_controller_member(
+        controller_member: UUID,
+        body: ControllerMemberPatch,
+        response: Response,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Change the listed fields; omitted ones stay."""
+        view = await svc.controller_members.update(
+            who,
+            controller_member,
+            expected_version=_if_match(if_match),
+            changes=body.model_dump(exclude_unset=True),
+            request_id=_rid(),
+        )
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.delete(
+        "/system/controller/members/{controller_member}",
+        status_code=204,
+        tags=["system"],
+        summary="Forget a controller cluster member",
+        responses=IF_MATCH_RESPONSES,
+    )
+    async def delete_controller_member(
+        controller_member: UUID,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Remove it from the list. The VM, etcd and Patroni are not touched."""
+        await svc.controller_members.delete(
+            who, controller_member, expected_version=_if_match(if_match), request_id=_rid()
+        )
+        return Response(status_code=204)
 
     @router.put(
         "/system/controller/pending",
