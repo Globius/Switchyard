@@ -216,22 +216,6 @@ def validate_header_name(value: str) -> str:
     return value
 
 
-def validate_cookie_name(value: str) -> str:
-    """Validate a cookie name (letters, digits, ``_`` and ``-``; 1-64 characters).
-
-    Example:
-        >>> validate_cookie_name("SY_SRV")
-        'SY_SRV'
-        >>> validate_cookie_name("a;b")
-        Traceback (most recent call last):
-            ...
-        ValueError: cookie name must be 1-64 characters of letters, digits, '_' and '-'
-    """
-    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
-        raise ValueError("cookie name must be 1-64 characters of letters, digits, '_' and '-'")
-    return value
-
-
 def validate_media_type(value: str) -> str:
     """Validate a media type such as ``text/html`` (no parameters, lower case).
 
@@ -495,6 +479,18 @@ FORBIDDEN_HEADERS = frozenset(
 )
 #: Request headers the renderer owns (client-address hygiene); a policy cannot touch them.
 MANAGED_REQUEST_HEADERS = frozenset({"x-forwarded-for", "x-forwarded-proto"})
+#: Headers the authentication proxy uses between itself and the engine (ADR 0132).
+AUTH_INTERNAL_HEADERS = frozenset(
+    {
+        "host",
+        "authorization",
+        "x-forwarded-user",
+        "x-forwarded-email",
+        "x-forwarded-groups",
+        "x-forwarded-preferred-username",
+        "x-forwarded-access-token",
+    }
+)
 
 
 def validate_body(value: str) -> str:
@@ -553,3 +549,116 @@ def discovery_tag_prefix(tenant_name: str) -> str:
         'sy-acme.'
     """
     return f"sy-{tenant_name}."
+
+
+_OIDC_ISSUER = re.compile(
+    r"^https://([a-z0-9]([a-z0-9-]*[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:[0-9]{1,5})?(/[A-Za-z0-9._~/%:@+-]{0,512})?$"
+)
+_CLAIM = re.compile(r"^[A-Za-z0-9_.:/-]{1,64}$")
+_COOKIE_NAME = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+_CLIENT_ID = re.compile(r"^[A-Za-z0-9._~:@-]{1,128}$")
+_GROUP = re.compile(r"^[A-Za-z0-9_.:/@=-]{1,128}$")
+
+
+def validate_issuer(value: str) -> str:
+    """Validate an OpenID Connect issuer URL: ``https`` and a host, an optional port and path.
+
+    No user info, query or fragment, and only characters that are safe in a quoted config value.
+
+    Example:
+        >>> validate_issuer("https://login.example.test/realms/acme")
+        'https://login.example.test/realms/acme'
+        >>> validate_issuer("http://login.example.test")
+        Traceback (most recent call last):
+            ...
+        ValueError: issuer must be an https URL (host, optional port and path)
+    """
+    if not _OIDC_ISSUER.fullmatch(value) or len(value) > 512:
+        raise ValueError("issuer must be an https URL (host, optional port and path)")
+    host = value[len("https://") :].split("/", 1)[0].split(":", 1)[0]
+    validate_hostname(host)
+    return value
+
+
+def validate_claim_name(value: str) -> str:
+    """Validate a token claim name (for example ``groups``).
+
+    Example:
+        >>> validate_claim_name("groups")
+        'groups'
+    """
+    if not _CLAIM.fullmatch(value):
+        raise ValueError("claim name must be 1-64 characters of letters, digits and _ . : / -")
+    return value
+
+
+def validate_cookie_name(value: str) -> str:
+    """Validate a session cookie name.
+
+    Example:
+        >>> validate_cookie_name("_sy_auth")
+        '_sy_auth'
+    """
+    if not _COOKIE_NAME.fullmatch(value):
+        raise ValueError("cookie name must be 1-32 characters of letters, digits, _ and -")
+    return value
+
+
+def validate_client_id(value: str) -> str:
+    """Validate an OAuth client id.
+
+    Example:
+        >>> validate_client_id("switchyard-web")
+        'switchyard-web'
+    """
+    if not _CLIENT_ID.fullmatch(value):
+        raise ValueError("client_id must be 1-128 characters of letters, digits and . _ ~ : @ -")
+    return value
+
+
+def validate_group_name(value: str) -> str:
+    """Validate an identity-provider group name or id.
+
+    Example:
+        >>> validate_group_name("/staff/admins")
+        '/staff/admins'
+    """
+    if not _GROUP.fullmatch(value):
+        raise ValueError("group must be 1-128 characters of letters, digits and . _ : / @ = -")
+    return value
+
+
+_PUBLIC_KEY = re.compile(
+    r"^-----BEGIN PUBLIC KEY-----\n[A-Za-z0-9+/=\n]{40,4000}\n-----END PUBLIC KEY-----\n?$"
+)
+_CERT_NAME = re.compile(r"^[A-Za-z0-9._@:-]{1,128}$")
+
+
+def validate_public_key_pem(value: str) -> str:
+    r"""Validate a PEM public key block (never a private key).
+
+    Example:
+        >>> validate_public_key_pem("-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----")
+        Traceback (most recent call last):
+            ...
+        ValueError: public_key_pem must be one PEM PUBLIC KEY block
+    """
+    if not _PUBLIC_KEY.fullmatch(value):
+        raise ValueError("public_key_pem must be one PEM PUBLIC KEY block")
+    return value if value.endswith("\n") else value + "\n"
+
+
+def validate_cert_name(value: str) -> str:
+    """Validate a certificate common name or a user label used in a map file.
+
+    Example:
+        >>> validate_cert_name("alice@example.test")
+        'alice@example.test'
+        >>> validate_cert_name("a b")
+        Traceback (most recent call last):
+            ...
+        ValueError: name must be 1-128 characters of letters, digits and . _ @ : -
+    """
+    if not _CERT_NAME.fullmatch(value):
+        raise ValueError("name must be 1-128 characters of letters, digits and . _ @ : -")
+    return value

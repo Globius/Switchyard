@@ -178,6 +178,357 @@
         "title": "AccessLogs",
         "type": "object"
       },
+      "AccessPolicySet": {
+        "additionalProperties": false,
+        "description": "Require a login (and optionally a group or e-mail domain) for a service (ADR 0130 to 0132).\n\nThe engine runs an authentication proxy for the set; requests that need a login are sent\nthrough it and come back to the same frontend once authenticated.\n\nAttributes:\n    oidc: The identity provider settings.\n    default_mode: What requests that match no rule need: ``login`` (the default, closed) or\n        ``public``.\n    rules: Ordered rules; the first match decides.\n    identity_headers: Which headers carry the user to the origin.\n    auth_path: Path prefix of the login endpoints (``/oauth2/start``, ``/oauth2/callback``,\n        ``/oauth2/sign_out``), reserved on every host of the service.",
+        "properties": {
+          "auth_path": {
+            "default": "/oauth2",
+            "title": "Auth Path",
+            "type": "string"
+          },
+          "default_mode": {
+            "default": "login",
+            "enum": [
+              "login",
+              "public"
+            ],
+            "title": "Default Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identity_headers": {
+            "$ref": "#/components/schemas/IdentityHeaders",
+            "default": {
+              "email": "X-Auth-Email",
+              "groups": "X-Auth-Groups",
+              "user": "X-Auth-User"
+            }
+          },
+          "kind": {
+            "const": "access",
+            "default": "access",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OidcSettings"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AccessRule"
+            },
+            "maxItems": 32,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "oidc"
+        ],
+        "title": "AccessPolicySet",
+        "type": "object"
+      },
+      "AccessPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "auth_path": {
+            "default": "/oauth2",
+            "title": "Auth Path",
+            "type": "string"
+          },
+          "default_mode": {
+            "default": "login",
+            "enum": [
+              "login",
+              "public"
+            ],
+            "title": "Default Mode",
+            "type": "string"
+          },
+          "identity_headers": {
+            "$ref": "#/components/schemas/IdentityHeaders",
+            "default": {
+              "email": "X-Auth-Email",
+              "groups": "X-Auth-Groups",
+              "user": "X-Auth-User"
+            }
+          },
+          "kind": {
+            "const": "access",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OidcSettings"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AccessRule"
+            },
+            "maxItems": 32,
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "oidc"
+        ],
+        "title": "AccessPolicySetCreate",
+        "type": "object"
+      },
+      "AccessPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "auth_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Path"
+          },
+          "default_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "login",
+                  "public"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Mode"
+          },
+          "identity_headers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IdentityHeaders"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "const": "access",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "oidc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OidcSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AccessRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "AccessPolicySetPatch",
+        "type": "object"
+      },
+      "AccessPolicySetRead": {
+        "additionalProperties": false,
+        "description": "AccessPolicySet as returned by the API.",
+        "properties": {
+          "auth_path": {
+            "default": "/oauth2",
+            "title": "Auth Path",
+            "type": "string"
+          },
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "default_mode": {
+            "default": "login",
+            "enum": [
+              "login",
+              "public"
+            ],
+            "title": "Default Mode",
+            "type": "string"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identity_headers": {
+            "$ref": "#/components/schemas/IdentityHeaders",
+            "default": {
+              "email": "X-Auth-Email",
+              "groups": "X-Auth-Groups",
+              "user": "X-Auth-User"
+            }
+          },
+          "kind": {
+            "const": "access",
+            "default": "access",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OidcSettings"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AccessRule"
+            },
+            "maxItems": 32,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "oidc",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "AccessPolicySetRead",
+        "type": "object"
+      },
+      "AccessRule": {
+        "additionalProperties": false,
+        "description": "What a request needs before it reaches the origin.\n\nAttributes:\n    match: Requests the rule covers; the first rule that matches decides.\n    mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of\n        at least one of ``groups``) or ``email_domains`` (an address in one of the domains).",
+        "properties": {
+          "email_domains": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Email Domains",
+            "type": "array"
+          },
+          "groups": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Groups",
+            "type": "array"
+          },
+          "match": {
+            "$ref": "#/components/schemas/RouteMatch",
+            "default": {
+              "headers": [],
+              "methods": [],
+              "query": [],
+              "source_cidrs": []
+            }
+          },
+          "mode": {
+            "default": "login",
+            "enum": [
+              "public",
+              "login",
+              "groups",
+              "email_domains"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "AccessRule",
+        "type": "object"
+      },
       "AcmeChallenge": {
         "description": "How an ACME certificate authority checks control of a name.",
         "enum": [
@@ -2817,6 +3168,44 @@
         "title": "CacheSettings",
         "type": "object"
       },
+      "CertIdentity": {
+        "additionalProperties": false,
+        "description": "Map a client certificate to a user and groups (ADR 0136).\n\nAttributes:\n    by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,\n        for individual certificates).\n    value: The common name, or 40 hex digits.\n    user: The user name written to the user header.\n    groups: Groups written to the groups header.",
+        "properties": {
+          "by": {
+            "default": "cn",
+            "enum": [
+              "cn",
+              "sha1"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "groups": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Groups",
+            "type": "array"
+          },
+          "user": {
+            "title": "User",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "user"
+        ],
+        "title": "CertIdentity",
+        "type": "object"
+      },
       "CertImportIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /certificates/import``.",
@@ -3793,6 +4182,361 @@
           "op_count"
         ],
         "title": "ChangeSetSummary",
+        "type": "object"
+      },
+      "ClientCertPolicySet": {
+        "additionalProperties": false,
+        "description": "Use the TLS client certificate as the identity (ADR 0136).\n\nAttributes:\n    identities: Certificates the set knows (up to 500).\n    rules: Ordered rules; the first that matches decides. Requests that match no rule are\n        not checked.\n    user_header: Header that receives the mapped user (client copies removed first).\n    groups_header: Header that receives the mapped groups, comma separated.",
+        "properties": {
+          "groups_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-Groups",
+            "title": "Groups Header"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CertIdentity"
+            },
+            "maxItems": 500,
+            "title": "Identities",
+            "type": "array"
+          },
+          "kind": {
+            "const": "client_cert",
+            "default": "client_cert",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCertRule"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "user_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-User",
+            "title": "User Header"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules"
+        ],
+        "title": "ClientCertPolicySet",
+        "type": "object"
+      },
+      "ClientCertPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "groups_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-Groups",
+            "title": "Groups Header"
+          },
+          "identities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CertIdentity"
+            },
+            "maxItems": 500,
+            "title": "Identities",
+            "type": "array"
+          },
+          "kind": {
+            "const": "client_cert",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCertRule"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "user_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-User",
+            "title": "User Header"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "rules"
+        ],
+        "title": "ClientCertPolicySetCreate",
+        "type": "object"
+      },
+      "ClientCertPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "groups_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Groups Header"
+          },
+          "identities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CertIdentity"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identities"
+          },
+          "kind": {
+            "const": "client_cert",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ClientCertRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          },
+          "user_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Header"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ClientCertPolicySetPatch",
+        "type": "object"
+      },
+      "ClientCertPolicySetRead": {
+        "additionalProperties": false,
+        "description": "ClientCertPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "groups_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-Groups",
+            "title": "Groups Header"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CertIdentity"
+            },
+            "maxItems": 500,
+            "title": "Identities",
+            "type": "array"
+          },
+          "kind": {
+            "const": "client_cert",
+            "default": "client_cert",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCertRule"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "user_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-User",
+            "title": "User Header"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "ClientCertPolicySetRead",
+        "type": "object"
+      },
+      "ClientCertRule": {
+        "additionalProperties": false,
+        "description": "What a request needs from its client certificate.\n\nAttributes:\n    match: Requests the rule covers (empty: all). The first rule that matches decides.\n    mode: ``valid`` (any certificate the port's client CA accepts), ``identity`` (the\n        certificate must be in ``identities``) or ``groups`` (and its identity must have one of\n        ``groups``).\n    groups: Groups for mode ``groups``.",
+        "properties": {
+          "groups": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Groups",
+            "type": "array"
+          },
+          "match": {
+            "$ref": "#/components/schemas/RouteMatch",
+            "default": {
+              "headers": [],
+              "methods": [],
+              "query": [],
+              "source_cidrs": []
+            }
+          },
+          "mode": {
+            "default": "valid",
+            "enum": [
+              "valid",
+              "identity",
+              "groups"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "ClientCertRule",
         "type": "object"
       },
       "Compression": {
@@ -7215,6 +7959,61 @@
         "title": "HttpMethod",
         "type": "string"
       },
+      "IdentityHeaders": {
+        "additionalProperties": false,
+        "description": "Headers that carry the signed-in user to the origin (ADR 0132).\n\nA name set to ``None`` turns that header off. The names are removed from every client\nrequest before the user's own values are written, so an origin can trust them when the\nservice is only reachable through the engine.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Auth-Email",
+            "title": "Email"
+          },
+          "groups": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Auth-Groups",
+            "title": "Groups"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Auth-User",
+            "title": "User"
+          }
+        },
+        "title": "IdentityHeaders",
+        "type": "object"
+      },
       "IdpRedirectRead": {
         "additionalProperties": false,
         "description": "The address an identity provider must allow for the new FQDN.",
@@ -7967,6 +8766,305 @@
         ],
         "title": "JobState",
         "type": "string"
+      },
+      "JwtKey": {
+        "additionalProperties": false,
+        "description": "A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.\n\nAttributes:\n    kid: The ``kid`` header the key belongs to; without it the key is tried for every token.\n    alg: The signature algorithm the token must declare.\n    public_key_pem: The key as a PEM ``PUBLIC KEY`` block (convert a JWK with\n        ``syctl jwks convert``).",
+        "properties": {
+          "alg": {
+            "default": "RS256",
+            "enum": [
+              "RS256",
+              "RS384",
+              "RS512",
+              "ES256",
+              "ES384",
+              "ES512",
+              "PS256",
+              "PS384",
+              "PS512"
+            ],
+            "title": "Alg",
+            "type": "string"
+          },
+          "kid": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9._:/@=-]{1,128}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kid"
+          },
+          "public_key_pem": {
+            "title": "Public Key Pem",
+            "type": "string"
+          }
+        },
+        "required": [
+          "public_key_pem"
+        ],
+        "title": "JwtKey",
+        "type": "object"
+      },
+      "JwtPolicySet": {
+        "additionalProperties": false,
+        "description": "Validate JWT bearer tokens for APIs, with no login page (ADR 0135).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "jwt",
+            "default": "jwt",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/JwtRule"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules"
+        ],
+        "title": "JwtPolicySet",
+        "type": "object"
+      },
+      "JwtPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "jwt",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/JwtRule"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "rules"
+        ],
+        "title": "JwtPolicySetCreate",
+        "type": "object"
+      },
+      "JwtPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "jwt",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/JwtRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "JwtPolicySetPatch",
+        "type": "object"
+      },
+      "JwtPolicySetRead": {
+        "additionalProperties": false,
+        "description": "JwtPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "jwt",
+            "default": "jwt",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/JwtRule"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "JwtPolicySetRead",
+        "type": "object"
+      },
+      "JwtRule": {
+        "additionalProperties": false,
+        "description": "Require a valid bearer token on the requests ``match`` selects.\n\nA token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``\ncontains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and\nevery ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is\nanswered 401.\n\nAttributes:\n    match: Requests the rule covers (empty: all).\n    issuer: The expected ``iss`` claim.\n    audiences: Accepted ``aud`` values (a string claim or an element of an array claim).\n    required_scopes: Scopes the token must carry.\n    leeway_s: Clock difference tolerated on ``exp``.\n    keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).\n    subject_header: Request header that receives the ``sub`` claim of a valid token;\n        client copies of it are removed first.",
+        "properties": {
+          "audiences": {
+            "default": [],
+            "items": {
+              "pattern": "^[A-Za-z0-9._~:/@=+-]{1,256}$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Audiences",
+            "type": "array"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/JwtKey"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Keys",
+            "type": "array"
+          },
+          "leeway_s": {
+            "default": 30,
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Leeway S",
+            "type": "integer"
+          },
+          "match": {
+            "$ref": "#/components/schemas/RouteMatch",
+            "default": {
+              "headers": [],
+              "methods": [],
+              "query": [],
+              "source_cidrs": []
+            }
+          },
+          "required_scopes": {
+            "default": [],
+            "items": {
+              "pattern": "^[A-Za-z0-9._:/-]{1,64}$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Required Scopes",
+            "type": "array"
+          },
+          "subject_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Header"
+          }
+        },
+        "required": [
+          "issuer",
+          "keys"
+        ],
+        "title": "JwtRule",
+        "type": "object"
       },
       "LatestRevision": {
         "additionalProperties": false,
@@ -9424,6 +10522,73 @@
         "title": "OidcProviderRead",
         "type": "object"
       },
+      "OidcSettings": {
+        "additionalProperties": false,
+        "description": "OpenID Connect login against a tenant's identity provider (ADR 0130).\n\nAttributes:\n    issuer: The provider's issuer URL (``https``); discovery is read from it.\n    client_id: The client registered for Switchyard at the provider.\n    client_secret_ref: OpenBao path of the client secret (never the secret).\n    cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies\n        (16, 24 or 32 bytes). One key per access set; rotate it to end every session.\n    scopes: Scopes to request; ``openid`` is required.\n    groups_claim: Claim that carries the user's groups.\n    cookie_name: Session cookie name.\n    cookie_expire_s: Absolute session lifetime.\n    cookie_refresh_s: How often the session is refreshed against the provider (a user whose\n        account was disabled loses the session at the next refresh). Less than the lifetime.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret_ref": {
+            "title": "Client Secret Ref",
+            "type": "string"
+          },
+          "cookie_expire_s": {
+            "default": 28800,
+            "maximum": 604800.0,
+            "minimum": 300.0,
+            "title": "Cookie Expire S",
+            "type": "integer"
+          },
+          "cookie_name": {
+            "default": "_sy_auth",
+            "title": "Cookie Name",
+            "type": "string"
+          },
+          "cookie_refresh_s": {
+            "default": 900,
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Cookie Refresh S",
+            "type": "integer"
+          },
+          "cookie_secret_ref": {
+            "title": "Cookie Secret Ref",
+            "type": "string"
+          },
+          "groups_claim": {
+            "default": "groups",
+            "title": "Groups Claim",
+            "type": "string"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "scopes": {
+            "default": [
+              "openid",
+              "email",
+              "profile"
+            ],
+            "items": {
+              "pattern": "^[A-Za-z0-9._:/-]{1,64}$",
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issuer",
+          "client_id",
+          "client_secret_ref",
+          "cookie_secret_ref"
+        ],
+        "title": "OidcSettings",
+        "type": "object"
+      },
       "OpIn": {
         "additionalProperties": false,
         "description": "One operation in a change set.",
@@ -9504,19 +10669,24 @@
         "title": "OpsIn",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
             "items": {
               "discriminator": {
                 "mapping": {
+                  "access": "#/components/schemas/AccessPolicySetRead",
                   "allow_list": "#/components/schemas/AllowListPolicySetRead",
+                  "client_cert": "#/components/schemas/ClientCertPolicySetRead",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
+                  "jwt": "#/components/schemas/JwtPolicySetRead",
+                  "protection": "#/components/schemas/ProtectionPolicySetRead",
                   "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                   "redirect": "#/components/schemas/RedirectPolicySetRead",
                   "respond": "#/components/schemas/RespondPolicySetRead",
-                  "rewrite": "#/components/schemas/RewritePolicySetRead"
+                  "rewrite": "#/components/schemas/RewritePolicySetRead",
+                  "waf": "#/components/schemas/WafPolicySetRead"
                 },
                 "propertyName": "kind"
               },
@@ -9538,6 +10708,21 @@
                 },
                 {
                   "$ref": "#/components/schemas/RateLimitPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/WafPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/ProtectionPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/AccessPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/JwtPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/ClientCertPolicySetRead"
                 }
               ]
             },
@@ -9560,7 +10745,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -11375,6 +12560,640 @@
           "detail"
         ],
         "title": "ProblemOut",
+        "type": "object"
+      },
+      "ProtectionPolicySet": {
+        "additionalProperties": false,
+        "description": "Bot and DDoS protection for a service (ADR 0150).\n\nPer-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits\nstay in ``rate_limit`` sets.\n\nAttributes:\n    max_connections_per_source: Connections one address may hold open; more are refused.\n    max_new_connections_per_source: New connections one address may open per\n        ``connection_rate_period_s``; more are refused.\n    connection_rate_period_s: Window of the connection rate.\n    header_timeout_s: How long a client has to send the whole request head (``timeout\n        http-request``); the answer to slow-header attacks.\n    client_timeout_s: Idle time allowed on a client connection (``timeout client``).\n    block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.\n    block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).\n    deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.\n    bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.\n    exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).\n    table_size: Addresses the connection table holds.\n\nExample:\n    >>> ProtectionPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"p\",\n    ...      \"block_scanners\": True}\n    ... ).bot_action\n    'deny'",
+        "properties": {
+          "block_empty_user_agent": {
+            "default": false,
+            "title": "Block Empty User Agent",
+            "type": "boolean"
+          },
+          "block_scanners": {
+            "default": false,
+            "title": "Block Scanners",
+            "type": "boolean"
+          },
+          "bot_action": {
+            "default": "deny",
+            "enum": [
+              "deny",
+              "silent_drop"
+            ],
+            "title": "Bot Action",
+            "type": "string"
+          },
+          "client_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Timeout S"
+          },
+          "connection_rate_period_s": {
+            "default": 10,
+            "enum": [
+              1,
+              10,
+              60
+            ],
+            "title": "Connection Rate Period S",
+            "type": "integer"
+          },
+          "deny_user_agents": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Deny User Agents",
+            "type": "array"
+          },
+          "exempt_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 32,
+            "title": "Exempt Cidrs",
+            "type": "array"
+          },
+          "header_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Timeout S"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "protection",
+            "default": "protection",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Connections Per Source"
+          },
+          "max_new_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max New Connections Per Source"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 1000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name"
+        ],
+        "title": "ProtectionPolicySet",
+        "type": "object"
+      },
+      "ProtectionPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "block_empty_user_agent": {
+            "default": false,
+            "title": "Block Empty User Agent",
+            "type": "boolean"
+          },
+          "block_scanners": {
+            "default": false,
+            "title": "Block Scanners",
+            "type": "boolean"
+          },
+          "bot_action": {
+            "default": "deny",
+            "enum": [
+              "deny",
+              "silent_drop"
+            ],
+            "title": "Bot Action",
+            "type": "string"
+          },
+          "client_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Timeout S"
+          },
+          "connection_rate_period_s": {
+            "default": 10,
+            "enum": [
+              1,
+              10,
+              60
+            ],
+            "title": "Connection Rate Period S",
+            "type": "integer"
+          },
+          "deny_user_agents": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Deny User Agents",
+            "type": "array"
+          },
+          "exempt_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 32,
+            "title": "Exempt Cidrs",
+            "type": "array"
+          },
+          "header_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Timeout S"
+          },
+          "kind": {
+            "const": "protection",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Connections Per Source"
+          },
+          "max_new_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max New Connections Per Source"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 1000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "ProtectionPolicySetCreate",
+        "type": "object"
+      },
+      "ProtectionPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "block_empty_user_agent": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Empty User Agent"
+          },
+          "block_scanners": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Block Scanners"
+          },
+          "bot_action": {
+            "anyOf": [
+              {
+                "enum": [
+                  "deny",
+                  "silent_drop"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bot Action"
+          },
+          "client_timeout_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Timeout S"
+          },
+          "connection_rate_period_s": {
+            "anyOf": [
+              {
+                "enum": [
+                  1,
+                  10,
+                  60
+                ],
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Rate Period S"
+          },
+          "deny_user_agents": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deny User Agents"
+          },
+          "exempt_cidrs": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "format": "ipv4network",
+                      "type": "string"
+                    },
+                    {
+                      "format": "ipv6network",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exempt Cidrs"
+          },
+          "header_timeout_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Timeout S"
+          },
+          "kind": {
+            "const": "protection",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_connections_per_source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Connections Per Source"
+          },
+          "max_new_connections_per_source": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max New Connections Per Source"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "table_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Size"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ProtectionPolicySetPatch",
+        "type": "object"
+      },
+      "ProtectionPolicySetRead": {
+        "additionalProperties": false,
+        "description": "ProtectionPolicySet as returned by the API.",
+        "properties": {
+          "block_empty_user_agent": {
+            "default": false,
+            "title": "Block Empty User Agent",
+            "type": "boolean"
+          },
+          "block_scanners": {
+            "default": false,
+            "title": "Block Scanners",
+            "type": "boolean"
+          },
+          "bot_action": {
+            "default": "deny",
+            "enum": [
+              "deny",
+              "silent_drop"
+            ],
+            "title": "Bot Action",
+            "type": "string"
+          },
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "client_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Timeout S"
+          },
+          "connection_rate_period_s": {
+            "default": 10,
+            "enum": [
+              1,
+              10,
+              60
+            ],
+            "title": "Connection Rate Period S",
+            "type": "integer"
+          },
+          "deny_user_agents": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Deny User Agents",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "exempt_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 32,
+            "title": "Exempt Cidrs",
+            "type": "array"
+          },
+          "header_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header Timeout S"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "protection",
+            "default": "protection",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Connections Per Source"
+          },
+          "max_new_connections_per_source": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max New Connections Per Source"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 1000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "ProtectionPolicySetRead",
         "type": "object"
       },
       "Protocol": {
@@ -14699,12 +16518,17 @@
             "items": {
               "discriminator": {
                 "mapping": {
+                  "access": "#/components/schemas/AccessPolicySet",
                   "allow_list": "#/components/schemas/AllowListPolicySet",
+                  "client_cert": "#/components/schemas/ClientCertPolicySet",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySet",
+                  "jwt": "#/components/schemas/JwtPolicySet",
+                  "protection": "#/components/schemas/ProtectionPolicySet",
                   "rate_limit": "#/components/schemas/RateLimitPolicySet",
                   "redirect": "#/components/schemas/RedirectPolicySet",
                   "respond": "#/components/schemas/RespondPolicySet",
-                  "rewrite": "#/components/schemas/RewritePolicySet"
+                  "rewrite": "#/components/schemas/RewritePolicySet",
+                  "waf": "#/components/schemas/WafPolicySet"
                 },
                 "propertyName": "kind"
               },
@@ -14726,6 +16550,21 @@
                 },
                 {
                   "$ref": "#/components/schemas/RateLimitPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/WafPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/ProtectionPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/AccessPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/JwtPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/ClientCertPolicySet"
                 }
               ]
             },
@@ -17368,6 +19207,496 @@
           "match"
         ],
         "title": "VsRoute",
+        "type": "object"
+      },
+      "WafPolicySet": {
+        "additionalProperties": false,
+        "description": "Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).\n\nNew policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,\nso a tenant can read the logs before turning blocking on. A service can carry one WAF policy.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.\n    crs_version: CRS release to use; must be one the SE image ships.\n    paranoia_level: CRS paranoia level 1 (fewest rules) to 4.\n    inbound_threshold: Anomaly score at which a request counts as an attack.\n    outbound_threshold: Anomaly score at which a response counts as a leak.\n    disabled_rule_ids: CRS rules to switch off (for false positives).\n    excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.\n    inspect_body: Send the request body (up to the engine buffer size) to the WAF too.\n    fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503 (ADR 0142).\n    timeout_ms: How long HAProxy waits for the WAF's verdict.\n\nExample:\n    >>> WafPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"w\"}\n    ... ).mode\n    'detect'",
+        "properties": {
+          "crs_version": {
+            "const": "4.8.0",
+            "default": "4.8.0",
+            "title": "Crs Version",
+            "type": "string"
+          },
+          "disabled_rule_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "title": "Disabled Rule Ids",
+            "type": "array"
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbound_threshold": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Inbound Threshold",
+            "type": "integer"
+          },
+          "inspect_body": {
+            "default": true,
+            "title": "Inspect Body",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "waf",
+            "default": "waf",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outbound_threshold": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Outbound Threshold",
+            "type": "integer"
+          },
+          "paranoia_level": {
+            "default": 1,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Paranoia Level",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name"
+        ],
+        "title": "WafPolicySet",
+        "type": "object"
+      },
+      "WafPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "crs_version": {
+            "const": "4.8.0",
+            "default": "4.8.0",
+            "title": "Crs Version",
+            "type": "string"
+          },
+          "disabled_rule_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "title": "Disabled Rule Ids",
+            "type": "array"
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "inbound_threshold": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Inbound Threshold",
+            "type": "integer"
+          },
+          "inspect_body": {
+            "default": true,
+            "title": "Inspect Body",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "waf",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outbound_threshold": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Outbound Threshold",
+            "type": "integer"
+          },
+          "paranoia_level": {
+            "default": 1,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Paranoia Level",
+            "type": "integer"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "WafPolicySetCreate",
+        "type": "object"
+      },
+      "WafPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "crs_version": {
+            "anyOf": [
+              {
+                "const": "4.8.0",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crs Version"
+          },
+          "disabled_rule_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disabled Rule Ids"
+          },
+          "excluded_paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Paths"
+          },
+          "fail_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "closed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fail Mode"
+          },
+          "inbound_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inbound Threshold"
+          },
+          "inspect_body": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inspect Body"
+          },
+          "kind": {
+            "const": "waf",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "detect",
+                  "block"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "outbound_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outbound Threshold"
+          },
+          "paranoia_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paranoia Level"
+          },
+          "timeout_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Ms"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WafPolicySetPatch",
+        "type": "object"
+      },
+      "WafPolicySetRead": {
+        "additionalProperties": false,
+        "description": "WafPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "crs_version": {
+            "const": "4.8.0",
+            "default": "4.8.0",
+            "title": "Crs Version",
+            "type": "string"
+          },
+          "disabled_rule_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "title": "Disabled Rule Ids",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "excluded_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Excluded Paths",
+            "type": "array"
+          },
+          "fail_mode": {
+            "default": "open",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Fail Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "inbound_threshold": {
+            "default": 5,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Inbound Threshold",
+            "type": "integer"
+          },
+          "inspect_body": {
+            "default": true,
+            "title": "Inspect Body",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "waf",
+            "default": "waf",
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "outbound_threshold": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Outbound Threshold",
+            "type": "integer"
+          },
+          "paranoia_level": {
+            "default": 1,
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Paranoia Level",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "timeout_ms": {
+            "default": 100,
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "WafPolicySetRead",
         "type": "object"
       },
       "WeightedPool": {
@@ -35546,7 +37875,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -35711,12 +38040,17 @@
               "schema": {
                 "discriminator": {
                   "mapping": {
+                    "access": "#/components/schemas/AccessPolicySetCreate",
                     "allow_list": "#/components/schemas/AllowListPolicySetCreate",
+                    "client_cert": "#/components/schemas/ClientCertPolicySetCreate",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
+                    "jwt": "#/components/schemas/JwtPolicySetCreate",
+                    "protection": "#/components/schemas/ProtectionPolicySetCreate",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetCreate",
                     "redirect": "#/components/schemas/RedirectPolicySetCreate",
                     "respond": "#/components/schemas/RespondPolicySetCreate",
-                    "rewrite": "#/components/schemas/RewritePolicySetCreate"
+                    "rewrite": "#/components/schemas/RewritePolicySetCreate",
+                    "waf": "#/components/schemas/WafPolicySetCreate"
                   },
                   "propertyName": "kind"
                 },
@@ -35738,6 +38072,21 @@
                   },
                   {
                     "$ref": "#/components/schemas/RateLimitPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WafPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProtectionPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AccessPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/JwtPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ClientCertPolicySetCreate"
                   }
                 ],
                 "title": "Body"
@@ -36091,12 +38440,17 @@
                 "schema": {
                   "discriminator": {
                     "mapping": {
+                      "access": "#/components/schemas/AccessPolicySetRead",
                       "allow_list": "#/components/schemas/AllowListPolicySetRead",
+                      "client_cert": "#/components/schemas/ClientCertPolicySetRead",
                       "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
+                      "jwt": "#/components/schemas/JwtPolicySetRead",
+                      "protection": "#/components/schemas/ProtectionPolicySetRead",
                       "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                       "redirect": "#/components/schemas/RedirectPolicySetRead",
                       "respond": "#/components/schemas/RespondPolicySetRead",
-                      "rewrite": "#/components/schemas/RewritePolicySetRead"
+                      "rewrite": "#/components/schemas/RewritePolicySetRead",
+                      "waf": "#/components/schemas/WafPolicySetRead"
                     },
                     "propertyName": "kind"
                   },
@@ -36118,6 +38472,21 @@
                     },
                     {
                       "$ref": "#/components/schemas/RateLimitPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/WafPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ProtectionPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AccessPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JwtPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ClientCertPolicySetRead"
                     }
                   ],
                   "title": "Response Get Policy Sets Api V1 Tenants  T  Policy Sets  Object Id  Get"
@@ -36282,12 +38651,17 @@
               "schema": {
                 "discriminator": {
                   "mapping": {
+                    "access": "#/components/schemas/AccessPolicySetPatch",
                     "allow_list": "#/components/schemas/AllowListPolicySetPatch",
+                    "client_cert": "#/components/schemas/ClientCertPolicySetPatch",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
+                    "jwt": "#/components/schemas/JwtPolicySetPatch",
+                    "protection": "#/components/schemas/ProtectionPolicySetPatch",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetPatch",
                     "redirect": "#/components/schemas/RedirectPolicySetPatch",
                     "respond": "#/components/schemas/RespondPolicySetPatch",
-                    "rewrite": "#/components/schemas/RewritePolicySetPatch"
+                    "rewrite": "#/components/schemas/RewritePolicySetPatch",
+                    "waf": "#/components/schemas/WafPolicySetPatch"
                   },
                   "propertyName": "kind"
                 },
@@ -36309,6 +38683,21 @@
                   },
                   {
                     "$ref": "#/components/schemas/RateLimitPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/WafPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProtectionPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AccessPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/JwtPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ClientCertPolicySetPatch"
                   }
                 ],
                 "title": "Body"

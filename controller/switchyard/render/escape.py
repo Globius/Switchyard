@@ -27,6 +27,7 @@ _LOCATION = re.compile(r"[A-Za-z0-9._~/%:@+,;=?&*-]+")
 _HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
 _MATCH = re.compile(r"[A-Za-z0-9._:/-]{1,128}")
 _MEDIA = re.compile(r"[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/[a-z0-9][a-z0-9!#$&^_.+-]{0,62}")
+_UA = re.compile(r"[a-z0-9][a-z0-9._/+-]{1,63}")
 _COOKIE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _HEADER = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?")
 _VALUE = re.compile(r"[A-Za-z0-9 ._~/:@+,;=*()&!'-]+")
@@ -126,6 +127,22 @@ def media_type(value: str) -> str:
     return value
 
 
+def user_agent_token(value: str) -> str:
+    """Return ``value`` if it is a safe lower-case user-agent substring, else raise.
+
+    Example:
+        >>> user_agent_token("sqlmap")
+        'sqlmap'
+        >>> user_agent_token("a b")
+        Traceback (most recent call last):
+            ...
+        switchyard.render.escape.RenderError: unsafe user agent token 'a b'
+    """
+    if not _UA.fullmatch(value):
+        raise RenderError(f"unsafe user agent token {value!r}")
+    return value
+
+
 def match_text(value: str) -> str:
     """Return ``value`` if it is safe literal text for a health check match, else raise.
 
@@ -194,6 +211,79 @@ def path_regex(prefix: str) -> str:
     if not _PATH.fullmatch(prefix):
         raise RenderError(f"unsafe path {prefix!r}")
     return prefix.replace(".", "[.]").replace("+", "[+]")
+
+
+def audience_regex(value: str) -> str:
+    """Return the regex source for a literal token audience (``.`` and ``+`` as classes).
+
+    Example:
+        >>> audience_regex("https://api.example.test/v1")
+        'https://api[.]example[.]test/v1'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9._~:/@=+-]{1,256}", value):
+        raise RenderError(f"unsafe audience {value!r}")
+    return value.replace(".", "[.]").replace("+", "[+]")
+
+
+def issuer(value: str) -> str:
+    """Return ``value`` if it is a safe issuer URL for an ACL operand, else raise.
+
+    Example:
+        >>> issuer("https://login.example.test/realms/a")
+        'https://login.example.test/realms/a'
+    """
+    if not re.fullmatch(r"https://[a-z0-9.:-]+(/[A-Za-z0-9._~/%:@+-]{0,512})?", value):
+        raise RenderError(f"unsafe issuer {value!r}")
+    return value
+
+
+def cert_key(value: str, by: str) -> str:
+    """Return a map key for a certificate identity: a common name or a SHA-1 fingerprint.
+
+    Example:
+        >>> cert_key("alice@example.test", "cn")
+        'alice@example.test'
+    """
+    pattern = r"[0-9a-f]{40}" if by == "sha1" else r"[A-Za-z0-9._@:-]{1,128}"
+    if not re.fullmatch(pattern, value):
+        raise RenderError(f"unsafe certificate identity {value!r}")
+    return value
+
+
+def cert_label(value: str) -> str:
+    """Return a user label for a map value, or raise.
+
+    Example:
+        >>> cert_label("alice")
+        'alice'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9._@:-]{1,128}", value):
+        raise RenderError(f"unsafe user label {value!r}")
+    return value
+
+
+def group_label(value: str) -> str:
+    """Return a group name for a map value, or raise.
+
+    Example:
+        >>> group_label("ops.team")
+        'ops.team'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_.:/@=-]{1,128}", value):
+        raise RenderError(f"unsafe group {value!r}")
+    return value
+
+
+def group_regex(value: str) -> str:
+    """Return the regex source for a literal identity-provider group name.
+
+    Example:
+        >>> group_regex("/staff/ops.team")
+        '/staff/ops[.]team'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_.:/@=-]{1,128}", value):
+        raise RenderError(f"unsafe group {value!r}")
+    return value.replace(".", "[.]")
 
 
 def hostname(value: str) -> str:

@@ -6,6 +6,12 @@ sources:
     type: journald
     include_units: [haproxy.service]
     current_boot_only: true
+  coraza:
+    # WAF audit lines of the Coraza SPOA (ADR 0143). Detect mode logs here too, so a tenant can
+    # read what blocking would do before turning it on.
+    type: journald
+    include_units: [coraza-spoa.service]
+    current_boot_only: true
 transforms:
   parse:
     type: remap
@@ -16,10 +22,18 @@ transforms:
       if err != null { abort }
       .frontend = parsed.frontend
       .message = msg
+  parse_waf:
+    type: remap
+    inputs: [coraza]
+    source: |
+      msg = string!(.message)
+      app, err = parse_regex(msg, r'"application":\s*"(?P<app>[a-z0-9_-]+)"')
+      .frontend = if err == null { "vs_" + string!(app.app) } else { "waf" }
+      .message = "waf " + msg
 sinks:
   loki:
     type: loki
-    inputs: [parse]
+    inputs: [parse, parse_waf]
     endpoint: "${LOKI_URL}"
     encoding: { codec: text }
     labels:

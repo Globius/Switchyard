@@ -34,3 +34,10 @@ therefore comes back with its VIP and BGP sessions with the controller down. `fr
 
 Test: `docker build -f se-image/test/Dockerfile -t sy-se-image-test .` from the repository root.
 Procedure: `docs/runbooks/build-se-template.md`. Decision: ADR 0050.
+
+## WAF sidecar (Coraza SPOA)
+
+`files/coraza-spoa.service` runs `coraza-spoa` on `127.0.0.1:9000` from `/etc/switchyard/coraza/config.yaml`, which the agent writes when a
+service has a `waf` policy (ADR 0140 to 0144). The image build still has to install the `coraza-spoa` binary at `/usr/local/bin/`, the OWASP CRS
+release named in `CRS_VERSIONS` (`controller/switchyard/domain/models.py`) where Coraza resolves `@owasp_crs`, a `coraza` user, and enable the unit.
+`files/vector.yaml` already ships its journal to Loki.

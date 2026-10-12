@@ -1,0 +1,118 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+certificates:
+- id: c-wiki
+  tenant_id: t-acme
+  name: wiki-example-test
+  source: cloudflare_origin
+  sans:
+  - wiki.example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/wiki-example-test
+pools:
+- id: p-wiki
+  tenant_id: t-acme
+  name: wiki
+  members:
+  - address: 10.20.4.11
+    port: 3000
+- id: p-admin
+  tenant_id: t-acme
+  name: wiki-admin
+  members:
+  - address: 10.20.4.12
+    port: 3000
+policy_sets:
+- id: ps-sso
+  tenant_id: t-acme
+  name: sso
+  kind: access
+  oidc:
+    issuer: https://login.example.test/realms/acme
+    client_id: switchyard-wiki
+    client_secret_ref: kv/tenants/acme/auth/wiki-client
+    cookie_secret_ref: kv/tenants/acme/auth/wiki-cookie
+    groups_claim: groups
+    cookie_expire_s: 28800
+    cookie_refresh_s: 900
+  default_mode: login
+  rules:
+  - match:
+      path_prefix: /health
+    mode: public
+  - match:
+      path_prefix: /admin
+    mode: groups
+    groups: [/wiki/admins, ops.team]
+  - match:
+      host: wiki.example.test
+      path_prefix: /staff
+    mode: email_domains
+    email_domains: [example.test, corp.example.test]
+  identity_headers:
+    user: X-Auth-User
+    email: X-Auth-Email
+    groups: X-Auth-Groups
+    token: X-Auth-Token
+- id: ps-limits
+  tenant_id: t-acme
+  name: login-limits
+  kind: rate_limit
+  rules:
+  - match:
+      path_prefix: /oauth2
+    max_requests: 20
+    period_s: 60
+- id: ps-allow
+  tenant_id: t-acme
+  name: office
+  kind: allow_list
+  cidrs: [203.0.113.0/24]
+virtual_services:
+- id: v-wiki
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: wiki
+  protocol: http
+  vip: 192.0.2.34
+  ports:
+  - port: 443
+    tls: true
+  - port: 80
+    https_redirect_port: 443
+  certificate_ids:
+  - c-wiki
+  allow_list_id: ps-allow
+  enforce_allow_list: true
+  policy_set_ids:
+  - ps-sso
+  - ps-limits
+  routes:
+  - match:
+      path_prefix: /admin
+    pool_id: p-admin
+    order: 1
+  default_pool_id: p-wiki

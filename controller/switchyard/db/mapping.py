@@ -142,7 +142,35 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     managed_by=ps.managed_by,
                 )
             )
+        elif isinstance(ps, dm.AccessPolicySet | dm.ClientCertPolicySet):
+            rows.append(
+                m.PolicySetRow(
+                    id=ps.id,
+                    version=ps.version,
+                    tenant_id=ps.tenant_id,
+                    name=ps.name,
+                    kind=ps.kind,
+                    config=ps.model_dump(
+                        mode="json", exclude={"id", "version", "tenant_id", "name", "kind"}
+                    ),
+                )
+            )
         else:
+            if isinstance(ps, dm.WafPolicySet | dm.ProtectionPolicySet):
+                settings = ps.model_dump(
+                    mode="json", exclude={"id", "version", "tenant_id", "name", "kind"}
+                )
+                rows.append(
+                    m.PolicySetRow(
+                        id=ps.id,
+                        version=ps.version,
+                        tenant_id=ps.tenant_id,
+                        name=ps.name,
+                        kind=ps.kind,
+                        rules=[settings],
+                    )
+                )
+                continue
             items = ps.pages if isinstance(ps, dm.ErrorPagesPolicySet) else ps.rules
             rows.append(
                 m.PolicySetRow(
@@ -536,8 +564,12 @@ def _policy_to_dict(ps: m.PolicySetRow) -> dict[str, Any]:
     if ps.kind == "allow_list":
         base["cidrs"] = [_net(c) for c in ps.cidrs or []]
         base["managed_by"] = ps.managed_by
+    elif ps.kind in ("access", "client_cert"):
+        base |= ps.config or {}
     elif ps.kind == "error_pages":
         base["pages"] = ps.rules
+    elif ps.kind in ("waf", "protection"):
+        base.update((ps.rules or [{}])[0])
     else:
         base["rules"] = ps.rules
     return base

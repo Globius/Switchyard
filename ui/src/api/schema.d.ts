@@ -3711,6 +3711,220 @@ export interface components {
             reason?: string | null;
         };
         /**
+         * AccessPolicySet
+         * @description Require a login (and optionally a group or e-mail domain) for a service (ADR 0130 to 0132).
+         *
+         *     The engine runs an authentication proxy for the set; requests that need a login are sent
+         *     through it and come back to the same frontend once authenticated.
+         *
+         *     Attributes:
+         *         oidc: The identity provider settings.
+         *         default_mode: What requests that match no rule need: ``login`` (the default, closed) or
+         *             ``public``.
+         *         rules: Ordered rules; the first match decides.
+         *         identity_headers: Which headers carry the user to the origin.
+         *         auth_path: Path prefix of the login endpoints (``/oauth2/start``, ``/oauth2/callback``,
+         *             ``/oauth2/sign_out``), reserved on every host of the service.
+         */
+        AccessPolicySet: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** AccessPolicySetCreate */
+        AccessPolicySetCreate: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+        };
+        /** AccessPolicySetPatch */
+        AccessPolicySetPatch: {
+            /** Auth Path */
+            auth_path?: string | null;
+            /** Default Mode */
+            default_mode?: ("login" | "public") | null;
+            identity_headers?: components["schemas"]["IdentityHeaders"] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name?: string | null;
+            oidc?: components["schemas"]["OidcSettings"] | null;
+            /** Rules */
+            rules?: components["schemas"]["AccessRule"][] | null;
+        };
+        /**
+         * AccessPolicySetRead
+         * @description AccessPolicySet as returned by the API.
+         */
+        AccessPolicySetRead: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * AccessRule
+         * @description What a request needs before it reaches the origin.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers; the first rule that matches decides.
+         *         mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of
+         *             at least one of ``groups``) or ``email_domains`` (an address in one of the domains).
+         */
+        AccessRule: {
+            /**
+             * Email Domains
+             * @default []
+             */
+            email_domains: string[];
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Mode
+             * @default login
+             * @enum {string}
+             */
+            mode: "public" | "login" | "groups" | "email_domains";
+        };
+        /**
          * AcmeChallenge
          * @description How an ACME certificate authority checks control of a name.
          * @enum {string}
@@ -4878,6 +5092,34 @@ export interface components {
             size_mb: number;
         };
         /**
+         * CertIdentity
+         * @description Map a client certificate to a user and groups (ADR 0136).
+         *
+         *     Attributes:
+         *         by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,
+         *             for individual certificates).
+         *         value: The common name, or 40 hex digits.
+         *         user: The user name written to the user header.
+         *         groups: Groups written to the groups header.
+         */
+        CertIdentity: {
+            /**
+             * By
+             * @default cn
+             * @enum {string}
+             */
+            by: "cn" | "sha1";
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /** User */
+            user: string;
+            /** Value */
+            value: string;
+        };
+        /**
          * CertImportIn
          * @description Body of ``POST /certificates/import``.
          */
@@ -5283,6 +5525,188 @@ export interface components {
             state: components["schemas"]["ChangeSetState"];
             /** Summary */
             summary: string;
+        };
+        /**
+         * ClientCertPolicySet
+         * @description Use the TLS client certificate as the identity (ADR 0136).
+         *
+         *     Attributes:
+         *         identities: Certificates the set knows (up to 500).
+         *         rules: Ordered rules; the first that matches decides. Requests that match no rule are
+         *             not checked.
+         *         user_header: Header that receives the mapped user (client copies removed first).
+         *         groups_header: Header that receives the mapped groups, comma separated.
+         */
+        ClientCertPolicySet: {
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ClientCertPolicySetCreate */
+        ClientCertPolicySetCreate: {
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+        };
+        /** ClientCertPolicySetPatch */
+        ClientCertPolicySetPatch: {
+            /** Groups Header */
+            groups_header?: string | null;
+            /** Identities */
+            identities?: components["schemas"]["CertIdentity"][] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["ClientCertRule"][] | null;
+            /** User Header */
+            user_header?: string | null;
+        };
+        /**
+         * ClientCertPolicySetRead
+         * @description ClientCertPolicySet as returned by the API.
+         */
+        ClientCertPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * ClientCertRule
+         * @description What a request needs from its client certificate.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers (empty: all). The first rule that matches decides.
+         *         mode: ``valid`` (any certificate the port's client CA accepts), ``identity`` (the
+         *             certificate must be in ``identities``) or ``groups`` (and its identity must have one of
+         *             ``groups``).
+         *         groups: Groups for mode ``groups``.
+         */
+        ClientCertRule: {
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Mode
+             * @default valid
+             * @enum {string}
+             */
+            mode: "valid" | "identity" | "groups";
         };
         /**
          * Compression
@@ -6835,6 +7259,33 @@ export interface components {
          */
         HttpMethod: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
         /**
+         * IdentityHeaders
+         * @description Headers that carry the signed-in user to the origin (ADR 0132).
+         *
+         *     A name set to ``None`` turns that header off. The names are removed from every client
+         *     request before the user's own values are written, so an origin can trust them when the
+         *     service is only reachable through the engine.
+         */
+        IdentityHeaders: {
+            /**
+             * Email
+             * @default X-Auth-Email
+             */
+            email: string | null;
+            /**
+             * Groups
+             * @default X-Auth-Groups
+             */
+            groups: string | null;
+            /** Token */
+            token?: string | null;
+            /**
+             * User
+             * @default X-Auth-User
+             */
+            user: string | null;
+        };
+        /**
          * IdpRedirectRead
          * @description The address an identity provider must allow for the new FQDN.
          */
@@ -7187,6 +7638,170 @@ export interface components {
          * @enum {string}
          */
         JobState: "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
+        /**
+         * JwtKey
+         * @description A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.
+         *
+         *     Attributes:
+         *         kid: The ``kid`` header the key belongs to; without it the key is tried for every token.
+         *         alg: The signature algorithm the token must declare.
+         *         public_key_pem: The key as a PEM ``PUBLIC KEY`` block (convert a JWK with
+         *             ``syctl jwks convert``).
+         */
+        JwtKey: {
+            /**
+             * Alg
+             * @default RS256
+             * @enum {string}
+             */
+            alg: "RS256" | "RS384" | "RS512" | "ES256" | "ES384" | "ES512" | "PS256" | "PS384" | "PS512";
+            /** Kid */
+            kid?: string | null;
+            /** Public Key Pem */
+            public_key_pem: string;
+        };
+        /**
+         * JwtPolicySet
+         * @description Validate JWT bearer tokens for APIs, with no login page (ADR 0135).
+         */
+        JwtPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** JwtPolicySetCreate */
+        JwtPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+        };
+        /** JwtPolicySetPatch */
+        JwtPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["JwtRule"][] | null;
+        };
+        /**
+         * JwtPolicySetRead
+         * @description JwtPolicySet as returned by the API.
+         */
+        JwtPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * JwtRule
+         * @description Require a valid bearer token on the requests ``match`` selects.
+         *
+         *     A token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``
+         *     contains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and
+         *     every ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is
+         *     answered 401.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers (empty: all).
+         *         issuer: The expected ``iss`` claim.
+         *         audiences: Accepted ``aud`` values (a string claim or an element of an array claim).
+         *         required_scopes: Scopes the token must carry.
+         *         leeway_s: Clock difference tolerated on ``exp``.
+         *         keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).
+         *         subject_header: Request header that receives the ``sub`` claim of a valid token;
+         *             client copies of it are removed first.
+         */
+        JwtRule: {
+            /**
+             * Audiences
+             * @default []
+             */
+            audiences: string[];
+            /** Issuer */
+            issuer: string;
+            /** Keys */
+            keys: components["schemas"]["JwtKey"][];
+            /**
+             * Leeway S
+             * @default 30
+             */
+            leeway_s: number;
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Required Scopes
+             * @default []
+             */
+            required_scopes: string[];
+            /** Subject Header */
+            subject_header?: string | null;
+        };
         /**
          * LatestRevision
          * @description The newest revision.
@@ -7810,6 +8425,62 @@ export interface components {
             warnings: string[];
         };
         /**
+         * OidcSettings
+         * @description OpenID Connect login against a tenant's identity provider (ADR 0130).
+         *
+         *     Attributes:
+         *         issuer: The provider's issuer URL (``https``); discovery is read from it.
+         *         client_id: The client registered for Switchyard at the provider.
+         *         client_secret_ref: OpenBao path of the client secret (never the secret).
+         *         cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies
+         *             (16, 24 or 32 bytes). One key per access set; rotate it to end every session.
+         *         scopes: Scopes to request; ``openid`` is required.
+         *         groups_claim: Claim that carries the user's groups.
+         *         cookie_name: Session cookie name.
+         *         cookie_expire_s: Absolute session lifetime.
+         *         cookie_refresh_s: How often the session is refreshed against the provider (a user whose
+         *             account was disabled loses the session at the next refresh). Less than the lifetime.
+         */
+        OidcSettings: {
+            /** Client Id */
+            client_id: string;
+            /** Client Secret Ref */
+            client_secret_ref: string;
+            /**
+             * Cookie Expire S
+             * @default 28800
+             */
+            cookie_expire_s: number;
+            /**
+             * Cookie Name
+             * @default _sy_auth
+             */
+            cookie_name: string;
+            /**
+             * Cookie Refresh S
+             * @default 900
+             */
+            cookie_refresh_s: number;
+            /** Cookie Secret Ref */
+            cookie_secret_ref: string;
+            /**
+             * Groups Claim
+             * @default groups
+             */
+            groups_claim: string;
+            /** Issuer */
+            issuer: string;
+            /**
+             * Scopes
+             * @default [
+             *       "openid",
+             *       "email",
+             *       "profile"
+             *     ]
+             */
+            scopes: string[];
+        };
+        /**
          * OpIn
          * @description One operation in a change set.
          */
@@ -7847,10 +8518,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -8609,6 +9280,272 @@ export interface components {
              * @default about:blank
              */
             type: string;
+        };
+        /**
+         * ProtectionPolicySet
+         * @description Bot and DDoS protection for a service (ADR 0150).
+         *
+         *     Per-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits
+         *     stay in ``rate_limit`` sets.
+         *
+         *     Attributes:
+         *         max_connections_per_source: Connections one address may hold open; more are refused.
+         *         max_new_connections_per_source: New connections one address may open per
+         *             ``connection_rate_period_s``; more are refused.
+         *         connection_rate_period_s: Window of the connection rate.
+         *         header_timeout_s: How long a client has to send the whole request head (``timeout
+         *             http-request``); the answer to slow-header attacks.
+         *         client_timeout_s: Idle time allowed on a client connection (``timeout client``).
+         *         block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.
+         *         block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).
+         *         deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.
+         *         bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.
+         *         exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).
+         *         table_size: Addresses the connection table holds.
+         *
+         *     Example:
+         *         >>> ProtectionPolicySet.model_validate(
+         *         ...     {"id": "00000000-0000-0000-0000-000000000001",
+         *         ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "p",
+         *         ...      "block_scanners": True}
+         *         ... ).bot_action
+         *         'deny'
+         */
+        ProtectionPolicySet: {
+            /**
+             * Block Empty User Agent
+             * @default false
+             */
+            block_empty_user_agent: boolean;
+            /**
+             * Block Scanners
+             * @default false
+             */
+            block_scanners: boolean;
+            /**
+             * Bot Action
+             * @default deny
+             * @enum {string}
+             */
+            bot_action: "deny" | "silent_drop";
+            /** Client Timeout S */
+            client_timeout_s?: number | null;
+            /**
+             * Connection Rate Period S
+             * @default 10
+             * @enum {integer}
+             */
+            connection_rate_period_s: 1 | 10 | 60;
+            /**
+             * Deny User Agents
+             * @default []
+             */
+            deny_user_agents: string[];
+            /**
+             * Exempt Cidrs
+             * @default []
+             */
+            exempt_cidrs: (string)[];
+            /** Header Timeout S */
+            header_timeout_s?: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "protection";
+            /** Max Connections Per Source */
+            max_connections_per_source?: number | null;
+            /** Max New Connections Per Source */
+            max_new_connections_per_source?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ProtectionPolicySetCreate */
+        ProtectionPolicySetCreate: {
+            /**
+             * Block Empty User Agent
+             * @default false
+             */
+            block_empty_user_agent: boolean;
+            /**
+             * Block Scanners
+             * @default false
+             */
+            block_scanners: boolean;
+            /**
+             * Bot Action
+             * @default deny
+             * @enum {string}
+             */
+            bot_action: "deny" | "silent_drop";
+            /** Client Timeout S */
+            client_timeout_s?: number | null;
+            /**
+             * Connection Rate Period S
+             * @default 10
+             * @enum {integer}
+             */
+            connection_rate_period_s: 1 | 10 | 60;
+            /**
+             * Deny User Agents
+             * @default []
+             */
+            deny_user_agents: string[];
+            /**
+             * Exempt Cidrs
+             * @default []
+             */
+            exempt_cidrs: (string)[];
+            /** Header Timeout S */
+            header_timeout_s?: number | null;
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "protection";
+            /** Max Connections Per Source */
+            max_connections_per_source?: number | null;
+            /** Max New Connections Per Source */
+            max_new_connections_per_source?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+        };
+        /** ProtectionPolicySetPatch */
+        ProtectionPolicySetPatch: {
+            /** Block Empty User Agent */
+            block_empty_user_agent?: boolean | null;
+            /** Block Scanners */
+            block_scanners?: boolean | null;
+            /** Bot Action */
+            bot_action?: ("deny" | "silent_drop") | null;
+            /** Client Timeout S */
+            client_timeout_s?: number | null;
+            /** Connection Rate Period S */
+            connection_rate_period_s?: (1 | 10 | 60) | null;
+            /** Deny User Agents */
+            deny_user_agents?: string[] | null;
+            /** Exempt Cidrs */
+            exempt_cidrs?: (string)[] | null;
+            /** Header Timeout S */
+            header_timeout_s?: number | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "protection";
+            /** Max Connections Per Source */
+            max_connections_per_source?: number | null;
+            /** Max New Connections Per Source */
+            max_new_connections_per_source?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Table Size */
+            table_size?: number | null;
+        };
+        /**
+         * ProtectionPolicySetRead
+         * @description ProtectionPolicySet as returned by the API.
+         */
+        ProtectionPolicySetRead: {
+            /**
+             * Block Empty User Agent
+             * @default false
+             */
+            block_empty_user_agent: boolean;
+            /**
+             * Block Scanners
+             * @default false
+             */
+            block_scanners: boolean;
+            /**
+             * Bot Action
+             * @default deny
+             * @enum {string}
+             */
+            bot_action: "deny" | "silent_drop";
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** Client Timeout S */
+            client_timeout_s?: number | null;
+            /**
+             * Connection Rate Period S
+             * @default 10
+             * @enum {integer}
+             */
+            connection_rate_period_s: 1 | 10 | 60;
+            /**
+             * Deny User Agents
+             * @default []
+             */
+            deny_user_agents: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Exempt Cidrs
+             * @default []
+             */
+            exempt_cidrs: (string)[];
+            /** Header Timeout S */
+            header_timeout_s?: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "protection";
+            /** Max Connections Per Source */
+            max_connections_per_source?: number | null;
+            /** Max New Connections Per Source */
+            max_new_connections_per_source?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * Protocol
@@ -10159,7 +11096,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["ProtectionPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -11448,6 +12385,291 @@ export interface components {
              */
             pools: components["schemas"]["WeightedPool"][];
             redirect?: components["schemas"]["RedirectAction"] | null;
+        };
+        /**
+         * WafPolicySet
+         * @description Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).
+         *
+         *     New policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,
+         *     so a tenant can read the logs before turning blocking on. A service can carry one WAF policy.
+         *
+         *     Attributes:
+         *         mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.
+         *         crs_version: CRS release to use; must be one the SE image ships.
+         *         paranoia_level: CRS paranoia level 1 (fewest rules) to 4.
+         *         inbound_threshold: Anomaly score at which a request counts as an attack.
+         *         outbound_threshold: Anomaly score at which a response counts as a leak.
+         *         disabled_rule_ids: CRS rules to switch off (for false positives).
+         *         excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.
+         *         inspect_body: Send the request body (up to the engine buffer size) to the WAF too.
+         *         fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the
+         *             request through, ``closed`` refuses it with 503 (ADR 0142).
+         *         timeout_ms: How long HAProxy waits for the WAF's verdict.
+         *
+         *     Example:
+         *         >>> WafPolicySet.model_validate(
+         *         ...     {"id": "00000000-0000-0000-0000-000000000001",
+         *         ...      "tenant_id": "00000000-0000-0000-0000-000000000002", "name": "w"}
+         *         ... ).mode
+         *         'detect'
+         */
+        WafPolicySet: {
+            /**
+             * Crs Version
+             * @default 4.8.0
+             * @constant
+             */
+            crs_version: "4.8.0";
+            /**
+             * Disabled Rule Ids
+             * @default []
+             */
+            disabled_rule_ids: number[];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbound Threshold
+             * @default 5
+             */
+            inbound_threshold: number;
+            /**
+             * Inspect Body
+             * @default true
+             */
+            inspect_body: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "waf";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Outbound Threshold
+             * @default 4
+             */
+            outbound_threshold: number;
+            /**
+             * Paranoia Level
+             * @default 1
+             */
+            paranoia_level: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** WafPolicySetCreate */
+        WafPolicySetCreate: {
+            /**
+             * Crs Version
+             * @default 4.8.0
+             * @constant
+             */
+            crs_version: "4.8.0";
+            /**
+             * Disabled Rule Ids
+             * @default []
+             */
+            disabled_rule_ids: number[];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Inbound Threshold
+             * @default 5
+             */
+            inbound_threshold: number;
+            /**
+             * Inspect Body
+             * @default true
+             */
+            inspect_body: boolean;
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "waf";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Outbound Threshold
+             * @default 4
+             */
+            outbound_threshold: number;
+            /**
+             * Paranoia Level
+             * @default 1
+             */
+            paranoia_level: number;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+        };
+        /** WafPolicySetPatch */
+        WafPolicySetPatch: {
+            /** Crs Version */
+            crs_version?: "4.8.0" | null;
+            /** Disabled Rule Ids */
+            disabled_rule_ids?: number[] | null;
+            /** Excluded Paths */
+            excluded_paths?: string[] | null;
+            /** Fail Mode */
+            fail_mode?: ("open" | "closed") | null;
+            /** Inbound Threshold */
+            inbound_threshold?: number | null;
+            /** Inspect Body */
+            inspect_body?: boolean | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "waf";
+            /** Mode */
+            mode?: ("detect" | "block") | null;
+            /** Name */
+            name?: string | null;
+            /** Outbound Threshold */
+            outbound_threshold?: number | null;
+            /** Paranoia Level */
+            paranoia_level?: number | null;
+            /** Timeout Ms */
+            timeout_ms?: number | null;
+        };
+        /**
+         * WafPolicySetRead
+         * @description WafPolicySet as returned by the API.
+         */
+        WafPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /**
+             * Crs Version
+             * @default 4.8.0
+             * @constant
+             */
+            crs_version: "4.8.0";
+            /**
+             * Disabled Rule Ids
+             * @default []
+             */
+            disabled_rule_ids: number[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Excluded Paths
+             * @default []
+             */
+            excluded_paths: string[];
+            /**
+             * Fail Mode
+             * @default open
+             * @enum {string}
+             */
+            fail_mode: "open" | "closed";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inbound Threshold
+             * @default 5
+             */
+            inbound_threshold: number;
+            /**
+             * Inspect Body
+             * @default true
+             */
+            inspect_body: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "waf";
+            /**
+             * Mode
+             * @default detect
+             * @enum {string}
+             */
+            mode: "detect" | "block";
+            /** Name */
+            name: string;
+            /**
+             * Outbound Threshold
+             * @default 4
+             */
+            outbound_threshold: number;
+            /**
+             * Paranoia Level
+             * @default 1
+             */
+            paranoia_level: number;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Timeout Ms
+             * @default 100
+             */
+            timeout_ms: number;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * WeightedPool
@@ -23395,7 +24617,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -23486,7 +24708,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["ProtectionPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"];
             };
         };
         responses: {
@@ -23603,7 +24825,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -23781,7 +25003,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["ProtectionPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"];
             };
         };
         responses: {

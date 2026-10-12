@@ -23,19 +23,23 @@ from switchyard.domain.models import (
     ATTACHABLE_POLICY_KINDS,
     CACHE_MAX_MB_PER_GROUP,
     HTTP_ONLY_PERSISTENCE,
+    AccessPolicySet,
     Algorithm,
     AllowListPolicySet,
     BgpProfile,
     Certificate,
+    ClientCertPolicySet,
     Entity,
     ErrorPagesPolicySet,
     HealthMonitor,
+    JwtPolicySet,
     Model,
     MonitorType,
     Network,
     NetworkRole,
     PolicySet,
     Pool,
+    ProtectionPolicySet,
     Protocol,
     RateLimitPolicySet,
     RateLimitRule,
@@ -44,6 +48,7 @@ from switchyard.domain.models import (
     Tenant,
     VipPool,
     VirtualService,
+    WafPolicySet,
 )
 
 
@@ -393,6 +398,9 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
 
         _check_routes(s, base, problems)
         _check_rate_limits(s, policies, base, problems)
+        _check_waf(s, policies, base, problems)
+        _check_protection(s, policies, base, problems)
+        _check_access(s, policies, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
@@ -451,6 +459,11 @@ def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
         refs.append((f"certificates.{c.name}.secret_ref", c.tenant_id, c.secret_ref))
         if c.crl_secret_ref:
             refs.append((f"certificates.{c.name}.crl_secret_ref", c.tenant_id, c.crl_secret_ref))
+    for ps in snapshot.policy_sets:
+        if isinstance(ps, AccessPolicySet):
+            base = f"policy_sets.{ps.name}.oidc"
+            refs.append((f"{base}.client_secret_ref", ps.tenant_id, ps.oidc.client_secret_ref))
+            refs.append((f"{base}.cookie_secret_ref", ps.tenant_id, ps.oidc.cookie_secret_ref))
     for profile in snapshot.routing_profiles:
         if isinstance(profile, BgpProfile):
             for i, peer in enumerate(profile.peers):
@@ -724,12 +737,54 @@ def stick_table_entries(snapshot: "Snapshot", tenant_id: UUID) -> int:
         0
     """
     policies = {p.id: p for p in snapshot.policy_sets}
-    return sum(
-        r.table_size
-        for s in snapshot.virtual_services
-        if s.tenant_id == tenant_id
-        for _, _, r in rate_limit_rules(s, policies)
-    )
+    total = 0
+    for s in snapshot.virtual_services:
+        if s.tenant_id != tenant_id:
+            continue
+        total += sum(r.table_size for _, _, r in rate_limit_rules(s, policies))
+        protection = protection_set(s, policies)
+        if protection is not None and protection.tracks_connections:
+            total += protection.table_size
+    return total
+
+
+def _check_protection(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    """A service carries at most one protection set (``too_many_protection_sets``, ADR 0150)."""
+    sets = [pid for pid in s.policy_set_ids if isinstance(policies.get(pid), ProtectionPolicySet)]
+    if len(sets) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "too_many_protection_sets",
+                "a service can carry only one protection policy set",
+            )
+        )
+
+
+def protection_set(s: VirtualService, policies: Mapping[UUID, Any]) -> ProtectionPolicySet | None:
+    """The protection set of a service, if it has one."""
+    for pid in s.policy_set_ids:
+        ps = policies.get(pid)
+        if isinstance(ps, ProtectionPolicySet):
+            return ps
+    return None
+
+
+def _check_waf(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    """A service carries at most one WAF policy (``too_many_waf_policies``, ADR 0140)."""
+    wafs = [pid for pid in s.policy_set_ids if isinstance(policies.get(pid), WafPolicySet)]
+    if len(wafs) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "too_many_waf_policies",
+                "a service can carry only one WAF policy",
+            )
+        )
 
 
 def _check_rate_limits(
@@ -806,6 +861,78 @@ def _check_cache_quota(snapshot: Snapshot, problems: list[Problem]) -> None:
                     f"{CACHE_MAX_MB_PER_GROUP} MB",
                 )
             )
+
+
+def _check_access(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    """A service has at most one access set and offers a login only over TLS."""
+    sets = [p for pid in s.policy_set_ids if isinstance(p := policies.get(pid), AccessPolicySet)]
+    attached = [policies[pid] for pid in s.policy_set_ids if pid in policies]
+    tokens = [p for p in attached if isinstance(p, JwtPolicySet)]
+    certs = [p for p in attached if isinstance(p, ClientCertPolicySet)]
+    _check_identity_headers(sets, tokens, certs, base, problems)
+    if len(certs) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "multiple_client_cert_sets",
+                "a service may attach one client-certificate policy set",
+            )
+        )
+    if certs and not any(p.client_ca_id for p in s.ports):
+        problems.append(
+            Problem(
+                f"{base}.ports",
+                "client_cert_needs_client_ca",
+                "a client-certificate policy set needs a port with client_ca_id",
+            )
+        )
+    if len(sets) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "multiple_access_sets",
+                "a service may attach one access policy set",
+            )
+        )
+    if sets or tokens:
+        for i, port in enumerate(s.ports):
+            if not port.tls and port.https_redirect_port is None:
+                problems.append(
+                    Problem(
+                        f"{base}.ports[{i}]",
+                        "access_needs_tls",
+                        f"port {port.port} would carry credentials in clear text; make it a TLS "
+                        "port or redirect it to one (https_redirect_port)",
+                    )
+                )
+
+
+def _check_identity_headers(
+    access: list[AccessPolicySet],
+    tokens: list[JwtPolicySet],
+    certs: list[ClientCertPolicySet],
+    base: str,
+    problems: list[Problem],
+) -> None:
+    """No two policies on a service may write the same identity header."""
+    names: list[str] = []
+    for a in access:
+        h = a.identity_headers
+        names += [n.lower() for n in (h.user, h.email, h.groups, h.token) if n]
+    for t in tokens:
+        names += [r.subject_header.lower() for r in t.rules if r.subject_header]
+    for c in certs:
+        names += [n.lower() for n in (c.user_header, c.groups_header) if n]
+    if len(set(names)) != len(names):
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "identity_header_conflict",
+                "two policies on this service write the same identity header",
+            )
+        )
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
