@@ -346,6 +346,61 @@ describe("virtual service settings", () => {
     );
   });
 
+  it("enables HTTP/3 only with TLS and HTTP/2, and offers TLS passthrough", async () => {
+    vsBody = {
+      ...VS,
+      ports: [
+        { port: 443, tls: false, http2: false, proxy_protocol: false, https_redirect_port: null },
+      ],
+    };
+    renderAt("/t/acme/virtual-services/v1/settings");
+    await userEvent.click(await screen.findByRole("button", { name: "Edit ports" }));
+    const h3 = await screen.findByRole("checkbox", { name: "HTTP/3" });
+    expect(h3).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "TLS" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "HTTP/2" }));
+    expect(h3).toBeEnabled();
+    await userEvent.click(h3);
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect((seen.body as { ports: { http3: boolean }[] }).ports[0]!.http3).toBe(true),
+    );
+  });
+
+  it("turns response compression on and sends the algorithms and content types", async () => {
+    renderAt("/t/acme/virtual-services/v1/settings");
+    const sw = await screen.findByRole("switch", { name: "Compress responses" });
+    await waitFor(() => expect(sw).toBeEnabled());
+    await userEvent.click(sw);
+    await userEvent.click(screen.getByRole("checkbox", { name: "deflate" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect(
+        (seen.body as { compression: { algorithms: string[] } }).compression.algorithms,
+      ).toEqual(["gzip", "deflate"]),
+    );
+  });
+
+  it("splits a route over weighted pools", async () => {
+    renderAt("/t/acme/virtual-services/v1/settings");
+    await userEvent.click(await screen.findByRole("button", { name: "Add route" }));
+    await userEvent.selectOptions(await enabled("Route 1 action"), "split");
+    expect(screen.getByLabelText("Route 1 split weight 1")).toBeInTheDocument();
+    await pick(screen.getByLabelText("Route 1 split pool 1"), "p1");
+    await pick(screen.getByLabelText("Route 1 split pool 2"), "p1");
+    await userEvent.clear(screen.getByLabelText("Route 1 split weight 1"));
+    await userEvent.type(screen.getByLabelText("Route 1 split weight 1"), "80");
+    await userEvent.click(screen.getByRole("button", { name: "Add pool" }));
+    await userEvent.click(screen.getByRole("button", { name: "Remove split pool 3" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => {
+      const r = (seen.body as { routes: { pools: { pool_id: string; weight: number }[] }[] })
+        .routes[0]!;
+      expect(r.pools.map((p) => p.weight)).toEqual([80, 50]);
+    });
+  });
+
   it("picks a client CA and its verification on a TLS port", async () => {
     server.use(
       http.get("*/api/v1/tenants/acme/certificates", () =>

@@ -580,6 +580,15 @@ export function Policies({ tenant }: { tenant: string }) {
           </Tip>
           <Tip label={write.reason}>
             <Button
+              variant="outline"
+              disabled={!write.allowed}
+              onClick={() => setEditing({ policy: null, kind: "rate_limit" })}
+            >
+              {t("New rate limit")}
+            </Button>
+          </Tip>
+          <Tip label={write.reason}>
+            <Button
               disabled={!write.allowed}
               onClick={() => setEditing({ policy: null, kind: "redirect" })}
             >
@@ -595,25 +604,33 @@ export function Policies({ tenant }: { tenant: string }) {
             aria-label={t("Kind")}
             className="inline-flex overflow-hidden rounded-md border"
           >
-            {(["all", "redirect", "allow_list", "rewrite", "respond", "error_pages"] as const).map(
-              (k) => (
-                <button
-                  key={k}
-                  type="button"
-                  aria-pressed={filter === k}
-                  onClick={() => setFilter(k)}
-                  className="px-3 py-1.5 text-sm aria-pressed:bg-accent"
-                >
-                  {k === "all"
-                    ? t("All")
-                    : k === "redirect"
-                      ? t("Redirect")
-                      : k === "allow_list"
-                        ? t("Allow list")
-                        : t(RULE_KIND_LABEL[k])}
-                </button>
-              ),
-            )}
+            {(
+              [
+                "all",
+                "redirect",
+                "allow_list",
+                "rewrite",
+                "respond",
+                "error_pages",
+                "rate_limit",
+              ] as const
+            ).map((k) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={filter === k}
+                onClick={() => setFilter(k)}
+                className="px-3 py-1.5 text-sm aria-pressed:bg-accent"
+              >
+                {k === "all"
+                  ? t("All")
+                  : k === "redirect"
+                    ? t("Redirect")
+                    : k === "allow_list"
+                      ? t("Allow list")
+                      : t(RULE_KIND_LABEL[k])}
+              </button>
+            ))}
           </div>
           {list.isPending ? (
             <TableSkeleton cols={1} />
@@ -640,9 +657,11 @@ export function Policies({ tenant }: { tenant: string }) {
                         ? t("Fixed response · {n} rules", { n: p.rules.length })
                         : p.kind === "error_pages"
                           ? t("Error pages · {n}", { n: p.pages.length })
-                          : p.managed_by
-                            ? t("Allow list · managed")
-                            : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
+                          : p.kind === "rate_limit"
+                            ? t("Rate limit · {n} rules", { n: p.rules.length })
+                            : p.managed_by
+                              ? t("Allow list · managed")
+                              : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
                 return (
                   <li key={p.id}>
                     <button
@@ -681,7 +700,8 @@ export function Policies({ tenant }: { tenant: string }) {
         {picked &&
           (picked.kind === "rewrite" ||
             picked.kind === "respond" ||
-            picked.kind === "error_pages") && (
+            picked.kind === "error_pages" ||
+            picked.kind === "rate_limit") && (
             <RulePolicySheet
               key={
                 picked.policy

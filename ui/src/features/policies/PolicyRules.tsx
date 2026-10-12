@@ -15,14 +15,16 @@ import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { cleanMatch, emptyMatch, MatchEditor } from "./MatchEditor";
 
-export type RuleKind = "rewrite" | "respond" | "error_pages";
+export type RuleKind = "rewrite" | "respond" | "error_pages" | "rate_limit";
 export type RulePolicy =
   | components["schemas"]["RewritePolicySetRead"]
   | components["schemas"]["RespondPolicySetRead"]
-  | components["schemas"]["ErrorPagesPolicySetRead"];
+  | components["schemas"]["ErrorPagesPolicySetRead"]
+  | components["schemas"]["RateLimitPolicySetRead"];
 type RewriteRule = components["schemas"]["RewriteRule"];
 type ResponseRule = components["schemas"]["ResponseRule"];
 type ErrorPage = components["schemas"]["ErrorPage"];
+type LimitRule = components["schemas"]["RateLimitRule"];
 type Variable = components["schemas"]["HeaderVariable"];
 type ActionType = "set_header" | "add_header" | "remove_header" | "replace_prefix";
 
@@ -50,6 +52,7 @@ export const RULE_KIND_LABEL: Record<RuleKind, string> = {
   rewrite: "Rewrite",
   respond: "Fixed response",
   error_pages: "Error pages",
+  rate_limit: "Rate limit",
 };
 
 export function newRewriteRule(): RewriteRule {
@@ -59,6 +62,39 @@ export function newRewriteRule(): RewriteRule {
     action: { type: "set_header", name: "", value: "" },
   };
 }
+export function newLimitRule(): LimitRule {
+  return {
+    match: emptyMatch(),
+    key: "client_ip",
+    max_requests: 100,
+    max_concurrent: null,
+    period_s: 10,
+    table_size: 10000,
+    action: "deny",
+    deny_status: 429,
+    tarpit_s: 5,
+  };
+}
+
+/** The rule as the API takes it: exactly one limit, and only the fields its action and key use. */
+export function cleanLimit(r: LimitRule): LimitRule {
+  const out: Record<string, unknown> = {
+    match: cleanMatch(r.match ?? emptyMatch()),
+    key: r.key,
+    table_size: r.table_size,
+    action: r.action,
+  };
+  if (r.key === "header") out.header_name = r.header_name;
+  if (r.max_concurrent != null) out.max_concurrent = r.max_concurrent;
+  else {
+    out.max_requests = r.max_requests;
+    out.period_s = r.period_s;
+  }
+  if (r.action === "deny") out.deny_status = r.deny_status;
+  if (r.action === "tarpit") out.tarpit_s = r.tarpit_s;
+  return out as LimitRule;
+}
+
 export function newResponseRule(): ResponseRule {
   return { match: emptyMatch(), status: 503, content_type: "text/html", body: "" };
 }
@@ -179,6 +215,9 @@ export function RulePolicySheet({
   const [respond, setRespond] = useState<ResponseRule[]>(
     policy?.kind === "respond" ? structuredClone(policy.rules) : [newResponseRule()],
   );
+  const [limits, setLimits] = useState<LimitRule[]>(
+    policy?.kind === "rate_limit" ? structuredClone(policy.rules) : [newLimitRule()],
+  );
   const [pages, setPages] = useState<Record<number, ErrorPage>>(
     Object.fromEntries(
       (policy?.kind === "error_pages" ? policy.pages : []).map((p) => [p.status, { ...p }]),
@@ -193,15 +232,17 @@ export function RulePolicySheet({
       ? { kind, name, rules: rewrite.map(cleanRewrite) }
       : kind === "respond"
         ? { kind, name, rules: respond.map(cleanResponse) }
-        : {
-            kind,
-            name,
-            pages: PAGE_STATUSES.filter((s) => pages[s]).map((s) => ({
-              status: s,
-              content_type: pages[s]!.content_type ?? "text/plain",
-              body: pages[s]!.body,
-            })),
-          };
+        : kind === "rate_limit"
+          ? { kind, name, rules: limits.map(cleanLimit) }
+          : {
+              kind,
+              name,
+              pages: PAGE_STATUSES.filter((s) => pages[s]).map((s) => ({
+                status: s,
+                content_type: pages[s]!.content_type ?? "text/plain",
+                body: pages[s]!.body,
+              })),
+            };
 
   async function submit() {
     setProblem(null);
@@ -588,6 +629,217 @@ export function RulePolicySheet({
               size="sm"
               disabled={dis}
               onClick={() => setRespond([...respond, newResponseRule()])}
+            >
+              {t("Add rule")}
+            </Button>
+          </section>
+        )}
+
+        {kind === "rate_limit" && (
+          <section className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Each rule counts the requests that match it, per client or per header value, and limits how often they may come. Use a path in the match for a per-path limit, such as a login page.",
+              )}
+            </p>
+            {limits.map((r, i) => {
+              const upd = (p: Partial<LimitRule>) =>
+                setLimits(limits.map((x, j) => (j === i ? { ...x, ...p } : x)));
+              const concurrent = r.max_concurrent != null;
+              return (
+                <div key={i} className="space-y-3 rounded-lg border p-4 text-sm">
+                  <Move
+                    i={i}
+                    n={limits.length}
+                    disabled={dis}
+                    what="Rule"
+                    onSwap={(a, b) => setLimits(swap(limits, a, b))}
+                    onRemove={() => setLimits(limits.filter((_, j) => j !== i))}
+                  />
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <label>
+                      <span className="mb-1.5 block text-sm font-medium">{t("Count per")}</span>
+                      <select
+                        aria-label={`Rule ${i + 1} key`}
+                        className={INPUT}
+                        disabled={dis}
+                        value={r.key ?? "client_ip"}
+                        onChange={(e) => upd({ key: e.target.value as LimitRule["key"] })}
+                      >
+                        <option value="client_ip">{t("Client address")}</option>
+                        <option value="header">{t("Header value")}</option>
+                      </select>
+                    </label>
+                    {r.key === "header" && (
+                      <label>
+                        <span className="mb-1.5 block text-sm font-medium">{t("Header")}</span>
+                        <input
+                          aria-label={`Rule ${i + 1} key header`}
+                          className={cn(INPUT, "font-mono")}
+                          disabled={dis}
+                          value={r.header_name ?? ""}
+                          onChange={(e) => upd({ header_name: e.target.value })}
+                        />
+                      </label>
+                    )}
+                    <label>
+                      <span className="mb-1.5 block text-sm font-medium">{t("Limit")}</span>
+                      <select
+                        aria-label={`Rule ${i + 1} limit type`}
+                        className={INPUT}
+                        disabled={dis}
+                        value={concurrent ? "concurrent" : "rate"}
+                        onChange={(e) =>
+                          upd(
+                            e.target.value === "concurrent"
+                              ? { max_concurrent: 20, max_requests: null }
+                              : { max_concurrent: null, max_requests: 100 },
+                          )
+                        }
+                      >
+                        <option value="rate">{t("Requests per period")}</option>
+                        <option value="concurrent">{t("Requests in flight")}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    {concurrent ? (
+                      <label>
+                        <span className="mb-1.5 block text-sm font-medium">{t("At most")}</span>
+                        <input
+                          aria-label={`Rule ${i + 1} max concurrent`}
+                          type="number"
+                          min={1}
+                          className={INPUT}
+                          disabled={dis}
+                          value={r.max_concurrent ?? ""}
+                          onChange={(e) => upd({ max_concurrent: Number(e.target.value) })}
+                        />
+                      </label>
+                    ) : (
+                      <>
+                        <label>
+                          <span className="mb-1.5 block text-sm font-medium">{t("At most")}</span>
+                          <input
+                            aria-label={`Rule ${i + 1} max requests`}
+                            type="number"
+                            min={1}
+                            className={INPUT}
+                            disabled={dis}
+                            value={r.max_requests ?? ""}
+                            onChange={(e) => upd({ max_requests: Number(e.target.value) })}
+                          />
+                        </label>
+                        <label>
+                          <span className="mb-1.5 block text-sm font-medium">{t("Per")}</span>
+                          <select
+                            aria-label={`Rule ${i + 1} period`}
+                            className={INPUT}
+                            disabled={dis}
+                            value={r.period_s ?? 10}
+                            onChange={(e) =>
+                              upd({ period_s: Number(e.target.value) as LimitRule["period_s"] })
+                            }
+                          >
+                            {[1, 10, 60, 300, 3600].map((p) => (
+                              <option key={p} value={p}>
+                                {p === 3600
+                                  ? t("hour")
+                                  : p >= 60
+                                    ? t("{n} min", { n: p / 60 })
+                                    : t("{n} s", { n: p })}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </>
+                    )}
+                    <label>
+                      <span className="mb-1.5 block text-sm font-medium">{t("Tracked keys")}</span>
+                      <input
+                        aria-label={`Rule ${i + 1} table size`}
+                        type="number"
+                        min={1}
+                        className={INPUT}
+                        disabled={dis}
+                        value={r.table_size ?? 10000}
+                        onChange={(e) => upd({ table_size: Number(e.target.value) })}
+                      />
+                    </label>
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <label>
+                      <span className="mb-1.5 block text-sm font-medium">
+                        {t("Over the limit")}
+                      </span>
+                      <select
+                        aria-label={`Rule ${i + 1} action`}
+                        className={INPUT}
+                        disabled={dis}
+                        value={r.action ?? "deny"}
+                        onChange={(e) => upd({ action: e.target.value as LimitRule["action"] })}
+                      >
+                        <option value="deny">{t("Answer with an error")}</option>
+                        <option value="tarpit">{t("Hold, then answer 500")}</option>
+                        <option value="silent_drop">{t("Drop silently")}</option>
+                      </select>
+                    </label>
+                    {(r.action ?? "deny") === "deny" && (
+                      <label>
+                        <span className="mb-1.5 block text-sm font-medium">{t("Status")}</span>
+                        <select
+                          aria-label={`Rule ${i + 1} deny status`}
+                          className={INPUT}
+                          disabled={dis}
+                          value={r.deny_status ?? 429}
+                          onChange={(e) =>
+                            upd({ deny_status: Number(e.target.value) as LimitRule["deny_status"] })
+                          }
+                        >
+                          {[403, 429, 503].map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {r.action === "tarpit" && (
+                      <label>
+                        <span className="mb-1.5 block text-sm font-medium">
+                          {t("Hold for (s)")}
+                        </span>
+                        <input
+                          aria-label={`Rule ${i + 1} tarpit seconds`}
+                          type="number"
+                          min={1}
+                          className={INPUT}
+                          disabled={dis}
+                          value={r.tarpit_s ?? 5}
+                          onChange={(e) => upd({ tarpit_s: Number(e.target.value) })}
+                        />
+                      </label>
+                    )}
+                  </div>
+                  <div>
+                    <div className="mb-1.5 text-sm font-medium">
+                      {t("Count requests that match")}
+                    </div>
+                    <MatchEditor
+                      id={`Rule ${i + 1}`}
+                      disabled={dis}
+                      match={r.match ?? emptyMatch()}
+                      onChange={(m) => upd({ match: m })}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={dis}
+              onClick={() => setLimits([...limits, newLimitRule()])}
             >
               {t("Add rule")}
             </Button>

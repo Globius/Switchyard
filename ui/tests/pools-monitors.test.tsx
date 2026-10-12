@@ -491,6 +491,21 @@ describe("pools", () => {
     });
   });
 
+  it("sets the backend protocol and the tunnel timeout for gRPC and WebSocket pools", async () => {
+    hasDraft = false;
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "grpc");
+    await userEvent.click(screen.getByLabelText("Backend TLS"));
+    await userEvent.selectOptions(screen.getByLabelText("Backend protocol"), "h2");
+    await userEvent.type(screen.getByLabelText("Tunnel timeout"), "7200");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.action).toBe("create"));
+    expect(posted!.ops[0]!.body).toMatchObject({ backend_protocol: "h2", tunnel_timeout_s: 7200 });
+  });
+
   it("maps 422 findings onto member fields and deletes after confirming", async () => {
     server.use(
       http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", () =>

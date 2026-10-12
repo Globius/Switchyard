@@ -34,6 +34,8 @@ export interface PoolForm {
   discovery: PoolDiscovery | null;
   send_proxy: "v1" | "v2" | null;
   client_certificate_id: string | null;
+  backend_protocol: PoolRead["backend_protocol"];
+  tunnel_timeout_s: number | null;
   members: Member[];
 }
 export type PassiveCheck = {
@@ -64,6 +66,8 @@ export function emptyPool(): PoolForm {
     discovery: null,
     send_proxy: null,
     client_certificate_id: null,
+    backend_protocol: "http1",
+    tunnel_timeout_s: null,
     members: [],
   };
 }
@@ -90,6 +94,8 @@ export function toForm(p: PoolRead): PoolForm {
     discovery: p.discovery ? { ...p.discovery } : null,
     send_proxy: p.send_proxy ?? null,
     client_certificate_id: p.client_certificate_id ?? null,
+    backend_protocol: p.backend_protocol ?? "http1",
+    tunnel_timeout_s: p.tunnel_timeout_s ?? null,
     members: structuredClone(p.members),
   };
 }
@@ -319,6 +325,49 @@ function PoolSheet({
                 {t(
                   "Sends the client address to members that understand the PROXY header. Health checks send it too.",
                 )}
+              </span>
+            </label>
+            <label className="block space-y-1.5 text-sm font-medium">
+              {t("Protocol to members")}
+              <select
+                aria-label={t("Backend protocol")}
+                className={INPUT}
+                disabled={!write.allowed}
+                value={f.backend_protocol ?? "http1"}
+                onChange={(e) =>
+                  set({ backend_protocol: e.target.value as PoolForm["backend_protocol"] })
+                }
+              >
+                <option value="http1">HTTP/1.1</option>
+                <option value="h2">{t("HTTP/2 over TLS (needs Backend TLS)")}</option>
+                <option value="h2c">{t("HTTP/2 without TLS")}</option>
+              </select>
+              <span className="block text-xs font-normal text-muted-foreground">
+                {t("gRPC backends need one of the HTTP/2 kinds. HTTP pools only.")}
+              </span>
+              {errors.backend_protocol && (
+                <span role="alert" className="block text-xs font-normal text-status-down">
+                  {errors.backend_protocol}
+                </span>
+              )}
+            </label>
+            <label className="block space-y-1.5 text-sm font-medium">
+              {t("Idle tunnel timeout (s)")}
+              <input
+                aria-label={t("Tunnel timeout")}
+                type="number"
+                min={1}
+                max={86400}
+                className={INPUT}
+                disabled={!write.allowed}
+                placeholder={t("1 hour")}
+                value={f.tunnel_timeout_s ?? ""}
+                onChange={(e) =>
+                  set({ tunnel_timeout_s: e.target.value ? Number(e.target.value) : null })
+                }
+              />
+              <span className="block text-xs font-normal text-muted-foreground">
+                {t("How long an idle WebSocket or long gRPC stream stays open.")}
               </span>
             </label>
             <div className="space-y-1.5">
