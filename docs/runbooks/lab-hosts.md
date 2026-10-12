@@ -153,6 +153,21 @@ Things this lab taught that are not in the scripts:
 - The guest agent is not ready for the first seconds of a VM boot: `enroll-engine.sh` fails with "QEMU guest agent is not
   running" until it is. Run it again.
 
+## Public VIPs
+
+`tenantpub.yaml` puts the VIP network on the hosts' own public /64 (the uplink bridge), with management and backend still
+on the lab ULA networks, so a VIP is an internet-reachable IPv6 address while the backend stays lab-only (edit the prefix
+first). Adopt it, deploy a VRRP group (the VIP NIC lands on `vmbr0`) and create an HTTP and a UDP service from the `vips`
+pool. Checked from outside the hosts: `curl -g http://[VIP]/` returns the helper's answer through the VRRP engines, and a UDP
+datagram to the UDP VIP's port 5301 is echoed back through IPVS. A BGP group would need a real upstream router for public
+reachability, so BGP stays lab-only.
+
+**HTTPS with a managed certificate.** Issue a server certificate from the lab CA (OpenBao `pki/issue/internal`, with the VIP as
+an IP SAN), import it (`drive.py cert NAME`, the `certificates/import` API with the PEM in `CERT_PEM`) and create the service
+with `drive.py vstls NAME GROUP VIP CERT`. Test from outside with the CA: `curl --cacert ca.pem https://[VIP]/` (on Windows
+add `--ssl-no-revoke`).
+The first TLS service used to fail validation because the certificate file reached the engine after the canary's check; the apply pipeline now sends certificates first (found by this lab, fixed in the pipeline).
+
 ## Tearing down
 
 Delete the lab guests (ids in `hosts.env` and the engines the controller created), remove the SDN zone `lab`
