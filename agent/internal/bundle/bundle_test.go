@@ -309,6 +309,34 @@ func TestRunningKeepalivedIsReloadedAndStoppedWhenItsFilesGo(t *testing.T) {
 	}
 }
 
+func TestAuthSidecarIsOnDemandRestartedAndItsFilesArePrivate(t *testing.T) {
+	a, priv, r := setup(t)
+	r.fail["systemctl is-active --quiet sy-auth"] = true // not running yet
+	resp := a.Apply(context.Background(), request(t, priv, "b1", map[string]string{
+		"auth/oauth2-proxy.cfg": "provider = \"oidc\"\n",
+		"auth/secrets.env":      "OAUTH2_PROXY_CLIENT_SECRET=x\n",
+	}))
+	if !resp.Ok {
+		t.Fatal(resp.Error)
+	}
+	if !contains(r.calls, "systemctl start sy-auth") || contains(r.calls, "systemctl restart sy-auth") {
+		t.Fatalf("a stopped sidecar is started: %v", r.calls)
+	}
+	if info, err := os.Stat(filepath.Join(a.Root, "auth", "secrets.env")); err != nil || (runtimeIsUnix() && info.Mode().Perm() != 0o600) {
+		t.Fatalf("auth files are owner-only: %v %v", info, err)
+	}
+	r.calls, r.fail["systemctl is-active --quiet sy-auth"] = nil, false
+	a.Apply(context.Background(), request(t, priv, "b2", map[string]string{"auth/oauth2-proxy.cfg": "provider = \"oidc\"\nx = 1\n"}))
+	if !contains(r.calls, "systemctl restart sy-auth") {
+		t.Fatalf("a running sidecar is restarted (it cannot reload): %v", r.calls)
+	}
+	r.calls = nil
+	resp = a.Apply(context.Background(), request(t, priv, "b3", map[string]string{"frr/frr.conf": "x\n"}))
+	if !resp.Ok || !contains(r.calls, "systemctl stop sy-auth") {
+		t.Fatalf("removing the last auth file stops the sidecar: %v %v", resp, r.calls)
+	}
+}
+
 func contains(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {

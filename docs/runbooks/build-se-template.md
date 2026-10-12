@@ -25,4 +25,10 @@ runs `provision.sh` inside, and converts it to a template. Deploy requests use i
 needs `ip_vs`, `ip_vs_rr`, `ip_vs_wrr`, `ip_vs_sh` and `nf_conntrack` loaded; containers have no cloud-init, so push the
 enrollment files in with `pct push` (see `replace-se.md`).
 
+**Versions and the sidecar slot.** `se-image/versions.env` pins the HAProxy series and the oauth2-proxy release (with its
+SHA-256); `se-image/fetch-binaries.sh` downloads and verifies oauth2-proxy next to `sy-agent` and the Data Plane API
+(`WITH_AUTH=0` skips it). Pass the binary to the build scripts with `AUTH_PROXY_BIN=se-image/dist/oauth2-proxy`; without it the
+image still has the idle `sy-auth` slot ([adr/0081](../adr/0081-se-image-sidecar-slot-and-rolling-operations.md)). Roll a new
+template under a group with [rolling-upgrade.md](rolling-upgrade.md).
+
 Rollback: keep the previous template vmid; point `template_vmid` back.

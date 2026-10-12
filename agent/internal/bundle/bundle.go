@@ -41,6 +41,7 @@ var Units = map[string]string{
 	"coraza":     "coraza-spoa",
 	"certs":      "haproxy",
 	"nftables":   "nftables",
+	"auth":       "sy-auth",
 	"sysctl":     "systemd-sysctl",
 }
 
@@ -52,7 +53,13 @@ var Units = map[string]string{
 var verbs = map[string]string{
 	"systemd-sysctl": "restart",
 	"nftables":       "restart",
+	"sy-auth":        "restart", // oauth2-proxy does not reload its configuration
 }
+
+// onDemand units run only while they have files: they are started when the first file appears and stopped
+// when the last one is gone. The SE image skips them at boot until their configuration exists, so an engine
+// without that feature carries no idle daemon, and one that has it comes back after a reboot without the controller.
+var onDemand = map[string]bool{"keepalived": true, "frr": true, "sy-auth": true}
 
 func verb(unit string) string {
 	if v, ok := verbs[unit]; ok {
@@ -68,7 +75,7 @@ func verb(unit string) string {
 var suffixOnly = map[string][]string{"certs": {".pem", ".crl"}}
 
 // secretDirs hold private keys and are written with owner-only permissions.
-var secretDirs = map[string]bool{"certs": true}
+var secretDirs = map[string]bool{"certs": true, "auth": true}
 
 func managedFile(rel string) bool {
 	prefix, rest, ok := strings.Cut(rel, "/")
@@ -175,11 +182,10 @@ func hasFiles(unit string, target map[string][]byte) bool {
 }
 
 // activate makes a unit pick up its files, which are now those of target: it reloads the unit (or
-// restarts it, for units that cannot reload). Keepalived and FRR are the exception because they only
-// run when they have something to do (the SE image skips them at boot until their config exists):
-// they are started when their files appear and stopped when they are gone.
+// restarts it, for units that cannot reload). On-demand units (see onDemand) are the exception: they are
+// started when their files appear and stopped when they are gone.
 func (a *Applier) activate(ctx context.Context, unit string, target map[string][]byte) error {
-	if unit == "keepalived" || unit == "frr" {
+	if onDemand[unit] {
 		if !hasFiles(unit, target) {
 			_, err := a.Runner.Run(ctx, "systemctl", "stop", unit)
 			return err

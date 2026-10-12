@@ -145,6 +145,13 @@ group's `engines[]` on each, for the Placement card; `available: false` when Pro
 create one per engine (`POST …/enrollment-token`). `nic_pools` on deploy maps each VIP or backend network id to the address pool its NIC addresses come from (ADR 0057; omit it to leave those NICs unaddressed). `guest_kind` on deploy is `qemu` (default) or `lxc` (container template; no cloud-init, ADR 0055). `ssh_public_keys` on deploy is for human access to the VM
 (cloud-init); the controller never uses SSH.
 
+## Health score
+
+`GET /tenants/{t}/status/se-groups` returns, for every SE group, `score` (0 to 100), `reasons` and its `engines` with their own
+score and reasons. Unreachable engines score 0; drift, pool members down, an unhealthy HAProxy, withdrawn routes, BGP sessions
+not established and a VRRP fault subtract from 100; a group is the mean of its engines, capped at 50 without two healthy engines.
+Any role in the tenant may read it. See ADR 0081.
+
 ## Certificate import
 
 `POST /tenants/{t}/certificates/import` takes `{name, pem}` (chain then unencrypted key) **or**

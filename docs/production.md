@@ -121,8 +121,9 @@ rules (stale status poll, failed change sets, a down exporter). No Alertmanager 
   re-resolves the API address, so a recreated API container needs no proxy restart.
 - Agents and controllers are upgraded together: bundles are bound to an engine and a rising sequence, and an agent refuses
   unbound bundles unless started with `-allow-unbound-bundles` ([adr/0074](adr/0074-agent-bundle-binding.md)).
-- New HAProxy, FRR, Keepalived or agent versions reach engines by building a new template and replacing engines one at a time
-  ([runbooks/build-se-template.md](runbooks/build-se-template.md), [runbooks/replace-se.md](runbooks/replace-se.md)).
+- New HAProxy, FRR, Keepalived or agent versions reach engines by building a new template and replacing engines one at a time,
+  health-gated: [runbooks/build-se-template.md](runbooks/build-se-template.md), [runbooks/rolling-upgrade.md](runbooks/rolling-upgrade.md)
+  (the gate is `GET /tenants/{t}/status/se-groups`), [runbooks/replace-se.md](runbooks/replace-se.md).
 - Every apply goes through the canary step; do not skip it.
 
 ## 10. What has and has not been proven

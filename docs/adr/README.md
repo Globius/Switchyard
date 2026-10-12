@@ -69,3 +69,4 @@ Date: YYYY-MM-DD
 | [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
+| [0081](0081-se-image-sidecar-slot-and-rolling-operations.md) | SE image sidecar slot, pinned versions, rolling upgrade, health score | Accepted |
