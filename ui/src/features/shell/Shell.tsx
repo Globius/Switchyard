@@ -33,6 +33,7 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
       { label: "SE groups", to: "se-groups" },
       { label: "Routing profiles", to: "routing-profiles" },
       { label: "Kubernetes", to: "kubernetes" },
+      { label: "GSLB", to: "gslb" },
     ],
   },
   {

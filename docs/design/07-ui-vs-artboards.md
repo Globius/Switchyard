@@ -419,3 +419,10 @@ Typed from `ControllerRead`, `ControllerChangeIn` and the confirm and revert cal
 | Bot and DDoS protection (ADR 0150) | Connections per source, new connections per period, header and client timeouts, empty User-Agent and scanners, extra User-Agent text, bot action, exempt networks. | Defaults and warnings for low limits. |
 
 Created from the "New security policy…" menu on the Policies screen.
+
+## Kubernetes and GSLB (no artboards; Design to specify or confirm)
+
+| Screen | What was built | Design questions |
+| --- | --- | --- |
+| Kubernetes (Infrastructure) | List of connected clusters (API server, pools hold, SE group and VIP pool, last sync with created, updated and deleted counts or the error, status) with **Sync now**. A sheet connects or edits a cluster: API server URL, write-only service-account token (OpenBao), optional CA, **Ready nodes** or **Ready pods**, SE group, VIP pool, `loadBalancerClass`, `gatewayClassName`, Enabled; **Test connection** shows version, nodes, services, Gateway API and the problems found; Disconnect asks first. Live and audited, tenant-admin. | Placement of the test result; whether a "waiting for a change set" cluster should link to that change set. |
+| GSLB (Infrastructure) | Wide IPs table (answers with, members, TTL, state in sync, drift, pending, error, off, with the last error) and **Sync now**; a sheet creates or edits a wide IP: algorithm cards (failover, all healthy, weighted, by client subnet, nearest, lowest latency), TTL, enabled, TCP or HTTP health check, members by virtual service or address with site and, depending on the algorithm, priority, weight or client subnets. Zones list with DNSSEC enable and DS records; a system administrator adds and removes zones. | Algorithm picker as cards or a select; a map of sites; whether drift should offer a per-record rewrite (today **Sync now** rewrites every record). |

@@ -169,4 +169,54 @@ describe("kubernetes", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Disconnect" }));
     await waitFor(() => expect(posted[0]?.url).toBe("delete"));
   });
+
+  it("shows a server finding on the API URL and keeps the sheet open", async () => {
+    server.use(
+      http.post("*/api/v1/tenants/acme/kubernetes-clusters", () =>
+        HttpResponse.json(
+          {
+            type: "about:blank",
+            title: "Invalid",
+            status: 422,
+            errors: [{ path: "api_url", message: "Must be https" }],
+          },
+          { status: 422, headers: { "content-type": "application/problem+json" } },
+        ),
+      ),
+    );
+    renderIt();
+    await userEvent.click(await screen.findByRole("button", { name: "Connect a cluster" }));
+    await userEvent.type(await screen.findByLabelText("Name"), "x");
+    await userEvent.type(screen.getByLabelText("API server URL"), "http://k");
+    await userEvent.type(screen.getByLabelText(/Service-account token/), "t");
+    await userEvent.type(screen.getByLabelText("API server CA"), "PEM");
+    await pick(screen.getByRole("combobox", { name: "SE group" }), "edge");
+    await pick(screen.getByRole("combobox", { name: "VIP pool" }), "v6");
+    await userEvent.click(screen.getByRole("button", { name: "Connect" }));
+    expect(await screen.findByText("Must be https")).toBeInTheDocument();
+  });
+
+  it("marks a failing and a disabled cluster", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/kubernetes-clusters", () =>
+        HttpResponse.json([
+          { ...CLUSTER, id: "k2", name: "bad", last_sync_ok: false, last_sync_error: "401" },
+          { ...CLUSTER, id: "k3", name: "off", enabled: false, mode: "pods" },
+          {
+            ...CLUSTER,
+            id: "k4",
+            name: "new",
+            last_sync_ok: null,
+            last_sync_at: null,
+            waiting_for_change_set: "cs1",
+          },
+        ]),
+      ),
+    );
+    renderIt();
+    expect(await screen.findByText("Failing")).toBeInTheDocument();
+    expect(screen.getByText("Disabled")).toBeInTheDocument();
+    expect(screen.getByText("New")).toBeInTheDocument();
+    expect(screen.getByText("waiting for a change set to finish")).toBeInTheDocument();
+  });
 });

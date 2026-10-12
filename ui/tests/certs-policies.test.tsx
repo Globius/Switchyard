@@ -1134,4 +1134,133 @@ describe("security policies", () => {
       bot_action: "deny",
     });
   });
+
+  it("fills every login option: email domains, cookie, timing, scopes and headers", async () => {
+    await userEvent.type(await open("access"), "all-login");
+    await userEvent.type(screen.getByLabelText("Issuer URL"), "https://idp.example.test");
+    await userEvent.type(screen.getByLabelText("Client ID"), "sy");
+    await userEvent.type(screen.getByLabelText("Client secret reference"), "kv/a");
+    await userEvent.type(screen.getByLabelText("Cookie secret reference"), "kv/b");
+    await userEvent.clear(screen.getByLabelText("Groups claim"));
+    await userEvent.type(screen.getByLabelText("Groups claim"), "roles");
+    await userEvent.clear(screen.getByLabelText("Cookie name"));
+    await userEvent.type(screen.getByLabelText("Cookie name"), "sy_s");
+    await userEvent.selectOptions(screen.getByLabelText("Default mode"), "login");
+    await userEvent.clear(screen.getByLabelText("Login path"));
+    await userEvent.type(screen.getByLabelText("Login path"), "/sy-login");
+    await userEvent.type(screen.getByLabelText("Header for email"), "X");
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.selectOptions(screen.getByLabelText("Rule 2 mode"), "email_domains");
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "Rule 2 email domains" }),
+      "example.com,",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Remove Rule 1" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "access",
+      default_mode: "login",
+      auth_path: "/sy-login",
+      rules: [{ mode: "email_domains", email_domains: ["example.com"] }],
+    });
+  });
+
+  it("adds and removes JWT rules and keys", async () => {
+    await userEvent.type(await open("jwt"), "multi-jwt");
+    await userEvent.type(screen.getByLabelText("Rule 1 issuer"), "https://a.test");
+    await userEvent.type(screen.getByRole("combobox", { name: "Rule 1 audiences" }), "api,");
+    await userEvent.type(screen.getByRole("combobox", { name: "Rule 1 scopes" }), "read,");
+    await userEvent.type(screen.getByLabelText("Rule 1 subject header"), "X-Sub");
+    await userEvent.type(screen.getByLabelText("Rule 1 key 1 kid"), "k1");
+    await userEvent.type(screen.getByLabelText("Rule 1 key 1 public key"), "PEM1");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 key 1 algorithm"), "ES256");
+    await userEvent.click(screen.getByRole("button", { name: "Add key" }));
+    await userEvent.type(screen.getByLabelText("Rule 1 key 2 kid"), "k2");
+    await userEvent.click(screen.getByRole("button", { name: "Remove key 2" }));
+    expect(screen.queryByLabelText("Rule 1 key 2 kid")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "jwt",
+      rules: [
+        {
+          audiences: ["api"],
+          required_scopes: ["read"],
+          subject_header: "X-Sub",
+          keys: [{ kid: "k1", alg: "ES256" }],
+        },
+      ],
+    });
+  });
+
+  it("sets the WAF to block and fail closed with body inspection off", async () => {
+    await userEvent.type(await open("waf"), "strict");
+    await userEvent.selectOptions(screen.getByLabelText("WAF mode"), "block");
+    await userEvent.selectOptions(screen.getByLabelText("Fail mode"), "closed");
+    await userEvent.click(screen.getByRole("switch", { name: "Inspect request bodies" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({ kind: "waf", mode: "block", fail_mode: "closed" });
+  });
+
+  it("sets every protection limit and the bot action", async () => {
+    await userEvent.type(await open("protection"), "tight");
+    await userEvent.type(screen.getByLabelText("New connections per source"), "20");
+    await userEvent.selectOptions(screen.getByLabelText("Connection rate period"), "60");
+    await userEvent.type(screen.getByLabelText("Header timeout"), "10");
+    await userEvent.type(screen.getByLabelText("Client timeout"), "60");
+    await userEvent.click(screen.getByRole("switch", { name: "Refuse an empty User-Agent" }));
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "User-Agent text to refuse" }),
+      "sqlmap,",
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Bot action"), "silent_drop");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({ kind: "protection", bot_action: "silent_drop" });
+  });
+
+  it("edits client certificate headers, identity by SHA-1 and a group rule", async () => {
+    await userEvent.type(await open("client_cert"), "cc2");
+    await userEvent.clear(screen.getByLabelText("User header"));
+    await userEvent.type(screen.getByLabelText("User header"), "X-U");
+    await userEvent.clear(screen.getByLabelText("Groups header"));
+    await userEvent.type(screen.getByLabelText("Groups header"), "X-G");
+    await userEvent.click(screen.getByRole("button", { name: "Add certificate" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add certificate" }));
+    await userEvent.selectOptions(screen.getByLabelText("Identity 2 match by"), "sha1");
+    await userEvent.type(screen.getByLabelText("Identity 2 value"), "ab12");
+    await userEvent.click(screen.getByRole("button", { name: "Remove identity 1" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 mode"), "groups");
+    await userEvent.type(screen.getByRole("combobox", { name: "Rule 1 groups" }), "ops,");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "client_cert",
+      identities: [{ by: "sha1", value: "ab12" }],
+      rules: [{ mode: "groups", groups: ["ops"] }, { mode: "valid" }],
+    });
+  });
+
+  it("adds and removes a second JWT rule", async () => {
+    await userEvent.type(await open("jwt"), "two-rules");
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    expect(screen.getByLabelText("Rule 2 issuer")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Remove Rule 2" }));
+    expect(screen.queryByLabelText("Rule 2 issuer")).toBeNull();
+  });
+
+  it("shows the WAF rule set as read-only and sets the thresholds", async () => {
+    await userEvent.type(await open("waf"), "thr");
+    expect(screen.getByLabelText("Core Rule Set version")).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Inbound threshold"), "7");
+    await userEvent.type(screen.getByLabelText("Outbound threshold"), "6");
+    await userEvent.type(screen.getByLabelText("WAF time limit"), "50");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({ kind: "waf" });
+  });
 });
