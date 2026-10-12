@@ -4,6 +4,120 @@
  */
 
 export interface paths {
+    "/api/v1/acme-provider-presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Known certificate authorities
+         * @description Let's Encrypt, ZeroSSL, Google, Buypass, Keyfactor and a custom entry.
+         *
+         *     **Access:** Any authenticated caller.
+         */
+        get: operations["list_acme_presets_api_v1_acme_provider_presets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List ACME providers
+         * @description Every provider, by name. Everyone signed in can read them so they can choose one.
+         *
+         *     **Access:** Any authenticated caller.
+         */
+        get: operations["list_acme_providers_api_v1_acme_providers_get"];
+        put?: never;
+        /**
+         * Register an ACME provider
+         * @description Register a certificate authority. The controller creates the ACME account key itself.
+         *
+         *     Secrets (`eab_hmac_key`, `oauth_client_secret`) go to the secrets backend and are never
+         *     returned. Call the test endpoint to register the account at the CA.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_acme_provider_api_v1_acme_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/acme-providers/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an ACME provider
+         * @description One provider with its version in the `ETag`.
+         *
+         *     **Access:** Any authenticated caller.
+         */
+        get: operations["get_acme_provider_api_v1_acme_providers__provider__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove an ACME provider
+         * @description Remove a provider that no certificate uses (`409` otherwise).
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_acme_provider_api_v1_acme_providers__provider__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an ACME provider
+         * @description Change settings or replace secrets.
+         *
+         *     Changing the directory or the authentication means the account has to be registered again
+         *     (run the test).
+         *
+         *     **Access:** `system-admin` only.
+         */
+        patch: operations["patch_acme_provider_api_v1_acme_providers__provider__patch"];
+        trace?: never;
+    };
+    "/api/v1/acme-providers/{provider}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register the account at the CA
+         * @description Contact the CA, sign in (EAB or OAuth) and register the account or find it.
+         *
+         *     Always answers `200`; `ok: false` carries the reason. A success sets `account_registered`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["test_acme_provider_api_v1_acme_providers__provider__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-actions": {
         parameters: {
             query?: never;
@@ -256,6 +370,28 @@ export interface paths {
          *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["prometheus_discovery_api_v1_discovery_prometheus_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dns-provider-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DNS provider types and their forms
+         * @description Each type lists its fields; `secret` fields are write-only. Render the form from this.
+         *
+         *     **Access:** Any authenticated caller.
+         */
+        get: operations["list_dns_provider_types_api_v1_dns_provider_types_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -869,6 +1005,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/certificate-renewals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Renewal status of every certificate
+         * @description For each server certificate: issuer, expiry, when renewal starts and the last result.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["renewal_status_api_v1_tenants__t__certificate_renewals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/certificates": {
         parameters: {
             query?: never;
@@ -965,6 +1123,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/certificates/issue/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a certificate request without queueing it
+         * @description Run the checks the issue call runs, and return every finding with its field path.
+         *
+         *     Use it while the request sheet is open: the ACME provider must exist, each name needs a DNS
+         *     credential that covers it (DNS-01), and an HTTP-01 name must lead to one of the tenant's
+         *     HTTP services on port 80. Always answers `200`; `ok: false` lists the problems.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["check_certificate_request_api_v1_tenants__t__certificates_issue_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/certificates/{certificate}/renew": {
         parameters: {
             query?: never;
@@ -981,6 +1165,28 @@ export interface paths {
          *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["renew_certificate_api_v1_tenants__t__certificates__certificate__renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/certificates/{certificate}/renewals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Renewal history of a certificate
+         * @description Issuance and renewal attempts, newest first, with the CA's error when one failed.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["renewal_history_api_v1_tenants__t__certificates__certificate__renewals_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1287,6 +1493,119 @@ export interface paths {
          *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["request_approval_api_v1_tenants__t__change_sets__cs__request_approval_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/dns-providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's DNS credentials
+         * @description The credentials DNS-01 can use, by name. Secrets are never returned.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_dns_providers_api_v1_tenants__t__dns_providers_get"];
+        put?: never;
+        /**
+         * Add a DNS credential
+         * @description Add a credential for a provider type.
+         *
+         *     Validation errors name the field, for example `credentials.api_token`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_dns_provider_api_v1_tenants__t__dns_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/dns-providers/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which credentials can validate these names
+         * @description For each name, the tenant's enabled credentials whose zones cover it, longest zone first.
+         *
+         *     A credential without a zone list comes last. An empty `candidates` list means the name
+         *     cannot be validated with DNS-01 until a credential covers it.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["match_dns_providers_api_v1_tenants__t__dns_providers_match_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/dns-providers/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a DNS credential
+         * @description One credential with its version in the `ETag`.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["get_dns_provider_api_v1_tenants__t__dns_providers__provider__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a DNS credential
+         * @description Remove a credential that no certificate names (`409` otherwise).
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_dns_provider_api_v1_tenants__t__dns_providers__provider__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a DNS credential
+         * @description Change zones, settings or secrets; omitted secrets keep their stored value.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_dns_provider_api_v1_tenants__t__dns_providers__provider__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/dns-providers/{provider}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a DNS credential
+         * @description Publish and remove a TXT record under `_switchyard-test.<zone>`.
+         *
+         *     Always answers `200`; `ok: false` carries the provider's reason.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["test_dns_provider_api_v1_tenants__t__dns_providers__provider__test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3021,6 +3340,268 @@ export interface components {
             reason?: string | null;
         };
         /**
+         * AcmeChallenge
+         * @description How an ACME certificate authority checks control of a name.
+         * @enum {string}
+         */
+        AcmeChallenge: "dns-01" | "http-01";
+        /**
+         * AcmeOauthIn
+         * @description OAuth settings for a CA behind an identity provider (client-credentials grant).
+         */
+        AcmeOauthIn: {
+            /** Audience */
+            audience?: string | null;
+            /**
+             * Bearer On Acme
+             * @description Send the token on every ACME request.
+             */
+            bearer_on_acme?: boolean | null;
+            /** Client Id */
+            client_id?: string | null;
+            /**
+             * Eab Url
+             * @description Endpoint that returns a fresh EAB key (JSON with a key id and an HMAC key) when called with the bearer token.
+             */
+            eab_url?: string | null;
+            /** Scope */
+            scope?: string | null;
+            /** Token Url */
+            token_url?: string | null;
+        };
+        /**
+         * AcmeOauthRead
+         * @description The stored OAuth settings (the client secret is never returned).
+         */
+        AcmeOauthRead: {
+            /** Audience */
+            audience?: string | null;
+            /** Bearer On Acme */
+            bearer_on_acme?: boolean | null;
+            /** Client Id */
+            client_id?: string | null;
+            /** Eab Url */
+            eab_url?: string | null;
+            /** Scope */
+            scope?: string | null;
+            /** Token Url */
+            token_url?: string | null;
+        };
+        /**
+         * AcmePresetRead
+         * @description A well-known certificate authority.
+         */
+        AcmePresetRead: {
+            /**
+             * Auth Mode
+             * @enum {string}
+             */
+            auth_mode: "none" | "eab" | "oauth";
+            /**
+             * Directory Url
+             * @description Empty when the administrator must enter it.
+             */
+            directory_url: string | null;
+            /** Eab Required */
+            eab_required: boolean;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Note */
+            note: string;
+        };
+        /**
+         * AcmeProviderIn
+         * @description Register an ACME provider.
+         */
+        AcmeProviderIn: {
+            /**
+             * Account Key
+             * @description Write-only PEM of an RSA account key (2048 bits or more) to use instead of a generated one.
+             */
+            account_key?: string | null;
+            /**
+             * Auth Mode
+             * @description Defaults to what the preset usually needs.
+             */
+            auth_mode?: ("none" | "eab" | "oauth") | null;
+            /**
+             * Ca Bundle Pem
+             * @description PEM certificates of extra trusted roots, for a private CA. Public data.
+             */
+            ca_bundle_pem?: string | null;
+            /**
+             * Default
+             * @description Use this provider when a certificate names none.
+             * @default false
+             */
+            default: boolean;
+            /**
+             * Directory Url
+             * @description Required for presets without a fixed directory.
+             */
+            directory_url?: string | null;
+            /**
+             * Eab Hmac Key
+             * @description Base64url HMAC key of the EAB credentials. Write-only.
+             */
+            eab_hmac_key?: string | null;
+            /** Eab Kid */
+            eab_kid?: string | null;
+            /**
+             * Email
+             * @description Contact address for the ACME account.
+             */
+            email?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Name */
+            name: string;
+            oauth?: components["schemas"]["AcmeOauthIn"] | null;
+            /**
+             * Oauth Client Secret
+             * @description Write-only.
+             */
+            oauth_client_secret?: string | null;
+            /**
+             * Preset
+             * @description A key from `GET /acme-provider-presets`.
+             * @default custom
+             */
+            preset: string;
+            /**
+             * Terms Agreed
+             * @description Must be true: the controller accepts the CA's terms.
+             * @default false
+             */
+            terms_agreed: boolean;
+        };
+        /**
+         * AcmeProviderPatch
+         * @description Change an ACME provider; send only what changes.
+         */
+        AcmeProviderPatch: {
+            /**
+             * Account Key
+             * @description Replaces the account key; the account is registered again.
+             */
+            account_key?: string | null;
+            /** Auth Mode */
+            auth_mode?: ("none" | "eab" | "oauth") | null;
+            /**
+             * Ca Bundle Pem
+             * @description Replaces the extra trusted roots; empty removes them.
+             */
+            ca_bundle_pem?: string | null;
+            /** Default */
+            default?: boolean | null;
+            /** Directory Url */
+            directory_url?: string | null;
+            /** Eab Hmac Key */
+            eab_hmac_key?: string | null;
+            /** Eab Kid */
+            eab_kid?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            oauth?: components["schemas"]["AcmeOauthIn"] | null;
+            /** Oauth Client Secret */
+            oauth_client_secret?: string | null;
+        };
+        /**
+         * AcmeProviderRead
+         * @description An ACME provider (never any secret).
+         */
+        AcmeProviderRead: {
+            /**
+             * Account Registered
+             * @description True after a successful test (the CA accepted the account).
+             */
+            account_registered: boolean;
+            /**
+             * Auth Mode
+             * @enum {string}
+             */
+            auth_mode: "none" | "eab" | "oauth";
+            /**
+             * Ca Bundle Set
+             * @description Extra trusted roots are configured.
+             */
+            ca_bundle_set: boolean;
+            /** Default */
+            default: boolean;
+            /** Directory Url */
+            directory_url: string;
+            /** Eab Configured */
+            eab_configured: boolean;
+            /** Eab Kid */
+            eab_kid: string | null;
+            /** Email */
+            email: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            oauth: components["schemas"]["AcmeOauthRead"] | null;
+            /** Oauth Secret Set */
+            oauth_secret_set: boolean;
+            /** Preset */
+            preset: string;
+            /** Terms Agreed */
+            terms_agreed: boolean;
+            /**
+             * Used By
+             * @description Certificates that name this provider.
+             */
+            used_by: number;
+            /** Version */
+            version: number;
+        };
+        /**
+         * AcmeProviderTestRead
+         * @description Result of testing a provider: the directory, then the EAB credentials, then the account.
+         */
+        AcmeProviderTestRead: {
+            /** Detail */
+            detail: string;
+            /** External Account Required */
+            external_account_required: boolean;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Stages
+             * @description The steps in order; the list stops at the first one that fails.
+             */
+            stages: components["schemas"]["AcmeTestStageRead"][];
+            /** Tos Url */
+            tos_url: string | null;
+        };
+        /**
+         * AcmeTestStageRead
+         * @description One step of a connection test.
+         */
+        AcmeTestStageRead: {
+            /** Detail */
+            detail: string;
+            /**
+             * Name
+             * @enum {string}
+             */
+            name: "directory" | "eab" | "account";
+            /** Ok */
+            ok: boolean;
+        };
+        /**
          * Action
          * @description What an operation does to its object.
          * @enum {string}
@@ -3639,8 +4220,33 @@ export interface components {
          * @description Body of ``POST /certificates/issue``.
          */
         CertIssueIn: {
+            /**
+             * Acme Provider
+             * @description ACME provider name (`acme` only). The default provider when empty.
+             */
+            acme_provider?: string | null;
+            /**
+             * Challenge
+             * @description `dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.
+             */
+            challenge?: ("dns-01" | "http-01") | null;
+            /**
+             * Dns Provider
+             * @description DNS credential name for `dns-01`. Chosen by zone when empty.
+             */
+            dns_provider?: string | null;
             /** Name */
             name: string;
+            /**
+             * Renew Before Days
+             * @description How long before expiry an automatic renewal starts.
+             */
+            renew_before_days?: number | null;
+            /**
+             * Renew Policy
+             * @description Defaults to `auto` for a new certificate.
+             */
+            renew_policy?: ("auto" | "manual") | null;
             /** Sans */
             sans: string[];
             /**
@@ -3694,10 +4300,20 @@ export interface components {
          *         purpose: ``server`` (a certificate with a key that a port presents) or ``client_ca``
          *             (trusted CA certificates, no key, that a port uses to check client certificates).
          *         crl_secret_ref: OpenBao path of a PEM certificate revocation list (``client_ca`` only).
+         *         acme_provider: Name of the ACME provider that issues and renews it (``acme`` only; the
+         *             default provider when empty).
+         *         challenge: ``dns-01`` (the default) or ``http-01`` (``acme`` only; no wildcard names).
+         *         dns_provider: Name of the DNS credential that publishes the DNS-01 records (``dns-01``
+         *             only; chosen by zone when empty).
          */
         Certificate: {
+            /** Acme Provider */
+            acme_provider?: string | null;
+            challenge?: components["schemas"]["AcmeChallenge"] | null;
             /** Crl Secret Ref */
             crl_secret_ref?: string | null;
+            /** Dns Provider */
+            dns_provider?: string | null;
             /**
              * Id
              * Format: uuid
@@ -3749,8 +4365,13 @@ export interface components {
         };
         /** CertificateCreate */
         CertificateCreate: {
+            /** Acme Provider */
+            acme_provider?: string | null;
+            challenge?: components["schemas"]["AcmeChallenge"] | null;
             /** Crl Secret Ref */
             crl_secret_ref?: string | null;
+            /** Dns Provider */
+            dns_provider?: string | null;
             /** Name */
             name: string;
             /**
@@ -3787,8 +4408,13 @@ export interface components {
         };
         /** CertificatePatch */
         CertificatePatch: {
+            /** Acme Provider */
+            acme_provider?: string | null;
+            challenge?: components["schemas"]["AcmeChallenge"] | null;
             /** Crl Secret Ref */
             crl_secret_ref?: string | null;
+            /** Dns Provider */
+            dns_provider?: string | null;
             /** Name */
             name?: string | null;
             /** Not After */
@@ -3811,6 +4437,9 @@ export interface components {
          * @description Certificate as returned by the API.
          */
         CertificateRead: {
+            /** Acme Provider */
+            acme_provider?: string | null;
+            challenge?: components["schemas"]["AcmeChallenge"] | null;
             /**
              * Changed Fields
              * @description Fields a draft changed; empty outside a draft.
@@ -3818,6 +4447,8 @@ export interface components {
             changed_fields: string[];
             /** Crl Secret Ref */
             crl_secret_ref?: string | null;
+            /** Dns Provider */
+            dns_provider?: string | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
             /**
@@ -4143,6 +4774,213 @@ export interface components {
              * @description `host:port` of the exporter.
              */
             targets: string[];
+        };
+        /**
+         * DnsCandidateRead
+         * @description A credential that could publish records for a name.
+         */
+        DnsCandidateRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /**
+             * Zone
+             * @description The zone that matched; empty for a credential without a zone list.
+             */
+            zone: string | null;
+        };
+        /**
+         * DnsFieldRead
+         * @description One field of a DNS provider type's form.
+         */
+        DnsFieldRead: {
+            /**
+             * Default
+             * @description Used when the field is left empty.
+             */
+            default: string | null;
+            /** Help */
+            help: string;
+            /**
+             * Key
+             * @description Name in `config`, or in `credentials` when `secret`.
+             */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "select" | "textarea";
+            /** Label */
+            label: string;
+            /**
+             * Options
+             * @description Allowed values of a `select`.
+             */
+            options: string[];
+            /** Required */
+            required: boolean;
+            /**
+             * Secret
+             * @description Write-only: sent in `credentials`, never returned.
+             */
+            secret: boolean;
+        };
+        /**
+         * DnsNameMatchRead
+         * @description The credentials that cover one name, best first.
+         */
+        DnsNameMatchRead: {
+            /** Candidates */
+            candidates: components["schemas"]["DnsCandidateRead"][];
+            /** Name */
+            name: string;
+        };
+        /**
+         * DnsProviderIn
+         * @description Create a DNS credential.
+         */
+        DnsProviderIn: {
+            /**
+             * Config
+             * @description The non-secret fields.
+             */
+            config?: {
+                [key: string]: string;
+            };
+            /**
+             * Credentials
+             * @description The secret fields. Stored in the secrets backend.
+             */
+            credentials?: {
+                [key: string]: string;
+            };
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Type
+             * @description One of the types from `GET /dns-provider-types`.
+             */
+            type: string;
+            /**
+             * Zones
+             * @description Domains this credential serves, for example `example.test`. The longest match wins; a credential without zones serves every name nobody else claims.
+             */
+            zones?: string[];
+        };
+        /**
+         * DnsProviderPatch
+         * @description Change a DNS credential; send only what changes.
+         */
+        DnsProviderPatch: {
+            /**
+             * Config
+             * @description Settings to set (merged with the stored ones).
+             */
+            config?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Credentials
+             * @description Secret fields to replace; the others keep their stored value.
+             */
+            credentials?: {
+                [key: string]: string;
+            } | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Zones */
+            zones?: string[] | null;
+        };
+        /**
+         * DnsProviderRead
+         * @description A DNS credential (never any secret).
+         */
+        DnsProviderRead: {
+            /** Config */
+            config: {
+                [key: string]: string;
+            };
+            /** Credentials Set */
+            credentials_set: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Version */
+            version: number;
+            /** Zones */
+            zones: string[];
+        };
+        /**
+         * DnsProviderTestIn
+         * @description Optionally name the zone to test in.
+         */
+        DnsProviderTestIn: {
+            /**
+             * Zone
+             * @description Test only this zone. By default every zone of the credential is tested.
+             */
+            zone?: string | null;
+        };
+        /**
+         * DnsProviderTestRead
+         * @description Result of publishing and removing a test TXT record in each zone of a credential.
+         */
+        DnsProviderTestRead: {
+            /** Detail */
+            detail: string;
+            /** Ok */
+            ok: boolean;
+            /** Zones */
+            zones: components["schemas"]["DnsZoneTestRead"][];
+        };
+        /**
+         * DnsProviderTypeRead
+         * @description A kind of DNS provider and the form it needs.
+         */
+        DnsProviderTypeRead: {
+            /** Fields */
+            fields: components["schemas"]["DnsFieldRead"][];
+            /** Label */
+            label: string;
+            /**
+             * Supports Zone Discovery
+             * @description The provider finds the zone of a name itself; `zones` then only chooses between credentials.
+             */
+            supports_zone_discovery: boolean;
+            /** Type */
+            type: string;
+        };
+        /**
+         * DnsZoneTestRead
+         * @description The test in one zone.
+         */
+        DnsZoneTestRead: {
+            /** Detail */
+            detail: string;
+            /** Ok */
+            ok: boolean;
+            /** Zone */
+            zone: string;
         };
         /**
          * DraftStatus
@@ -4970,6 +5808,29 @@ export interface components {
             vip: string;
             /** Weight */
             weight: number;
+        };
+        /**
+         * IssueCheckRead
+         * @description What is wrong with a certificate request, if anything.
+         */
+        IssueCheckRead: {
+            /** Ok */
+            ok: boolean;
+            /** Problems */
+            problems: components["schemas"]["IssueProblemRead"][];
+        };
+        /**
+         * IssueProblemRead
+         * @description One finding of a certificate request check.
+         */
+        IssueProblemRead: {
+            /** Message */
+            message: string;
+            /**
+             * Path
+             * @description Field path, for example `sans[1]` or `acme_provider`.
+             */
+            path: string;
         };
         /**
          * Job
@@ -6002,7 +6863,7 @@ export interface components {
              * Object
              * @enum {string}
              */
-            object: "application" | "break_glass" | "certificate" | "change_set" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
+            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
             /**
              * Verb
              * @enum {string}
@@ -6512,6 +7373,103 @@ export interface components {
          * @enum {string}
          */
         RenewPolicy: "manual" | "auto";
+        /**
+         * RenewalRead
+         * @description One issuance or renewal attempt.
+         */
+        RenewalRead: {
+            /** Acme Provider */
+            acme_provider: string | null;
+            /** Certificate */
+            certificate: string;
+            /** Challenge */
+            challenge: string | null;
+            /**
+             * Change Set Id
+             * @description The `system:certs` change set it opened.
+             */
+            change_set_id: string | null;
+            /**
+             * Error
+             * @description The CA's or provider's error, quoted.
+             */
+            error: string | null;
+            /**
+             * Finished At
+             * Format: date-time
+             */
+            finished_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Not After
+             * @description Expiry of the certificate it obtained.
+             */
+            not_after: string | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Trigger
+             * @enum {string}
+             */
+            trigger: "manual" | "auto";
+        };
+        /**
+         * RenewalStatusRead
+         * @description When a certificate renews and how the last attempts went.
+         */
+        RenewalStatusRead: {
+            /** Certificate */
+            certificate: string;
+            /**
+             * Certificate Id
+             * Format: uuid
+             */
+            certificate_id: string;
+            /** Failures In A Row */
+            failures_in_a_row: number;
+            /**
+             * Issuer
+             * @description The ACME provider, or the kind of source.
+             */
+            issuer: string;
+            /** Last Attempt At */
+            last_attempt_at: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Last Ok */
+            last_ok: boolean | null;
+            /** Last Success At */
+            last_success_at: string | null;
+            /**
+             * Not After
+             * Format: date-time
+             */
+            not_after: string;
+            /** Renew Before Days */
+            renew_before_days: number;
+            /**
+             * Renew Due At
+             * Format: date-time
+             * @description `not_after` minus `renew_before_days`.
+             */
+            renew_due_at: string;
+            /**
+             * Renew Policy
+             * @enum {string}
+             */
+            renew_policy: "auto" | "manual";
+            /** Source */
+            source: string;
+        };
         /**
          * RevisionRead
          * @description A revision with the full desired state it recorded.
@@ -8494,6 +9452,604 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_acme_presets_api_v1_acme_provider_presets_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "auth_mode": "none",
+                     *         "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                     *         "eab_required": false,
+                     *         "key": "letsencrypt",
+                     *         "label": "Let's Encrypt",
+                     *         "note": "Free certificates, rate limited; use staging for tests."
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["AcmePresetRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_acme_providers_api_v1_acme_providers_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "account_registered": true,
+                     *         "auth_mode": "none",
+                     *         "ca_bundle_set": false,
+                     *         "default": true,
+                     *         "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                     *         "eab_configured": false,
+                     *         "email": "pki@example.test",
+                     *         "enabled": true,
+                     *         "id": "0192f1a2-0000-7000-8000-00000000a501",
+                     *         "name": "letsencrypt",
+                     *         "oauth_secret_set": false,
+                     *         "preset": "letsencrypt",
+                     *         "terms_agreed": true,
+                     *         "used_by": 3,
+                     *         "version": 1
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["AcmeProviderRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_acme_provider_api_v1_acme_providers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "default": true,
+                 *       "email": "pki@example.test",
+                 *       "name": "letsencrypt",
+                 *       "preset": "letsencrypt",
+                 *       "terms_agreed": true
+                 *     }
+                 */
+                "application/json": components["schemas"]["AcmeProviderIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "account_registered": true,
+                     *       "auth_mode": "none",
+                     *       "ca_bundle_set": false,
+                     *       "default": true,
+                     *       "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                     *       "eab_configured": false,
+                     *       "email": "pki@example.test",
+                     *       "enabled": true,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000a501",
+                     *       "name": "letsencrypt",
+                     *       "oauth_secret_set": false,
+                     *       "preset": "letsencrypt",
+                     *       "terms_agreed": true,
+                     *       "used_by": 3,
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AcmeProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_acme_provider_api_v1_acme_providers__provider__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "account_registered": true,
+                     *       "auth_mode": "none",
+                     *       "ca_bundle_set": false,
+                     *       "default": true,
+                     *       "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                     *       "eab_configured": false,
+                     *       "email": "pki@example.test",
+                     *       "enabled": true,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000a501",
+                     *       "name": "letsencrypt",
+                     *       "oauth_secret_set": false,
+                     *       "preset": "letsencrypt",
+                     *       "terms_agreed": true,
+                     *       "used_by": 3,
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AcmeProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_acme_provider_api_v1_acme_providers__provider__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_acme_provider_api_v1_acme_providers__provider__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "default": true,
+                 *       "email": "certs@example.test"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AcmeProviderPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "account_registered": true,
+                     *       "auth_mode": "none",
+                     *       "ca_bundle_set": false,
+                     *       "default": true,
+                     *       "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                     *       "eab_configured": false,
+                     *       "email": "pki@example.test",
+                     *       "enabled": true,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000a501",
+                     *       "name": "letsencrypt",
+                     *       "oauth_secret_set": false,
+                     *       "preset": "letsencrypt",
+                     *       "terms_agreed": true,
+                     *       "used_by": 3,
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AcmeProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_acme_provider_api_v1_acme_providers__provider__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+                     *       "external_account_required": false,
+                     *       "ok": true,
+                     *       "stages": [
+                     *         {
+                     *           "detail": "reachable",
+                     *           "name": "directory",
+                     *           "ok": true
+                     *         },
+                     *         {
+                     *           "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+                     *           "name": "account",
+                     *           "ok": true
+                     *         }
+                     *       ],
+                     *       "tos_url": "https://letsencrypt.org/documents/LE-SA-v1.5.pdf"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AcmeProviderTestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     audit_actions_api_v1_audit_actions_get: {
         parameters: {
             query?: never;
@@ -9292,6 +10848,85 @@ export interface operations {
                      *     ]
                      */
                     "application/json": components["schemas"]["DiscoveryGroup"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_dns_provider_types_api_v1_dns_provider_types_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "fields": [
+                     *           {
+                     *             "help": "A token with Zone:Read and DNS:Edit on the zones you validate.",
+                     *             "key": "api_token",
+                     *             "kind": "text",
+                     *             "label": "API token",
+                     *             "options": [],
+                     *             "required": true,
+                     *             "secret": true
+                     *           }
+                     *         ],
+                     *         "label": "Cloudflare",
+                     *         "supports_zone_discovery": true,
+                     *         "type": "cloudflare"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["DnsProviderTypeRead"][];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -12240,6 +13875,86 @@ export interface operations {
             };
         };
     };
+    renewal_status_api_v1_tenants__t__certificate_renewals_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "certificate": "web-example",
+                     *         "certificate_id": "0192f1a2-0000-7000-8000-00000000f501",
+                     *         "failures_in_a_row": 0,
+                     *         "issuer": "letsencrypt",
+                     *         "last_attempt_at": "2026-10-12T02:00:00Z",
+                     *         "last_ok": true,
+                     *         "last_success_at": "2026-10-12T02:01:10Z",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "renew_before_days": 30,
+                     *         "renew_due_at": "2026-12-11T02:01:00Z",
+                     *         "renew_policy": "auto",
+                     *         "source": "acme"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["RenewalStatusRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_certificates_api_v1_tenants__t__certificates_get: {
         parameters: {
             query?: {
@@ -12674,7 +14389,12 @@ export interface operations {
             content: {
                 /**
                  * @example {
+                 *       "acme_provider": "letsencrypt",
+                 *       "challenge": "dns-01",
+                 *       "dns_provider": "cloudflare-main",
                  *       "name": "web-example",
+                 *       "renew_before_days": 30,
+                 *       "renew_policy": "auto",
                  *       "sans": [
                  *         "www.example.test"
                  *       ],
@@ -12697,6 +14417,103 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    check_certificate_request_api_v1_tenants__t__certificates_issue_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "challenge": "dns-01",
+                 *       "name": "web-example",
+                 *       "sans": [
+                 *         "www.example.test",
+                 *         "*.example.test"
+                 *       ],
+                 *       "source": "acme"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CertIssueIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "ok": false,
+                     *       "problems": [
+                     *         {
+                     *           "message": "no DNS credential covers this name",
+                     *           "path": "sans[1]"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["IssueCheckRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -12806,6 +14623,89 @@ export interface operations {
             };
             /** @description The resource is in a state that does not allow this, or the name is already taken. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    renewal_history_api_v1_tenants__t__certificates__certificate__renewals_get: {
+        parameters: {
+            query?: {
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Certificate id. */
+                certificate: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "acme_provider": "letsencrypt",
+                     *         "certificate": "web-example",
+                     *         "challenge": "dns-01",
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c501",
+                     *         "finished_at": "2026-10-12T02:01:10Z",
+                     *         "id": "0192f1a2-0000-7000-8000-00000000e501",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "ok": true,
+                     *         "started_at": "2026-10-12T02:00:00Z",
+                     *         "trigger": "auto"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["RenewalRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14313,6 +16213,651 @@ export interface operations {
                 };
             };
             /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_dns_providers_api_v1_tenants__t__dns_providers_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "config": {},
+                     *         "credentials_set": true,
+                     *         "enabled": true,
+                     *         "id": "0192f1a2-0000-7000-8000-00000000d501",
+                     *         "name": "cloudflare-main",
+                     *         "type": "cloudflare",
+                     *         "version": 1,
+                     *         "zones": [
+                     *           "example.test"
+                     *         ]
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["DnsProviderRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_dns_provider_api_v1_tenants__t__dns_providers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "config": {},
+                 *       "credentials": {
+                 *         "api_token": "example-token"
+                 *       },
+                 *       "name": "cloudflare-main",
+                 *       "type": "cloudflare",
+                 *       "zones": [
+                 *         "example.test"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["DnsProviderIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "config": {},
+                     *       "credentials_set": true,
+                     *       "enabled": true,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d501",
+                     *       "name": "cloudflare-main",
+                     *       "type": "cloudflare",
+                     *       "version": 1,
+                     *       "zones": [
+                     *         "example.test"
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DnsProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    match_dns_providers_api_v1_tenants__t__dns_providers_match_get: {
+        parameters: {
+            query: {
+                /** @description Names to look up (repeat the parameter); wildcards ok. */
+                names: string[];
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "candidates": [
+                     *           {
+                     *             "id": "0192f1a2-0000-7000-8000-00000000d501",
+                     *             "name": "cloudflare-main",
+                     *             "type": "cloudflare",
+                     *             "zone": "example.test"
+                     *           }
+                     *         ],
+                     *         "name": "*.example.test"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["DnsNameMatchRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_dns_provider_api_v1_tenants__t__dns_providers__provider__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                provider: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "config": {},
+                     *       "credentials_set": true,
+                     *       "enabled": true,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d501",
+                     *       "name": "cloudflare-main",
+                     *       "type": "cloudflare",
+                     *       "version": 1,
+                     *       "zones": [
+                     *         "example.test"
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DnsProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_dns_provider_api_v1_tenants__t__dns_providers__provider__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                provider: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_dns_provider_api_v1_tenants__t__dns_providers__provider__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                provider: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "zones": [
+                 *         "example.test",
+                 *         "example.org"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["DnsProviderPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "config": {},
+                     *       "credentials_set": true,
+                     *       "enabled": true,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d501",
+                     *       "name": "cloudflare-main",
+                     *       "type": "cloudflare",
+                     *       "version": 1,
+                     *       "zones": [
+                     *         "example.test"
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DnsProviderRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_dns_provider_api_v1_tenants__t__dns_providers__provider__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Identity provider id. */
+                provider: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                /**
+                 * @example {
+                 *       "zone": "example.test"
+                 *     }
+                 */
+                "application/json": components["schemas"]["DnsProviderTestIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "detail": "every zone works",
+                     *       "ok": true,
+                     *       "zones": [
+                     *         {
+                     *           "detail": "published and removed _switchyard-test.example.test",
+                     *           "ok": true,
+                     *           "zone": "example.test"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["DnsProviderTestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
                     [name: string]: unknown;

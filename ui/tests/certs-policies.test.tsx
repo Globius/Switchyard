@@ -179,6 +179,23 @@ const server = setupServer(
     issued = await request.json();
     return HttpResponse.json({ change_set_id: "cs1", job_id: "j" }, { status: 202 });
   }),
+  http.post("*/api/v1/tenants/acme/certificates/issue/check", () =>
+    HttpResponse.json({ ok: true, problems: [] }),
+  ),
+  http.get("*/api/v1/tenants/acme/jobs/j", () =>
+    HttpResponse.json({
+      id: "j",
+      kind: "issue_cert",
+      state: "running",
+      attempts: 1,
+      max_attempts: 1,
+      retrying: false,
+      created_at: "2026-10-11T10:00:00Z",
+      stages: [{ name: "order", state: "succeeded" }],
+    }),
+  ),
+  http.get("*/api/v1/tenants/acme/certificate-renewals", () => HttpResponse.json([])),
+  http.get("*/api/v1/acme-providers", () => HttpResponse.json([])),
   http.post("*/api/v1/tenants/acme/certificates/:id/renew", ({ params }) => {
     renewed = String(params.id);
     return HttpResponse.json({ change_set_id: "cs1", job_id: "j" }, { status: 202 });
@@ -552,7 +569,7 @@ ${KEY_ONLY}
 
   it("issues a certificate through a job and renews a non-upload one", async () => {
     renderAt("/t/acme/certificates");
-    const issue = await screen.findByRole("button", { name: "Issue certificate" });
+    const issue = await screen.findByRole("button", { name: "Request certificate" });
     await waitFor(() => expect(issue).toBeEnabled());
     await userEvent.click(issue);
     await userEvent.click(await screen.findByRole("radio", { name: "Cloudflare Origin CA" }));
@@ -561,15 +578,19 @@ ${KEY_ONLY}
       screen.getByRole("combobox", { name: "Names (SANs)" }),
       "docs.example.test,www.example.test{enter}",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Start issuing" }));
+    await userEvent.click(screen.getByRole("button", { name: "Request" }));
     await waitFor(() =>
       expect(issued).toEqual({
         name: "docs",
         source: "cloudflare_origin",
         sans: ["docs.example.test", "www.example.test"],
+        renew_policy: "auto",
       }),
     );
-    expect(await screen.findByText(/Issuing has started as a job/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Requesting certificate" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Order placed")).toBeInTheDocument();
     await userEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
     const portal = screen.getByText("portal").closest("tr")!;
     expect(
@@ -584,7 +605,7 @@ ${KEY_ONLY}
     renderAt("/t/acme/certificates");
     await screen.findByText("mqtt");
     await waitFor(() => expect(screen.getByRole("button", { name: "Import" })).toBeDisabled());
-    expect(screen.getByRole("button", { name: "Issue certificate" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Request certificate" })).toBeDisabled();
   });
 });
 

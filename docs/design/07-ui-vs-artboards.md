@@ -344,3 +344,23 @@ Built against what `openapi.json` has; the rest waits for the API (see the list 
 | Admin > ACME providers, Tenant > DNS credentials, Admin > Controller | Not built: no endpoints on main. Navigation entries are added with each screen. |
 
 Needed from the API: ACME providers CRUD, test, default flag and registration status; per-tenant DNS credentials with provider schemas, zones and a test; certificate request fields (provider, validation, credential per name, auto-renew); issuer, renewal status and renewal history on the certificate read; engine metrics; controller settings with a pending change, expiry, confirm and revert.
+
+## Design v52: ACME, DNS credentials, request sheet, renewal (API: ADR 0080, `docs/acme.md`)
+
+| Screen | Status |
+| --- | --- |
+| Admin > ACME providers | Built. List (Name, Type, Directory URL, Account, Default, Used by); live sheet with type cards from `GET /acme-provider-presets`, directory URL, contact email, account key (generated unless pasted; write-only), authentication (none, EAB, OAuth), trusted roots, default switch, terms checkbox, Test connection (directory, EAB, account, plus the CA's terms link), Delete disabled while certificates use the provider. |
+| Tenant > DNS credentials | Built. One schema-driven sheet from `GET /dns-provider-types`; provider locked on edit; write-only secrets with Set / Replace / Keep the current value; zones as chips; Test reports per zone; 422 zone clashes show on the zones field. Nav entry added to the Tenant group. |
+| Certificates > Request certificate | Built. ACME provider (default preselected; enabled providers only), names, DNS-01 or HTTP-01, credential picker, auto-renew with days. The request is checked on the server while you type (`issue/check`) and Request stays disabled with the reason. Progress shows the job stages; a failure quotes the CA error and offers Retry, Edit request and Open job; success links the `system:certs` change set. Cloudflare Origin CA keeps its own simple path. |
+| Certificates list | Issuer sub-line (the provider) and Renewal column from `GET …/certificate-renewals` (Auto / Manual, "Renewal failed", renewed and next dates). History sheet from `GET …/certificates/{id}/renewals` with the deadline, "Retry renewal now" and each attempt with the CA error. |
+
+### Differences from the v52 artboards (for Design to confirm)
+
+1. **One DNS credential per certificate.** The API takes a single `dns_provider`, so the sheet shows one credential picker listing the credentials that cover every name, not one picker per name. A name no credential covers is an inline error; if the names need different credentials, the request is blocked.
+2. **Provider type cards.** The API presets are Let's Encrypt (production, staging), ZeroSSL, Google Trust Services, Buypass, Keyfactor and Custom. There is no step-ca preset (use Custom). Cards come from the API, so there are more than the four drawn.
+3. **Progress stages.** The job reports five coarse stages (order, validate, finalize, store, change set), not the six drawn (TXT published and DNS propagated are not separate).
+4. **"TXT records were removed".** The API does not say whether the records were removed; the failure view points to the job log instead of claiming it.
+5. **"Requesting" in the Renewal column and expiry notifications** need data the API does not have yet (no running-renewal flag; expiry notifications are not built).
+6. **Test connection** works on a saved provider only (the API tests by id), so an unsaved edit says "Save first".
+7. **Account key** shows Set / Replace; the API does not return when or by whom it was set.
+8. **No TLS-ALPN-01**, per the backend.
