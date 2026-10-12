@@ -23,6 +23,9 @@ FREE_FORM = {
     "Job.result",
     "AuditEventRead.diff",
     "IdpTestResult.claims",
+    "AlertTargetRead.config",  # per kind: {url}, {url, format} or {to}
+    "AlertRuleRead.spec",  # per kind: actions, a metric threshold or days
+    "AlertFiring.details",  # the numbers behind one alert
 }
 
 

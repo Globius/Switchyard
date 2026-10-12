@@ -28,6 +28,17 @@ from switchyard.adapters.secrets import SecretsReader, SecretsWriter
 from switchyard.adapters.telemetry import Telemetry, TelemetryError
 from switchyard.api import docs_meta, job_models, overview
 from switchyard.api import examples as ex
+from switchyard.api.alert_models import (
+    AlertCatalog,
+    AlertRuleIn,
+    AlertRulePatch,
+    AlertRuleRead,
+    AlertStatus,
+    AlertTargetIn,
+    AlertTargetPatch,
+    AlertTargetRead,
+    AlertTargetTest,
+)
 from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
 from switchyard.api.overview import SearchResults, TenantSummary
 from switchyard.api.problems import ApiError, install_handlers
@@ -162,6 +173,7 @@ from switchyard.render.escape import RenderError
 from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
 from switchyard.services import principals
 from switchyard.services.acme_providers import AcmeProviders
+from switchyard.services.alerts import EVENT_ACTIONS, AlertService
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
 from switchyard.services.cert_requests import CertificateRequests, IssueRequest
 from switchyard.services.certificates import CertificateJobs, CertificateService
@@ -235,6 +247,8 @@ class ApiServices:
     hosts: HostService | None = None
     settings: SystemSettings = None  # type: ignore[assignment]
     grafana: GrafanaService | None = None
+    alerts: AlertService | None = None
+    email_configured: bool = False
     acme_providers: AcmeProviders | None = None
     dns_providers: DnsProviders | None = None
 
@@ -252,6 +266,8 @@ def build_services(
     break_glass: BreakGlassService | None = None,
     proxmox: Proxmox | None = None,
     grafana: GrafanaService | None = None,
+    alerts: AlertService | None = None,
+    email_configured: bool = False,
 ) -> ApiServices:
     """Wire the services over one set of database handles.
 
@@ -298,6 +314,8 @@ def build_services(
         hosts=HostService(db, engines, proxmox),
         settings=SystemSettings(db),
         grafana=grafana,
+        alerts=alerts,
+        email_configured=email_configured,
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
         dns_providers=DnsProviders(db, secrets) if writer is not None else None,
     )
@@ -1956,6 +1974,269 @@ def create_app(
         if grafana_proxy is None:
             raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
         return await grafana_proxy.datasource(request, kind, path)
+
+    # alerting (ADR 0120 to 0123)
+    def need_alerts(svc: ApiServices, who: Principal | None = None) -> AlertService:
+        if who is not None:  # who may write is decided before whether the feature is on
+            require(who, "write", "infrastructure")
+        if svc.alerts is None:
+            raise ApiError(404, "alerting is not enabled on this controller", code="not_enabled")
+        return svc.alerts
+
+    @router.get(
+        "/alert-catalog",
+        tags=["alerts"],
+        summary="What alert rules and targets can use",
+        description="Metrics a rule can watch, audit actions an event rule can name, chat formats.",
+        response_model=AlertCatalog,
+        responses=_ok(ex.ALERT_CATALOG),
+    )
+    async def alert_catalog(who: Who, svc: Services) -> dict[str, Any]:
+        from switchyard.domain.alerts import CHAT_FORMATS, METRICS
+
+        return {
+            "metrics": [
+                {"name": n, "label": v[0], "unit": v[1], "scope": v[2]}
+                for n, v in sorted(METRICS.items())
+            ],
+            "event_actions": sorted(EVENT_ACTIONS),
+            "chat_formats": list(CHAT_FORMATS),
+            "email_configured": svc.email_configured,
+        }
+
+    @router.get(
+        "/tenants/{t}/alert-targets",
+        tags=["alerts"],
+        summary="List alert targets",
+        description="Where this tenant's alerts go. Requires any role in the tenant.",
+        response_model=list[AlertTargetRead],
+        responses=_ok([ex.ALERT_TARGET]),
+    )
+    async def list_alert_targets(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return await need_alerts(svc).list_targets(who, tenant.id)
+
+    @router.post(
+        "/tenants/{t}/alert-targets",
+        status_code=201,
+        tags=["alerts"],
+        summary="Create an alert target",
+        description=(
+            "A webhook (JSON body, optionally signed with a secret kept in OpenBao), a chat "
+            "incoming webhook (Slack, Teams or Mattermost) or a list of email addresses. URLs "
+            "must be https and must not name a private address. Applies live (no change set) "
+            "and is audited. Requires `tenant-admin`."
+        ),
+        response_model=AlertTargetRead,
+        responses=_ok(ex.ALERT_TARGET, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_alert_target(
+        body: AlertTargetIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).create_target(
+            who,
+            tenant.id,
+            name=body.name,
+            kind=body.kind,
+            config=body.config,
+            secret_ref=body.secret_ref,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+
+    @router.patch(
+        "/tenants/{t}/alert-targets/{name}",
+        tags=["alerts"],
+        summary="Change an alert target",
+        description="Change the configuration, the secret reference or the enabled flag. "
+        "Requires `tenant-admin`.",
+        response_model=AlertTargetRead,
+        responses=_ok(ex.ALERT_TARGET) | VALIDATION_RESPONSE,
+    )
+    async def patch_alert_target(
+        name: str, body: AlertTargetPatch, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).update_target(
+            who,
+            tenant.id,
+            name,
+            config=body.config,
+            secret_ref=body.secret_ref,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+
+    @router.delete(
+        "/tenants/{t}/alert-targets/{name}",
+        status_code=204,
+        tags=["alerts"],
+        summary="Delete an alert target",
+        description="Rules that name it skip it from then on. Requires `tenant-admin`.",
+        responses=_ok(None, 204),
+    )
+    async def delete_alert_target(name: str, tenant: Tenant, who: Who, svc: Services) -> Response:
+        await need_alerts(svc, who).delete_target(who, tenant.id, name, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.post(
+        "/tenants/{t}/alert-targets/{name}/test",
+        tags=["alerts"],
+        summary="Send a test message through an alert target",
+        description="Sends one clearly marked test message now and reports whether it was "
+        "delivered. Requires `tenant-admin`.",
+        response_model=AlertTargetTest,
+        responses=_ok({"ok": True, "error": None}),
+    )
+    async def test_alert_target(
+        name: str, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).test_target(who, tenant.id, name)
+
+    @router.get(
+        "/tenants/{t}/alert-rules",
+        tags=["alerts"],
+        summary="List alert rules",
+        description="What this tenant watches. Requires any role in the tenant.",
+        response_model=list[AlertRuleRead],
+        responses=_ok([ex.ALERT_RULE]),
+    )
+    async def list_alert_rules(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return await need_alerts(svc).list_rules(who, tenant.id)
+
+    @router.post(
+        "/tenants/{t}/alert-rules",
+        status_code=201,
+        tags=["alerts"],
+        summary="Create an alert rule",
+        description=(
+            "`event`: tell me when an audit event with one of these actions is written. "
+            "`metric`: tell me when a built-in series is over or under a threshold for N "
+            "minutes (and when it recovers). `cert_expiry`: tell me when a certificate is "
+            "within 30, 14 or 7 days (or your own days) of expiring, and when it is renewed. "
+            "Applies live and is audited. Requires `tenant-admin`."
+        ),
+        response_model=AlertRuleRead,
+        responses=_ok(ex.ALERT_RULE, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_alert_rule(
+        body: AlertRuleIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).create_rule(
+            who,
+            tenant.id,
+            name=body.name,
+            kind=body.kind,
+            spec=body.spec,
+            targets=body.targets,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+
+    @router.patch(
+        "/tenants/{t}/alert-rules/{name}",
+        tags=["alerts"],
+        summary="Change an alert rule",
+        description="Change the specification, the targets or the enabled flag. "
+        "Requires `tenant-admin`.",
+        response_model=AlertRuleRead,
+        responses=_ok(ex.ALERT_RULE) | VALIDATION_RESPONSE,
+    )
+    async def patch_alert_rule(
+        name: str, body: AlertRulePatch, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_alerts(svc, who).update_rule(
+            who,
+            tenant.id,
+            name,
+            spec=body.spec,
+            targets=body.targets,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+
+    @router.delete(
+        "/tenants/{t}/alert-rules/{name}",
+        status_code=204,
+        tags=["alerts"],
+        summary="Delete an alert rule",
+        description="Also forgets what it was firing. Requires `tenant-admin`.",
+        responses=_ok(None, 204),
+    )
+    async def delete_alert_rule(name: str, tenant: Tenant, who: Who, svc: Services) -> Response:
+        await need_alerts(svc, who).delete_rule(who, tenant.id, name, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.get(
+        "/tenants/{t}/alerts",
+        tags=["alerts"],
+        summary="What is firing and what was sent",
+        description="Alerts firing or waiting out their duration, and the latest deliveries "
+        "with their outcome. Requires any role in the tenant.",
+        response_model=AlertStatus,
+        responses=_ok(ex.ALERT_STATUS),
+    )
+    async def alert_status(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> dict[str, Any]:
+        return await need_alerts(svc).status(who, tenant.id, limit=limit)
+
+    @router.get(
+        "/tenants/{t}/logs",
+        tags=["virtual-services"],
+        summary="Access log of the whole tenant",
+        description=(
+            "HAProxy HTTP log lines of every virtual service of the tenant (or of one, with "
+            "`service`), newest first. Same filters and paging as the per-service log: "
+            "`since`/`until` (default: the last hour), `q`, `status_class`, `limit`, `cursor`. "
+            "Read from Loki with the tenant label enforced. Requires any role in the tenant."
+        ),
+        response_model=AccessLogs,
+        responses=_ok(ex.ACCESS_LOGS),
+    )
+    async def tenant_logs(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        service: Annotated[str | None, Query(max_length=63)] = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        q: Annotated[str | None, Query(max_length=200)] = None,
+        status_class: Annotated[int | None, Query(ge=2, le=5)] = None,
+        cursor: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> AccessLogs:
+        if svc.telemetry is None:
+            return AccessLogs(available=False, reason="no log backend is configured", entries=[])
+        end = until or datetime.now(UTC)
+        if cursor:
+            try:
+                end = _EPOCH + timedelta(microseconds=int(cursor))
+            except ValueError:
+                raise ApiError(400, "cursor is not valid") from None
+        start = since or end - timedelta(hours=1)
+        try:
+            found = await svc.telemetry.logs(
+                tenant.id,
+                service,
+                since=start,
+                until=end,
+                limit=limit + 1,
+                contains=q,
+                status_class=status_class,
+            )
+        except (TelemetryError, RenderError) as exc:
+            return AccessLogs(available=False, reason=str(exc), entries=[])
+        window = found[:limit]
+        more = len(found) > limit
+        return AccessLogs(
+            available=True,
+            entries=window,
+            next_cursor=(
+                str((window[-1].at - _EPOCH) // timedelta(microseconds=1)) if more else None
+            ),
+        )
 
     # telemetry
     async def _service_name(svc: ApiServices, tenant: TenantRecord, service_id: UUID) -> str:

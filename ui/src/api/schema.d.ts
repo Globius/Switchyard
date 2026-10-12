@@ -118,6 +118,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alert-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What alert rules and targets can use
+         * @description Metrics a rule can watch, audit actions an event rule can name, chat formats.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["alert_catalog_api_v1_alert_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-actions": {
         parameters: {
             query?: never;
@@ -977,6 +999,162 @@ export interface paths {
          *     **Access:** `tenant-admin` or higher in the tenant.
          */
         patch: operations["patch_tenant_api_v1_tenants__t__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/alert-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List alert rules
+         * @description What this tenant watches. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_alert_rules_api_v1_tenants__t__alert_rules_get"];
+        put?: never;
+        /**
+         * Create an alert rule
+         * @description `event`: tell me when an audit event with one of these actions is written. `metric`: tell me when a built-in series is over or under a threshold for N minutes (and when it recovers). `cert_expiry`: tell me when a certificate is within 30, 14 or 7 days (or your own days) of expiring, and when it is renewed. Applies live and is audited. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_alert_rule_api_v1_tenants__t__alert_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/alert-rules/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an alert rule
+         * @description Also forgets what it was firing. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_alert_rule_api_v1_tenants__t__alert_rules__name__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an alert rule
+         * @description Change the specification, the targets or the enabled flag. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_alert_rule_api_v1_tenants__t__alert_rules__name__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/alert-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List alert targets
+         * @description Where this tenant's alerts go. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_alert_targets_api_v1_tenants__t__alert_targets_get"];
+        put?: never;
+        /**
+         * Create an alert target
+         * @description A webhook (JSON body, optionally signed with a secret kept in OpenBao), a chat incoming webhook (Slack, Teams or Mattermost) or a list of email addresses. URLs must be https and must not name a private address. Applies live (no change set) and is audited. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_alert_target_api_v1_tenants__t__alert_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/alert-targets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an alert target
+         * @description Rules that name it skip it from then on. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_alert_target_api_v1_tenants__t__alert_targets__name__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change an alert target
+         * @description Change the configuration, the secret reference or the enabled flag. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_alert_target_api_v1_tenants__t__alert_targets__name__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/alert-targets/{name}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test message through an alert target
+         * @description Sends one clearly marked test message now and reports whether it was delivered. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["test_alert_target_api_v1_tenants__t__alert_targets__name__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What is firing and what was sent
+         * @description Alerts firing or waiting out their duration, and the latest deliveries with their outcome. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["alert_status_api_v1_tenants__t__alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/tenants/{t}/audit-events": {
@@ -2028,6 +2206,30 @@ export interface paths {
          *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["retry_job_api_v1_tenants__t__jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Access log of the whole tenant
+         * @description HAProxy HTTP log lines of every virtual service of the tenant (or of one, with `service`), newest first. Same filters and paging as the per-service log: `since`/`until` (default: the last hour), `q`, `status_class`, `limit`, `cursor`. Read from Loki with the tenant label enforced. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         *
+         *     **Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.
+         */
+        get: operations["tenant_logs_api_v1_tenants__t__logs_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3729,6 +3931,271 @@ export interface components {
              * @description The BGP prefixes the watchdog has withdrawn, sorted.
              */
             withdrawn_prefixes?: string[];
+        };
+        /**
+         * AlertCatalog
+         * @description What the rule and target forms offer.
+         */
+        AlertCatalog: {
+            /** Chat Formats */
+            chat_formats: string[];
+            /**
+             * Email Configured
+             * @description False when email targets cannot send.
+             */
+            email_configured: boolean;
+            /** Event Actions */
+            event_actions: string[];
+            /** Metrics */
+            metrics: components["schemas"]["AlertMetricInfo"][];
+        };
+        /**
+         * AlertDeliveryRead
+         * @description One attempt to tell one target.
+         */
+        AlertDeliveryRead: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Error */
+            error: string | null;
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "firing" | "resolved" | "test";
+            /** Rule */
+            rule: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "sent" | "failed";
+            /** Target */
+            target: string;
+        };
+        /**
+         * AlertFiring
+         * @description One watched thing that is firing (or waiting out `for_minutes`).
+         */
+        AlertFiring: {
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /** Key */
+            key: string;
+            /** Rule */
+            rule: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "firing" | "pending";
+        };
+        /**
+         * AlertMetricInfo
+         * @description A series a metric rule can watch.
+         */
+        AlertMetricInfo: {
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "vs" | "engine";
+            /** Unit */
+            unit: string;
+        };
+        /**
+         * AlertRuleIn
+         * @description What to watch and who to tell.
+         */
+        AlertRuleIn: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "event" | "metric" | "cert_expiry";
+            /** Name */
+            name: string;
+            /**
+             * Spec
+             * @description `event`: `{actions: [audit action, ...]}`. `metric`: `{metric, op: gt|lt, threshold, for_minutes, scope?}` with `metric` from `GET /alert-catalog`. `cert_expiry`: `{days: [30, 14, 7]}`.
+             */
+            spec: {
+                [key: string]: unknown;
+            };
+            /**
+             * Targets
+             * @description Names of targets in the same tenant (1 to 10).
+             */
+            targets: string[];
+        };
+        /**
+         * AlertRulePatch
+         * @description Fields of a rule that can change; omitted fields stay as they are.
+         */
+        AlertRulePatch: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Spec */
+            spec?: {
+                [key: string]: unknown;
+            } | null;
+            /** Targets */
+            targets?: string[] | null;
+        };
+        /**
+         * AlertRuleRead
+         * @description A rule.
+         */
+        AlertRuleRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Spec */
+            spec: {
+                [key: string]: unknown;
+            };
+            /** Targets */
+            targets: string[];
+            /** Version */
+            version: number;
+        };
+        /**
+         * AlertStatus
+         * @description What is firing now and the latest deliveries.
+         */
+        AlertStatus: {
+            /** Deliveries */
+            deliveries: components["schemas"]["AlertDeliveryRead"][];
+            /** Firing */
+            firing: components["schemas"]["AlertFiring"][];
+        };
+        /**
+         * AlertTargetIn
+         * @description A place alerts go.
+         */
+        AlertTargetIn: {
+            /**
+             * Config
+             * @description `webhook`: `{url}`. `chat`: `{url, format: slack|teams|mattermost}`. `email`: `{to: [address, ...]}`. URLs are https and name no private address.
+             */
+            config: {
+                [key: string]: unknown;
+            };
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "webhook" | "chat" | "email";
+            /**
+             * Name
+             * @description Lowercase letters, digits, `-` and `_`; unique in the tenant.
+             */
+            name: string;
+            /**
+             * Secret Ref
+             * @description Webhooks only: an OpenBao path (`kv/...`) whose value signs each body (`X-Switchyard-Signature: sha256=<hmac>`). The secret itself is never stored here.
+             */
+            secret_ref?: string | null;
+        };
+        /**
+         * AlertTargetPatch
+         * @description Fields of a target that can change; omitted fields stay as they are.
+         */
+        AlertTargetPatch: {
+            /** Config */
+            config?: {
+                [key: string]: unknown;
+            } | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Secret Ref */
+            secret_ref?: string | null;
+        };
+        /**
+         * AlertTargetRead
+         * @description A target.
+         */
+        AlertTargetRead: {
+            /** Config */
+            config: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Secret Ref */
+            secret_ref: string | null;
+            /** Version */
+            version: number;
+        };
+        /**
+         * AlertTargetTest
+         * @description The outcome of a test message.
+         */
+        AlertTargetTest: {
+            /**
+             * Error
+             * @description Why delivery failed, when it did.
+             */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
         };
         /**
          * Algorithm
@@ -6296,9 +6763,10 @@ export interface components {
          *         GIT_MIRROR: Pushes a revision to the Git mirror.
          *         GC: Scheduled housekeeping.
          *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+         *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members" | "evaluate_alerts";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -10954,6 +11422,87 @@ export interface operations {
             };
         };
     };
+    alert_catalog_api_v1_alert_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "chat_formats": [
+                     *         "slack",
+                     *         "teams",
+                     *         "mattermost"
+                     *       ],
+                     *       "email_configured": false,
+                     *       "event_actions": [
+                     *         "change_set.failed",
+                     *         "drift.detected"
+                     *       ],
+                     *       "metrics": [
+                     *         {
+                     *           "label": "Share of 5xx responses",
+                     *           "name": "vs_5xx_ratio",
+                     *           "scope": "vs",
+                     *           "unit": "%"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AlertCatalog"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     audit_actions_api_v1_audit_actions_get: {
         parameters: {
             query?: never;
@@ -14650,6 +15199,897 @@ export interface operations {
             };
             /** @description `If-Match` is required for this request. */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_alert_rules_api_v1_tenants__t__alert_rules_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-10-10T08:30:00Z",
+                     *         "created_by": "user:authentik:alice",
+                     *         "enabled": true,
+                     *         "id": "0192f3a0-0000-7000-8000-0000000000a2",
+                     *         "kind": "cert_expiry",
+                     *         "name": "certs-expiring",
+                     *         "spec": {
+                     *           "days": [
+                     *             30,
+                     *             14,
+                     *             7
+                     *           ]
+                     *         },
+                     *         "targets": [
+                     *           "ops-chat"
+                     *         ],
+                     *         "version": 1
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["AlertRuleRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_alert_rule_api_v1_tenants__t__alert_rules_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "kind": "cert_expiry",
+                 *       "name": "certs-expiring",
+                 *       "spec": {
+                 *         "days": [
+                 *           30,
+                 *           14,
+                 *           7
+                 *         ]
+                 *       },
+                 *       "targets": [
+                 *         "ops-chat"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["AlertRuleIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "enabled": true,
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000a2",
+                     *       "kind": "cert_expiry",
+                     *       "name": "certs-expiring",
+                     *       "spec": {
+                     *         "days": [
+                     *           30,
+                     *           14,
+                     *           7
+                     *         ]
+                     *       },
+                     *       "targets": [
+                     *         "ops-chat"
+                     *       ],
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AlertRuleRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_alert_rule_api_v1_tenants__t__alert_rules__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_alert_rule_api_v1_tenants__t__alert_rules__name__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "enabled": false
+                 *     }
+                 */
+                "application/json": components["schemas"]["AlertRulePatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "enabled": true,
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000a2",
+                     *       "kind": "cert_expiry",
+                     *       "name": "certs-expiring",
+                     *       "spec": {
+                     *         "days": [
+                     *           30,
+                     *           14,
+                     *           7
+                     *         ]
+                     *       },
+                     *       "targets": [
+                     *         "ops-chat"
+                     *       ],
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AlertRuleRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_alert_targets_api_v1_tenants__t__alert_targets_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "config": {
+                     *           "format": "slack",
+                     *           "url": "https://hooks.example.test/services/T000/B000/XXXX"
+                     *         },
+                     *         "created_at": "2026-10-10T08:30:00Z",
+                     *         "created_by": "user:authentik:alice",
+                     *         "enabled": true,
+                     *         "id": "0192f3a0-0000-7000-8000-0000000000a1",
+                     *         "kind": "chat",
+                     *         "name": "ops-chat",
+                     *         "version": 1
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["AlertTargetRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_alert_target_api_v1_tenants__t__alert_targets_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "config": {
+                 *         "format": "slack",
+                 *         "url": "https://hooks.example.test/services/T000/B000/XXXX"
+                 *       },
+                 *       "kind": "chat",
+                 *       "name": "ops-chat"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AlertTargetIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "config": {
+                     *         "format": "slack",
+                     *         "url": "https://hooks.example.test/services/T000/B000/XXXX"
+                     *       },
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "enabled": true,
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000a1",
+                     *       "kind": "chat",
+                     *       "name": "ops-chat",
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AlertTargetRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_alert_target_api_v1_tenants__t__alert_targets__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_alert_target_api_v1_tenants__t__alert_targets__name__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "enabled": false
+                 *     }
+                 */
+                "application/json": components["schemas"]["AlertTargetPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "config": {
+                     *         "format": "slack",
+                     *         "url": "https://hooks.example.test/services/T000/B000/XXXX"
+                     *       },
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "enabled": true,
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000a1",
+                     *       "kind": "chat",
+                     *       "name": "ops-chat",
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AlertTargetRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_alert_target_api_v1_tenants__t__alert_targets__name__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "ok": true
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AlertTargetTest"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    alert_status_api_v1_tenants__t__alerts_get: {
+        parameters: {
+            query?: {
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "deliveries": [
+                     *         {
+                     *           "at": "2026-10-10T08:30:00Z",
+                     *           "key": "cert:shop-example",
+                     *           "kind": "firing",
+                     *           "rule": "certs-expiring",
+                     *           "status": "sent",
+                     *           "target": "ops-chat"
+                     *         }
+                     *       ],
+                     *       "firing": [
+                     *         {
+                     *           "details": {
+                     *             "not_after": "2026-10-10T08:30:00Z",
+                     *             "tier": 14
+                     *           },
+                     *           "key": "cert:shop-example",
+                     *           "rule": "certs-expiring",
+                     *           "since": "2026-10-10T08:30:00Z",
+                     *           "state": "firing"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AlertStatus"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -19932,6 +21372,112 @@ export interface operations {
             };
             /** @description The resource is in a state that does not allow this, or the name is already taken. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    tenant_logs_api_v1_tenants__t__logs_get: {
+        parameters: {
+            query?: {
+                /** @description Virtual service id. */
+                service?: string | null;
+                /** @description Only events at or after this time (ISO 8601). */
+                since?: string | null;
+                /** @description Only events before this time (ISO 8601). */
+                until?: string | null;
+                /** @description Free text. */
+                q?: string | null;
+                /** @description Only responses of this class: 2, 3, 4 or 5. */
+                status_class?: number | null;
+                /** @description `next_cursor` of the previous page. */
+                cursor?: string | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "available": true,
+                     *       "entries": [
+                     *         {
+                     *           "at": "2026-10-10T08:30:00Z",
+                     *           "backend": "pool_web",
+                     *           "bytes": 512,
+                     *           "client_ip": "198.51.100.7",
+                     *           "duration_ms": 13,
+                     *           "frontend": "vs_shop",
+                     *           "method": "GET",
+                     *           "path": "/cart",
+                     *           "raw": "198.51.100.7:51514 [10/Oct/2026:08:30:00.123] vs_shop pool_web/web-1 0/0/1/12/13 200 512 - - ---- 1/1/0/0/0 0/0 \"GET /cart HTTP/1.1\"",
+                     *           "server": "web-1",
+                     *           "status": 200
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AccessLogs"];
+                };
+            };
+            /** @description `cursor` is not a value this endpoint returned. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

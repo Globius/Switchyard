@@ -35,6 +35,10 @@ TAGS: list[dict[str, str]] = [
         "name": "grafana",
         "description": "Grafana embedded in the UI: one-time launch links, scoped to a tenant.",
     },
+    {
+        "name": "alerts",
+        "description": "Alert targets (webhook, chat, email), rules on events, metrics and certificate expiry, and what is firing.",
+    },
     {"name": "pools", "description": "Backend pools and members; runtime member state."},
     {"name": "health-monitors", "description": "Active health checks for pools."},
     {"name": "certificates", "description": "Certificates: import, issue, renew."},
@@ -314,6 +318,12 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("DELETE", r"/tenants/\{t\}/tokens/\{token\}", "tenant-admin", False),
     ("POST", r"/tenants/\{t\}/vip-pools/\{pool_id\}/next-free", "viewer", False),
     ("POST", r"/tenants/\{t\}/grafana/launch", "viewer", False),
+    (
+        "(POST|PATCH|DELETE)",
+        r"/tenants/\{t\}/alert-(targets|rules)(/\{name\}(/test)?)?",
+        "tenant-admin",
+        False,
+    ),
     ("POST", r"/grafana/launch", "system-admin", False),
     ("POST", r"/tenants/\{t\}/health-monitors/\{monitor_id\}/test", "operator", False),
     ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/[a-z-]+(/\{object_id\})?", "operator", False),
@@ -382,6 +392,19 @@ def _patch_example(slug: str) -> dict[str, Any] | None:
 
 
 REQUEST_EXAMPLES: dict[str, Any] = {
+    "POST /tenants/{t}/alert-targets": {
+        "name": "ops-chat",
+        "kind": "chat",
+        "config": {"url": "https://hooks.example.test/services/T000/B000/XXXX", "format": "slack"},
+    },
+    "PATCH /tenants/{t}/alert-targets/{name}": {"enabled": False},
+    "POST /tenants/{t}/alert-rules": {
+        "name": "certs-expiring",
+        "kind": "cert_expiry",
+        "spec": {"days": [30, 14, 7]},
+        "targets": ["ops-chat"],
+    },
+    "PATCH /tenants/{t}/alert-rules/{name}": {"enabled": False},
     "POST /tenants/{t}/grafana/launch": {"landing": "/d/sy-tenant-services"},
     "POST /grafana/launch": {"landing": ""},
     "POST /auth/break-glass": {
