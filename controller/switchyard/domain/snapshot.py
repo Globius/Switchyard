@@ -100,6 +100,8 @@ class Snapshot(Model):
             policy_ids.update(s.policy_set_ids)
             if s.allow_list_id:
                 policy_ids.add(s.allow_list_id)
+            if s.deny_list_id:
+                policy_ids.add(s.deny_list_id)
         pools = tuple(p for p in self.pools if p.id in pool_ids)
         monitor_ids = {p.health_monitor_id for p in pools if p.health_monitor_id}
         network_ids = {n.network_id for n in group.networks}
@@ -148,6 +150,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       a SAN of the service's certificates (wildcards cover exactly one label).
     - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
+    - ``discovery_tag_not_allowed``: a pool's Proxmox discovery tag starts with ``sy-<tenant>.``,
+      so a tenant never discovers another tenant's guests (ADR 0145).
     - ``secret_ref_not_allowed``: certificate and BGP secret references stay in the tenant's own
       namespace and out of the platform's (ADR 0071).
     - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
@@ -188,6 +192,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
 
     _check_names(snapshot, problems)
     _check_secret_scopes(snapshot, problems)
+    _check_discovery_scopes(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -326,6 +331,19 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                     )
                 )
 
+        if s.deny_list_id:
+            ps = check_ref(
+                f"{base}.deny_list_id", s.tenant_id, "policy set", s.deny_list_id, policies
+            )
+            if ps is not None and not isinstance(ps, AllowListPolicySet):
+                problems.append(
+                    Problem(
+                        f"{base}.deny_list_id",
+                        "wrong_policy_kind",
+                        f"policy set {ps.name} is not an IP list policy set",
+                    )
+                )
+
         _check_routes(s, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
@@ -356,6 +374,23 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 )
             )
     return sorted(problems)
+
+
+def _check_discovery_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """Discovery tags start with the owning tenant's prefix (``discovery_tag_not_allowed``)."""
+    names = {t.id: t.name for t in snapshot.tenants}
+    for pool in snapshot.pools:
+        if pool.discovery is None or pool.tenant_id not in names:
+            continue
+        prefix = v.discovery_tag_prefix(names[pool.tenant_id])
+        if not pool.discovery.tag.startswith(prefix) or pool.discovery.tag == prefix:
+            problems.append(
+                Problem(
+                    f"pools.{pool.name}.discovery.tag",
+                    "discovery_tag_not_allowed",
+                    f"a discovery tag must start with {prefix!r} and continue with a label",
+                )
+            )
 
 
 def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:

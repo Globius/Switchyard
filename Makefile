@@ -29,3 +29,7 @@ ui-gen-api:
 ui-check: ui-lint ui-typecheck ui-test ui-build
 	cd ui && pnpm gen:api:check
 	cd ui && pnpm audit --audit-level high
+
+# OpenTofu provider (Go): vet, tests, and "the generated table matches docs/api/openapi.json".
+provider-check:
+	cd provider && go vet ./... && go test ./...

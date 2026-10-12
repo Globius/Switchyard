@@ -4189,15 +4189,39 @@ export interface components {
         Algorithm: "roundrobin" | "leastconn" | "source" | "random";
         /**
          * AllowListPolicySet
-         * @description Source networks, for example the published Cloudflare ranges.
+         * @description Source networks: the published Cloudflare ranges, a country list or a reputation feed.
+         *
+         *     The same object serves as an allow list (``allow_list_id``) and as a deny list
+         *     (``deny_list_id``) of a virtual service.
          *
          *     Attributes:
-         *         cidrs: Networks in the list.
-         *         managed_by: ``cloudflare`` when the daily ``sync_cloudflare_ips`` job maintains the list.
+         *         cidrs: Networks in the list. A list managed by ``geo`` or ``reputation`` may be empty
+         *             until its first sync; the sync never writes an empty list.
+         *         managed_by: ``cloudflare`` when the daily ``sync_cloudflare_ips`` job maintains the list;
+         *             ``geo`` or ``reputation`` when ``sync_ip_lists`` does (ADR 0147).
+         *         countries: ISO 3166 alpha-2 codes whose networks a ``geo`` list holds.
+         *         feed: Name of the operator-configured feed a ``reputation`` list mirrors.
+         *
+         *     Example:
+         *         >>> AllowListPolicySet(
+         *         ...     id=UUID(int=1), tenant_id=UUID(int=2), name="no-xx",
+         *         ...     managed_by="geo", countries=("XX",),
+         *         ... ).cidrs
+         *         ()
          */
         AllowListPolicySet: {
-            /** Cidrs */
+            /**
+             * Cidrs
+             * @default []
+             */
             cidrs: (string)[];
+            /**
+             * Countries
+             * @default []
+             */
+            countries: string[];
+            /** Feed */
+            feed?: string | null;
             /**
              * Id
              * Format: uuid
@@ -4209,7 +4233,7 @@ export interface components {
              */
             kind: "allow_list";
             /** Managed By */
-            managed_by?: "cloudflare" | null;
+            managed_by?: ("cloudflare" | "geo" | "reputation") | null;
             /** Name */
             name: string;
             /**
@@ -4225,15 +4249,25 @@ export interface components {
         };
         /** AllowListPolicySetCreate */
         AllowListPolicySetCreate: {
-            /** Cidrs */
+            /**
+             * Cidrs
+             * @default []
+             */
             cidrs: (string)[];
+            /**
+             * Countries
+             * @default []
+             */
+            countries: string[];
+            /** Feed */
+            feed?: string | null;
             /**
              * @description Which kind of object this is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             kind: "allow_list";
             /** Managed By */
-            managed_by?: "cloudflare" | null;
+            managed_by?: ("cloudflare" | "geo" | "reputation") | null;
             /** Name */
             name: string;
         };
@@ -4241,13 +4275,17 @@ export interface components {
         AllowListPolicySetPatch: {
             /** Cidrs */
             cidrs?: (string)[] | null;
+            /** Countries */
+            countries?: string[] | null;
+            /** Feed */
+            feed?: string | null;
             /**
              * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             kind: "allow_list";
             /** Managed By */
-            managed_by?: "cloudflare" | null;
+            managed_by?: ("cloudflare" | "geo" | "reputation") | null;
             /** Name */
             name?: string | null;
         };
@@ -4261,10 +4299,20 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
-            /** Cidrs */
+            /**
+             * Cidrs
+             * @default []
+             */
             cidrs: (string)[];
+            /**
+             * Countries
+             * @default []
+             */
+            countries: string[];
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
+            /** Feed */
+            feed?: string | null;
             /**
              * Id
              * Format: uuid
@@ -4276,7 +4324,7 @@ export interface components {
              */
             kind: "allow_list";
             /** Managed By */
-            managed_by?: "cloudflare" | null;
+            managed_by?: ("cloudflare" | "geo" | "reputation") | null;
             /** Name */
             name: string;
             /**
@@ -6575,10 +6623,12 @@ export interface components {
          *         POLL_STATUS: Scheduled engine status poll and drift detection.
          *         GIT_MIRROR: Pushes a revision to the Git mirror.
          *         GC: Scheduled housekeeping.
+         *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+         *         SYNC_IP_LISTS: Refreshes country and reputation lists from their sources.
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "evaluate_alerts";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members" | "sync_ip_lists" | "evaluate_alerts";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -7567,11 +7617,13 @@ export interface components {
          *         passive_check: Also judge members by their live traffic. Needs a health monitor.
          *         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
          *             weight (HAProxy ``slowstart``). Needs a health monitor.
-         *         members: Backend servers, unique by name.
+         *         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
+         *         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
          */
         Pool: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -7615,6 +7667,7 @@ export interface components {
         PoolCreate: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -7638,6 +7691,44 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+        };
+        /**
+         * PoolDiscovery
+         * @description Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).
+         *
+         *     The discovery job lists running guests with ``tag``, takes the first address of each that lies
+         *     in ``cidr`` and keeps ``Pool.members`` in step through a normal change set. Members that were
+         *     discovered keep the weight and admin state an operator gave them.
+         *
+         *     Attributes:
+         *         source: Where members come from; only ``proxmox_tag`` exists.
+         *         tag: The Proxmox tag; it must start with ``sy-<tenant>.``.
+         *         cidr: Backend network; a guest's address in it becomes the member address.
+         *         port: Member port.
+         *         weight: Weight of a newly discovered member.
+         *
+         *     Example:
+         *         >>> PoolDiscovery(tag="sy-acme.web", cidr="10.20.0.0/24", port=8080).weight
+         *         100
+         */
+        PoolDiscovery: {
+            /** Cidr */
+            cidr: string;
+            /** Port */
+            port: number;
+            /**
+             * Source
+             * @default proxmox_tag
+             * @constant
+             */
+            source: "proxmox_tag";
+            /** Tag */
+            tag: string;
+            /**
+             * Weight
+             * @default 100
+             */
+            weight: number;
         };
         /**
          * PoolMember
@@ -7674,6 +7765,7 @@ export interface components {
         /** PoolPatch */
         PoolPatch: {
             algorithm?: components["schemas"]["Algorithm"] | null;
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /** Members */
@@ -7701,6 +7793,7 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
             /** Health Monitor Id */
@@ -9495,6 +9588,8 @@ export interface components {
          *         policy_set_ids: Redirect policy sets, applied before routing, in order.
          *         allow_list_id: Allow-list policy set (for example the Cloudflare ranges).
          *         enforce_allow_list: Reject connections from sources outside the allow list.
+         *         deny_list_id: Allow-list policy set whose networks are refused (for example a country or
+         *             reputation list, ADR 0147). Applies to the client address after restoration.
          *         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
          *             client address; honoured only when the connection source is in the allow list.
          */
@@ -9508,6 +9603,8 @@ export interface components {
             certificate_ids: string[];
             /** Default Pool Id */
             default_pool_id?: string | null;
+            /** Deny List Id */
+            deny_list_id?: string | null;
             /**
              * Enabled
              * @default true
@@ -9571,6 +9668,8 @@ export interface components {
             certificate_ids: string[];
             /** Default Pool Id */
             default_pool_id?: string | null;
+            /** Deny List Id */
+            deny_list_id?: string | null;
             /**
              * Enabled
              * @default true
@@ -9677,6 +9776,8 @@ export interface components {
             certificate_ids?: string[] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
+            /** Deny List Id */
+            deny_list_id?: string | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Enforce Allow List */
@@ -9718,6 +9819,8 @@ export interface components {
             changed_fields: string[];
             /** Default Pool Id */
             default_pool_id?: string | null;
+            /** Deny List Id */
+            deny_list_id?: string | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
             /**
@@ -13291,6 +13394,7 @@ export interface operations {
                      *         "policy_set_ids",
                      *         "allow_list_id",
                      *         "enforce_allow_list",
+                     *         "deny_list_id",
                      *         "restore_client_ip_header",
                      *         "routes"
                      *       ]
@@ -26817,6 +26921,7 @@ export interface operations {
                  *       "allow_list_id": null,
                  *       "certificate_ids": [],
                  *       "default_pool_id": "0192f3a0-0000-7000-8000-000000000014",
+                 *       "deny_list_id": null,
                  *       "enabled": true,
                  *       "enforce_allow_list": false,
                  *       "name": "web",

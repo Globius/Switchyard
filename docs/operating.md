@@ -22,7 +22,8 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_DATAPLANE_CA`, `_CERT`, `_KEY` | mTLS from the controller to Data Plane APIs and agents. With a bundle signing key the CA is required: the worker and API refuse to start without it unless `SWITCHYARD_INSECURE_AGENT=1` (lab only) |
 | `SWITCHYARD_BUNDLE_KEY_FILE` | Ed25519 key (PKCS#8 PEM) that signs agent bundles |
 | `SWITCHYARD_PKI_MOUNT`, `SWITCHYARD_PKI_ROLE` | OpenBao PKI role that signs agent certificates (defaults `pki`, `agents`) |
-| `SWITCHYARD_PVE_URL`, `_PVE_TOKEN_ID`, `_PVE_CA` | Proxmox API (token secret at reference `kv/proxmox/token`) |
+| `SWITCHYARD_GEO_URL`, `SWITCHYARD_REPUTATION_FEEDS` | Sources of country and reputation lists for `managed_by: geo` and `reputation` ([guide](ip-lists.md)) |
+| `SWITCHYARD_PVE_URL`, `_PVE_TOKEN_ID`, `_PVE_CA` | Proxmox API (token secret at reference `kv/proxmox/token`); also turns on pool discovery by tag ([guide](pool-discovery.md)) |
 | `SWITCHYARD_CLOUDFLARE_TOKEN` | DNS-01, Origin CA and IP-range sync |
 | `SWITCHYARD_ACME_DIRECTORY`, `_EMAIL`, `_ACCOUNT_KEY_FILE` | The ACME provider of earlier versions; on first use it becomes the provider `default`. Manage providers in the UI instead (`docs/acme.md`) |
 | `SWITCHYARD_ACME_DNS_WAIT` | Seconds to wait after publishing DNS-01 records (default 15) |

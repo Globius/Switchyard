@@ -28,6 +28,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
@@ -36,6 +37,7 @@ from switchyard.services.infra import (
     DeployRequest,
     InfraService,
 )
+from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
@@ -53,13 +55,17 @@ def build_handlers(
     infra: InfraService | None = None,
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
+    discovery: DiscoveryService | None = None,
     alerts: AlertEvaluator | None = None,
+    iplists: IpListSync | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
+        discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
         alerts: The alert evaluator; ``None`` skips the ``evaluate_alerts`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
@@ -96,6 +102,18 @@ def build_handlers(
             return dict(await gc.run())
 
         handlers[GC_JOB] = collect_garbage
+    if iplists is not None:
+
+        async def sync_ip_lists(job: Job) -> dict[str, Any]:
+            return {"changed": await iplists.run()}
+
+        handlers[SYNC_IP_LISTS_JOB] = sync_ip_lists
+    if discovery is not None:
+
+        async def discover_pool_members(job: Job) -> dict[str, Any]:
+            return {"changed": await discovery.run()}
+
+        handlers[DISCOVER_POOLS_JOB] = discover_pool_members
     if alerts is not None:
 
         async def evaluate_alerts(job: Job) -> dict[str, Any]:

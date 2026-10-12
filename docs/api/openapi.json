@@ -1523,9 +1523,10 @@
       },
       "AllowListPolicySet": {
         "additionalProperties": false,
-        "description": "Source networks, for example the published Cloudflare ranges.\n\nAttributes:\n    cidrs: Networks in the list.\n    managed_by: ``cloudflare`` when the daily ``sync_cloudflare_ips`` job maintains the list.",
+        "description": "Source networks: the published Cloudflare ranges, a country list or a reputation feed.\n\nThe same object serves as an allow list (``allow_list_id``) and as a deny list\n(``deny_list_id``) of a virtual service.\n\nAttributes:\n    cidrs: Networks in the list. A list managed by ``geo`` or ``reputation`` may be empty\n        until its first sync; the sync never writes an empty list.\n    managed_by: ``cloudflare`` when the daily ``sync_cloudflare_ips`` job maintains the list;\n        ``geo`` or ``reputation`` when ``sync_ip_lists`` does (ADR 0147).\n    countries: ISO 3166 alpha-2 codes whose networks a ``geo`` list holds.\n    feed: Name of the operator-configured feed a ``reputation`` list mirrors.\n\nExample:\n    >>> AllowListPolicySet(\n    ...     id=UUID(int=1), tenant_id=UUID(int=2), name=\"no-xx\",\n    ...     managed_by=\"geo\", countries=(\"XX\",),\n    ... ).cidrs\n    ()",
         "properties": {
           "cidrs": {
+            "default": [],
             "items": {
               "anyOf": [
                 {
@@ -1538,9 +1539,28 @@
                 }
               ]
             },
-            "minItems": 1,
             "title": "Cidrs",
             "type": "array"
+          },
+          "countries": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 250,
+            "title": "Countries",
+            "type": "array"
+          },
+          "feed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feed"
           },
           "id": {
             "format": "uuid",
@@ -1556,7 +1576,11 @@
           "managed_by": {
             "anyOf": [
               {
-                "const": "cloudflare",
+                "enum": [
+                  "cloudflare",
+                  "geo",
+                  "reputation"
+                ],
                 "type": "string"
               },
               {
@@ -1584,8 +1608,7 @@
         "required": [
           "id",
           "tenant_id",
-          "name",
-          "cidrs"
+          "name"
         ],
         "title": "AllowListPolicySet",
         "type": "object"
@@ -1594,6 +1617,7 @@
         "additionalProperties": false,
         "properties": {
           "cidrs": {
+            "default": [],
             "items": {
               "anyOf": [
                 {
@@ -1606,9 +1630,28 @@
                 }
               ]
             },
-            "minItems": 1,
             "title": "Cidrs",
             "type": "array"
+          },
+          "countries": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 250,
+            "title": "Countries",
+            "type": "array"
+          },
+          "feed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feed"
           },
           "kind": {
             "const": "allow_list",
@@ -1619,7 +1662,11 @@
           "managed_by": {
             "anyOf": [
               {
-                "const": "cloudflare",
+                "enum": [
+                  "cloudflare",
+                  "geo",
+                  "reputation"
+                ],
                 "type": "string"
               },
               {
@@ -1635,8 +1682,7 @@
         },
         "required": [
           "name",
-          "kind",
-          "cidrs"
+          "kind"
         ],
         "title": "AllowListPolicySetCreate",
         "type": "object"
@@ -1667,6 +1713,31 @@
             ],
             "title": "Cidrs"
           },
+          "countries": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Countries"
+          },
+          "feed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feed"
+          },
           "kind": {
             "const": "allow_list",
             "description": "Must equal the object's kind.",
@@ -1676,7 +1747,11 @@
           "managed_by": {
             "anyOf": [
               {
-                "const": "cloudflare",
+                "enum": [
+                  "cloudflare",
+                  "geo",
+                  "reputation"
+                ],
                 "type": "string"
               },
               {
@@ -1716,6 +1791,7 @@
             "type": "array"
           },
           "cidrs": {
+            "default": [],
             "items": {
               "anyOf": [
                 {
@@ -1728,13 +1804,32 @@
                 }
               ]
             },
-            "minItems": 1,
             "title": "Cidrs",
+            "type": "array"
+          },
+          "countries": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 250,
+            "title": "Countries",
             "type": "array"
           },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
             "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "feed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feed"
           },
           "id": {
             "format": "uuid",
@@ -1750,7 +1845,11 @@
           "managed_by": {
             "anyOf": [
               {
-                "const": "cloudflare",
+                "enum": [
+                  "cloudflare",
+                  "geo",
+                  "reputation"
+                ],
                 "type": "string"
               },
               {
@@ -1779,7 +1878,6 @@
           "id",
           "tenant_id",
           "name",
-          "cidrs",
           "draft_status",
           "changed_fields"
         ],
@@ -6769,7 +6867,7 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.\n    SYNC_IP_LISTS: Refreshes country and reputation lists from their sources.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
         "enum": [
           "apply_change_set",
           "reapply_se_group",
@@ -6782,6 +6880,8 @@
           "poll_status",
           "git_mirror",
           "gc",
+          "discover_pool_members",
+          "sync_ip_lists",
           "evaluate_alerts"
         ],
         "title": "JobKind",
@@ -9116,11 +9216,21 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    members: Backend servers, unique by name.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolDiscovery"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "health_monitor_id": {
             "anyOf": [
@@ -9221,6 +9331,16 @@
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
           },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolDiscovery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "health_monitor_id": {
             "anyOf": [
               {
@@ -9295,6 +9415,53 @@
         "title": "PoolCreate",
         "type": "object"
       },
+      "PoolDiscovery": {
+        "additionalProperties": false,
+        "description": "Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).\n\nThe discovery job lists running guests with ``tag``, takes the first address of each that lies\nin ``cidr`` and keeps ``Pool.members`` in step through a normal change set. Members that were\ndiscovered keep the weight and admin state an operator gave them.\n\nAttributes:\n    source: Where members come from; only ``proxmox_tag`` exists.\n    tag: The Proxmox tag; it must start with ``sy-<tenant>.``.\n    cidr: Backend network; a guest's address in it becomes the member address.\n    port: Member port.\n    weight: Weight of a newly discovered member.\n\nExample:\n    >>> PoolDiscovery(tag=\"sy-acme.web\", cidr=\"10.20.0.0/24\", port=8080).weight\n    100",
+        "properties": {
+          "cidr": {
+            "anyOf": [
+              {
+                "format": "ipv4network",
+                "type": "string"
+              },
+              {
+                "format": "ipv6network",
+                "type": "string"
+              }
+            ],
+            "title": "Cidr"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "source": {
+            "const": "proxmox_tag",
+            "default": "proxmox_tag",
+            "title": "Source",
+            "type": "string"
+          },
+          "tag": {
+            "title": "Tag",
+            "type": "string"
+          },
+          "weight": {
+            "default": 100,
+            "maximum": 256.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tag",
+          "cidr",
+          "port"
+        ],
+        "title": "PoolDiscovery",
+        "type": "object"
+      },
       "PoolMember": {
         "additionalProperties": false,
         "description": "One backend server.\n\nAttributes:\n    id: Stable id, used by the runtime enable/disable/drain endpoint.\n    address: Backend IP address.\n    port: Backend port, or ``None`` to reuse the port the client connected to.\n    weight: 0-256; 0 takes no new connections.\n    admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.\n    name: HAProxy server name; derived from address and port when omitted.",
@@ -9365,6 +9532,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Algorithm"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolDiscovery"
               },
               {
                 "type": "null"
@@ -9480,6 +9657,16 @@
             },
             "title": "Changed Fields",
             "type": "array"
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolDiscovery"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
@@ -13297,7 +13484,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect policy sets, applied before routing, in order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect policy sets, applied before routing, in order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -13331,6 +13518,18 @@
               }
             ],
             "title": "Default Pool Id"
+          },
+          "deny_list_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deny List Id"
           },
           "enabled": {
             "default": true,
@@ -13479,6 +13678,18 @@
               }
             ],
             "title": "Default Pool Id"
+          },
+          "deny_list_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deny List Id"
           },
           "enabled": {
             "default": true,
@@ -13731,6 +13942,18 @@
             ],
             "title": "Default Pool Id"
           },
+          "deny_list_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deny List Id"
+          },
           "enabled": {
             "anyOf": [
               {
@@ -13916,6 +14139,18 @@
               }
             ],
             "title": "Default Pool Id"
+          },
+          "deny_list_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deny List Id"
           },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
@@ -19368,6 +19603,7 @@
                     "policy_set_ids",
                     "allow_list_id",
                     "enforce_allow_list",
+                    "deny_list_id",
                     "restore_client_ip_header",
                     "routes"
                   ]
@@ -41114,6 +41350,7 @@
                 "allow_list_id": null,
                 "certificate_ids": [],
                 "default_pool_id": "0192f3a0-0000-7000-8000-000000000014",
+                "deny_list_id": null,
                 "enabled": true,
                 "enforce_allow_list": false,
                 "name": "web",

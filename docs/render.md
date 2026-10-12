@@ -84,6 +84,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Route with `path_prefix` / `path_exact` | `use_backend pool_<n> if { var(txn.host) -m str <host> } { path_beg <path> }` (host condition only when set) |
 | Route `redirect` and policy-set redirect rule | `http-request redirect location <target> code <n> if <conditions>` |
 | Service `allow_list_id` + `enforce_allow_list` | `tcp-request session reject if !{ src -f <dir>/lists/<name>.cidr }` |
+| Service `deny_list_id` | HTTP: `http-request deny deny_status 403 if { src -f <dir>/lists/<name>.cidr }` after the client address is restored; TCP: `tcp-request session reject if { src -f ... }` |
 | Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
 | Pool `persistence` (source IP) | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
@@ -105,7 +106,7 @@ Server names come from the member name or `<ip>-<port>` with dots and colons tur
 ## Request order in an HTTP frontend
 
 1. **Connection filter**: reject sources outside the allow list (only with `enforce_allow_list`).
-2. **Header hygiene**: restore the client address (below), delete any client `X-Forwarded-For`, set
+2. **Header hygiene**: restore the client address (below), then refuse the client if it is in the `deny_list_id` list (403), delete any client `X-Forwarded-For`, set
    `X-Forwarded-Proto`, store the lower-cased `Host` without port in `txn.host`. `option forwardfor`
    then adds the connection's source address.
 3. **Redirects**: HTTP to HTTPS, then policy-set rules in attachment order, then redirect routes by

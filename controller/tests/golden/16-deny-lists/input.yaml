@@ -1,0 +1,105 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+certificates:
+- id: c-wild
+  tenant_id: t-acme
+  name: origin-example-test
+  source: cloudflare_origin
+  sans:
+  - '*.example.test'
+  - example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/origin-example-test
+pools:
+- id: p-site
+  tenant_id: t-acme
+  name: site
+  members:
+  - address: 10.20.7.10
+    port: 8080
+- id: p-db
+  tenant_id: t-acme
+  name: db
+  members:
+  - address: 10.20.7.20
+    port: 5432
+policy_sets:
+- id: ps-cf
+  tenant_id: t-acme
+  name: cloudflare-ranges
+  kind: allow_list
+  managed_by: cloudflare
+  cidrs:
+  - 198.51.100.0/24
+  - 203.0.113.0/24
+- id: ps-geo
+  tenant_id: t-acme
+  name: blocked-countries
+  kind: allow_list
+  managed_by: geo
+  countries:
+  - XX
+  - YY
+  cidrs:
+  - 192.0.2.0/25
+  - 2001:db8:bad::/48
+- id: ps-rep
+  tenant_id: t-acme
+  name: bad-reputation
+  kind: allow_list
+  managed_by: reputation
+  feed: example-drop
+  cidrs:
+  - 203.0.113.64/26
+virtual_services:
+- id: v-web
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: public-site
+  protocol: http
+  vip: 192.0.2.40
+  ports:
+  - port: 443
+    tls: true
+  certificate_ids:
+  - c-wild
+  routes:
+  - match:
+      host: www.example.test
+    pool_id: p-site
+  allow_list_id: ps-cf
+  restore_client_ip_header: CF-Connecting-IP
+  deny_list_id: ps-geo
+- id: v-tcp
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: raw-service
+  protocol: tcp
+  vip: 192.0.2.41
+  ports:
+  - port: 5432
+  default_pool_id: p-db
+  deny_list_id: ps-rep

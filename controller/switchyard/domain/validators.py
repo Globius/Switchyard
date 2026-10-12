@@ -383,3 +383,56 @@ def host_port(host: str, port: int) -> str:
         '[2001:db8::5]:5556'
     """
     return f"[{host}]:{port}" if ":" in host and not host.startswith("[") else f"{host}:{port}"
+
+
+_COUNTRY = re.compile(r"^[A-Z]{2}$")
+_DISCOVERY_TAG = re.compile(r"^[a-z0-9_][a-z0-9_+.-]{0,63}$")
+
+
+def validate_discovery_tag(value: str) -> str:
+    """Validate a Proxmox tag used for pool discovery.
+
+    Proxmox tags are lower-case and may contain ``a-z``, ``0-9``, ``_``, ``+``, ``.`` and ``-``.
+    Which tags a tenant may use is a cross-object rule (:func:`discovery_tag_prefix`).
+
+    Example:
+        >>> validate_discovery_tag("sy-acme.web")
+        'sy-acme.web'
+        >>> validate_discovery_tag("Web Tier")
+        Traceback (most recent call last):
+            ...
+        ValueError: tag must be 1-64 characters: a-z, 0-9, '_', '+', '.' or '-'
+    """
+    if not _DISCOVERY_TAG.fullmatch(value):
+        raise ValueError("tag must be 1-64 characters: a-z, 0-9, '_', '+', '.' or '-'")
+    return value
+
+
+def discovery_tag_prefix(tenant_name: str) -> str:
+    """The prefix every discovery tag of a tenant must start with.
+
+    Proxmox tags are cluster-wide, so a tenant may only discover guests whose tag begins with
+    ``sy-<tenant>.``. Tenant names never contain a dot, so ``sy-acme.`` cannot be a prefix of the
+    tags of a tenant called ``acme-x`` (ADR 0145).
+
+    Example:
+        >>> discovery_tag_prefix("acme")
+        'sy-acme.'
+    """
+    return f"sy-{tenant_name}."
+
+
+def validate_country_code(value: str) -> str:
+    """Validate an ISO 3166 alpha-2 country code (upper case, two letters).
+
+    Example:
+        >>> validate_country_code("NL")
+        'NL'
+        >>> validate_country_code("nld")
+        Traceback (most recent call last):
+            ...
+        ValueError: country must be a two-letter upper-case ISO 3166 code
+    """
+    if not _COUNTRY.fullmatch(value):
+        raise ValueError("country must be a two-letter upper-case ISO 3166 code")
+    return value

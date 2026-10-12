@@ -36,6 +36,8 @@ UrlPath = Annotated[str, AfterValidator(v.validate_path)]
 Location = Annotated[str, AfterValidator(v.validate_location)]
 HeaderName = Annotated[str, AfterValidator(v.validate_header_name)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
+CountryCode = Annotated[str, AfterValidator(v.validate_country_code)]
+DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
 
 class HaMode(enum.StrEnum):
@@ -416,6 +418,8 @@ class VirtualService(TenantOwned):
         policy_set_ids: Redirect policy sets, applied before routing, in order.
         allow_list_id: Allow-list policy set (for example the Cloudflare ranges).
         enforce_allow_list: Reject connections from sources outside the allow list.
+        deny_list_id: Allow-list policy set whose networks are refused (for example a country or
+            reputation list, ADR 0147). Applies to the client address after restoration.
         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
             client address; honoured only when the connection source is in the allow list.
     """
@@ -432,6 +436,7 @@ class VirtualService(TenantOwned):
     policy_set_ids: tuple[UUID, ...] = ()
     allow_list_id: UUID | None = None
     enforce_allow_list: bool = False
+    deny_list_id: UUID | None = None
     restore_client_ip_header: HeaderName | None = None
 
     @model_validator(mode="after")
@@ -532,6 +537,32 @@ class PoolMember(Model):
         return f"{base}-{self.port}" if self.port is not None else base
 
 
+class PoolDiscovery(Model):
+    """Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).
+
+    The discovery job lists running guests with ``tag``, takes the first address of each that lies
+    in ``cidr`` and keeps ``Pool.members`` in step through a normal change set. Members that were
+    discovered keep the weight and admin state an operator gave them.
+
+    Attributes:
+        source: Where members come from; only ``proxmox_tag`` exists.
+        tag: The Proxmox tag; it must start with ``sy-<tenant>.``.
+        cidr: Backend network; a guest's address in it becomes the member address.
+        port: Member port.
+        weight: Weight of a newly discovered member.
+
+    Example:
+        >>> PoolDiscovery(tag="sy-acme.web", cidr="10.20.0.0/24", port=8080).weight
+        100
+    """
+
+    source: Literal["proxmox_tag"] = "proxmox_tag"
+    tag: DiscoveryTag
+    cidr: IPNetwork
+    port: Port
+    weight: int = Field(default=100, ge=0, le=256)
+
+
 class Pool(TenantOwned):
     """A group of backend servers.
 
@@ -545,7 +576,8 @@ class Pool(TenantOwned):
         passive_check: Also judge members by their live traffic. Needs a health monitor.
         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
             weight (HAProxy ``slowstart``). Needs a health monitor.
-        members: Backend servers, unique by name.
+        discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
+        members: Backend servers, unique by name. With ``discovery`` the job owns this list.
     """
 
     algorithm: Algorithm = Algorithm.ROUNDROBIN
@@ -555,6 +587,7 @@ class Pool(TenantOwned):
     tls_verify: bool = False
     passive_check: PassiveCheck | None = None
     slow_start_s: int | None = Field(default=None, ge=1, le=3600)
+    discovery: PoolDiscovery | None = None
     members: tuple[PoolMember, ...] = ()
 
     @model_validator(mode="after")
@@ -721,16 +754,45 @@ class RedirectPolicySet(TenantOwned):
 
 
 class AllowListPolicySet(TenantOwned):
-    """Source networks, for example the published Cloudflare ranges.
+    """Source networks: the published Cloudflare ranges, a country list or a reputation feed.
+
+    The same object serves as an allow list (``allow_list_id``) and as a deny list
+    (``deny_list_id``) of a virtual service.
 
     Attributes:
-        cidrs: Networks in the list.
-        managed_by: ``cloudflare`` when the daily ``sync_cloudflare_ips`` job maintains the list.
+        cidrs: Networks in the list. A list managed by ``geo`` or ``reputation`` may be empty
+            until its first sync; the sync never writes an empty list.
+        managed_by: ``cloudflare`` when the daily ``sync_cloudflare_ips`` job maintains the list;
+            ``geo`` or ``reputation`` when ``sync_ip_lists`` does (ADR 0147).
+        countries: ISO 3166 alpha-2 codes whose networks a ``geo`` list holds.
+        feed: Name of the operator-configured feed a ``reputation`` list mirrors.
+
+    Example:
+        >>> AllowListPolicySet(
+        ...     id=UUID(int=1), tenant_id=UUID(int=2), name="no-xx",
+        ...     managed_by="geo", countries=("XX",),
+        ... ).cidrs
+        ()
     """
 
     kind: Literal["allow_list"] = "allow_list"
-    cidrs: tuple[IPNetwork, ...] = Field(min_length=1)
-    managed_by: Literal["cloudflare"] | None = None
+    cidrs: tuple[IPNetwork, ...] = ()
+    managed_by: Literal["cloudflare", "geo", "reputation"] | None = None
+    countries: tuple[CountryCode, ...] = Field(default=(), max_length=250)
+    feed: Name | None = None
+
+    @model_validator(mode="after")
+    def _managed(self) -> Self:
+        geo, reputation = self.managed_by == "geo", self.managed_by == "reputation"
+        if not (geo or reputation) and not self.cidrs:
+            raise ValueError("cidrs needs at least one network")
+        if geo != bool(self.countries):
+            raise ValueError("countries is required for, and only valid with, managed_by geo")
+        if reputation != (self.feed is not None):
+            raise ValueError("feed is required for, and only valid with, managed_by reputation")
+        if len(set(self.countries)) != len(self.countries):
+            raise ValueError("countries must be unique")
+        return self
 
 
 PolicySet = Annotated[RedirectPolicySet | AllowListPolicySet, Field(discriminator="kind")]

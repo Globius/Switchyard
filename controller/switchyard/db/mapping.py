@@ -149,6 +149,8 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     kind="allow_list",
                     cidrs=[str(c) for c in ps.cidrs],
                     managed_by=ps.managed_by,
+                    countries=list(ps.countries) or None,
+                    feed=ps.feed,
                 )
             )
     for p in snapshot.pools:
@@ -165,6 +167,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 tls_verify=p.tls_verify,
                 passive_check=p.passive_check.model_dump(mode="json") if p.passive_check else None,
                 slow_start_s=p.slow_start_s,
+                discovery=p.discovery.model_dump(mode="json") if p.discovery else None,
             )
         )
     for s in snapshot.virtual_services:
@@ -181,6 +184,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 vip_pool_id=s.vip_pool_id,
                 default_pool_id=s.default_pool_id,
                 allow_list_id=s.allow_list_id,
+                deny_list_id=s.deny_list_id,
                 enforce_allow_list=s.enforce_allow_list,
                 restore_client_ip_header=s.restore_client_ip_header,
             )
@@ -412,6 +416,7 @@ def rows_to_snapshot(
                 "tls_verify": p.tls_verify,
                 "passive_check": p.passive_check,
                 "slow_start_s": p.slow_start_s,
+                "discovery": p.discovery,
                 "members": [
                     {
                         "id": mem.id,
@@ -439,6 +444,7 @@ def rows_to_snapshot(
                 "vip_pool_id": s.vip_pool_id,
                 "default_pool_id": s.default_pool_id,
                 "allow_list_id": s.allow_list_id,
+                "deny_list_id": s.deny_list_id,
                 "enforce_allow_list": s.enforce_allow_list,
                 "restore_client_ip_header": s.restore_client_ip_header,
                 "ports": [
@@ -490,4 +496,6 @@ def _policy_to_dict(ps: m.PolicySetRow) -> dict[str, Any]:
     else:
         base["cidrs"] = [_net(c) for c in ps.cidrs or []]
         base["managed_by"] = ps.managed_by
+        base["countries"] = tuple(ps.countries or ())
+        base["feed"] = ps.feed
     return base
