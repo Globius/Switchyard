@@ -25,7 +25,7 @@ grep -q '^ExecStartPre=$' /etc/systemd/system/vector.service.d/switchyard.conf |
 for k in net.ipv6.ip_nonlocal_bind net.ipv6.conf.all.forwarding net.ipv6.conf.all.accept_ra; do
   grep -q "^$k" /etc/sysctl.d/90-switchyard.conf || fail "sysctl $k"
 done
-# The auth sidecar slot (ADR 0081): idle unit, its user and directory; the binary only when the image was given one.
+# The auth sidecar slot (ADR 0083): idle unit, its user and directory; the binary only when the image was given one.
 id sy-auth >/dev/null 2>&1 || fail "user sy-auth"
 [ -d /etc/switchyard/auth ] || fail "/etc/switchyard/auth"
 [ -f /etc/systemd/system/sy-auth.service ] || fail "sy-auth unit"

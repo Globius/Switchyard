@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds the SE *container* template on a Proxmox node (run as root on the node). Usage:
 #   [BUILD_BRIDGE=vmbr0] [BUILD_NET_IP="ip=dhcp"|"ip=manual,ip6=auto" for an IPv6-only network] build-template.sh VMID AGENT_BIN DATAPLANE_BIN [STORAGE]
-# Optional: SIDECAR_DIR=se-image/dist installs the sidecars found there (oauth2-proxy, coraza-spoa, coreruleset.tar.gz; ADR 0081).
+# Optional: SIDECAR_DIR=se-image/dist installs the sidecars found there (oauth2-proxy, coraza-spoa, coreruleset.tar.gz; ADR 0083).
 # Creates a privileged Debian 13 container, runs provision.sh inside it, stops it and converts it to a
 # template. Clone it with VmSpec kind "lxc" (deploy request guest_kind: "lxc"; ADR 0055).
 #
@@ -24,7 +24,7 @@ for f in "$HERE"/files/*; do pct push "$VMID" "$f" "/opt/build/se-image/files/$(
 pct push "$VMID" "$AGENT" /opt/build/sy-agent --perms 755
 pct push "$VMID" "$DP" /opt/build/dataplaneapi --perms 755
 AUTHENV=""
-if [ -n "${SIDECAR_DIR:-}" ]; then   # sidecar slots (ADR 0081): whatever fetch-binaries.sh put in SIDECAR_DIR (se-image/dist)
+if [ -n "${SIDECAR_DIR:-}" ]; then   # sidecar slots (ADR 0083): whatever fetch-binaries.sh put in SIDECAR_DIR (se-image/dist)
   for f in oauth2-proxy oauth2-proxy.sha256 coraza-spoa coraza-spoa.sha256 coreruleset.tar.gz; do
     [ ! -f "$SIDECAR_DIR/$f" ] || pct push "$VMID" "$SIDECAR_DIR/$f" "/opt/build/$f" --perms 755
   done

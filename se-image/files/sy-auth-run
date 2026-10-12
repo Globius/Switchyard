@@ -1,6 +1,6 @@
 #!/bin/bash
 # Runs one oauth2-proxy per /etc/switchyard/auth/<name>.cfg, each with the secrets in <name>.env if that file exists.
-# Started by sy-auth.service when the agent has written auth configuration (ADR 0081). If any instance exits the script
+# Started by sy-auth.service when the agent has written auth configuration (ADR 0083). If any instance exits the script
 # exits, and systemd restarts them all: a half-running auth service would fail open or closed unpredictably.
 set -u
 shopt -s nullglob

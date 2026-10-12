@@ -1,4 +1,4 @@
-# ADR 0081: SE image sidecar slot, pinned versions, rolling upgrade and health score
+# ADR 0083: SE image sidecar slot, pinned versions, rolling upgrade and health score
 
 Status: Accepted
 

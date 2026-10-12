@@ -3,7 +3,7 @@ Description=Switchyard auth sidecar (one oauth2-proxy per configuration)
 Documentation=https://github.com/oauth2-proxy/oauth2-proxy
 After=network.target
 # Runs only on engines that have an auth configuration: the agent writes /etc/switchyard/auth/ from the signed bundle,
-# starts this unit when the first file appears and stops it when the last one is gone (agent/internal/bundle, ADR 0081).
+# starts this unit when the first file appears and stops it when the last one is gone (agent/internal/bundle, ADR 0083).
 ConditionPathExistsGlob=/etc/switchyard/auth/*.cfg
 ConditionPathExists=/usr/local/bin/oauth2-proxy
 

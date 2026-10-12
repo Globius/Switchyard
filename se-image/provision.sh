@@ -4,7 +4,7 @@
 #   HAPROXY_SERIES  HAProxy series from haproxy.debian.net (default 3.2)
 #   AGENT_BIN       path to a built sy-agent binary (required)
 #   DATAPLANE_BIN   path to the dataplaneapi binary (v3, from haproxytech releases)
-#   AUTH_PROXY_BIN  path to the oauth2-proxy binary (the auth sidecar slot, ADR 0081); optional
+#   AUTH_PROXY_BIN  path to the oauth2-proxy binary (the auth sidecar slot, ADR 0083); optional
 #   CORAZA_SPOA_BIN path to the coraza-spoa binary (the WAF slot); CRS_TARBALL the Core Rule Set tarball; both optional
 #   (a <file>.sha256 next to a binary, which fetch-binaries.sh writes, must match it)
 # Versions come from versions.env next to this script.
@@ -27,7 +27,7 @@ apt-get install -y -qq --no-install-recommends "haproxy=${HAPROXY_SERIES}.*" vec
 [ -z "${DATAPLANE_BIN:-}" ] || install -m 0755 "$DATAPLANE_BIN" /usr/bin/dataplaneapi
 
 install -m 0755 "$AGENT_BIN" /usr/local/bin/sy-agent
-# Sidecar slots (ADR 0081): the units and users always exist and stay idle (each needs configuration that only the agent
+# Sidecar slots (ADR 0083): the units and users always exist and stay idle (each needs configuration that only the agent
 # writes), the binaries are installed when supplied, so a template built without them can be given them later. Binaries
 # listed with a <file>.sha256 next to them must match it.
 verified() { # path: succeeds when there is no checksum file or it matches

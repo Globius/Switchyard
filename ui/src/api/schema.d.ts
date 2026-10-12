@@ -3425,6 +3425,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/status/se-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health score of every SE group and engine
+         * @description A score from 0 to 100 per engine and per SE group, with the reasons for every deduction (unreachable, drift, pool members down, HAProxy, BGP or VRRP trouble). A group with fewer than two healthy engines is capped at 50. Computed from the last observed status. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["se_group_health_api_v1_tenants__t__status_se_groups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/status/stream": {
         parameters: {
             query?: never;
@@ -7093,6 +7115,23 @@ export interface components {
              * @enum {string}
              */
             scope: "group" | "engine";
+        };
+        /**
+         * EngineHealthRead
+         * @description Health of one engine.
+         */
+        EngineHealthRead: {
+            /** Engine */
+            engine: string;
+            /**
+             * Engine Id
+             * Format: uuid
+             */
+            engine_id: string;
+            /** Reasons */
+            reasons: string[];
+            /** Score */
+            score: number;
         };
         /**
          * EngineIn
@@ -12045,6 +12084,25 @@ export interface components {
             peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
+        };
+        /**
+         * SeGroupHealthRead
+         * @description Health of one SE group: the mean of its engines, capped at 50 without two healthy engines.
+         */
+        SeGroupHealthRead: {
+            /** Engines */
+            engines: components["schemas"]["EngineHealthRead"][];
+            /** Name */
+            name: string;
+            /** Reasons */
+            reasons: string[];
+            /** Score */
+            score: number;
+            /**
+             * Se Group Id
+             * Format: uuid
+             */
+            se_group_id: string;
         };
         /**
          * SeGroupNetwork
@@ -31514,6 +31572,96 @@ export interface operations {
                      *     ]
                      */
                     "application/json": components["schemas"]["EngineStatusRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    se_group_health_api_v1_tenants__t__status_se_groups_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "engines": [
+                     *           {
+                     *             "engine": "edge-1",
+                     *             "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                     *             "reasons": [],
+                     *             "score": 100
+                     *           },
+                     *           {
+                     *             "engine": "edge-2",
+                     *             "engine_id": "0192f3a0-0000-7000-8000-000000000022",
+                     *             "reasons": [
+                     *               "1 drifted file(s)"
+                     *             ],
+                     *             "score": 80
+                     *           }
+                     *         ],
+                     *         "name": "edge",
+                     *         "reasons": [
+                     *           "1 of 2 engines not healthy"
+                     *         ],
+                     *         "score": 90,
+                     *         "se_group_id": "0192f3a0-0000-7000-8000-000000000012"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["SeGroupHealthRead"][];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
