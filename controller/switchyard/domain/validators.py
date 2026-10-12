@@ -210,6 +210,38 @@ def validate_header_name(value: str) -> str:
     return value
 
 
+def validate_cookie_name(value: str) -> str:
+    """Validate a cookie name (letters, digits, ``_`` and ``-``; 1-64 characters).
+
+    Example:
+        >>> validate_cookie_name("SY_SRV")
+        'SY_SRV'
+        >>> validate_cookie_name("a;b")
+        Traceback (most recent call last):
+            ...
+        ValueError: cookie name must be 1-64 characters of letters, digits, '_' and '-'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", value):
+        raise ValueError("cookie name must be 1-64 characters of letters, digits, '_' and '-'")
+    return value
+
+
+def validate_match_text(value: str) -> str:
+    """Validate literal text a health check looks for (letters, digits and ``._:/-``; 1-128).
+
+    Example:
+        >>> validate_match_text("status:ok")
+        'status:ok'
+        >>> validate_match_text("a b")
+        Traceback (most recent call last):
+            ...
+        ValueError: match text must be 1-128 characters of letters, digits and '._:/-'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9._:/-]{1,128}", value):
+        raise ValueError("match text must be 1-128 characters of letters, digits and '._:/-'")
+    return value
+
+
 def validate_interface(value: str) -> str:
     """Validate a network interface name (Linux ``IFNAMSIZ``: at most 15 characters).
 

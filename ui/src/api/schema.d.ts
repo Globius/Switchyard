@@ -4556,6 +4556,20 @@ export interface components {
          */
         HaMode: "bgp" | "vrrp";
         /**
+         * HeaderExpect
+         * @description A response header the health check must see, optionally with an exact value.
+         *
+         *     Example:
+         *         >>> HeaderExpect(name="X-Health", value="ok").value
+         *         'ok'
+         */
+        HeaderExpect: {
+            /** Name */
+            name: string;
+            /** Value */
+            value?: string | null;
+        };
+        /**
          * Health
          * @description Liveness answer.
          */
@@ -4581,6 +4595,8 @@ export interface components {
          *         fall: Consecutive failures to mark a server down.
          *         http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.
          *         udp: Optional probe details; only valid for ``udp``.
+         *         preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or
+         *             ``mysql``. Without one a ``tcp`` monitor only connects.
          */
         HealthMonitor: {
             /**
@@ -4603,6 +4619,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -4643,6 +4661,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -4667,6 +4687,8 @@ export interface components {
             name?: string | null;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /** Rise */
             rise?: number | null;
             /** Timeout S */
@@ -4706,6 +4728,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -4812,6 +4836,9 @@ export interface components {
          * @description HTTP health check request and expectation.
          */
         HttpCheck: {
+            /** Expect Body */
+            expect_body?: string | null;
+            expect_header?: components["schemas"]["HeaderExpect"] | null;
             /**
              * Expect Status
              * @default []
@@ -6010,6 +6037,79 @@ export interface components {
             verb: "apply" | "apply_bypass" | "approve" | "cancel" | "change" | "create" | "deploy" | "disable" | "edit" | "enable" | "list" | "manage" | "read" | "reject" | "request_approval" | "retry" | "rollback" | "set_state" | "write";
         };
         /**
+         * PersistenceCookie
+         * @description Pin a client to one member with an HTTP cookie (HAProxy ``cookie``), ``http`` pools only.
+         *
+         *     Attributes:
+         *         name: Cookie name.
+         *         mode: ``insert`` makes HAProxy set the cookie; ``rewrite`` rewrites a cookie the member
+         *             sets; ``prefix`` prefixes the member's own cookie value.
+         *         ttl_s: ``insert`` only: lifetime of the cookie in seconds (``maxlife``); omitted gives a
+         *             session cookie.
+         *         secure: ``insert`` only: add the ``Secure`` attribute.
+         *         http_only: ``insert`` only: add the ``HttpOnly`` attribute.
+         *
+         *     Example:
+         *         >>> PersistenceCookie(name="SY_SRV", mode="insert", ttl_s=3600).mode
+         *         'insert'
+         */
+        PersistenceCookie: {
+            /**
+             * Http Only
+             * @default true
+             */
+            http_only: boolean;
+            /**
+             * Mode
+             * @default insert
+             * @enum {string}
+             */
+            mode: "insert" | "rewrite" | "prefix";
+            /** Name */
+            name: string;
+            /**
+             * Secure
+             * @default false
+             */
+            secure: boolean;
+            /** Ttl S */
+            ttl_s?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "http_cookie";
+        };
+        /**
+         * PersistenceHeader
+         * @description Pin requests that carry the same value of a header to one member (``stick on hdr``).
+         *
+         *     ``http`` pools only. Requests without the header fall back to the load-balancing algorithm.
+         *
+         *     Example:
+         *         >>> PersistenceHeader(header="X-Session").timeout_s
+         *         1800
+         */
+        PersistenceHeader: {
+            /** Header */
+            header: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Timeout S
+             * @default 1800
+             */
+            timeout_s: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "header";
+        };
+        /**
          * PersistenceSourceIp
          * @description Pin a client address to one member (HAProxy ``stick on src``).
          */
@@ -6025,11 +6125,50 @@ export interface components {
              */
             timeout_s: number;
             /**
-             * Type
-             * @default source_ip
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             type: "source_ip";
+        };
+        /**
+         * PersistenceUri
+         * @description Pin requests with the same URI path, or the same query parameter, to one member.
+         *
+         *     ``http`` pools only.
+         *
+         *     Attributes:
+         *         source: ``path`` sticks on the request path; ``url_param`` on the value of query
+         *             parameter ``param``.
+         *         param: The query parameter name, required for ``url_param`` and forbidden for ``path``.
+         *
+         *     Example:
+         *         >>> PersistenceUri(source="url_param", param="session").source
+         *         'url_param'
+         */
+        PersistenceUri: {
+            /** Param */
+            param?: string | null;
+            /**
+             * Source
+             * @default path
+             * @enum {string}
+             */
+            source: "path" | "url_param";
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Timeout S
+             * @default 1800
+             */
+            timeout_s: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "uri";
         };
         /**
          * PlacementRead
@@ -6060,11 +6199,16 @@ export interface components {
          *         passive_check: Also judge members by their live traffic. Needs a health monitor.
          *         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
          *             weight (HAProxy ``slowstart``). Needs a health monitor.
+         *         send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
+         *         client_certificate_id: Server certificate HAProxy presents to members (backend
+         *             mutual TLS). Needs ``tls``.
          *         members: Backend servers, unique by name.
          */
         Pool: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -6080,7 +6224,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**
@@ -6108,6 +6255,8 @@ export interface components {
         PoolCreate: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -6118,7 +6267,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**
@@ -6143,6 +6295,8 @@ export interface components {
          *         weight: 0-256; 0 takes no new connections.
          *         admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.
          *         name: HAProxy server name; derived from address and port when omitted.
+         *         backup: A backup member takes traffic only when every non-backup member is down.
+         *         maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.
          */
         PoolMember: {
             /** Address */
@@ -6150,10 +6304,17 @@ export interface components {
             /** @default enabled */
             admin_state: components["schemas"]["AdminState"];
             /**
+             * Backup
+             * @default false
+             */
+            backup: boolean;
+            /**
              * Id
              * Format: uuid
              */
             id: string;
+            /** Maxconn */
+            maxconn?: number | null;
             /** Name */
             name?: string | null;
             /** Port */
@@ -6167,6 +6328,8 @@ export interface components {
         /** PoolPatch */
         PoolPatch: {
             algorithm?: components["schemas"]["Algorithm"] | null;
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /** Members */
@@ -6174,7 +6337,10 @@ export interface components {
             /** Name */
             name?: string | null;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /** Tls */
@@ -6194,6 +6360,8 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
             /** Health Monitor Id */
@@ -6211,7 +6379,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**

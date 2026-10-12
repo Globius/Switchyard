@@ -35,6 +35,8 @@ Port = Annotated[int, AfterValidator(v.validate_port)]
 UrlPath = Annotated[str, AfterValidator(v.validate_path)]
 Location = Annotated[str, AfterValidator(v.validate_location)]
 HeaderName = Annotated[str, AfterValidator(v.validate_header_name)]
+CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
+MatchText = Annotated[str, AfterValidator(v.validate_match_text)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
 
 
@@ -471,6 +473,88 @@ class PersistenceSourceIp(Model):
     table_size: int = Field(default=100_000, ge=1_000, le=10_000_000)
 
 
+class PersistenceCookie(Model):
+    """Pin a client to one member with an HTTP cookie (HAProxy ``cookie``), ``http`` pools only.
+
+    Attributes:
+        name: Cookie name.
+        mode: ``insert`` makes HAProxy set the cookie; ``rewrite`` rewrites a cookie the member
+            sets; ``prefix`` prefixes the member's own cookie value.
+        ttl_s: ``insert`` only: lifetime of the cookie in seconds (``maxlife``); omitted gives a
+            session cookie.
+        secure: ``insert`` only: add the ``Secure`` attribute.
+        http_only: ``insert`` only: add the ``HttpOnly`` attribute.
+
+    Example:
+        >>> PersistenceCookie(name="SY_SRV", mode="insert", ttl_s=3600).mode
+        'insert'
+    """
+
+    type: Literal["http_cookie"] = "http_cookie"
+    name: CookieName
+    mode: Literal["insert", "rewrite", "prefix"] = "insert"
+    ttl_s: int | None = Field(default=None, ge=1, le=31_536_000)
+    secure: bool = False
+    http_only: bool = True
+
+    @model_validator(mode="after")
+    def _insert_only(self) -> Self:
+        if self.mode != "insert" and (self.ttl_s is not None or self.secure):
+            raise ValueError("ttl_s and secure only apply to mode insert")
+        return self
+
+
+class PersistenceHeader(Model):
+    """Pin requests that carry the same value of a header to one member (``stick on hdr``).
+
+    ``http`` pools only. Requests without the header fall back to the load-balancing algorithm.
+
+    Example:
+        >>> PersistenceHeader(header="X-Session").timeout_s
+        1800
+    """
+
+    type: Literal["header"] = "header"
+    header: HeaderName
+    timeout_s: int = Field(default=1800, ge=1, le=86_400)
+    table_size: int = Field(default=100_000, ge=1_000, le=10_000_000)
+
+
+class PersistenceUri(Model):
+    """Pin requests with the same URI path, or the same query parameter, to one member.
+
+    ``http`` pools only.
+
+    Attributes:
+        source: ``path`` sticks on the request path; ``url_param`` on the value of query
+            parameter ``param``.
+        param: The query parameter name, required for ``url_param`` and forbidden for ``path``.
+
+    Example:
+        >>> PersistenceUri(source="url_param", param="session").source
+        'url_param'
+    """
+
+    type: Literal["uri"] = "uri"
+    source: Literal["path", "url_param"] = "path"
+    param: Name | None = None
+    timeout_s: int = Field(default=1800, ge=1, le=86_400)
+    table_size: int = Field(default=100_000, ge=1_000, le=10_000_000)
+
+    @model_validator(mode="after")
+    def _param(self) -> Self:
+        if (self.source == "url_param") != (self.param is not None):
+            raise ValueError("param is required for source url_param and forbidden for path")
+        return self
+
+
+Persistence = Annotated[
+    PersistenceSourceIp | PersistenceCookie | PersistenceHeader | PersistenceUri,
+    Field(discriminator="type"),
+]
+HTTP_ONLY_PERSISTENCE = (PersistenceCookie, PersistenceHeader, PersistenceUri)
+
+
 class PassiveCheck(Model):
     """Judge members by their real traffic as well as by the health monitor (HAProxy ``observe``).
 
@@ -501,6 +585,8 @@ class PoolMember(Model):
         weight: 0-256; 0 takes no new connections.
         admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.
         name: HAProxy server name; derived from address and port when omitted.
+        backup: A backup member takes traffic only when every non-backup member is down.
+        maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.
     """
 
     id: UUID
@@ -509,6 +595,8 @@ class PoolMember(Model):
     weight: int = Field(default=100, ge=0, le=256)
     admin_state: AdminState = AdminState.ENABLED
     name: Name | None = None
+    backup: bool = False
+    maxconn: int | None = Field(default=None, ge=1, le=1_000_000)
 
     @property
     def server_name(self) -> str:
@@ -538,16 +626,21 @@ class Pool(TenantOwned):
         passive_check: Also judge members by their live traffic. Needs a health monitor.
         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
             weight (HAProxy ``slowstart``). Needs a health monitor.
+        send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
+        client_certificate_id: Server certificate HAProxy presents to members (backend
+            mutual TLS). Needs ``tls``.
         members: Backend servers, unique by name.
     """
 
     algorithm: Algorithm = Algorithm.ROUNDROBIN
-    persistence: PersistenceSourceIp | None = None
+    persistence: Persistence | None = None
     health_monitor_id: UUID | None = None
     tls: bool = False
     tls_verify: bool = False
     passive_check: PassiveCheck | None = None
     slow_start_s: int | None = Field(default=None, ge=1, le=3600)
+    send_proxy: Literal["v1", "v2"] | None = None
+    client_certificate_id: UUID | None = None
     members: tuple[PoolMember, ...] = ()
 
     @model_validator(mode="after")
@@ -557,7 +650,21 @@ class Pool(TenantOwned):
             raise ValueError("pool member names must be unique")
         if self.tls_verify and not self.tls:
             raise ValueError("tls_verify requires tls")
+        if self.client_certificate_id is not None and not self.tls:
+            raise ValueError("client_certificate_id requires tls")
         return self
+
+
+class HeaderExpect(Model):
+    """A response header the health check must see, optionally with an exact value.
+
+    Example:
+        >>> HeaderExpect(name="X-Health", value="ok").value
+        'ok'
+    """
+
+    name: HeaderName
+    value: MatchText | None = None
 
 
 class HttpCheck(Model):
@@ -567,11 +674,17 @@ class HttpCheck(Model):
     path: UrlPath = "/"
     host: Hostname | None = None
     expect_status: tuple[int, ...] = ()
+    expect_body: MatchText | None = None
+    expect_header: HeaderExpect | None = None
 
     @model_validator(mode="after")
     def _codes(self) -> Self:
         if any(not 100 <= c <= 599 for c in self.expect_status):
             raise ValueError("expect_status codes must be between 100 and 599")
+        chosen = [bool(self.expect_status), self.expect_body is not None]
+        chosen.append(self.expect_header is not None)
+        if sum(chosen) > 1:
+            raise ValueError("use only one of expect_status, expect_body and expect_header")
         return self
 
 
@@ -594,6 +707,9 @@ class UdpCheck(Model):
     require_reply: bool = False
 
 
+TcpPreset = Literal["redis", "smtp", "ldap", "mysql"]
+
+
 class HealthMonitor(TenantOwned):
     """Active health check, shareable across pools.
 
@@ -607,6 +723,8 @@ class HealthMonitor(TenantOwned):
         fall: Consecutive failures to mark a server down.
         http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.
         udp: Optional probe details; only valid for ``udp``.
+        preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or
+            ``mysql``. Without one a ``tcp`` monitor only connects.
     """
 
     type: MonitorType
@@ -617,9 +735,12 @@ class HealthMonitor(TenantOwned):
     fall: int = Field(default=3, ge=1, le=100)
     http: HttpCheck | None = None
     udp: UdpCheck | None = None
+    preset: TcpPreset | None = None
 
     @model_validator(mode="after")
     def _http(self) -> Self:
+        if self.preset is not None and self.type is not MonitorType.TCP:
+            raise ValueError("preset is only valid on a tcp monitor")
         if self.type is MonitorType.HTTP and self.http is None:
             raise ValueError("an http monitor needs an http block")
         if self.type is not MonitorType.HTTP and self.http is not None:

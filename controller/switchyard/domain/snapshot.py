@@ -20,6 +20,7 @@ from switchyard.domain import validators as v
 from switchyard.domain.errors import DomainValidationError, Problem
 from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDDEN_SERVICE_FIELDS
 from switchyard.domain.models import (
+    HTTP_ONLY_PERSISTENCE,
     Algorithm,
     AllowListPolicySet,
     BgpProfile,
@@ -101,6 +102,7 @@ class Snapshot(Model):
             if s.allow_list_id:
                 policy_ids.add(s.allow_list_id)
         pools = tuple(p for p in self.pools if p.id in pool_ids)
+        cert_ids.update(p.client_certificate_id for p in pools if p.client_certificate_id)
         monitor_ids = {p.health_monitor_id for p in pools if p.health_monitor_id}
         network_ids = {n.network_id for n in group.networks}
         pool_networks = {p.network_id for p in self.vip_pools if p.id in _vip_pool_ids(services)}
@@ -251,6 +253,25 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                                 "member has no port and its health monitor has no port to check",
                             )
                         )
+
+    for pool in snapshot.pools:
+        if pool.client_certificate_id is None:
+            continue
+        cert = check_ref(
+            f"pools.{pool.name}.client_certificate_id",
+            pool.tenant_id,
+            "certificate",
+            pool.client_certificate_id,
+            certs,
+        )
+        if cert is not None and cert.purpose != "server":
+            problems.append(
+                Problem(
+                    f"pools.{pool.name}.client_certificate_id",
+                    "wrong_certificate_purpose",
+                    f"certificate {cert.name} is a client CA, not a certificate with a key",
+                )
+            )
 
     pool_protocols: dict[UUID, set[Protocol]] = defaultdict(set)
     listeners: list[v.Listener] = []
@@ -487,7 +508,7 @@ def _check_udp_pools(
                         "persistence is not valid on a udp pool; use the source algorithm",
                     )
                 )
-            for field in ("passive_check", "slow_start_s"):
+            for field in ("passive_check", "slow_start_s", "send_proxy", "client_certificate_id"):
                 if getattr(pool, field) is not None:
                     problems.append(
                         Problem(
@@ -513,6 +534,15 @@ def _check_udp_pools(
                             "a member of a udp pool needs a port",
                         )
                     )
+                for field in ("backup", "maxconn"):
+                    if getattr(member, field):
+                        problems.append(
+                            Problem(
+                                f"{base}.members.{member.server_name}.{field}",
+                                "udp_field_not_allowed",
+                                f"{field} is not valid on a member of a udp pool",
+                            )
+                        )
             if monitor is not None and monitor.type is not MonitorType.UDP:
                 problems.append(
                     Problem(
@@ -544,9 +574,19 @@ def _check_live_traffic(
 ) -> None:
     """Passive checks and slow start build on the health monitor; ``layer7`` needs HTTP.
 
-    Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``) and
-    ``passive_check_layer7_needs_http``.
+    Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``),
+    ``passive_check_layer7_needs_http`` and ``persistence_needs_http`` (cookie, header and URI
+    persistence on a pool a ``tcp`` service uses).
     """
+    if isinstance(pool.persistence, HTTP_ONLY_PERSISTENCE) and Protocol.TCP in protocols:
+        problems.append(
+            Problem(
+                f"{base}.persistence",
+                "persistence_needs_http",
+                f"{pool.persistence.type} persistence needs a pool used only by http services; "
+                "use source_ip for tcp",
+            )
+        )
     for field in ("passive_check", "slow_start_s"):
         if getattr(pool, field) is not None and monitor is None:
             problems.append(

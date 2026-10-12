@@ -48,7 +48,7 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Certificates: import, PKCS#12 (ADR 0043), replace (ADR 0044), ACME DNS-01 (incl. step-ca), Origin CA, renew job (M5) | done | | |
 | OCSP stapling, cipher and TLS-version profiles | done | `tls_profile` on ports, `ocsp_stapling` on certificates (ADR 0067) | |
 | mTLS: client certificate verification | done | `client_ca` certificates and `client_ca_id` on ports (ADR 0070) | |
-| mTLS to the backend members | missing | *not built*: client certificate on server lines (ADR 0070) | Pool field, bundle, golden case |
+| mTLS to the backend members | done | `client_certificate_id` on a TLS pool; certificate in the bundle (ADR 0107) | |
 | Cloudflare-only allow list sync job | done | | |
 | Cloudflare DNS record created from a virtual service | partial | Adapter has DNS calls; no service flow uses them (01 phase 2) | A job or change-set hook plus a model flag |
 | Login: OIDC, SAML, break-glass, sessions, refresh (T1, G1-2, G1-4, G1-7) | done | | |

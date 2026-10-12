@@ -3495,6 +3495,32 @@
         "title": "HaMode",
         "type": "string"
       },
+      "HeaderExpect": {
+        "additionalProperties": false,
+        "description": "A response header the health check must see, optionally with an exact value.\n\nExample:\n    >>> HeaderExpect(name=\"X-Health\", value=\"ok\").value\n    'ok'",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "HeaderExpect",
+        "type": "object"
+      },
       "Health": {
         "additionalProperties": false,
         "description": "Liveness answer.",
@@ -3511,7 +3537,7 @@
       },
       "HealthMonitor": {
         "additionalProperties": false,
-        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.\n    udp: Optional probe details; only valid for ``udp``.",
+        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.\n    udp: Optional probe details; only valid for ``udp``.\n    preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or\n        ``mysql``. Without one a ``tcp`` monitor only connects.",
         "properties": {
           "fall": {
             "default": 3,
@@ -3556,6 +3582,23 @@
               }
             ],
             "title": "Port"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redis",
+                  "smtp",
+                  "ldap",
+                  "mysql"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rise": {
             "default": 2,
@@ -3646,6 +3689,23 @@
               }
             ],
             "title": "Port"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redis",
+                  "smtp",
+                  "ldap",
+                  "mysql"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rise": {
             "default": 2,
@@ -3738,6 +3798,23 @@
               }
             ],
             "title": "Port"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redis",
+                  "smtp",
+                  "ldap",
+                  "mysql"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rise": {
             "anyOf": [
@@ -3844,6 +3921,23 @@
               }
             ],
             "title": "Port"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redis",
+                  "smtp",
+                  "ldap",
+                  "mysql"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rise": {
             "default": 2,
@@ -4105,6 +4199,27 @@
         "additionalProperties": false,
         "description": "HTTP health check request and expectation.",
         "properties": {
+          "expect_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expect Body"
+          },
+          "expect_header": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeaderExpect"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "expect_status": {
             "default": [],
             "items": {
@@ -6926,6 +7041,95 @@
         "title": "PermissionRead",
         "type": "object"
       },
+      "PersistenceCookie": {
+        "additionalProperties": false,
+        "description": "Pin a client to one member with an HTTP cookie (HAProxy ``cookie``), ``http`` pools only.\n\nAttributes:\n    name: Cookie name.\n    mode: ``insert`` makes HAProxy set the cookie; ``rewrite`` rewrites a cookie the member\n        sets; ``prefix`` prefixes the member's own cookie value.\n    ttl_s: ``insert`` only: lifetime of the cookie in seconds (``maxlife``); omitted gives a\n        session cookie.\n    secure: ``insert`` only: add the ``Secure`` attribute.\n    http_only: ``insert`` only: add the ``HttpOnly`` attribute.\n\nExample:\n    >>> PersistenceCookie(name=\"SY_SRV\", mode=\"insert\", ttl_s=3600).mode\n    'insert'",
+        "properties": {
+          "http_only": {
+            "default": true,
+            "title": "Http Only",
+            "type": "boolean"
+          },
+          "mode": {
+            "default": "insert",
+            "enum": [
+              "insert",
+              "rewrite",
+              "prefix"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secure": {
+            "default": false,
+            "title": "Secure",
+            "type": "boolean"
+          },
+          "ttl_s": {
+            "anyOf": [
+              {
+                "maximum": 31536000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttl S"
+          },
+          "type": {
+            "const": "http_cookie",
+            "default": "http_cookie",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PersistenceCookie",
+        "type": "object"
+      },
+      "PersistenceHeader": {
+        "additionalProperties": false,
+        "description": "Pin requests that carry the same value of a header to one member (``stick on hdr``).\n\n``http`` pools only. Requests without the header fall back to the load-balancing algorithm.\n\nExample:\n    >>> PersistenceHeader(header=\"X-Session\").timeout_s\n    1800",
+        "properties": {
+          "header": {
+            "title": "Header",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 10000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          },
+          "timeout_s": {
+            "default": 1800,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Timeout S",
+            "type": "integer"
+          },
+          "type": {
+            "const": "header",
+            "default": "header",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "header"
+        ],
+        "title": "PersistenceHeader",
+        "type": "object"
+      },
       "PersistenceSourceIp": {
         "additionalProperties": false,
         "description": "Pin a client address to one member (HAProxy ``stick on src``).",
@@ -6952,6 +7156,54 @@
           }
         },
         "title": "PersistenceSourceIp",
+        "type": "object"
+      },
+      "PersistenceUri": {
+        "additionalProperties": false,
+        "description": "Pin requests with the same URI path, or the same query parameter, to one member.\n\n``http`` pools only.\n\nAttributes:\n    source: ``path`` sticks on the request path; ``url_param`` on the value of query\n        parameter ``param``.\n    param: The query parameter name, required for ``url_param`` and forbidden for ``path``.\n\nExample:\n    >>> PersistenceUri(source=\"url_param\", param=\"session\").source\n    'url_param'",
+        "properties": {
+          "param": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param"
+          },
+          "source": {
+            "default": "path",
+            "enum": [
+              "path",
+              "url_param"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 10000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          },
+          "timeout_s": {
+            "default": 1800,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Timeout S",
+            "type": "integer"
+          },
+          "type": {
+            "const": "uri",
+            "default": "uri",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "PersistenceUri",
         "type": "object"
       },
       "PlacementRead": {
@@ -6990,11 +7242,23 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    members: Backend servers, unique by name.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.\n    client_certificate_id: Server certificate HAProxy presents to members (backend\n        mutual TLS). Needs ``tls``.\n    members: Backend servers, unique by name.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
+          },
+          "client_certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Certificate Id"
           },
           "health_monitor_id": {
             "anyOf": [
@@ -7038,12 +7302,50 @@
           "persistence": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PersistenceSourceIp"
+                "discriminator": {
+                  "mapping": {
+                    "header": "#/components/schemas/PersistenceHeader",
+                    "http_cookie": "#/components/schemas/PersistenceCookie",
+                    "source_ip": "#/components/schemas/PersistenceSourceIp",
+                    "uri": "#/components/schemas/PersistenceUri"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PersistenceSourceIp"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceCookie"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceHeader"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceUri"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Persistence"
+          },
+          "send_proxy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "v1",
+                  "v2"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Proxy"
           },
           "slow_start_s": {
             "anyOf": [
@@ -7095,6 +7397,18 @@
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
           },
+          "client_certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Certificate Id"
+          },
           "health_monitor_id": {
             "anyOf": [
               {
@@ -7132,12 +7446,50 @@
           "persistence": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PersistenceSourceIp"
+                "discriminator": {
+                  "mapping": {
+                    "header": "#/components/schemas/PersistenceHeader",
+                    "http_cookie": "#/components/schemas/PersistenceCookie",
+                    "source_ip": "#/components/schemas/PersistenceSourceIp",
+                    "uri": "#/components/schemas/PersistenceUri"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PersistenceSourceIp"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceCookie"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceHeader"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceUri"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Persistence"
+          },
+          "send_proxy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "v1",
+                  "v2"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Proxy"
           },
           "slow_start_s": {
             "anyOf": [
@@ -7171,7 +7523,7 @@
       },
       "PoolMember": {
         "additionalProperties": false,
-        "description": "One backend server.\n\nAttributes:\n    id: Stable id, used by the runtime enable/disable/drain endpoint.\n    address: Backend IP address.\n    port: Backend port, or ``None`` to reuse the port the client connected to.\n    weight: 0-256; 0 takes no new connections.\n    admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.\n    name: HAProxy server name; derived from address and port when omitted.",
+        "description": "One backend server.\n\nAttributes:\n    id: Stable id, used by the runtime enable/disable/drain endpoint.\n    address: Backend IP address.\n    port: Backend port, or ``None`` to reuse the port the client connected to.\n    weight: 0-256; 0 takes no new connections.\n    admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.\n    name: HAProxy server name; derived from address and port when omitted.\n    backup: A backup member takes traffic only when every non-backup member is down.\n    maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.",
         "properties": {
           "address": {
             "anyOf": [
@@ -7190,10 +7542,28 @@
             "$ref": "#/components/schemas/AdminState",
             "default": "enabled"
           },
+          "backup": {
+            "default": false,
+            "title": "Backup",
+            "type": "boolean"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "maxconn": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxconn"
           },
           "name": {
             "anyOf": [
@@ -7245,6 +7615,18 @@
               }
             ]
           },
+          "client_certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Certificate Id"
+          },
           "health_monitor_id": {
             "anyOf": [
               {
@@ -7295,12 +7677,50 @@
           "persistence": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PersistenceSourceIp"
+                "discriminator": {
+                  "mapping": {
+                    "header": "#/components/schemas/PersistenceHeader",
+                    "http_cookie": "#/components/schemas/PersistenceCookie",
+                    "source_ip": "#/components/schemas/PersistenceSourceIp",
+                    "uri": "#/components/schemas/PersistenceUri"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PersistenceSourceIp"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceCookie"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceHeader"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceUri"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Persistence"
+          },
+          "send_proxy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "v1",
+                  "v2"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Proxy"
           },
           "slow_start_s": {
             "anyOf": [
@@ -7355,6 +7775,18 @@
             "title": "Changed Fields",
             "type": "array"
           },
+          "client_certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Certificate Id"
+          },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
             "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
@@ -7401,12 +7833,50 @@
           "persistence": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PersistenceSourceIp"
+                "discriminator": {
+                  "mapping": {
+                    "header": "#/components/schemas/PersistenceHeader",
+                    "http_cookie": "#/components/schemas/PersistenceCookie",
+                    "source_ip": "#/components/schemas/PersistenceSourceIp",
+                    "uri": "#/components/schemas/PersistenceUri"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PersistenceSourceIp"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceCookie"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceHeader"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceUri"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Persistence"
+          },
+          "send_proxy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "v1",
+                  "v2"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Proxy"
           },
           "slow_start_s": {
             "anyOf": [

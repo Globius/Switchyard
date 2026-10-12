@@ -55,6 +55,14 @@ EXPORTER_PORT = 8405
 CERT_DIR = "/etc/switchyard/certs"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 
+#: Protocol-aware health checks HAProxy ships, by monitor ``preset`` (ADR 0108).
+_TCP_PRESETS = {
+    "redis": "option redis-check",
+    "smtp": "option smtpchk",
+    "ldap": "option ldap-check",
+    "mysql": "option mysql-check",
+}
+
 #: TLS 1.3 cipher suites (Mozilla server-side TLS, 5.7).
 _TLS13_SUITES = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
 #: TLS 1.2 ciphers of the ``intermediate`` profile (forward secrecy, AEAD).
@@ -506,19 +514,46 @@ class _Renderer:
         monitor = self.monitors.get(pool.health_monitor_id) if pool.health_monitor_id else None
         lines: list[str] = [f"mode {mode}", f"balance {pool.algorithm.value}"]
         if pool.persistence is not None:
-            lines += [
-                f"stick-table type ipv6 size {pool.persistence.table_size} "
-                f"expire {pool.persistence.timeout_s}s",
-                "stick on src",
-            ]
+            lines += self._persistence_lines(pool.persistence)
         if monitor is not None:
             lines += self._monitor_lines(monitor)
         servers = sorted(self._server(pool, m, monitor, mode) for m in pool.members)
         return {"name": self._backend_name(pool.id), "lines": lines, "servers": servers}
 
     @staticmethod
+    def _persistence_lines(persistence: dm.Persistence) -> list[str]:
+        """Backend lines for one persistence profile (ADR 0105)."""
+        if isinstance(persistence, dm.PersistenceCookie):
+            line = f"cookie {esc.cookie_name(persistence.name)} {persistence.mode}"
+            if persistence.mode == "insert":
+                line += " indirect nocache"
+                if persistence.ttl_s is not None:
+                    line += f" maxlife {persistence.ttl_s}s"
+                if persistence.secure:
+                    line += " secure"
+                if persistence.http_only:
+                    line += " httponly"
+            return [line]
+        if isinstance(persistence, dm.PersistenceSourceIp):
+            table = f"type ipv6 size {persistence.table_size} expire {persistence.timeout_s}s"
+            key = "src"
+        else:
+            table = (
+                f"type string len 128 size {persistence.table_size} expire {persistence.timeout_s}s"
+            )
+            if isinstance(persistence, dm.PersistenceHeader):
+                key = f"req.hdr({esc.header_name(persistence.header)})"
+            elif persistence.source == "path":
+                key = "path"
+            else:
+                key = f"url_param({esc.ident(_need(persistence.param, 'url parameter'))})"
+        return [f"stick-table {table}", f"stick on {key}"]
+
+    @staticmethod
     def _monitor_lines(monitor: dm.HealthMonitor) -> list[str]:
         lines: list[str] = []
+        if monitor.preset is not None:
+            lines.append(_TCP_PRESETS[monitor.preset])
         if monitor.type is dm.MonitorType.HTTP:
             http = _need(monitor.http, "http monitor block")
             lines.append("option httpchk")
@@ -529,27 +564,38 @@ class _Renderer:
             if http.expect_status:
                 codes = ",".join(str(c) for c in sorted(set(http.expect_status)))
                 lines.append(f"http-check expect status {codes}")
+            elif http.expect_body is not None:
+                lines.append(f"http-check expect string {esc.match_text(http.expect_body)}")
+            elif http.expect_header is not None:
+                expected = http.expect_header
+                line = f"http-check expect hdr name {esc.header_name(expected.name)}"
+                if expected.value is not None:
+                    line += f" value {esc.match_text(expected.value)}"
+                lines.append(line)
         lines += [
             f"timeout check {monitor.timeout_s}s",
             f"default-server inter {monitor.interval_s}s fall {monitor.fall} rise {monitor.rise}",
         ]
         return lines
 
-    @staticmethod
     def _server(
-        pool: dm.Pool, member: dm.PoolMember, monitor: dm.HealthMonitor | None, mode: str
+        self, pool: dm.Pool, member: dm.PoolMember, monitor: dm.HealthMonitor | None, mode: str
     ) -> str:
         address = member.address
         target = str(address) if address.version == 4 else f"ipv6@{address}"
         if member.port is not None:
             target += f":{member.port}"
         parts = [f"server {esc.ident(member.server_name)} {target}"]
+        if isinstance(pool.persistence, dm.PersistenceCookie):
+            parts.append(f"cookie {esc.ident(member.server_name)}")
         if monitor is not None:
             parts.append("check")
             if monitor.port is not None:
                 parts.append(f"port {monitor.port}")
             if pool.tls:
                 parts.append("check-ssl")
+            if pool.send_proxy is not None:
+                parts.append("check-send-proxy")
             if pool.passive_check is not None:
                 passive = pool.passive_check
                 parts.append(
@@ -562,9 +608,18 @@ class _Renderer:
             parts.append(
                 f"ssl verify required ca-file {CA_BUNDLE}" if pool.tls_verify else "ssl verify none"
             )
+            if pool.client_certificate_id is not None:
+                cert = self.certs[pool.client_certificate_id]
+                parts.append(f"crt {CERT_DIR}/{esc.ident(cert.name)}.pem")
             if mode == "http":
                 parts.append("sni req.hdr(host),field(1,:),lower")
+        if pool.send_proxy is not None:
+            parts.append("send-proxy" if pool.send_proxy == "v1" else "send-proxy-v2")
         parts.append(f"weight {member.weight}")
+        if member.maxconn is not None:
+            parts.append(f"maxconn {member.maxconn}")
+        if member.backup:
+            parts.append("backup")
         if member.admin_state is not dm.AdminState.ENABLED:
             parts.append("disabled")  # drain and disabled both start out of rotation
         return " ".join(parts)

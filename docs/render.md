@@ -86,16 +86,23 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Service `allow_list_id` + `enforce_allow_list` | `tcp-request session reject if !{ src -f <dir>/lists/<name>.cidr }` |
 | Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
-| Pool `persistence` (source IP) | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
+| Pool `persistence` `source_ip` | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
+| Pool `persistence` `http_cookie` | `cookie <name> insert indirect nocache [maxlife <t>s] [secure] [httponly]` (or `rewrite`, `prefix`) and `cookie <server name>` on every server (ADR 0105) |
+| Pool `persistence` `header`, `uri` | `stick-table type string len 128 size <n> expire <t>s` and `stick on req.hdr(<H>)`, `stick on path` or `stick on url_param(<p>)` (ADR 0105); `http` pools only |
 | Pool `passive_check`, `slow_start_s` | server options `observe <layer> error-limit <n> on-error <action>` and `slowstart <n>s`; both need the pool's health monitor (ADR 0066) |
 | Port `tls_profile` | `ssl-min-ver`, `ciphers` and `ciphersuites` on the TLS `bind` (`modern`, `intermediate`, `legacy`; none keeps the default), see ADR 0067 |
 | Port `client_ca_id`, `client_verify` | `ca-file certs/ca-<name>.pem verify required|optional` (and `crl-file certs/ca-<name>.crl`) on the TLS `bind`; the files travel in the agent bundle (ADR 0070) |
 | Certificate `ocsp_stapling` | `[ocsp-update on]` on the certificate's `crt-list` line |
 | Pool `tls`, `tls_verify` | server options `ssl verify none` or `ssl verify required ca-file /etc/ssl/certs/ca-certificates.crt`, plus `sni` from the Host header on HTTP pools |
 | Member `address`, `port` | `server <name> <ip>[:<port>]`; a member without a port uses the client's port |
+| Member `backup`, `maxconn` | `backup` and `maxconn <n>` on the server line (ADR 0106) |
+| Pool `send_proxy` | `send-proxy` (`v1`) or `send-proxy-v2` on every server, and `check-send-proxy` when the pool has a monitor (ADR 0106) |
+| Pool `client_certificate_id` | `crt /etc/switchyard/certs/<name>.pem` after the `ssl` options; the certificate and key travel in the agent bundle like a front-end certificate (ADR 0107) |
 | Member `weight`, `admin_state` | `weight <n>`; `drain` and `disabled` both add the `disabled` keyword (see ADR 0006) |
 | Health monitor `tcp` | `check` on each server (`port <n>` when the monitor sets one) |
 | Health monitor `http` | `option httpchk`, `http-check send meth <m> uri <path> [ver HTTP/1.1 hdr Host <h>]`, `http-check expect status <codes>` |
+| Health monitor `http` `expect_body`, `expect_header` | `http-check expect string <text>` or `http-check expect hdr name <H> [value <v>]`; one of `expect_status`, `expect_body`, `expect_header` (ADR 0108) |
+| Health monitor `tcp` with `preset` | `option redis-check`, `option smtpchk`, `option ldap-check` or `option mysql-check` (ADR 0108) |
 | Monitor `interval_s`, `rise`, `fall`, `timeout_s` | `default-server inter <i>s fall <f> rise <r>` and `timeout check <t>s` |
 | Pool with a monitor and `tls` | `check-ssl` on the servers |
 

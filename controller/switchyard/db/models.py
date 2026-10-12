@@ -153,6 +153,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         enum_check("type", dm.MonitorType),
+        CheckConstraint("preset IN ('redis', 'smtp', 'ldap', 'mysql')", name="preset"),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -164,6 +165,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
     fall: Mapped[int] = mapped_column(Integer, nullable=False)
     http: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     udp: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    preset: Mapped[str | None] = mapped_column(Text)
 
 
 class CertificateRow(TenantOwnedMixin, Base):
@@ -226,6 +228,8 @@ class PoolRow(TenantOwnedMixin, Base):
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         tenant_fk("health_monitor_id", "health_monitor"),
+        tenant_fk("client_certificate_id", "certificate"),
+        CheckConstraint("send_proxy IN ('v1', 'v2')", name="send_proxy"),
         enum_check("algorithm", dm.Algorithm),
         CheckConstraint("version >= 1", name="version"),
     )
@@ -237,6 +241,8 @@ class PoolRow(TenantOwnedMixin, Base):
     tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     passive_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     slow_start_s: Mapped[int | None] = mapped_column(Integer)
+    send_proxy: Mapped[str | None] = mapped_column(Text)
+    client_certificate_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
 
 class PoolMemberRow(Base):
@@ -249,6 +255,7 @@ class PoolMemberRow(Base):
         UniqueConstraint("pool_id", "position"),
         enum_check("admin_state", dm.AdminState),
         CheckConstraint("weight BETWEEN 0 AND 256", name="weight"),
+        CheckConstraint("maxconn BETWEEN 1 AND 1000000", name="maxconn"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -260,6 +267,8 @@ class PoolMemberRow(Base):
     port: Mapped[int | None] = mapped_column(Integer)
     weight: Mapped[int] = mapped_column(Integer, nullable=False)
     admin_state: Mapped[str] = mapped_column(Text, nullable=False)
+    backup: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    maxconn: Mapped[int | None] = mapped_column(Integer)
 
 
 class VirtualServiceRow(TenantOwnedMixin, Base):
