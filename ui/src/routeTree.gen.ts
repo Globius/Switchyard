@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAcmeProvidersRouteImport } from './routes/admin.acme-providers'
 import { Route as AdminAuditLogRouteImport } from './routes/admin.audit-log'
+import { Route as AdminControllerRouteImport } from './routes/admin.controller'
 import { Route as AdminIdentityProvidersRouteImport } from './routes/admin.identity-providers'
 import { Route as AdminRoleMappingsRouteImport } from './routes/admin.role-mappings'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -74,6 +75,11 @@ const AdminAcmeProvidersRoute = AdminAcmeProvidersRouteImport.update({
 const AdminAuditLogRoute = AdminAuditLogRouteImport.update({
   id: '/audit-log',
   path: '/audit-log',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminControllerRoute = AdminControllerRouteImport.update({
+  id: '/controller',
+  path: '/controller',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminIdentityProvidersRoute = AdminIdentityProvidersRouteImport.update({
@@ -242,6 +248,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin/acme-providers': typeof AdminAcmeProvidersRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -278,6 +285,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/admin/acme-providers': typeof AdminAcmeProvidersRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -314,6 +322,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/admin/acme-providers': typeof AdminAcmeProvidersRoute
   '/admin/audit-log': typeof AdminAuditLogRoute
+  '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -354,6 +363,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/acme-providers'
     | '/admin/audit-log'
+    | '/admin/controller'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -390,6 +400,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/acme-providers'
     | '/admin/audit-log'
+    | '/admin/controller'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -425,6 +436,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin/acme-providers'
     | '/admin/audit-log'
+    | '/admin/controller'
     | '/admin/identity-providers'
     | '/admin/role-mappings'
     | '/admin/settings'
@@ -507,6 +519,13 @@ declare module '@tanstack/react-router' {
       path: '/audit-log'
       fullPath: '/admin/audit-log'
       preLoaderRoute: typeof AdminAuditLogRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/controller': {
+      id: '/admin/controller'
+      path: '/controller'
+      fullPath: '/admin/controller'
+      preLoaderRoute: typeof AdminControllerRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/identity-providers': {
@@ -725,6 +744,7 @@ declare module '@tanstack/react-router' {
 interface AdminRouteChildren {
   AdminAcmeProvidersRoute: typeof AdminAcmeProvidersRoute
   AdminAuditLogRoute: typeof AdminAuditLogRoute
+  AdminControllerRoute: typeof AdminControllerRoute
   AdminIdentityProvidersRoute: typeof AdminIdentityProvidersRoute
   AdminRoleMappingsRoute: typeof AdminRoleMappingsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -737,6 +757,7 @@ interface AdminRouteChildren {
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAcmeProvidersRoute: AdminAcmeProvidersRoute,
   AdminAuditLogRoute: AdminAuditLogRoute,
+  AdminControllerRoute: AdminControllerRoute,
   AdminIdentityProvidersRoute: AdminIdentityProvidersRoute,
   AdminRoleMappingsRoute: AdminRoleMappingsRoute,
   AdminSettingsRoute: AdminSettingsRoute,

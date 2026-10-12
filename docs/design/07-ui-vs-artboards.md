@@ -372,3 +372,18 @@ Needed from the API: ACME providers CRUD, test, default flag and registration st
 | Discovery block on the pool form (switch, Proxmox tag, network CIDR, member port, weight of a new member) | Built **without an artboard**; Design to specify. The tag defaults to `sy-<tenant>.`; the 422 `discovery_tag_not_allowed` shows on the tag field. Turning the switch off sends `discovery: null`. |
 | Member list while discovery is on | Read-only with a note ("managed by discovery"); Add member is disabled. |
 | Pools list marker for discovered pools, and the `system:discovery` change sets | Not built; Design question: should a discovered pool show a badge and a "last discovered" time? The API has no last-run time. |
+
+## Admin > Controller (Design v52, Backend draft contract)
+
+Built against the draft of `GET /system/controller`, `PUT …/pending`, `POST …/confirm` and `POST …/revert`. The response shape is one interface (`ControllerState` in `AdminController.tsx`) and uses untyped calls (`rawGet`, `rawSend`) until the API is in `openapi.json`; adjust both when the Backend MR lands.
+
+| Item | Status |
+| --- | --- |
+| Serving now, listen address, certificate with expiry pill | Built. |
+| FQDN field, identity-provider redirect URL warning (concrete URLs from the API), Apply and confirm with a confirm dialog listing before and after | Built. |
+| Pending window: countdown (`role=timer`, polite announcement about every 10 s), progress bar, "Open https://<new> to confirm" on the old address, "Keep the new settings" on the new one, "Revert now", before/after table | Built. The page polls every 4 s while pending and re-syncs the countdown. |
+| Unmanaged controller (no management tenant) and values pinned by the environment | Built as notes; the form is read-only when pinned. |
+
+**Differences from the artboard (for Design):**
+1. The artboard has a chip list of listen addresses and Upload / ACME source radios. The contract has one `vip` and a certificate chosen from the management tenant, so the page has a single Listen address field and a Certificate picker (certificates that cover the FQDN), with the note that upload or an ACME request happens under Certificates in the management tenant first.
+2. After "reverted" or "confirmed" the API gives no history, so the artboard's confirmed and reverted states show only as the pending banner disappearing.

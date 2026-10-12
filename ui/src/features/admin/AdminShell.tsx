@@ -13,6 +13,7 @@ const NAV = [
   { label: "Role mappings", to: "/admin/role-mappings" },
   { label: "System tokens", to: "/admin/tokens" },
   { label: "ACME providers", to: "/admin/acme-providers" },
+  { label: "Controller", to: "/admin/controller" },
   { label: "System settings", to: "/admin/settings" },
   { label: "Audit log", to: "/admin/audit-log" },
 ] as const;
