@@ -38,6 +38,7 @@ from switchyard.services.infra import (
     InfraService,
 )
 from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
+from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
@@ -45,6 +46,7 @@ GIT_MIRROR_JOB = "git_mirror"
 
 
 POLL_STATUS_JOB = "poll_status"
+EXPIRE_DRAINS_JOB = "expire_drains"
 
 
 def build_handlers(
@@ -55,6 +57,7 @@ def build_handlers(
     infra: InfraService | None = None,
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
+    members: MemberService | None = None,
     discovery: DiscoveryService | None = None,
     alerts: AlertEvaluator | None = None,
     iplists: IpListSync | None = None,
@@ -64,6 +67,7 @@ def build_handlers(
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
         iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
@@ -96,6 +100,12 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}
+    if members is not None:
+
+        async def expire_drains(job: Job) -> dict[str, Any]:
+            return {"disabled": await members.expire_drains()}
+
+        handlers[EXPIRE_DRAINS_JOB] = expire_drains
     if gc is not None:
 
         async def collect_garbage(job: Job) -> dict[str, Any]:

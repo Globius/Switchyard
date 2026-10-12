@@ -1,0 +1,5 @@
+cookie.example.test pool_cookie-insert
+header.example.test pool_header-sticky
+path.example.test pool_uri-path
+prefix.example.test pool_cookie-prefix
+uri.example.test pool_uri-param

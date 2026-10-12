@@ -21,6 +21,8 @@ from switchyard.domain.errors import DomainValidationError, Problem
 from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDDEN_SERVICE_FIELDS
 from switchyard.domain.models import (
     ATTACHABLE_POLICY_KINDS,
+    CACHE_MAX_MB_PER_GROUP,
+    HTTP_ONLY_PERSISTENCE,
     AccessPolicySet,
     Algorithm,
     AllowListPolicySet,
@@ -103,7 +105,7 @@ class Snapshot(Model):
         for s in services:
             if s.default_pool_id:
                 pool_ids.add(s.default_pool_id)
-            pool_ids.update(r.pool_id for r in s.routes if r.pool_id)
+            pool_ids.update(pid for r in s.routes for pid in r.pool_ids)
             cert_ids.update(s.certificate_ids)
             cert_ids.update(p.client_ca_id for p in s.ports if p.client_ca_id)
             policy_ids.update(s.policy_set_ids)
@@ -115,6 +117,7 @@ class Snapshot(Model):
             if ps.id in policy_ids and isinstance(ps, AccessPolicySet) and ps.oidc.directory_id:
                 policy_ids.add(ps.oidc.directory_id)
         pools = tuple(p for p in self.pools if p.id in pool_ids)
+        cert_ids.update(p.client_certificate_id for p in pools if p.client_certificate_id)
         monitor_ids = {p.health_monitor_id for p in pools if p.health_monitor_id}
         network_ids = {n.network_id for n in group.networks}
         pool_networks = {p.network_id for p in self.vip_pools if p.id in _vip_pool_ids(services)}
@@ -232,6 +235,23 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 f"se_groups.{g.name}.networks[{i}]", g.tenant_id, "network", gn.network_id, networks
             )
     for g in snapshot.se_groups:
+        if g.peers is None:
+            continue
+        backend_cidrs = [
+            networks[gn.network_id].cidr
+            for gn in g.networks
+            if gn.role is NetworkRole.BACKEND and gn.network_id in networks
+        ]
+        for i, peer in enumerate(g.peers.members):
+            if not any(peer.address in cidr for cidr in backend_cidrs):
+                problems.append(
+                    Problem(
+                        f"se_groups.{g.name}.peers.members[{i}].address",
+                        "peer_outside_backend_network",
+                        f"{peer.address} is not in a backend network of the group",
+                    )
+                )
+    for g in snapshot.se_groups:
         if g.routing_profile_id is None:
             continue
         profile = check_ref(
@@ -270,6 +290,25 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                             )
                         )
 
+    for pool in snapshot.pools:
+        if pool.client_certificate_id is None:
+            continue
+        cert = check_ref(
+            f"pools.{pool.name}.client_certificate_id",
+            pool.tenant_id,
+            "certificate",
+            pool.client_certificate_id,
+            certs,
+        )
+        if cert is not None and cert.purpose != "server":
+            problems.append(
+                Problem(
+                    f"pools.{pool.name}.client_certificate_id",
+                    "wrong_certificate_purpose",
+                    f"certificate {cert.name} is a client CA, not a certificate with a key",
+                )
+            )
+
     pool_protocols: dict[UUID, set[Protocol]] = defaultdict(set)
     listeners: list[v.Listener] = []
     for s in snapshot.virtual_services:
@@ -287,9 +326,17 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         used_pools: list[tuple[str, UUID]] = []
         if s.default_pool_id:
             used_pools.append((f"{base}.default_pool_id", s.default_pool_id))
-        used_pools += [
-            (f"{base}.routes[{i}].pool_id", r.pool_id) for i, r in enumerate(s.routes) if r.pool_id
-        ]
+        for i, route in enumerate(s.routes):
+            if route.pool_id:
+                used_pools.append((f"{base}.routes[{i}].pool_id", route.pool_id))
+            used_pools += [
+                (f"{base}.routes[{i}].pools[{j}].pool_id", w.pool_id)
+                for j, w in enumerate(route.pools)
+            ]
+            used_pools += [
+                (f"{base}.routes[{i}].fallback_pool_ids[{j}]", pid)
+                for j, pid in enumerate(route.fallback_pool_ids)
+            ]
         for path, pid in used_pools:
             if check_ref(path, s.tenant_id, "pool", pid, pools_by_id) is not None:
                 pool_protocols[pid].add(s.protocol)
@@ -380,6 +427,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         listeners += [v.Listener(s.name, s.vip, p.port, transport) for p in s.ports]
 
     _check_udp_pools(snapshot, pool_protocols, monitors, problems)
+    _check_failover(snapshot, problems)
+    _check_cache_quota(snapshot, problems)
 
     for first, second in v.find_port_collisions(listeners):
         problems.append(
@@ -597,7 +646,7 @@ def _check_udp_pools(
                         "persistence is not valid on a udp pool; use the source algorithm",
                     )
                 )
-            for field in ("passive_check", "slow_start_s"):
+            for field in ("passive_check", "slow_start_s", "send_proxy", "client_certificate_id"):
                 if getattr(pool, field) is not None:
                     problems.append(
                         Problem(
@@ -606,6 +655,22 @@ def _check_udp_pools(
                             f"{field} is not valid on a udp pool",
                         )
                     )
+            if pool.tunnel_timeout_s is not None:
+                problems.append(
+                    Problem(
+                        f"{base}.tunnel_timeout_s",
+                        "udp_field_not_allowed",
+                        "tunnel_timeout_s is not valid on a udp pool",
+                    )
+                )
+            if pool.backend_protocol != "http1":
+                problems.append(
+                    Problem(
+                        f"{base}.backend_protocol",
+                        "udp_field_not_allowed",
+                        "backend_protocol is not valid on a udp pool",
+                    )
+                )
             if pool.algorithm is Algorithm.RANDOM:
                 problems.append(
                     Problem(
@@ -623,6 +688,15 @@ def _check_udp_pools(
                             "a member of a udp pool needs a port",
                         )
                     )
+                for field in ("backup", "maxconn"):
+                    if getattr(member, field):
+                        problems.append(
+                            Problem(
+                                f"{base}.members.{member.server_name}.{field}",
+                                "udp_field_not_allowed",
+                                f"{field} is not valid on a member of a udp pool",
+                            )
+                        )
             if monitor is not None and monitor.type is not MonitorType.UDP:
                 problems.append(
                     Problem(
@@ -654,9 +728,27 @@ def _check_live_traffic(
 ) -> None:
     """Passive checks and slow start build on the health monitor; ``layer7`` needs HTTP.
 
-    Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``) and
-    ``passive_check_layer7_needs_http``.
+    Codes: ``needs_health_monitor`` (on ``passive_check`` or ``slow_start_s``),
+    ``passive_check_layer7_needs_http`` and ``persistence_needs_http`` (cookie, header and URI
+    persistence on a pool a ``tcp`` service uses).
     """
+    if pool.backend_protocol != "http1" and Protocol.TCP in protocols:
+        problems.append(
+            Problem(
+                f"{base}.backend_protocol",
+                "backend_protocol_needs_http",
+                f"backend_protocol {pool.backend_protocol} needs a pool used only by http services",
+            )
+        )
+    if isinstance(pool.persistence, HTTP_ONLY_PERSISTENCE) and Protocol.TCP in protocols:
+        problems.append(
+            Problem(
+                f"{base}.persistence",
+                "persistence_needs_http",
+                f"{pool.persistence.type} persistence needs a pool used only by http services; "
+                "use source_ip for tcp",
+            )
+        )
     for field in ("passive_check", "slow_start_s"):
         if getattr(pool, field) is not None and monitor is None:
             problems.append(
@@ -747,6 +839,49 @@ def _check_rate_limits(
         )
 
 
+def _check_failover(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """A priority chain needs health checks on all pools but the last.
+
+    Code: ``failover_needs_health_monitor``.
+
+    Without a check HAProxy counts a down server as up, so traffic would never move on.
+    """
+    pools = {p.id: p for p in snapshot.pools}
+    for s in snapshot.virtual_services:
+        for i, route in enumerate(s.routes):
+            if not route.fallback_pool_ids or route.pool_id is None:
+                continue
+            for pid in (route.pool_id, *route.fallback_pool_ids)[:-1]:
+                pool = pools.get(pid)
+                if pool is not None and pool.health_monitor_id is None:
+                    problems.append(
+                        Problem(
+                            f"virtual_services.{s.name}.routes[{i}].fallback_pool_ids",
+                            "failover_needs_health_monitor",
+                            f"pool {pool.name} needs a health monitor to fail over",
+                        )
+                    )
+
+
+def _check_cache_quota(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """The caches of one SE group share a memory quota (``cache_quota_exceeded``, ADR 0117)."""
+    for group in snapshot.se_groups:
+        total = sum(
+            s.cache.size_mb
+            for s in snapshot.virtual_services
+            if s.se_group_id == group.id and s.enabled and s.cache is not None
+        )
+        if total > CACHE_MAX_MB_PER_GROUP:
+            problems.append(
+                Problem(
+                    f"se_groups.{group.name}",
+                    "cache_quota_exceeded",
+                    f"caches of the group's services use {total} MB; the limit is "
+                    f"{CACHE_MAX_MB_PER_GROUP} MB",
+                )
+            )
+
+
 def _check_access(
     s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
 ) -> None:
@@ -830,6 +965,22 @@ def _check_identity_headers(
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
+    if s.protocol is Protocol.TCP:
+        for i, r in enumerate(s.routes):
+            if (
+                r.match.host is None
+                or r.match.path_prefix
+                or r.match.path_exact
+                or r.redirect
+                or r.pools
+            ):
+                problems.append(
+                    Problem(
+                        f"{base}.routes[{i}]",
+                        "passthrough_route_invalid",
+                        "a tcp route matches the SNI host only and names a pool",
+                    )
+                )
     seen: set[str] = set()
     for i, r in enumerate(s.routes):
         key = r.match.model_dump_json()

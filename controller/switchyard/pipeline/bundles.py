@@ -46,7 +46,20 @@ def referenced_certs(snapshot: Snapshot, se_group_id: UUID) -> list[dm.Certifica
             for port in svc.ports:
                 if port.client_ca_id in certs:
                     wanted[port.client_ca_id] = certs[port.client_ca_id]
+    for pool in snapshot.pools:
+        if pool.client_certificate_id in certs and _pool_in_group(snapshot, pool.id, se_group_id):
+            wanted[pool.client_certificate_id] = certs[pool.client_certificate_id]
     return sorted(wanted.values(), key=lambda c: c.name)
+
+
+def _pool_in_group(snapshot: Snapshot, pool_id: UUID, se_group_id: UUID) -> bool:
+    """True when an enabled virtual service of the group routes to the pool."""
+    return any(
+        s.se_group_id == se_group_id
+        and s.enabled
+        and (s.default_pool_id == pool_id or any(pool_id in r.pool_ids for r in s.routes))
+        for s in snapshot.virtual_services
+    )
 
 
 async def _bgp_secrets(

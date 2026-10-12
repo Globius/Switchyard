@@ -3246,6 +3246,35 @@
         "title": "CaImportIn",
         "type": "object"
       },
+      "CacheSettings": {
+        "additionalProperties": false,
+        "description": "HAProxy small-object cache for the responses of an ``http`` service (ADR 0117).\n\nOnly responses the origin marks cacheable are stored, for ``GET`` and ``HEAD`` requests without\n``Authorization``; ``Vary`` is honoured. Rate limits and deny rules run before the cache.\n\nAttributes:\n    size_mb: Memory of the cache in megabytes (1 to 256).\n    max_object_kb: Largest response body kept, in kilobytes (1 to 8192).\n    max_age_s: Longest time an entry is served without asking the origin (1 to 86400).\n\nExample:\n    >>> CacheSettings().size_mb\n    16",
+        "properties": {
+          "max_age_s": {
+            "default": 60,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Max Age S",
+            "type": "integer"
+          },
+          "max_object_kb": {
+            "default": 1024,
+            "maximum": 8192.0,
+            "minimum": 1.0,
+            "title": "Max Object Kb",
+            "type": "integer"
+          },
+          "size_mb": {
+            "default": 16,
+            "maximum": 256.0,
+            "minimum": 1.0,
+            "title": "Size Mb",
+            "type": "integer"
+          }
+        },
+        "title": "CacheSettings",
+        "type": "object"
+      },
       "CertIdentity": {
         "additionalProperties": false,
         "description": "Map a client certificate to a user and groups (ADR 0136).\n\nAttributes:\n    by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,\n        for individual certificates).\n    value: The common name, or 40 hex digits.\n    user: The user name written to the user header.\n    groups: Groups written to the groups header.",
@@ -4661,6 +4690,48 @@
           }
         },
         "title": "ClientCertRule",
+        "type": "object"
+      },
+      "Compression": {
+        "additionalProperties": false,
+        "description": "Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.\n\nAttributes:\n    algorithms: In order of preference: ``gzip``, ``deflate``.\n    content_types: Media types to compress, such as ``text/html``. Never images or archives.\n\nExample:\n    >>> Compression().algorithms\n    ('gzip',)",
+        "properties": {
+          "algorithms": {
+            "default": [
+              "gzip"
+            ],
+            "items": {
+              "enum": [
+                "gzip",
+                "deflate"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Algorithms",
+            "type": "array"
+          },
+          "content_types": {
+            "default": [
+              "text/html",
+              "text/plain",
+              "text/css",
+              "text/javascript",
+              "application/javascript",
+              "application/json",
+              "application/xml",
+              "image/svg+xml"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Content Types",
+            "type": "array"
+          }
+        },
+        "title": "Compression",
         "type": "object"
       },
       "DeployIn": {
@@ -6959,6 +7030,32 @@
         "title": "HaMode",
         "type": "string"
       },
+      "HeaderExpect": {
+        "additionalProperties": false,
+        "description": "A response header the health check must see, optionally with an exact value.\n\nExample:\n    >>> HeaderExpect(name=\"X-Health\", value=\"ok\").value\n    'ok'",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "HeaderExpect",
+        "type": "object"
+      },
       "HeaderMatch": {
         "additionalProperties": false,
         "description": "Match a request header. ``value`` is required for the comparisons and forbidden otherwise.\n\nExample:\n    >>> HeaderMatch(name=\"X-Env\", op=\"equals\", value=\"canary\").op\n    <HeaderOp.EQUALS: 'equals'>",
@@ -7035,7 +7132,7 @@
       },
       "HealthMonitor": {
         "additionalProperties": false,
-        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.\n    udp: Optional probe details; only valid for ``udp``.",
+        "description": "Active health check, shareable across pools.\n\nAttributes:\n    type: ``tcp`` connect check, ``http`` request check or ``udp`` probe (UDP services only).\n    port: Port to check. Required when pool members have no port of their own; otherwise\n        members are checked on their service port.\n    interval_s: Seconds between checks.\n    timeout_s: Seconds before a check fails.\n    rise: Consecutive successes to mark a server up.\n    fall: Consecutive failures to mark a server down.\n    http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.\n    udp: Optional probe details; only valid for ``udp``.\n    preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or\n        ``mysql``. Without one a ``tcp`` monitor only connects.",
         "properties": {
           "fall": {
             "default": 3,
@@ -7080,6 +7177,23 @@
               }
             ],
             "title": "Port"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redis",
+                  "smtp",
+                  "ldap",
+                  "mysql"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rise": {
             "default": 2,
@@ -7170,6 +7284,23 @@
               }
             ],
             "title": "Port"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redis",
+                  "smtp",
+                  "ldap",
+                  "mysql"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rise": {
             "default": 2,
@@ -7262,6 +7393,23 @@
               }
             ],
             "title": "Port"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redis",
+                  "smtp",
+                  "ldap",
+                  "mysql"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rise": {
             "anyOf": [
@@ -7368,6 +7516,23 @@
               }
             ],
             "title": "Port"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "enum": [
+                  "redis",
+                  "smtp",
+                  "ldap",
+                  "mysql"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rise": {
             "default": 2,
@@ -7629,6 +7794,27 @@
         "additionalProperties": false,
         "description": "HTTP health check request and expectation.",
         "properties": {
+          "expect_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expect Body"
+          },
+          "expect_header": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeaderExpect"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "expect_status": {
             "default": [],
             "items": {
@@ -11053,6 +11239,60 @@
         "title": "PassiveCheck",
         "type": "object"
       },
+      "PeerMember": {
+        "additionalProperties": false,
+        "description": "One service engine in a peer group: its HAProxy host name and its backend-network address.\n\nExample:\n    >>> PeerMember(name=\"se-1\", address=\"10.20.0.5\").name\n    'se-1'",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "format": "ipv4",
+                "type": "string"
+              },
+              {
+                "format": "ipv6",
+                "type": "string"
+              }
+            ],
+            "title": "Address"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ],
+        "title": "PeerMember",
+        "type": "object"
+      },
+      "PeerSync": {
+        "additionalProperties": false,
+        "description": "Share persistence tables between the engines of a group (HAProxy ``peers``; ADR 0118).\n\nAttributes:\n    port: TCP port the engines use to talk to each other, on the backend network.\n    members: Every engine of the group, by the name HAProxy finds as its own (the host name)\n        and the address it listens on. At least two, at most 16.",
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/PeerMember"
+            },
+            "maxItems": 16,
+            "minItems": 2,
+            "title": "Members",
+            "type": "array"
+          },
+          "port": {
+            "default": 10000,
+            "title": "Port",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "title": "PeerSync",
+        "type": "object"
+      },
       "PermissionMatrix": {
         "additionalProperties": false,
         "description": "The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.",
@@ -11167,6 +11407,95 @@
         "title": "PermissionRead",
         "type": "object"
       },
+      "PersistenceCookie": {
+        "additionalProperties": false,
+        "description": "Pin a client to one member with an HTTP cookie (HAProxy ``cookie``), ``http`` pools only.\n\nAttributes:\n    name: Cookie name.\n    mode: ``insert`` makes HAProxy set the cookie; ``rewrite`` rewrites a cookie the member\n        sets; ``prefix`` prefixes the member's own cookie value.\n    ttl_s: ``insert`` only: lifetime of the cookie in seconds (``maxlife``); omitted gives a\n        session cookie.\n    secure: ``insert`` only: add the ``Secure`` attribute.\n    http_only: ``insert`` only: add the ``HttpOnly`` attribute.\n\nExample:\n    >>> PersistenceCookie(name=\"SY_SRV\", mode=\"insert\", ttl_s=3600).mode\n    'insert'",
+        "properties": {
+          "http_only": {
+            "default": true,
+            "title": "Http Only",
+            "type": "boolean"
+          },
+          "mode": {
+            "default": "insert",
+            "enum": [
+              "insert",
+              "rewrite",
+              "prefix"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secure": {
+            "default": false,
+            "title": "Secure",
+            "type": "boolean"
+          },
+          "ttl_s": {
+            "anyOf": [
+              {
+                "maximum": 31536000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttl S"
+          },
+          "type": {
+            "const": "http_cookie",
+            "default": "http_cookie",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PersistenceCookie",
+        "type": "object"
+      },
+      "PersistenceHeader": {
+        "additionalProperties": false,
+        "description": "Pin requests that carry the same value of a header to one member (``stick on hdr``).\n\n``http`` pools only. Requests without the header fall back to the load-balancing algorithm.\n\nExample:\n    >>> PersistenceHeader(header=\"X-Session\").timeout_s\n    1800",
+        "properties": {
+          "header": {
+            "title": "Header",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 10000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          },
+          "timeout_s": {
+            "default": 1800,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Timeout S",
+            "type": "integer"
+          },
+          "type": {
+            "const": "header",
+            "default": "header",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "header"
+        ],
+        "title": "PersistenceHeader",
+        "type": "object"
+      },
       "PersistenceSourceIp": {
         "additionalProperties": false,
         "description": "Pin a client address to one member (HAProxy ``stick on src``).",
@@ -11193,6 +11522,54 @@
           }
         },
         "title": "PersistenceSourceIp",
+        "type": "object"
+      },
+      "PersistenceUri": {
+        "additionalProperties": false,
+        "description": "Pin requests with the same URI path, or the same query parameter, to one member.\n\n``http`` pools only.\n\nAttributes:\n    source: ``path`` sticks on the request path; ``url_param`` on the value of query\n        parameter ``param``.\n    param: The query parameter name, required for ``url_param`` and forbidden for ``path``.\n\nExample:\n    >>> PersistenceUri(source=\"url_param\", param=\"session\").source\n    'url_param'",
+        "properties": {
+          "param": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param"
+          },
+          "source": {
+            "default": "path",
+            "enum": [
+              "path",
+              "url_param"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "table_size": {
+            "default": 100000,
+            "maximum": 10000000.0,
+            "minimum": 1000.0,
+            "title": "Table Size",
+            "type": "integer"
+          },
+          "timeout_s": {
+            "default": 1800,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Timeout S",
+            "type": "integer"
+          },
+          "type": {
+            "const": "uri",
+            "default": "uri",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "PersistenceUri",
         "type": "object"
       },
       "PlacementRead": {
@@ -11231,11 +11608,33 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,\n        ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,\n        needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).\n    tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2\n        stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``\n        keeps the default of one hour.\n    send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.\n    client_certificate_id: Server certificate HAProxy presents to members (backend\n        mutual TLS). Needs ``tls``.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
+          },
+          "backend_protocol": {
+            "default": "http1",
+            "enum": [
+              "http1",
+              "h2",
+              "h2c"
+            ],
+            "title": "Backend Protocol",
+            "type": "string"
+          },
+          "client_certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Certificate Id"
           },
           "discovery": {
             "anyOf": [
@@ -11289,12 +11688,50 @@
           "persistence": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PersistenceSourceIp"
+                "discriminator": {
+                  "mapping": {
+                    "header": "#/components/schemas/PersistenceHeader",
+                    "http_cookie": "#/components/schemas/PersistenceCookie",
+                    "source_ip": "#/components/schemas/PersistenceSourceIp",
+                    "uri": "#/components/schemas/PersistenceUri"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PersistenceSourceIp"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceCookie"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceHeader"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceUri"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Persistence"
+          },
+          "send_proxy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "v1",
+                  "v2"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Proxy"
           },
           "slow_start_s": {
             "anyOf": [
@@ -11324,6 +11761,19 @@
             "title": "Tls Verify",
             "type": "boolean"
           },
+          "tunnel_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 86400.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tunnel Timeout S"
+          },
           "version": {
             "default": 1,
             "minimum": 1.0,
@@ -11345,6 +11795,28 @@
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
+          },
+          "backend_protocol": {
+            "default": "http1",
+            "enum": [
+              "http1",
+              "h2",
+              "h2c"
+            ],
+            "title": "Backend Protocol",
+            "type": "string"
+          },
+          "client_certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Certificate Id"
           },
           "discovery": {
             "anyOf": [
@@ -11393,12 +11865,50 @@
           "persistence": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PersistenceSourceIp"
+                "discriminator": {
+                  "mapping": {
+                    "header": "#/components/schemas/PersistenceHeader",
+                    "http_cookie": "#/components/schemas/PersistenceCookie",
+                    "source_ip": "#/components/schemas/PersistenceSourceIp",
+                    "uri": "#/components/schemas/PersistenceUri"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PersistenceSourceIp"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceCookie"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceHeader"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceUri"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Persistence"
+          },
+          "send_proxy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "v1",
+                  "v2"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Proxy"
           },
           "slow_start_s": {
             "anyOf": [
@@ -11422,6 +11932,19 @@
             "default": false,
             "title": "Tls Verify",
             "type": "boolean"
+          },
+          "tunnel_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 86400.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tunnel Timeout S"
           }
         },
         "required": [
@@ -11479,7 +12002,7 @@
       },
       "PoolMember": {
         "additionalProperties": false,
-        "description": "One backend server.\n\nAttributes:\n    id: Stable id, used by the runtime enable/disable/drain endpoint.\n    address: Backend IP address.\n    port: Backend port, or ``None`` to reuse the port the client connected to.\n    weight: 0-256; 0 takes no new connections.\n    admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.\n    name: HAProxy server name; derived from address and port when omitted.",
+        "description": "One backend server.\n\nAttributes:\n    id: Stable id, used by the runtime enable/disable/drain endpoint.\n    address: Backend IP address.\n    port: Backend port, or ``None`` to reuse the port the client connected to.\n    weight: 0-256; 0 takes no new connections.\n    admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.\n    name: HAProxy server name; derived from address and port when omitted.\n    backup: A backup member takes traffic only when every non-backup member is down.\n    maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.\n    drain_timeout_s: With ``admin_state`` ``drain``: seconds after which the controller moves\n        the member to ``disabled`` (a periodic job, ADR 0109). ``None`` drains until an\n        operator acts. Never reaches the engine configuration.",
         "properties": {
           "address": {
             "anyOf": [
@@ -11498,10 +12021,41 @@
             "$ref": "#/components/schemas/AdminState",
             "default": "enabled"
           },
+          "backup": {
+            "default": false,
+            "title": "Backup",
+            "type": "boolean"
+          },
+          "drain_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 604800.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drain Timeout S"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "maxconn": {
+            "anyOf": [
+              {
+                "maximum": 1000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxconn"
           },
           "name": {
             "anyOf": [
@@ -11552,6 +12106,34 @@
                 "type": "null"
               }
             ]
+          },
+          "backend_protocol": {
+            "anyOf": [
+              {
+                "enum": [
+                  "http1",
+                  "h2",
+                  "h2c"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend Protocol"
+          },
+          "client_certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Certificate Id"
           },
           "discovery": {
             "anyOf": [
@@ -11613,12 +12195,50 @@
           "persistence": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PersistenceSourceIp"
+                "discriminator": {
+                  "mapping": {
+                    "header": "#/components/schemas/PersistenceHeader",
+                    "http_cookie": "#/components/schemas/PersistenceCookie",
+                    "source_ip": "#/components/schemas/PersistenceSourceIp",
+                    "uri": "#/components/schemas/PersistenceUri"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PersistenceSourceIp"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceCookie"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceHeader"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceUri"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Persistence"
+          },
+          "send_proxy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "v1",
+                  "v2"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Proxy"
           },
           "slow_start_s": {
             "anyOf": [
@@ -11652,6 +12272,17 @@
               }
             ],
             "title": "Tls Verify"
+          },
+          "tunnel_timeout_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tunnel Timeout S"
           }
         },
         "title": "PoolPatch",
@@ -11665,6 +12296,16 @@
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
           },
+          "backend_protocol": {
+            "default": "http1",
+            "enum": [
+              "http1",
+              "h2",
+              "h2c"
+            ],
+            "title": "Backend Protocol",
+            "type": "string"
+          },
           "changed_fields": {
             "description": "Fields a draft changed; empty outside a draft.",
             "items": {
@@ -11672,6 +12313,18 @@
             },
             "title": "Changed Fields",
             "type": "array"
+          },
+          "client_certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Certificate Id"
           },
           "discovery": {
             "anyOf": [
@@ -11729,12 +12382,50 @@
           "persistence": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PersistenceSourceIp"
+                "discriminator": {
+                  "mapping": {
+                    "header": "#/components/schemas/PersistenceHeader",
+                    "http_cookie": "#/components/schemas/PersistenceCookie",
+                    "source_ip": "#/components/schemas/PersistenceSourceIp",
+                    "uri": "#/components/schemas/PersistenceUri"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/PersistenceSourceIp"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceCookie"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceHeader"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PersistenceUri"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Persistence"
+          },
+          "send_proxy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "v1",
+                  "v2"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Send Proxy"
           },
           "slow_start_s": {
             "anyOf": [
@@ -11763,6 +12454,19 @@
             "default": false,
             "title": "Tls Verify",
             "type": "boolean"
+          },
+          "tunnel_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 86400.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tunnel Timeout S"
           },
           "version": {
             "default": 1,
@@ -14675,7 +15379,7 @@
       },
       "SeGroup": {
         "additionalProperties": false,
-        "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).",
+        "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).\n    peers: Persistence table sync between the group's engines; ``None`` keeps each table local.",
         "properties": {
           "canary_seconds": {
             "default": 30,
@@ -14710,6 +15414,16 @@
             "minItems": 1,
             "title": "Networks",
             "type": "array"
+          },
+          "peers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "routing_profile_id": {
             "anyOf": [
@@ -14776,6 +15490,16 @@
             "minItems": 1,
             "title": "Networks",
             "type": "array"
+          },
+          "peers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "routing_profile_id": {
             "anyOf": [
@@ -14878,6 +15602,16 @@
             ],
             "title": "Networks"
           },
+          "peers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "routing_profile_id": {
             "anyOf": [
               {
@@ -14943,6 +15677,16 @@
             "minItems": 1,
             "title": "Networks",
             "type": "array"
+          },
+          "peers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "routing_profile_id": {
             "anyOf": [
@@ -16583,7 +17327,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -16597,6 +17341,16 @@
             ],
             "title": "Allow List Id"
           },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "certificate_ids": {
             "default": [],
             "items": {
@@ -16605,6 +17359,16 @@
             },
             "title": "Certificate Ids",
             "type": "array"
+          },
+          "compression": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Compression"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "default_pool_id": {
             "anyOf": [
@@ -16757,6 +17521,16 @@
             ],
             "title": "Allow List Id"
           },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "certificate_ids": {
             "default": [],
             "items": {
@@ -16765,6 +17539,16 @@
             },
             "title": "Certificate Ids",
             "type": "array"
+          },
+          "compression": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Compression"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "default_pool_id": {
             "anyOf": [
@@ -17014,6 +17798,16 @@
             ],
             "title": "Allow List Id"
           },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "certificate_ids": {
             "anyOf": [
               {
@@ -17028,6 +17822,16 @@
               }
             ],
             "title": "Certificate Ids"
+          },
+          "compression": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Compression"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "default_pool_id": {
             "anyOf": [
@@ -17210,6 +18014,16 @@
             ],
             "title": "Allow List Id"
           },
+          "cache": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CacheSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "certificate_ids": {
             "default": [],
             "items": {
@@ -17226,6 +18040,16 @@
             },
             "title": "Changed Fields",
             "type": "array"
+          },
+          "compression": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Compression"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "default_pool_id": {
             "anyOf": [
@@ -17788,7 +18612,7 @@
       },
       "VsPort": {
         "additionalProperties": false,
-        "description": "One listening port on a virtual service's VIP.\n\nAttributes:\n    port: Listening port.\n    tls: Terminate TLS on this port using the service's certificates.\n    http2: Offer HTTP/2 via ALPN (requires ``tls``).\n    proxy_protocol: Accept the PROXY protocol header from the client side.\n    https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port\n        (which must be a TLS port of the same service).\n    tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine\n        default (TLS 1.2 or later, HAProxy's default ciphers).\n    client_ca_id: A ``client_ca`` certificate: clients must present a certificate it signed\n        (mutual TLS). Needs ``tls``.\n    client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid\n        certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.",
+        "description": "One listening port on a virtual service's VIP.\n\nAttributes:\n    port: Listening port.\n    tls: Terminate TLS on this port using the service's certificates.\n    http2: Offer HTTP/2 via ALPN (requires ``tls``).\n    proxy_protocol: Accept the PROXY protocol header from the client side.\n    https_redirect_port: On a plaintext port, redirect every request to ``https`` on this port\n        (which must be a TLS port of the same service).\n    tls_profile: Protocol versions and ciphers of a TLS port. ``None`` keeps the engine\n        default (TLS 1.2 or later, HAProxy's default ciphers).\n    client_ca_id: A ``client_ca`` certificate: clients must present a certificate it signed\n        (mutual TLS). Needs ``tls``.\n    client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid\n        certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.\n    tls_passthrough: ``tcp`` services only: do not terminate TLS; route by the SNI in the\n        client hello (ADR 0115). Excludes every TLS option of the port.\n    http3: Also listen for HTTP/3 over QUIC on the same number (UDP) and advertise it with\n        ``Alt-Svc`` (ADR 0116). Needs ``tls`` and ``http2``.",
         "properties": {
           "client_ca_id": {
             "anyOf": [
@@ -17816,6 +18640,11 @@
             "title": "Http2",
             "type": "boolean"
           },
+          "http3": {
+            "default": false,
+            "title": "Http3",
+            "type": "boolean"
+          },
           "https_redirect_port": {
             "anyOf": [
               {
@@ -17841,6 +18670,11 @@
             "title": "Tls",
             "type": "boolean"
           },
+          "tls_passthrough": {
+            "default": false,
+            "title": "Tls Passthrough",
+            "type": "boolean"
+          },
           "tls_profile": {
             "anyOf": [
               {
@@ -17860,8 +18694,18 @@
       },
       "VsRoute": {
         "additionalProperties": false,
-        "description": "Route a request to a pool or answer it with a redirect.\n\nAttributes:\n    order: Position among path routes; lower runs first. Host-only routes are looked up in map\n        files and are order-independent (exact host wins over wildcard).\n    match: What the request must match. Must not be empty.\n    pool_id: Target pool, or ``None`` when ``redirect`` is set.\n    redirect: Redirect to answer with, or ``None`` when ``pool_id`` is set.",
+        "description": "Route a request to a pool, split it over weighted pools, or answer it with a redirect.\n\nAttributes:\n    order: Position among path routes; lower runs first. Host-only routes are looked up in map\n        files and are order-independent (exact host wins over wildcard).\n    match: What the request must match. Must not be empty.\n    pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.\n    redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.\n    fallback_pool_ids: Priority groups: pools tried in order when every server of the pool\n        before them is down (``pool_id`` only; up to three; ADR 0119).\n    pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each\n        request is sent to one of them at random in that proportion (ADR 0119).\n\nExample:\n    >>> import uuid\n    >>> route = VsRoute(\n    ...     match=RouteMatch(host=\"app.example.test\"),\n    ...     pools=(\n    ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),\n    ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),\n    ...     ),\n    ... )\n    >>> len(route.pool_ids)\n    2",
         "properties": {
+          "fallback_pool_ids": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Fallback Pool Ids",
+            "type": "array"
+          },
           "match": {
             "$ref": "#/components/schemas/RouteMatch"
           },
@@ -17883,6 +18727,15 @@
             ],
             "title": "Pool Id"
           },
+          "pools": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WeightedPool"
+            },
+            "maxItems": 8,
+            "title": "Pools",
+            "type": "array"
+          },
           "redirect": {
             "anyOf": [
               {
@@ -17898,6 +18751,29 @@
           "match"
         ],
         "title": "VsRoute",
+        "type": "object"
+      },
+      "WeightedPool": {
+        "additionalProperties": false,
+        "description": "One target of a weighted route: a pool and its share of the matching requests.\n\nExample:\n    >>> import uuid\n    >>> WeightedPool(pool_id=uuid.UUID(int=1), weight=90).weight\n    90",
+        "properties": {
+          "pool_id": {
+            "format": "uuid",
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "weight": {
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pool_id",
+          "weight"
+        ],
+        "title": "WeightedPool",
         "type": "object"
       },
       "WouldGrant": {

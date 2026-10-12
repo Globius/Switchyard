@@ -25,6 +25,9 @@ _IDENT = re.compile(r"[a-z0-9]([a-z0-9_-]*[a-z0-9])?")
 _ARG = re.compile(r"[A-Za-z0-9._~/%:@+,;=*-]+")
 _LOCATION = re.compile(r"[A-Za-z0-9._~/%:@+,;=?&*-]+")
 _HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
+_MATCH = re.compile(r"[A-Za-z0-9._:/-]{1,128}")
+_MEDIA = re.compile(r"[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/[a-z0-9][a-z0-9!#$&^_.+-]{0,62}")
+_COOKIE = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _HEADER = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?")
 _VALUE = re.compile(r"[A-Za-z0-9 ._~/:@+,;=*()&!'-]+")
 _PATH = re.compile(r"/[A-Za-z0-9._~/%:@+,;=-]*")
@@ -88,6 +91,54 @@ def header_name(value: str) -> str:
     """
     if not _HEADER.fullmatch(value):
         raise RenderError(f"unsafe header name {value!r}")
+    return value
+
+
+def cookie_name(value: str) -> str:
+    """Return ``value`` if it is a plain cookie name, else raise.
+
+    Example:
+        >>> cookie_name("SY_SRV")
+        'SY_SRV'
+        >>> cookie_name("a=b")
+        Traceback (most recent call last):
+            ...
+        switchyard.render.escape.RenderError: unsafe cookie name 'a=b'
+    """
+    if not _COOKIE.fullmatch(value):
+        raise RenderError(f"unsafe cookie name {value!r}")
+    return value
+
+
+def media_type(value: str) -> str:
+    """Return ``value`` if it is a plain media type such as ``text/html``, else raise.
+
+    Example:
+        >>> media_type("application/json")
+        'application/json'
+        >>> media_type("text/html; charset=x")
+        Traceback (most recent call last):
+            ...
+        switchyard.render.escape.RenderError: unsafe media type 'text/html; charset=x'
+    """
+    if not _MEDIA.fullmatch(value):
+        raise RenderError(f"unsafe media type {value!r}")
+    return value
+
+
+def match_text(value: str) -> str:
+    """Return ``value`` if it is safe literal text for a health check match, else raise.
+
+    Example:
+        >>> match_text("status_ok")
+        'status_ok'
+        >>> match_text('a"b')
+        Traceback (most recent call last):
+            ...
+        switchyard.render.escape.RenderError: unsafe match text 'a"b'
+    """
+    if not _MATCH.fullmatch(value):
+        raise RenderError(f"unsafe match text {value!r}")
     return value
 
 

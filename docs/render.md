@@ -102,16 +102,32 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Service `deny_list_id` | HTTP: `http-request deny deny_status 403 if { src -f <dir>/lists/<name>.cidr }` after the client address is restored; TCP: `tcp-request session reject if { src -f ... }` |
 | Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
-| Pool `persistence` (source IP) | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
+| Pool `persistence` `source_ip` | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
+| Pool `persistence` `http_cookie` | `cookie <name> insert indirect nocache [maxlife <t>s] [secure] [httponly]` (or `rewrite`, `prefix`) and `cookie m<12 hex>` on every server: an opaque hash of the pool and member ids, never the server name or address (ADR 0105) |
+| Pool `persistence` `header`, `uri` | `stick-table type string len 128 size <n> expire <t>s` and `stick on req.hdr(<H>)`, `stick on path` or `stick on url_param(<p>)` (ADR 0105); `http` pools only |
+| Port `tls_passthrough` + routes (`tcp` service) | `tcp-request inspect-delay 5s`, `tcp-request content accept if { req.ssl_hello_type 1 }`, and `use_backend %[req.ssl_sni,lower,map(...)]` over `haproxy/maps/<name>-sni.map` and `-sni-wild.map`; no certificate (ADR 0115) |
+| Port `http3` | a second `bind quic4@<vip>:<port> ssl crt-list ... alpn h3` (`quic6@` for IPv6) and `http-response set-header alt-svc 'h3=":<port>"; ma=86400'` (ADR 0116) |
+| Pool `backend_protocol` | `h2`: `alpn h2` on TLS servers; `h2c`: `proto h2` on plain servers (gRPC backends; ADR 0116) |
+| Pool `tunnel_timeout_s` | `timeout tunnel <n>s` in the backend (WebSocket and gRPC idle time; ADR 0116) |
+| Service `compression` | `compression algo <a>...` and `compression type <t>...` in the frontend (ADR 0117) |
+| SE group `peers` | a `peers sy_peers` section with one `peer <name> <address>:<port>` per engine, and `peers sy_peers` on every stick table; each engine's host name must be one of the peer names (ADR 0118) |
+| Route `pools` (weighted) | one `http-request set-var(txn.pick) rand(100)` per request, then one `use_backend <pool> if <match> { var(txn.pick) -m int lt <cumulative weight> }` per pool except the last, which takes the rest (ADR 0119) |
+| Route `fallback_pool_ids` | `use_backend <pool> if <match> { nbsrv(<pool>) gt 0 }` per pool in order, the last without the condition (ADR 0119) |
+| Service `cache` | a `cache sy_cache_<name>` section (`total-max-size` MB, `max-object-size` bytes, `max-age` s) and `http-request cache-use` / `http-response cache-store` after the policy rules (ADR 0117); at most 1024 MB per SE group |
 | Pool `passive_check`, `slow_start_s` | server options `observe <layer> error-limit <n> on-error <action>` and `slowstart <n>s`; both need the pool's health monitor (ADR 0066) |
 | Port `tls_profile` | `ssl-min-ver`, `ciphers` and `ciphersuites` on the TLS `bind` (`modern`, `intermediate`, `legacy`; none keeps the default), see ADR 0067 |
 | Port `client_ca_id`, `client_verify` | `ca-file certs/ca-<name>.pem verify required|optional` (and `crl-file certs/ca-<name>.crl`) on the TLS `bind`; the files travel in the agent bundle (ADR 0070) |
 | Certificate `ocsp_stapling` | `[ocsp-update on]` on the certificate's `crt-list` line |
 | Pool `tls`, `tls_verify` | server options `ssl verify none` or `ssl verify required ca-file /etc/ssl/certs/ca-certificates.crt`, plus `sni` from the Host header on HTTP pools |
 | Member `address`, `port` | `server <name> <ip>[:<port>]`; a member without a port uses the client's port |
+| Member `backup`, `maxconn` | `backup` and `maxconn <n>` on the server line (ADR 0106); `drain_timeout_s` is controller-side only (ADR 0109) |
+| Pool `send_proxy` | `send-proxy` (`v1`) or `send-proxy-v2` on every server, and `check-send-proxy` when the pool has a monitor (ADR 0106) |
+| Pool `client_certificate_id` | `crt /etc/switchyard/certs/<name>.pem` after the `ssl` options; the certificate and key travel in the agent bundle like a front-end certificate (ADR 0107) |
 | Member `weight`, `admin_state` | `weight <n>`; `drain` and `disabled` both add the `disabled` keyword (see ADR 0006) |
 | Health monitor `tcp` | `check` on each server (`port <n>` when the monitor sets one) |
 | Health monitor `http` | `option httpchk`, `http-check send meth <m> uri <path> [ver HTTP/1.1 hdr Host <h>]`, `http-check expect status <codes>` |
+| Health monitor `http` `expect_body`, `expect_header` | `http-check expect string <text>` or `http-check expect hdr name <H> [value <v>]`; one of `expect_status`, `expect_body`, `expect_header`; match text and header values may only use letters, digits and `._:/-` (ADR 0108) |
+| Health monitor `tcp` with `preset` | `option redis-check`, `option smtpchk`, `option ldap-check` or `option mysql-check` (ADR 0108) |
 | Monitor `interval_s`, `rise`, `fall`, `timeout_s` | `default-server inter <i>s fall <f> rise <r>` and `timeout check <t>s` |
 | Pool with a monitor and `tls` | `check-ssl` on the servers |
 

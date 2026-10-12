@@ -188,7 +188,7 @@ def virtual_service_members(
     """
     if not service.enabled:
         return ()
-    pool_ids = {r.pool_id for r in service.routes if r.pool_id}
+    pool_ids = {pid for r in service.routes for pid in r.pool_ids}
     if service.default_pool_id:
         pool_ids.add(service.default_pool_id)
     rows: list[MemberRow] = []
@@ -250,7 +250,7 @@ def virtual_service_health(
     """
     if not service.enabled:
         return "disabled", 0, 0
-    pool_ids = [r.pool_id for r in service.routes if r.pool_id]
+    pool_ids = [pid for r in service.routes for pid in r.pool_ids]
     if service.default_pool_id:
         pool_ids.append(service.default_pool_id)
     pools = [p for p in snapshot.pools if p.id in set(pool_ids)]

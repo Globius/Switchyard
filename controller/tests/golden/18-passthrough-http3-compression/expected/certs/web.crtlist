@@ -1,0 +1,1 @@
+/etc/switchyard/certs/web.pem app.example.test grpc.example.test plain-grpc.example.test

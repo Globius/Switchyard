@@ -10,6 +10,9 @@ frontend vs_{{ f.name }}
     timeout tarpit {{ f.tarpit_s }}s
 {% endif %}
 {% endif %}
+{% for option in f.options %}
+    {{ option }}
+{% endfor %}
 {% for rule in f.connection_rules %}
     {{ rule }}
 {% endfor %}

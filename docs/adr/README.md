@@ -68,6 +68,18 @@ Date: YYYY-MM-DD
 | [0077](0077-wait-for-storage-reloads.md) | Wait for the reload a storage call starts | Accepted |
 | [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
+| [0105](0105-pool-persistence-kinds.md) | Pool persistence: cookie, header and URI | Accepted |
+| [0106](0106-member-options-and-send-proxy.md) | Member backup and maxconn, PROXY protocol to members | Accepted |
+| [0107](0107-backend-client-certificate.md) | Client certificate to pool members (backend mTLS) | Accepted |
+| [0108](0108-health-check-presets.md) | Health checks: body and header match, protocol presets | Accepted |
+| [0109](0109-timed-member-drain.md) | Timed member drain | Accepted |
+| [0115](0115-sni-passthrough.md) | TLS passthrough with SNI routing on TCP services | Accepted |
+| [0116](0116-http3-grpc-websocket.md) | HTTP/3, gRPC backends and WebSocket timeout | Accepted |
+| [0117](0117-response-compression.md) | Response compression | Accepted |
+| [0118](0118-persistence-peers.md) | Persistence table sync between engines (peers) | Accepted |
+| [0119](0119-weighted-pool-routes.md) | Weighted pool routes (canary and blue-green) | Accepted |
+| [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
+| [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
 | [0147](0147-country-and-reputation-ip-lists.md) | Country and reputation IP lists | Accepted |

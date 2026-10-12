@@ -5005,6 +5005,39 @@ export interface components {
             pem: string;
         };
         /**
+         * CacheSettings
+         * @description HAProxy small-object cache for the responses of an ``http`` service (ADR 0117).
+         *
+         *     Only responses the origin marks cacheable are stored, for ``GET`` and ``HEAD`` requests without
+         *     ``Authorization``; ``Vary`` is honoured. Rate limits and deny rules run before the cache.
+         *
+         *     Attributes:
+         *         size_mb: Memory of the cache in megabytes (1 to 256).
+         *         max_object_kb: Largest response body kept, in kilobytes (1 to 8192).
+         *         max_age_s: Longest time an entry is served without asking the origin (1 to 86400).
+         *
+         *     Example:
+         *         >>> CacheSettings().size_mb
+         *         16
+         */
+        CacheSettings: {
+            /**
+             * Max Age S
+             * @default 60
+             */
+            max_age_s: number;
+            /**
+             * Max Object Kb
+             * @default 1024
+             */
+            max_object_kb: number;
+            /**
+             * Size Mb
+             * @default 16
+             */
+            size_mb: number;
+        };
+        /**
          * CertIdentity
          * @description Map a client certificate to a user and groups (ADR 0136).
          *
@@ -5644,6 +5677,41 @@ export interface components {
              * @enum {string}
              */
             mode: "valid" | "identity" | "groups";
+        };
+        /**
+         * Compression
+         * @description Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
+         *
+         *     Attributes:
+         *         algorithms: In order of preference: ``gzip``, ``deflate``.
+         *         content_types: Media types to compress, such as ``text/html``. Never images or archives.
+         *
+         *     Example:
+         *         >>> Compression().algorithms
+         *         ('gzip',)
+         */
+        Compression: {
+            /**
+             * Algorithms
+             * @default [
+             *       "gzip"
+             *     ]
+             */
+            algorithms: ("gzip" | "deflate")[];
+            /**
+             * Content Types
+             * @default [
+             *       "text/html",
+             *       "text/plain",
+             *       "text/css",
+             *       "text/javascript",
+             *       "application/javascript",
+             *       "application/json",
+             *       "application/xml",
+             *       "image/svg+xml"
+             *     ]
+             */
+            content_types: string[];
         };
         /**
          * DeployIn
@@ -6751,6 +6819,20 @@ export interface components {
          */
         HaMode: "bgp" | "vrrp";
         /**
+         * HeaderExpect
+         * @description A response header the health check must see, optionally with an exact value.
+         *
+         *     Example:
+         *         >>> HeaderExpect(name="X-Health", value="ok").value
+         *         'ok'
+         */
+        HeaderExpect: {
+            /** Name */
+            name: string;
+            /** Value */
+            value?: string | null;
+        };
+        /**
          * HeaderMatch
          * @description Match a request header. ``value`` is required for the comparisons and forbidden otherwise.
          *
@@ -6804,6 +6886,8 @@ export interface components {
          *         fall: Consecutive failures to mark a server down.
          *         http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.
          *         udp: Optional probe details; only valid for ``udp``.
+         *         preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or
+         *             ``mysql``. Without one a ``tcp`` monitor only connects.
          */
         HealthMonitor: {
             /**
@@ -6826,6 +6910,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -6866,6 +6952,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -6890,6 +6978,8 @@ export interface components {
             name?: string | null;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /** Rise */
             rise?: number | null;
             /** Timeout S */
@@ -6929,6 +7019,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -7035,6 +7127,9 @@ export interface components {
          * @description HTTP health check request and expectation.
          */
         HttpCheck: {
+            /** Expect Body */
+            expect_body?: string | null;
+            expect_header?: components["schemas"]["HeaderExpect"] | null;
             /**
              * Expect Status
              * @default []
@@ -8604,6 +8699,38 @@ export interface components {
             on_error: "mark-down" | "fastinter" | "fail-check" | "sudden-death";
         };
         /**
+         * PeerMember
+         * @description One service engine in a peer group: its HAProxy host name and its backend-network address.
+         *
+         *     Example:
+         *         >>> PeerMember(name="se-1", address="10.20.0.5").name
+         *         'se-1'
+         */
+        PeerMember: {
+            /** Address */
+            address: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PeerSync
+         * @description Share persistence tables between the engines of a group (HAProxy ``peers``; ADR 0118).
+         *
+         *     Attributes:
+         *         port: TCP port the engines use to talk to each other, on the backend network.
+         *         members: Every engine of the group, by the name HAProxy finds as its own (the host name)
+         *             and the address it listens on. At least two, at most 16.
+         */
+        PeerSync: {
+            /** Members */
+            members: components["schemas"]["PeerMember"][];
+            /**
+             * Port
+             * @default 10000
+             */
+            port: number;
+        };
+        /**
          * PermissionMatrix
          * @description The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.
          */
@@ -8645,6 +8772,79 @@ export interface components {
             verb: "apply" | "apply_bypass" | "approve" | "cancel" | "change" | "create" | "deploy" | "disable" | "edit" | "enable" | "list" | "manage" | "read" | "reject" | "request_approval" | "retry" | "rollback" | "set_state" | "write";
         };
         /**
+         * PersistenceCookie
+         * @description Pin a client to one member with an HTTP cookie (HAProxy ``cookie``), ``http`` pools only.
+         *
+         *     Attributes:
+         *         name: Cookie name.
+         *         mode: ``insert`` makes HAProxy set the cookie; ``rewrite`` rewrites a cookie the member
+         *             sets; ``prefix`` prefixes the member's own cookie value.
+         *         ttl_s: ``insert`` only: lifetime of the cookie in seconds (``maxlife``); omitted gives a
+         *             session cookie.
+         *         secure: ``insert`` only: add the ``Secure`` attribute.
+         *         http_only: ``insert`` only: add the ``HttpOnly`` attribute.
+         *
+         *     Example:
+         *         >>> PersistenceCookie(name="SY_SRV", mode="insert", ttl_s=3600).mode
+         *         'insert'
+         */
+        PersistenceCookie: {
+            /**
+             * Http Only
+             * @default true
+             */
+            http_only: boolean;
+            /**
+             * Mode
+             * @default insert
+             * @enum {string}
+             */
+            mode: "insert" | "rewrite" | "prefix";
+            /** Name */
+            name: string;
+            /**
+             * Secure
+             * @default false
+             */
+            secure: boolean;
+            /** Ttl S */
+            ttl_s?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "http_cookie";
+        };
+        /**
+         * PersistenceHeader
+         * @description Pin requests that carry the same value of a header to one member (``stick on hdr``).
+         *
+         *     ``http`` pools only. Requests without the header fall back to the load-balancing algorithm.
+         *
+         *     Example:
+         *         >>> PersistenceHeader(header="X-Session").timeout_s
+         *         1800
+         */
+        PersistenceHeader: {
+            /** Header */
+            header: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Timeout S
+             * @default 1800
+             */
+            timeout_s: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "header";
+        };
+        /**
          * PersistenceSourceIp
          * @description Pin a client address to one member (HAProxy ``stick on src``).
          */
@@ -8660,11 +8860,50 @@ export interface components {
              */
             timeout_s: number;
             /**
-             * Type
-             * @default source_ip
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             type: "source_ip";
+        };
+        /**
+         * PersistenceUri
+         * @description Pin requests with the same URI path, or the same query parameter, to one member.
+         *
+         *     ``http`` pools only.
+         *
+         *     Attributes:
+         *         source: ``path`` sticks on the request path; ``url_param`` on the value of query
+         *             parameter ``param``.
+         *         param: The query parameter name, required for ``url_param`` and forbidden for ``path``.
+         *
+         *     Example:
+         *         >>> PersistenceUri(source="url_param", param="session").source
+         *         'url_param'
+         */
+        PersistenceUri: {
+            /** Param */
+            param?: string | null;
+            /**
+             * Source
+             * @default path
+             * @enum {string}
+             */
+            source: "path" | "url_param";
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Timeout S
+             * @default 1800
+             */
+            timeout_s: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "uri";
         };
         /**
          * PlacementRead
@@ -8695,12 +8934,29 @@ export interface components {
          *         passive_check: Also judge members by their live traffic. Needs a health monitor.
          *         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
          *             weight (HAProxy ``slowstart``). Needs a health monitor.
+         *         backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,
+         *             ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,
+         *             needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).
+         *         tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2
+         *             stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``
+         *             keeps the default of one hour.
+         *         send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
+         *         client_certificate_id: Server certificate HAProxy presents to members (backend
+         *             mutual TLS). Needs ``tls``.
          *         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
          *         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
          */
         Pool: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
@@ -8717,7 +8973,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**
@@ -8735,6 +8994,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
             /**
              * Version
              * @default 1
@@ -8745,6 +9006,14 @@ export interface components {
         PoolCreate: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
@@ -8756,7 +9025,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**
@@ -8769,6 +9041,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
         };
         /**
          * PoolDiscovery
@@ -8819,6 +9093,11 @@ export interface components {
          *         weight: 0-256; 0 takes no new connections.
          *         admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.
          *         name: HAProxy server name; derived from address and port when omitted.
+         *         backup: A backup member takes traffic only when every non-backup member is down.
+         *         maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.
+         *         drain_timeout_s: With ``admin_state`` ``drain``: seconds after which the controller moves
+         *             the member to ``disabled`` (a periodic job, ADR 0109). ``None`` drains until an
+         *             operator acts. Never reaches the engine configuration.
          */
         PoolMember: {
             /** Address */
@@ -8826,10 +9105,19 @@ export interface components {
             /** @default enabled */
             admin_state: components["schemas"]["AdminState"];
             /**
+             * Backup
+             * @default false
+             */
+            backup: boolean;
+            /** Drain Timeout S */
+            drain_timeout_s?: number | null;
+            /**
              * Id
              * Format: uuid
              */
             id: string;
+            /** Maxconn */
+            maxconn?: number | null;
             /** Name */
             name?: string | null;
             /** Port */
@@ -8843,6 +9131,10 @@ export interface components {
         /** PoolPatch */
         PoolPatch: {
             algorithm?: components["schemas"]["Algorithm"] | null;
+            /** Backend Protocol */
+            backend_protocol?: ("http1" | "h2" | "h2c") | null;
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
@@ -8851,13 +9143,18 @@ export interface components {
             /** Name */
             name?: string | null;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /** Tls */
             tls?: boolean | null;
             /** Tls Verify */
             tls_verify?: boolean | null;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
         };
         /**
          * PoolRead
@@ -8867,10 +9164,18 @@ export interface components {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
             /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
+            /**
              * Changed Fields
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
@@ -8889,7 +9194,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**
@@ -8907,6 +9215,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
             /**
              * Version
              * @default 1
@@ -10286,6 +10596,7 @@ export interface components {
          *             a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.
          *         canary_seconds: How long the canary SE is watched after a push before the rest of the
          *             group is updated (0 skips the wait).
+         *         peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
          */
         SeGroup: {
             /**
@@ -10308,6 +10619,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
             /**
@@ -10338,6 +10650,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
         };
@@ -10364,6 +10677,7 @@ export interface components {
             name?: string | null;
             /** Networks */
             networks?: components["schemas"]["SeGroupNetwork"][] | null;
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
         };
@@ -10399,6 +10713,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
             /**
@@ -11242,15 +11557,19 @@ export interface components {
          *             reputation list, ADR 0147). Applies to the client address after restoration.
          *         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
          *             client address; honoured only when the connection source is in the allow list.
+         *         compression: Response compression (``http`` only; ADR 0117).
+         *         cache: Response cache (``http`` only; ADR 0117).
          */
         VirtualService: {
             /** Allow List Id */
             allow_list_id?: string | null;
+            cache?: components["schemas"]["CacheSettings"] | null;
             /**
              * Certificate Ids
              * @default []
              */
             certificate_ids: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** Deny List Id */
@@ -11311,11 +11630,13 @@ export interface components {
         VirtualServiceCreate: {
             /** Allow List Id */
             allow_list_id?: string | null;
+            cache?: components["schemas"]["CacheSettings"] | null;
             /**
              * Certificate Ids
              * @default []
              */
             certificate_ids: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** Deny List Id */
@@ -11422,8 +11743,10 @@ export interface components {
         VirtualServicePatch: {
             /** Allow List Id */
             allow_list_id?: string | null;
+            cache?: components["schemas"]["CacheSettings"] | null;
             /** Certificate Ids */
             certificate_ids?: string[] | null;
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** Deny List Id */
@@ -11457,6 +11780,7 @@ export interface components {
         VirtualServiceRead: {
             /** Allow List Id */
             allow_list_id?: string | null;
+            cache?: components["schemas"]["CacheSettings"] | null;
             /**
              * Certificate Ids
              * @default []
@@ -11467,6 +11791,7 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** Deny List Id */
@@ -11776,6 +12101,10 @@ export interface components {
          *             (mutual TLS). Needs ``tls``.
          *         client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
          *             certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
+         *         tls_passthrough: ``tcp`` services only: do not terminate TLS; route by the SNI in the
+         *             client hello (ADR 0115). Excludes every TLS option of the port.
+         *         http3: Also listen for HTTP/3 over QUIC on the same number (UDP) and advertise it with
+         *             ``Alt-Svc`` (ADR 0116). Needs ``tls`` and ``http2``.
          */
         VsPort: {
             /** Client Ca Id */
@@ -11791,6 +12120,11 @@ export interface components {
              * @default false
              */
             http2: boolean;
+            /**
+             * Http3
+             * @default false
+             */
+            http3: boolean;
             /** Https Redirect Port */
             https_redirect_port?: number | null;
             /** Port */
@@ -11805,20 +12139,46 @@ export interface components {
              * @default false
              */
             tls: boolean;
+            /**
+             * Tls Passthrough
+             * @default false
+             */
+            tls_passthrough: boolean;
             tls_profile?: components["schemas"]["TlsProfile"] | null;
         };
         /**
          * VsRoute
-         * @description Route a request to a pool or answer it with a redirect.
+         * @description Route a request to a pool, split it over weighted pools, or answer it with a redirect.
          *
          *     Attributes:
          *         order: Position among path routes; lower runs first. Host-only routes are looked up in map
          *             files and are order-independent (exact host wins over wildcard).
          *         match: What the request must match. Must not be empty.
-         *         pool_id: Target pool, or ``None`` when ``redirect`` is set.
-         *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` is set.
+         *         pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.
+         *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.
+         *         fallback_pool_ids: Priority groups: pools tried in order when every server of the pool
+         *             before them is down (``pool_id`` only; up to three; ADR 0119).
+         *         pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each
+         *             request is sent to one of them at random in that proportion (ADR 0119).
+         *
+         *     Example:
+         *         >>> import uuid
+         *         >>> route = VsRoute(
+         *         ...     match=RouteMatch(host="app.example.test"),
+         *         ...     pools=(
+         *         ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),
+         *         ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),
+         *         ...     ),
+         *         ... )
+         *         >>> len(route.pool_ids)
+         *         2
          */
         VsRoute: {
+            /**
+             * Fallback Pool Ids
+             * @default []
+             */
+            fallback_pool_ids: string[];
             match: components["schemas"]["RouteMatch"];
             /**
              * Order
@@ -11827,7 +12187,30 @@ export interface components {
             order: number;
             /** Pool Id */
             pool_id?: string | null;
+            /**
+             * Pools
+             * @default []
+             */
+            pools: components["schemas"]["WeightedPool"][];
             redirect?: components["schemas"]["RedirectAction"] | null;
+        };
+        /**
+         * WeightedPool
+         * @description One target of a weighted route: a pool and its share of the matching requests.
+         *
+         *     Example:
+         *         >>> import uuid
+         *         >>> WeightedPool(pool_id=uuid.UUID(int=1), weight=90).weight
+         *         90
+         */
+        WeightedPool: {
+            /**
+             * Pool Id
+             * Format: uuid
+             */
+            pool_id: string;
+            /** Weight */
+            weight: number;
         };
         /**
          * WouldGrant
