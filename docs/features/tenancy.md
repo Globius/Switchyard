@@ -11,7 +11,7 @@ automation a tenant token (`/tenants/{t}/tokens`). `GET /permissions` and `GET /
 Guides: [Signing in, roles and access](../auth.md), [Controller settings](../controller-settings.md).
 
 **Limits.** Tenancy is enforced twice, in the service layer and by PostgreSQL row-level security, and cannot be switched off.
-Tenant quotas cap objects and table sizes. Secret references must stay inside the tenant's own OpenBao path. Virtual services and pools
+Tenant quotas cap objects and table sizes; a tenant administrator asks for more in [Usage and requests](quota-requests.md). Secret references must stay inside the tenant's own OpenBao path. Virtual services and pools
 carry [labels](pools.md#labels) for grouping.
 
 **Decisions:** [0002](../adr/0002-tenancy-rls.md), [0012](../adr/0012-user-login-and-sessions.md),

@@ -14,7 +14,7 @@ Every change to a tenant's load-balancing objects goes through a [change set](ch
 | Request policies | [Policy sets and request stages](policies.md), [Rate and concurrency limits](rate-limits.md), [Country and reputation lists](ip-lists.md) |
 | Security | [WAF](waf.md), [Bot and DDoS protection](bot-protection.md), [Login in front of a service](access-login.md), [API tokens and client certificates](api-protection.md) |
 | Placement and HA | [VIP placement: VRRP and BGP](vip-placement.md), [Engines on Proxmox](engines.md), [GSLB](gslb.md) |
-| Operating | [Change sets, revisions and drift](change-sets.md), [Alerting](alerting.md), [Metrics and logs](telemetry.md), [Audit log](audit.md), [Tenants, roles and sign-in](tenancy.md) |
+| Operating | [Change sets, revisions and drift](change-sets.md), [Alerting](alerting.md), [Metrics and logs](telemetry.md), [Audit log](audit.md), [Tenants, roles and sign-in](tenancy.md), [Usage, quotas and quota requests](quota-requests.md) |
 | Integrations | [Kubernetes](kubernetes.md), [Pool discovery from Proxmox tags](pool-discovery.md), [Avi importer](avi-import.md), [OpenTofu provider](opentofu.md) |
 
 Not built, on purpose: multi-site and remote engines ([ADR 0180](../adr/0180-multi-site-and-remote-engines.md) is only a

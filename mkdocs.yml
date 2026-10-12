@@ -83,6 +83,7 @@ nav:
       - Metrics and logs: features/telemetry.md
       - Audit log: features/audit.md
       - Tenants, roles and sign-in: features/tenancy.md
+      - Usage, quotas and quota requests: features/quota-requests.md
       - Kubernetes: features/kubernetes.md
       - Pool discovery from Proxmox tags: features/pool-discovery.md
       - Avi importer: features/avi-import.md

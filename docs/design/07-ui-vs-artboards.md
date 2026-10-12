@@ -456,3 +456,9 @@ API and the ADRs and need a design pass.
   lists show label chips; clicking one adds its selector. Labels are edited with a chip input ("key=value") in the
   virtual service settings and the pool sheet. Deviation from the handoff: a text box, not a menu of known keys, because
   the API has no list of keys.
+- **Tenant portal (ADR 0199).** New page "Usage and requests" in the Tenant nav group (`/t/:tenant/portal`): quota table with
+  used, a meter, a word for Nearly full (80 %) or Full, and "Ask for more" (a dialog with the new limit and the reason);
+  below it the tenant's requests with state, the answer and Withdraw; at the top three links for getting started. Admin gets
+  "Quota requests" with a waiting count and Approve (grant between the current and requested limit, optional note) and Deny
+  (note required) dialogs. Deviation: there is no artboard, so the layout reuses the tables and dialogs of Access and the
+  Tenants admin page; the meter is the only new element and always comes with a word, never colour alone.

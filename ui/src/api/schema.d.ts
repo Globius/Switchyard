@@ -689,6 +689,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quota-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List quota requests of every tenant
+         * @description The queue a system administrator works, oldest first.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_quota_requests_api_v1_quota_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quota-requests/{request}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a quota request
+         * @description Raise the tenant's quota to the requested limit, or to `granted_limit` if lower.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["approve_quota_request_api_v1_quota_requests__request__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quota-requests/{request}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deny a quota request
+         * @description Refuse it; `note` is required and is shown to the tenant.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["deny_quota_request_api_v1_quota_requests__request__deny_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/role-mappings": {
         parameters: {
             query?: never;
@@ -2985,6 +3051,59 @@ export interface paths {
         get: operations["tenant_principals_api_v1_tenants__t__principals_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/quota-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's quota requests
+         * @description Newest first. Anyone who can read the tenant can read its requests.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_tenant_quota_requests_api_v1_tenants__t__quota_requests_get"];
+        put?: never;
+        /**
+         * Ask for a higher quota
+         * @description File a request for a higher limit on one resource (tenant administrators).
+         *
+         *     The tenant must already have a limit for the resource, the new limit must be higher, and
+         *     only one request per resource can be pending. A system administrator decides it.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_quota_request_api_v1_tenants__t__quota_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/quota-requests/{request}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw a quota request
+         * @description Take back a pending request. A request that was already decided answers `409`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["withdraw_quota_request_api_v1_tenants__t__quota_requests__request__withdraw_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10043,12 +10162,12 @@ export interface components {
              * Object
              * @enum {string}
              */
-            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "kubernetes_cluster" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
+            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "kubernetes_cluster" | "member" | "quota" | "quota_request" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
             /**
              * Verb
              * @enum {string}
              */
-            verb: "apply" | "apply_bypass" | "approve" | "cancel" | "change" | "create" | "deploy" | "disable" | "edit" | "enable" | "list" | "manage" | "read" | "reject" | "request_approval" | "retry" | "rollback" | "set_state" | "write";
+            verb: "apply" | "apply_bypass" | "approve" | "cancel" | "change" | "create" | "decide" | "deploy" | "disable" | "edit" | "enable" | "list" | "manage" | "read" | "reject" | "request" | "request_approval" | "retry" | "rollback" | "set_state" | "write";
         };
         /**
          * PersistenceCookie
@@ -10933,6 +11052,104 @@ export interface components {
          * @enum {string}
          */
         QueryOp: "present" | "equals";
+        /**
+         * QuotaDecisionIn
+         * @description The decision on a quota request.
+         */
+        QuotaDecisionIn: {
+            /**
+             * Granted Limit
+             * @description Approve only: the new limit, between the current limit and the requested one. Default: the requested limit.
+             */
+            granted_limit?: number | null;
+            /**
+             * Note
+             * @description Shown to the tenant. Required when the request is denied.
+             */
+            note?: string | null;
+        };
+        /**
+         * QuotaRequestIn
+         * @description A request for a higher limit.
+         */
+        QuotaRequestIn: {
+            /**
+             * Reason
+             * @description Why the tenant needs it.
+             */
+            reason: string;
+            /**
+             * Requested Limit
+             * @description The limit the tenant wants. It must be higher than the current one.
+             */
+            requested_limit: number;
+            /**
+             * Resource
+             * @description The quota key, an object type such as `virtual_service`, or `stick_table_entries`. The tenant must already have a limit for it.
+             */
+            resource: string;
+        };
+        /**
+         * QuotaRequestRead
+         * @description A quota request.
+         */
+        QuotaRequestRead: {
+            /**
+             * Current Limit
+             * @description The tenant's limit when the request was filed.
+             */
+            current_limit: number;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * Decided By
+             * @description The decider, or the requester who withdrew it.
+             */
+            decided_by: string | null;
+            /** Decision Note */
+            decision_note: string | null;
+            /**
+             * Granted Limit
+             * @description Set when the request was approved.
+             */
+            granted_limit: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested By */
+            requested_by: string;
+            /** Requested Limit */
+            requested_limit: number;
+            /** Resource */
+            resource: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "approved" | "denied" | "withdrawn";
+            /** Tenant */
+            tenant: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+        };
+        /**
+         * QuotaRequestState
+         * @description Where a quota request stands.
+         * @enum {string}
+         */
+        QuotaRequestState: "pending" | "approved" | "denied" | "withdrawn";
         /**
          * RateLimitPolicySet
          * @description Rate and concurrency limits per client or key (ADR 0110).
@@ -17078,6 +17295,258 @@ export interface operations {
                 };
             };
             /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_quota_requests_api_v1_quota_requests_get: {
+        parameters: {
+            query?: {
+                /** @description Only requests in this state; default `pending`. */
+                state?: components["schemas"]["QuotaRequestState"] | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "current_limit": 20,
+                     *         "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *         "reason": "Two product teams move onto the platform in November.",
+                     *         "requested_at": "2026-10-12T09:00:00Z",
+                     *         "requested_by": "user:miguel@example.test",
+                     *         "requested_limit": 50,
+                     *         "resource": "virtual_service",
+                     *         "state": "pending",
+                     *         "tenant": "acme",
+                     *         "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    approve_quota_request_api_v1_quota_requests__request__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Quota request id. */
+                request: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "granted_limit": 40,
+                 *       "note": "40 for now."
+                 *     }
+                 */
+                "application/json": components["schemas"]["QuotaDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "current_limit": 20,
+                     *       "granted_limit": 40,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *       "reason": "Two product teams move onto the platform in November.",
+                     *       "requested_at": "2026-10-12T09:00:00Z",
+                     *       "requested_by": "user:miguel@example.test",
+                     *       "requested_limit": 50,
+                     *       "resource": "virtual_service",
+                     *       "state": "approved",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    deny_quota_request_api_v1_quota_requests__request__deny_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Quota request id. */
+                request: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "note": "Delete unused services first."
+                 *     }
+                 */
+                "application/json": components["schemas"]["QuotaDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "current_limit": 20,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *       "reason": "Two product teams move onto the platform in November.",
+                     *       "requested_at": "2026-10-12T09:00:00Z",
+                     *       "requested_by": "user:miguel@example.test",
+                     *       "requested_limit": 50,
+                     *       "resource": "virtual_service",
+                     *       "state": "denied",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29293,6 +29762,272 @@ export interface operations {
             };
             /** @description The tenant or object does not exist. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_tenant_quota_requests_api_v1_tenants__t__quota_requests_get: {
+        parameters: {
+            query?: {
+                /** @description Only requests in this state. */
+                state?: components["schemas"]["QuotaRequestState"] | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "current_limit": 20,
+                     *         "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *         "reason": "Two product teams move onto the platform in November.",
+                     *         "requested_at": "2026-10-12T09:00:00Z",
+                     *         "requested_by": "user:miguel@example.test",
+                     *         "requested_limit": 50,
+                     *         "resource": "virtual_service",
+                     *         "state": "pending",
+                     *         "tenant": "acme",
+                     *         "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_quota_request_api_v1_tenants__t__quota_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "reason": "Two product teams move onto the platform in November.",
+                 *       "requested_limit": 50,
+                 *       "resource": "virtual_service"
+                 *     }
+                 */
+                "application/json": components["schemas"]["QuotaRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "current_limit": 20,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *       "reason": "Two product teams move onto the platform in November.",
+                     *       "requested_at": "2026-10-12T09:00:00Z",
+                     *       "requested_by": "user:miguel@example.test",
+                     *       "requested_limit": 50,
+                     *       "resource": "virtual_service",
+                     *       "state": "pending",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    withdraw_quota_request_api_v1_tenants__t__quota_requests__request__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Quota request id. */
+                request: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "current_limit": 20,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *       "reason": "Two product teams move onto the platform in November.",
+                     *       "requested_at": "2026-10-12T09:00:00Z",
+                     *       "requested_by": "user:miguel@example.test",
+                     *       "requested_limit": 50,
+                     *       "resource": "virtual_service",
+                     *       "state": "withdrawn",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

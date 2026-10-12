@@ -88,7 +88,7 @@ The `.p12` upload and the conflict view were never verified live; `deploy/lab/ch
 | SE scale-out (automatic) | missing | *deferred*: v3; manual deploy and retire exist | |
 | GSLB, PowerDNS | missing | *deferred*: phase 3 | |
 | Packet capture job | missing | *deferred*: phase 3 | |
-| Tenant self-service portal | missing | *deferred*: phase 3 | |
+| Tenant self-service portal | done | "Usage and requests" page and quota requests (ADR 0199) | Billing is out of scope (usage only) |
 
 ## 2. Operations and deployment (02 "HA and deployment", "Repo layout")
 
