@@ -79,7 +79,7 @@ const server = setupServer(
       nodes: 3,
       services: 12,
       gateway_api: true,
-      permissions: [],
+      permissions: { "list endpointslices": false, "list gateways": true },
       problems: ["Cannot list endpointslices"],
     }),
   ),
@@ -217,6 +217,15 @@ describe("kubernetes", () => {
     expect(await screen.findByText("Failing")).toBeInTheDocument();
     expect(screen.getByText("Disabled")).toBeInTheDocument();
     expect(screen.getByText("New")).toBeInTheDocument();
-    expect(screen.getByText("waiting for a change set to finish")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for a change set")).toBeInTheDocument();
+  });
+
+  it("lists the permissions the test found", async () => {
+    renderIt();
+    await userEvent.click(await screen.findByRole("button", { name: "prod" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Test connection" }));
+    const list = await screen.findByRole("list", { name: "Permissions" });
+    expect(list).toHaveTextContent("✗ list endpointslices");
+    expect(list).toHaveTextContent("✓ list gateways");
   });
 });

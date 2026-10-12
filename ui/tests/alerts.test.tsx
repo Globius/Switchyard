@@ -207,6 +207,17 @@ describe("alerts", () => {
   });
 });
 
+describe("empty alerting", () => {
+  it("says nothing is set up when there are no targets or rules", async () => {
+    server.use(
+      http.get("*/api/v1/tenants/acme/alert-targets", () => HttpResponse.json([])),
+      http.get("*/api/v1/tenants/acme/alert-rules", () => HttpResponse.json([])),
+    );
+    renderIt();
+    expect(await screen.findByText(/Nothing is set up yet/)).toBeInTheDocument();
+  });
+});
+
 describe("pending alerts", () => {
   it("says when a pending alert fires", () => {
     const now = new Date("2026-10-12T10:00:00Z");

@@ -4,7 +4,7 @@
  * time and text; "Load older" follows the cursor.
  */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { api, unwrap } from "@/api/client";
 import { StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton, UnavailableState } from "@/components/sy/states";
@@ -31,6 +31,7 @@ export function statusTone(status: number): "healthy" | "neutral" | "degraded" |
 }
 
 export function RequestLogs({ tenant }: { tenant: string }) {
+  const [open, setOpen] = useState<number | null>(null);
   const [service, setService] = useState("");
   const [cls, setCls] = useState("");
   const [range, setRange] = useState("1h");
@@ -160,26 +161,49 @@ export function RequestLogs({ tenant }: { tenant: string }) {
             </thead>
             <tbody className="divide-y">
               {entries.map((e, i) => (
-                <tr key={`${e.at}-${i}`}>
-                  <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
-                    {shortWhen(e.at)}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs break-all">
-                    <span className="font-semibold">{e.method ?? "—"}</span> {e.path ?? ""}
-                    <span className="block text-muted-foreground">{e.frontend}</span>
-                  </td>
-                  <td className="px-4 py-2">
-                    <StatusPill status={statusTone(e.status)}>{e.status}</StatusPill>
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
-                    {e.duration_ms} ms
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs break-all">{e.client_ip}</td>
-                  <td className="px-4 py-2 font-mono text-xs break-all">
-                    {e.server}
-                    <span className="block text-muted-foreground">{e.backend}</span>
-                  </td>
-                </tr>
+                <Fragment key={`${e.at}-${i}`}>
+                  <tr
+                    className="cursor-pointer hover:bg-accent/40"
+                    aria-expanded={open === i}
+                    onClick={() => setOpen(open === i ? null : i)}
+                  >
+                    <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
+                      {shortWhen(e.at)}
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs break-all">
+                      <span className="font-semibold">{e.method ?? "—"}</span> {e.path ?? ""}
+                      <span className="block text-muted-foreground">{e.frontend}</span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <StatusPill status={statusTone(e.status)}>{e.status}</StatusPill>
+                      {e.waf && (
+                        <StatusPill status="degraded">
+                          {e.waf_action === "drop" ? t("WAF dropped") : t("WAF denied")}
+                        </StatusPill>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
+                      {e.duration_ms} ms
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs break-all">{e.client_ip}</td>
+                    <td className="px-4 py-2 font-mono text-xs break-all">
+                      {e.server}
+                      <span className="block text-muted-foreground">{e.backend}</span>
+                    </td>
+                  </tr>
+                  {open === i && (
+                    <tr>
+                      <td colSpan={6} className="bg-muted/40 px-4 py-2">
+                        <pre
+                          aria-label={t("Raw log line")}
+                          className="overflow-x-auto font-mono text-xs break-all whitespace-pre-wrap"
+                        >
+                          {e.raw || t("No raw line kept.")}
+                        </pre>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>

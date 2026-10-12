@@ -301,7 +301,36 @@ export function ExtraMatch({
 }
 
 /** Host, path and the extra conditions: the whole match for a policy rule. */
-export function MatchEditor({
+/**
+ * The "When" block of a rule: a one-line summary with "Edit conditions", open from the start when
+ * the rule has no conditions yet (Design v53).
+ */
+export function MatchEditor(props: {
+  match: Match;
+  onChange: (m: Match) => void;
+  disabled?: boolean;
+  id: string;
+}) {
+  const summary = describeMatch(props.match);
+  const [open, setOpen] = useState(summary === "every request");
+  if (open) return <MatchFields {...props} />;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="font-medium">{t("When")}</span>
+      <span className="font-mono text-xs">{summary}</span>
+      <Button
+        size="sm"
+        variant="outline"
+        aria-label={`${props.id} edit conditions`}
+        onClick={() => setOpen(true)}
+      >
+        {t("Edit conditions")}
+      </Button>
+    </div>
+  );
+}
+
+function MatchFields({
   match,
   onChange,
   disabled,

@@ -22,6 +22,16 @@ function useSummary(tenant: string) {
   });
 }
 
+function useAlertStatus(tenant: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "alerts"],
+    retry: false,
+    refetchInterval: 30_000,
+    queryFn: async () =>
+      unwrap(await api.GET("/api/v1/tenants/{t}/alerts", { params: { path: { t: tenant } } })),
+  });
+}
+
 function useEngineCount(tenant: string) {
   return useQuery({
     queryKey: ["t", tenant, "engines"],
@@ -93,6 +103,7 @@ export function Home({ tenant }: { tenant: string }) {
   const summary = useSummary(tenant);
   const engines = useEngineCount(tenant);
   const drafts = useOpenDrafts(tenant);
+  const alerts = useAlertStatus(tenant);
   const revisions = useRecentRevisions(tenant);
   const { draft } = useDraft(tenant);
   const name = usePrincipalNames(
@@ -129,6 +140,23 @@ export function Home({ tenant }: { tenant: string }) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.isArray(alerts.data?.firing) && alerts.data && (
+          <Stat
+            label={t("Alerts firing")}
+            value={alerts.data.firing.filter((a) => a.state === "firing").length}
+          >
+            {alerts.data.firing.some((a) => a.state === "pending") && (
+              <StatusPill status="degraded">
+                {t("{n} pending", {
+                  n: alerts.data.firing.filter((a) => a.state === "pending").length,
+                })}
+              </StatusPill>
+            )}
+            <Link to="/t/$tenant/$" params={{ tenant, _splat: "alerts" }} className={LINK}>
+              {t("Open alerts")}
+            </Link>
+          </Stat>
+        )}
         <Stat label={t("Virtual services")} value={s.services.total}>
           {s.services.healthy > 0 && (
             <StatusPill status="healthy">{t("{n} healthy", { n: s.services.healthy })}</StatusPill>

@@ -339,7 +339,15 @@ function EnginesCard({
                             {b.peer} {b.state}
                           </span>
                         ))}
-                        {(st?.agent?.bgp.length ?? 0) === 0 && "—"}
+                        {st?.agent?.waf_expected && !st.agent.waf_running && (
+                          <span
+                            role="alert"
+                            className="w-fit rounded bg-status-down/15 px-1.5 py-0.5 text-xs text-status-down"
+                          >
+                            {t("WAF sidecar not running")}
+                          </span>
+                        )}
+                        {(st?.agent?.bgp.length ?? 0) === 0 && !st?.agent?.waf_expected && "—"}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -1229,6 +1237,21 @@ function Settings({ tenant, group }: { tenant: string; group: Group }) {
               }
             >
               {t("Add engine")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!write.allowed || groupEngines.length === 0}
+              onClick={() => {
+                const backend = group.networks?.find((n) => n.role === "backend")?.network_id;
+                const members = groupEngines.slice(0, 16).map((e) => ({
+                  name: e.name,
+                  address: (e.addresses ?? []).find((a) => a.network_id === backend)?.address ?? "",
+                }));
+                setF({ ...f, peers: { ...f.peers!, members } });
+              }}
+            >
+              {t("Add all engines")}
             </Button>
             <p className="text-xs text-muted-foreground">
               {t(
