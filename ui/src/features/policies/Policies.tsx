@@ -543,14 +543,16 @@ export function Policies({ tenant }: { tenant: string }) {
     editing ?? (first && list.data ? { policy: first, kind: first.kind as Kind } : null);
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1 basis-80">
           <h1 className="text-2xl font-semibold">{t("Policies")}</h1>
           <p className="text-sm text-muted-foreground">
-            {t("Redirect rules and source allow lists, attached to virtual services")}
+            {t(
+              "Redirects, rewrites, fixed responses, rate limits, logins, tokens, client certificates, WAF and bot protection, attached to virtual services",
+            )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <Tip label={write.reason}>
             <Button
               variant="outline"
@@ -624,13 +626,9 @@ export function Policies({ tenant }: { tenant: string }) {
           </Tip>
         </div>
       </div>
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,19rem)_1fr]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,19rem)_minmax(0,1fr)]">
         <div className="space-y-3 rounded-lg border bg-card p-2">
-          <div
-            role="group"
-            aria-label={t("Kind")}
-            className="inline-flex overflow-hidden rounded-md border"
-          >
+          <div role="group" aria-label={t("Kind")} className="flex flex-wrap gap-1">
             {(
               [
                 "all",
@@ -648,7 +646,7 @@ export function Policies({ tenant }: { tenant: string }) {
                 type="button"
                 aria-pressed={filter === k}
                 onClick={() => setFilter(k)}
-                className="px-3 py-1.5 text-sm aria-pressed:bg-accent"
+                className="rounded-md border px-2.5 py-1 text-sm whitespace-nowrap hover:bg-accent/50 aria-pressed:bg-accent"
               >
                 {k === "all"
                   ? t("All")
