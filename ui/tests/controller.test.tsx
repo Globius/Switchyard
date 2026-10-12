@@ -13,6 +13,8 @@ import { routeTree } from "@/routeTree.gen";
 const FUTURE = new Date(Date.now() + 71 * 86_400_000).toISOString();
 const BASE: ControllerState = {
   managed: true,
+  management_tenant: true,
+  reached_at: null,
   fqdn: "switchyard.example.test",
   public_url: "https://switchyard.example.test",
   listen: { vip: "10.40.0.10", ports: [{ port: 443, tls: true, https_redirect_port: null }] },
@@ -190,6 +192,7 @@ describe("Admin > Controller", () => {
     state = {
       ...BASE,
       managed: false,
+      management_tenant: false,
       listen: null,
       certificate: null,
       redirect_urls: [],
@@ -205,5 +208,23 @@ describe("Admin > Controller", () => {
     expect(screen.getByText(/was reverted .*: not confirmed in time/)).toBeInTheDocument();
     expect(screen.getByText(/syctl controller revert/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Listen address (VIP)")).toBeNull();
+  });
+
+  it("says the controller service is not set up and offers the address in use", async () => {
+    state = {
+      ...BASE,
+      managed: false,
+      management_tenant: true,
+      reached_at: "https://[2001:db8::10]:9000",
+      listen: null,
+      certificate: null,
+      redirect_urls: [],
+    };
+    renderIt();
+    expect(await screen.findByText(/controller service has not been set up/)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: /Use \[2001:db8::10\], the address you are on/ }),
+    );
+    expect(screen.getByLabelText("FQDN")).toHaveValue("[2001:db8::10]");
   });
 });

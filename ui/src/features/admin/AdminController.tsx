@@ -121,6 +121,13 @@ export function AdminController() {
       v !== (s.listen?.vip ?? "") ||
       certName !== (s.certificate?.name ?? "")
     : false;
+  const reachedHost = (() => {
+    try {
+      return s?.reached_at ? new URL(s.reached_at).hostname : null;
+    } catch {
+      return null;
+    }
+  })();
   const newFqdn = pending?.after.fqdn ?? null;
   const onNewAddress = newFqdn ? globalThis.location?.hostname === newFqdn : false;
 
@@ -311,9 +318,13 @@ export function AdminController() {
 
       {!d.managed && (
         <p role="note" className="rounded-md bg-muted p-3 text-sm">
-          {t(
-            "There is no management tenant here, so only the FQDN (the public URL) can be changed. The listen address and certificate are managed outside Switchyard.",
-          )}
+          {d.management_tenant
+            ? t(
+                "The controller service has not been set up, so only the FQDN (the public URL) can be changed. The listen address and certificate are managed outside Switchyard.",
+              )
+            : t(
+                "There is no management tenant here, so only the FQDN (the public URL) can be changed. The listen address and certificate are managed outside Switchyard.",
+              )}
         </p>
       )}
       {d.last_result && !pending && (
@@ -348,6 +359,16 @@ export function AdminController() {
               "The name people and API clients use. It must resolve to the listen address below. Sign-in redirect URLs at your identity providers must use it too.",
             )}
           </span>
+          {!d.managed && reachedHost && reachedHost !== f && !readOnly && (
+            <Button type="button" size="sm" variant="outline" onClick={() => setFqdn(reachedHost)}>
+              {t("Use {host}, the address you are on", { host: reachedHost })}
+            </Button>
+          )}
+          {!d.managed && (
+            <span className="block text-xs font-normal text-muted-foreground">
+              {t("While unmanaged, an IP address is allowed (IPv6 in square brackets).")}
+            </span>
+          )}
           {fieldErrors.fqdn && (
             <span role="alert" className="block text-xs font-normal text-status-down">
               {fieldErrors.fqdn}
