@@ -168,9 +168,12 @@ var Definitions = []Definition{
 		Slug:      "certificates",
 		Doc:       "",
 		Resource:  false,
-		PatchKeys: []string{"crl_secret_ref", "name", "not_after", "ocsp_stapling", "purpose", "renew_before_days", "renew_policy", "sans", "secret_ref", "source"},
+		PatchKeys: []string{"acme_provider", "challenge", "crl_secret_ref", "dns_provider", "name", "not_after", "ocsp_stapling", "purpose", "renew_before_days", "renew_policy", "sans", "secret_ref", "source"},
 		Attrs: []Attr{
+			{Name: "acme_provider", Kind: KindString},
+			{Name: "challenge", Kind: KindString, Doc: "How an ACME certificate authority checks control of a name.", Enum: []string{"dns-01", "http-01"}},
 			{Name: "crl_secret_ref", Kind: KindString},
+			{Name: "dns_provider", Kind: KindString},
 			{Name: "name", Kind: KindString, Required: true},
 			{Name: "not_after", Kind: KindString, Required: true},
 			{Name: "ocsp_stapling", Kind: KindBool},

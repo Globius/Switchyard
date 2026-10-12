@@ -36,6 +36,12 @@ def controller_policy(
         '  capabilities = ["list", "read"]',
         "}",
     ]
+    lines += [
+        "# ACME account keys, EAB keys and OAuth client secrets of the ACME providers.",
+        f'path "{mount}/data/system/acme/*" {{',
+        '  capabilities = ["create", "read", "update"]',
+        "}",
+    ]
     for prefix in shared_prefixes:
         path = prefix.removeprefix(f"{mount}/").rstrip("/")
         lines += [

@@ -147,6 +147,21 @@ class HaproxyEngine(Protocol):
         """Change a server's admin state at runtime, without a reload."""
         ...
 
+    async def set_map_entry(self, map_file: str, key: str, value: str) -> None:
+        """Add or replace one entry of a rendered map file at run time (no reload).
+
+        ``map_file`` is the rendered path, for example ``haproxy/maps/acme-http01.map``. The entry
+        is kept in the file too, so a later reload does not lose it.
+
+        Raises:
+            HaproxyError: If the engine has no such map loaded.
+        """
+        ...
+
+    async def remove_map_entry(self, map_file: str, key: str) -> None:
+        """Remove one entry of a map at run time; a missing entry is not an error."""
+        ...
+
     async def close(self) -> None:
         """Release network resources."""
         ...

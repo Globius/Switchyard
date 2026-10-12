@@ -1,10 +1,11 @@
-==> haproxy/haproxy.cfg (haproxy, lines 31-46)
+==> haproxy/haproxy.cfg (haproxy, lines 31-47)
 frontend vs_files
     mode http
     bind 192.0.2.23:80
     bind 192.0.2.23:443 ssl crt-list /etc/switchyard/certs/files.crtlist alpn http/1.1
     option httplog
     option forwardfor
+    http-request return status 200 content-type text/plain lf-string "%[path,map(/etc/switchyard/haproxy/maps/acme-http01.map)]" if { dst_port 80 } { path,map(/etc/switchyard/haproxy/maps/acme-http01.map) -m found }
     http-request del-header X-Forwarded-For
     http-request set-header X-Forwarded-Proto https if { ssl_fc }
     http-request set-header X-Forwarded-Proto http if !{ ssl_fc }

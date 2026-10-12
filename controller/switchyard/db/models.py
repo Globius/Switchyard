@@ -31,6 +31,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, CIDR, INET, JSONB, TIMESTAMP, 
 from sqlalchemy.orm import Mapped, mapped_column
 
 from switchyard.db import (
+    acme_models,  # noqa: F401  (registers the ACME and DNS provider tables)
     auth_models,  # noqa: F401  (registers the login tables)
     ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
 )
@@ -177,6 +178,9 @@ class CertificateRow(TenantOwnedMixin, Base):
         enum_check("renew_policy", dm.RenewPolicy),
         CheckConstraint("renew_before_days BETWEEN 1 AND 365", name="renew_before_days"),
         CheckConstraint("purpose IN ('server', 'client_ca')", name="purpose"),
+        CheckConstraint(
+            "challenge IS NULL OR challenge IN ('dns-01', 'http-01')", name="challenge"
+        ),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -193,6 +197,9 @@ class CertificateRow(TenantOwnedMixin, Base):
     )
     purpose: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'server'"))
     crl_secret_ref: Mapped[str | None] = mapped_column(Text)
+    acme_provider: Mapped[str | None] = mapped_column(Text)
+    challenge: Mapped[str | None] = mapped_column(Text)
+    dns_provider: Mapped[str | None] = mapped_column(Text)
 
 
 class PolicySetRow(TenantOwnedMixin, Base):

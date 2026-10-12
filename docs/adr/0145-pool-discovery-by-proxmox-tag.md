@@ -11,7 +11,7 @@ asks for members that follow Proxmox guests.
 ## Decisions
 
 1. `Pool.discovery` (`source: proxmox_tag`, `tag`, `cidr`, `port`, `weight`) turns a pool into a discovered one. The `pool` table gets
-   a `discovery` JSON column (migration 0023). Nothing in the renderer changes: discovered members are ordinary members.
+   a `discovery` JSON column (migration 0024). Nothing in the renderer changes: discovered members are ordinary members.
 2. A job, `discover_pool_members` (every minute, only where a Proxmox client is configured), lists guests with
    `GET /cluster/resources?type=vm`, asks each running tagged guest for its addresses (QEMU guest agent
    `network-get-interfaces`, or `lxc/<id>/interfaces`) and takes the first address inside `cidr`. Templates and stopped guests do not

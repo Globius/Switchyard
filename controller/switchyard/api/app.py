@@ -11,7 +11,7 @@ import os
 import uuid
 from collections.abc import AsyncIterator, Callable
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import parse_qs
@@ -38,6 +38,11 @@ from switchyard.api.schemas import (
     VALIDATION_RESPONSE,
     Accepted,
     AccessLogs,
+    AcmePresetRead,
+    AcmeProviderIn,
+    AcmeProviderPatch,
+    AcmeProviderRead,
+    AcmeProviderTestRead,
     ApplyIn,
     AuditActionRead,
     AuditEventRead,
@@ -57,6 +62,13 @@ from switchyard.api.schemas import (
     ChangeSetSummary,
     DeployIn,
     DiscoveryGroup,
+    DnsNameMatchRead,
+    DnsProviderIn,
+    DnsProviderPatch,
+    DnsProviderRead,
+    DnsProviderTestIn,
+    DnsProviderTestRead,
+    DnsProviderTypeRead,
     EngineIn,
     EngineRead,
     EngineRenderedRead,
@@ -72,6 +84,7 @@ from switchyard.api.schemas import (
     IdpTestIn,
     IdpTestResult,
     IdpTestStarted,
+    IssueCheckRead,
     JobAccepted,
     JobRead,
     Me,
@@ -92,6 +105,8 @@ from switchyard.api.schemas import (
     ProblemOut,
     ProtocolRulesRead,
     ReasonIn,
+    RenewalRead,
+    RenewalStatusRead,
     RevisionRead,
     RevisionSummary,
     RoleMappingIn,
@@ -134,14 +149,16 @@ from switchyard.domain.changes import (
 )
 from switchyard.domain.field_rules import protocol_rules
 from switchyard.domain.impact import impact as impact_of
-from switchyard.domain.models import CertSource, Protocol
+from switchyard.domain.models import AcmeChallenge, CertSource, Protocol, RenewPolicy
 from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
 from switchyard.render.escape import RenderError
 from switchyard.render.fragments import RENDERED_TYPES, rendered_fragments
 from switchyard.services import principals
+from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
+from switchyard.services.cert_requests import CertificateRequests, IssueRequest
 from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import (
     ChangeSetDetail,
@@ -150,6 +167,7 @@ from switchyard.services.changesets import (
     require,
 )
 from switchyard.services.context import Databases, Principal
+from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.hosts import HostService
@@ -197,6 +215,7 @@ class ApiServices:
     status: StatusService
     infra: InfraJobs
     cert_jobs: CertificateJobs
+    cert_requests: CertificateRequests
     jobs: JobService
     role_mappings: RoleMappingService
     users: UserService
@@ -209,6 +228,8 @@ class ApiServices:
     break_glass: BreakGlassService | None = None
     hosts: HostService | None = None
     settings: SystemSettings = None  # type: ignore[assignment]
+    acme_providers: AcmeProviders | None = None
+    dns_providers: DnsProviders | None = None
 
 
 def build_services(
@@ -255,6 +276,7 @@ def build_services(
         status=StatusService(db, directory, secrets),
         infra=InfraJobs(db),
         cert_jobs=CertificateJobs(db),
+        cert_requests=CertificateRequests(db),
         jobs=JobService(db),
         role_mappings=RoleMappingService(db),
         users=UserService(db),
@@ -267,6 +289,8 @@ def build_services(
         break_glass=break_glass,
         hosts=HostService(db, engines, proxmox),
         settings=SystemSettings(db),
+        acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
+        dns_providers=DnsProviders(db, secrets) if writer is not None else None,
     )
 
 
@@ -2863,6 +2887,321 @@ def create_app(
         )
         return view.__dict__
 
+    def require_acme(svc: ApiServices) -> AcmeProviders:
+        if svc.acme_providers is None:
+            raise ApiError(503, "ACME providers need a writable secrets backend (OpenBao)")
+        return svc.acme_providers
+
+    def require_dns(svc: ApiServices) -> DnsProviders:
+        if svc.dns_providers is None:
+            raise ApiError(503, "DNS credentials need a writable secrets backend (OpenBao)")
+        return svc.dns_providers
+
+    @router.get(
+        "/acme-provider-presets",
+        tags=["acme providers"],
+        summary="Known certificate authorities",
+        response_model=list[AcmePresetRead],
+        responses=_ok(ex.ACME_PRESETS),
+    )
+    async def list_acme_presets(who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Let's Encrypt, ZeroSSL, Google, Buypass, Keyfactor and a custom entry."""
+        return [asdict(p) for p in AcmeProviders.presets()]
+
+    @router.get(
+        "/acme-providers",
+        tags=["acme providers"],
+        summary="List ACME providers",
+        response_model=list[AcmeProviderRead],
+        responses=_ok([ex.ACME_PROVIDER]),
+    )
+    async def list_acme_providers(who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Every provider, by name. Everyone signed in can read them so they can choose one."""
+        return [asdict(p) for p in await require_acme(svc).list_providers()]
+
+    @router.post(
+        "/acme-providers",
+        status_code=201,
+        tags=["acme providers"],
+        summary="Register an ACME provider",
+        response_model=AcmeProviderRead,
+        responses=_ok(ex.ACME_PROVIDER, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_acme_provider(body: AcmeProviderIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Register a certificate authority. The controller creates the ACME account key itself.
+
+        Secrets (`eab_hmac_key`, `oauth_client_secret`) go to the secrets backend and are never
+        returned. Call the test endpoint to register the account at the CA.
+        """
+        view = await require_acme(svc).create(
+            who,
+            name=body.name,
+            preset=body.preset,
+            directory_url=body.directory_url,
+            email=body.email,
+            auth_mode=body.auth_mode,
+            eab_kid=body.eab_kid,
+            eab_hmac_key=body.eab_hmac_key,
+            oauth=body.oauth.model_dump(exclude_none=True) if body.oauth else None,
+            oauth_client_secret=body.oauth_client_secret,
+            account_key=body.account_key,
+            ca_bundle_pem=body.ca_bundle_pem,
+            terms_agreed=body.terms_agreed,
+            enabled=body.enabled,
+            default=body.default,
+            request_id=_rid(),
+        )
+        return asdict(view)
+
+    @router.get(
+        "/acme-providers/{provider}",
+        tags=["acme providers"],
+        summary="Get an ACME provider",
+        response_model=AcmeProviderRead,
+        responses=_ok(ex.ACME_PROVIDER, headers=ETAG_HEADER),
+    )
+    async def get_acme_provider(
+        provider: UUID, response: Response, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """One provider with its version in the `ETag`."""
+        view = await require_acme(svc).get(provider)
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.patch(
+        "/acme-providers/{provider}",
+        tags=["acme providers"],
+        summary="Change an ACME provider",
+        response_model=AcmeProviderRead,
+        responses=_ok(ex.ACME_PROVIDER) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def patch_acme_provider(
+        provider: UUID,
+        body: AcmeProviderPatch,
+        response: Response,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Change settings or replace secrets.
+
+        Changing the directory or the authentication means the account has to be registered again
+        (run the test).
+        """
+        require(who, "manage", "acme_provider")
+        data = body.model_dump(exclude_unset=True, exclude_none=False)
+        oauth = data.pop("oauth", None)
+        if oauth is not None:
+            oauth = {k: v for k, v in oauth.items() if v is not None}
+        view = await require_acme(svc).update(
+            who,
+            provider,
+            expected_version=_if_match(if_match),
+            oauth=oauth,
+            request_id=_rid(),
+            **data,
+        )
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.delete(
+        "/acme-providers/{provider}",
+        status_code=204,
+        tags=["acme providers"],
+        summary="Remove an ACME provider",
+        responses=IF_MATCH_RESPONSES,
+    )
+    async def delete_acme_provider(
+        provider: UUID,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Remove a provider that no certificate uses (`409` otherwise)."""
+        require(who, "manage", "acme_provider")
+        await require_acme(svc).delete(
+            who, provider, expected_version=_if_match(if_match), request_id=_rid()
+        )
+        return Response(status_code=204)
+
+    @router.post(
+        "/acme-providers/{provider}/test",
+        tags=["acme providers"],
+        summary="Register the account at the CA",
+        response_model=AcmeProviderTestRead,
+        responses=_ok(ex.ACME_PROVIDER_TEST),
+    )
+    async def test_acme_provider(provider: UUID, who: Who, svc: Services) -> dict[str, Any]:
+        """Contact the CA, sign in (EAB or OAuth) and register the account or find it.
+
+        Always answers `200`; `ok: false` carries the reason. A success sets `account_registered`.
+        """
+        return asdict(await require_acme(svc).test(who, provider, request_id=_rid()))
+
+    @router.get(
+        "/dns-provider-types",
+        tags=["dns providers"],
+        summary="DNS provider types and their forms",
+        response_model=list[DnsProviderTypeRead],
+        responses=_ok(ex.DNS_PROVIDER_TYPES),
+    )
+    async def list_dns_provider_types(who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Each type lists its fields; `secret` fields are write-only. Render the form from this."""
+        return [asdict(t) for t in DnsProviders.catalogue()]
+
+    @router.get(
+        "/tenants/{t}/dns-providers",
+        tags=["dns providers"],
+        summary="List the tenant's DNS credentials",
+        response_model=list[DnsProviderRead],
+        responses=_ok([ex.DNS_PROVIDER]),
+    )
+    async def list_dns_providers(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        """The credentials DNS-01 can use, by name. Secrets are never returned."""
+        return [asdict(p) for p in await require_dns(svc).list_providers(who, tenant.id)]
+
+    @router.post(
+        "/tenants/{t}/dns-providers",
+        status_code=201,
+        tags=["dns providers"],
+        summary="Add a DNS credential",
+        response_model=DnsProviderRead,
+        responses=_ok(ex.DNS_PROVIDER, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_dns_provider(
+        body: DnsProviderIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Add a credential for a provider type.
+
+        Validation errors name the field, for example `credentials.api_token`.
+        """
+        view = await require_dns(svc).create(
+            who,
+            tenant.id,
+            name=body.name,
+            type_=body.type,
+            zones=body.zones,
+            config=body.config,
+            credentials=body.credentials,
+            enabled=body.enabled,
+            request_id=_rid(),
+        )
+        return asdict(view)
+
+    @router.get(
+        "/tenants/{t}/dns-providers/match",
+        tags=["dns providers"],
+        summary="Which credentials can validate these names",
+        response_model=list[DnsNameMatchRead],
+        responses=_ok(ex.DNS_MATCH),
+    )
+    async def match_dns_providers(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        names: Annotated[
+            list[str], Query(description="Names to look up (repeat the parameter); wildcards ok.")
+        ],
+    ) -> list[dict[str, Any]]:
+        """For each name, the tenant's enabled credentials whose zones cover it, longest zone first.
+
+        A credential without a zone list comes last. An empty `candidates` list means the name
+        cannot be validated with DNS-01 until a credential covers it.
+        """
+        return [asdict(m) for m in await require_dns(svc).match(who, tenant.id, names)]
+
+    @router.get(
+        "/tenants/{t}/dns-providers/{provider}",
+        tags=["dns providers"],
+        summary="Get a DNS credential",
+        response_model=DnsProviderRead,
+        responses=_ok(ex.DNS_PROVIDER, headers=ETAG_HEADER),
+    )
+    async def get_dns_provider(
+        provider: UUID, tenant: Tenant, response: Response, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """One credential with its version in the `ETag`."""
+        view = await require_dns(svc).get(who, tenant.id, provider)
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.patch(
+        "/tenants/{t}/dns-providers/{provider}",
+        tags=["dns providers"],
+        summary="Change a DNS credential",
+        response_model=DnsProviderRead,
+        responses=_ok(ex.DNS_PROVIDER) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def patch_dns_provider(
+        provider: UUID,
+        body: DnsProviderPatch,
+        tenant: Tenant,
+        response: Response,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Change zones, settings or secrets; omitted secrets keep their stored value."""
+        require(who, "manage", "dns_provider")
+        view = await require_dns(svc).update(
+            who,
+            tenant.id,
+            provider,
+            expected_version=_if_match(if_match),
+            request_id=_rid(),
+            **body.model_dump(exclude_unset=True),
+        )
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.delete(
+        "/tenants/{t}/dns-providers/{provider}",
+        status_code=204,
+        tags=["dns providers"],
+        summary="Remove a DNS credential",
+        responses=IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def delete_dns_provider(
+        provider: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Remove a credential that no certificate names (`409` otherwise)."""
+        require(who, "manage", "dns_provider")
+        await require_dns(svc).delete(
+            who, tenant.id, provider, expected_version=_if_match(if_match), request_id=_rid()
+        )
+        return Response(status_code=204)
+
+    @router.post(
+        "/tenants/{t}/dns-providers/{provider}/test",
+        tags=["dns providers"],
+        summary="Test a DNS credential",
+        response_model=DnsProviderTestRead,
+        responses=_ok(ex.DNS_PROVIDER_TEST) | VALIDATION_RESPONSE,
+    )
+    async def test_dns_provider(
+        provider: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        body: DnsProviderTestIn | None = None,
+    ) -> dict[str, Any]:
+        """Publish and remove a TXT record under `_switchyard-test.<zone>`.
+
+        Always answers `200`; `ok: false` carries the provider's reason.
+        """
+        result = await require_dns(svc).test(
+            who,
+            tenant.id,
+            provider,
+            zone=body.zone if body else None,
+            request_id=_rid(),
+        )
+        return asdict(result)
+
     @router.get(
         "/system/break-glass",
         tags=["break-glass"],
@@ -3404,6 +3743,68 @@ def create_app(
             svc, who, tenant, op, change_set, apply, f"import client CA {body.name}"
         )
 
+    def to_request(body: CertIssueIn) -> IssueRequest:
+        return IssueRequest(
+            body.name,
+            CertSource(body.source),
+            tuple(body.sans),
+            body.acme_provider,
+            AcmeChallenge(body.challenge) if body.challenge else None,
+            body.dns_provider,
+            RenewPolicy(body.renew_policy) if body.renew_policy else RenewPolicy.AUTO,
+            body.renew_before_days,
+        )
+
+    @router.post(
+        "/tenants/{t}/certificates/issue/check",
+        tags=["certificates"],
+        summary="Check a certificate request without queueing it",
+        response_model=IssueCheckRead,
+        responses=_ok(ex.ISSUE_CHECK) | VALIDATION_RESPONSE,
+    )
+    async def check_certificate_request(
+        body: CertIssueIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Run the checks the issue call runs, and return every finding with its field path.
+
+        Use it while the request sheet is open: the ACME provider must exist, each name needs a DNS
+        credential that covers it (DNS-01), and an HTTP-01 name must lead to one of the tenant's
+        HTTP services on port 80. Always answers `200`; `ok: false` lists the problems.
+        """
+        problems = await svc.cert_requests.check(who, tenant.id, to_request(body))
+        return {"ok": not problems, "problems": [asdict(p) for p in problems]}
+
+    @router.get(
+        "/tenants/{t}/certificate-renewals",
+        tags=["certificates"],
+        summary="Renewal status of every certificate",
+        response_model=list[RenewalStatusRead],
+        responses=_ok([ex.RENEWAL_STATUS]),
+    )
+    async def renewal_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        """For each server certificate: issuer, expiry, when renewal starts and the last result."""
+        return [asdict(s) for s in await svc.cert_requests.status(who, tenant.id)]
+
+    @router.get(
+        "/tenants/{t}/certificates/{certificate}/renewals",
+        tags=["certificates"],
+        summary="Renewal history of a certificate",
+        response_model=list[RenewalRead],
+        responses=_ok([ex.RENEWAL]),
+    )
+    async def renewal_history(
+        certificate: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        limit: Annotated[int, Query(ge=1, le=200, description="Page size.")] = 50,
+    ) -> list[dict[str, Any]]:
+        """Issuance and renewal attempts, newest first, with the CA's error when one failed."""
+        return [
+            asdict(r)
+            for r in await svc.cert_requests.renewals(who, tenant.id, certificate, limit=limit)
+        ]
+
     @router.post(
         "/tenants/{t}/certificates/issue",
         status_code=202,
@@ -3422,6 +3823,11 @@ def create_app(
             name=body.name,
             source=CertSource(body.source),
             sans=tuple(body.sans),
+            acme_provider=body.acme_provider,
+            challenge=AcmeChallenge(body.challenge) if body.challenge else None,
+            dns_provider=body.dns_provider,
+            renew_policy=RenewPolicy(body.renew_policy) if body.renew_policy else None,
+            renew_before_days=body.renew_before_days,
             request_id=_rid(),
         )
         return {"job_id": str(job)}
