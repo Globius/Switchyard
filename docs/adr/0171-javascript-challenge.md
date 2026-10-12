@@ -12,7 +12,7 @@ Plan item E10 asks for a JavaScript challenge for bot defense. Options: HAProxy 
 1. **Native HAProxy, no Lua and no sidecar.** HAProxy 3.2 has `sha2`, `hex`, `field`, `date` and `sub`, which is enough to check a proof of work.
    This adds no process to the SE image, no code the controller must ship besides one fixed HTML page, and nothing that can crash separately.
 2. **Scheme.** `protection.challenge` (`difficulty` 3 to 5 zero hex digits, `valid_for_s`, `skip_paths`, `skip_user_agents`). A client without a valid
-   cookie gets a page (`haproxy/challenge/<service>.html`, `lf-file`, so `%[date]` and `%[src]` are filled per request). Its script finds `n` such that
+   cookie gets a page (`haproxy/lists/challenge-<service>.html`, `lf-file`, so `%[date]` and `%[src]` are filled per request). Its script finds `n` such that
    `sha256("<epoch>-<n>|<client address>|<salt>")` starts with the required zeros, stores `sy_chal=<epoch>-<n>` and reloads. HAProxy recomputes the hash,
    checks the zeros and that the epoch is between 0 and `valid_for_s` seconds old, and lets the request through.
 3. **Nothing secret.** The salt is a public per-service value (hash of the service and set ids), so a solved cookie is good for one address on one
