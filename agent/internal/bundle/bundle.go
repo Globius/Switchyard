@@ -45,9 +45,13 @@ var Units = map[string]string{
 }
 
 // verbs overrides the systemctl verb for units that cannot reload (default "reload"). The
-// sysctl directory is applied by restarting systemd-sysctl, which re-reads the settings.
+// sysctl directory is applied by restarting systemd-sysctl, which re-reads the settings. The
+// nftables unit is a one-shot that is inactive until it has run once, and a reload of an inactive
+// unit fails, so it is restarted (stop flushes the ruleset, start loads /etc/nftables.conf, which
+// includes the managed files); conntrack keeps the NAT of flows already established.
 var verbs = map[string]string{
 	"systemd-sysctl": "restart",
+	"nftables":       "restart",
 }
 
 func verb(unit string) string {

@@ -121,6 +121,7 @@ async def test_create_vm_clones_waits_for_the_task_and_configures() -> None:
     assert clone["newid"] == ["101"] and clone["pool"] == ["switchyard"]
     config = next(b for m, p, b in api.requests if m == "PUT" and p.endswith("/101/config"))
     assert config["ipconfig0"] == ["ip=10.30.0.11/24,gw=10.30.0.1"]
+    assert config["ciupgrade"] == ["0"]  # an engine must not need the internet to boot
     assert config["net1"] == ["virtio,bridge=vnet1"]
     assert config["net2"] == ["virtio,bridge=vnet2,tag=120"]
     await pve.close()
