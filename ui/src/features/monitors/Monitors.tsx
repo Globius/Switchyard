@@ -460,9 +460,9 @@ function MonitorSheet({
                   />
                   <div className="grid gap-3 sm:grid-cols-[11rem_1fr_1fr]">
                     <label className="space-y-1.5 text-sm font-medium">
-                      {t("Also check")}
+                      {t("Healthy when")}
                       <select
-                        aria-label={t("Also check")}
+                        aria-label={t("Healthy when")}
                         className={INPUT}
                         disabled={!write.allowed}
                         value={h.expect_body != null ? "body" : h.expect_header ? "header" : "none"}
@@ -474,9 +474,9 @@ function MonitorSheet({
                           })
                         }
                       >
-                        <option value="none">{t("Status only")}</option>
+                        <option value="none">{t("Status is one of the codes above")}</option>
                         <option value="body">{t("Body contains")}</option>
-                        <option value="header">{t("Response header")}</option>
+                        <option value="header">{t("Header has")}</option>
                       </select>
                     </label>
                     {h.expect_body != null && (

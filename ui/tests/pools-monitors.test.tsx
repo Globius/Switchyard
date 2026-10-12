@@ -656,10 +656,10 @@ describe("health monitors", () => {
     await userEvent.click(n);
     await userEvent.type(await screen.findByLabelText("Name"), "body-check");
     await userEvent.click(screen.getByRole("radio", { name: "HTTP" }));
-    await userEvent.selectOptions(screen.getByLabelText("Also check"), "header");
+    await userEvent.selectOptions(screen.getByLabelText("Healthy when"), "header");
     await userEvent.type(screen.getByLabelText("Expected header name"), "X-Health");
     await userEvent.type(screen.getByLabelText("Expected header value"), "ok");
-    await userEvent.selectOptions(screen.getByLabelText("Also check"), "body");
+    await userEvent.selectOptions(screen.getByLabelText("Healthy when"), "body");
     expect(screen.queryByLabelText("Expected header name")).toBeNull();
     await userEvent.type(screen.getByLabelText("Expected body"), "status_ok");
     await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));

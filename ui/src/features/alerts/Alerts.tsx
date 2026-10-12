@@ -466,7 +466,14 @@ function RuleSheet({
   );
 }
 
-export function Alerts({ tenant }: { tenant: string }) {
+export function Alerts({
+  tenant,
+  startWith = null,
+}: {
+  tenant: string;
+  /** Open the new-rule sheet on arrival (the Certificates "Expiry alerts" button). */
+  startWith?: "rule" | null;
+}) {
   const can = useCan(tenant);
   const write = can("write", "infrastructure");
   const refresh = useInvalidate(tenant);
@@ -474,7 +481,7 @@ export function Alerts({ tenant }: { tenant: string }) {
   const targets = useTargets(tenant);
   const rules = useRules(tenant);
   const catalog = useCatalog();
-  const [adding, setAdding] = useState<"target" | "rule" | null>(null);
+  const [adding, setAdding] = useState<"target" | "rule" | null>(startWith);
   const [testResult, setTestResult] = useState<Record<string, string>>({});
 
   const test = useMutation({

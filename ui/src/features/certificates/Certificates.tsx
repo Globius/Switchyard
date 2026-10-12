@@ -679,6 +679,11 @@ export function Certificates({ tenant }: { tenant: string }) {
               {t("Import client CA")}
             </Button>
           </Tip>
+          <Button variant="outline" asChild>
+            <Link to="/t/$tenant/alerts" params={{ tenant }} search={{ new: "rule" }}>
+              {t("Expiry alerts")}
+            </Link>
+          </Button>
           <Tip label={runtime.reason}>
             <Button disabled={!runtime.allowed} onClick={() => setSheet("issue")}>
               {t("Request certificate")}

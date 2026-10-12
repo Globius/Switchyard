@@ -3,7 +3,12 @@ import { Alerts } from "@/features/alerts/Alerts";
 
 function Page() {
   const { tenant } = Route.useParams();
-  return <Alerts tenant={tenant} />;
+  const { new: add } = Route.useSearch();
+  return <Alerts tenant={tenant} startWith={add === "rule" ? "rule" : null} />;
 }
 
-export const Route = createFileRoute("/t/$tenant/_shell/alerts")({ component: Page });
+export const Route = createFileRoute("/t/$tenant/_shell/alerts")({
+  component: Page,
+  validateSearch: (s: Record<string, unknown>): { new?: string } =>
+    typeof s.new === "string" ? { new: s.new } : {},
+});
