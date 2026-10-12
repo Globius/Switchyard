@@ -4,11 +4,22 @@
 # dnsdist (the DNS firewall: rate limits, no ANY, no transfers from outside) answers on port 53 and forwards to pdns on its
 # private port 5300; only dnsdist is published. Run at least two of these (one per site), each with its own zone copy: the controller writes zones to the one named in
 # SWITCHYARD_POWERDNS_URL, so replicate with AXFR/IXFR secondaries (docs/gslb.md) or point the URL at a primary.
+#
+# IPv6: health checks to IPv6 members start from this container, so its network needs IPv6. The `dns` network below has a ULA
+# subnet (override with DNS_IPV6_SUBNET). Docker must route and NAT it: set {"ipv6": true, "ip6tables": true} in
+# /etc/docker/daemon.json (Docker 27 or later) and restart the daemon. Or run pdns with `network_mode: host` instead of the network.
 name: switchyard-dns
+networks:
+  dns:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: ${DNS_IPV6_SUBNET:-fd00:5d:5d::/64}
 services:
   pdns:
     image: powerdns/pdns-auth-50:latest
     restart: unless-stopped
+    networks: [dns]
     environment:
       PDNS_AUTH_API_KEY: ${PDNS_API_KEY:?set PDNS_API_KEY in dns.env}
     command:

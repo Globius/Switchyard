@@ -55,7 +55,9 @@ def test_weighted_drops_members_that_are_down_and_falls_back_to_all() -> None:
     )
     assert "{3, '192.0.2.10'}" in rec and "192.0.2.20" not in rec  # weight 0 is never answered
     assert rec.startswith('A ";local all = ') and "pickwrandom(c)" in rec
-    assert "ifportup(443, {m[2]}, {backupSelector='none', timeout=1000})" in rec
+    # one check over the pickable members; the up ones are kept (all of them when none is up)
+    assert "ifportup(443, {{'192.0.2.10'}}, {selector='all', timeout=1000})" in rec
+    assert "ok[tostring(a)] = true" in rec
     assert "if #c == 0 then c = all end" in rec  # everything down: answer anyway
 
 
@@ -84,6 +86,26 @@ def test_http_health_uses_ifurlup_with_the_wide_ip_as_host() -> None:
         health={"kind": "http", "scheme": "http", "port": 80, "host": "app.example.test"}
     )
     assert "http://app.example.test:80/" in named[0]
+
+
+def test_http_health_scheme_follows_the_port_unless_given() -> None:
+    """Port 80 is plain http, anything else https; an explicit scheme always wins."""
+    assert "http://shop.gslb.example.test:80/" in records(health={"kind": "http", "port": 80})[0]
+    assert "https://shop.gslb.example.test:443/" in records(health={"kind": "http"})[0]
+    assert (
+        "https://shop.gslb.example.test:80/"
+        in records(health={"kind": "http", "port": 80, "scheme": "https"})[0]
+    )
+
+
+def test_weighted_http_health_checks_a_list_of_sets() -> None:
+    """``ifurlup`` takes sets of addresses; a flat list is not health checked."""
+    (rec,) = records(
+        algorithm="weighted",
+        health={"kind": "http", "port": 80},
+        members=[{"address": "192.0.2.10", "weight": 1}, {"address": "192.0.2.20", "weight": 1}],
+    )
+    assert "{{'192.0.2.10', '192.0.2.20'}}" in rec and "{m[2]}" not in rec
 
 
 def test_both_families_share_one_record_set() -> None:

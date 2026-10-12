@@ -134,7 +134,7 @@ def _health(f: _Findings, path: str, h: Any) -> dict[str, Any]:
         f.add(f"{path}.timeout_ms", "invalid", "milliseconds from 100 to 5000")
     out: dict[str, Any] = {"kind": kind, "port": port, "timeout_ms": timeout}
     if kind == "http":
-        scheme = h.get("scheme", "https")
+        scheme = h.get("scheme", "http" if port == 80 else "https")  # port 80 speaks plain http
         if scheme not in ("http", "https"):
             f.add(f"{path}.scheme", "invalid", "http or https")
         p = h.get("path", "/")
@@ -332,13 +332,15 @@ def _expression(
         nested = "{" + ", ".join(_ips(a) for _, a in sorted(tiers.items())) + "}"
         return _check_call(health, nested, "", fqdn)
     if algorithm == "weighted":
-        pairs = ", ".join(
-            f"{{{m['weight']}, {_q(m['address'])}}}" for m in group if m["weight"] > 0
-        )
-        up = _check_call(health, "{m[2]}", "backupSelector='none'", fqdn)
+        # One check over every member that can be picked. A down set is answered with the whole set
+        # (PowerDNS's backup), so the answer is the up members, or all of them when none is up.
+        live = [m for m in group if m["weight"] > 0]
+        pairs = ", ".join(f"{{{m['weight']}, {_q(m['address'])}}}" for m in live)
+        up = _check_call(health, "{" + _ips([m["address"] for m in live]) + "}", ALL, fqdn)
         return (
-            f";local all = {{{pairs}}} local c = {{}} "
-            f"for _, m in ipairs(all) do if #{up} > 0 then c[#c + 1] = m end end "
+            f";local all = {{{pairs}}} local up = {up} local ok = {{}} "
+            f"for _, a in ipairs(up) do ok[tostring(a)] = true end local c = {{}} "
+            f"for _, m in ipairs(all) do if ok[m[2]] then c[#c + 1] = m end end "
             f"if #c == 0 then c = all end return pickwrandom(c)"
         )
     # subnet: one view; members without subnets are the default answer

@@ -258,3 +258,42 @@ async def test_removing_a_wide_ip_removes_the_answer_and_dnssec_signs_the_zone(
     assert (await service.ds_records(ADMIN, TENANT, ZONE))["ds"] == signed["ds"]
     states = await service.status(ADMIN, TENANT)
     assert all(s["state"] in {"in_sync", "off"} for s in states)
+
+
+async def test_weighted_and_failover_honour_http_health_checks(
+    svc: tuple[GslbService, World], pdns: Pdns
+) -> None:
+    """``ifurlup`` needs a list of address sets; a flat list made weighted ignore health."""
+    service, _ = svc
+    health = {
+        "kind": "http",
+        "scheme": "http",
+        "port": 8080,
+        "path": "/etc/hostname",
+        "timeout_ms": 1000,
+    }
+    members = [{"address": DOWN, "weight": 5}, {"address": UP, "weight": 5}]
+    await service.create_wide_ip(
+        ADMIN,
+        TENANT,
+        ZONE,
+        "wurl",
+        {"algorithm": "weighted", "health": health, "members": members},
+    )
+    await service.create_wide_ip(
+        ADMIN,
+        TENANT,
+        ZONE,
+        "furl",
+        {
+            "algorithm": "failover",
+            "health": health,
+            "members": [{"address": DOWN, "priority": 1}, {"address": UP, "priority": 2}],
+        },
+    )
+    assert eventually(f"wurl.{ZONE}", pdns.port, [UP]) == [UP]
+    assert eventually(f"furl.{ZONE}", pdns.port, [UP]) == [UP]
+    # A member nobody has checked yet is assumed up, so the first answers can include the down one;
+    # once the checks have run it is never picked.
+    time.sleep(8)
+    assert {ask(f"wurl.{ZONE}", pdns.port)[1][0] for _ in range(20)} == {UP}
