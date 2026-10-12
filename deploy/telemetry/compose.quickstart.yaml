@@ -1,5 +1,5 @@
 # Run the telemetry stack beside the quickstart stack on the same machine (docs/quickstart.md, "Add monitoring"):
-# Set PROMETHEUS_URL=http://prometheus:9090 and LOKI_URL=http://loki:3100 in the quickstart .env (then
+# Set PROMETHEUS_URL=http://prometheus:9090, LOKI_URL=http://loki:3100 and GRAFANA_URL=http://<this host>:3000 in the quickstart .env (then
 # `docker compose up -d api worker` there) and the UI charts and log tail work.
 #   docker compose -f compose.yaml -f compose.quickstart.yaml --env-file telemetry.env up -d
 # Prometheus joins the quickstart's Docker network and scrapes the API directly (CONTROLLER_SCHEME=http,
