@@ -1,4 +1,4 @@
-.PHONY: ui-e2e ui-install ui-lint ui-typecheck ui-test ui-build ui-gen-api ui-check
+.PHONY: ui-e2e ui-install ui-lint ui-typecheck ui-test ui-build ui-gen-api ui-check docs docs-serve ui-screenshots
 
 # Frontend (ui/). Requires Node 22+ and pnpm. See docs/ui/README.md.
 ui-install:
@@ -33,3 +33,15 @@ ui-check: ui-lint ui-typecheck ui-test ui-build
 # OpenTofu provider (Go): vet, tests, and "the generated table matches docs/api/openapi.json".
 provider-check:
 	cd provider && go vet ./... && go test ./...
+
+# Docs site (MkDocs Material, ADR 0190): strict build with link checking into public/, same as CI.
+# Needs uv only. On Windows without make: the same uvx command from the repo root.
+docs:
+	uvx --with-requirements docs/requirements.txt mkdocs build --strict
+
+docs-serve:
+	uvx --with-requirements docs/requirements.txt mkdocs serve
+
+# Refresh the screenshots in docs/assets/screenshots (UI against a mocked API with a demo dataset).
+ui-screenshots:
+	cd ui && SY_SCREENSHOTS=1 pnpm exec playwright test screenshots --project desktop

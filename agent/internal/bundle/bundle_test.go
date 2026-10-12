@@ -202,6 +202,19 @@ func TestWritesAreAtomicAndLeaveNoTemporaryFiles(t *testing.T) {
 	}
 }
 
+func TestHashesSkipStagingFilesOfAWriteInProgress(t *testing.T) {
+	a, priv, _ := setup(t)
+	a.Apply(context.Background(), request(t, priv, "b1", map[string]string{"frr/frr.conf": "x"}))
+	// A status read can run while write has a staging file open next to the target.
+	if err := os.WriteFile(filepath.Join(a.Root, "frr", ".sy-123456"), []byte("half"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h, err := a.Hashes()
+	if err != nil || len(h) != 1 || h["frr/frr.conf"] != Hash([]byte("x")) {
+		t.Fatalf("a staging file was reported as managed: %v %v", h, err)
+	}
+}
+
 func TestClientCAFilesAreManagedAndKeepOwnerOnlyPermissions(t *testing.T) {
 	a, priv, _ := setup(t)
 	files := map[string]string{"certs/ca-partners.pem": "CA", "certs/ca-partners.crl": "CRL"}

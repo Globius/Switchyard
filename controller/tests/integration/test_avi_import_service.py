@@ -73,9 +73,15 @@ async def test_the_import_opens_one_draft_with_everything_and_stores_keys_in_the
     assert stored and "PRIVATE KEY" in rig.secrets._values[stored[0]]
     dumped = json.dumps([op.body for op in detail.ops], default=str)
     assert "PRIVATE KEY" not in dumped, "keys never enter a change set"
-    assert not any("no-key" in str(op.body.get("name")) for op in detail.ops), "keyless is skipped"
-    parent = next(op for op in detail.ops if op.body.get("name") == "avi-external-parentsni")
-    assert parent.body["vip"].startswith("192.0.2.") and len(parent.body["certificate_ids"]) == 1
+    assert not any("no-key" in str((op.body or {}).get("name")) for op in detail.ops), (
+        "keyless is skipped"
+    )
+    parent = next(
+        op for op in detail.ops if (op.body or {}).get("name") == "avi-external-parentsni"
+    )
+    assert (parent.body or {})["vip"].startswith("192.0.2.") and len(
+        (parent.body or {})["certificate_ids"]
+    ) == 1
 
 
 async def test_the_draft_applies_and_renders(rig: Rig) -> None:

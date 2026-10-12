@@ -1,6 +1,7 @@
 """The TLS-ALPN-01 challenge certificate (RFC 8737)."""
 
 import hashlib
+from typing import cast
 
 from cryptography import x509
 
@@ -14,7 +15,10 @@ def test_the_certificate_names_the_domain_and_carries_the_key_authorization_dige
     assert san.get_values_for_type(x509.DNSName) == ["a.example.test"]
     ext = cert.extensions.get_extension_for_oid(x509.ObjectIdentifier(ACME_IDENTIFIER_OID))
     assert ext.critical
-    assert ext.value.value == b"\x04\x20" + hashlib.sha256(b"token.thumbprint").digest()
+    assert (
+        cast(x509.UnrecognizedExtension, ext.value).value
+        == b"\x04\x20" + hashlib.sha256(b"token.thumbprint").digest()
+    )
     assert "PRIVATE KEY" in pem, "the key travels with it so the engine can serve it"
     again = challenge_certificate("a.example.test", "token.thumbprint")
     assert again != pem, "a fresh key each time"

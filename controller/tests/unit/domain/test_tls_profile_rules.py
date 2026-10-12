@@ -16,7 +16,7 @@ def test_a_profile_needs_a_tls_port() -> None:
     with pytest.raises(ValidationError, match="tls_profile requires tls"):
         VsPort(port=80, tls_profile=TlsProfile.MODERN)
     with pytest.raises(ValidationError):
-        VsPort(port=443, tls=True, tls_profile="sslv3")  # type: ignore[arg-type]
+        VsPort(port=443, tls=True, tls_profile="sslv3")
 
 
 def cert(**kw: object) -> Certificate:
@@ -31,7 +31,7 @@ def cert(**kw: object) -> Certificate:
         "not_after": datetime.datetime(2038, 1, 1, tzinfo=datetime.UTC),
         "secret_ref": "kv/x",
     }
-    return Certificate(**(base | kw))  # type: ignore[arg-type]
+    return Certificate(**(base | kw))
 
 
 def test_ocsp_stapling_is_off_by_default_and_refused_for_origin_ca_certificates() -> None:

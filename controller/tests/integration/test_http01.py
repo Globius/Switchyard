@@ -271,7 +271,9 @@ async def test_a_missing_crt_list_leaves_nothing_loaded(pg_url: str) -> None:
     three_tls_services(data)
     async with world(pg_url, data) as w:
         engine = FakeHaproxy("se-a")
-        files = render_haproxy(snapshot_from_mapping(data), UUID(symbolic_uuid("seg-1"))).files
+        files = dict(
+            render_haproxy(snapshot_from_mapping(data), UUID(symbolic_uuid("seg-1"))).files
+        )
         del files["certs/shop.crtlist"]
         await engine.push(files)
         directory = StaticEngineDirectory({GROUP: [(record("se-a"), engine)]}, {})

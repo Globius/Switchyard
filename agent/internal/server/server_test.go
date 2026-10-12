@@ -108,9 +108,15 @@ func TestWatchSendsAnUpdateWhenSomethingChanges(t *testing.T) {
 	if _, err := client.ApplyBundle(ctx, signed(priv, "rev-8", map[string]string{"frr/frr.conf": "y\n"})); err != nil {
 		t.Fatal(err)
 	}
-	second, err := stream.Recv()
-	if err != nil || second.BundleId != "rev-8" {
-		t.Fatalf("second: %v %+v", err, second)
+	// Updates in between (files written, bundle id not yet recorded) are allowed; rev-8 must follow.
+	for {
+		next, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("no update with bundle rev-8: %v", err)
+		}
+		if next.BundleId == "rev-8" {
+			return
+		}
 	}
 }
 
