@@ -1117,7 +1117,7 @@ describe("security policies", () => {
 
   it("creates a WAF policy in detect mode with disabled rules and excluded paths", async () => {
     await userEvent.type(await open("waf"), "shop-waf");
-    expect(screen.getByLabelText("WAF mode")).toHaveValue("detect");
+    expect(screen.getByLabelText("Detect")).toBeChecked();
     await userEvent.selectOptions(screen.getByLabelText("Paranoia level"), "2");
     await userEvent.type(screen.getByRole("combobox", { name: "Disabled rule IDs" }), "942100,");
     await userEvent.type(screen.getByRole("combobox", { name: "Paths not inspected" }), "/health,");
@@ -1211,7 +1211,7 @@ describe("security policies", () => {
 
   it("sets the WAF to block and fail closed with body inspection off", async () => {
     await userEvent.type(await open("waf"), "strict");
-    await userEvent.selectOptions(screen.getByLabelText("WAF mode"), "block");
+    await userEvent.click(screen.getByLabelText("Block"));
     await userEvent.selectOptions(screen.getByLabelText("Fail mode"), "closed");
     await userEvent.click(screen.getByRole("switch", { name: "Inspect request bodies" }));
     await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));

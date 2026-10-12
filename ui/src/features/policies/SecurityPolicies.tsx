@@ -7,6 +7,7 @@
 import { X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { ApiError, api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan } from "@/auth/session";
@@ -1209,18 +1210,54 @@ export function SecurityPolicySheet({
               )}
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
-              <Field label={t("Mode")}>
-                <select
-                  aria-label={t("WAF mode")}
-                  className={INPUT}
-                  disabled={dis}
-                  value={cfg.mode}
-                  onChange={(e) => set({ mode: e.target.value })}
-                >
-                  <option value="detect">{t("Detect (log only)")}</option>
-                  <option value="block">{t("Block")}</option>
-                </select>
-              </Field>
+              <fieldset className="space-y-1.5 sm:col-span-3">
+                <legend className="text-sm font-medium">{t("Mode")}</legend>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(
+                    [
+                      [
+                        "detect",
+                        "Detect",
+                        "Log what would be blocked; traffic is not touched. Start here.",
+                      ],
+                      ["block", "Block", "Refuse requests that score over the threshold."],
+                    ] as const
+                  ).map(([k, label, help]) => (
+                    <label
+                      key={k}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-2 rounded-lg border bg-card p-2.5 text-sm",
+                        cfg.mode === k && "border-primary bg-primary/10",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="waf-mode"
+                        aria-label={t(label)}
+                        className="mt-1"
+                        disabled={dis}
+                        checked={cfg.mode === k}
+                        onChange={() => set({ mode: k })}
+                      />
+                      <span>
+                        <span className="font-medium">{t(label)}</span>
+                        <span className="block text-xs text-muted-foreground">{t(help)}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {t("Detected requests show in")}{" "}
+                  <Link
+                    to="/t/$tenant/logs"
+                    params={{ tenant }}
+                    className="text-primary hover:underline"
+                  >
+                    {t("Request logs")}
+                  </Link>
+                  .
+                </p>
+              </fieldset>
               <Field
                 label={t("If the WAF fails")}
                 help={t("Open lets traffic through; closed answers an error.")}
