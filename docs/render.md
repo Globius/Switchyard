@@ -89,6 +89,11 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Pool `persistence` `source_ip` | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
 | Pool `persistence` `http_cookie` | `cookie <name> insert indirect nocache [maxlife <t>s] [secure] [httponly]` (or `rewrite`, `prefix`) and `cookie <server name>` on every server (ADR 0105) |
 | Pool `persistence` `header`, `uri` | `stick-table type string len 128 size <n> expire <t>s` and `stick on req.hdr(<H>)`, `stick on path` or `stick on url_param(<p>)` (ADR 0105); `http` pools only |
+| Port `tls_passthrough` + routes (`tcp` service) | `tcp-request inspect-delay 5s`, `tcp-request content accept if { req.ssl_hello_type 1 }`, and `use_backend %[req.ssl_sni,lower,map(...)]` over `haproxy/maps/<name>-sni.map` and `-sni-wild.map`; no certificate (ADR 0115) |
+| Port `http3` | a second `bind quic4@<vip>:<port> ssl crt-list ... alpn h3` (`quic6@` for IPv6) and `http-response set-header alt-svc 'h3=":<port>"; ma=86400'` (ADR 0116) |
+| Pool `backend_protocol` | `h2`: `alpn h2` on TLS servers; `h2c`: `proto h2` on plain servers (gRPC backends; ADR 0116) |
+| Pool `tunnel_timeout_s` | `timeout tunnel <n>s` in the backend (WebSocket and gRPC idle time; ADR 0116) |
+| Service `compression` | `compression algo <a>...` and `compression type <t>...` in the frontend (ADR 0117) |
 | Pool `passive_check`, `slow_start_s` | server options `observe <layer> error-limit <n> on-error <action>` and `slowstart <n>s`; both need the pool's health monitor (ADR 0066) |
 | Port `tls_profile` | `ssl-min-ver`, `ciphers` and `ciphersuites` on the TLS `bind` (`modern`, `intermediate`, `legacy`; none keeps the default), see ADR 0067 |
 | Port `client_ca_id`, `client_verify` | `ca-file certs/ca-<name>.pem verify required|optional` (and `crl-file certs/ca-<name>.crl`) on the TLS `bind`; the files travel in the agent bundle (ADR 0070) |

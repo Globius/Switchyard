@@ -167,6 +167,8 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 passive_check=p.passive_check.model_dump(mode="json") if p.passive_check else None,
                 slow_start_s=p.slow_start_s,
                 send_proxy=p.send_proxy,
+                tunnel_timeout_s=p.tunnel_timeout_s,
+                backend_protocol=p.backend_protocol,
                 client_certificate_id=p.client_certificate_id,
             )
         )
@@ -186,6 +188,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 allow_list_id=s.allow_list_id,
                 enforce_allow_list=s.enforce_allow_list,
                 restore_client_ip_header=s.restore_client_ip_header,
+                compression=s.compression.model_dump(mode="json") if s.compression else None,
             )
         )
     # Child rows come after their parents so inserts satisfy the foreign keys.
@@ -232,6 +235,8 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     tls_profile=port.tls_profile.value if port.tls_profile else None,
                     client_ca_id=port.client_ca_id,
                     client_verify=port.client_verify,
+                    tls_passthrough=port.tls_passthrough,
+                    http3=port.http3,
                 )
             )
         for i, r in enumerate(s.routes):
@@ -420,6 +425,8 @@ def rows_to_snapshot(
                 "passive_check": p.passive_check,
                 "slow_start_s": p.slow_start_s,
                 "send_proxy": p.send_proxy,
+                "tunnel_timeout_s": p.tunnel_timeout_s,
+                "backend_protocol": p.backend_protocol,
                 "client_certificate_id": p.client_certificate_id,
                 "members": [
                     {
@@ -453,6 +460,7 @@ def rows_to_snapshot(
                 "allow_list_id": s.allow_list_id,
                 "enforce_allow_list": s.enforce_allow_list,
                 "restore_client_ip_header": s.restore_client_ip_header,
+                "compression": s.compression,
                 "ports": [
                     {
                         "port": p.port,
@@ -463,6 +471,8 @@ def rows_to_snapshot(
                         "tls_profile": p.tls_profile,
                         "client_ca_id": p.client_ca_id,
                         "client_verify": p.client_verify,
+                        "tls_passthrough": p.tls_passthrough,
+                        "http3": p.http3,
                     }
                     for p in sorted(ports.get(s.id, []), key=lambda r: r.port)
                 ],

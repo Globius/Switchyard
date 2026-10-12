@@ -35,6 +35,7 @@ Port = Annotated[int, AfterValidator(v.validate_port)]
 UrlPath = Annotated[str, AfterValidator(v.validate_path)]
 Location = Annotated[str, AfterValidator(v.validate_location)]
 HeaderName = Annotated[str, AfterValidator(v.validate_header_name)]
+MediaType = Annotated[str, AfterValidator(v.validate_media_type)]
 CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
 MatchText = Annotated[str, AfterValidator(v.validate_match_text)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
@@ -379,6 +380,10 @@ class VsPort(Model):
             (mutual TLS). Needs ``tls``.
         client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
             certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
+        tls_passthrough: ``tcp`` services only: do not terminate TLS; route by the SNI in the
+            client hello (ADR 0115). Excludes every TLS option of the port.
+        http3: Also listen for HTTP/3 over QUIC on the same number (UDP) and advertise it with
+            ``Alt-Svc`` (ADR 0116). Needs ``tls`` and ``http2``.
     """
 
     port: Port
@@ -389,9 +394,22 @@ class VsPort(Model):
     tls_profile: TlsProfile | None = None
     client_ca_id: UUID | None = None
     client_verify: Literal["required", "optional"] = "required"
+    tls_passthrough: bool = False
+    http3: bool = False
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
+        if self.tls_passthrough and (
+            self.tls
+            or self.http2
+            or self.http3
+            or self.client_ca_id is not None
+            or self.tls_profile is not None
+            or self.https_redirect_port is not None
+        ):
+            raise ValueError("tls_passthrough excludes tls, http2, http3 and the other TLS options")
+        if self.http3 and not (self.tls and self.http2):
+            raise ValueError("http3 requires tls and http2")
         if self.client_ca_id is not None and not self.tls:
             raise ValueError("client_ca_id requires tls")
         if self.http2 and not self.tls:
@@ -400,6 +418,41 @@ class VsPort(Model):
             raise ValueError("tls_profile requires tls")
         if self.https_redirect_port is not None and self.tls:
             raise ValueError("https_redirect_port is only valid on a plaintext port")
+        return self
+
+
+class Compression(Model):
+    """Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
+
+    Attributes:
+        algorithms: In order of preference: ``gzip``, ``deflate``.
+        content_types: Media types to compress, such as ``text/html``. Never images or archives.
+
+    Example:
+        >>> Compression().algorithms
+        ('gzip',)
+    """
+
+    algorithms: tuple[Literal["gzip", "deflate"], ...] = Field(default=("gzip",), min_length=1)
+    content_types: tuple[MediaType, ...] = Field(
+        default=(
+            "text/html",
+            "text/plain",
+            "text/css",
+            "text/javascript",
+            "application/javascript",
+            "application/json",
+            "application/xml",
+            "image/svg+xml",
+        ),
+        min_length=1,
+        max_length=32,
+    )
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        if len(set(self.algorithms)) != len(self.algorithms):
+            raise ValueError("algorithms must be unique")
         return self
 
 
@@ -420,6 +473,7 @@ class VirtualService(TenantOwned):
         enforce_allow_list: Reject connections from sources outside the allow list.
         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
             client address; honoured only when the connection source is in the allow list.
+        compression: Response compression (``http`` only; ADR 0117).
     """
 
     se_group_id: UUID
@@ -435,6 +489,7 @@ class VirtualService(TenantOwned):
     allow_list_id: UUID | None = None
     enforce_allow_list: bool = False
     restore_client_ip_header: HeaderName | None = None
+    compression: Compression | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -447,18 +502,30 @@ class VirtualService(TenantOwned):
             if self.default_pool_id is None:
                 raise ValueError("a udp service needs default_pool_id")
             return self
+        if self.protocol is Protocol.HTTP and any(p.tls_passthrough for p in self.ports):
+            raise ValueError("tls_passthrough is only valid for tcp services")
         if any(p.tls for p in self.ports) and not self.certificate_ids:
             raise ValueError("a TLS port needs at least one certificate")
         if self.protocol is Protocol.HTTP:
             if not self.routes and self.default_pool_id is None:
                 raise ValueError("an http service needs routes or default_pool_id")
         else:
-            if self.routes or self.policy_set_ids:
-                raise ValueError(f"a {self.protocol} service cannot have routes or policy sets")
+            passthrough = all(p.tls_passthrough for p in self.ports)
+            if self.policy_set_ids or (self.routes and not passthrough):
+                raise ValueError(
+                    f"a {self.protocol} service cannot have routes or policy sets "
+                    "(routes need every port to be tls_passthrough)"
+                )
+            if self.compression is not None:
+                raise ValueError("compression is only valid for http services")
+            if passthrough and self.protocol is not Protocol.TCP:
+                raise ValueError("tls_passthrough is only valid for tcp services")
             if self.default_pool_id is None:
                 raise ValueError(f"a {self.protocol} service needs default_pool_id")
-            if any(p.http2 or p.https_redirect_port is not None for p in self.ports):
-                raise ValueError("http2 and https_redirect_port are only valid for http services")
+            if any(p.http2 or p.http3 or p.https_redirect_port is not None for p in self.ports):
+                raise ValueError(
+                    "http2, http3 and https_redirect_port are only valid for http services"
+                )
             if self.restore_client_ip_header is not None:
                 raise ValueError("restore_client_ip_header is only valid for http services")
         if (self.enforce_allow_list or self.restore_client_ip_header) and not self.allow_list_id:
@@ -637,6 +704,12 @@ class Pool(TenantOwned):
         passive_check: Also judge members by their live traffic. Needs a health monitor.
         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
             weight (HAProxy ``slowstart``). Needs a health monitor.
+        backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,
+            ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,
+            needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).
+        tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2
+            stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``
+            keeps the default of one hour.
         send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
         client_certificate_id: Server certificate HAProxy presents to members (backend
             mutual TLS). Needs ``tls``.
@@ -650,6 +723,8 @@ class Pool(TenantOwned):
     tls_verify: bool = False
     passive_check: PassiveCheck | None = None
     slow_start_s: int | None = Field(default=None, ge=1, le=3600)
+    backend_protocol: Literal["http1", "h2", "h2c"] = "http1"
+    tunnel_timeout_s: int | None = Field(default=None, ge=1, le=86_400)
     send_proxy: Literal["v1", "v2"] | None = None
     client_certificate_id: UUID | None = None
     members: tuple[PoolMember, ...] = ()
@@ -661,6 +736,10 @@ class Pool(TenantOwned):
             raise ValueError("pool member names must be unique")
         if self.tls_verify and not self.tls:
             raise ValueError("tls_verify requires tls")
+        if self.backend_protocol == "h2" and not self.tls:
+            raise ValueError("backend_protocol h2 requires tls; use h2c without tls")
+        if self.backend_protocol == "h2c" and self.tls:
+            raise ValueError("backend_protocol h2c is for pools without tls; use h2")
         if self.client_certificate_id is not None and not self.tls:
             raise ValueError("client_certificate_id requires tls")
         return self

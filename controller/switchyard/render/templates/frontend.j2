@@ -7,6 +7,9 @@ frontend vs_{{ f.name }}
 {% if f.mode == "http" %}
     option forwardfor
 {% endif %}
+{% for option in f.options %}
+    {{ option }}
+{% endfor %}
 {% for rule in f.connection_rules %}
     {{ rule }}
 {% endfor %}

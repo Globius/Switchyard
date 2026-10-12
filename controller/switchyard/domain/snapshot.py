@@ -517,6 +517,22 @@ def _check_udp_pools(
                             f"{field} is not valid on a udp pool",
                         )
                     )
+            if pool.tunnel_timeout_s is not None:
+                problems.append(
+                    Problem(
+                        f"{base}.tunnel_timeout_s",
+                        "udp_field_not_allowed",
+                        "tunnel_timeout_s is not valid on a udp pool",
+                    )
+                )
+            if pool.backend_protocol != "http1":
+                problems.append(
+                    Problem(
+                        f"{base}.backend_protocol",
+                        "udp_field_not_allowed",
+                        "backend_protocol is not valid on a udp pool",
+                    )
+                )
             if pool.algorithm is Algorithm.RANDOM:
                 problems.append(
                     Problem(
@@ -578,6 +594,14 @@ def _check_live_traffic(
     ``passive_check_layer7_needs_http`` and ``persistence_needs_http`` (cookie, header and URI
     persistence on a pool a ``tcp`` service uses).
     """
+    if pool.backend_protocol != "http1" and Protocol.TCP in protocols:
+        problems.append(
+            Problem(
+                f"{base}.backend_protocol",
+                "backend_protocol_needs_http",
+                f"backend_protocol {pool.backend_protocol} needs a pool used only by http services",
+            )
+        )
     if isinstance(pool.persistence, HTTP_ONLY_PERSISTENCE) and Protocol.TCP in protocols:
         problems.append(
             Problem(
@@ -611,6 +635,16 @@ def _check_live_traffic(
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
+    if s.protocol is Protocol.TCP:
+        for i, r in enumerate(s.routes):
+            if r.match.host is None or r.match.path_prefix or r.match.path_exact or r.redirect:
+                problems.append(
+                    Problem(
+                        f"{base}.routes[{i}]",
+                        "passthrough_route_invalid",
+                        "a tcp route matches the SNI host only and names a pool",
+                    )
+                )
     seen: set[tuple[str | None, str | None, str | None]] = set()
     for i, r in enumerate(s.routes):
         key = (r.match.host, r.match.path_prefix, r.match.path_exact)

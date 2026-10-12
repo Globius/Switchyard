@@ -4600,6 +4600,41 @@ export interface components {
             summary: string;
         };
         /**
+         * Compression
+         * @description Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
+         *
+         *     Attributes:
+         *         algorithms: In order of preference: ``gzip``, ``deflate``.
+         *         content_types: Media types to compress, such as ``text/html``. Never images or archives.
+         *
+         *     Example:
+         *         >>> Compression().algorithms
+         *         ('gzip',)
+         */
+        Compression: {
+            /**
+             * Algorithms
+             * @default [
+             *       "gzip"
+             *     ]
+             */
+            algorithms: ("gzip" | "deflate")[];
+            /**
+             * Content Types
+             * @default [
+             *       "text/html",
+             *       "text/plain",
+             *       "text/css",
+             *       "text/javascript",
+             *       "application/javascript",
+             *       "application/json",
+             *       "application/xml",
+             *       "image/svg+xml"
+             *     ]
+             */
+            content_types: string[];
+        };
+        /**
          * DeployIn
          * @description Body of ``POST /se-groups/{id}/deploy``.
          */
@@ -7060,6 +7095,12 @@ export interface components {
          *         passive_check: Also judge members by their live traffic. Needs a health monitor.
          *         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
          *             weight (HAProxy ``slowstart``). Needs a health monitor.
+         *         backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,
+         *             ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,
+         *             needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).
+         *         tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2
+         *             stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``
+         *             keeps the default of one hour.
          *         send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
          *         client_certificate_id: Server certificate HAProxy presents to members (backend
          *             mutual TLS). Needs ``tls``.
@@ -7068,6 +7109,12 @@ export interface components {
         Pool: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             /** Health Monitor Id */
@@ -7106,6 +7153,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
             /**
              * Version
              * @default 1
@@ -7116,6 +7165,12 @@ export interface components {
         PoolCreate: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             /** Health Monitor Id */
@@ -7144,6 +7199,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
         };
         /**
          * PoolMember
@@ -7158,6 +7215,9 @@ export interface components {
          *         name: HAProxy server name; derived from address and port when omitted.
          *         backup: A backup member takes traffic only when every non-backup member is down.
          *         maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.
+         *         drain_timeout_s: With ``admin_state`` ``drain``: seconds after which the controller moves
+         *             the member to ``disabled`` (a periodic job, ADR 0109). ``None`` drains until an
+         *             operator acts. Never reaches the engine configuration.
          */
         PoolMember: {
             /** Address */
@@ -7169,6 +7229,8 @@ export interface components {
              * @default false
              */
             backup: boolean;
+            /** Drain Timeout S */
+            drain_timeout_s?: number | null;
             /**
              * Id
              * Format: uuid
@@ -7189,6 +7251,8 @@ export interface components {
         /** PoolPatch */
         PoolPatch: {
             algorithm?: components["schemas"]["Algorithm"] | null;
+            /** Backend Protocol */
+            backend_protocol?: ("http1" | "h2" | "h2c") | null;
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             /** Health Monitor Id */
@@ -7208,6 +7272,8 @@ export interface components {
             tls?: boolean | null;
             /** Tls Verify */
             tls_verify?: boolean | null;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
         };
         /**
          * PoolRead
@@ -7216,6 +7282,12 @@ export interface components {
         PoolRead: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
             /**
              * Changed Fields
              * @description Fields a draft changed; empty outside a draft.
@@ -7261,6 +7333,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
             /**
              * Version
              * @default 1
@@ -9022,6 +9096,7 @@ export interface components {
          *         enforce_allow_list: Reject connections from sources outside the allow list.
          *         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
          *             client address; honoured only when the connection source is in the allow list.
+         *         compression: Response compression (``http`` only; ADR 0117).
          */
         VirtualService: {
             /** Allow List Id */
@@ -9031,6 +9106,7 @@ export interface components {
              * @default []
              */
             certificate_ids: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /**
@@ -9094,6 +9170,7 @@ export interface components {
              * @default []
              */
             certificate_ids: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /**
@@ -9200,6 +9277,7 @@ export interface components {
             allow_list_id?: string | null;
             /** Certificate Ids */
             certificate_ids?: string[] | null;
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** Enabled */
@@ -9241,6 +9319,7 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
@@ -9548,6 +9627,10 @@ export interface components {
          *             (mutual TLS). Needs ``tls``.
          *         client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
          *             certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
+         *         tls_passthrough: ``tcp`` services only: do not terminate TLS; route by the SNI in the
+         *             client hello (ADR 0115). Excludes every TLS option of the port.
+         *         http3: Also listen for HTTP/3 over QUIC on the same number (UDP) and advertise it with
+         *             ``Alt-Svc`` (ADR 0116). Needs ``tls`` and ``http2``.
          */
         VsPort: {
             /** Client Ca Id */
@@ -9563,6 +9646,11 @@ export interface components {
              * @default false
              */
             http2: boolean;
+            /**
+             * Http3
+             * @default false
+             */
+            http3: boolean;
             /** Https Redirect Port */
             https_redirect_port?: number | null;
             /** Port */
@@ -9577,6 +9665,11 @@ export interface components {
              * @default false
              */
             tls: boolean;
+            /**
+             * Tls Passthrough
+             * @default false
+             */
+            tls_passthrough: boolean;
             tls_profile?: components["schemas"]["TlsProfile"] | null;
         };
         /**

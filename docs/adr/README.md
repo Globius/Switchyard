@@ -73,4 +73,7 @@ Date: YYYY-MM-DD
 | [0107](0107-backend-client-certificate.md) | Client certificate to pool members (backend mTLS) | Accepted |
 | [0108](0108-health-check-presets.md) | Health checks: body and header match, protocol presets | Accepted |
 | [0109](0109-timed-member-drain.md) | Timed member drain | Accepted |
+| [0115](0115-sni-passthrough.md) | TLS passthrough with SNI routing on TCP services | Accepted |
+| [0116](0116-http3-grpc-websocket.md) | HTTP/3, gRPC backends and WebSocket timeout | Accepted |
+| [0117](0117-response-compression.md) | Response compression | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |

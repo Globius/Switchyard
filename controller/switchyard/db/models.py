@@ -237,6 +237,7 @@ class PoolRow(TenantOwnedMixin, Base):
         tenant_fk("health_monitor_id", "health_monitor"),
         tenant_fk("client_certificate_id", "certificate"),
         CheckConstraint("send_proxy IN ('v1', 'v2')", name="send_proxy"),
+        CheckConstraint("backend_protocol IN ('http1', 'h2', 'h2c')", name="backend_protocol"),
         enum_check("algorithm", dm.Algorithm),
         CheckConstraint("version >= 1", name="version"),
     )
@@ -249,6 +250,10 @@ class PoolRow(TenantOwnedMixin, Base):
     passive_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     slow_start_s: Mapped[int | None] = mapped_column(Integer)
     send_proxy: Mapped[str | None] = mapped_column(Text)
+    tunnel_timeout_s: Mapped[int | None] = mapped_column(Integer)
+    backend_protocol: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'http1'")
+    )
     client_certificate_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
 
 
@@ -307,6 +312,7 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
         Boolean, nullable=False, server_default=text("false")
     )
     restore_client_ip_header: Mapped[str | None] = mapped_column(Text)
+    compression: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class VsPortRow(Base):
@@ -335,6 +341,10 @@ class VsPortRow(Base):
     client_verify: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'required'")
     )
+    tls_passthrough: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    http3: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
 
 class VsRouteRow(Base):

@@ -226,6 +226,22 @@ def validate_cookie_name(value: str) -> str:
     return value
 
 
+def validate_media_type(value: str) -> str:
+    """Validate a media type such as ``text/html`` (no parameters, lower case).
+
+    Example:
+        >>> validate_media_type("image/svg+xml")
+        'image/svg+xml'
+        >>> validate_media_type("Text/HTML")
+        Traceback (most recent call last):
+            ...
+        ValueError: media type must look like 'text/html' (lower case, no parameters)
+    """
+    if not re.fullmatch(r"[a-z0-9][a-z0-9!#$&^_.+-]{0,62}/[a-z0-9][a-z0-9!#$&^_.+-]{0,62}", value):
+        raise ValueError("media type must look like 'text/html' (lower case, no parameters)")
+    return value
+
+
 def validate_match_text(value: str) -> str:
     """Validate literal text a health check looks for (letters, digits and ``._:/-``; 1-128).
 

@@ -387,7 +387,15 @@ class _Renderer:
                 connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
         request_rules: list[str] = []
         routing_rules: list[str] = []
+        options: list[str] = []
+        if mode == "tcp" and svc.routes:
+            request_rules = [
+                "tcp-request inspect-delay 5s",
+                "tcp-request content accept if { req.ssl_hello_type 1 }",
+            ]
+            routing_rules = self._sni_rules(svc, name)
         if mode == "http":
+            options = self._http_options(svc, ports)
             request_rules = self._request_rules(svc, ports, allow)
             if any(p.port == 80 and not p.tls for p in ports):
                 # First, before redirects and routes: the CA's request must reach the answer.
@@ -397,7 +405,8 @@ class _Renderer:
         return {
             "name": name,
             "mode": mode,
-            "binds": [self._bind(svc, p, name, mode) for p in ports],
+            "binds": [bind for p in ports for bind in self._binds(svc, p, name, mode)],
+            "options": options,
             "connection_rules": connection_rules,
             "request_rules": request_rules,
             "routing_rules": routing_rules,
@@ -405,6 +414,55 @@ class _Renderer:
                 self._backend_name(svc.default_pool_id) if svc.default_pool_id else None
             ),
         }
+
+    @staticmethod
+    def _http_options(svc: dm.VirtualService, ports: list[dm.VsPort]) -> list[str]:
+        """Frontend keywords of an HTTP service: compression, ``Alt-Svc`` (ADR 0116, 0117)."""
+        options: list[str] = []
+        if svc.compression is not None:
+            options.append("compression algo " + " ".join(svc.compression.algorithms))
+            options.append(
+                "compression type "
+                + " ".join(esc.media_type(t) for t in svc.compression.content_types)
+            )
+        for port in ports:
+            if port.http3:
+                options.append(f"http-response set-header alt-svc 'h3=\":{port.port}\"; ma=86400'")
+        return options
+
+    def _sni_rules(self, svc: dm.VirtualService, name: str) -> list[str]:
+        """Route a passthrough ``tcp`` service by the SNI of the client hello (ADR 0115)."""
+        exact: dict[str, str] = {}
+        wild: dict[str, str] = {}
+        for route in svc.routes:
+            host = _need(route.match.host, "passthrough route host")
+            target = self._backend_name(_need(route.pool_id, "passthrough route pool"))
+            if _is_wild(host):
+                wild[esc.wildcard_regex(host)] = target
+            else:
+                exact[esc.hostname(host)] = target
+        rules: list[str] = []
+        for converter, entries, suffix in (("map", exact, "sni"), ("map_reg", wild, "sni-wild")):
+            if not entries:
+                continue
+            path = f"{BASE_DIR}/maps/{name}-{suffix}.map"
+            self.files[f"haproxy/maps/{name}-{suffix}.map"] = _map_text(entries)
+            lookup = f"req.ssl_sni,lower,{converter}({path})"
+            rules.append(f"use_backend %[{lookup}] if {{ {lookup} -m found }}")
+        return rules
+
+    def _binds(self, svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> list[str]:
+        bind = self._bind(svc, port, name, mode)
+        if not port.http3:
+            return [bind]
+        # The same listener again over QUIC (UDP), with ALPN h3 instead of h2 and http/1.1.
+        quic = bind.replace("alpn h2,http/1.1", "alpn h3")
+        family = "quic6@" if svc.vip.version == 6 else "quic4@"
+        address = f"[{svc.vip}]:{port.port}" if svc.vip.version == 6 else f"{svc.vip}:{port.port}"
+        quic = quic.replace(
+            f"bind {esc.bind_address(svc.vip, port.port)}", f"bind {family}{address}", 1
+        )
+        return [bind, quic]
 
     def _bind(self, svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> str:
         parts = [f"bind {esc.bind_address(svc.vip, port.port)}"]
@@ -538,6 +596,8 @@ class _Renderer:
         lines: list[str] = [f"mode {mode}", f"balance {pool.algorithm.value}"]
         if pool.persistence is not None:
             lines += self._persistence_lines(pool.persistence)
+        if pool.tunnel_timeout_s is not None:
+            lines.append(f"timeout tunnel {pool.tunnel_timeout_s}s")
         if monitor is not None:
             lines += self._monitor_lines(monitor)
         servers = sorted(self._server(pool, m, monitor, mode) for m in pool.members)
@@ -636,6 +696,10 @@ class _Renderer:
                 parts.append(f"crt {CERT_DIR}/{esc.ident(cert.name)}.pem")
             if mode == "http":
                 parts.append("sni req.hdr(host),field(1,:),lower")
+            if pool.backend_protocol == "h2":
+                parts.append("alpn h2")
+        if pool.backend_protocol == "h2c":
+            parts.append("proto h2")
         if pool.send_proxy is not None:
             parts.append("send-proxy" if pool.send_proxy == "v1" else "send-proxy-v2")
         parts.append(f"weight {member.weight}")
