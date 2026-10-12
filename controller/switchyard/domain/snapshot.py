@@ -109,6 +109,8 @@ class Snapshot(Model):
             policy_ids.update(s.policy_set_ids)
             if s.allow_list_id:
                 policy_ids.add(s.allow_list_id)
+            if s.deny_list_id:
+                policy_ids.add(s.deny_list_id)
         for ps in self.policy_sets:
             if ps.id in policy_ids and isinstance(ps, AccessPolicySet) and ps.oidc.directory_id:
                 policy_ids.add(ps.oidc.directory_id)
@@ -351,6 +353,19 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                         f"{base}.allow_list_id",
                         "wrong_policy_kind",
                         f"policy set {ps.name} is not an allow-list policy set",
+                    )
+                )
+
+        if s.deny_list_id:
+            ps = check_ref(
+                f"{base}.deny_list_id", s.tenant_id, "policy set", s.deny_list_id, policies
+            )
+            if ps is not None and not isinstance(ps, AllowListPolicySet):
+                problems.append(
+                    Problem(
+                        f"{base}.deny_list_id",
+                        "wrong_policy_kind",
+                        f"policy set {ps.name} is not an IP list policy set",
                     )
                 )
 

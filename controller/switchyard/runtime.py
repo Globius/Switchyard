@@ -16,6 +16,7 @@ Login: ``SWITCHYARD_PUBLIC_URL`` (external base URL, for redirect URIs and Secur
 (``SWITCHYARD_PKI_MOUNT``, ``SWITCHYARD_PKI_ROLE``).
 """
 
+import json
 import logging
 import os
 import socket
@@ -28,6 +29,7 @@ from switchyard.adapters.agent import BundleSigner
 from switchyard.adapters.cloudflare import Cloudflare, HttpCloudflare
 from switchyard.adapters.git import GitLabMirror, GitMirror
 from switchyard.adapters.grafana import HttpGrafana
+from switchyard.adapters.iplists import HttpIpLists
 from switchyard.adapters.notify import HttpNotifier, SmtpSettings
 from switchyard.adapters.pki import OpenBaoPki
 from switchyard.adapters.proxmox import HttpProxmox
@@ -58,6 +60,7 @@ from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
+from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
 from switchyard.services.status import StatusService
@@ -271,6 +274,22 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     return InfraService(db, client) if client else None
 
 
+def ip_list_source() -> HttpIpLists | None:
+    """Country and reputation list sources from the environment, or ``None`` when neither is set.
+
+    ``SWITCHYARD_GEO_URL`` is a template with ``{cc}``; ``SWITCHYARD_REPUTATION_FEEDS`` is JSON
+    ``{"name": "url"}`` (ADR 0147).
+    """
+    geo = os.environ.get("SWITCHYARD_GEO_URL") or None
+    raw = os.environ.get("SWITCHYARD_REPUTATION_FEEDS") or "{}"
+    feeds = json.loads(raw)
+    if not isinstance(feeds, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in feeds.items()
+    ):
+        raise ValueError('SWITCHYARD_REPUTATION_FEEDS must be a JSON object of {"name": "url"}')
+    return HttpIpLists(geo, feeds) if geo or feeds else None
+
+
 def discovery_service(db: Databases) -> DiscoveryService | None:
     """Pool discovery, if the Proxmox client is configured (same settings as the infra jobs)."""
     client = proxmox_client()
@@ -378,6 +397,8 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     status = StatusService(db, engines, secrets)
     certs = certificates(db, secrets)
     discovery = discovery_service(db)
+    lists = ip_list_source()
+    iplists = IpListSync(db, lists, ChangeSetService(db)) if lists else None
     handlers = build_handlers(
         db,
         pipeline,
@@ -388,6 +409,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         GarbageCollector(db),
         discovery,
         AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
+        iplists,
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
@@ -396,6 +418,8 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     }
     if discovery is not None:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
+    if iplists is not None:
+        schedule[SYNC_IP_LISTS_JOB] = timedelta(hours=6)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

@@ -483,6 +483,7 @@ def validate_body(value: str) -> str:
     return value
 
 
+_COUNTRY = re.compile(r"^[A-Z]{2}$")
 _DISCOVERY_TAG = re.compile(r"^[a-z0-9_][a-z0-9_+.-]{0,63}$")
 
 
@@ -716,3 +717,19 @@ def validate_cert_pem(value: str) -> str:
     if not _CERT_PEM.fullmatch(value):
         raise ValueError("expected PEM CERTIFICATE blocks only")
     return value if value.endswith("\n") else value + "\n"
+
+
+def validate_country_code(value: str) -> str:
+    """Validate an ISO 3166 alpha-2 country code (upper case, two letters).
+
+    Example:
+        >>> validate_country_code("NL")
+        'NL'
+        >>> validate_country_code("nld")
+        Traceback (most recent call last):
+            ...
+        ValueError: country must be a two-letter upper-case ISO 3166 code
+    """
+    if not _COUNTRY.fullmatch(value):
+        raise ValueError("country must be a two-letter upper-case ISO 3166 code")
+    return value

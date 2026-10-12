@@ -70,6 +70,7 @@ Date: YYYY-MM-DD
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0147](0147-country-and-reputation-ip-lists.md) | Country and reputation IP lists | Accepted |
 | [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
 | [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
 | [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |

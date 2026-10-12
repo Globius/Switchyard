@@ -431,13 +431,20 @@ class _Renderer:
                 connection_rules.append(
                     f"tcp-request session reject if !{{ src -f {lst} }}{exempt}"
                 )
+        deny = _allow_list(self.policies[svc.deny_list_id]) if svc.deny_list_id else None
+        if deny is not None:
+            self.files[f"haproxy/lists/{esc.ident(deny.name)}.cidr"] = self._allow_list_text(deny)
+            if mode != "http":
+                connection_rules.append(
+                    f"tcp-request session reject if {{ src -f {self._list_path(deny)} }}"
+                )
         request_rules: list[str] = []
         tarpit_s: int | None = None
         response_rules: list[str] = []
         error_rules: list[str] = []
         routing_rules: list[str] = []
         if mode == "http":
-            request_rules = self._request_rules(svc, ports, allow, inst)
+            request_rules = self._request_rules(svc, ports, allow, deny, inst)
             tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
@@ -952,6 +959,7 @@ class _Renderer:
         svc: dm.VirtualService,
         ports: list[dm.VsPort],
         allow: dm.AllowListPolicySet | None,
+        deny: dm.AllowListPolicySet | None = None,
         inst: AuthInstance | None = None,
     ) -> list[str]:
         rules: list[str] = []
@@ -968,6 +976,12 @@ class _Renderer:
                 f"if {{ var(txn.trusted) -m bool }} {{ hdr({header}) -m found }}",
                 f"http-request del-header {header} if !{{ var(txn.trusted) -m bool }}",
             ]
+        if deny is not None:
+            # After the client address is restored (behind a CDN ``src`` is the real client), and
+            # before anything else touches the request.
+            rules.append(
+                f"http-request deny deny_status 403 if {{ src -f {self._list_path(deny)} }}"
+            )
         rules += [
             "http-request del-header X-Forwarded-For",
             f"http-request set-header X-Forwarded-Proto https if {{ ssl_fc }}{self._g()}",

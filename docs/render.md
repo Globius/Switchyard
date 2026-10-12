@@ -99,6 +99,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Policy set `rewrite`, request rule | `http-request set-header\|add-header <Name> "<value>"`, `del-header <Name>`, or `replace-path` / `set-path` for a prefix replacement, `if <conditions>` (ADR 0102) |
 | Policy set `rewrite`, response rule | `http-response set-header\|add-header\|del-header ...`; a rule with a match tests a flag set at request time: `http-request set-var(txn.sy_m<n>) bool(true) if <conditions>` then `http-response ... if { var(txn.sy_m<n>) -m bool }` |
 | Service `allow_list_id` + `enforce_allow_list` | `tcp-request session reject if !{ src -f <dir>/lists/<name>.cidr }` |
+| Service `deny_list_id` | HTTP: `http-request deny deny_status 403 if { src -f <dir>/lists/<name>.cidr }` after the client address is restored; TCP: `tcp-request session reject if { src -f ... }` |
 | Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
 | Pool `persistence` (source IP) | `stick-table type ipv6 size <n> expire <t>s` and `stick on src` |
@@ -120,7 +121,7 @@ Server names come from the member name or `<ip>-<port>` with dots and colons tur
 ## Request order in an HTTP frontend
 
 1. **Connection filter**: reject sources outside the allow list (only with `enforce_allow_list`).
-2. **Header hygiene**: restore the client address (below), delete any client `X-Forwarded-For`, set
+2. **Header hygiene**: restore the client address (below), then refuse the client if it is in the `deny_list_id` list (403), delete any client `X-Forwarded-For`, set
    `X-Forwarded-Proto`, store the lower-cased `Host` without port in `txn.host`. `option forwardfor`
    then adds the connection's source address.
 2b. **Rate limits**: `rate_limit` policy-set rules (ADR 0110): `track-sc` and the deny, tarpit or drop line per rule, with a stick-table backend `rl_<service>_<set>_<n>` each.

@@ -15,6 +15,7 @@ UDP_FORBIDDEN_SERVICE_FIELDS = (
     "policy_set_ids",
     "allow_list_id",
     "enforce_allow_list",
+    "deny_list_id",
     "restore_client_ip_header",
     "routes",
 )

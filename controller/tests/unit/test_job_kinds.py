@@ -12,6 +12,7 @@ from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.discovery import DISCOVER_POOLS_JOB
 from switchyard.services.gc import GC_JOB
 from switchyard.services.infra import APPLY_SDN_JOB, DEPLOY_SE_GROUP_JOB, RETIRE_ENGINE_JOB
+from switchyard.services.iplists import SYNC_IP_LISTS_JOB
 
 
 def test_every_job_kind_is_published() -> None:
@@ -28,6 +29,7 @@ def test_every_job_kind_is_published() -> None:
         POLL_STATUS_JOB,
         GC_JOB,
         DISCOVER_POOLS_JOB,
+        SYNC_IP_LISTS_JOB,
         EVALUATE_ALERTS_JOB,
     }
     assert kinds == {k.value for k in JobKind}
