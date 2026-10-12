@@ -87,6 +87,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 maxconn=g.maxconn,
                 canary_seconds=g.canary_seconds,
                 routing_profile_id=g.routing_profile_id,
+                peers=g.peers.model_dump(mode="json") if g.peers else None,
             )
         )
     for hm in snapshot.health_monitors:
@@ -352,6 +353,7 @@ def rows_to_snapshot(
                 "ha_mode": g.ha_mode,
                 "maxconn": g.maxconn,
                 "canary_seconds": g.canary_seconds,
+                "peers": g.peers,
                 "routing_profile_id": g.routing_profile_id,
                 "networks": [
                     {"network_id": gn.network_id, "role": gn.role}

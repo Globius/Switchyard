@@ -94,6 +94,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Pool `backend_protocol` | `h2`: `alpn h2` on TLS servers; `h2c`: `proto h2` on plain servers (gRPC backends; ADR 0116) |
 | Pool `tunnel_timeout_s` | `timeout tunnel <n>s` in the backend (WebSocket and gRPC idle time; ADR 0116) |
 | Service `compression` | `compression algo <a>...` and `compression type <t>...` in the frontend (ADR 0117) |
+| SE group `peers` | a `peers sy_peers` section with one `peer <name> <address>:<port>` per engine, and `peers sy_peers` on every stick table; each engine's host name must be one of the peer names (ADR 0118) |
 | Pool `passive_check`, `slow_start_s` | server options `observe <layer> error-limit <n> on-error <action>` and `slowstart <n>s`; both need the pool's health monitor (ADR 0066) |
 | Port `tls_profile` | `ssl-min-ver`, `ciphers` and `ciphersuites` on the TLS `bind` (`modern`, `intermediate`, `legacy`; none keeps the default), see ADR 0067 |
 | Port `client_ca_id`, `client_verify` | `ca-file certs/ca-<name>.pem verify required|optional` (and `crl-file certs/ca-<name>.crl`) on the TLS `bind`; the files travel in the agent bundle (ADR 0070) |

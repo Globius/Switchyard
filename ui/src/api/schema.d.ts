@@ -6892,6 +6892,38 @@ export interface components {
             on_error: "mark-down" | "fastinter" | "fail-check" | "sudden-death";
         };
         /**
+         * PeerMember
+         * @description One service engine in a peer group: its HAProxy host name and its backend-network address.
+         *
+         *     Example:
+         *         >>> PeerMember(name="se-1", address="10.20.0.5").name
+         *         'se-1'
+         */
+        PeerMember: {
+            /** Address */
+            address: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PeerSync
+         * @description Share persistence tables between the engines of a group (HAProxy ``peers``; ADR 0118).
+         *
+         *     Attributes:
+         *         port: TCP port the engines use to talk to each other, on the backend network.
+         *         members: Every engine of the group, by the name HAProxy finds as its own (the host name)
+         *             and the address it listens on. At least two, at most 16.
+         */
+        PeerSync: {
+            /** Members */
+            members: components["schemas"]["PeerMember"][];
+            /**
+             * Port
+             * @default 10000
+             */
+            port: number;
+        };
+        /**
          * PermissionMatrix
          * @description The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.
          */
@@ -8158,6 +8190,7 @@ export interface components {
          *             a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.
          *         canary_seconds: How long the canary SE is watched after a push before the rest of the
          *             group is updated (0 skips the wait).
+         *         peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
          */
         SeGroup: {
             /**
@@ -8180,6 +8213,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
             /**
@@ -8210,6 +8244,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
         };
@@ -8236,6 +8271,7 @@ export interface components {
             name?: string | null;
             /** Networks */
             networks?: components["schemas"]["SeGroupNetwork"][] | null;
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
         };
@@ -8271,6 +8307,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
             /**

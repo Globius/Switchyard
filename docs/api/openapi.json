@@ -8316,6 +8316,60 @@
         "title": "PassiveCheck",
         "type": "object"
       },
+      "PeerMember": {
+        "additionalProperties": false,
+        "description": "One service engine in a peer group: its HAProxy host name and its backend-network address.\n\nExample:\n    >>> PeerMember(name=\"se-1\", address=\"10.20.0.5\").name\n    'se-1'",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "format": "ipv4",
+                "type": "string"
+              },
+              {
+                "format": "ipv6",
+                "type": "string"
+              }
+            ],
+            "title": "Address"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ],
+        "title": "PeerMember",
+        "type": "object"
+      },
+      "PeerSync": {
+        "additionalProperties": false,
+        "description": "Share persistence tables between the engines of a group (HAProxy ``peers``; ADR 0118).\n\nAttributes:\n    port: TCP port the engines use to talk to each other, on the backend network.\n    members: Every engine of the group, by the name HAProxy finds as its own (the host name)\n        and the address it listens on. At least two, at most 16.",
+        "properties": {
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/PeerMember"
+            },
+            "maxItems": 16,
+            "minItems": 2,
+            "title": "Members",
+            "type": "array"
+          },
+          "port": {
+            "default": 10000,
+            "title": "Port",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "title": "PeerSync",
+        "type": "object"
+      },
       "PermissionMatrix": {
         "additionalProperties": false,
         "description": "The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.",
@@ -11305,7 +11359,7 @@
       },
       "SeGroup": {
         "additionalProperties": false,
-        "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).",
+        "description": "A set of HAProxy service engines that serve the same virtual services.\n\nAttributes:\n    ha_mode: How VIPs are placed (BGP or VRRP).\n    networks: Attached networks; VIPs must live in a ``vip`` network.\n    maxconn: HAProxy global ``maxconn``.\n    routing_profile_id: How VIPs are announced: a ``vrrp`` profile for ``ha_mode: vrrp`` and\n        a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.\n    canary_seconds: How long the canary SE is watched after a push before the rest of the\n        group is updated (0 skips the wait).\n    peers: Persistence table sync between the group's engines; ``None`` keeps each table local.",
         "properties": {
           "canary_seconds": {
             "default": 30,
@@ -11340,6 +11394,16 @@
             "minItems": 1,
             "title": "Networks",
             "type": "array"
+          },
+          "peers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "routing_profile_id": {
             "anyOf": [
@@ -11406,6 +11470,16 @@
             "minItems": 1,
             "title": "Networks",
             "type": "array"
+          },
+          "peers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "routing_profile_id": {
             "anyOf": [
@@ -11508,6 +11582,16 @@
             ],
             "title": "Networks"
           },
+          "peers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "routing_profile_id": {
             "anyOf": [
               {
@@ -11573,6 +11657,16 @@
             "minItems": 1,
             "title": "Networks",
             "type": "array"
+          },
+          "peers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PeerSync"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "routing_profile_id": {
             "anyOf": [

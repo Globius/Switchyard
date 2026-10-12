@@ -103,6 +103,13 @@ def full_data() -> dict:  # type: ignore[type-arg]
             "members": [{"address": "10.20.0.30", "port": 6443}],
         }
     )
+    data["se_groups"][0]["peers"] = {
+        "port": 10001,
+        "members": [
+            {"name": "se-1", "address": "10.20.0.5"},
+            {"name": "se-2", "address": "10.20.0.6"},
+        ],
+    }
     data["certificates"][0].update(source="acme", ocsp_stapling=True, renew_before_days=14)
     vs = data["virtual_services"][0]
     vs["ports"][0]["tls_profile"] = "modern"

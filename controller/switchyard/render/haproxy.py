@@ -58,6 +58,7 @@ CERT_DIR = "/etc/switchyard/certs"
 ACME_MAP_FILE = "haproxy/maps/acme-http01.map"
 ACME_MAP = f"{BASE_DIR}/maps/acme-http01.map"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
+PEERS_SECTION = "sy_peers"
 
 #: Protocol-aware health checks HAProxy ships, by monitor ``preset`` (ADR 0108).
 _TCP_PRESETS = {
@@ -335,6 +336,7 @@ class _Renderer:
                 backends=backends,
                 exporter=self._exporter(),
                 fingerprint=fingerprint,
+                peers=self._peers(),
             )
 
         # The fingerprint covers every file; the config is hashed with a placeholder in its own
@@ -348,6 +350,19 @@ class _Renderer:
         )
 
     # -- helpers ---------------------------------------------------------------------------------
+
+    def _peers(self) -> dict[str, Any] | None:
+        """The ``peers`` section that syncs persistence tables between the group's engines."""
+        sync = self.group.peers
+        if sync is None:
+            return None
+        return {
+            "name": PEERS_SECTION,
+            "members": [
+                {"name": esc.ident(m.name), "target": esc.bind_address(m.address, sync.port)}
+                for m in sorted(sync.members, key=lambda m: m.name)
+            ],
+        }
 
     def _exporter(self) -> dict[str, Any] | None:
         """Where the Prometheus exporter listens: port 8405, only for the management networks.
@@ -612,7 +627,7 @@ class _Renderer:
         monitor = self.monitors.get(pool.health_monitor_id) if pool.health_monitor_id else None
         lines: list[str] = [f"mode {mode}", f"balance {pool.algorithm.value}"]
         if pool.persistence is not None:
-            lines += self._persistence_lines(pool.persistence)
+            lines += self._persistence_lines(pool.persistence, self.group.peers is not None)
         if pool.tunnel_timeout_s is not None:
             lines.append(f"timeout tunnel {pool.tunnel_timeout_s}s")
         if monitor is not None:
@@ -621,7 +636,7 @@ class _Renderer:
         return {"name": self._backend_name(pool.id), "lines": lines, "servers": servers}
 
     @staticmethod
-    def _persistence_lines(persistence: dm.Persistence) -> list[str]:
+    def _persistence_lines(persistence: dm.Persistence, peers: bool) -> list[str]:
         """Backend lines for one persistence profile (ADR 0105)."""
         if isinstance(persistence, dm.PersistenceCookie):
             line = f"cookie {esc.cookie_name(persistence.name)} {persistence.mode}"
@@ -647,6 +662,8 @@ class _Renderer:
                 key = "path"
             else:
                 key = f"url_param({esc.ident(_need(persistence.param, 'url parameter'))})"
+        if peers:
+            table += f" peers {PEERS_SECTION}"
         return [f"stick-table {table}", f"stick on {key}"]
 
     @staticmethod

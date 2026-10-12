@@ -21,6 +21,13 @@ defaults
     timeout http-keep-alive 10s
     timeout tunnel 1h
 
+{% if peers %}
+peers {{ peers.name }}
+{% for peer in peers.members %}
+    peer {{ peer.name }} {{ peer.target }}
+{% endfor %}
+
+{% endif %}
 # Local health endpoint for keepalived's check script and the agent's route-health watchdog.
 frontend sy_local_health
     mode http

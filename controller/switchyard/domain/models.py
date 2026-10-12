@@ -214,6 +214,39 @@ class SeGroupNetwork(Model):
     role: NetworkRole
 
 
+class PeerMember(Model):
+    """One service engine in a peer group: its HAProxy host name and its backend-network address.
+
+    Example:
+        >>> PeerMember(name="se-1", address="10.20.0.5").name
+        'se-1'
+    """
+
+    name: Name
+    address: IPAddress
+
+
+class PeerSync(Model):
+    """Share persistence tables between the engines of a group (HAProxy ``peers``; ADR 0118).
+
+    Attributes:
+        port: TCP port the engines use to talk to each other, on the backend network.
+        members: Every engine of the group, by the name HAProxy finds as its own (the host name)
+            and the address it listens on. At least two, at most 16.
+    """
+
+    port: Port = 10_000
+    members: tuple[PeerMember, ...] = Field(min_length=2, max_length=16)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        names = [m.name for m in self.members]
+        addresses = [m.address for m in self.members]
+        if len(set(names)) != len(names) or len(set(addresses)) != len(addresses):
+            raise ValueError("peer names and addresses must be unique")
+        return self
+
+
 class SeGroup(TenantOwned):
     """A set of HAProxy service engines that serve the same virtual services.
 
@@ -225,6 +258,7 @@ class SeGroup(TenantOwned):
             a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.
         canary_seconds: How long the canary SE is watched after a push before the rest of the
             group is updated (0 skips the wait).
+        peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
     """
 
     ha_mode: HaMode
@@ -232,6 +266,7 @@ class SeGroup(TenantOwned):
     maxconn: int = Field(default=20_000, ge=1, le=10_000_000)
     canary_seconds: int = Field(default=30, ge=0, le=600)
     routing_profile_id: UUID | None = None
+    peers: PeerSync | None = None
 
 
 InterfaceName = Annotated[str, AfterValidator(v.validate_interface)]

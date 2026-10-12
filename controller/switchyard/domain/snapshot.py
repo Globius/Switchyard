@@ -216,6 +216,23 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 f"se_groups.{g.name}.networks[{i}]", g.tenant_id, "network", gn.network_id, networks
             )
     for g in snapshot.se_groups:
+        if g.peers is None:
+            continue
+        backend_cidrs = [
+            networks[gn.network_id].cidr
+            for gn in g.networks
+            if gn.role is NetworkRole.BACKEND and gn.network_id in networks
+        ]
+        for i, peer in enumerate(g.peers.members):
+            if not any(peer.address in cidr for cidr in backend_cidrs):
+                problems.append(
+                    Problem(
+                        f"se_groups.{g.name}.peers.members[{i}].address",
+                        "peer_outside_backend_network",
+                        f"{peer.address} is not in a backend network of the group",
+                    )
+                )
+    for g in snapshot.se_groups:
         if g.routing_profile_id is None:
             continue
         profile = check_ref(

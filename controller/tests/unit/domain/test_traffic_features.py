@@ -186,3 +186,54 @@ def test_the_renderer_refuses_an_unsafe_media_type() -> None:
     broken = snap.model_copy(update={"virtual_services": (svc,)})
     with pytest.raises(RenderError, match="media type"):
         render_haproxy(broken, broken.se_groups[0].id)
+
+
+# -- C3: persistence table sync ----------------------------------------------------------------
+
+
+def with_peers(*members: dict[str, str], **extra: Any) -> dict[str, Any]:
+    d = copy.deepcopy(BASE)
+    d["pools"][0]["persistence"] = {"type": "source_ip"}
+    d["se_groups"][0]["peers"] = {"members": list(members), **extra}
+    return d
+
+
+A = {"name": "se-a", "address": "10.20.0.5"}
+B = {"name": "se-b", "address": "10.20.0.6"}
+
+
+def test_peers_render_a_section_and_attach_it_to_the_tables() -> None:
+    snap = snapshot_from_mapping(with_peers(B, A))
+    assert validate_snapshot(snap) == []
+    cfg = render_haproxy(snap, snap.se_groups[0].id).files["haproxy/haproxy.cfg"]
+    assert "peers sy_peers\n    peer se-a 10.20.0.5:10000\n    peer se-b 10.20.0.6:10000\n" in cfg
+    assert "expire 1800s peers sy_peers" in cfg
+
+
+def test_no_peers_means_local_tables() -> None:
+    d = with_peers(A, B)
+    del d["se_groups"][0]["peers"]
+    snap = snapshot_from_mapping(d)
+    cfg = render_haproxy(snap, snap.se_groups[0].id).files["haproxy/haproxy.cfg"]
+    assert "peers" not in cfg
+
+
+@pytest.mark.parametrize(
+    "members",
+    [
+        [A],
+        [A, {"name": "se-a", "address": "10.20.0.7"}],
+        [A, {"name": "se-c", "address": "10.20.0.5"}],
+    ],
+)
+def test_peer_lists_are_validated(members: list[dict[str, str]]) -> None:
+    with pytest.raises(ValidationError):
+        snapshot_from_mapping(with_peers(*members))
+
+
+def test_peers_must_sit_on_a_backend_network_of_the_group() -> None:
+    outside = {"name": "se-c", "address": "172.16.0.9"}
+    got = [
+        (p.path, p.code) for p in validate_snapshot(snapshot_from_mapping(with_peers(A, outside)))
+    ]
+    assert got == [("se_groups.edge.peers.members[1].address", "peer_outside_backend_network")]

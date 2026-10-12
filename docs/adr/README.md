@@ -76,4 +76,5 @@ Date: YYYY-MM-DD
 | [0115](0115-sni-passthrough.md) | TLS passthrough with SNI routing on TCP services | Accepted |
 | [0116](0116-http3-grpc-websocket.md) | HTTP/3, gRPC backends and WebSocket timeout | Accepted |
 | [0117](0117-response-compression.md) | Response compression | Accepted |
+| [0118](0118-persistence-peers.md) | Persistence table sync between engines (peers) | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |

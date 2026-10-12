@@ -125,6 +125,7 @@ class SeGroupRow(TenantOwnedMixin, Base):
     routing_profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     maxconn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20000"))
     canary_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("30"))
+    peers: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class SeGroupNetworkRow(Base):
