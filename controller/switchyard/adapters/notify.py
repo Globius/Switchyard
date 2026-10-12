@@ -9,13 +9,14 @@ pointing the controller at the management network or the cloud metadata address.
 import asyncio
 import hashlib
 import hmac
+import ipaddress
 import json
 import smtplib
 import socket
 from dataclasses import dataclass, field
 from email.message import EmailMessage
 from typing import Any, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
@@ -110,20 +111,42 @@ class HttpNotifier:
         self._allow_private = allow_private
         self._client = client or httpx.AsyncClient(timeout=timeout, follow_redirects=False)
 
-    async def _check_host(self, url: str) -> None:
-        host = urlsplit(url).hostname or ""
+    async def _pin(self, url: str) -> tuple[str, dict[str, str], dict[str, Any]]:
+        """Resolve the host once, check every answer, and return what to connect to.
+
+        The request goes to the first checked address, not to the name, so a resolver that answers
+        differently the second time (DNS rebinding) changes nothing. ``Host`` and, for https, the
+        TLS server name stay the original host, so certificate verification is unchanged.
+        """
+        parts = urlsplit(url)
+        host = parts.hostname or ""
         if self._allow_private:
-            return
+            return url, {}, {}
         if private_address(host):
             raise NotifyError("the URL names a private or local address")
+        try:
+            ipaddress.ip_address(host)
+            return url, {}, {}  # a public IP literal needs no resolution
+        except ValueError:
+            pass
         loop = asyncio.get_running_loop()
         try:
             infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
         except OSError as exc:
             raise NotifyError(f"cannot resolve {host}") from exc
-        for info in infos:
-            if private_address(str(info[4][0])):
+        addresses = [str(i[4][0]) for i in infos]
+        if not addresses:
+            raise NotifyError(f"cannot resolve {host}")
+        for address in addresses:
+            if private_address(address):
                 raise NotifyError(f"{host} resolves to a private or local address")
+        pinned = addresses[0]
+        netloc = f"[{pinned}]" if ":" in pinned else pinned
+        if parts.port:
+            netloc += f":{parts.port}"
+        host_header = host if not parts.port else f"{host}:{parts.port}"
+        extensions: dict[str, Any] = {"sni_hostname": host} if parts.scheme == "https" else {}
+        return urlunsplit(parts._replace(netloc=netloc)), {"Host": host_header}, extensions
 
     async def send(
         self, kind: str, config: dict[str, Any], secret: str | None, alert: Alert
@@ -133,8 +156,8 @@ class HttpNotifier:
             await self._email(config, alert)
             return
         url = str(config["url"])
-        await self._check_host(url)
-        headers = {"Content-Type": "application/json", EVENT_HEADER: alert.state}
+        url, pin_headers, extensions = await self._pin(url)
+        headers = {**pin_headers, "Content-Type": "application/json", EVENT_HEADER: alert.state}
         payload: dict[str, Any] = (
             chat_body(str(config.get("format", "slack")), alert)
             if kind == "chat"
@@ -144,7 +167,9 @@ class HttpNotifier:
         if kind == "webhook" and secret:
             headers[SIGNATURE_HEADER] = sign(secret, body)
         try:
-            response = await self._client.post(url, content=body, headers=headers)
+            response = await self._client.post(
+                url, content=body, headers=headers, extensions=extensions
+            )
         except httpx.HTTPError as exc:
             raise NotifyError(f"request failed: {type(exc).__name__}") from exc
         if response.status_code >= 300:

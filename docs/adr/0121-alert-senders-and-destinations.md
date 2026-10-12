@@ -26,12 +26,13 @@ forgery), including the cloud metadata address. Signing secrets must not be stor
   `GET /alert-catalog` says whether it is.
 
 ## Consequences
-DNS rebinding between the check and the connection is possible in principle (the check resolves, the client resolves
-again). The window is small and the request has no credentials of the controller's, but a hostile resolver can still
-reach a private HTTP port once; run the controller with an egress policy that blocks the management network from the
-alert path if that matters, or pin the address in a later change. Chat webhook URLs are stored in `alert_target.config` in
-plain text (they are bearer URLs); they are shown to tenant administrators and viewers of the tenant, so treat a chat
-target as readable by everyone in the tenant, and use a signed webhook when that is not acceptable.
+The host is resolved once per send, every answer is checked, and the request connects to the first checked address with
+`Host` and the TLS server name kept as the original host (certificate verification is unchanged), so DNS rebinding
+between check and connection cannot reach a private address; redirects are never followed. A test rebinds the name and
+fails if the client connects by name. Lab mode (`SWITCHYARD_ALERT_ALLOW_PRIVATE=1`) skips all of it. Chat webhook URLs are
+stored in `alert_target.config` in plain text (they are bearer URLs); they are shown to tenant administrators and viewers
+of the tenant, so treat a chat target as readable by everyone in the tenant, and use a signed webhook when that is not
+acceptable.
 
 ## Alternatives considered
 An allow-list of destination domains per tenant (operational burden); proxying through an egress service (the right answer
