@@ -19,9 +19,78 @@ says where something has **not** been proven yet. Read [design/02-backend-design
 - **Engines:** HAProxy SEs cloned from the template in `se-image/`, placed by VRRP or BGP per SE group. SEs keep serving and
   failing over when the controller is down; tests in [adr/0056](adr/0056-end-to-end-lab.md) show a VIP surviving both the
   controller being stopped and the engines rebooting.
-- **Monitoring** runs apart from the controller ([section 8](#8-monitoring)).
+- **Monitoring** runs apart from the controller ([section 10](#10-monitoring)).
 
-## 2. Sizing (starting points, not measurements)
+## 2. Deployment options for the controller
+
+The controller stack is the same containers in every option: `api`, `worker`, a one-shot `migrate`, the `proxy` (nginx with
+the built UI), PostgreSQL, and OpenBao next to it. Engines are always Proxmox guests (section 9); only where the controller
+runs changes.
+
+| Option | What exists on main | Status |
+| --- | --- | --- |
+| [Docker Compose](#docker-compose) | `deploy/prod/compose.yaml`: etcd, Patroni (PostgreSQL 17), `migrate`, `api`, `worker`, `proxy`, one copy per node | supported; rehearsed on a three-node lab on one host |
+| [VMs or LXC containers on Proxmox](#vms-or-lxc-containers-on-proxmox) | the Compose option inside three Proxmox guests, adopted into the `management` tenant | VMs: the reference shape (ADR 0048). LXC: not proven |
+| [Kubernetes](#kubernetes) | nothing yet: no Helm chart or manifests | planned (ADR 0191, being built) |
+
+### Docker Compose
+
+Three Linux hosts with Docker, each running `deploy/prod/compose.yaml` with its own `node.env`; steps in
+[deploy/prod/README.md](../deploy/prod/README.md). Patroni keeps one synchronous standby, so a node can fail without losing a
+committed change. The worker runs on every node; scheduled jobs take a leader lock in PostgreSQL, so they run once.
+Put TLS in front of the three `proxy` ports (8080), ideally the management SE group (next option). `compose.lab.yaml` runs the
+same stack on one host to rehearse failover and restore (`deploy/prod/lab-drill.sh`).
+
+A single node (`deploy/quickstart/`) is fine for a lab or a small site that accepts downtime and restores from backup; it is
+not HA and its OpenBao is a dev-style single node.
+
+### VMs or LXC containers on Proxmox
+
+The reference production shape: three VMs, each running the Compose option, in the dedicated `management` tenant, with the
+controller's own VIP served by that tenant's SE group (section 1). Steps:
+
+1. Create three VMs (section 4 for sizing), two on different Proxmox hosts and the third on another platform with its Patroni
+   member tagged `nofailover` when you have only two hosts.
+2. Install Docker and run the Compose option on each.
+3. Bring the VMs and the controller's service under management with `syctl adopt`
+   (`deploy/prod/adopt/management.example.yaml`); `syctl serve` already created the empty `management` tenant (ADR 0155).
+4. Set the public address under Admin, Controller ([controller-settings.md](controller-settings.md)).
+
+**LXC containers.** Running the controller Compose inside privileged LXC containers (with nesting, for Docker) is expected to
+work but **has not been proven yet**; until it is, use VMs. Unprivileged containers are not supported for the controller.
+
+### Kubernetes
+
+!!! note "Placeholder"
+    No Kubernetes deployment exists on main yet. A Helm chart is being built (ADR 0191). This section will describe it
+    (API and worker Deployments, the migrate Job, the UI proxy, PostgreSQL through an operator, OpenBao outside or through
+    its chart, Secrets for the bundle key and mTLS files, probes on `/api/v1/healthz`) once it has merged. Until then, run
+    the controller with Compose.
+
+Do not confuse this with the [Kubernetes connector](kubernetes.md), which publishes Services of an existing cluster through
+Switchyard engines and works with any deployment option.
+
+## 3. Network and ports
+
+| From | To | Port | Why |
+| --- | --- | --- | --- |
+| Browsers, `syctl`, automation | proxy (behind the management VIP) | 443 (8080 on each node behind TLS) | UI and API |
+| Engines | controller | 443 (8443 in the quickstart) | enrolment and agent certificate renewal; https only |
+| Controller | engine management address | 7443 | `sy-agent` (gRPC over mTLS): bundles, status |
+| Controller | engine management address | 5556 | HAProxy Data Plane API (mTLS) |
+| Prometheus | engine management address | 8405, 9100 | HAProxy and node exporters (management network only) |
+| Engines | Loki | 3100 | logs from Vector |
+| Controller | Proxmox API | 8006 | deploy, retire, placement, discovery |
+| Controller | OpenBao | 8200 | secrets and agent PKI |
+| Controller nodes | each other | 5432, 8008, 2379, 2380 | PostgreSQL, Patroni, etcd |
+| Engines | engines of the group | VRRP (protocol 112), 10000 | failover, persistence peers |
+| Engines | upstream routers | 179, BFD 3784 | BGP mode |
+| Engines | CAPTCHA provider, ACME CA | 443 outbound | only if those features are used |
+
+Keep the management network separate from the VIP and backend networks; the exporter refuses requests that do not arrive on
+a management address. The controller never opens SSH to an engine. Engines need no internet access to start.
+
+## 4. Sizing (starting points, not measurements)
 
 Nothing here has been load-tested. Start with these and watch the dashboards.
 
@@ -33,7 +102,7 @@ Nothing here has been load-tested. Start with these and watch the dashboards.
 | Telemetry VM | 30 days of metrics and 14 days of logs by default; disk follows your request rate (`PROM_RETENTION`, `loki.yaml`) |
 | Proxmox hosts | enough for engines (each group at least two, on different hosts) plus the three controller VMs placed as above |
 
-## 3. Security checklist
+## 5. Security checklist
 
 The security reviews are in [security/backend-review.md](security/backend-review.md) and
 [security/ui-review.md](security/ui-review.md); ADRs [0072](adr/0072-hardening-engines-logins-secrets.md) and
@@ -60,7 +129,7 @@ The security reviews are in [security/backend-review.md](security/backend-review
       depends on the controller. There is no SSH from the controller to engines and none is needed.
 - [ ] No secrets in PostgreSQL, logs or Git: only `secret_ref`s that point into OpenBao.
 
-## 4. OpenBao
+## 6. OpenBao
 
 The quickstart runs a single OpenBao node with its unseal key on disk. For production:
 
@@ -72,7 +141,7 @@ The quickstart runs a single OpenBao node with its unseal key on disk. For produ
   (`--shared kv/se/ --platform kv/proxmox/token` as needed). Rotate the AppRole secret id on a schedule.
 - Back up OpenBao itself (raft snapshots) and test the restore. This repository does not yet script that.
 
-## 5. Certificates and the CA
+## 7. Certificates and the CA
 
 - Agent certificates are issued by the OpenBao PKI (7 days by default) and renewed by each engine every 8 hours
   ([adr/0011](adr/0011-agent-enrollment.md)). Rotating the CA is an overlap of two trusted CAs followed by a wait:
@@ -82,7 +151,7 @@ The quickstart runs a single OpenBao node with its unseal key on disk. For produ
   pipeline ([adr/0010](adr/0010-certificates-and-cloudflare.md), [adr/0043](adr/0043-pkcs12-certificate-import.md)).
 - The controller's public certificate is served by the management SE group like any other service.
 
-## 6. Backups and disaster recovery
+## 8. Backups and disaster recovery
 
 - **Database:** pgBackRest to object storage, point-in-time restore, replicas rebuilt after a fresh backup:
   [runbooks/restore-database.md](runbooks/restore-database.md), rehearsed on the three-node lab (`deploy/prod/lab-drill.sh`).
@@ -94,7 +163,7 @@ The quickstart runs a single OpenBao node with its unseal key on disk. For produ
 - **What you must also keep:** the bundle signing key, the PKI and the controller client certificate. Losing the bundle key
   means re-enrolling every engine.
 
-## 7. VMs or containers for engines
+## 9. VMs or containers for engines
 
 Engines can be QEMU VMs (cloud-init template, the default) or privileged LXC containers with nesting. Containers are
 lighter and need no KVM, but share the Proxmox host's kernel, and the host must load `ip_vs`, `ip_vs_rr`, `ip_vs_wrr`,
@@ -106,7 +175,7 @@ them were not tried, so they are not supported yet. Deploying LXC guests is a sy
 `SWITCHYARD_ALLOW_LXC=1` forces it on for a deployment (read-only in the API, as `allow_lxc_guests_forced`), which the lab and
 the quickstart use. Enable it only where you accept the shared kernel.
 
-## 8. Monitoring
+## 10. Monitoring
 
 Prometheus, Loki and Grafana from `deploy/telemetry/` ([adr/0052](adr/0052-telemetry-pipeline.md),
 [runbooks/telemetry.md](runbooks/telemetry.md)): scrape the controller (`/metrics`) and the per-engine HAProxy and node
@@ -114,7 +183,7 @@ exporters through the service-discovery endpoint, ship access logs with Vector, 
 rules (stale status poll, failed change sets, a down exporter). Grafana can be shown inside the UI, scoped per tenant by the controller ([adr/0085](adr/0085-grafana-behind-controller.md), [runbooks/telemetry.md](runbooks/telemetry.md)): keep Grafana reachable from the controller nodes only and its admin password and `GRAFANA_DS_SECRET` in your secret store. No Alertmanager is deployed; connect your own. Alert on
 `switchyard_status_age_seconds` growing, failed apply jobs, certificates near expiry and engines with drift.
 
-## 9. Upgrades
+## 11. Upgrades
 
 - The `migrate` step runs `syctl db upgrade` and is idempotent; migrations are forward-only, so back up first.
 - Upgrade the controller nodes one at a time (stop the node's worker, upgrade, check `GET /api/v1/healthz`). The proxy
@@ -126,7 +195,7 @@ rules (stale status poll, failed change sets, a down exporter). Grafana can be s
   (the gate is `GET /tenants/{t}/status/se-groups`), [runbooks/replace-se.md](runbooks/replace-se.md).
 - Every apply goes through the canary step; do not skip it.
 
-## 10. What has and has not been proven
+## 12. What has and has not been proven
 
 Proven in the Docker-hosted lab on a real Proxmox ([adr/0056](adr/0056-end-to-end-lab.md)): deploying engines through the
 controller, enrollment and renewal, mTLS, a canary-first apply with per-engine bundles, VRRP failover and fail-back, a
@@ -139,5 +208,5 @@ Proven on two real Proxmox hosts in a cluster ([runbooks/lab-hosts.md](runbooks/
 spread over both hosts; the telemetry stack with real engines (Prometheus targets, all four dashboards, Loki logs); and the
 whole set again with IPv6 only ([ipv6.md](ipv6.md)). Pilot items that remain: BGP or IPVS in unprivileged containers,
 reboot recovery of every engine kind across hosts, a real switch with VLAN trunks and IGMP snooping (the lab used a VXLAN
-overlay), IPv6 VIP withdrawal on a failed HAProxy (the renderer does not list IPv6 prefixes for the watchdog yet), and the
+overlay), and the
 multi-node production Compose end to end across hosts.
