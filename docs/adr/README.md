@@ -66,3 +66,4 @@ Date: YYYY-MM-DD
 | [0075](0075-deploy-hardening.md) | Deploy hardening: templates, node names, engine addresses | Accepted |
 | [0076](0076-lxc-guests-setting.md) | A system setting for container (LXC) guests | Accepted |
 | [0077](0077-wait-for-storage-reloads.md) | Wait for the reload a storage call starts | Accepted |
+| [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |

@@ -70,6 +70,42 @@ class TestVrrp:
         assert "http://127.0.0.1:8404/healthz" in conf
         assert "/run/switchyard/vrrp-sy_edge.state" in conf
 
+    def test_dual_stack_gets_one_instance_per_family(self) -> None:
+        data = load("01-vrrp")
+        data["networks"][0]["cidr"] = "192.0.2.0/24"
+        data["networks"].append(
+            {"id": "net-lb6", "tenant_id": "t-acme", "name": "lb6", "cidr": "2001:db8:1::/64"}
+        )
+        data["vip_pools"].append(
+            {
+                "id": "vp-6",
+                "tenant_id": "t-acme",
+                "name": "v6",
+                "network_id": "net-lb6",
+                "ranges": [{"start": "2001:db8:1::10", "end": "2001:db8:1::50"}],
+            }
+        )
+        data["se_groups"][0]["networks"].append({"network_id": "net-lb6", "role": "vip"})
+        data["virtual_services"][1]["vip"] = "2001:db8:1::21"
+        data["virtual_services"][1].pop("vip_pool_id", None)
+        data["routing_profiles"][0]["static_routes"].append(
+            {"prefix": "2001:db8:99::/48", "next_hop": "2001:db8:1::1"}
+        )
+        conf = render_keepalived(snapshot_from_mapping(data), GROUP, slot())[
+            "keepalived/keepalived.conf"
+        ]
+        assert conf.count("vrrp_instance ") == 2
+        assert "vrrp_instance sy_edge {" in conf
+        v6 = conf[conf.index("vrrp_instance sy_edge_6 {") :]
+        v4 = conf[: conf.index("vrrp_instance sy_edge_6 {")]
+        assert "version 3" in v6 and "version 3" not in v4
+        assert "2001:db8:1::21/64 dev eth1" in v6 and "2001:db8:1::21" not in v4
+        assert "192.0.2.20/24 dev eth1" in v4 and "192.0.2.20" not in v6
+        assert "2001:db8:99::/48 via 2001:db8:1::1 dev eth1" in v6
+        assert "10.99.0.0/16 via 192.0.2.1 dev eth1" in v4
+        assert "/run/switchyard/vrrp-sy_edge_6.state" in v6
+        assert conf.count("virtual_router_id 51") == 2
+
     def test_wrong_mode_is_refused(self) -> None:
         snap = snapshot_from_mapping(load("02-bgp"))
         with pytest.raises(RenderError, match="does not use VRRP"):
@@ -111,9 +147,15 @@ class TestBgp:
         with pytest.raises(RenderError):
             self.render(secrets={"kv/bgp/peer-1": bad})
 
-    def test_router_id_must_be_ipv4(self) -> None:
-        with pytest.raises(RenderError, match="router_id"):
-            self.render(router="not-an-ip")
+    def test_ipv6_only_engine_gets_a_stable_derived_router_id(self) -> None:
+        first = self.render(router="2001:db8::5")["frr/frr.conf"]
+        again = self.render(router="2001:db8::9")["frr/frr.conf"]
+        line = next(x for x in first.splitlines() if "bgp router-id" in x)
+        assert line == next(x for x in again.splitlines() if "bgp router-id" in x)
+        assert line.split()[-1].startswith("100.")
+
+    def test_ipv4_management_address_stays_the_router_id(self) -> None:
+        assert " bgp router-id 10.30.0.11" in self.render()["frr/frr.conf"]
 
     def test_the_password_appears_only_in_frr_conf(self) -> None:
         files = self.render()

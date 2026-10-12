@@ -371,3 +371,15 @@ def find_port_collisions(listeners: Iterable[Listener]) -> list[tuple[Listener, 
         else:
             seen[key] = item
     return out
+
+
+def host_port(host: str, port: int) -> str:
+    """``host:port`` with an IPv6 literal in brackets, as URLs and socket targets need it.
+
+    Example:
+        >>> host_port("10.0.0.5", 5556)
+        '10.0.0.5:5556'
+        >>> host_port("2001:db8::5", 5556)
+        '[2001:db8::5]:5556'
+    """
+    return f"[{host}]:{port}" if ":" in host and not host.startswith("[") else f"{host}:{port}"

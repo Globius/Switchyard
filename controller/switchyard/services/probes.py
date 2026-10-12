@@ -14,6 +14,7 @@ from switchyard.adapters.agent import AgentError, ProbeRequest
 from switchyard.db.ops_models import ServiceEngineRow
 from switchyard.db.repository import load_snapshot
 from switchyard.db.tenancy import tenant_session
+from switchyard.domain.validators import host_port
 from switchyard.domain.workflow import EngineState
 from switchyard.pipeline.engines import EngineDirectory
 from switchyard.services.changesets import require
@@ -134,7 +135,7 @@ class MonitorTestService:
             latency_ms=result.latency_ms,
             detail=result.detail,
             engine=record.name,
-            target=f"{member.address}:{check_port}",
+            target=host_port(str(member.address), check_port),
             protocol=request.protocol,
         )
 
