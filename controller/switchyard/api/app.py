@@ -4814,19 +4814,9 @@ def create_app(
         summary="Report a device's posture and get a certificate",
         response_model=DeviceReportOut,
         responses=_ok(ex.DEVICE_REPORT_OUT, problems=False),
-        openapi_extra={
-            "requestBody": {
-                "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": DeviceReportIn.model_json_schema(),
-                        "example": docs_meta.REQUEST_EXAMPLES["POST /device/report"],
-                    }
-                },
-            }
-        },
     )
     async def device_report(
+        body: DeviceReportIn,
         request: Request,
         svc: Services,
         x_device_id: Annotated[UUID, Header(description="The device id from enrollment.")],
@@ -4841,7 +4831,12 @@ def create_app(
             ),
         ],
     ) -> dict[str, Any]:
-        """Called by the device agent on a schedule; the signature is the credential."""
+        """Called by the device agent on a schedule; the signature is the credential.
+
+        The body is parsed for the documentation above and checked again by the service from
+        the exact bytes that were signed.
+        """
+        del body
         try:
             result = await device_service(svc).report(
                 x_device_id,

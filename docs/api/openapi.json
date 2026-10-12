@@ -6175,6 +6175,34 @@
         "title": "DeviceRead",
         "type": "object"
       },
+      "DeviceReportIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /device/report``: the measured facts and an optional certificate request.",
+        "properties": {
+          "csr": {
+            "anyOf": [
+              {
+                "maxLength": 16384,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "PEM request for a client certificate.",
+            "title": "Csr"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/PostureFacts",
+            "description": "What the agent measured. Unknown fields are refused."
+          }
+        },
+        "required": [
+          "facts"
+        ],
+        "title": "DeviceReportIn",
+        "type": "object"
+      },
       "DeviceReportOut": {
         "additionalProperties": false,
         "description": "The verdict on a posture report and, if it passed, the new certificate.",
@@ -25832,7 +25860,7 @@
     },
     "/api/v1/device/report": {
       "post": {
-        "description": "Called by the device agent on a schedule; the signature is the credential.\n\n**Access:** Public: no credentials needed.",
+        "description": "Called by the device agent on a schedule; the signature is the credential.\n\nThe body is parsed for the documentation above and checked again by the service from\nthe exact bytes that were signed.\n\n**Access:** Public: no credentials needed.",
         "operationId": "device_report_api_v1_device_report_post",
         "parameters": [
           {
@@ -25885,112 +25913,7 @@
                 }
               },
               "schema": {
-                "$defs": {
-                  "PostureFacts": {
-                    "additionalProperties": false,
-                    "description": "What the device agent measured. Unknown fields are refused, so the format is explicit.\n\nAttributes:\n    os / os_version: Operating system and its dotted numeric version.\n    disk_encrypted: Full-disk encryption is on for the system volume.\n    firewall_enabled: The host firewall is on.\n    screen_lock: A screen lock is configured; ``None`` when the agent cannot tell.\n    days_since_update: Days since the last update was installed; ``None`` when unknown.\n    agent_version: Version of the agent that reported.\n    hostname: Informational; never used for a decision.",
-                    "properties": {
-                      "agent_version": {
-                        "default": "0",
-                        "pattern": "^[A-Za-z0-9._+-]{1,32}$",
-                        "title": "Agent Version",
-                        "type": "string"
-                      },
-                      "days_since_update": {
-                        "anyOf": [
-                          {
-                            "maximum": 36500,
-                            "minimum": 0,
-                            "type": "integer"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "title": "Days Since Update"
-                      },
-                      "disk_encrypted": {
-                        "title": "Disk Encrypted",
-                        "type": "boolean"
-                      },
-                      "firewall_enabled": {
-                        "title": "Firewall Enabled",
-                        "type": "boolean"
-                      },
-                      "hostname": {
-                        "anyOf": [
-                          {
-                            "pattern": "^[A-Za-z0-9._-]{1,253}$",
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "title": "Hostname"
-                      },
-                      "os": {
-                        "enum": [
-                          "windows",
-                          "macos",
-                          "linux"
-                        ],
-                        "title": "Os",
-                        "type": "string"
-                      },
-                      "os_version": {
-                        "pattern": "^[0-9]{1,6}(\\.[0-9]{1,6}){0,3}$",
-                        "title": "Os Version",
-                        "type": "string"
-                      },
-                      "screen_lock": {
-                        "anyOf": [
-                          {
-                            "type": "boolean"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "title": "Screen Lock"
-                      }
-                    },
-                    "required": [
-                      "os",
-                      "os_version",
-                      "disk_encrypted",
-                      "firewall_enabled"
-                    ],
-                    "title": "PostureFacts",
-                    "type": "object"
-                  }
-                },
-                "additionalProperties": false,
-                "description": "Body of ``POST /device/report``: the measured facts and an optional certificate request.",
-                "properties": {
-                  "csr": {
-                    "anyOf": [
-                      {
-                        "maxLength": 16384,
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ],
-                    "description": "PEM request for a client certificate.",
-                    "title": "Csr"
-                  },
-                  "facts": {
-                    "$ref": "#/$defs/PostureFacts",
-                    "description": "What the agent measured. Unknown fields are refused."
-                  }
-                },
-                "required": [
-                  "facts"
-                ],
-                "title": "DeviceReportIn",
-                "type": "object"
+                "$ref": "#/components/schemas/DeviceReportIn"
               }
             }
           },

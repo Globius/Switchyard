@@ -285,6 +285,7 @@ var Definitions = []Definition{
 					{Name: "sni", Kind: KindString},
 					{Name: "source_cidrs", Kind: KindList, Elem: &Attr{Kind: KindString}},
 				}},
+				{Name: "min_factors", Kind: KindInt},
 				{Name: "mode", Kind: KindString, Enum: []string{"public", "login", "groups", "email_domains"}},
 				{Name: "posture", Kind: KindObject, Doc: "Device conditions a request must meet besides the login (ADR 0138).", Attrs: []Attr{
 					{Name: "claims", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
@@ -366,9 +367,22 @@ var Definitions = []Definition{
 		Discriminator: "kind",
 		Variant:       "directory",
 		Consts:        map[string]string{"kind": "directory"},
-		PatchKeys:     []string{"connector", "kind", "name"},
+		PatchKeys:     []string{"connector", "flow", "kind", "name"},
 		Attrs: []Attr{
 			{Name: "connector", Kind: KindJSON, Required: true},
+			{Name: "flow", Kind: KindObject, Doc: "Ordered factors with conditions, in the manner of Citrix nFactor (ADR 0195).", Attrs: []Attr{
+				{Name: "steps", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+					{Name: "kind", Kind: KindString, Enum: []string{"password", "code"}},
+					{Name: "name", Kind: KindString, Required: true},
+					{Name: "prompt", Kind: KindString},
+					{Name: "server", Kind: KindString},
+					{Name: "when", Kind: KindObject, Doc: "When a step applies (ADR 0195); everything given must hold.", Attrs: []Attr{
+						{Name: "groups_any", Kind: KindList, Elem: &Attr{Kind: KindString}},
+						{Name: "source_in", Kind: KindList, Elem: &Attr{Kind: KindString}},
+						{Name: "source_not_in", Kind: KindList, Elem: &Attr{Kind: KindString}},
+					}},
+				}}},
+			}},
 			{Name: "name", Kind: KindString, Required: true},
 		},
 	},
@@ -432,6 +446,32 @@ var Definitions = []Definition{
 				{Name: "required_scopes", Kind: KindList, Elem: &Attr{Kind: KindString}},
 				{Name: "subject_header", Kind: KindString},
 			}}},
+		},
+	},
+	{
+		TypeName:      "posture_policy_set",
+		Slug:          "policy-sets",
+		Doc:           "",
+		Resource:      true,
+		Discriminator: "kind",
+		Variant:       "posture",
+		Consts:        map[string]string{"kind": "posture"},
+		PatchKeys:     []string{"cert_ttl_h", "kind", "name", "pki_role", "requirements"},
+		Attrs: []Attr{
+			{Name: "cert_ttl_h", Kind: KindInt},
+			{Name: "name", Kind: KindString, Required: true},
+			{Name: "pki_role", Kind: KindString, Required: true},
+			{Name: "requirements", Kind: KindObject, Doc: "What a device must show to get a certificate.", Attrs: []Attr{
+				{Name: "allowed_os", Kind: KindList, Elem: &Attr{Kind: KindString, Enum: []string{"windows", "macos", "linux"}}},
+				{Name: "max_patch_age_days", Kind: KindInt},
+				{Name: "minimums", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+					{Name: "os", Kind: KindString, Required: true, Enum: []string{"windows", "macos", "linux"}},
+					{Name: "version", Kind: KindString, Required: true},
+				}}},
+				{Name: "require_disk_encryption", Kind: KindBool},
+				{Name: "require_firewall", Kind: KindBool},
+				{Name: "require_screen_lock", Kind: KindBool},
+			}},
 		},
 	},
 	{
@@ -631,8 +671,34 @@ var Definitions = []Definition{
 		Discriminator: "kind",
 		Variant:       "waf",
 		Consts:        map[string]string{"crs_version": "4.8.0", "kind": "waf"},
-		PatchKeys:     []string{"crs_version", "disabled_rule_ids", "excluded_paths", "fail_mode", "inbound_threshold", "inspect_body", "kind", "mode", "name", "outbound_threshold", "paranoia_level", "timeout_ms"},
+		PatchKeys:     []string{"api", "crs_version", "disabled_rule_ids", "excluded_paths", "fail_mode", "inbound_threshold", "inspect_body", "kind", "mode", "name", "outbound_threshold", "paranoia_level", "timeout_ms"},
 		Attrs: []Attr{
+			{Name: "api", Kind: KindObject, Doc: "The requests an API accepts, as a positive security model for the WAF (ADR 0197).", Attrs: []Attr{
+				{Name: "allow_unknown_query", Kind: KindBool},
+				{Name: "base_path", Kind: KindString},
+				{Name: "max_body_bytes", Kind: KindInt},
+				{Name: "mode", Kind: KindString, Enum: []string{"detect", "block"}},
+				{Name: "operations", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+					{Name: "content_types", Kind: KindList, Elem: &Attr{Kind: KindString}},
+					{Name: "max_body_bytes", Kind: KindInt},
+					{Name: "method", Kind: KindString, Required: true, Enum: []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}},
+					{Name: "path", Kind: KindString, Required: true},
+					{Name: "path_params", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+						{Name: "kind", Kind: KindString, Enum: []string{"string", "integer", "number", "boolean", "uuid", "enum"}},
+						{Name: "max_length", Kind: KindInt},
+						{Name: "name", Kind: KindString, Required: true},
+						{Name: "required", Kind: KindBool},
+						{Name: "values", Kind: KindList, Elem: &Attr{Kind: KindString}},
+					}}},
+					{Name: "query", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
+						{Name: "kind", Kind: KindString, Enum: []string{"string", "integer", "number", "boolean", "uuid", "enum"}},
+						{Name: "max_length", Kind: KindInt},
+						{Name: "name", Kind: KindString, Required: true},
+						{Name: "required", Kind: KindBool},
+						{Name: "values", Kind: KindList, Elem: &Attr{Kind: KindString}},
+					}}},
+				}}},
+			}},
 			{Name: "disabled_rule_ids", Kind: KindList, Elem: &Attr{Kind: KindInt}},
 			{Name: "excluded_paths", Kind: KindList, Elem: &Attr{Kind: KindString}},
 			{Name: "fail_mode", Kind: KindString, Enum: []string{"open", "closed"}},
