@@ -59,3 +59,37 @@ openapi-breaking:
     - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - git show origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME:docs/api/openapi.json > /tmp/old-openapi.json || exit 0
     - uv run python -m switchyard.api.openapi_check /tmp/old-openapi.json ../docs/api/openapi.json
+
+# The agent (Go) and the SE image recipe. The image test provisions Debian 13 with every binary and runs
+# se-image/test/check.sh (units, sysctls, the auth sidecar slot, Data Plane API over mTLS).
+agent:
+  stage: check
+  image: golang:1.26
+  script:
+    - cd agent
+    - test -z "$(gofmt -l .)"
+    - go vet ./...
+    - go test ./...
+
+se-image:
+  stage: check
+  image: docker:27
+  services:
+    - docker:27-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  rules:
+    - changes: [se-image/**/*, agent/**/*]
+  script:
+    - docker build -q -f se-image/test/Dockerfile -t sy-se-image-test .
+
+# Live checks against a real stack (the quickstart in Docker with OpenBao): the .p12 import and the 412/428 conflict
+# responses, deploy/lab/checks/live.sh. Manual: it needs the stack running and the lab scripts' environment.
+live-checks:
+  stage: check
+  image: docker:27
+  when: manual
+  allow_failure: true
+  script:
+    - echo "see docs/runbooks/lab-hosts.md and deploy/lab/checks/live.sh"
