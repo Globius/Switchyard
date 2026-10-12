@@ -315,6 +315,94 @@ describe("ACME providers", () => {
   });
 });
 
+describe("ACME provider variants", () => {
+  it("adds ZeroSSL with EAB credentials and makes it the default", async () => {
+    providers = [];
+    renderAt("/admin/acme-providers");
+    await userEvent.click(await screen.findByRole("button", { name: "Add provider" }));
+    const dlg = within(await screen.findByRole("dialog"));
+    await userEvent.click(dlg.getByRole("radio", { name: "ZeroSSL" }));
+    expect(dlg.getByLabelText("Directory URL")).toHaveValue("https://acme.zerossl.com/v2/DV90");
+    await userEvent.type(dlg.getByLabelText("EAB key ID"), "kid1");
+    await userEvent.type(dlg.getByLabelText("EAB HMAC key"), "hmac1");
+    await userEvent.click(dlg.getByRole("switch", { name: "Default provider" }));
+    await userEvent.click(dlg.getByRole("checkbox"));
+    await userEvent.click(dlg.getByRole("button", { name: "Add provider" }));
+    await waitFor(() =>
+      expect(body).toMatchObject({
+        preset: "zerossl",
+        auth_mode: "eab",
+        eab_kid: "kid1",
+        eab_hmac_key: "hmac1",
+        default: true,
+      }),
+    );
+  });
+
+  it("adds a custom CA behind OAuth with a client secret and trusted roots", async () => {
+    providers = [];
+    renderAt("/admin/acme-providers");
+    await userEvent.click(await screen.findByRole("button", { name: "Add provider" }));
+    const dlg = within(await screen.findByRole("dialog"));
+    await userEvent.click(dlg.getByRole("radio", { name: "Custom" }));
+    await userEvent.type(dlg.getByLabelText("Name"), "private");
+    await userEvent.type(dlg.getByLabelText("Directory URL"), "https://ca.internal/acme/directory");
+    await userEvent.click(dlg.getByRole("radio", { name: "OAuth" }));
+    await userEvent.type(dlg.getByLabelText("Token URL"), "https://idp.internal/token");
+    await userEvent.type(dlg.getByLabelText("Client ID"), "sy");
+    await userEvent.type(dlg.getByLabelText("Client secret"), "s3cret");
+    await userEvent.type(dlg.getByLabelText("Scope"), "acme");
+    await userEvent.type(dlg.getByLabelText("Audience"), "ca");
+    await userEvent.type(dlg.getByLabelText("EAB endpoint"), "https://ca.internal/eab");
+    await userEvent.click(
+      dlg.getByRole("switch", { name: "Send the token on every ACME request" }),
+    );
+    await userEvent.type(
+      dlg.getByLabelText("Trusted root certificates"),
+      "-----BEGIN CERTIFICATE-----",
+    );
+    await userEvent.click(dlg.getByRole("checkbox"));
+    await userEvent.click(dlg.getByRole("button", { name: "Add provider" }));
+    await waitFor(() =>
+      expect(body).toMatchObject({
+        preset: "custom",
+        auth_mode: "oauth",
+        oauth_client_secret: "s3cret",
+        oauth: {
+          token_url: "https://idp.internal/token",
+          client_id: "sy",
+          bearer_on_acme: true,
+          eab_url: "https://ca.internal/eab",
+        },
+        ca_bundle_pem: "-----BEGIN CERTIFICATE-----",
+      }),
+    );
+  });
+
+  it("shows field errors from the API on the sheet", async () => {
+    providers = [];
+    server.use(
+      http.post("*/api/v1/acme-providers", () =>
+        HttpResponse.json(
+          {
+            title: "Invalid",
+            status: 422,
+            errors: [{ path: "directory_url", code: "bad", message: "Not an ACME directory" }],
+          },
+          { status: 422 },
+        ),
+      ),
+    );
+    renderAt("/admin/acme-providers");
+    await userEvent.click(await screen.findByRole("button", { name: "Add provider" }));
+    const dlg = within(await screen.findByRole("dialog"));
+    await userEvent.type(dlg.getByLabelText("Name"), "x");
+    await userEvent.click(dlg.getByRole("checkbox"));
+    await userEvent.click(dlg.getByRole("button", { name: "Add provider" }));
+    expect(await dlg.findByText("Not an ACME directory")).toBeInTheDocument();
+  });
+});
+
 describe("DNS credentials", () => {
   it("adds a credential from the provider's own fields, with a write-only secret and zones", async () => {
     role = "tenant-admin";

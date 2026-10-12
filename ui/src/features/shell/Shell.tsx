@@ -41,6 +41,7 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
       { label: "Revisions", to: "revisions" },
       { label: "Jobs", to: "jobs" },
       { label: "Alerts", to: "alerts" },
+      { label: "Request logs", to: "logs" },
     ],
   },
   {

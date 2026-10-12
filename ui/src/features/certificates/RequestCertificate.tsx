@@ -194,7 +194,7 @@ export function RequestCertificate({
   const [name, setName] = useState("");
   const [sans, setSans] = useState<string[]>([]);
   const [provider, setProvider] = useState<string>("");
-  const [challenge, setChallenge] = useState<"dns-01" | "http-01">("dns-01");
+  const [challenge, setChallenge] = useState<"dns-01" | "http-01" | "tls-alpn-01">("dns-01");
   const [cred, setCred] = useState<string | null>(null);
   const [auto, setAuto] = useState(true);
   const [days, setDays] = useState("30");
@@ -254,6 +254,7 @@ export function RequestCertificate({
       ),
   });
   const problems = check.data?.problems ?? [];
+  const warnings = check.data?.warnings ?? [];
   const at = (prefix: string) => problems.filter((p) => p.path.startsWith(prefix));
   const general = problems.filter((p) => !/^(sans|acme_provider|dns_provider)/.test(p.path));
 
@@ -285,7 +286,7 @@ export function RequestCertificate({
           names: sans,
           provider:
             source === "acme"
-              ? `${effProvider} · ${challenge === "dns-01" ? "DNS-01" : "HTTP-01"}${dns && effCred ? ` · ${effCred}` : ""}`
+              ? `${effProvider} · ${challenge.toUpperCase()}${dns && effCred ? ` · ${effCred}` : ""}`
               : "Cloudflare Origin CA",
         }}
         onRetry={() => {
@@ -305,7 +306,7 @@ export function RequestCertificate({
     problems.length > 0 ||
     check.isFetching ||
     (source === "acme" &&
-      (!effProvider || noCred || (challenge === "http-01" && (wildcard || sans.length > 1))));
+      (!effProvider || noCred || (challenge !== "dns-01" && (wildcard || sans.length > 1))));
   const why = noCred
     ? t("Add a DNS credential that covers every name, or remove the names it doesn't cover.")
     : problems.length > 0
@@ -435,6 +436,7 @@ export function RequestCertificate({
                 [
                   ["dns-01", "DNS-01"],
                   ["http-01", "HTTP-01"],
+                  ["tls-alpn-01", "TLS-ALPN-01"],
                 ] as const
               ).map(([k, label]) => (
                 <label key={k} className="flex items-center gap-1.5">
@@ -453,9 +455,13 @@ export function RequestCertificate({
                 ? t(
                     "Publishes a TXT record through one of your DNS credentials. Works for wildcards.",
                   )
-                : t(
-                    "One name, no wildcard. It must resolve to a VIP of this tenant with an HTTP service on port 80 (no allow list).",
-                  )}
+                : challenge === "http-01"
+                  ? t(
+                      "One name, no wildcard. It must resolve to a VIP of this tenant with an HTTP service on port 80 (no allow list).",
+                    )
+                  : t(
+                      "One name, no wildcard, answered on port 443. While it runs, every HTTPS handshake for the name gets the challenge certificate, so a name that serves traffic blinks for a few seconds.",
+                    )}
             </p>
           </fieldset>
           {dns && (
@@ -499,6 +505,11 @@ export function RequestCertificate({
           )}
         </>
       )}
+      {warnings.map((w) => (
+        <p key={w.path + w.message} role="note" className="text-xs text-status-degraded">
+          {w.message}
+        </p>
+      ))}
       {general.map((p) => (
         <p key={p.path + p.message} role="alert" className="text-xs text-status-down">
           {p.message}

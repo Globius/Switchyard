@@ -14,20 +14,17 @@ const FUTURE = new Date(Date.now() + 71 * 86_400_000).toISOString();
 const BASE: ControllerState = {
   managed: true,
   fqdn: "switchyard.example.test",
-  vip: "10.40.0.10",
-  ports: [443],
-  certificate: {
-    name: "switchyard-cert",
-    sans: ["switchyard.example.test"],
-    not_after: FUTURE,
-    issuer: "letsencrypt-prod",
-  },
+  public_url: "https://switchyard.example.test",
+  listen: { vip: "10.40.0.10", ports: [{ port: 443, tls: true, https_redirect_port: null }] },
+  certificate: { name: "switchyard-cert", sans: ["switchyard.example.test"], not_after: FUTURE },
   pending: null,
+  last_result: null,
+  break_glass: "If the new address does not work: syctl controller revert.",
   redirect_urls: [
     {
       provider: "authentik",
-      current: ["https://switchyard.example.test/api/v1/auth/callback/x"],
-      required: ["https://lb.example.test/api/v1/auth/callback/x"],
+      protocol: "oidc",
+      redirect_url: "https://lb.example.test/api/v1/auth/callback/x",
     },
   ],
 };
@@ -115,7 +112,7 @@ describe("Admin > Controller", () => {
     await userEvent.clear(fqdn);
     await userEvent.type(fqdn, "lb.example.test");
     expect(screen.getByText(/Update the redirect URLs first/)).toBeInTheDocument();
-    expect(screen.getByText(/authentik: https:\/\/lb\.example\.test/)).toBeInTheDocument();
+    expect(screen.getByText(/authentik \(oidc\): https:\/\/lb\.example\.test/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("combobox", { name: "Certificate" }));
     const list = await screen.findByRole("listbox");
     expect(within(list).queryByText("other")).toBeNull();
@@ -125,7 +122,7 @@ describe("Admin > Controller", () => {
     expect(dlg.getByText(/switchyard\.example\.test → lb\.example\.test/)).toBeInTheDocument();
     await userEvent.click(dlg.getByRole("button", { name: "Apply and confirm" }));
     await waitFor(() =>
-      expect(put).toEqual({ fqdn: "lb.example.test", vip: "10.40.0.10", certificate: "lb-cert" }),
+      expect(put).toEqual({ fqdn: "lb.example.test", vip: null, certificate: "lb-cert" }),
     );
   });
 
@@ -150,15 +147,26 @@ describe("Admin > Controller", () => {
     state = {
       ...BASE,
       pending: {
-        state: "pending",
-        expires_at: new Date(Date.now() + 97_000).toISOString(),
-        seconds_left: 97,
-        applied_by: "Miguel Rodriguez",
-        applied_at: new Date().toISOString(),
+        state: "waiting",
         window_s: 120,
-        changes: {
-          fqdn: ["switchyard.example.test", "lb.example.test"],
-          certificate: ["switchyard-cert", "lb-cert"],
+        seconds_left: 97,
+        proposed_by: "Miguel Rodriguez",
+        proposed_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 97_000).toISOString(),
+        change_set_id: null,
+        revision_before: 1,
+        revision_after: 2,
+        before: {
+          fqdn: "switchyard.example.test",
+          public_url: "https://switchyard.example.test",
+          vip: "10.40.0.10",
+          certificate: "switchyard-cert",
+        },
+        after: {
+          fqdn: "lb.example.test",
+          public_url: "https://lb.example.test",
+          vip: "10.40.0.10",
+          certificate: "lb-cert",
         },
       },
     };
@@ -173,19 +181,24 @@ describe("Admin > Controller", () => {
     await waitFor(() => expect(posted).toEqual(["revert"]));
   });
 
-  it("explains an unmanaged controller and shows pinned values read-only", async () => {
+  it("explains an unmanaged controller and shows how the last change ended", async () => {
     state = {
       ...BASE,
       managed: false,
-      forced: true,
-      vip: null,
+      listen: null,
       certificate: null,
       redirect_urls: [],
+      last_result: {
+        kind: "reverted",
+        at: new Date().toISOString(),
+        by: null,
+        reason: "not confirmed in time",
+      },
     };
     renderIt();
     expect(await screen.findByText(/no management tenant here/)).toBeInTheDocument();
-    expect(screen.getByText(/pins these values in its environment/)).toBeInTheDocument();
-    expect(screen.getByLabelText("FQDN")).toBeDisabled();
+    expect(screen.getByText(/was reverted .*: not confirmed in time/)).toBeInTheDocument();
+    expect(screen.getByText(/syctl controller revert/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Listen address (VIP)")).toBeNull();
   });
 });

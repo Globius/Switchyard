@@ -375,7 +375,7 @@ Needed from the API: ACME providers CRUD, test, default flag and registration st
 
 ## Admin > Controller (Design v52, Backend draft contract)
 
-Built against the draft of `GET /system/controller`, `PUT …/pending`, `POST …/confirm` and `POST …/revert`. The response shape is one interface (`ControllerState` in `AdminController.tsx`) and uses untyped calls (`rawGet`, `rawSend`) until the API is in `openapi.json`; adjust both when the Backend MR lands.
+Typed from `ControllerRead`, `ControllerChangeIn` and the confirm and revert calls (ADR 0081, !113). Pending states are `applying` (no window yet) and `waiting` (countdown); `last_result` and `break_glass` from the API are shown.
 
 | Item | Status |
 | --- | --- |
@@ -387,3 +387,12 @@ Built against the draft of `GET /system/controller`, `PUT …/pending`, `POST �
 **Differences from the artboard (for Design):**
 1. The artboard has a chip list of listen addresses and Upload / ACME source radios. The contract has one `vip` and a certificate chosen from the management tenant, so the page has a single Listen address field and a Certificate picker (certificates that cover the FQDN), with the note that upload or an ACME request happens under Certificates in the management tenant first.
 2. After "reverted" or "confirmed" the API gives no history, so the artboard's confirmed and reverted states show only as the pending banner disappearing.
+
+## Parity blocks P1, P2, P6 and P11 (no artboards; Design to specify or confirm)
+
+| Block | What was built | Design questions |
+| --- | --- | --- |
+| P1 route match and policies (ADR 0100 to 0103) | "More conditions" on every route and redirect rule: methods, header rows (equals, present, absent, prefix, suffix, contains), query rows, source networks (IPv4 and IPv6), SNI. New policy kinds on the Policies screen: **Rewrite** (request or response phase; set, add or remove header with text or a variable; replace path prefix in the request phase), **Fixed response** (status, content type, body, Retry-After for 429 and 503) and **Error pages** (one page per generated status). Rules reorder with up and down. | Layout of a rule with many conditions; a variable picker with descriptions; a body editor with preview; the protected-header list is only enforced by the API (shown as a finding). |
+| P2 pool and health (ADR 0105 to 0108) | Persistence kinds (source IP, HTTP cookie, request header, URI by path or parameter) with their fields; PROXY protocol (v1, v2); backend client certificate (server certificates only; needs Backend TLS); per member Backup and Max connections; monitors: Body contains or a response header (one matcher), and TCP presets (Redis, SMTP, LDAP, MySQL). | Where member options sit in the member row; timed drain is not built (needs a job). |
+| P6 alerting | New **Alerts** screen with Status (firing, latest deliveries with the error), Rules (event, metric, certificate expiry) and Targets (webhook with an optional OpenBao signing secret reference, chat with Slack, Teams or Mattermost format, email with a warning when the controller has no email server; test message). New **Request logs** screen (service, status class, time, text; load older; unavailable state). Changing rules and targets needs tenant-admin. | Both screens are new; navigation placement (now under Changes); whether firing alerts should show on Tenant home. |
+| P11 TLS-ALPN-01 | Third validation option in Request certificate, with the "blinks for a few seconds" explanation and the server's warnings shown. | Copy of the warning. |

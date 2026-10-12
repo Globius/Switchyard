@@ -34,6 +34,7 @@ import { Route as TTenantShellChangeSetsRouteImport } from './routes/t.$tenant._
 import { Route as TTenantShellDnsCredentialsRouteImport } from './routes/t.$tenant._shell.dns-credentials'
 import { Route as TTenantShellHealthMonitorsRouteImport } from './routes/t.$tenant._shell.health-monitors'
 import { Route as TTenantShellJobsRouteImport } from './routes/t.$tenant._shell.jobs'
+import { Route as TTenantShellLogsRouteImport } from './routes/t.$tenant._shell.logs'
 import { Route as TTenantShellNetworksRouteImport } from './routes/t.$tenant._shell.networks'
 import { Route as TTenantShellPoliciesRouteImport } from './routes/t.$tenant._shell.policies'
 import { Route as TTenantShellPoolsRouteImport } from './routes/t.$tenant._shell.pools'
@@ -175,6 +176,11 @@ const TTenantShellJobsRoute = TTenantShellJobsRouteImport.update({
   path: '/jobs',
   getParentRoute: () => TTenantShellRoute,
 } as any)
+const TTenantShellLogsRoute = TTenantShellLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
 const TTenantShellNetworksRoute = TTenantShellNetworksRouteImport.update({
   id: '/networks',
   path: '/networks',
@@ -272,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/t/$tenant/dns-credentials': typeof TTenantShellDnsCredentialsRoute
   '/t/$tenant/health-monitors': typeof TTenantShellHealthMonitorsRoute
   '/t/$tenant/jobs': typeof TTenantShellJobsRoute
+  '/t/$tenant/logs': typeof TTenantShellLogsRoute
   '/t/$tenant/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
@@ -310,6 +317,7 @@ export interface FileRoutesByTo {
   '/t/$tenant/dns-credentials': typeof TTenantShellDnsCredentialsRoute
   '/t/$tenant/health-monitors': typeof TTenantShellHealthMonitorsRoute
   '/t/$tenant/jobs': typeof TTenantShellJobsRoute
+  '/t/$tenant/logs': typeof TTenantShellLogsRoute
   '/t/$tenant/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
@@ -349,6 +357,7 @@ export interface FileRoutesById {
   '/t/$tenant/_shell/dns-credentials': typeof TTenantShellDnsCredentialsRoute
   '/t/$tenant/_shell/health-monitors': typeof TTenantShellHealthMonitorsRoute
   '/t/$tenant/_shell/jobs': typeof TTenantShellJobsRoute
+  '/t/$tenant/_shell/logs': typeof TTenantShellLogsRoute
   '/t/$tenant/_shell/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/_shell/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/_shell/pools': typeof TTenantShellPoolsRoute
@@ -390,6 +399,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/dns-credentials'
     | '/t/$tenant/health-monitors'
     | '/t/$tenant/jobs'
+    | '/t/$tenant/logs'
     | '/t/$tenant/networks'
     | '/t/$tenant/policies'
     | '/t/$tenant/pools'
@@ -428,6 +438,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/dns-credentials'
     | '/t/$tenant/health-monitors'
     | '/t/$tenant/jobs'
+    | '/t/$tenant/logs'
     | '/t/$tenant/networks'
     | '/t/$tenant/policies'
     | '/t/$tenant/pools'
@@ -466,6 +477,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/_shell/dns-credentials'
     | '/t/$tenant/_shell/health-monitors'
     | '/t/$tenant/_shell/jobs'
+    | '/t/$tenant/_shell/logs'
     | '/t/$tenant/_shell/networks'
     | '/t/$tenant/_shell/policies'
     | '/t/$tenant/_shell/pools'
@@ -666,6 +678,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTenantShellJobsRouteImport
       parentRoute: typeof TTenantShellRoute
     }
+    '/t/$tenant/_shell/logs': {
+      id: '/t/$tenant/_shell/logs'
+      path: '/logs'
+      fullPath: '/t/$tenant/logs'
+      preLoaderRoute: typeof TTenantShellLogsRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
     '/t/$tenant/_shell/networks': {
       id: '/t/$tenant/_shell/networks'
       path: '/networks'
@@ -821,6 +840,7 @@ interface TTenantShellRouteChildren {
   TTenantShellDnsCredentialsRoute: typeof TTenantShellDnsCredentialsRoute
   TTenantShellHealthMonitorsRoute: typeof TTenantShellHealthMonitorsRoute
   TTenantShellJobsRoute: typeof TTenantShellJobsRoute
+  TTenantShellLogsRoute: typeof TTenantShellLogsRoute
   TTenantShellNetworksRoute: typeof TTenantShellNetworksRoute
   TTenantShellPoliciesRoute: typeof TTenantShellPoliciesRoute
   TTenantShellPoolsRoute: typeof TTenantShellPoolsRoute
@@ -841,6 +861,7 @@ const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellDnsCredentialsRoute: TTenantShellDnsCredentialsRoute,
   TTenantShellHealthMonitorsRoute: TTenantShellHealthMonitorsRoute,
   TTenantShellJobsRoute: TTenantShellJobsRoute,
+  TTenantShellLogsRoute: TTenantShellLogsRoute,
   TTenantShellNetworksRoute: TTenantShellNetworksRoute,
   TTenantShellPoliciesRoute: TTenantShellPoliciesRoute,
   TTenantShellPoolsRoute: TTenantShellPoolsRoute,

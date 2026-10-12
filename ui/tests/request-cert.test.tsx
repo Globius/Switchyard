@@ -37,6 +37,7 @@ let issued: Record<string, unknown> | null = null;
 let match: Record<string, { name: string; candidates: ReturnType<typeof CAND>[] }> = {};
 let problems: { path: string; message: string }[] = [];
 let jobState: "failed" | "succeeded" = "failed";
+let renewed = false;
 const server = setupServer(
   http.get("*/api/v1/me", () =>
     HttpResponse.json({
@@ -148,8 +149,25 @@ const server = setupServer(
         not_after: null,
         change_set_id: null,
       },
+      {
+        id: "r0",
+        certificate: "api",
+        acme_provider: "letsencrypt-prod",
+        challenge: "http-01",
+        trigger: "manual",
+        ok: true,
+        error: null,
+        started_at: "2026-09-01T08:00:00Z",
+        finished_at: "2026-09-01T08:01:00Z",
+        not_after: "2026-12-01T00:00:00Z",
+        change_set_id: "cs5",
+      },
     ]),
   ),
+  http.post("*/api/v1/tenants/acme/certificates/c1/renew", () => {
+    renewed = true;
+    return HttpResponse.json({ job_id: "jr" }, { status: 202 });
+  }),
   http.get("*/api/v1/tenants/acme/virtual-services", () =>
     HttpResponse.json({ items: [], next_cursor: null }),
   ),
@@ -161,6 +179,7 @@ afterEach(() => {
   match = {};
   problems = [];
   jobState = "failed";
+  renewed = false;
 });
 afterAll(() => server.close());
 
@@ -228,6 +247,32 @@ describe("request certificate", () => {
         renew_policy: "auto",
         renew_before_days: 30,
       }),
+    );
+  });
+
+  it("offers TLS-ALPN-01 with its warning and sends it as the challenge", async () => {
+    server.use(
+      http.post("*/api/v1/tenants/acme/certificates/issue/check", () =>
+        HttpResponse.json({
+          ok: true,
+          problems: [],
+          warnings: [
+            { path: "sans[0]", message: "docs.example.test is serving traffic and will blink." },
+          ],
+        }),
+      ),
+    );
+    const dlg = await openRequest();
+    await userEvent.click(dlg.getByRole("radio", { name: "TLS-ALPN-01" }));
+    expect(dlg.getByText(/blinks for a few seconds/)).toBeInTheDocument();
+    expect(dlg.queryByRole("combobox", { name: "DNS credential" })).toBeNull();
+    await userEvent.type(dlg.getByLabelText("Name"), "docs");
+    await userEvent.type(dlg.getByRole("combobox", { name: "Names (SANs)" }), "docs.example.test,");
+    expect(await dlg.findByText(/will blink/)).toBeInTheDocument();
+    await waitFor(() => expect(dlg.getByRole("button", { name: "Request" })).toBeEnabled());
+    await userEvent.click(dlg.getByRole("button", { name: "Request" }));
+    await waitFor(() =>
+      expect(issued).toMatchObject({ challenge: "tls-alpn-01", dns_provider: null }),
     );
   });
 
@@ -303,6 +348,11 @@ describe("renewal in the certificate list", () => {
     const dlg = within(await screen.findByRole("dialog"));
     expect(await dlg.findByText(/rateLimited/)).toBeInTheDocument();
     expect(dlg.getByText("2 failed attempts in a row.")).toBeInTheDocument();
-    expect(dlg.getByRole("button", { name: "Retry renewal now" })).toBeEnabled();
+    expect(dlg.getByText("Automatic")).toBeInTheDocument();
+    expect(dlg.getByText("Manual")).toBeInTheDocument();
+    expect(dlg.getByRole("link", { name: "Change set" })).toBeInTheDocument();
+    await userEvent.click(dlg.getByRole("button", { name: "Retry renewal now" }));
+    await waitFor(() => expect(renewed).toBe(true));
+    expect(await dlg.findByText(/Renewal started as a job/)).toBeInTheDocument();
   });
 });

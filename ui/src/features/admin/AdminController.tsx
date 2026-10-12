@@ -2,16 +2,13 @@
  * Admin > Controller (system-admin): where the controller answers (FQDN, VIP) and which certificate
  * it shows. A change applies at once, then waits two minutes for a confirmation from the NEW
  * address, which proves the name, address and certificate work; unconfirmed changes revert on
- * their own (the worker does it, not this page).
- *
- * Built against the draft contract of `GET /system/controller`, `PUT …/pending`,
- * `POST …/confirm` and `POST …/revert`; the response shape lives in {@link ControllerState} so it
- * is one place to adjust when the API spec is final.
+ * their own (the worker does it, not this page). ADR 0081.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Clock, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ApiError, rawGet, rawSend } from "@/api/client";
+import { ApiError, api, unwrap } from "@/api/client";
+import type { components } from "@/api/schema";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
 import { ExpiryPill, expiryStatus } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
@@ -25,38 +22,13 @@ import { cn } from "@/lib/utils";
 const INPUT =
   "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-/** What `GET /system/controller` returns (draft contract). */
-export interface ControllerState {
-  /** False when there is no management tenant (quickstart): only the FQDN applies. */
-  managed: boolean;
-  fqdn: string;
-  vip?: string | null;
-  ports?: number[];
-  certificate?: { name: string; sans: string[]; not_after: string; issuer?: string | null } | null;
-  pending?: {
-    state: "pending" | "confirmed" | "reverted" | "applying";
-    expires_at: string;
-    seconds_left: number;
-    applied_by?: string | null;
-    applied_at?: string | null;
-    window_s?: number;
-    changes?: {
-      fqdn?: [string, string] | null;
-      vip?: [string, string] | null;
-      certificate?: [string | null, string | null] | null;
-    };
-  } | null;
-  /** Per identity provider, the sign-in redirect URLs the new FQDN needs. */
-  redirect_urls?: { provider: string; current: string[]; required: string[] }[];
-  /** True when the environment pins the values; they are shown read-only. */
-  forced?: boolean;
-}
+export type ControllerState = components["schemas"]["ControllerRead"];
 
 function useController() {
   return useQuery({
     queryKey: ["admin", "controller"],
-    refetchInterval: (q) => (q.state.data?.pending?.state === "pending" ? 4000 : false),
-    queryFn: () => rawGet<ControllerState>("/api/v1/system/controller"),
+    refetchInterval: (q) => (q.state.data?.pending ? 4000 : false),
+    queryFn: async () => unwrap(await api.GET("/api/v1/system/controller")),
   });
 }
 
@@ -64,9 +36,11 @@ function useManagementCerts(enabled: boolean) {
   return useQuery({
     queryKey: ["admin", "controller", "certs"],
     enabled,
-    queryFn: () =>
-      rawGet<{ items: { id: string; name: string; sans: string[]; not_after: string }[] }>(
-        "/api/v1/tenants/management/certificates?limit=200",
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/v1/tenants/{t}/certificates", {
+          params: { path: { t: "management" }, query: { limit: 200 } },
+        }),
       ),
   });
 }
@@ -137,23 +111,34 @@ export function AdminController() {
   const [problem, setProblem] = useState<unknown>(null);
 
   const f = fqdn ?? s?.fqdn ?? "";
-  const v = vip ?? s?.vip ?? "";
+  const v = vip ?? s?.listen?.vip ?? "";
   const certName = cert ?? s?.certificate?.name ?? "";
-  const pending = s?.pending?.state === "pending" ? s.pending : null;
-  const readOnly = !!s?.forced || !!pending;
+  const pending = s?.pending ?? null;
+  const waiting = pending?.state === "waiting" ? pending : null;
+  const readOnly = !!pending;
   const dirty = s
-    ? f !== s.fqdn || v !== (s.vip ?? "") || certName !== (s.certificate?.name ?? "")
+    ? f !== (s.fqdn ?? "") ||
+      v !== (s.listen?.vip ?? "") ||
+      certName !== (s.certificate?.name ?? "")
     : false;
-  const onNewAddress = pending?.changes?.fqdn
-    ? globalThis.location?.hostname === pending.changes.fqdn[1]
-    : false;
+  const newFqdn = pending?.after.fqdn ?? null;
+  const onNewAddress = newFqdn ? globalThis.location?.hostname === newFqdn : false;
 
   const apply = useMutation({
-    mutationFn: () =>
-      rawSend("PUT", "/api/v1/system/controller/pending", {
-        fqdn: f,
-        ...(s?.managed ? { vip: v || undefined, certificate: certName || undefined } : {}),
-      }),
+    mutationFn: async () =>
+      unwrap(
+        await api.PUT("/api/v1/system/controller/pending", {
+          body: {
+            fqdn: f,
+            ...(s?.managed
+              ? {
+                  vip: v && v !== s.listen?.vip ? v : null,
+                  certificate: certName && certName !== s.certificate?.name ? certName : null,
+                }
+              : {}),
+          },
+        }),
+      ),
     onSuccess: () => {
       setConfirmApply(false);
       void qc.invalidateQueries({ queryKey: ["admin", "controller"] });
@@ -164,8 +149,12 @@ export function AdminController() {
     },
   });
   const act = useMutation({
-    mutationFn: (kind: "confirm" | "revert") =>
-      rawSend("POST", `/api/v1/system/controller/${kind}`),
+    mutationFn: async (kind: "confirm" | "revert") =>
+      unwrap(
+        kind === "confirm"
+          ? await api.POST("/api/v1/system/controller/confirm")
+          : await api.POST("/api/v1/system/controller/revert"),
+      ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["admin", "controller"] }),
     onError: setProblem,
   });
@@ -174,7 +163,8 @@ export function AdminController() {
   const selected = (certs.data?.items ?? []).find((c) => c.name === certName);
   const certCovers = !s?.managed || !selected || coversName(selected.sans, f);
   const vipBad = v !== "" && !isIp(v);
-  const missing = f !== s?.fqdn && f !== "" ? (s?.redirect_urls ?? []) : [];
+  const fqdnChanged = f !== (s?.fqdn ?? "") && f !== "";
+  const missing = fqdnChanged ? (s?.redirect_urls ?? []) : [];
   const fieldErrors: Record<string, string> = {};
   if (problem instanceof ApiError && problem.status === 422)
     for (const e of problem.problem?.errors ?? [])
@@ -202,22 +192,31 @@ export function AdminController() {
         <section className="overflow-hidden rounded-lg border border-status-degraded/60 bg-card">
           <header className="flex items-center gap-2 border-b bg-status-degraded-bg px-4 py-3">
             <Clock className="size-4" aria-hidden />
-            <h2 className="text-base font-semibold">{t("Waiting for you to confirm")}</h2>
+            <h2 className="text-base font-semibold">
+              {waiting ? t("Waiting for you to confirm") : t("Applying the change")}
+            </h2>
             <span className="text-xs text-status-degraded">{t("Pending")}</span>
           </header>
           <div className="space-y-4 p-4">
             <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
               <div>
-                <Countdown
-                  key={pending.seconds_left}
-                  secondsLeft={pending.seconds_left}
-                  total={pending.window_s ?? 120}
-                />
+                {waiting ? (
+                  <Countdown
+                    key={waiting.seconds_left ?? 0}
+                    secondsLeft={waiting.seconds_left ?? 0}
+                    total={waiting.window_s}
+                  />
+                ) : (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    {t(
+                      "The change is being applied to the management tenant. The window starts when it is live.",
+                    )}
+                  </p>
+                )}
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {t("of {time}", { time: clock(pending.window_s ?? 120) })}
-                  {pending.applied_at &&
-                    ` · ${t("applied {when}", { when: shortWhen(pending.applied_at) })}`}
-                  {pending.applied_by && ` ${t("by {who}", { who: pending.applied_by })}`}
+                  {t("of {time}", { time: clock(pending.window_s) })} ·{" "}
+                  {t("proposed {when}", { when: shortWhen(pending.proposed_at) })}{" "}
+                  {t("by {who}", { who: pending.proposed_by })}
                 </div>
               </div>
               <p className="text-sm">
@@ -231,19 +230,19 @@ export function AdminController() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {onNewAddress || !pending.changes?.fqdn ? (
+              {!waiting ? null : onNewAddress || !newFqdn || newFqdn === pending.before.fqdn ? (
                 <Button disabled={act.isPending} onClick={() => act.mutate("confirm")}>
                   {t("Keep the new settings")}
                 </Button>
               ) : (
                 <Button asChild>
                   <a
-                    href={`https://${pending.changes.fqdn[1]}/admin/controller`}
+                    href={`https://${newFqdn}/admin/controller`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
                     <ExternalLink className="size-4" aria-hidden />{" "}
-                    {t("Open https://{host} to confirm", { host: pending.changes.fqdn[1] })}
+                    {t("Open https://{host} to confirm", { host: newFqdn })}
                   </a>
                 </Button>
               )}
@@ -266,17 +265,19 @@ export function AdminController() {
               <tbody className="divide-y">
                 {(
                   [
-                    ["FQDN", pending.changes?.fqdn],
-                    ["Listen address", pending.changes?.vip],
-                    ["Certificate", pending.changes?.certificate],
+                    ["FQDN", pending.before.fqdn, pending.after.fqdn],
+                    ["Listen address", pending.before.vip, pending.after.vip],
+                    ["Certificate", pending.before.certificate, pending.after.certificate],
                   ] as const
-                ).map(([label, c]) => (
+                ).map(([label, before, after]) => (
                   <tr key={label}>
                     <td className="px-3 py-2">{t(label)}</td>
                     <td className="px-3 py-2 font-mono text-xs">
-                      {c ? (c[0] ?? "—") : t("unchanged")}
+                      {before === after ? t("unchanged") : (before ?? "—")}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs">{c ? (c[1] ?? "—") : ""}</td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {before === after ? "" : (after ?? "—")}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -288,19 +289,16 @@ export function AdminController() {
       <section className="rounded-lg border bg-card p-4">
         <dl className="grid grid-cols-[9rem_1fr] gap-y-2 text-sm">
           <dt className="text-muted-foreground">{t("Serving now")}</dt>
-          <dd className="font-mono">https://{d.fqdn}</dd>
+          <dd className="font-mono">{d.public_url ?? (d.fqdn ? `https://${d.fqdn}` : "—")}</dd>
           <dt className="text-muted-foreground">{t("Listen address")}</dt>
           <dd className="font-mono text-xs break-all">
-            {d.vip ? `${d.vip}${d.ports?.length ? ` · ${d.ports.join(", ")}` : ""}` : "—"}
+            {d.listen ? `${d.listen.vip} · ${d.listen.ports.map((p) => p.port).join(", ")}` : "—"}
           </dd>
           <dt className="text-muted-foreground">{t("Certificate")}</dt>
           <dd className="flex flex-wrap items-center gap-2">
             {d.certificate ? (
               <>
                 {d.certificate.name}
-                {d.certificate.issuer && (
-                  <span className="text-muted-foreground">· {d.certificate.issuer}</span>
-                )}
                 {ex && <ExpiryPill ex={ex} />}
               </>
             ) : (
@@ -317,9 +315,19 @@ export function AdminController() {
           )}
         </p>
       )}
-      {d.forced && (
-        <p role="note" className="rounded-md bg-muted p-3 text-sm">
-          {t("This deployment pins these values in its environment, so they are read-only here.")}
+      {d.last_result && !pending && (
+        <p role="status" className="rounded-md bg-muted p-3 text-sm">
+          {d.last_result.kind === "confirmed"
+            ? t("The last change was confirmed {when}.", { when: shortWhen(d.last_result.at) })
+            : d.last_result.kind === "reverted"
+              ? t("The last change was reverted {when}{why}.", {
+                  when: shortWhen(d.last_result.at),
+                  why: d.last_result.reason ? `: ${d.last_result.reason}` : "",
+                })
+              : t("The last change failed {when}{why}.", {
+                  when: shortWhen(d.last_result.at),
+                  why: d.last_result.reason ? `: ${d.last_result.reason}` : "",
+                })}
         </p>
       )}
 
@@ -361,7 +369,7 @@ export function AdminController() {
               <ul className="font-mono text-xs break-all">
                 {missing.map((r) => (
                   <li key={r.provider}>
-                    {r.provider}: {r.required.join(", ")}
+                    {r.provider} ({r.protocol}): {r.redirect_url}
                   </li>
                 ))}
               </ul>
@@ -451,9 +459,8 @@ export function AdminController() {
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        {t(
-          "Only system-admins see this page. Every apply, confirm and revert is audited. A deployment that pins these values (environment) shows them read-only here.",
-        )}
+        {t("Only system-admins see this page. Every apply, confirm and revert is audited.")}{" "}
+        {d.break_glass}
       </p>
 
       <ConfirmDialog
@@ -475,9 +482,9 @@ export function AdminController() {
               FQDN: {d.fqdn} → {f}
             </li>
           )}
-          {d.managed && v !== (d.vip ?? "") && (
+          {d.managed && v !== (d.listen?.vip ?? "") && (
             <li>
-              {t("Listen address")}: {d.vip ?? "—"} → {v || "—"}
+              {t("Listen address")}: {d.listen?.vip ?? "—"} → {v || "—"}
             </li>
           )}
           {d.managed && certName !== (d.certificate?.name ?? "") && (

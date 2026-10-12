@@ -4,6 +4,7 @@
  * {@link ExtraMatch} is the part beyond host and path, for screens that already edit those two.
  */
 import { Plus, X } from "lucide-react";
+import { useState } from "react";
 import type { components } from "@/api/schema";
 import { Button } from "@/components/ui/button";
 import { cidrProblem } from "@/lib/ip";
@@ -137,7 +138,8 @@ export function ExtraMatch({
 }) {
   const set = (p: Partial<Match>) => onChange({ ...match, ...p });
   const label = "mb-1.5 block text-sm font-medium";
-  const nets = parseNetworks((match.source_cidrs ?? []).join("\n"));
+  const [netText, setNetText] = useState((match.source_cidrs ?? []).join("\n"));
+  const nets = parseNetworks(netText);
   const count =
     (match.methods?.length ? 1 : 0) +
     (match.headers?.length ?? 0) +
@@ -262,8 +264,11 @@ export function ExtraMatch({
             className={cn(INPUT, "h-20 py-2 font-mono text-xs")}
             disabled={disabled}
             placeholder={"10.0.0.0/8\n2001:db8::/32"}
-            defaultValue={(match.source_cidrs ?? []).join("\n")}
-            onChange={(e) => set({ source_cidrs: parseNetworks(e.target.value).list })}
+            value={netText}
+            onChange={(e) => {
+              setNetText(e.target.value);
+              set({ source_cidrs: parseNetworks(e.target.value).list });
+            }}
           />
           <span className="block text-xs text-muted-foreground">
             {t(

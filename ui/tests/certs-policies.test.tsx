@@ -886,3 +886,82 @@ describe("rule policies", () => {
     expect(await screen.findByText(/Host cannot be changed/)).toBeInTheDocument();
   });
 });
+
+describe("rule editor details", () => {
+  it("edits a path-prefix rewrite with every match condition and keeps rule order", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New rewrite policy" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "v2");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 action"), "replace_prefix");
+    await userEvent.type(screen.getByLabelText("Rule 1 from prefix"), "/api");
+    await userEvent.type(screen.getByLabelText("Rule 1 to prefix"), "/v2");
+    await userEvent.click(screen.getByText("More conditions"));
+    await userEvent.click(screen.getByLabelText("Rule 1 GET"));
+    await userEvent.click(screen.getByLabelText("Rule 1 POST"));
+    await userEvent.click(screen.getByLabelText("Rule 1 POST"));
+    await userEvent.click(screen.getByRole("button", { name: "Add query condition" }));
+    await userEvent.type(screen.getByLabelText("Rule 1 query 1 name"), "debug");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 query 1 operator"), "present");
+    await userEvent.type(screen.getByLabelText("Rule 1 source networks"), "10.0.0.0/8");
+    await userEvent.type(screen.getByLabelText("Rule 1 SNI"), "*.example.test");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 path match"), "prefix");
+    await userEvent.type(screen.getByLabelText("Rule 1 path"), "x");
+    await userEvent.type(screen.getByLabelText("Rule 1 host"), "api.example.test");
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move up 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move down 1" }));
+    await userEvent.click(screen.getByRole("button", { name: /Remove Rule 2/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    const rule = (posted!.ops[0]!.body as { rules: Record<string, unknown>[] }).rules;
+    expect(rule).toHaveLength(1);
+    expect(rule[0]).toMatchObject({
+      phase: "request",
+      action: { type: "replace_prefix", from_prefix: "/api", to_prefix: "/v2" },
+      match: {
+        host: "api.example.test",
+        path_prefix: "/x",
+        methods: ["GET"],
+        query: [{ name: "debug", op: "present" }],
+        source_cidrs: ["10.0.0.0/8"],
+        sni: "*.example.test",
+      },
+    });
+  });
+
+  it("flags a bad source network and sets a remove-header action without a value", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New rewrite policy" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "strip");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 action"), "remove_header");
+    expect(screen.queryByLabelText("Rule 1 value")).toBeNull();
+    await userEvent.type(screen.getByLabelText("Rule 1 header name"), "Server");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 phase"), "response");
+    await userEvent.click(screen.getByText("More conditions"));
+    await userEvent.click(screen.getByRole("button", { name: "Add header condition" }));
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 header 1 operator"), "absent");
+    expect(screen.getByLabelText("Rule 1 header 1 value")).toBeDisabled();
+    await userEvent.type(screen.getByLabelText("Rule 1 source networks"), "nope");
+    expect(await screen.findByText(/Line 1: not a valid address or network/)).toBeInTheDocument();
+  });
+
+  it("deletes a rewrite policy after confirming, and picks the content type of an error page", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New error pages" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "pages");
+    await userEvent.click(screen.getByLabelText("Custom page for 502"));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Page 502 content type"),
+      "application/json",
+    );
+    await userEvent.type(screen.getByLabelText("Page 502 body"), "x");
+    await userEvent.click(screen.getByLabelText("Custom page for 502"));
+    expect(screen.queryByLabelText("Page 502 body")).toBeNull();
+  });
+});
