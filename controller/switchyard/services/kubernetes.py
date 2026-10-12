@@ -65,6 +65,7 @@ PERMISSIONS = (
 GATEWAY_PERMISSIONS = (
     ("list", "gateways", "gateway.networking.k8s.io", ""),
     ("list", "httproutes", "gateway.networking.k8s.io", ""),
+    ("patch", "gateways", "gateway.networking.k8s.io", "status"),
 )
 
 
@@ -589,7 +590,7 @@ class KubernetesClusters:
             row.last_sync_ok = ok
             row.last_sync_error = error
             if summary is not None:
-                row.last_sync = summary
+                row.last_sync = _with_last_change(summary, row.last_sync, row.last_sync_at)
             if pending is not False:
                 row.pending_change_set = pending if isinstance(pending, UUID) else None
 
@@ -634,6 +635,7 @@ class KubernetesClusters:
                 change_set = await self._submit(tenant_id, row.name, ops)
                 summary["change_set_id"] = str(change_set)
             written = await self._write_back(kube, planned, snapshot, vips, services)
+            written += await self._write_gateways(kube, planned, snapshot, vips, gateways or [])
             summary["addresses_written"] = written
         finally:
             await kube.close()
@@ -907,6 +909,68 @@ class KubernetesClusters:
                 except KubeError as exc:
                     log.warning("could not write the address of %s/%s: %s", namespace, name, exc)
         return written
+
+    async def _write_gateways(
+        self,
+        kube: Kube,
+        planned: K8sPlan,
+        snapshot: Any,
+        vips: dict[str, str],
+        gateways: list[dict[str, Any]],
+    ) -> int:
+        """Mark the Gateways whose virtual service is committed: address, Accepted, Programmed."""
+        committed = {s.name: str(s.vip) for s in snapshot.virtual_services}
+        by_key = {(g["metadata"]["namespace"], g["metadata"]["name"]): g for g in gateways}
+        written = 0
+        for key, (namespace, name) in planned.gateway_targets.items():
+            wanted = vips.get(key)
+            live = [
+                sp for sp in planned.services.values() if sp.vip_key == key and sp.name in committed
+            ]
+            gateway = by_key.get((namespace, name))
+            if wanted is None or not live or committed[live[0].name] != wanted or gateway is None:
+                continue
+            status = gateway.get("status") or {}
+            have = [a.get("value") for a in status.get("addresses") or []]
+            programmed = any(
+                c.get("type") == "Programmed" and c.get("status") == "True"
+                for c in status.get("conditions") or []
+            )
+            generation = int((gateway.get("metadata") or {}).get("generation") or 1)
+            observed = all(
+                int(c.get("observedGeneration") or generation) == generation
+                for c in status.get("conditions") or []
+            )
+            if have == [wanted] and programmed and observed:
+                continue
+            try:
+                await kube.set_gateway_status(namespace, name, wanted, generation)
+                written += 1
+            except KubeError as exc:
+                log.warning("could not write the status of gateway %s/%s: %s", namespace, name, exc)
+        return written
+
+
+def _with_last_change(
+    summary: dict[str, Any], previous: dict[str, Any] | None, at: datetime | None
+) -> dict[str, Any]:
+    """Keep the counts of the last sync that changed something next to the latest summary.
+
+    A sync that changes nothing replaces ``last_sync``; without this the counts of the sync that
+    created the objects would be gone a few seconds later.
+    """
+    keys = ("created", "updated", "deleted")
+    if any(summary.get(k) for k in keys):
+        return {
+            **summary,
+            "last_change": {
+                **{k: summary.get(k, 0) for k in keys},
+                "change_set_id": summary.get("change_set_id"),
+                "at": at.isoformat() if at else None,
+            },
+        }
+    kept = (previous or {}).get("last_change")
+    return {**summary, "last_change": kept} if kept else summary
 
 
 def _service_differs(

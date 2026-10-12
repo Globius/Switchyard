@@ -388,3 +388,53 @@ async def test_the_test_checks_gateway_access_only_when_the_gateway_api_is_insta
     assert found.gateway_api is True and found.permissions["list gateways"] is True
     assert found.permissions["list httproutes"] is False
     assert not found.ok and "may not list httproutes" in found.detail
+
+
+async def test_gateway_status_gets_the_address_and_conditions_once_committed(rig: Rig) -> None:
+    cluster = await rig.create()
+    rig.kube.service_list = [
+        service(
+            "shop",
+            "web",
+            [{"name": "http", "port": 80, "nodePort": 30080}],
+            kind="NodePort",
+            klass=None,
+        )
+    ]
+    rig.kube.gateway_list = [gateway("infra", "edge", [{"port": 80, "protocol": "HTTP"}])]
+    rig.kube.route_list = [
+        http_route(
+            "shop",
+            "r",
+            "edge",
+            [
+                {
+                    "matches": [{"path": {"type": "PathPrefix", "value": "/"}}],
+                    "backendRefs": [{"name": "web", "port": 80}],
+                }
+            ],
+            hostnames=["shop.example.test"],
+            parent_namespace="infra",
+        )
+    ]
+    await rig.sync(cluster)
+    assert rig.kube.gateway_statuses == {}, "nothing is written before the service is committed"
+    await rig.settle()
+    summary = await rig.sync(cluster)
+    vip = str((await rig.names())["k8s-prod--gw-infra-edge"].vip)
+    assert rig.kube.gateway_statuses == {("infra", "edge"): vip}
+    assert summary["addresses_written"] == 1
+    conditions = {c["type"]: c["status"] for c in rig.kube.gateway_list[0]["status"]["conditions"]}
+    assert conditions == {"Accepted": "True", "Programmed": "True"}
+    assert (await rig.sync(cluster))["addresses_written"] == 0, "written once"
+
+
+async def test_a_sync_that_changes_nothing_keeps_the_counts_of_the_last_change(rig: Rig) -> None:
+    cluster = await rig.create()
+    first = await rig.sync(cluster)
+    await rig.settle()
+    await rig.sync(cluster)
+    row = await rig.clusters.get(ADMIN, TENANT, cluster.id)
+    assert row.last_sync["created"] == 0
+    assert row.last_sync["last_change"]["created"] == first["created"] > 0
+    assert row.last_sync["last_change"]["change_set_id"] == first["change_set_id"]

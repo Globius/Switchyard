@@ -1,12 +1,12 @@
 #!/bin/sh
 # One-command setup of a Switchyard test instance on this host (docs/quickstart.md). Idempotent: run it again to
 # bring the stack back up; it keeps the passwords, keys and certificates it already made in .env and secrets/.
-#   sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--rebuild]
+#   sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--mtu N] [--rebuild]
 # ADDRESS is how browsers and engines reach this machine (an IP or DNS name); --port is the HTTPS port to publish.
 set -eu
 cd "$(dirname "$0")"
-HOST=""; PORTARG=""; IPV6ARG=""; REBUILD=""
-while [ $# -gt 0 ]; do case "$1" in --host) HOST=$2; shift 2 ;; --port) PORTARG=$2; shift 2 ;; --ipv6) IPV6ARG=1; shift ;; --rebuild) REBUILD=1; shift ;; *) echo "usage: sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--rebuild]" >&2; exit 2 ;; esac; done
+HOST=""; PORTARG=""; IPV6ARG=""; REBUILD=""; MTUARG=""
+while [ $# -gt 0 ]; do case "$1" in --host) HOST=$2; shift 2 ;; --port) PORTARG=$2; shift 2 ;; --ipv6) IPV6ARG=1; shift ;; --mtu) MTUARG=$2; shift 2 ;; --rebuild) REBUILD=1; shift ;; *) echo "usage: sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--mtu N] [--rebuild]" >&2; exit 2 ;; esac; done
 [ -n "$HOST" ] || [ -f .env ] || { echo "usage: sh bootstrap.sh --host ADDRESS" >&2; exit 2; }
 export MSYS_NO_PATHCONV=1
 say() { echo "== $*"; }
@@ -20,6 +20,7 @@ mkdir -p secrets; chmod 755 secrets   # the controller containers (uid 10001) re
 # engines are told to use, and every one is a name in the TLS certificate. IPv6 literals are fine.
 [ -z "$HOST" ] || { ENVSET HOST_ALL "$HOST"; ENVSET HOST_ADDR "${HOST%%,*}"; }
 [ -z "$PORTARG" ] || ENVSET HTTPS_PORT "$PORTARG"
+[ -z "$MTUARG" ] || ENVSET DOCKER_MTU "$MTUARG"   # MTU of the stack's Docker network (tunnelled underlays: 1430)
 [ -z "$IPV6ARG" ] || ENVSET COMPOSE_FILE compose.yaml:compose.ipv6.yaml   # Compose reads this from .env, so every script picks it up
 HOST=$(ENVGET HOST_ADDR); HOSTS=$(ENVGET HOST_ALL); HOSTS=${HOSTS:-$HOST}
 case "$HOST" in *:*) ENVSET HOST_URL "[$HOST]" ; HOSTURL="[$HOST]" ;; *) ENVSET HOST_URL "$HOST"; HOSTURL=$HOST ;; esac
