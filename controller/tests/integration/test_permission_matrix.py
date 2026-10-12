@@ -153,6 +153,10 @@ for _read in (
     ("GET", "/tenants/{t}/engines/{engine}"),
     ("GET", "/tenants/{t}/engines/{engine}/metrics"),
     ("GET", "/tenants/{t}/alert-targets"),
+    ("GET", "/tenants/{t}/gslb-zones"),
+    ("GET", "/tenants/{t}/gslb-zones/{zone}/ds"),
+    ("GET", "/tenants/{t}/wide-ips"),
+    ("GET", "/tenants/{t}/gslb/status"),
     ("GET", "/tenants/{t}/alert-rules"),
     ("GET", "/tenants/{t}/alerts"),
     ("GET", "/tenants/{t}/logs"),
@@ -169,6 +173,13 @@ for _read in (
 ROUTES[("POST", "/tenants/{t}/health-monitors/{monitor_id}/test")] = APP
 ROUTES[("POST", "/grafana/launch")] = ("manage", "tenant")
 ROUTES[("GET", "/alert-catalog")] = ANY
+ROUTES[("POST", "/tenants/{t}/gslb-zones")] = ("manage", "tenant")
+ROUTES[("DELETE", "/tenants/{t}/gslb-zones/{zone}")] = ("manage", "tenant")
+ROUTES[("POST", "/tenants/{t}/gslb-zones/{zone}/dnssec")] = INFRA
+ROUTES[("POST", "/tenants/{t}/gslb-zones/{zone}/wide-ips")] = INFRA
+ROUTES[("PATCH", "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}")] = INFRA
+ROUTES[("DELETE", "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}")] = INFRA
+ROUTES[("POST", "/tenants/{t}/gslb/sync")] = INFRA
 for _alert in ("targets", "rules"):
     ROUTES[("POST", f"/tenants/{{t}}/alert-{_alert}")] = INFRA
     ROUTES[("PATCH", f"/tenants/{{t}}/alert-{_alert}/{{name}}")] = INFRA
@@ -231,6 +242,15 @@ BODIES: dict[tuple[str, str], Any] = {
         "targets": ["ops"],
     },
     ("PATCH", "/tenants/{t}/alert-rules/{name}"): {"enabled": False},
+    ("POST", "/tenants/{t}/gslb-zones"): {
+        "name": "gslb.example.test",
+        "nameservers": ["ns1.example.test"],
+    },
+    ("POST", "/tenants/{t}/gslb-zones/{zone}/wide-ips"): {
+        "name": "shop",
+        "members": [{"address": "192.0.2.10"}],
+    },
+    ("PATCH", "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}"): {"ttl": 60},
     ("POST", "/tenants"): {"name": "newco"},
     ("PATCH", "/tenants/{t}"): {"require_approval": True},
     ("POST", "/tenants/{t}/change-sets"): {},

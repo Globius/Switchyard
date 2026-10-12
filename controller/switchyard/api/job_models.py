@@ -34,6 +34,7 @@ class JobKind(StrEnum):
         POLL_STATUS: Scheduled engine status poll and drift detection.
         GIT_MIRROR: Pushes a revision to the Git mirror.
         GC: Scheduled housekeeping.
+        SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
 
@@ -49,6 +50,7 @@ class JobKind(StrEnum):
     GIT_MIRROR = "git_mirror"
     GC = "gc"
     EVALUATE_ALERTS = "evaluate_alerts"
+    SYNC_GSLB = "sync_gslb"
 
 
 class JobStage(ApiModel):

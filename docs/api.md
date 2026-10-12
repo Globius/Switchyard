@@ -210,6 +210,13 @@ state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 `false`) with `allow_lxc_guests_forced` when `SWITCHYARD_ALLOW_LXC=1` forces it on. While it is off, a deploy with `guest_kind: lxc` answers `403`
 with code `lxc_disabled`. `GET /me` returns `features.lxc_guests` for the UI. See ADR 0076.
 
+## GSLB
+
+`GET/POST /tenants/{t}/gslb-zones` (create: `system-admin`), `DELETE .../gslb-zones/{zone}`, `POST .../gslb-zones/{zone}/dnssec`,
+`GET .../gslb-zones/{zone}/ds`; `GET /tenants/{t}/wide-ips`, `POST .../gslb-zones/{zone}/wide-ips`,
+`PATCH/DELETE .../gslb-zones/{zone}/wide-ips/{name}`; `GET /tenants/{t}/gslb/status` and `POST .../gslb/sync`. Reads: any role in
+the tenant; writes: `tenant-admin`; applied at once and audited. See [gslb.md](gslb.md). Not wired: `404`, code `not_enabled`.
+
 ## Alerts and the tenant log
 
 `GET/POST /tenants/{t}/alert-targets`, `PATCH/DELETE .../alert-targets/{name}` and `POST .../alert-targets/{name}/test`;

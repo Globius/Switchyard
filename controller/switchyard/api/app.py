@@ -40,6 +40,16 @@ from switchyard.api.alert_models import (
     AlertTargetTest,
 )
 from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
+from switchyard.api.gslb_models import (
+    GslbDsRead,
+    GslbSyncResult,
+    GslbZoneIn,
+    GslbZoneRead,
+    WideIpIn,
+    WideIpPatch,
+    WideIpRead,
+    WideIpState,
+)
 from switchyard.api.overview import SearchResults, TenantSummary
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.api.rendered_models import RenderedConfig, RenderedFragment
@@ -188,6 +198,7 @@ from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.grafana import GrafanaLaunchError, GrafanaService
+from switchyard.services.gslb import GslbService
 from switchyard.services.hosts import HostService
 from switchyard.services.identity_providers import (
     IdentityProviderRecord,
@@ -248,6 +259,7 @@ class ApiServices:
     settings: SystemSettings = None  # type: ignore[assignment]
     grafana: GrafanaService | None = None
     alerts: AlertService | None = None
+    gslb: GslbService | None = None
     email_configured: bool = False
     acme_providers: AcmeProviders | None = None
     dns_providers: DnsProviders | None = None
@@ -268,6 +280,7 @@ def build_services(
     grafana: GrafanaService | None = None,
     alerts: AlertService | None = None,
     email_configured: bool = False,
+    gslb: GslbService | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles.
 
@@ -315,6 +328,7 @@ def build_services(
         settings=SystemSettings(db),
         grafana=grafana,
         alerts=alerts,
+        gslb=gslb,
         email_configured=email_configured,
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
         dns_providers=DnsProviders(db, secrets) if writer is not None else None,
@@ -2236,6 +2250,191 @@ def create_app(
             next_cursor=(
                 str((window[-1].at - _EPOCH) // timedelta(microseconds=1)) if more else None
             ),
+        )
+
+    # GSLB (ADR 0160 to 0163)
+    def need_gslb(svc: ApiServices, who: Principal | None = None, *, system: bool = False) -> Any:
+        if who is not None:  # who may do it is decided before whether the feature is on
+            if system:
+                require(who, "manage", "tenant")
+            else:
+                require(who, "write", "infrastructure")
+        if svc.gslb is None:
+            raise ApiError(404, "GSLB is not enabled on this controller", code="not_enabled")
+        return svc.gslb
+
+    @router.get(
+        "/tenants/{t}/gslb-zones",
+        tags=["gslb"],
+        summary="List GSLB zones",
+        description="DNS zones hosted for this tenant on the controller's PowerDNS. "
+        "Requires any role in the tenant.",
+        response_model=list[GslbZoneRead],
+        responses=_ok([ex.GSLB_ZONE]),
+    )
+    async def list_gslb_zones(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return await need_gslb(svc).list_zones(who, tenant.id)  # type: ignore[no-any-return]
+
+    @router.post(
+        "/tenants/{t}/gslb-zones",
+        status_code=201,
+        tags=["gslb"],
+        summary="Host a zone for a tenant",
+        description=(
+            "Creates the zone on PowerDNS and assigns it to the tenant. A zone name belongs to one "
+            "tenant and may not overlap another tenant's zone. Delegate it at its parent to the "
+            "nameservers you name. Requires `system-admin`."
+        ),
+        response_model=GslbZoneRead,
+        responses=_ok(ex.GSLB_ZONE, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_gslb_zone(
+        body: GslbZoneIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_gslb(svc, who, system=True).create_zone(  # type: ignore[no-any-return]
+            who, tenant.id, body.name, body.nameservers, request_id=_rid()
+        )
+
+    @router.delete(
+        "/tenants/{t}/gslb-zones/{zone}",
+        status_code=204,
+        tags=["gslb"],
+        summary="Remove a zone",
+        description="Removes the zone from PowerDNS and every wide IP in it. "
+        "Requires `system-admin`.",
+        responses=_ok(None, 204),
+    )
+    async def delete_gslb_zone(zone: str, tenant: Tenant, who: Who, svc: Services) -> Response:
+        await need_gslb(svc, who, system=True).delete_zone(who, tenant.id, zone, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.post(
+        "/tenants/{t}/gslb-zones/{zone}/dnssec",
+        tags=["gslb"],
+        summary="Sign a zone (DNSSEC)",
+        description="Turns DNSSEC on (PowerDNS creates the keys) and returns the DS records to "
+        "publish at the zone's parent. Requires `tenant-admin`.",
+        response_model=GslbDsRead,
+        responses=_ok(ex.GSLB_DS),
+    )
+    async def enable_gslb_dnssec(
+        zone: str, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await need_gslb(svc, who).enable_dnssec(  # type: ignore[no-any-return]
+            who, tenant.id, zone, request_id=_rid()
+        )
+
+    @router.get(
+        "/tenants/{t}/gslb-zones/{zone}/ds",
+        tags=["gslb"],
+        summary="DS records of a zone",
+        description="Whether the zone is signed and its DS records. "
+        "Requires any role in the tenant.",
+        response_model=GslbDsRead,
+        responses=_ok(ex.GSLB_DS),
+    )
+    async def gslb_ds(zone: str, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        return await need_gslb(svc).ds_records(who, tenant.id, zone)  # type: ignore[no-any-return]
+
+    @router.get(
+        "/tenants/{t}/wide-ips",
+        tags=["gslb"],
+        summary="List wide IPs",
+        description="Names whose answer follows the health of their members; `zone` narrows to one "
+        "zone. Requires any role in the tenant.",
+        response_model=list[WideIpRead],
+        responses=_ok([ex.WIDE_IP]),
+    )
+    async def list_wide_ips(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        zone: Annotated[str | None, Query(max_length=200)] = None,
+    ) -> list[dict[str, Any]]:
+        return await need_gslb(svc).list_wide_ips(who, tenant.id, zone)  # type: ignore[no-any-return]
+
+    @router.post(
+        "/tenants/{t}/gslb-zones/{zone}/wide-ips",
+        status_code=201,
+        tags=["gslb"],
+        summary="Create a wide IP",
+        description=(
+            "Publishes a name in the zone. `failover` answers with the first priority tier that "
+            "has a member up; `all` with every member that is up; `weighted` picks among members "
+            "that are up by weight; `subnet` answers by the client's network; `geo` picks the "
+            "member closest to the client (the PowerDNS server needs a GeoIP database). A member "
+            "is "
+            "an address or a virtual service (its VIP is followed when it moves). PowerDNS checks "
+            "health itself, from the DNS servers. Applies at once and is audited. Requires "
+            "`tenant-admin`."
+        ),
+        response_model=WideIpRead,
+        responses=_ok(ex.WIDE_IP, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_wide_ip(
+        zone: str, body: WideIpIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        spec = body.model_dump(exclude={"name", "enabled"}, exclude_none=True)
+        return await need_gslb(svc, who).create_wide_ip(  # type: ignore[no-any-return]
+            who, tenant.id, zone, body.name, spec, enabled=body.enabled, request_id=_rid()
+        )
+
+    @router.patch(
+        "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}",
+        tags=["gslb"],
+        summary="Change a wide IP",
+        description="Change the algorithm, TTL, health check or members, or switch it off (its "
+        "records are removed) and on. Requires `tenant-admin`.",
+        response_model=WideIpRead,
+        responses=_ok(ex.WIDE_IP) | VALIDATION_RESPONSE,
+    )
+    async def patch_wide_ip(
+        zone: str, name: str, body: WideIpPatch, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        spec = body.model_dump(exclude={"enabled"}, exclude_none=True) or None
+        return await need_gslb(svc, who).update_wide_ip(  # type: ignore[no-any-return]
+            who, tenant.id, zone, name, spec=spec, enabled=body.enabled, request_id=_rid()
+        )
+
+    @router.delete(
+        "/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}",
+        status_code=204,
+        tags=["gslb"],
+        summary="Delete a wide IP",
+        description="Removes the records. Requires `tenant-admin`.",
+        responses=_ok(None, 204),
+    )
+    async def delete_wide_ip(
+        zone: str, name: str, tenant: Tenant, who: Who, svc: Services
+    ) -> Response:
+        await need_gslb(svc, who).delete_wide_ip(who, tenant.id, zone, name, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.get(
+        "/tenants/{t}/gslb/status",
+        tags=["gslb"],
+        summary="Wide IPs against PowerDNS",
+        description="Compares each wide IP with the records PowerDNS holds: `in_sync`, `drift` "
+        "(they differ; nothing is changed), `pending`, `error` (the last push failed) or `off`. "
+        "Requires any role in the tenant.",
+        response_model=list[WideIpState],
+        responses=_ok([ex.WIDE_IP_STATE]),
+    )
+    async def gslb_status(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return await need_gslb(svc).status(who, tenant.id)  # type: ignore[no-any-return]
+
+    @router.post(
+        "/tenants/{t}/gslb/sync",
+        tags=["gslb"],
+        summary="Write every wide IP to PowerDNS again",
+        description="Rewrites the records of every enabled wide IP, which also repairs drift. "
+        "Requires `tenant-admin`.",
+        response_model=GslbSyncResult,
+        responses=_ok({"written": 2, "failed": 0}),
+    )
+    async def gslb_sync(tenant: Tenant, who: Who, svc: Services) -> dict[str, int]:
+        return await need_gslb(svc, who).sync(  # type: ignore[no-any-return]
+            who, tenant.id, force=True, request_id=_rid()
         )
 
     # telemetry

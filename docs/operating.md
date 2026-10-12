@@ -33,6 +33,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_TRUST_FORWARDED` | `1` behind a reverse proxy: login throttling uses the last `X-Forwarded-For` entry as the source address |
 | `SWITCHYARD_ALLOW_LXC` | `1` forces container (LXC) guests on (labs and the quickstart); otherwise a system administrator enables them with `PATCH /system/settings` or `syctl setting allow_lxc_guests true`. ADR 0076 |
 | `SWITCHYARD_AUDIT_SYSLOG` | Also send every audit event to syslog as one JSON line (`udp://host[:514]`, `tcp://host[:514]` or `unix:///dev/log`, facility local0) |
+| `SWITCHYARD_POWERDNS_URL`, `SWITCHYARD_POWERDNS_API_KEY`, `SWITCHYARD_POWERDNS_SERVER_ID` (`localhost`) | PowerDNS Authoritative for GSLB (ADR 0160, [gslb.md](gslb.md)); both URL and key turn it on. The server needs `enable-lua-records=yes` |
 | `SWITCHYARD_SMTP_HOST`, `_PORT` (587), `_USER`, `_PASSWORD`, `_FROM`, `_STARTTLS` (`0` turns it off) | Mail server for email alert targets (ADR 0121); without a host email targets cannot send |
 | `SWITCHYARD_ALERT_ALLOW_HTTP`, `SWITCHYARD_ALERT_ALLOW_PRIVATE` | `1` lets alert webhooks use http and name private addresses (labs). Default: https and public destinations only |
 | `SWITCHYARD_GRAFANA_URL` | Grafana base URL (http or https); the UI links to it from `GET /me` `links.grafana` |

@@ -68,6 +68,10 @@ Date: YYYY-MM-DD
 | [0077](0077-wait-for-storage-reloads.md) | Wait for the reload a storage call starts | Accepted |
 | [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
+| [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
+| [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
+| [0162](0162-gslb-zones-ownership-and-dnssec.md) | GSLB zones: ownership, DNSSEC, several sites | Accepted |
+| [0163](0163-gslb-scope-and-deferred.md) | GSLB: what is built and what is not | Accepted |
 | [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
 | [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
 | [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |

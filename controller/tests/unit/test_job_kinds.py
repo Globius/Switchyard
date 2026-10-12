@@ -10,6 +10,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.gc import GC_JOB
+from switchyard.services.gslb import SYNC_GSLB_JOB
 from switchyard.services.infra import APPLY_SDN_JOB, DEPLOY_SE_GROUP_JOB, RETIRE_ENGINE_JOB
 
 
@@ -27,5 +28,6 @@ def test_every_job_kind_is_published() -> None:
         POLL_STATUS_JOB,
         GC_JOB,
         EVALUATE_ALERTS_JOB,
+        SYNC_GSLB_JOB,
     }
     assert kinds == {k.value for k in JobKind}

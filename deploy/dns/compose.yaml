@@ -1,0 +1,30 @@
+# Authoritative DNS for GSLB (ADR 0160): PowerDNS Authoritative with LUA records, driven by the controller's API.
+#   cp dns.env.example dns.env ; edit it ; docker compose --env-file dns.env up -d
+# Controller side: SWITCHYARD_POWERDNS_URL=http://<this host>:8081 and SWITCHYARD_POWERDNS_API_KEY=<same key>.
+# Run at least two of these (one per site), each with its own zone copy: the controller writes zones to the one named in
+# SWITCHYARD_POWERDNS_URL, so replicate with AXFR/IXFR secondaries (docs/gslb.md) or point the URL at a primary.
+name: switchyard-dns
+services:
+  pdns:
+    image: powerdns/pdns-auth-50:latest
+    restart: unless-stopped
+    environment:
+      PDNS_AUTH_API_KEY: ${PDNS_API_KEY:?set PDNS_API_KEY in dns.env}
+    command:
+      - --api=yes
+      - --webserver=yes
+      - --webserver-address=0.0.0.0
+      # Only the controller nodes may call the API (comma-separated addresses or networks).
+      - --webserver-allow-from=${PDNS_API_ALLOW_FROM:-127.0.0.1,::1}
+      # GSLB needs LUA records; health checks run from here (ifportup/ifurlup), every few seconds.
+      - --enable-lua-records=yes
+      - --lua-health-checks-interval=5
+    volumes:
+      - pdns-data:/var/lib/powerdns
+    ports:
+      - "${DNS_BIND:-0.0.0.0}:53:53/udp"
+      - "${DNS_BIND:-0.0.0.0}:53:53/tcp"
+      # The API is for the controller only: bind it to the management address, never to the internet.
+      - "${PDNS_API_BIND:-127.0.0.1}:8081:8081"
+volumes:
+  pdns-data: {}
