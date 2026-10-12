@@ -157,11 +157,162 @@ export function defaults(kind: SecurityKind): Obj {
         deny_user_agents: [],
         bot_action: "deny",
         exempt_cidrs: [],
+        challenge: null,
+        captcha: null,
       };
   }
 }
 
 const nz = (v: unknown) => (v === "" || v === undefined ? null : v);
+
+const GATE_DEFAULT = {
+  valid_for_s: 3600,
+  skip_paths: [] as string[],
+  skip_user_agents: [] as string[],
+};
+
+/** "Check new visitors": nothing, a JavaScript proof of work, or a CAPTCHA (ADR 0171, 0172). */
+function NewVisitorCheck({
+  cfg,
+  set,
+  disabled,
+}: {
+  cfg: Obj;
+  set: (p: Obj) => void;
+  disabled: boolean;
+}) {
+  const mode: "none" | "js" | "captcha" = cfg.challenge ? "js" : cfg.captcha ? "captcha" : "none";
+  const gate: Obj = cfg.challenge ?? cfg.captcha;
+  const key = mode === "js" ? "challenge" : "captcha";
+  const setGate = (p: Obj) => set({ [key]: { ...gate, ...p } });
+  return (
+    <fieldset className="space-y-3 rounded-lg border p-4">
+      <legend className="px-1 text-sm font-medium">{t("Check new visitors")}</legend>
+      <Field
+        label={t("Before the first answer")}
+        help={t("A challenge or a CAPTCHA, not both. Passed visitors get a signed cookie.")}
+      >
+        <select
+          aria-label={t("Visitor check")}
+          className={INPUT}
+          disabled={disabled}
+          value={mode}
+          onChange={(e) =>
+            set(
+              e.target.value === "js"
+                ? { challenge: { ...GATE_DEFAULT, difficulty: 4 }, captcha: null }
+                : e.target.value === "captcha"
+                  ? {
+                      captcha: {
+                        ...GATE_DEFAULT,
+                        provider: "turnstile",
+                        site_key: "",
+                        secret_ref: "",
+                      },
+                      challenge: null,
+                    }
+                  : { challenge: null, captcha: null },
+            )
+          }
+        >
+          <option value="none">{t("Nothing")}</option>
+          <option value="js">{t("JavaScript challenge (proof of work)")}</option>
+          <option value="captcha">{t("CAPTCHA")}</option>
+        </select>
+      </Field>
+      {mode === "js" && (
+        <Field
+          label={t("Difficulty")}
+          help={t("3 is about 4,000 hashes, 4 about 65,000, 5 about a million.")}
+        >
+          <select
+            aria-label={t("Challenge difficulty")}
+            className={INPUT}
+            disabled={disabled}
+            value={gate.difficulty}
+            onChange={(e) => setGate({ difficulty: Number(e.target.value) })}
+          >
+            {[3, 4, 5].map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      {mode === "captcha" && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label={t("Provider")}>
+            <select
+              aria-label={t("CAPTCHA provider")}
+              className={INPUT}
+              disabled={disabled}
+              value={gate.provider}
+              onChange={(e) => setGate({ provider: e.target.value })}
+            >
+              <option value="turnstile">Cloudflare Turnstile</option>
+              <option value="hcaptcha">hCaptcha</option>
+            </select>
+          </Field>
+          <Field label={t("Site key")}>
+            <input
+              aria-label={t("CAPTCHA site key")}
+              className={MONO}
+              disabled={disabled}
+              value={gate.site_key}
+              onChange={(e) => setGate({ site_key: e.target.value })}
+            />
+          </Field>
+          <Field
+            label={t("Secret key (OpenBao path)")}
+            help={t("The path of the provider's secret key, never the key itself.")}
+          >
+            <input
+              aria-label={t("CAPTCHA secret reference")}
+              className={MONO}
+              disabled={disabled}
+              placeholder="tenants/acme/captcha"
+              value={gate.secret_ref}
+              onChange={(e) => setGate({ secret_ref: e.target.value })}
+            />
+          </Field>
+        </div>
+      )}
+      {mode !== "none" && (
+        <>
+          <Field label={t("A pass lasts (s)")}>
+            <input
+              aria-label={t("Pass lifetime")}
+              type="number"
+              min={300}
+              max={86400}
+              className={INPUT}
+              disabled={disabled}
+              value={gate.valid_for_s}
+              onChange={(e) => setGate({ valid_for_s: Number(e.target.value) })}
+            />
+          </Field>
+          <ChipInput
+            label={t("Paths never checked")}
+            value={gate.skip_paths}
+            onChange={(v) => setGate({ skip_paths: v })}
+            freeText={{ validate: (v) => (v.startsWith("/") ? null : t("Starts with /")) }}
+            placeholder="/api"
+            disabled={disabled}
+          />
+          <ChipInput
+            label={t("User-Agent text never checked")}
+            value={gate.skip_user_agents}
+            onChange={(v) => setGate({ skip_user_agents: v.map((x) => x.toLowerCase()) })}
+            freeText={{ validate: () => null }}
+            placeholder="googlebot"
+            disabled={disabled}
+          />
+        </>
+      )}
+    </fieldset>
+  );
+}
 
 /** The body the API takes: empty optional values become null and empty matches are trimmed. */
 export function securityBody(kind: SecurityKind, name: string, cfg: Obj): Obj {
@@ -1156,6 +1307,7 @@ export function SecurityPolicySheet({
                 )}
               </Field>
             </div>
+            <NewVisitorCheck cfg={cfg} set={set} disabled={dis} />
           </div>
         )}
       </div>

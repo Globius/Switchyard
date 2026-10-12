@@ -1263,4 +1263,35 @@ describe("security policies", () => {
     await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
     expect(posted!.ops[0]!.body).toMatchObject({ kind: "waf" });
   });
+
+  it("adds a JavaScript challenge and then switches to a CAPTCHA", async () => {
+    await userEvent.type(await open("protection"), "gate");
+    await userEvent.selectOptions(screen.getByLabelText("Visitor check"), "js");
+    await userEvent.selectOptions(screen.getByLabelText("Challenge difficulty"), "5");
+    await userEvent.type(screen.getByRole("combobox", { name: "Paths never checked" }), "/api,");
+    await userEvent.selectOptions(screen.getByLabelText("Visitor check"), "captcha");
+    expect(screen.queryByLabelText("Challenge difficulty")).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("CAPTCHA provider"), "hcaptcha");
+    await userEvent.type(screen.getByLabelText("CAPTCHA site key"), "site-1");
+    await userEvent.type(screen.getByLabelText("CAPTCHA secret reference"), "kv/captcha");
+    await userEvent.clear(screen.getByLabelText("Pass lifetime"));
+    await userEvent.type(screen.getByLabelText("Pass lifetime"), "600");
+    await userEvent.type(
+      screen.getByRole("combobox", { name: "User-Agent text never checked" }),
+      "GoogleBot,",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "protection",
+      challenge: null,
+      captcha: {
+        provider: "hcaptcha",
+        site_key: "site-1",
+        secret_ref: "kv/captcha",
+        valid_for_s: 600,
+        skip_user_agents: ["googlebot"],
+      },
+    });
+  });
 });
