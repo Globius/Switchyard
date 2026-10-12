@@ -95,6 +95,7 @@ func main() {
 	collector := &status.Collector{
 		Runner: run, StateDir: *stateDir, Hashes: applier.Hashes, BundleID: applier.LastBundleID,
 		Health: wd.State, Withdrawn: wd.Withdrawn, Now: time.Now, KeepalivedConf: keepalivedConf,
+		WafConfig: filepath.Join(*root, "coraza", "config.yaml"),
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

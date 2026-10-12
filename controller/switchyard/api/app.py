@@ -58,6 +58,8 @@ from switchyard.api.schemas import (
     ETAG_HEADER,
     IF_MATCH_RESPONSES,
     OBJECT_APIS,
+    OBJECT_MODELS,
+    PATCH_KIND,
     PROBLEM_RESPONSES,
     VALIDATION_RESPONSE,
     Accepted,
@@ -1147,6 +1149,26 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
             services, who, tenant, op, change_set, apply, f"create {slug}/{data.get('name')}"
         )
 
+    async def _patch_kind(
+        object_id: UUID,
+        tenant: Tenant,
+        who: Who,
+        services: Services,
+        change_set: UUID | None = None,
+    ) -> AsyncIterator[None]:
+        """Tell the body validator which kind the stored object has (unions only)."""
+        token = None
+        if len(OBJECT_MODELS[object_type]) > 1:
+            for item in await _view(services, who, tenant, object_type, change_set):
+                if item["id"] == str(object_id):
+                    token = PATCH_KIND.set(item.get("kind"))
+                    break
+        try:
+            yield
+        finally:
+            if token is not None:
+                PATCH_KIND.reset(token)
+
     @router.patch(
         base + "/{object_id}",
         tags=[tag],
@@ -1161,6 +1183,7 @@ def _object_routes(router: APIRouter, slug: str, object_type: ObjectType) -> Non
     async def update_object(
         object_id: UUID,
         body: patch_in,
+        _kind: Annotated[None, Depends(_patch_kind)],
         tenant: Tenant,
         who: Who,
         services: Services,

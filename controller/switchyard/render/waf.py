@@ -164,6 +164,7 @@ def render_waf_files(snapshot: Snapshot, se_group_id: UUID) -> dict[str, str]:
         f"bind: {AGENT_ADDRESS}",
         "log_level: info",
         "log_file: /dev/stdout",
+        "log_format: json",
         "applications:",
     ]
     for name, policy in apps:
@@ -171,6 +172,7 @@ def render_waf_files(snapshot: Snapshot, se_group_id: UUID) -> dict[str, str]:
             f"  - name: {name}",
             "    log_level: info",
             "    log_file: /dev/stdout",
+            "    log_format: json",
             "    transaction_ttl_ms: 60000",
             "    directives: |",
             *[f"      {line}" for line in directives(policy)],

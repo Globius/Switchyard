@@ -1135,3 +1135,46 @@ async def test_engine_addresses_count_as_used_in_a_vip_pool(api: Api) -> None:
     assert (await api.client.post(f"{url}/next-free", headers=h)).json() == {
         "address": "192.0.2.12"
     }
+
+
+async def test_patching_a_policy_set_does_not_need_the_kind(api: Api) -> None:
+    h = await api.token()
+    t = f"{V1}/tenants/acme"
+    made = await api.client.post(
+        f"{t}/policy-sets?apply=true",
+        json={"kind": "waf", "name": "shield", "mode": "detect"},
+        headers=h,
+    )
+    assert made.status_code == 202, made.text
+    await api.run_jobs()
+    item = next(
+        i
+        for i in (await api.client.get(f"{t}/policy-sets", headers=h)).json()["items"]
+        if i["name"] == "shield"
+    )
+    match = {**h, "If-Match": f'"{item["version"]}"'}
+    # No kind in the body: it comes from the stored object.
+    ok = await api.client.patch(
+        f"{t}/policy-sets/{item['id']}?apply=true", json={"mode": "block"}, headers=match
+    )
+    assert ok.status_code == 202, ok.text
+    await api.run_jobs()
+    after = (await api.client.get(f"{t}/policy-sets/{item['id']}", headers=h)).json()
+    assert after["kind"] == "waf" and after["mode"] == "block"
+    # A kind that does not match the stored object is refused; a matching one is fine.
+    wrong = await api.client.patch(
+        f"{t}/policy-sets/{item['id']}?apply=true",
+        json={"kind": "redirect", "mode": "detect"},
+        headers={**h, "If-Match": f'"{after["version"]}"'},
+    )
+    assert wrong.status_code == 422, wrong.text
+    same = await api.client.patch(
+        f"{t}/policy-sets/{item['id']}?apply=true",
+        json={"kind": "waf", "paranoia_level": 2},
+        headers={**h, "If-Match": f'"{after["version"]}"'},
+    )
+    assert same.status_code == 202, same.text
+    missing = await api.client.patch(
+        f"{t}/policy-sets/{uuid.uuid4()}?apply=true", json={"mode": "block"}, headers=match
+    )
+    assert missing.status_code == 422  # unknown object: no kind to infer
