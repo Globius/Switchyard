@@ -506,6 +506,24 @@ describe("pools", () => {
     expect(posted!.ops[0]!.body).toMatchObject({ backend_protocol: "h2", tunnel_timeout_s: 7200 });
   });
 
+  it("sets a drain timeout on a draining member", async () => {
+    hasDraft = false;
+    renderAt("/t/acme/pools");
+    const n = await screen.findByRole("button", { name: /New pool/ });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "draining");
+    await userEvent.click(screen.getByRole("button", { name: "Add member" }));
+    await userEvent.type(screen.getByLabelText("Member 1 address"), "10.9.0.1");
+    expect(screen.queryByLabelText("Member 1 drain timeout")).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Member 1 state"), "drain");
+    await userEvent.type(screen.getByLabelText("Member 1 drain timeout"), "300");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.action).toBe("create"));
+    const b = posted!.ops[0]!.body as { members: Record<string, unknown>[] };
+    expect(b.members[0]).toMatchObject({ admin_state: "drain", drain_timeout_s: 300 });
+  });
+
   it("maps 422 findings onto member fields and deletes after confirming", async () => {
     server.use(
       http.post("*/api/v1/tenants/acme/change-sets/cs1/ops", () =>

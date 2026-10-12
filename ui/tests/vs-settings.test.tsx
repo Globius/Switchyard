@@ -401,6 +401,21 @@ describe("virtual service settings", () => {
     });
   });
 
+  it("adds fallback pools to a route and turns the response cache on", async () => {
+    renderAt("/t/acme/virtual-services/v1/settings");
+    await userEvent.click(await screen.findByRole("button", { name: "Add route" }));
+    await pick(await screen.findByLabelText("Route 1 pool"), "p1");
+    expect(screen.getByRole("combobox", { name: "Route 1 fallback pools" })).toBeInTheDocument();
+    const sw = screen.getByRole("switch", { name: "Cache responses" });
+    await userEvent.click(sw);
+    await userEvent.clear(screen.getByLabelText("Memory (MB)"));
+    await userEvent.type(screen.getByLabelText("Memory (MB)"), "32");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() =>
+      expect((seen.body as { cache: { size_mb: number } }).cache.size_mb).toBe(32),
+    );
+  });
+
   it("picks a client CA and its verification on a TLS port", async () => {
     server.use(
       http.get("*/api/v1/tenants/acme/certificates", () =>

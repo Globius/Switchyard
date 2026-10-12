@@ -846,6 +846,7 @@ function SettingsForm({
                     match: emptyMatch(),
                     pool_id: null,
                     pools: [],
+                    fallback_pool_ids: [],
                     redirect: null,
                   },
                 ])
@@ -1077,14 +1078,28 @@ function SettingsForm({
                                 </Button>
                               </div>
                             ) : (
-                              <Combobox
-                                aria-label={t("Route {n} pool", { n: i + 1 })}
-                                placeholder={t("Pool")}
-                                disabled={disabled}
-                                value={r.pool_id ?? ""}
-                                onChange={(v) => upd({ pool_id: v || null })}
-                                options={poolOptions.map((p) => ({ value: p.id, label: p.name }))}
-                              />
+                              <div className="space-y-1.5">
+                                <Combobox
+                                  aria-label={t("Route {n} pool", { n: i + 1 })}
+                                  placeholder={t("Pool")}
+                                  disabled={disabled}
+                                  value={r.pool_id ?? ""}
+                                  onChange={(v) => upd({ pool_id: v || null })}
+                                  options={poolOptions.map((p) => ({ value: p.id, label: p.name }))}
+                                />
+                                {r.pool_id && (
+                                  <ChipInput
+                                    label={t("Route {n} fallback pools", { n: i + 1 })}
+                                    value={r.fallback_pool_ids ?? []}
+                                    onChange={(v) => upd({ fallback_pool_ids: v.slice(0, 3) })}
+                                    options={poolOptions
+                                      .filter((p) => p.id !== r.pool_id)
+                                      .map((p) => ({ value: p.id, label: p.name }))}
+                                    placeholder={t("If it is down, try…")}
+                                    disabled={disabled}
+                                  />
+                                )}
+                              </div>
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
@@ -1253,6 +1268,62 @@ function SettingsForm({
         </div>
       </SettingsCard>
 
+      {v.protocol === "http" || form.cache != null ? (
+        <SettingsCard title={t("Response cache")}>
+          <div className="space-y-4 p-4" data-field="cache">
+            <div className="flex items-start gap-3">
+              <Switch
+                aria-label={t("Cache responses")}
+                disabled={disabled}
+                checked={form.cache != null}
+                onCheckedChange={(on) =>
+                  set("cache", on ? { size_mb: 16, max_object_kb: 1024, max_age_s: 60 } : null)
+                }
+              />
+              <div className="text-sm">
+                <div className="font-medium">{t("Cache responses")}</div>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "Stores responses the origin marks cacheable, for GET and HEAD requests without Authorization. Rate limits and deny rules run first. The caches of one SE group share a memory quota.",
+                  )}
+                </p>
+              </div>
+            </div>
+            {form.cache && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                {(
+                  [
+                    ["size_mb", "Memory (MB)", 1, 256],
+                    ["max_object_kb", "Largest object (KB)", 1, 8192],
+                    ["max_age_s", "Longest age (s)", 1, 86400],
+                  ] as const
+                ).map(([k, label, min, max]) => (
+                  <label key={k} className="space-y-1.5 text-sm font-medium">
+                    {t(label)}
+                    <input
+                      aria-label={t(label)}
+                      type="number"
+                      min={min}
+                      max={max}
+                      className={INPUT}
+                      disabled={disabled}
+                      value={form.cache![k] ?? ""}
+                      onChange={(e) =>
+                        set("cache", { ...form.cache!, [k]: Number(e.target.value) })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+            {er("cache").map((m) => (
+              <p key={m} role="alert" className="text-xs text-status-down">
+                {m}
+              </p>
+            ))}
+          </div>
+        </SettingsCard>
+      ) : null}
       {v.protocol === "http" || form.compression != null ? (
         <SettingsCard title={t("Compression")}>
           <div className="space-y-4 p-4" data-field="compression">

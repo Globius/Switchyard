@@ -742,6 +742,25 @@ function PoolSheet({
                       />
                       {t("Backup: takes traffic only when every other member is down")}
                     </label>
+                    {m.admin_state === "drain" && (
+                      <label className="flex items-center gap-1.5">
+                        {t("Disable after (s)")}
+                        <input
+                          aria-label={t("Member {n} drain timeout", { n: i + 1 })}
+                          type="number"
+                          min={1}
+                          className={cn(INPUT, "h-8 w-24")}
+                          disabled={!write.allowed}
+                          placeholder={t("never")}
+                          value={m.drain_timeout_s ?? ""}
+                          onChange={(e) =>
+                            setMember(i, {
+                              drain_timeout_s: e.target.value ? Number(e.target.value) : null,
+                            })
+                          }
+                        />
+                      </label>
+                    )}
                     <label className="flex items-center gap-1.5">
                       {t("Max connections")}
                       <input
