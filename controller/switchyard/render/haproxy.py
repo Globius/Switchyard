@@ -53,6 +53,10 @@ CONFIG_PATH = "haproxy/haproxy.cfg"
 #: Port of the Prometheus exporter listener (8404 is the local health endpoint).
 EXPORTER_PORT = 8405
 CERT_DIR = "/etc/switchyard/certs"
+#: Answers to ACME HTTP-01 challenges, keyed by request path. The file is empty in the rendered
+#: configuration; the controller adds entries at run time while a certificate is being validated.
+ACME_MAP_FILE = "haproxy/maps/acme-http01.map"
+ACME_MAP = f"{BASE_DIR}/maps/acme-http01.map"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 
 #: TLS 1.3 cipher suites (Mozilla server-side TLS, 5.7).
@@ -254,6 +258,21 @@ def _map_rule(converter: str, path: str) -> str:
     return f"use_backend %[{lookup}] if {{ {lookup} -m found }}"
 
 
+_ACME_MAP_TEXT = "# ACME HTTP-01 answers are added at run time (Switchyard).\n"
+
+
+def _acme_rule() -> str:
+    """Answer ``/.well-known/acme-challenge/<token>`` on port 80 from the challenge map.
+
+    The map holds the full request path as key, so only a published token is ever answered.
+    """
+    lookup = f"path,map({ACME_MAP})"
+    return (
+        "http-request return status 200 content-type text/plain "
+        f'lf-string "%[{lookup}]" if {{ dst_port 80 }} {{ {lookup} -m found }}'
+    )
+
+
 class _Renderer:
     def __init__(self, snapshot: Snapshot) -> None:
         self.snap = snapshot
@@ -362,6 +381,10 @@ class _Renderer:
         routing_rules: list[str] = []
         if mode == "http":
             request_rules = self._request_rules(svc, ports, allow)
+            if any(p.port == 80 and not p.tls for p in ports):
+                # First, before redirects and routes: the CA's request must reach the answer.
+                request_rules.insert(0, _acme_rule())
+                self.files[ACME_MAP_FILE] = _ACME_MAP_TEXT
             routing_rules = self._routing_rules(svc, name)
         return {
             "name": name,

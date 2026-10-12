@@ -13,6 +13,7 @@ is left waiting for a person.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -209,7 +210,7 @@ class CertificateService:
         cloudflare: Cloudflare | None = None,
         acme_providers: AcmeProviders | None = None,
         dns_providers: DnsProviders | None = None,
-        http_publisher: HttpPublisher | None = None,
+        http_publisher: Callable[[UUID], HttpPublisher] | None = None,
         dns_wait_s: float = 15.0,
     ) -> None:
         """Create the service; issuers are optional and checked when used.
@@ -222,7 +223,8 @@ class CertificateService:
                 for tenants that have no DNS credential of their own).
             acme_providers: The ACME providers.
             dns_providers: The tenants' DNS credentials.
-            http_publisher: Makes the engines answer HTTP-01 challenges.
+            http_publisher: Builds, for a tenant, the publisher that makes the engines answer
+                HTTP-01 challenges.
             dns_wait_s: Pause after publishing DNS records.
         """
         self._db = db
@@ -434,13 +436,15 @@ class CertificateService:
         if self._acme_providers is None:
             raise CertificateError("ACME is not configured")
         resolver = None
+        publisher: HttpPublisher | None = None
         solver: Solver
         if how.challenge is dm.AcmeChallenge.HTTP01:
             if any(name.startswith("*.") for name in sans):
                 raise CertificateError("HTTP-01 cannot validate wildcard names; use DNS-01")
             if self._http_publisher is None:
                 raise CertificateError("HTTP-01 is not configured")
-            solver = Http01Solver(self._http_publisher)
+            publisher = self._http_publisher(tenant_id)
+            solver = Http01Solver(publisher)
         else:
             if self._dns_providers is None:
                 raise CertificateError("DNS-01 needs DNS credentials, which are not configured")
@@ -452,6 +456,8 @@ class CertificateService:
         finally:
             if resolver is not None:
                 await resolver.close()
+            if publisher is not None:
+                await publisher.close()
 
     async def _obtain(
         self,

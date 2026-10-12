@@ -773,3 +773,91 @@ async def test_every_attempt_is_recorded_with_the_error_and_the_stages_are_repor
     assert mine["last_ok"] is False and mine["failures_in_a_row"] == 1
     assert mine["last_success_at"] is not None and "bad token" in mine["last_error"]
     assert mine["renew_before_days"] == 45 and mine["issuer"] == "ACME (default provider)"
+
+
+# -- HTTP-01 ---------------------------------------------------------------------------------
+
+
+class RecordingPublisher:
+    def __init__(self) -> None:
+        self.published: list[tuple[str, str, str]] = []
+        self.withdrawn: list[tuple[str, str]] = []
+        self.closed = False
+
+    async def publish(self, domain: str, path: str, body: str) -> None:
+        self.published.append((domain, path, body))
+
+    async def withdraw(self, domain: str, path: str) -> None:
+        self.withdrawn.append((domain, path))
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+async def test_http01_hands_the_key_authorization_to_the_publisher_and_withdraws_it(
+    rig: Rig, directory_url: str
+) -> None:
+    publisher = RecordingPublisher()
+    certs = CertificateService(
+        rig.w.db,
+        rig.secrets,
+        rig.w.service,
+        acme_providers=rig.services.acme_providers,
+        dns_providers=rig.services.dns_providers,
+        http_publisher=lambda tenant_id: publisher,
+        dns_wait_s=0,
+    )
+    await rig.create_acme(directory_url, default=True)
+    stages = Stages()
+    await certs.issue(
+        TENANT,
+        "plain",
+        CertSource.ACME,
+        ("plain.example.test",),
+        challenge=AcmeChallenge.HTTP01,
+        progress=stages,
+    )
+    [(domain, path, body)] = publisher.published
+    assert domain == "plain.example.test"
+    assert path.startswith("/.well-known/acme-challenge/") and "." in body
+    assert publisher.withdrawn == [(domain, path)] and publisher.closed
+    cert = next(c for c in await _latest(rig) if c.name == "plain")
+    assert cert.challenge is AcmeChallenge.HTTP01 and cert.dns_provider is None
+    assert rig.cloudflare.created == [], "no DNS record is involved"
+
+
+async def test_the_http01_check_wants_a_port_80_service_the_name_leads_to(
+    rig: Rig, directory_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import ipaddress
+
+    from switchyard.services import cert_requests
+
+    await rig.create_acme(directory_url, default=True)
+    answers: dict[str, set[Any]] = {}
+
+    async def resolve(host: str) -> set[Any]:
+        return answers.get(host, set())
+
+    monkeypatch.setattr(cert_requests, "_addresses", resolve)
+    url = f"{V1}/tenants/{T}/certificates/issue/check"
+    body = {
+        "name": "plain",
+        "source": "acme",
+        "challenge": "http-01",
+        "sans": ["plain.example.test"],
+    }
+
+    async def problems(**extra: Any) -> list[tuple[str, str]]:
+        got = (await rig.client.post(url, json=body | extra, headers=rig.operator)).json()
+        return [(p["path"], p["message"]) for p in got["problems"]]
+
+    assert await problems() == [("sans[0]", "does not resolve from the controller")]
+    answers["plain.example.test"] = {ipaddress.ip_address("203.0.113.9")}
+    [(path, message)] = await problems()
+    assert path == "sans[0]" and "203.0.113.9" in message and "not a VIP" in message
+    answers["plain.example.test"] = {ipaddress.ip_address("192.0.2.20")}  # the base data's VIP
+    assert await problems() == []
+    assert "sans" in {p for p, _ in await problems(sans=["a.example.test", "b.example.test"])}
+    assert {p for p, _ in await problems(sans=["*.example.test"])} == {"sans[0]"}
+    assert {p for p, _ in await problems(dns_provider="x")} == {"dns_provider"}

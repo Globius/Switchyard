@@ -51,6 +51,7 @@ from switchyard.services.context import Databases
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
+from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
@@ -149,6 +150,7 @@ def certificates(db: Databases, secrets: SecretsReader | None = None) -> Certifi
     store = secrets or secrets_backend()
     if not isinstance(store, OpenBaoSecrets):
         return None
+    engines = directory(db)
     return CertificateService(
         db,
         store,
@@ -156,6 +158,7 @@ def certificates(db: Databases, secrets: SecretsReader | None = None) -> Certifi
         cloudflare=cloudflare(),
         acme_providers=AcmeProviders(db, store),
         dns_providers=DnsProviders(db, store),
+        http_publisher=lambda tenant_id: EngineHttp01Publisher(db, engines, tenant_id),
         dns_wait_s=float(os.environ.get("SWITCHYARD_ACME_DNS_WAIT", "15")),
     )
 

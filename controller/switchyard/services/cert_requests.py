@@ -235,13 +235,15 @@ class CertificateRequests:
                 add(f"sans[{index}]", "wildcard names need DNS-01")
         async with tenant_session(self._db.app, [tenant_id]) as session:
             snapshot = await load_snapshot(session)
-        vips = {
-            s.vip
+        plain = [
+            s
             for s in snapshot.virtual_services
             if s.enabled
             and s.protocol is dm.Protocol.HTTP
             and any(p.port == 80 and not p.tls for p in s.ports)
-        }
+        ]
+        vips = {s.vip for s in plain}
+        open_vips = {s.vip for s in plain if not (s.allow_list_id and s.enforce_allow_list)}
         if not vips:
             add("sans[0]", "needs a virtual service with an HTTP port 80 listener")
             return
@@ -257,6 +259,12 @@ class CertificateRequests:
                     "resolves to "
                     + ", ".join(sorted(str(a) for a in found))
                     + ", which is not a VIP of one of your HTTP services on port 80",
+                )
+            elif not found & open_vips:
+                add(
+                    f"sans[{index}]",
+                    "its service rejects clients outside its allow list, so the CA cannot "
+                    "reach it; use DNS-01",
                 )
 
     async def validate(self, principal: Principal, tenant_id: UUID, request: IssueRequest) -> None:

@@ -1,4 +1,4 @@
-==> haproxy/haproxy.cfg (haproxy, lines 31-54)
+==> haproxy/haproxy.cfg (haproxy, lines 31-55)
 frontend vs_external-sni
     mode http
     bind 192.0.2.20:80
@@ -11,6 +11,7 @@ frontend vs_external-sni
     option httplog
     option forwardfor
     tcp-request session reject if !{ src -f /etc/switchyard/haproxy/lists/cloudflare-ranges.cidr }
+    http-request return status 200 content-type text/plain lf-string "%[path,map(/etc/switchyard/haproxy/maps/acme-http01.map)]" if { dst_port 80 } { path,map(/etc/switchyard/haproxy/maps/acme-http01.map) -m found }
     http-request set-var(txn.trusted) bool(true) if { src -f /etc/switchyard/haproxy/lists/cloudflare-ranges.cidr }
     http-request set-src hdr(CF-Connecting-IP) if { var(txn.trusted) -m bool } { hdr(CF-Connecting-IP) -m found }
     http-request del-header CF-Connecting-IP if !{ var(txn.trusted) -m bool }

@@ -160,6 +160,10 @@ class HttpPublisher(Protocol):
         """Stop serving it."""
         ...
 
+    async def close(self) -> None:
+        """Remove anything still published and release connections."""
+        ...
+
 
 class Http01Solver:
     """HTTP-01: the engines answer ``/.well-known/acme-challenge/<token>`` on port 80."""

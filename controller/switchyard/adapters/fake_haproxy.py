@@ -14,6 +14,7 @@ from switchyard.adapters.haproxy import (
     CONFIG_PATH,
     ConfigRejected,
     EngineInfo,
+    HaproxyError,
     PushResult,
     ReloadFailed,
     ServerAdminState,
@@ -58,6 +59,8 @@ class FakeHaproxy:
         self._failures: list[Failure] = []
         self._status_overrides: dict[tuple[str, str], str] = {}
         self.closed = False
+        #: Entries added at run time: ``map file -> key -> value``.
+        self.map_entries: dict[str, dict[str, str]] = {}
         #: Called after every successful push; lets a test degrade the engine or touch other state.
         self.on_push: Callable[[FakeHaproxy], Awaitable[None]] | None = None
 
@@ -142,6 +145,16 @@ class FakeHaproxy:
                 status = self._status_overrides.get((backend, server), "UP")
                 out.append(ServerStatus(backend, server, status))
         return sorted(out, key=lambda s: (s.backend, s.server))
+
+    async def set_map_entry(self, map_file: str, key: str, value: str) -> None:
+        """Record the entry; fails like an engine that has no such map when it is not rendered."""
+        if map_file not in self.files:
+            raise HaproxyError(f"{self._name}: map {map_file} is not loaded on this engine")
+        self.map_entries.setdefault(map_file, {})[key] = value
+
+    async def remove_map_entry(self, map_file: str, key: str) -> None:
+        """Forget the entry."""
+        self.map_entries.get(map_file, {}).pop(key, None)
 
     async def set_server_state(self, backend: str, server: str, state: ServerAdminState) -> None:
         """Record the new admin state as the server's status."""
