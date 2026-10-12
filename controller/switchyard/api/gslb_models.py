@@ -43,7 +43,10 @@ class WideIpHealth(ApiModel):
 
     kind: Literal["tcp", "http"] = "tcp"
     port: int = Field(default=443, ge=1, le=65535)
-    scheme: Literal["http", "https"] | None = Field(default=None, description="`http` checks only.")
+    scheme: Literal["http", "https"] | None = Field(
+        default=None,
+        description="`http` checks only; default `http` for port 80, `https` otherwise.",
+    )
     path: str | None = Field(default=None, description="`http` checks only; starts with `/`.")
     match: str | None = Field(default=None, description="Text the response must contain.")
     host: str | None = Field(

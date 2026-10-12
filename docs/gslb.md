@@ -48,7 +48,7 @@ with a CNAME. `name: "@"` publishes at the zone apex.
 A member is an `address` (IPv4 or IPv6) or a `virtual_service` (its VIP is followed when it moves; the sync job rewrites the
 record, no more than five minutes later). `site` is a free label. IPv4 and IPv6 members answer `A` and `AAAA` from the same name.
 
-**Health** (`health`): `tcp` connects to `port` (default 443); `http` fetches `scheme://host:port/path` (the wide IP's own name
+**Health** (`health`): `tcp` connects to `port` (default 443); `http` fetches `scheme://host:port/path` (`scheme` defaults to `http` for port 80 and `https` otherwise) (the wide IP's own name
 unless `host` is set) and optionally requires `match` in the body. `timeout_ms` (100 to 5000, default 1000) bounds one check.
 PowerDNS runs the checks from its own address every few seconds. A member PowerDNS has not checked yet is assumed up.
 
@@ -69,6 +69,10 @@ Answers are cached for the TTL, so a change is seen within one TTL (default 30 s
 
 `POST /tenants/{t}/gslb-zones/{zone}/dnssec` signs the zone and returns the DS records; publish them at the parent zone.
 `GET .../ds` shows them again. Keys are managed by PowerDNS; rollover is not automated.
+
+IPv6 members are checked from the PowerDNS container, so its Docker network needs IPv6: `deploy/dns/compose.yaml` creates one with a ULA
+subnet (`DNS_IPV6_SUBNET`), and the Docker daemon must route it (`"ipv6": true, "ip6tables": true` in `daemon.json`, Docker 27 or later),
+or run PowerDNS with host networking.
 
 ## Several sites
 

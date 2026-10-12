@@ -14094,7 +14094,7 @@ export interface components {
             port: number;
             /**
              * Scheme
-             * @description `http` checks only.
+             * @description `http` checks only; default `http` for port 80, `https` otherwise.
              */
             scheme?: ("http" | "https") | null;
             /**

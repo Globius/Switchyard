@@ -21793,7 +21793,7 @@
                 "type": "null"
               }
             ],
-            "description": "`http` checks only.",
+            "description": "`http` checks only; default `http` for port 80, `https` otherwise.",
             "title": "Scheme"
           },
           "timeout_ms": {
