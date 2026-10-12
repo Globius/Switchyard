@@ -40,6 +40,7 @@ from switchyard.services.infra import (
     InfraService,
 )
 from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
+from switchyard.services.jwks_sync import SYNC_JWKS_JOB, JwksSync
 from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
@@ -68,6 +69,7 @@ def build_handlers(
     iplists: IpListSync | None = None,
     gslb: GslbSync | None = None,
     prober: GslbProber | None = None,
+    jwks: JwksSync | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -76,6 +78,7 @@ def build_handlers(
         pipeline: The apply pipeline.
         members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
         iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
+        jwks: Refreshes JWT keys from ``jwks_url``; ``None`` skips the ``sync_jwks`` kind.
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
         kubernetes: Syncs the tenants' Kubernetes clusters; ``None`` skips the ``kubernetes_sync``
@@ -143,6 +146,12 @@ def build_handlers(
             return {"changed": await iplists.run()}
 
         handlers[SYNC_IP_LISTS_JOB] = sync_ip_lists
+    if jwks is not None:
+
+        async def sync_jwks(job: Job) -> dict[str, Any]:
+            return {"changed": await jwks.run()}
+
+        handlers[SYNC_JWKS_JOB] = sync_jwks
     if discovery is not None:
 
         async def discover_pool_members(job: Job) -> dict[str, Any]:

@@ -45,6 +45,7 @@ HeaderValue = Annotated[str, AfterValidator(v.validate_header_value)]
 QueryParam = Annotated[str, AfterValidator(v.validate_query_param)]
 Body = Annotated[str, AfterValidator(v.validate_body)]
 Issuer = Annotated[str, AfterValidator(v.validate_issuer)]
+JwksUrl = Annotated[str, AfterValidator(v.validate_jwks_url)]
 ClaimName = Annotated[str, AfterValidator(v.validate_claim_name)]
 ClientId = Annotated[str, AfterValidator(v.validate_client_id)]
 GroupName = Annotated[str, AfterValidator(v.validate_group_name)]
@@ -1735,7 +1736,11 @@ class JwtRule(Model):
         audiences: Accepted ``aud`` values (a string claim or an element of an array claim).
         required_scopes: Scopes the token must carry.
         leeway_s: Clock difference tolerated on ``exp``.
-        keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).
+        keys: The issuer's public keys (up to 8; several keep tokens valid across a key
+            rotation). With ``jwks_url`` the controller keeps them in step with the issuer.
+        jwks_url: Where the issuer publishes its JWKS (``https``). The controller fetches it
+            every few minutes and replaces ``keys`` when they changed (ADR 0153). Until the
+            first fetch has been applied the rule has no keys and answers 401.
         subject_header: Request header that receives the ``sub`` claim of a valid token;
             client copies of it are removed first.
     """
@@ -1749,8 +1754,15 @@ class JwtRule(Model):
         default=(), max_length=8
     )
     leeway_s: int = Field(default=30, ge=0, le=300)
-    keys: tuple[JwtKey, ...] = Field(min_length=1, max_length=8)
+    keys: tuple[JwtKey, ...] = Field(default=(), max_length=8)
+    jwks_url: JwksUrl | None = None
     subject_header: HeaderName | None = None
+
+    @model_validator(mode="after")
+    def _needs_keys(self) -> Self:
+        if not self.keys and self.jwks_url is None:
+            raise ValueError("a rule needs keys or a jwks_url")
+        return self
 
     @model_validator(mode="after")
     def _header(self) -> Self:

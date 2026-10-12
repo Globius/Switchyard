@@ -295,7 +295,7 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("POST", r"/auth/refresh", "authenticated", False),
     (
         "GET",
-        r"/(acme-providers(/\{provider\})?|acme-provider-presets|dns-provider-types)",
+        r"/(acme-providers(/\{provider\})?|acme-provider-presets|dns-provider-types|waf/crs-rules)",
         "authenticated",
         False,
     ),

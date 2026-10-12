@@ -80,8 +80,6 @@ Date: YYYY-MM-DD
 | [0119](0119-weighted-pool-routes.md) | Weighted pool routes (canary and blue-green) | Accepted |
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
-| [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
-| [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
 | [0147](0147-country-and-reputation-ip-lists.md) | Country and reputation IP lists | Accepted |
 | [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
 | [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
@@ -104,8 +102,6 @@ Date: YYYY-MM-DD
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
 | [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
 | [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
-| [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
-| [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |
 | [0140](0140-waf-policy-set.md) | WAF policy set | Accepted |
 | [0141](0141-waf-detect-first-and-crs-pinning.md) | Detect first, and a pinned Core Rule Set | Accepted |
 | [0142](0142-waf-sidecar-and-failure-mode.md) | WAF sidecar life cycle and failure mode | Accepted |
@@ -118,12 +114,11 @@ Date: YYYY-MM-DD
 | [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
 | [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
 | [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
-| [0137](0137-directory-logins-saml-ldap-radius-local.md) | Directory logins (SAML, LDAP, RADIUS, local users): not built, and why | Accepted |
-| [0150](0150-bot-and-ddos-protection.md) | Bot and DDoS protection set | Accepted |
-| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |
 | [0170](0170-bot-and-ddos-protection.md) | Bot and DDoS protection set | Accepted |
 | [0171](0171-javascript-challenge.md) | JavaScript challenge (proof of work) | Accepted |
 | [0172](0172-captcha-gate.md) | CAPTCHA gate with a pluggable provider | Accepted |
-| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |
 | [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
 | [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |
+| [0152](0152-crs-rule-catalogue.md) | OWASP CRS rule catalogue for the WAF screen | Accepted |
+| [0153](0153-jwks-url.md) | JWKS URL on JWT rules, refreshed by the controller | Accepted |
+| [0154](0154-v53-read-additions.md) | WAF flag on log lines, Gateway API checks, latency in the wide IP read | Accepted |

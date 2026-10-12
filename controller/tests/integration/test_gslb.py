@@ -307,6 +307,10 @@ async def test_latency_follows_measured_round_trips_with_hysteresis(env: Env) ->
     records = {r.name: r.records[0] for r in await env.dns.get_rrsets(ZONE)}
     # the faster member answers first, the slower is the backup tier
     assert "{{'192.0.2.20'}, {'192.0.2.10'}}" in records["shop.gslb.example.test."]
+    read = (await env.client.get(f"{V1}/wide-ips", headers=env.h())).json()
+    shop = next(w for w in read if w["name"] != "plain")
+    assert [m["latency_ms"] for m in shop["members"]] == [80.0, 20.0]
+    assert shop["latency_order"] == [1, 0]
 
     times.update({"192.0.2.10": 18.0})  # now 10% faster than the leader: noise
     assert (await prober.run())["rewritten"] == 0

@@ -61,6 +61,13 @@ PERMISSIONS = (
 )
 
 
+#: Checked only when the Gateway API is installed.
+GATEWAY_PERMISSIONS = (
+    ("list", "gateways", "gateway.networking.k8s.io", ""),
+    ("list", "httproutes", "gateway.networking.k8s.io", ""),
+)
+
+
 def _http_kube(api_url: str, token: str, ca_pem: str | None) -> Kube:
     return HttpKube(api_url, token, ca_pem=ca_pem)
 
@@ -478,7 +485,9 @@ class KubernetesClusters:
             services = await kube.services()
             gateways = await kube.gateways()
             permissions = {}
-            for verb, resource, group, sub in PERMISSIONS:
+            for verb, resource, group, sub in PERMISSIONS + (
+                GATEWAY_PERMISSIONS if gateways is not None else ()
+            ):
                 permissions[f"{verb} {resource}{'/' + sub if sub else ''}"] = await kube.can(
                     verb, resource, group, sub
                 )

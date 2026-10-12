@@ -93,6 +93,16 @@ class WideIpPatch(ApiModel):
     enabled: bool | None = None
 
 
+class WideIpMemberRead(WideIpMember):
+    """A member as read back, with what the latency probe measured."""
+
+    latency_ms: float | None = Field(
+        default=None,
+        description="`latency` only: smoothed connect time to the member in milliseconds, or "
+        "null when it was never measured or did not answer.",
+    )
+
+
 class WideIpRead(ApiModel):
     """A wide IP."""
 
@@ -103,7 +113,11 @@ class WideIpRead(ApiModel):
     algorithm: str
     ttl: int
     health: WideIpHealth
-    members: list[WideIpMember]
+    members: list[WideIpMemberRead]
+    latency_order: list[int] = Field(
+        default_factory=list,
+        description="`latency` only: member indexes from fastest to slowest, as last answered.",
+    )
     enabled: bool
     version: int
     applied_at: datetime | None

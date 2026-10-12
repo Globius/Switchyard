@@ -70,6 +70,7 @@ from switchyard.services.gslb import (
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
 from switchyard.services.iplists import SYNC_IP_LISTS_JOB, IpListSync
+from switchyard.services.jwks_sync import SYNC_JWKS_JOB, JwksSync
 from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.oidc import OidcClient
@@ -442,6 +443,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         iplists,
         GslbSync(gslb, db) if (gslb := gslb_service(db)) is not None else None,
         GslbProber(gslb, db) if gslb is not None else None,
+        JwksSync(db, ChangeSetService(db)),
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
@@ -450,6 +452,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         KUBERNETES_SYNC_JOB: timedelta(seconds=30),
         EXPIRE_DRAINS_JOB: timedelta(seconds=30),
         EVALUATE_ALERTS_JOB: timedelta(minutes=1),
+        SYNC_JWKS_JOB: timedelta(minutes=5),
     }
     if gslb_service(db) is not None:
         schedule[SYNC_GSLB_JOB] = timedelta(minutes=5)
