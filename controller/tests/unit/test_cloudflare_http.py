@@ -85,3 +85,107 @@ async def test_errors_carry_cloudflares_message_and_unknown_zones_fail() -> None
     )
     with pytest.raises(CloudflareError, match="no permission"):
         await broken.ip_ranges()
+
+
+class AddressApi:
+    """Zone z1 with a record store: GET filters by type and name, PUT/POST write."""
+
+    def __init__(self, records: list[dict[str, object]]) -> None:
+        self.records = {str(r["id"]): r for r in records}
+        self.requests: list[tuple[str, str, object]] = []
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path.removeprefix("/client/v4")
+        body = json.loads(request.content) if request.content else None
+        self.requests.append((request.method, path, body))
+
+        def ok(result: object) -> httpx.Response:
+            return httpx.Response(200, json={"success": True, "result": result})
+
+        if path == "/zones":
+            return ok([{"id": "z1"}] if request.url.params["name"] == "example.test" else [])
+        if path == "/zones/z1/dns_records" and request.method == "GET":
+            want = request.url.params
+            return ok(
+                [
+                    r
+                    for r in self.records.values()
+                    if r["type"] == want["type"] and r["name"] == want["name"]
+                ]
+            )
+        if path == "/zones/z1/dns_records" and request.method == "POST":
+            self.records["new"] = {"id": "new", **(body or {})}
+            return ok({"id": "new"})
+        rid = path.rsplit("/", 1)[-1]
+        if request.method == "PUT" and rid in self.records:
+            self.records[rid] = {"id": rid, **(body or {})}
+            return ok({"id": rid})
+        return httpx.Response(404, json={"success": False, "errors": [{"message": "gone"}]})
+
+
+def address_client(api: AddressApi) -> HttpCloudflare:
+    return HttpCloudflare(
+        "tok",
+        base_url="https://api.cloudflare.com/client/v4",
+        transport=httpx.MockTransport(api.handler),
+    )
+
+
+async def test_address_record_is_created_with_proxy_and_automatic_ttl() -> None:
+    api = AddressApi([])
+    handle = await address_client(api).upsert_address(
+        "app.example.test", "192.0.2.20", ttl=300, proxied=True, handle=None
+    )
+    assert handle == "z1/new"
+    assert api.records["new"] | {"id": 0} == {
+        "id": 0,
+        "type": "A",
+        "name": "app.example.test",
+        "content": "192.0.2.20",
+        "ttl": 1,
+        "proxied": True,
+    }
+
+
+async def test_an_ipv6_address_makes_an_aaaa_record() -> None:
+    api = AddressApi([])
+    await address_client(api).upsert_address(
+        "app.example.test", "2001:db8::1", ttl=300, proxied=False, handle=None
+    )
+    assert api.records["new"]["type"] == "AAAA"
+    assert api.records["new"]["ttl"] == 300
+
+
+async def test_a_known_handle_is_updated_in_place() -> None:
+    api = AddressApi(
+        [{"id": "r1", "type": "A", "name": "app.example.test", "content": "192.0.2.1"}]
+    )
+    handle = await address_client(api).upsert_address(
+        "app.example.test", "192.0.2.2", ttl=300, proxied=False, handle="z1/r1"
+    )
+    assert handle == "z1/r1"
+    assert api.records["r1"]["content"] == "192.0.2.2"
+
+
+async def test_a_handle_deleted_by_hand_falls_back_to_creating() -> None:
+    api = AddressApi([])
+    handle = await address_client(api).upsert_address(
+        "app.example.test", "192.0.2.2", ttl=300, proxied=False, handle="z1/missing"
+    )
+    assert handle == "z1/new"
+
+
+async def test_an_identical_existing_record_is_adopted_and_a_different_one_refused() -> None:
+    same = AddressApi([{"id": "r1", "type": "A", "name": "a.example.test", "content": "192.0.2.2"}])
+    handle = await address_client(same).upsert_address(
+        "a.example.test", "192.0.2.2", ttl=300, proxied=False, handle=None
+    )
+    assert handle == "z1/r1"
+    other = AddressApi(
+        [{"id": "r1", "type": "A", "name": "a.example.test", "content": "198.51.100.9"}]
+    )
+    with pytest.raises(CloudflareError, match="did not create"):
+        await address_client(other).upsert_address(
+            "a.example.test", "192.0.2.2", ttl=300, proxied=False, handle=None
+        )
+    assert other.records["r1"]["content"] == "198.51.100.9"

@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import INET, JSONB, TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import BYTEA, INET, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from switchyard.db.base import (
@@ -397,3 +397,57 @@ class SdnObjectRow(Base):
     kind: Mapped[str] = mapped_column(Text, primary_key=True)  # "zone" | "vnet"
     name: Mapped[str] = mapped_column(Text, primary_key=True)
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
+class AutoscaleStateRow(Base):
+    """``autoscale_state``: what the autoscaler last saw and did for one SE group (ADR 0194).
+
+    ``decision`` is ``idle``, ``busy`` (over the threshold, waiting out ``sustain_s``),
+    ``scaling`` (an engine is deploying or enrolling), ``cooldown``, ``at_max`` or ``blocked``
+    (``reason`` says why: an unhealthy group, an engine that never enrolled, a failed deploy).
+    """
+
+    __tablename__ = "autoscale_state"
+    __table_args__ = (ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),)
+
+    se_group_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    busy_since: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    last_scaled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    pending_job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    pending_engine_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    enroll_sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    pending_since: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    utilization: Mapped[int | None] = mapped_column(Integer)
+    decision: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'idle'"))
+    reason: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+
+class PacketCaptureRow(Base):
+    """``packet_capture``: a capture taken on an engine, with its pcap, until ``expires_at``."""
+
+    __tablename__ = "packet_capture"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
+        CheckConstraint("state IN ('queued', 'running', 'done', 'failed')", name="state"),
+        Index("ix_packet_capture_tenant_created", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    engine_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    engine_name: Mapped[str] = mapped_column(Text, nullable=False)
+    requested_by: Mapped[str] = mapped_column(Text, nullable=False)
+    spec: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'queued'"))
+    packets: Mapped[int | None] = mapped_column(Integer)
+    size_bytes: Mapped[int | None] = mapped_column(Integer)
+    truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    error: Mapped[str | None] = mapped_column(Text)
+    data: Mapped[bytes | None] = mapped_column(BYTEA)
+    created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    finished_at: Mapped[datetime | None] = _timestamp()
+    expires_at: Mapped[datetime] = _timestamp(nullable=False)

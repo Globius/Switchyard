@@ -116,3 +116,35 @@ class CertificateRenewalRow(EntityMixin, Base):
 
 
 __all__ = ["AcmeProviderRow", "CertificateRenewalRow", "DnsProviderRow"]
+
+
+class DnsRecordRow(Base):
+    """``dns_record``: an address record the controller created for a virtual service (ADR 0193).
+
+    The row is the proof of ownership: the controller changes or deletes only records it has a
+    row for. ``handle`` is the provider's opaque id for the record.
+    """
+
+    __tablename__ = "dns_record"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
+        UniqueConstraint("tenant_id", "hostname", "rtype"),
+        CheckConstraint("rtype IN ('A', 'AAAA')", name="rtype"),
+        CheckConstraint("state IN ('pending', 'published', 'error')", name="state"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    version: Mapped[int] = mapped_column(nullable=False, server_default=text("1"))
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    virtual_service_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    hostname: Mapped[str] = mapped_column(Text, nullable=False)
+    rtype: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    ttl: Mapped[int] = mapped_column(nullable=False)
+    proxied: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    handle: Mapped[str | None] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=text("now()")
+    )

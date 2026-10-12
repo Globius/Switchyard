@@ -391,6 +391,7 @@ class StatusService:
         members: list[dict[str, str]] = []
         agent_json: dict[str, Any] | None = None
         drift: list[dict[str, str]] = []
+        load: dict[str, int] | None = None
         engine: HaproxyEngine | None = None
         agent: AgentEngine | None = None
         try:
@@ -398,6 +399,12 @@ class StatusService:
                 engine = await self._directory.connect(record)
                 fingerprint = await engine.fingerprint()
                 members = [_member_row(s) for s in await engine.server_statuses()]
+                try:  # the load feeds the autoscaler; not knowing it is not a failure
+                    info = await engine.info()
+                except HaproxyError:
+                    info = None
+                if info is not None and info.curr_conns is not None and info.max_conn:
+                    load = {"conns": info.curr_conns, "max_conn": info.max_conn}
         except HaproxyError as exc:
             reachable, error = False, str(exc)
         finally:
@@ -416,6 +423,8 @@ class StatusService:
             if agent is not None:
                 status = await agent.status()
                 agent_json = _agent_json(status)
+                if load is not None:
+                    agent_json["load"] = load
                 members += ipvs_members(status.ipvs, expected.udp_members)
                 wanted = expected.bundles.get(record.name)
                 if wanted is not None:

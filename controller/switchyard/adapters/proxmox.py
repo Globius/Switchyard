@@ -11,7 +11,7 @@ Two implementations share :class:`Proxmox`:
 
 import asyncio
 import ipaddress
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -224,6 +224,21 @@ class Proxmox(Protocol):
         ``None`` means unknown (agent not running, guest stopped), which is not the same as
         "no addresses".
         """
+        ...
+
+    async def guest_write_file(self, node: str, vmid: int, path: str, content: str) -> None:
+        """Write a text file inside a running QEMU guest through its guest agent.
+
+        The file gets the guest's default mode; follow with :meth:`guest_exec` to restrict it.
+        The controller talks only to Proxmox: nothing connects to the guest itself.
+
+        Raises:
+            ProxmoxError: If the guest agent is not running or Proxmox refuses.
+        """
+        ...
+
+    async def guest_exec(self, node: str, vmid: int, command: Sequence[str]) -> None:
+        """Run a command inside a running QEMU guest through its guest agent (no output read)."""
         ...
 
     async def close(self) -> None:
@@ -590,6 +605,20 @@ class HttpProxmox:
                         found.append(str(entry["ip-address"]))
         return tuple(found)
 
+    async def guest_write_file(self, node: str, vmid: int, path: str, content: str) -> None:
+        """Write a file in a QEMU guest (``agent/file-write``; Proxmox encodes the content)."""
+        await self._call(
+            "POST",
+            f"/nodes/{node}/qemu/{vmid}/agent/file-write",
+            {"file": path, "content": content},
+        )
+
+    async def guest_exec(self, node: str, vmid: int, command: Sequence[str]) -> None:
+        """Run a command in a QEMU guest (``agent/exec``); the exit status is not read."""
+        await self._call(
+            "POST", f"/nodes/{node}/qemu/{vmid}/agent/exec", {"command": list(command)}
+        )
+
     async def close(self) -> None:
         """Close the HTTP client."""
         await self._http.aclose()
@@ -619,6 +648,10 @@ class FakeProxmox:
     guests: list[GuestInfo] = field(default_factory=list)
     #: ``vmid -> addresses``; a missing id means the guest cannot say (no agent).
     guest_ips: dict[int, tuple[str, ...]] = field(default_factory=dict)
+    #: ``(vmid, path) -> content`` of files written through the guest agent.
+    guest_files: dict[tuple[int, str], str] = field(default_factory=dict)
+    #: Commands run through the guest agent, as ``(vmid, argv)``.
+    guest_commands: list[tuple[int, tuple[str, ...]]] = field(default_factory=list)
     _next: int = 100
 
     def _do(self, op: str, arg: str = "") -> None:
@@ -705,6 +738,20 @@ class FakeProxmox:
         """Remove the VM."""
         self._do("destroy_vm", str(vmid))
         self.vms.pop(vmid, None)
+
+    async def guest_write_file(self, node: str, vmid: int, path: str, content: str) -> None:
+        """Record the file; fails like Proxmox when the VM is not running."""
+        self._do("guest_write_file", path)
+        if self.vms.get(vmid, (None, "stopped"))[1] != "running":
+            raise ProxmoxError("QEMU guest agent is not running")
+        self.guest_files[(vmid, path)] = content
+
+    async def guest_exec(self, node: str, vmid: int, command: Sequence[str]) -> None:
+        """Record the command; fails like Proxmox when the VM is not running."""
+        self._do("guest_exec", " ".join(command))
+        if self.vms.get(vmid, (None, "stopped"))[1] != "running":
+            raise ProxmoxError("QEMU guest agent is not running")
+        self.guest_commands.append((vmid, tuple(command)))
 
     async def list_nodes(self) -> list[NodeInfo]:
         """Return the configured nodes."""

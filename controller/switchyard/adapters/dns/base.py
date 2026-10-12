@@ -38,6 +38,38 @@ class DnsProvider(Protocol):
         ...
 
 
+class AddressRecords(Protocol):
+    """Providers that can also publish ``A``/``AAAA`` records for a virtual service (ADR 0193).
+
+    Only Cloudflare implements it so far. :func:`supports_addresses` tells them apart.
+    """
+
+    async def upsert_address(
+        self, name: str, address: str, *, ttl: int, proxied: bool, handle: str | None
+    ) -> str:
+        """Make ``name`` resolve to ``address`` and return the record's handle.
+
+        With a ``handle`` the record the controller created earlier is updated. Without one an
+        existing record with the same content is adopted and one with different content is
+        refused (:class:`DnsError`): the controller never overwrites a record it did not create.
+        """
+        ...
+
+    async def delete_address(self, name: str, handle: str) -> None:
+        """Remove a record created by :meth:`upsert_address` (idempotent)."""
+        ...
+
+
+def supports_addresses(provider: object) -> bool:
+    """True if the provider can publish address records.
+
+    Example:
+        >>> supports_addresses(object())
+        False
+    """
+    return callable(getattr(provider, "upsert_address", None))
+
+
 @dataclass(frozen=True)
 class Field:
     """One field of a provider's form.

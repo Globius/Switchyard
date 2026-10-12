@@ -65,6 +65,9 @@ class JobKind(StrEnum):
     EVALUATE_ALERTS = "evaluate_alerts"
     SYNC_GSLB = "sync_gslb"
     PROBE_GSLB = "probe_gslb"
+    SYNC_DNS_RECORDS = "sync_dns_records"
+    AUTOSCALE_SE_GROUPS = "autoscale_se_groups"
+    PACKET_CAPTURE = "packet_capture"
 
 
 class JobStage(ApiModel):
