@@ -8,6 +8,15 @@ with a way back (ADR 0081). System administrators do it under **Admin > Controll
 environment** (`SWITCHYARD_PUBLIC_URL`), propose `{"reset_to_default": true}` instead of an `fqdn` (see
 "Going back to the default address" below, or `syctl api controller-reset`).
 
+## What exists out of the box
+
+`syctl serve` creates the empty, locked `management` tenant if it is missing (ADR 0155). The page then
+shows `management_tenant: true`. Listen address and certificate become changeable when the tenant also
+holds a `controller` service (deployed or adopted, `docs/operating.md`); until then only the public
+address can change. In that state it may be an **IP address** (IPv4 or IPv6, for a lab or quick start);
+`reached_at` in the response is the address you are using now. With a `controller` service it must be a
+host name.
+
 ## The flow
 
 1. **Prepare.** Put the certificate in the management tenant (import it or request it from an ACME

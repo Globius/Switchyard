@@ -57,6 +57,43 @@ from switchyard.services.errors import (
 log = logging.getLogger("switchyard.controller")
 
 CONTROLLER_TICK_JOB = "controller_tick"
+
+
+def host_of(header: str | None) -> str:
+    """The host of a ``Host`` header: lower case, no port, no brackets around an IPv6 address.
+
+    Example:
+        >>> host_of("Switchyard.Example.test:8443"), host_of("[2001:db8::1]:8443"), host_of("::1")
+        ('switchyard.example.test', '2001:db8::1', '::1')
+    """
+    value = (header or "").strip().lower()
+    if value.startswith("["):
+        return value[1:].split("]", 1)[0]
+    if value.count(":") > 1:  # a bare IPv6 address
+        return value
+    return value.split(":", 1)[0]
+
+
+def _is_ip(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _same_host(a: str, b: str) -> bool:
+    try:
+        return ipaddress.ip_address(a) == ipaddress.ip_address(b)
+    except ValueError:
+        return a == b
+
+
+def _url_host(host: str) -> str:
+    """The host as it is written in a URL (IPv6 literals in brackets)."""
+    return f"[{host}]" if ":" in host else host
+
+
 DEFAULT_WINDOW_S = 120
 MIN_WINDOW_S = 30
 MAX_WINDOW_S = 600
@@ -109,6 +146,10 @@ class ControllerView:
 
     Attributes:
         managed: The management tenant and its ``controller`` service exist.
+        management_tenant: The ``management`` tenant exists (it is created at start-up). Without a
+            ``controller`` service in it only the public URL can change.
+        reached_at: The address this request came in on (``scheme://host``), so the screen can
+            offer it as the public URL.
         fqdn: The public host name now in effect (from the public URL), if known.
         public_url: The public URL now in effect.
         listen: VIP and ports of the ``controller`` service.
@@ -127,6 +168,8 @@ class ControllerView:
     pending: dict[str, Any] | None
     last_result: dict[str, Any] | None
     redirect_urls: list[IdpRedirect] = field(default_factory=list)
+    management_tenant: bool = False
+    reached_at: str | None = None
     break_glass: str = (
         "On a controller node: `syctl controller status` and `syctl controller revert` need only "
         "database access; the break-glass login still works."
@@ -184,7 +227,11 @@ class ControllerSettings:
         return None if service is None else (tenant_id, service, snapshot)
 
     async def view(
-        self, principal: Principal, *, env_public_url: str | None = None
+        self,
+        principal: Principal,
+        *,
+        env_public_url: str | None = None,
+        reached_at: str | None = None,
     ) -> ControllerView:
         """The current state of the settings (system administrators)."""
         require(principal, "manage", "controller")
@@ -193,6 +240,12 @@ class ControllerSettings:
             public_url, pending, last = row.public_url, row.pending, row.last_result
         public_url = public_url or env_public_url
         management = await self._management()
+        async with admin_session(self._db.admin) as session:
+            has_tenant = (
+                await session.execute(
+                    select(TenantRow.id).where(TenantRow.name == MANAGEMENT_TENANT)
+                )
+            ).first() is not None
         listen = certificate = None
         if management is not None:
             _, service, snapshot = management
@@ -216,6 +269,8 @@ class ControllerSettings:
             redirects = await self._redirects(pending["after"]["public_url"])
         return ControllerView(
             managed=management is not None,
+            management_tenant=has_tenant,
+            reached_at=reached_at,
             fqdn=urlparse(public_url).hostname if public_url else None,
             public_url=public_url,
             listen=listen,
@@ -276,7 +331,7 @@ class ControllerSettings:
         _, stored, pending = self._cache
         if pending and pending.get("state") == "waiting" and host:
             after = pending.get("after", {})
-            if after.get("fqdn") and host.split(":")[0].lower() == after["fqdn"]:
+            if after.get("fqdn") and _same_host(host_of(host), after["fqdn"]):
                 return str(after["public_url"])
         return stored or env_default
 
@@ -311,17 +366,22 @@ class ControllerSettings:
         require(principal, "manage", "controller")
         errors = FieldErrors()
         host = ""
+        management = await self._management()
         if reset_to_default:
+            management = None
             if vip or certificate:
                 errors.add("vip", "conflict", "a reset changes only the public URL")
         else:
             try:
-                host = v.validate_hostname(fqdn.strip().lower())
+                host = v.validate_hostname(fqdn.strip().lower().strip("[]"))
             except ValueError as exc:
-                errors.add("fqdn", "invalid", str(exc))
-        management = await self._management()
-        if reset_to_default:
-            management = None
+                address = fqdn.strip().strip("[]")
+                if management is None and _is_ip(address):
+                    # Without a controller service there is no certificate to match: the screen
+                    # may be reached by address (lab, quick start), IPv4 or IPv6.
+                    host = str(ipaddress.ip_address(address))
+                else:
+                    errors.add("fqdn", "invalid", str(exc))
         if management is None and (vip or certificate):
             errors.add(
                 "vip" if vip else "certificate",
@@ -349,7 +409,7 @@ class ControllerSettings:
                 service, snapshot, host, vip, certificate, now, errors, before, after
             )
             errors.raise_if_any()
-        after["public_url"] = f"{scheme}://{host}{port_suffix}" if host else None
+        after["public_url"] = f"{scheme}://{_url_host(host)}{port_suffix}" if host else None
         before["public_url"] = current_url
         pending: dict[str, Any] = {
             "state": "applying" if ops else "waiting",
@@ -512,8 +572,8 @@ class ControllerSettings:
                 raise ConflictError("no change is waiting for confirmation")
             after = pending["after"]
             changed = bool(after["fqdn"]) and after["fqdn"] != pending["before"].get("fqdn")
-            seen = (request_host or "").split(":")[0].lower()
-            if changed and seen != after["fqdn"]:
+            seen = host_of(request_host)
+            if changed and not _same_host(seen, after["fqdn"]):
                 raise PermissionDeniedError(
                     f"confirm from https://{after['fqdn']}: reaching the new address is the proof "
                     "that it works"

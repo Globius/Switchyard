@@ -332,3 +332,34 @@ async def test_the_api_walks_through_a_change(rig: Rig) -> None:
         assert kept.json()["public_url"] == f"https://{NEW}" and kept.json()["pending"] is None
         nothing = await client.post(f"{V1}/system/controller/revert", headers=headers)
         assert nothing.status_code == 409
+
+
+async def test_an_ip_address_can_be_the_public_address_without_a_controller_service(
+    pg_url: str,
+) -> None:
+    from switchyard.services.bootstrap import ensure_management_tenant
+
+    async with world(pg_url) as w:
+        assert await ensure_management_tenant(w.db) is True
+        assert await ensure_management_tenant(w.db) is False, "idempotent"
+        controller = ControllerSettings(w.db, w.service)
+        view = await controller.view(
+            ROOT, env_public_url="https://172.30.0.5:8443", reached_at="https://[2001:db8::5]:8443"
+        )
+        assert view.management_tenant and not view.managed
+        assert view.reached_at == "https://[2001:db8::5]:8443"
+        with pytest.raises(FieldErrors):
+            await controller.propose(ROOT, fqdn="not an address!")
+        proposed = await controller.propose(ROOT, fqdn="2001:db8::5")
+        assert proposed.pending["after"]["public_url"] == "https://[2001:db8::5]"
+        with pytest.raises(PermissionDeniedError):
+            await controller.confirm(ROOT, request_host="172.30.0.5:8443")
+        done = await controller.confirm(ROOT, request_host="[2001:db8::5]:8443")
+        assert done.public_url == "https://[2001:db8::5]" and done.fqdn == "2001:db8::5"
+        again = await controller.propose(ROOT, fqdn="172.30.0.5")
+        assert again.pending["after"]["public_url"] == "https://172.30.0.5"
+
+
+async def test_with_a_controller_service_an_ip_is_not_a_valid_fqdn(rig: Rig) -> None:
+    with pytest.raises(FieldErrors):
+        await rig.controller.propose(ROOT, fqdn="192.0.2.99")
