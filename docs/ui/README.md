@@ -3,8 +3,8 @@
 The web UI lives in `ui/` (React 19, TypeScript strict, Vite, Tailwind v4, TanStack Query). See
 `docs/design/03-frontend-design.md` for the design and `04-frontend-scope.md` for per-screen scope.
 
-**Status:** scaffold, typed client, session plumbing and theme are in; screens are being built in
-small MRs from the design handoff (`docs/design/ui-handoff/README.md`).
+**Status:** every screen of Design's handoff has a route and a screen, plus screens the backend blocks added (Alerts, Request logs,
+Kubernetes, GSLB, policies for access, WAF and bot protection). What is left is under "Known differences".
 
 ## Commands
 
@@ -80,14 +80,12 @@ Every artboard of Design's v46 handoff has a screen:
 
 ## Known differences from the design
 
-- Revision "message" is read-only: the apply endpoint takes no message.
-- Config diff is plain text, not Monaco.
-- No per-member health on the Overview, and no "last check" column for failing members on Home
-  (the API has neither).
-- SE groups have no Placement card (no API for the Proxmox host layout); routing mode and networks
-  are read-only in the group's settings.
-- Tenant access shows quota limits only (no usage counts); the admin role matrix lists every server
-  permission instead of the artboard's eight grouped rows.
-- Audit log Export covers the events already loaded.
+- No `@switchyard` shadcn registry; React Hook Form, Zod, TanStack Table and Sonner are not used. Selects are native; dialogs,
+  sheets, switches, menus and the chip input are Radix-based. No ADR records this yet.
+- The label filter on virtual services is a disabled control (objects have no labels).
+- The directory login policy (LDAP, SAML, local users) is listed read-only; its editor is not built.
+- Admin > Controller does not offer "use the default address" (`reset_to_default`) although the API accepts it.
 - Viewer (read-only) states are covered by tests only; no viewer user exists in the demo data.
+- Screens without an artboard (Alerts, Request logs, Kubernetes, GSLB, the new policy kinds) wait for Design to confirm them.
+- The browser checks (`make ui-e2e`) and `ui-check` are not part of CI.
 - Theme: `ui/src/globals.css` from the design handoff (ADR 0042).
