@@ -12,6 +12,7 @@ from switchyard.adapters.secrets import SecretsReader
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
 from switchyard.render import escape as esc
+from switchyard.render.auth import auth_secret_refs, render_auth_files
 from switchyard.render.escape import RenderError
 from switchyard.render.routing import EngineSlot, render_agent_bundle
 
@@ -66,6 +67,27 @@ async def _bgp_secrets(
     return found
 
 
+async def _auth_files(
+    snapshot: Snapshot, group: dm.SeGroup, secrets: SecretsReader | None
+) -> dict[str, str]:
+    """The authentication proxy configs of the group's access sets (ADR 0130)."""
+    refs = auth_secret_refs(snapshot.for_se_group(group.id), group.id)
+    if not refs:
+        return {}
+    if secrets is None:
+        raise BundleError("access policy sets are in use but no secrets backend is available")
+    found: dict[str, str] = {}
+    for ref in refs:
+        try:
+            found[ref] = await secrets.get(ref)
+        except LookupError as exc:
+            raise BundleError(f"secret {ref} for an access policy set not found") from exc
+    try:
+        return render_auth_files(snapshot, group.id, found)
+    except RenderError as exc:
+        raise BundleError(str(exc)) from exc
+
+
 async def _ca_files(cert: dm.Certificate, secrets: SecretsReader | None) -> dict[str, str]:
     """The CA bundle (certificates only) and the optional revocation list of a client CA."""
     if secrets is None:
@@ -106,6 +128,7 @@ async def engine_files(
             files |= render_agent_bundle(snapshot, group.id, slot, bgp)
         except RenderError as exc:
             raise BundleError(str(exc)) from exc
+    files |= await _auth_files(snapshot, group, secrets)
     for cert in referenced_certs(snapshot, group.id):
         if cert.purpose == "client_ca":
             files |= await _ca_files(cert, secrets)

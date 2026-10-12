@@ -36,6 +36,7 @@ API write to. (`--out DIR` reproduces that layout under `DIR`.)
 | `haproxy/maps/<service>-wild.map` | `regex backend` for wildcard-host routes | a service has a wildcard host-only route |
 | `haproxy/lists/<policy>.cidr` | one network per line, IPv4 first | a service references an allow-list policy set |
 | `haproxy/lists/<policy>-r<n>.page` | body of rule *n* of a respond policy set | a rule has a body (ADR 0103) |
+| `auth/<service>-<set>.cfg` (agent bundle, not HAProxy) | oauth2-proxy configuration of an access set, with its secrets, mode 0600 | a service attaches an access set |
 | `haproxy/lists/<policy>-e<status>.page` | body of an error page | a service references an error-pages policy set |
 
 `haproxy/haproxy.cfg` has a `# switchyard-render: sha256:<hex>` line, a hash of every file. The Data
@@ -86,6 +87,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Route with `path_prefix` / `path_exact` | `use_backend pool_<n> if { var(txn.host) -m str <host> } { path_beg <path> }` (host condition only when set) |
 | Route with any other condition (`methods`, `headers`, `query`, `source_cidrs`, `sni`) | the same `use_backend ... if` line with one more `{ ... }` per condition (below); only a route that is a host and nothing else uses the maps |
 | Route `redirect` and policy-set redirect rule | `http-request redirect location <target> code <n> if <conditions>` |
+| Policy set `access` | a second `bind 127.0.0.1:<loop_port>`, a backend `auth_<service>-<set>` (one server, `127.0.0.1:<auth_port>`), `use_backend auth_... if !{ var(txn.sy_loop) -m bool } ...`, decision rules on `txn.sy_ad`, 401 and 403 checks and identity `set-header` lines on the loopback hop; the proxy's own config goes to `auth/<service>-<set>.cfg` in the agent bundle (ADR 0130) |
 | Policy set `rate_limit` | per rule a backend `rl_<service>_<set>_<n>` holding `stick-table ... store http_req_rate(<p>s)\|conn_cur`, `http-request track-sc<n> src\|req.hdr(Name) table ... [if <conditions>]`, and `return status ...`, `tarpit` or `silent-drop` `if { sc_http_req_rate(...) gt <max> }` (ADR 0110) |
 | Policy set `respond` | `http-request return status <n> [content-type <t> file <page>] [hdr Retry-After <s>] [if <conditions>]` per rule (ADR 0103) |
 | Policy set `error_pages` | `http-error status <n> content-type <t> file <page>` per page, in the frontend (ADR 0103) |
@@ -122,6 +124,7 @@ Server names come from the member name or `<ip>-<port>` with dots and colons tur
 4. **Fixed responses**: `respond` policy-set rules in attachment order. First match answers.
 5. **Request rewrites**: `rewrite` policy-set rules (request phase) in attachment order; each rule sees the effect of the
    earlier ones. A response rule that has a match records it here as a flag.
+5b. **Access** (`access` policy set, ADR 0130 to 0132): decide per request whether a login is needed; protected requests are sent to the authentication proxy and come back on a loopback bind of the same frontend, where the groups or e-mail rule is checked and the identity headers are written. Stages 2b to 5 and the response rewrites run on the first hop only.
 6. **Routing**: conditional routes (any route that is more than a host) by `order`, then host routes (exact host, then
    wildcard host), then the default pool, or HAProxy's 503 when there is none.
 7. **Response rewrites**: `http-response` rules in attachment order (they come last in the frontend block; HAProxy runs

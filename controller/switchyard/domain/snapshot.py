@@ -21,6 +21,7 @@ from switchyard.domain.errors import DomainValidationError, Problem
 from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDDEN_SERVICE_FIELDS
 from switchyard.domain.models import (
     ATTACHABLE_POLICY_KINDS,
+    AccessPolicySet,
     Algorithm,
     AllowListPolicySet,
     BgpProfile,
@@ -346,6 +347,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
 
         _check_routes(s, base, problems)
         _check_rate_limits(s, policies, base, problems)
+        _check_access(s, policies, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
@@ -402,6 +404,11 @@ def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
         refs.append((f"certificates.{c.name}.secret_ref", c.tenant_id, c.secret_ref))
         if c.crl_secret_ref:
             refs.append((f"certificates.{c.name}.crl_secret_ref", c.tenant_id, c.crl_secret_ref))
+    for ps in snapshot.policy_sets:
+        if isinstance(ps, AccessPolicySet):
+            base = f"policy_sets.{ps.name}.oidc"
+            refs.append((f"{base}.client_secret_ref", ps.tenant_id, ps.oidc.client_secret_ref))
+            refs.append((f"{base}.cookie_secret_ref", ps.tenant_id, ps.oidc.cookie_secret_ref))
     for profile in snapshot.routing_profiles:
         if isinstance(profile, BgpProfile):
             for i, peer in enumerate(profile.peers):
@@ -671,6 +678,32 @@ def _check_rate_limits(
                 "tarpit rules of one service must use the same tarpit_s (one timeout per frontend)",
             )
         )
+
+
+def _check_access(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    """A service has at most one access set and offers a login only over TLS."""
+    sets = [p for pid in s.policy_set_ids if isinstance(p := policies.get(pid), AccessPolicySet)]
+    if len(sets) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "multiple_access_sets",
+                "a service may attach one access policy set",
+            )
+        )
+    if sets:
+        for i, port in enumerate(s.ports):
+            if not port.tls and port.https_redirect_port is None:
+                problems.append(
+                    Problem(
+                        f"{base}.ports[{i}]",
+                        "access_needs_tls",
+                        f"port {port.port} would carry logins in clear text; make it a TLS port "
+                        "or redirect it to one (https_redirect_port)",
+                    )
+                )
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:

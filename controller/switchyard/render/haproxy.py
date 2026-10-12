@@ -49,6 +49,7 @@ from jinja2 import Environment, PackageLoader, StrictUndefined
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
 from switchyard.render import escape as esc
+from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
 
 ROOT_DIR = "/etc/switchyard"
@@ -254,6 +255,19 @@ _HEADER_FLAGS = {
     dm.HeaderOp.SUFFIX: "end",
     dm.HeaderOp.CONTAINS: "sub",
 }
+#: The request came back from the authentication proxy on the loopback bind (ADR 0130).
+LOOP_ON = "{ var(txn.sy_loop) -m bool }"
+LOOP_OFF = "!{ var(txn.sy_loop) -m bool }"
+#: Headers the authentication proxy sets for the engine; never sent to the origin (ADR 0132).
+PROXY_HEADERS = (
+    "X-Forwarded-User",
+    "X-Forwarded-Email",
+    "X-Forwarded-Groups",
+    "X-Forwarded-Preferred-Username",
+    "X-Forwarded-Access-Token",
+)
+#: Carries the access decision from the first hop to the loopback hop.
+ACCESS_HEADER = "X-Sy-Access"
 #: Frontend rules by stage, filled while the policy sets of a service are rendered.
 _Stages = tuple[list[str], list[str], list[str], list[str]]
 
@@ -311,6 +325,8 @@ class _Renderer:
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
         self.limit_backends: list[dict[str, Any]] = []
+        self.instances = {i.service.id: i for i in auth_instances(snapshot, self.group.id)}
+        self.guard = ""
         self.stick_counters = 0
 
     def render(self) -> RenderResult:
@@ -400,19 +416,25 @@ class _Renderer:
         if any(p.tls for p in ports):
             self._crt_list(svc, name)
         allow = _allow_list(self.policies[svc.allow_list_id]) if svc.allow_list_id else None
+        inst = self.instances.get(svc.id) if mode == "http" else None
+        self.guard = LOOP_OFF if inst is not None else ""
         connection_rules: list[str] = []
         if allow is not None:
             self.files[f"haproxy/lists/{esc.ident(allow.name)}.cidr"] = self._allow_list_text(allow)
             if svc.enforce_allow_list:
                 lst = self._list_path(allow)
-                connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
+                # the loopback hop of a login comes from the proxy, not from an allowed client
+                exempt = " !{ dst 127.0.0.1 }" if inst is not None else ""
+                connection_rules.append(
+                    f"tcp-request session reject if !{{ src -f {lst} }}{exempt}"
+                )
         request_rules: list[str] = []
         tarpit_s: int | None = None
         response_rules: list[str] = []
         error_rules: list[str] = []
         routing_rules: list[str] = []
         if mode == "http":
-            request_rules = self._request_rules(svc, ports, allow)
+            request_rules = self._request_rules(svc, ports, allow, inst)
             tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
@@ -421,10 +443,22 @@ class _Renderer:
                 request_rules.insert(0, _acme_rule())
                 self.files[ACME_MAP_FILE] = _ACME_MAP_TEXT
             routing_rules = self._routing_rules(svc, name)
+            if inst is not None:
+                routing_rules = self._auth_routing(inst) + routing_rules
+                self.limit_backends.append(
+                    {
+                        "name": inst.backend,
+                        "lines": ["mode http"],
+                        "servers": [f"server auth 127.0.0.1:{inst.auth_port}"],
+                    }
+                )
+        binds = [self._bind(svc, p, name, mode) for p in ports]
+        if inst is not None:
+            binds.append(f"bind 127.0.0.1:{inst.loop_port}")
         return {
             "name": name,
             "mode": mode,
-            "binds": [self._bind(svc, p, name, mode) for p in ports],
+            "binds": binds,
             "connection_rules": connection_rules,
             "request_rules": request_rules,
             "response_rules": response_rules,
@@ -511,7 +545,7 @@ class _Renderer:
                 }
             )
             self.stick_counters = max(self.stick_counters, slot + 1)
-            cond = " ".join(self._conditions(rule.match))
+            cond = self._cond(rule.match)
             track = f"http-request track-sc{slot} {key} table {table}"
             rules.append(track + (f" if {cond}" if cond else ""))
             if rule.action == "deny":
@@ -549,7 +583,7 @@ class _Renderer:
                     responses.append(self._response_line(policy, index, response))
             elif isinstance(policy, dm.RewritePolicySet):
                 for rewrite in policy.rules:
-                    cond = " ".join(self._conditions(rewrite.match))
+                    cond = self._cond(rewrite.match)
                     if rewrite.phase == "request":
                         rewrites += self._rewrite_lines(rewrite, cond)
                         continue
@@ -564,8 +598,12 @@ class _Renderer:
                     outgoing += self._rewrite_lines(rewrite, f"{{ var({flag}) -m bool }}")
         return redirects, responses, rewrites, outgoing
 
+    def _cond(self, match: dm.RouteMatch) -> str:
+        """The conditions of a match plus the stage guard (not on the loopback hop of a login)."""
+        return " ".join([*self._conditions(match), *([self.guard] if self.guard else [])])
+
     def _redirect_line(self, match: dm.RouteMatch, redirect: dm.RedirectAction) -> str:
-        cond = " ".join(self._conditions(match))
+        cond = self._cond(match)
         location = esc.location(redirect.location)
         return f"http-request redirect location {location} code {redirect.code} if {cond}"
 
@@ -582,7 +620,7 @@ class _Renderer:
             parts.append(f"file {self._page(policy, f'r{index}', rule.body)}")
         if rule.retry_after_s is not None:
             parts.append(f"hdr Retry-After {rule.retry_after_s}")
-        cond = " ".join(self._conditions(rule.match))
+        cond = self._cond(rule.match)
         return " ".join(parts) + (f" if {cond}" if cond else "")
 
     def _error_lines(self, svc: dm.VirtualService) -> list[str]:
@@ -632,13 +670,117 @@ class _Renderer:
             ]
         return [f"http-request replace-path '^{source}(/.*)?$' '{target}{_GROUP_1}'{suffix}"]
 
+    def _g(self) -> str:
+        """The stage guard as a trailing condition block (empty when there is none)."""
+        return f" {self.guard}" if self.guard else ""
+
+    @staticmethod
+    def _loop_entry(inst: AuthInstance) -> list[str]:
+        """Recognise the loopback hop of a login and recover the real client address on it."""
+        return [
+            "http-request set-var(txn.sy_loop) bool(true) "
+            f"if {{ dst 127.0.0.1 }} {{ dst_port {inst.loop_port} }}",
+            f"http-request set-src hdr(X-Forwarded-For) if {LOOP_ON}",
+        ]
+
+    @staticmethod
+    def _identity_names(inst: AuthInstance) -> list[str]:
+        """Headers a client may never send: ours, and the proxy's own (ADR 0132)."""
+        ours = inst.policy.identity_headers
+        names = [n for n in (ours.user, ours.email, ours.groups, ours.token) if n]
+        return [*names, *PROXY_HEADERS, ACCESS_HEADER]
+
+    def _auth_hygiene(self, inst: AuthInstance) -> list[str]:
+        """Drop client-supplied identity headers; only the loopback hop may carry them."""
+        return [
+            f"http-request del-header {esc.header_name(name)} if {LOOP_OFF}"
+            for name in self._identity_names(inst)
+        ]
+
+    def _access_rules(self, inst: AuthInstance) -> list[str]:
+        """Decide what each request needs, route it through the proxy, enforce it on return.
+
+        On the first hop ``txn.sy_ad`` becomes 1 (public) or ``k + 2`` (rule *k* needs a login; the
+        default needs ``len(rules) + 2``). The value travels to the loopback hop in a header that
+        client requests cannot set (it is removed in the hygiene stage), where the groups and
+        e-mail checks run on the identity the proxy vouched for.
+        """
+        policy = inst.policy
+        rules: list[str] = []
+        fresh = "!{ var(txn.sy_ad) -m found }"
+        for k, rule in enumerate(policy.rules):
+            value = 1 if rule.mode == "public" else k + 2
+            conds = " ".join([fresh, *self._conditions(rule.match), LOOP_OFF])
+            rules.append(f"http-request set-var(txn.sy_ad) int({value}) if {conds}")
+        default = 1 if policy.default_mode == "public" else len(policy.rules) + 2
+        rules.append(f"http-request set-var(txn.sy_ad) int({default}) if {fresh} {LOOP_OFF}")
+        rules.append(
+            f'http-request set-header {ACCESS_HEADER} "%[var(txn.sy_ad)]" '
+            f"if {LOOP_OFF} {{ var(txn.sy_ad) -m int 2: }}"
+        )
+        # second hop: read the decision back, then check the identity
+        rules.append(
+            f"http-request return status 403 if {LOOP_ON} !{{ req.hdr({ACCESS_HEADER}) -m found }}"
+        )
+        rules.append(f"http-request set-var(txn.sy_ad) req.hdr_val({ACCESS_HEADER}) if {LOOP_ON}")
+        need = f"{LOOP_ON} {{ var(txn.sy_ad) -m int 2: }}"
+        rules.append(
+            f"http-request return status 401 if {need} !{{ req.hdr(X-Forwarded-User) -m found }}"
+        )
+        for k, rule in enumerate(policy.rules):
+            if rule.mode == "groups":
+                regex = "|".join(sorted(esc.group_regex(g) for g in rule.groups))
+                test = f"!{{ req.fhdr(X-Forwarded-Groups) -m reg '(^|,)({regex})(,|$)' }}"
+            elif rule.mode == "email_domains":
+                regex = "|".join(
+                    sorted(esc.hostname(d).replace(".", "[.]") for d in rule.email_domains)
+                )
+                test = f"!{{ req.hdr(X-Forwarded-Email) -m reg -i '@({regex})$' }}"
+            else:
+                continue
+            here = f"{LOOP_ON} {{ var(txn.sy_ad) -m int {k + 2} }}"
+            rules.append(f"http-request return status 403 if {here} {test}")
+        ours = policy.identity_headers
+        for name, source in (
+            (ours.user, "X-Forwarded-User"),
+            (ours.email, "X-Forwarded-Email"),
+            (ours.groups, "X-Forwarded-Groups"),
+        ):
+            if name:
+                rules.append(
+                    f'http-request set-header {esc.header_name(name)} "%[req.fhdr({source})]" '
+                    f"if {LOOP_ON}"
+                )
+        if ours.token:
+            rules.append(
+                f"http-request set-header {esc.header_name(ours.token)} "
+                f"\"%[req.hdr(Authorization),regsub('^Bearer ',)]\" if {LOOP_ON}"
+            )
+            rules.append(f"http-request del-header Authorization if {LOOP_ON}")
+        rules += [
+            f"http-request del-header {n} if {LOOP_ON}" for n in (*PROXY_HEADERS, ACCESS_HEADER)
+        ]
+        return rules
+
+    @staticmethod
+    def _auth_routing(inst: AuthInstance) -> list[str]:
+        """Send login endpoints and requests that need a login to the proxy (first hop only)."""
+        prefix = esc.arg(inst.policy.auth_path)
+        return [
+            f"use_backend {inst.backend} if {LOOP_OFF} {{ path_beg {prefix}/ }}",
+            f"use_backend {inst.backend} if {LOOP_OFF} {{ var(txn.sy_ad) -m int 2: }}",
+        ]
+
     def _request_rules(
         self,
         svc: dm.VirtualService,
         ports: list[dm.VsPort],
         allow: dm.AllowListPolicySet | None,
+        inst: AuthInstance | None = None,
     ) -> list[str]:
         rules: list[str] = []
+        if inst is not None:
+            rules += self._loop_entry(inst)
         # Client address and header hygiene. The trusted flag is computed first because
         # ``set-src`` changes what ``src`` means for every later rule.
         if allow is not None and svc.restore_client_ip_header:
@@ -652,8 +794,8 @@ class _Renderer:
             ]
         rules += [
             "http-request del-header X-Forwarded-For",
-            "http-request set-header X-Forwarded-Proto https if { ssl_fc }",
-            "http-request set-header X-Forwarded-Proto http if !{ ssl_fc }",
+            f"http-request set-header X-Forwarded-Proto https if {{ ssl_fc }}{self._g()}",
+            f"http-request set-header X-Forwarded-Proto http if !{{ ssl_fc }}{self._g()}",
             "http-request set-var(txn.host) req.hdr(host),field(1,:),lower",
         ]
         for port in ports:
@@ -663,6 +805,8 @@ class _Renderer:
                     f'http-request redirect prefix "https://%[var(txn.host)]{suffix}" code 301 '
                     f"if {{ dst_port {port.port} }}"
                 )
+        if inst is not None:
+            rules += self._auth_hygiene(inst)
         rules += self._limit_rules(svc)
         redirects, responses, rewrites, _ = self._policy_stages(svc)
         rules += redirects
@@ -670,7 +814,10 @@ class _Renderer:
         rules += [
             self._redirect_line(r.match, r.redirect) for _, r in ordered if r.redirect is not None
         ]
-        return rules + responses + rewrites
+        rules += responses + rewrites
+        if inst is not None:
+            rules += self._access_rules(inst)
+        return rules
 
     @staticmethod
     def _conditions(match: dm.RouteMatch) -> list[str]:

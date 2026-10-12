@@ -27,7 +27,7 @@ defaults
     timeout connect 5s
 frontend f
     bind :8080
-    http-request return status 200 content-type text/plain lf-string "be={label} method=%[method] path=%[path] query=%[query] edge=%[req.hdr(x-edge)] cip=%[req.hdr(x-client-ip)] cookie=%[req.hdr(cookie)] via=%[req.hdr(via)] host=%[req.hdr(host)]" hdr Server backend-secret hdr X-Origin {label}
+    http-request return status 200 content-type text/plain lf-string "be={label} method=%[method] path=%[path] query=%[query] edge=%[req.hdr(x-edge)] cip=%[req.hdr(x-client-ip)] cookie=%[req.hdr(cookie)] via=%[req.hdr(via)] host=%[req.hdr(host)] au=%[req.hdr(x-auth-user)] ae=%[req.hdr(x-auth-email)] ag=%[req.fhdr(x-auth-groups)] at=%[req.hdr(x-auth-token)] fu=%[req.hdr(x-forwarded-user)] sa=%[req.hdr(x-sy-access)] az=%[req.hdr(authorization)] xff=%[req.hdr(x-forwarded-for)] proto=%[req.hdr(x-forwarded-proto)]" hdr Server backend-secret hdr X-Origin {label}
 """
 
 #: Nothing listens on the edge's port 8080, so a pool pointing at it makes HAProxy answer 503.
@@ -37,6 +37,32 @@ DEAD = EDGE
 HDRS = r"""
 hdrs() { label=$1; shift; out=$(curl -s -k --max-time 6 -D - -o /dev/null "$@" | tr -d '\r' | tr '\n' '~'); echo "$label: $out"; }
 """
+
+
+#: Stands in for oauth2-proxy on the engine: no cookie means the login page or a redirect to it, a
+#: cookie ``sy=<user>:<email>:<groups separated by |>`` is a session and the request goes on to the loopback bind
+#: with the headers the real proxy sets.
+STUB_PROXY = """global
+    maxconn 100
+defaults
+    mode http
+    timeout client 5s
+    timeout server 5s
+    timeout connect 5s
+frontend p
+    bind 127.0.0.1:14000
+    http-request return status 200 content-type text/plain string login-page if { path_beg /oauth2/ }
+    http-request return status 302 hdr Location /oauth2/start unless { req.cook(sy) -m found }
+    http-request set-header X-Forwarded-User %[req.cook(sy),field(1,:)]
+    http-request set-header X-Forwarded-Email %[req.cook(sy),field(2,:)]
+    http-request set-header X-Forwarded-Groups "%[req.cook(sy),field(3,:),regsub('[|]',',',g)]"
+    http-request set-header Authorization "Bearer tok123"
+    default_backend up
+backend up
+    server s 127.0.0.1:18000
+"""
+
+EDGE_WITH_PROXY = "haproxy -D -f /stub.cfg" + chr(10) + EDGE_START
 
 
 def data() -> dict[str, Any]:
@@ -199,6 +225,28 @@ def data() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "sso",
+                "tenant_id": "t",
+                "name": "sso",
+                "kind": "access",
+                "oidc": {
+                    "issuer": "https://login.example.test",
+                    "client_id": "lab",
+                    "client_secret_ref": "kv/tenants/acme/auth/c",
+                    "cookie_secret_ref": "kv/tenants/acme/auth/k",
+                },
+                "rules": [
+                    {"match": {"path_prefix": "/health"}, "mode": "public"},
+                    {"match": {"path_prefix": "/admin"}, "mode": "groups", "groups": ["ops.team"]},
+                    {
+                        "match": {"path_prefix": "/staff"},
+                        "mode": "email_domains",
+                        "email_domains": ["example.test"],
+                    },
+                ],
+                "identity_headers": {"token": "X-Auth-Token"},
+            },
+            {
                 "id": "err",
                 "tenant_id": "t",
                 "name": "err",
@@ -239,6 +287,8 @@ def data() -> dict[str, Any]:
             ),
             service("rewrite", 8443, policy_set_ids=["rw"]),
             service("limits", 7443, policy_set_ids=["lim"]),
+            service("login", 6443, policy_set_ids=["sso"]),
+            service("zlogin", 6444, policy_set_ids=["sso"]),
             service(
                 "respond",
                 9443,
@@ -263,7 +313,8 @@ def lab(lab_network: Lab) -> Iterator[Lab]:
         snapshot = snapshot_from_mapping(data())
         rendered = render_haproxy(snapshot, UUID(symbolic_uuid("g")))
         files = {f"etc/switchyard/{p}": c for p, c in rendered.files.items()}
-        lab_network._run(HAPROXY_IMAGE, EDGE, ["sh", "-c", EDGE_START], files, user="root")
+        files["stub.cfg"] = STUB_PROXY
+        lab_network._run(HAPROXY_IMAGE, EDGE, ["sh", "-c", EDGE_WITH_PROXY], files, user="root")
         yield lab_network
 
 
@@ -483,3 +534,69 @@ class TestRateLimits:
         ]
         assert _status(got["key-b"]) == "HTTP/1.1 200 OK"
         assert all(_status(got[f"nokey{i}"]) == "HTTP/1.1 200 OK" for i in range(1, 5))
+
+
+SESSION = "-H 'Cookie: sy=alice:alice@example.test:staff|ops.team'"
+
+
+@pytest.fixture(scope="module")
+def login_results(lab: Lab) -> dict[str, str]:
+    script = chr(10).join(
+        [
+            _req("health", 6443, "/health", "-H 'X-Auth-User: root' -H 'X-Sy-Access: 2'"),
+            _req("anon", 6443, "/private"),
+            _req("start", 6443, "/oauth2/start"),
+            _req("user", 6443, "/private", SESSION, "-H 'X-Auth-User: root'"),
+            _req("admin", 6443, "/admin", SESSION),
+            _req("admin-no", 6443, "/admin", "-H 'Cookie: sy=bob:bob@example.test:staff'"),
+            _req("staff", 6443, "/staff", SESSION),
+            _req("staff-no", 6443, "/staff", "-H 'Cookie: sy=eve:eve@evil.test:ops.team'"),
+            _hdrs("down-h", 6444, "/private", SESSION),
+            _req("down-public", 6444, "/health"),
+        ]
+    )
+    return lab.curl("192.0.2.99", HDRS + script)
+
+
+class TestAccess:
+    def test_public_rule_skips_the_login_and_client_identity_headers_are_dropped(
+        self, login_results: dict[str, str]
+    ) -> None:
+        out = login_results["health"]
+        assert out.startswith("be=A ") and out.endswith("|200|")
+        assert " au= " in out and " sa= " in out, (
+            "client-supplied identity must not reach the origin"
+        )
+
+    def test_anonymous_request_is_sent_to_the_login_and_never_reaches_the_origin(
+        self, login_results: dict[str, str]
+    ) -> None:
+        assert login_results["anon"] == "|302|https://app.example.test:6443/oauth2/start"
+        assert login_results["start"] == "login-page|200|"
+
+    def test_signed_in_user_reaches_the_origin_with_identity_headers(
+        self, login_results: dict[str, str]
+    ) -> None:
+        out = login_results["user"]
+        assert out.startswith("be=A ")
+        for part in (" au=alice ", " ae=alice@example.test ", " ag=staff,ops.team ", " at=tok123 "):
+            assert part in out
+        assert " fu= " in out and " sa= " in out and " az= " in out, "proxy headers must not leak"
+
+    def test_the_real_client_address_and_scheme_survive_the_loopback_hop(
+        self, login_results: dict[str, str]
+    ) -> None:
+        out = login_results["user"]
+        assert " xff=192.0.2.99 " in out and " proto=https" in out
+
+    def test_group_and_domain_rules(self, login_results: dict[str, str]) -> None:
+        assert login_results["admin"].startswith("be=A ")
+        assert login_results["admin-no"] == "|403|"
+        assert login_results["staff"].startswith("be=A ")
+        assert login_results["staff-no"] == "|403|"
+
+    def test_a_dead_proxy_closes_protected_paths_but_not_public_ones(
+        self, login_results: dict[str, str]
+    ) -> None:
+        assert login_results["down-h"].startswith("HTTP/1.1 503")
+        assert login_results["down-public"].startswith("be=A ")

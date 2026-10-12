@@ -1,6 +1,7 @@
 """Policy-set kinds rewrite, respond and error_pages; extra route match conditions.
 
-- ``policy_set.kind`` accepts the new kinds (rewrite, respond, error_pages, rate_limit); their rules (the pages of ``error_pages``) are
+- ``policy_set.kind`` accepts the new kinds (rewrite, respond, error_pages, rate_limit, access);
+  ``policy_set.config`` (JSON) holds an access set's settings; their rules (the pages of ``error_pages``) are
   JSON in ``rules``, as for ``redirect``.
 - ``vs_route.match_extra`` (JSON): methods, headers, query parameters, source networks and SNI of
   the route's match (host and path keep their columns).
@@ -19,14 +20,16 @@ branch_labels = None
 depends_on = None
 
 _OLD_KIND = "kind IN ('redirect', 'allow_list')"
-_NEW_KIND = "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit')"
+_NEW_KIND = "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit', 'access')"
 _OLD_PAYLOAD = (
     "(kind = 'redirect' AND rules IS NOT NULL AND cidrs IS NULL) "
     "OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL)"
 )
 _NEW_PAYLOAD = (
-    "(kind <> 'allow_list' AND rules IS NOT NULL AND cidrs IS NULL) "
-    "OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL)"
+    "(kind NOT IN ('allow_list', 'access') AND rules IS NOT NULL AND cidrs IS NULL "
+    "AND config IS NULL) "
+    "OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL AND config IS NULL) "
+    "OR (kind = 'access' AND config IS NOT NULL AND rules IS NULL AND cidrs IS NULL)"
 )
 
 
@@ -38,6 +41,9 @@ def _swap(kind: str, payload: str) -> None:
 
 
 def upgrade() -> None:
+    op.add_column(
+        "policy_set", sa.Column("config", postgresql.JSONB(none_as_null=True), nullable=True)
+    )
     _swap(_NEW_KIND, _NEW_PAYLOAD)
     op.add_column(
         "vs_route",
@@ -52,3 +58,4 @@ def downgrade() -> None:
     )
     op.execute("DELETE FROM policy_set WHERE kind NOT IN ('redirect', 'allow_list')")
     _swap(_OLD_KIND, _OLD_PAYLOAD)
+    op.drop_column("policy_set", "config")

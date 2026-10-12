@@ -31,6 +31,7 @@ from switchyard.domain.snapshot import Snapshot
 from switchyard.pipeline.apply import bundle_id, file_hashes
 from switchyard.pipeline.bundles import BundleError, engine_files
 from switchyard.pipeline.engines import EngineDirectory, EngineRecord
+from switchyard.render.auth import auth_secret_refs, render_auth_files
 from switchyard.render.escape import RenderError, ident
 from switchyard.render.haproxy import fingerprint_of, render_haproxy
 from switchyard.render.routing import EngineSlot, render_agent_bundle
@@ -567,6 +568,12 @@ class StatusService:
             # a group that cannot render its routing yet shows the HAProxy files only
             with contextlib.suppress(RenderError):
                 files |= render_agent_bundle(snapshot, group.id, slot, refs)
+        # access sets: the proxy configs, with their secrets shown as REDACTED
+        placeholders = dict.fromkeys(
+            auth_secret_refs(snapshot.for_se_group(group.id), group.id), "REDACTEDREDACTED"
+        )
+        with contextlib.suppress(RenderError):
+            files |= render_auth_files(snapshot, group.id, placeholders)
         return record, rendered.fingerprint, files
 
     async def running_config(

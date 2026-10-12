@@ -32,7 +32,8 @@ limits, C2 weighted routes, E1 to E3 auth) add more rules to it. Doing it piecem
    | 3 Redirects | HTTPS redirect, `redirect` sets, redirect routes | yes |
    | 4 Fixed responses | `respond` sets | yes |
    | 5 Request rewrites | `rewrite` sets, request phase | no |
-   | 6 Routing | path and conditional routes by `order`, host maps, default pool | no |
+   | 5b Access | `access` sets ([0130](0130-auth-service-architecture.md)): decision, then login through the proxy | yes (to the proxy, 401, 403) |
+| 6 Routing | path and conditional routes by `order`, host maps, default pool | no |
    | 7 Response rewrites | `rewrite` sets, response phase | no |
 
    `error_pages` is not a request stage: it renders `http-error` lines that apply when HAProxy generates the error. New

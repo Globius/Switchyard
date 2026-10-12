@@ -145,6 +145,18 @@ def path_regex(prefix: str) -> str:
     return prefix.replace(".", "[.]").replace("+", "[+]")
 
 
+def group_regex(value: str) -> str:
+    """Return the regex source for a literal identity-provider group name.
+
+    Example:
+        >>> group_regex("/staff/ops.team")
+        '/staff/ops[.]team'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_.:/@=-]{1,128}", value):
+        raise RenderError(f"unsafe group {value!r}")
+    return value.replace(".", "[.]")
+
+
 def hostname(value: str) -> str:
     """Return ``value`` if it is a lower-case hostname, else raise.
 

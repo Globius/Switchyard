@@ -68,6 +68,7 @@ Policy sets and routing profiles are unions on `kind`:
 | | `rewrite` | `rules[]` (`phase`, `match`, `action`: `set_header`, `add_header`, `remove_header`, `replace_prefix`), ADR 0102 |
 | | `respond` | `rules[]` (`match`, `status`, `content_type`, `body`, `retry_after_s`), ADR 0103 |
 | | `error_pages` | `pages[]` (`status`, `content_type`, `body`), ADR 0103 |
+| | `access` | `oidc`, `default_mode`, `rules[]` (`match`, `mode`, `groups`, `email_domains`), `identity_headers`, `auth_path`, ADR 0130 to 0132 |
 | | `rate_limit` | `rules[]` (`match`, `key`, `header_name`, `max_requests`, `period_s`, `max_concurrent`, `action`, `deny_status`, `tarpit_s`, `table_size`), ADR 0110 |
 | `routing-profiles` | `vrrp` | `vrid`, `interface`, `advert_interval_s`, `base_priority`, `priority_step`, `static_routes[]` |
 | | `bgp` | `asn`, `bfd`, `peers[]` (`peer_ip`, `remote_asn`, `md5_ref`, `max_prefixes`), `max_prefixes`, `max_paths`, `static_routes[]` |

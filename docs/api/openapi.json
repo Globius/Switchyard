@@ -178,6 +178,357 @@
         "title": "AccessLogs",
         "type": "object"
       },
+      "AccessPolicySet": {
+        "additionalProperties": false,
+        "description": "Require a login (and optionally a group or e-mail domain) for a service (ADR 0130 to 0132).\n\nThe engine runs an authentication proxy for the set; requests that need a login are sent\nthrough it and come back to the same frontend once authenticated.\n\nAttributes:\n    oidc: The identity provider settings.\n    default_mode: What requests that match no rule need: ``login`` (the default, closed) or\n        ``public``.\n    rules: Ordered rules; the first match decides.\n    identity_headers: Which headers carry the user to the origin.\n    auth_path: Path prefix of the login endpoints (``/oauth2/start``, ``/oauth2/callback``,\n        ``/oauth2/sign_out``), reserved on every host of the service.",
+        "properties": {
+          "auth_path": {
+            "default": "/oauth2",
+            "title": "Auth Path",
+            "type": "string"
+          },
+          "default_mode": {
+            "default": "login",
+            "enum": [
+              "login",
+              "public"
+            ],
+            "title": "Default Mode",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identity_headers": {
+            "$ref": "#/components/schemas/IdentityHeaders",
+            "default": {
+              "email": "X-Auth-Email",
+              "groups": "X-Auth-Groups",
+              "user": "X-Auth-User"
+            }
+          },
+          "kind": {
+            "const": "access",
+            "default": "access",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OidcSettings"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AccessRule"
+            },
+            "maxItems": 32,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "oidc"
+        ],
+        "title": "AccessPolicySet",
+        "type": "object"
+      },
+      "AccessPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "auth_path": {
+            "default": "/oauth2",
+            "title": "Auth Path",
+            "type": "string"
+          },
+          "default_mode": {
+            "default": "login",
+            "enum": [
+              "login",
+              "public"
+            ],
+            "title": "Default Mode",
+            "type": "string"
+          },
+          "identity_headers": {
+            "$ref": "#/components/schemas/IdentityHeaders",
+            "default": {
+              "email": "X-Auth-Email",
+              "groups": "X-Auth-Groups",
+              "user": "X-Auth-User"
+            }
+          },
+          "kind": {
+            "const": "access",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OidcSettings"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AccessRule"
+            },
+            "maxItems": 32,
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "oidc"
+        ],
+        "title": "AccessPolicySetCreate",
+        "type": "object"
+      },
+      "AccessPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "auth_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Path"
+          },
+          "default_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "login",
+                  "public"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Mode"
+          },
+          "identity_headers": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IdentityHeaders"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "const": "access",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "oidc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OidcSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AccessRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "AccessPolicySetPatch",
+        "type": "object"
+      },
+      "AccessPolicySetRead": {
+        "additionalProperties": false,
+        "description": "AccessPolicySet as returned by the API.",
+        "properties": {
+          "auth_path": {
+            "default": "/oauth2",
+            "title": "Auth Path",
+            "type": "string"
+          },
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "default_mode": {
+            "default": "login",
+            "enum": [
+              "login",
+              "public"
+            ],
+            "title": "Default Mode",
+            "type": "string"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identity_headers": {
+            "$ref": "#/components/schemas/IdentityHeaders",
+            "default": {
+              "email": "X-Auth-Email",
+              "groups": "X-Auth-Groups",
+              "user": "X-Auth-User"
+            }
+          },
+          "kind": {
+            "const": "access",
+            "default": "access",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oidc": {
+            "$ref": "#/components/schemas/OidcSettings"
+          },
+          "rules": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AccessRule"
+            },
+            "maxItems": 32,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "oidc",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "AccessPolicySetRead",
+        "type": "object"
+      },
+      "AccessRule": {
+        "additionalProperties": false,
+        "description": "What a request needs before it reaches the origin.\n\nAttributes:\n    match: Requests the rule covers; the first rule that matches decides.\n    mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of\n        at least one of ``groups``) or ``email_domains`` (an address in one of the domains).",
+        "properties": {
+          "email_domains": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Email Domains",
+            "type": "array"
+          },
+          "groups": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Groups",
+            "type": "array"
+          },
+          "match": {
+            "$ref": "#/components/schemas/RouteMatch",
+            "default": {
+              "headers": [],
+              "methods": [],
+              "query": [],
+              "source_cidrs": []
+            }
+          },
+          "mode": {
+            "default": "login",
+            "enum": [
+              "public",
+              "login",
+              "groups",
+              "email_domains"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "AccessRule",
+        "type": "object"
+      },
       "AcmeChallenge": {
         "description": "How an ACME certificate authority checks control of a name.",
         "enum": [
@@ -6556,6 +6907,61 @@
         "title": "HttpMethod",
         "type": "string"
       },
+      "IdentityHeaders": {
+        "additionalProperties": false,
+        "description": "Headers that carry the signed-in user to the origin (ADR 0132).\n\nA name set to ``None`` turns that header off. The names are removed from every client\nrequest before the user's own values are written, so an origin can trust them when the\nservice is only reachable through the engine.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Auth-Email",
+            "title": "Email"
+          },
+          "groups": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Auth-Groups",
+            "title": "Groups"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Auth-User",
+            "title": "User"
+          }
+        },
+        "title": "IdentityHeaders",
+        "type": "object"
+      },
       "IdpTestIn": {
         "additionalProperties": false,
         "description": "Start a test sign-in.",
@@ -8730,6 +9136,73 @@
         "title": "OidcProviderRead",
         "type": "object"
       },
+      "OidcSettings": {
+        "additionalProperties": false,
+        "description": "OpenID Connect login against a tenant's identity provider (ADR 0130).\n\nAttributes:\n    issuer: The provider's issuer URL (``https``); discovery is read from it.\n    client_id: The client registered for Switchyard at the provider.\n    client_secret_ref: OpenBao path of the client secret (never the secret).\n    cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies\n        (16, 24 or 32 bytes). One key per access set; rotate it to end every session.\n    scopes: Scopes to request; ``openid`` is required.\n    groups_claim: Claim that carries the user's groups.\n    cookie_name: Session cookie name.\n    cookie_expire_s: Absolute session lifetime.\n    cookie_refresh_s: How often the session is refreshed against the provider (a user whose\n        account was disabled loses the session at the next refresh). Less than the lifetime.",
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_secret_ref": {
+            "title": "Client Secret Ref",
+            "type": "string"
+          },
+          "cookie_expire_s": {
+            "default": 28800,
+            "maximum": 604800.0,
+            "minimum": 300.0,
+            "title": "Cookie Expire S",
+            "type": "integer"
+          },
+          "cookie_name": {
+            "default": "_sy_auth",
+            "title": "Cookie Name",
+            "type": "string"
+          },
+          "cookie_refresh_s": {
+            "default": 900,
+            "maximum": 86400.0,
+            "minimum": 60.0,
+            "title": "Cookie Refresh S",
+            "type": "integer"
+          },
+          "cookie_secret_ref": {
+            "title": "Cookie Secret Ref",
+            "type": "string"
+          },
+          "groups_claim": {
+            "default": "groups",
+            "title": "Groups Claim",
+            "type": "string"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "scopes": {
+            "default": [
+              "openid",
+              "email",
+              "profile"
+            ],
+            "items": {
+              "pattern": "^[A-Za-z0-9._:/-]{1,64}$",
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issuer",
+          "client_id",
+          "client_secret_ref",
+          "cookie_secret_ref"
+        ],
+        "title": "OidcSettings",
+        "type": "object"
+      },
       "OpIn": {
         "additionalProperties": false,
         "description": "One operation in a change set.",
@@ -8810,13 +9283,14 @@
         "title": "OpsIn",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
             "items": {
               "discriminator": {
                 "mapping": {
+                  "access": "#/components/schemas/AccessPolicySetRead",
                   "allow_list": "#/components/schemas/AllowListPolicySetRead",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                   "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
@@ -8844,6 +9318,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/RateLimitPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/AccessPolicySetRead"
                 }
               ]
             },
@@ -8866,7 +9343,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, AccessPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -13446,6 +13923,7 @@
             "items": {
               "discriminator": {
                 "mapping": {
+                  "access": "#/components/schemas/AccessPolicySet",
                   "allow_list": "#/components/schemas/AllowListPolicySet",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySet",
                   "rate_limit": "#/components/schemas/RateLimitPolicySet",
@@ -13473,6 +13951,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/RateLimitPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/AccessPolicySet"
                 }
               ]
             },
@@ -33564,7 +34045,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -33729,6 +34210,7 @@
               "schema": {
                 "discriminator": {
                   "mapping": {
+                    "access": "#/components/schemas/AccessPolicySetCreate",
                     "allow_list": "#/components/schemas/AllowListPolicySetCreate",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetCreate",
@@ -33756,6 +34238,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/RateLimitPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AccessPolicySetCreate"
                   }
                 ],
                 "title": "Body"
@@ -34109,6 +34594,7 @@
                 "schema": {
                   "discriminator": {
                     "mapping": {
+                      "access": "#/components/schemas/AccessPolicySetRead",
                       "allow_list": "#/components/schemas/AllowListPolicySetRead",
                       "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                       "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
@@ -34136,6 +34622,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/RateLimitPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AccessPolicySetRead"
                     }
                   ],
                   "title": "Response Get Policy Sets Api V1 Tenants  T  Policy Sets  Object Id  Get"
@@ -34300,6 +34789,7 @@
               "schema": {
                 "discriminator": {
                   "mapping": {
+                    "access": "#/components/schemas/AccessPolicySetPatch",
                     "allow_list": "#/components/schemas/AllowListPolicySetPatch",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetPatch",
@@ -34327,6 +34817,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/RateLimitPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AccessPolicySetPatch"
                   }
                 ],
                 "title": "Body"

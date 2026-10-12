@@ -39,6 +39,11 @@ SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
 HeaderValue = Annotated[str, AfterValidator(v.validate_header_value)]
 QueryParam = Annotated[str, AfterValidator(v.validate_query_param)]
 Body = Annotated[str, AfterValidator(v.validate_body)]
+Issuer = Annotated[str, AfterValidator(v.validate_issuer)]
+ClaimName = Annotated[str, AfterValidator(v.validate_claim_name)]
+CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
+ClientId = Annotated[str, AfterValidator(v.validate_client_id)]
+GroupName = Annotated[str, AfterValidator(v.validate_group_name)]
 DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
 
@@ -1099,13 +1104,138 @@ class RateLimitPolicySet(TenantOwned):
     rules: tuple[RateLimitRule, ...] = Field(min_length=1, max_length=8)
 
 
+class OidcSettings(Model):
+    """OpenID Connect login against a tenant's identity provider (ADR 0130).
+
+    Attributes:
+        issuer: The provider's issuer URL (``https``); discovery is read from it.
+        client_id: The client registered for Switchyard at the provider.
+        client_secret_ref: OpenBao path of the client secret (never the secret).
+        cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies
+            (16, 24 or 32 bytes). One key per access set; rotate it to end every session.
+        scopes: Scopes to request; ``openid`` is required.
+        groups_claim: Claim that carries the user's groups.
+        cookie_name: Session cookie name.
+        cookie_expire_s: Absolute session lifetime.
+        cookie_refresh_s: How often the session is refreshed against the provider (a user whose
+            account was disabled loses the session at the next refresh). Less than the lifetime.
+    """
+
+    issuer: Issuer
+    client_id: ClientId
+    client_secret_ref: SecretRef
+    cookie_secret_ref: SecretRef
+    scopes: tuple[Annotated[str, Field(pattern=r"^[A-Za-z0-9._:/-]{1,64}$")], ...] = (
+        "openid",
+        "email",
+        "profile",
+    )
+    groups_claim: ClaimName = "groups"
+    cookie_name: CookieName = "_sy_auth"
+    cookie_expire_s: int = Field(default=28_800, ge=300, le=604_800)
+    cookie_refresh_s: int = Field(default=900, ge=60, le=86_400)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if "openid" not in self.scopes:
+            raise ValueError("scopes must include openid")
+        if len(set(self.scopes)) != len(self.scopes) or len(self.scopes) > 10:
+            raise ValueError("scopes must be unique and at most 10")
+        if self.cookie_refresh_s >= self.cookie_expire_s:
+            raise ValueError("cookie_refresh_s must be less than cookie_expire_s")
+        return self
+
+
+class AccessRule(Model):
+    """What a request needs before it reaches the origin.
+
+    Attributes:
+        match: Requests the rule covers; the first rule that matches decides.
+        mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of
+            at least one of ``groups``) or ``email_domains`` (an address in one of the domains).
+    """
+
+    match: RouteMatch = RouteMatch()
+    mode: Literal["public", "login", "groups", "email_domains"] = "login"
+    groups: tuple[GroupName, ...] = Field(default=(), max_length=32)
+    email_domains: tuple[Hostname, ...] = Field(default=(), max_length=32)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if self.mode == "groups" and not self.groups:
+            raise ValueError("mode groups needs groups")
+        if self.mode == "email_domains" and not self.email_domains:
+            raise ValueError("mode email_domains needs email_domains")
+        if self.mode != "groups" and self.groups:
+            raise ValueError("groups only goes with mode groups")
+        if self.mode != "email_domains" and self.email_domains:
+            raise ValueError("email_domains only goes with mode email_domains")
+        return self
+
+
+class IdentityHeaders(Model):
+    """Headers that carry the signed-in user to the origin (ADR 0132).
+
+    A name set to ``None`` turns that header off. The names are removed from every client
+    request before the user's own values are written, so an origin can trust them when the
+    service is only reachable through the engine.
+    """
+
+    user: HeaderName | None = "X-Auth-User"
+    email: HeaderName | None = "X-Auth-Email"
+    groups: HeaderName | None = "X-Auth-Groups"
+    token: HeaderName | None = None
+
+    @model_validator(mode="after")
+    def _distinct_and_allowed(self) -> Self:
+        names = [n.lower() for n in (self.user, self.email, self.groups, self.token) if n]
+        if len(set(names)) != len(names):
+            raise ValueError("identity header names must be different")
+        reserved = v.FORBIDDEN_HEADERS | v.MANAGED_REQUEST_HEADERS | v.AUTH_INTERNAL_HEADERS
+        for name in names:
+            if name in reserved:
+                raise ValueError(f"header {name} cannot carry identity")
+        return self
+
+
+class AccessPolicySet(TenantOwned):
+    """Require a login (and optionally a group or e-mail domain) for a service (ADR 0130 to 0132).
+
+    The engine runs an authentication proxy for the set; requests that need a login are sent
+    through it and come back to the same frontend once authenticated.
+
+    Attributes:
+        oidc: The identity provider settings.
+        default_mode: What requests that match no rule need: ``login`` (the default, closed) or
+            ``public``.
+        rules: Ordered rules; the first match decides.
+        identity_headers: Which headers carry the user to the origin.
+        auth_path: Path prefix of the login endpoints (``/oauth2/start``, ``/oauth2/callback``,
+            ``/oauth2/sign_out``), reserved on every host of the service.
+    """
+
+    kind: Literal["access"] = "access"
+    oidc: OidcSettings
+    default_mode: Literal["login", "public"] = "login"
+    rules: tuple[AccessRule, ...] = Field(default=(), max_length=32)
+    identity_headers: IdentityHeaders = IdentityHeaders()
+    auth_path: UrlPath = "/oauth2"
+
+    @model_validator(mode="after")
+    def _path(self) -> Self:
+        if len(self.auth_path) < 2 or self.auth_path.endswith("/"):
+            raise ValueError("auth_path must be a directory such as /oauth2")
+        return self
+
+
 PolicySet = Annotated[
     RedirectPolicySet
     | AllowListPolicySet
     | RewritePolicySet
     | RespondPolicySet
     | ErrorPagesPolicySet
-    | RateLimitPolicySet,
+    | RateLimitPolicySet
+    | AccessPolicySet,
     Field(discriminator="kind"),
 ]
 #: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).
@@ -1115,4 +1245,5 @@ ATTACHABLE_POLICY_KINDS = (
     RespondPolicySet,
     ErrorPagesPolicySet,
     RateLimitPolicySet,
+    AccessPolicySet,
 )
