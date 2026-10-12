@@ -261,7 +261,7 @@ async def test_the_provider_secret_travels_in_the_bundle_only() -> None:
     group = snap.se_groups[0]
     slot = EngineSlot("se-1", 0, "192.0.2.5")
     cert = {"kv/tenants/acme/certs/wild-example-test": "BEGIN CERTIFICATE PRIVATE KEY"}
-    store = MemorySecrets({GATE["secret_ref"]: "topsecret\n", **cert})
+    store = MemorySecrets({str(GATE["secret_ref"]): "topsecret\n", **cert})
     files = await engine_files(snap, group, slot, store)
     assert files["certs/captcha-web.secret"] == "topsecret\n"
     assert "topsecret" not in "".join(v for k, v in render_haproxy(snap, group.id).files.items())

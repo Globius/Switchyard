@@ -206,7 +206,7 @@ def test_the_bearer_token_goes_on_every_acme_request(monkeypatch: pytest.MonkeyP
         _jwk(),
         account=None,
         verify_ssl=False,
-        bearer="tok-9",  # type: ignore[no-untyped-call]
+        bearer="tok-9",
     )
     network._send_request("GET", "https://ca.example.test/dir")
     assert seen == [{"Authorization": "Bearer tok-9"}]

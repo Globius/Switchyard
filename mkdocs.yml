@@ -94,33 +94,33 @@ nav:
       - Multi-tenancy: whitepapers/multi-tenancy.md
   - Runbooks:
       - Overview: runbooks/README.md
-      - Build or refresh the SE template: runbooks\build-se-template.md
-      - Emergency rollback: runbooks\emergency-rollback.md
-      - GSLB on the two-host lab: runbooks\gslb-lab.md
-      - Set up two Proxmox hosts for the Switchyard lab: runbooks\lab-hosts.md
-      - Runbook - the login broker (Dex): runbooks\login-broker.md
-      - Replace a service engine: runbooks\replace-se.md
-      - Restore the database (pgBackRest + Patroni): runbooks\restore-database.md
-      - Roll an SE group to a new template, or scale it out: runbooks\rolling-upgrade.md
-      - Rotate the certificate authority: runbooks\rotate-ca.md
-      - Telemetry stack (Prometheus, Loki, Grafana): runbooks\telemetry.md
+      - Build or refresh the SE template: runbooks/build-se-template.md
+      - Emergency rollback: runbooks/emergency-rollback.md
+      - GSLB on the two-host lab: runbooks/gslb-lab.md
+      - Set up two Proxmox hosts for the Switchyard lab: runbooks/lab-hosts.md
+      - Runbook - the login broker (Dex): runbooks/login-broker.md
+      - Replace a service engine: runbooks/replace-se.md
+      - Restore the database (pgBackRest + Patroni): runbooks/restore-database.md
+      - Roll an SE group to a new template, or scale it out: runbooks/rolling-upgrade.md
+      - Rotate the certificate authority: runbooks/rotate-ca.md
+      - Telemetry stack (Prometheus, Loki, Grafana): runbooks/telemetry.md
   - Decisions:
       - Why it works this way: why.md
       - ADR index: adr/README.md
   - Design:
-      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/bf06390f-6cf2-4fa9-9128-b6e8286ecb93: design\01-replacement-plan.md
-      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/3698c8a8-230c-4787-998c-007be6665190: design\02-backend-design.md
-      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/23e2b8ae-c97b-4555-ab71-66d5dfc0485f: design\03-frontend-design.md
-      - Switchyard — Frontend Scope and Claude Design Handoff: design\04-frontend-scope.md
-      - Backend tickets required by the frontend: design\05-frontend-backend-tickets.md
-      - Planned vs built: design\06-planned-vs-built.md
-      - 07 - Built UI vs Design artboards (handoff v46): design\07-ui-vs-artboards.md
-      - Competitive parity matrix and phased plan: design\08-competitive-parity-plan.md
-      - Parity work blocks: design\09-parity-work-blocks.md
+      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/bf06390f-6cf2-4fa9-9128-b6e8286ecb93: design/01-replacement-plan.md
+      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/3698c8a8-230c-4787-998c-007be6665190: design/02-backend-design.md
+      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/23e2b8ae-c97b-4555-ab71-66d5dfc0485f: design/03-frontend-design.md
+      - Switchyard — Frontend Scope and Claude Design Handoff: design/04-frontend-scope.md
+      - Backend tickets required by the frontend: design/05-frontend-backend-tickets.md
+      - Planned vs built: design/06-planned-vs-built.md
+      - 07 - Built UI vs Design artboards (handoff v46): design/07-ui-vs-artboards.md
+      - Competitive parity matrix and phased plan: design/08-competitive-parity-plan.md
+      - Parity work blocks: design/09-parity-work-blocks.md
       - UI handoff: design/ui-handoff/README.md
       - UI: ui/README.md
       - Backend security review: security/backend-review.md
       - UI security review: security/ui-review.md
   - Lab results:
-      - Lab pass on two real Proxmox hosts, 2026-10-12: lab\2026-10-12-full-pass.md
-      - Kubernetes connector on a real cluster (2026-10-12): lab\2026-10-12-kubernetes.md
+      - Lab pass on two real Proxmox hosts, 2026-10-12: lab/2026-10-12-full-pass.md
+      - Kubernetes connector on a real cluster (2026-10-12): lab/2026-10-12-kubernetes.md
