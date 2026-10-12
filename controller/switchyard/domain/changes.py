@@ -53,7 +53,7 @@ from switchyard.domain.models import (
     VipPool,
     VirtualService,
 )
-from switchyard.domain.snapshot import Snapshot, validate_snapshot
+from switchyard.domain.snapshot import Snapshot, stick_table_entries, validate_snapshot
 
 
 class ObjectType(enum.StrEnum):
@@ -338,6 +338,10 @@ def apply_ops(base: Snapshot, ops: Sequence[ChangeOp], *, tenant_id: UUID) -> Dr
     return Draft(snapshot=after, objects=summary, problems=tuple(sorted(problems)))
 
 
+#: Quota key (besides object type names) that caps the stick-table entries of rate limits.
+STICK_TABLE_QUOTA = "stick_table_entries"
+
+
 def quota_problems(base: Snapshot, after: Snapshot) -> list[Problem]:
     """Report object types that grow past a tenant quota (``quota_exceeded``).
 
@@ -352,6 +356,18 @@ def quota_problems(base: Snapshot, after: Snapshot) -> list[Problem]:
     problems: list[Problem] = []
     for tenant in after.tenants:
         for key, limit in sorted(tenant.quotas.items()):
+            if key == STICK_TABLE_QUOTA:
+                used = stick_table_entries(after, tenant.id)
+                if used > stick_table_entries(base, tenant.id) and used > limit:
+                    problems.append(
+                        Problem(
+                            f"quota.{key}",
+                            "quota_exceeded",
+                            f"tenant {tenant.name!r} may have {limit} rate-limit table entries; "
+                            f"this change would make {used}",
+                        )
+                    )
+                continue
             try:
                 object_type = ObjectType(key)
             except ValueError:

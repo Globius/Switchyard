@@ -503,6 +503,42 @@ async def test_policy_sets_and_routing_profiles_are_unions_on_kind(api: Api) -> 
                 ],
             },
             {"kind": "allow_list", "name": "office", "cidrs": ["203.0.113.0/24"]},
+            {
+                "kind": "rewrite",
+                "name": "edge-headers",
+                "rules": [
+                    {"action": {"type": "set_header", "name": "X-Edge", "value": "sy"}},
+                    {
+                        "phase": "response",
+                        "match": {"methods": ["GET"], "path_prefix": "/static"},
+                        "action": {"type": "remove_header", "name": "Server"},
+                    },
+                    {
+                        "action": {
+                            "type": "replace_prefix",
+                            "from_prefix": "/api/v1",
+                            "to_prefix": "/",
+                        }
+                    },
+                ],
+            },
+            {
+                "kind": "respond",
+                "name": "maintenance",
+                "rules": [
+                    {
+                        "status": 503,
+                        "content_type": "text/html",
+                        "body": "<p>back soon</p>",
+                        "retry_after_s": 60,
+                    }
+                ],
+            },
+            {
+                "kind": "error_pages",
+                "name": "pages",
+                "pages": [{"status": 503, "body": "<p>down</p>"}],
+            },
         ],
         "routing-profiles": [
             {"kind": "vrrp", "name": "vrrp-b", "vrid": 61, "interface": "eth1"},
@@ -559,6 +595,22 @@ async def test_union_validation_errors_keep_field_paths_without_the_tag(api: Api
         f"{t}/policy-sets?apply=true", json={"kind": "bogus", "name": "x"}, headers=h
     )
     assert r.status_code == 422
+    bad_rewrite = {
+        "kind": "rewrite",
+        "name": "bad-rw",
+        "rules": [{"action": {"type": "set_header", "name": "Content-Length", "value": "0"}}],
+    }
+    r = await api.client.post(f"{t}/policy-sets?apply=true", json=bad_rewrite, headers=h)
+    assert r.status_code == 422
+    assert any("cannot be changed" in e["message"] for e in r.json()["errors"])
+    unsafe = {
+        "kind": "rewrite",
+        "name": "unsafe",
+        "rules": [{"action": {"type": "set_header", "name": "X-A", "value": "%[src]"}}],
+    }
+    r = await api.client.post(f"{t}/policy-sets?apply=true", json=unsafe, headers=h)
+    assert r.status_code == 422
+    assert "rules.0.action.value" in {e["path"] for e in r.json()["errors"]}, r.json()
 
 
 async def test_job_endpoints(api: Api) -> None:
@@ -849,6 +901,47 @@ async def test_metrics_and_logs_are_tenant_scoped_and_degrade_when_unconfigured(
     missing = await api.client.get(f"{base}/virtual-services/{uuid.uuid4()}/metrics", headers=h)
     assert missing.status_code == 404
     assert set(fake.asked) == {TENANT}
+
+
+async def test_engine_metrics_are_tenant_scoped_ranged_and_degrade(api: Api) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from switchyard.adapters.telemetry import FakeTelemetry
+
+    h = await api.token(Role.VIEWER)
+    admin = await api.token()
+    base = f"{V1}/tenants/acme"
+    engine = (
+        await api.client.post(
+            f"{base}/se-groups/{GROUP}/engines",
+            json={"name": "se-metrics-1", "dataplane_url": "https://198.51.100.9:5555"},
+            headers=admin,
+        )
+    ).json()
+    url = f"{base}/engines/{engine['id']}/metrics"
+    off = (await api.client.get(url, headers=h)).json()
+    assert off["available"] is False and off["reason"]
+    fake = FakeTelemetry()
+    api.services.telemetry = fake
+    end = datetime.now(UTC) - timedelta(hours=2)
+    on = await api.client.get(url, params={"window_s": 7200, "until": end.isoformat()}, headers=h)
+    body = on.json()
+    assert on.status_code == 200 and body["available"]
+    assert body["metrics"]["summary"]["vcpus"] == 4 and body["metrics"]["window_s"] == 7200
+    assert fake.engines == ["se-metrics-1"] and set(fake.asked) == {TENANT}
+    assert fake.until is not None and abs((fake.until - end).total_seconds()) < 1
+    future = datetime.now(UTC) + timedelta(hours=1)
+    assert (
+        await api.client.get(url, params={"until": future.isoformat()}, headers=h)
+    ).status_code == 422
+    assert (await api.client.get(url, params={"window_s": 5}, headers=h)).status_code == 422
+    unknown = await api.client.get(f"{base}/engines/{uuid.uuid4()}/metrics", headers=h)
+    assert unknown.status_code == 404
+    # a tenant that does not own the engine cannot read it
+    globex = (await api.services.tenants.create(ROOT, "globex-metrics")).id
+    other = await api.token(Role.VIEWER, tenant=globex)
+    foreign = f"{V1}/tenants/globex-metrics/engines/{engine['id']}/metrics"
+    assert (await api.client.get(foreign, headers=other)).status_code == 404
 
 
 async def test_monitor_test_runs_from_an_engine_through_the_agent(api: Api) -> None:

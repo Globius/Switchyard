@@ -38,7 +38,7 @@ def _changed(draft: Draft) -> dict[ObjectType, set[UUID]]:
 
 
 def _uses(svc: VirtualService, changed: dict[ObjectType, set[UUID]], pool_ids: set[UUID]) -> bool:
-    pools = {r.pool_id for r in svc.routes if r.pool_id}
+    pools = {pid for r in svc.routes for pid in r.pool_ids}
     if svc.default_pool_id:
         pools.add(svc.default_pool_id)
     return bool(

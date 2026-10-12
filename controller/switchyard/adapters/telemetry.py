@@ -22,6 +22,8 @@ import httpx
 
 from switchyard.domain.telemetry import (
     AccessLogEntry,
+    EngineMetrics,
+    EngineSummary,
     MetricPoint,
     MetricSummary,
     ServiceMetrics,
@@ -37,9 +39,27 @@ class Telemetry(Protocol):
     """What the API needs from the metrics and logs backends."""
 
     async def metrics(
-        self, tenant_id: UUID, service: str, *, window_s: int, step_s: int
+        self,
+        tenant_id: UUID,
+        service: str,
+        *,
+        window_s: int,
+        step_s: int,
+        until: datetime | None = None,
     ) -> ServiceMetrics:
-        """Series and headline numbers of one virtual service over the last ``window_s``."""
+        """Series and headline numbers of one service over ``window_s`` ending at ``until``."""
+        ...
+
+    async def engine_metrics(
+        self,
+        tenant_id: UUID,
+        engine: str,
+        *,
+        window_s: int,
+        step_s: int,
+        until: datetime | None = None,
+    ) -> EngineMetrics:
+        """CPU, memory, HAProxy sessions and traffic of one engine over ``window_s``."""
         ...
 
     async def summaries(
@@ -51,7 +71,7 @@ class Telemetry(Protocol):
     async def logs(
         self,
         tenant_id: UUID,
-        service: str,
+        service: str | None,
         *,
         since: datetime,
         until: datetime,
@@ -59,7 +79,7 @@ class Telemetry(Protocol):
         contains: str | None = None,
         status_class: int | None = None,
     ) -> list[AccessLogEntry]:
-        """Access log lines of one service, newest first."""
+        """Access log lines of one service (or of the whole tenant), newest first."""
         ...
 
 
@@ -138,6 +158,32 @@ def promql(tenant_id: UUID, service: str) -> dict[str, str]:
     }
 
 
+def engine_promql(tenant_id: UUID, engine: str) -> dict[str, str]:
+    """The PromQL expression of each engine metric (node exporter and HAProxy exporter).
+
+    Both exporters carry the ``tenant`` and ``engine`` labels from the discovery endpoint
+    (ADR 0061); the tenant matcher comes first and the engine name must be a safe identifier.
+
+    Example:
+        >>> from uuid import UUID
+        >>> q = engine_promql(UUID(int=1), "se-a-01")
+        >>> q["haproxy_sessions"].startswith('sum(haproxy_frontend_current_sessions{tenant="')
+        True
+    """
+    sel = f'tenant="{tenant_id}",engine="{ident(engine)}"'
+    return {
+        "cpu_percent": f'100 * (1 - avg(rate(node_cpu_seconds_total{{{sel},mode="idle"}}[1m])))',
+        "memory_used_bytes": (
+            f"node_memory_MemTotal_bytes{{{sel}}} - node_memory_MemAvailable_bytes{{{sel}}}"
+        ),
+        "haproxy_sessions": f"sum(haproxy_frontend_current_sessions{{{sel}}})",
+        "traffic_in_bps": f"sum(rate(haproxy_frontend_bytes_in_total{{{sel}}}[1m])) * 8",
+        # headline-only values (instant queries)
+        "vcpus": f"count(count by (cpu) (node_cpu_seconds_total{{{sel}}}))",
+        "memory_total_bytes": f"node_memory_MemTotal_bytes{{{sel}}}",
+    }
+
+
 def logql_p95(tenant_id: UUID, service: str) -> str:
     """LogQL for the 95th percentile of the total time of requests, in milliseconds."""
     sel = _selector(tenant_id, "frontend", frontend_name(service))
@@ -198,10 +244,16 @@ class HttpTelemetry:
         ]
 
     async def metrics(
-        self, tenant_id: UUID, service: str, *, window_s: int, step_s: int
+        self,
+        tenant_id: UUID,
+        service: str,
+        *,
+        window_s: int,
+        step_s: int,
+        until: datetime | None = None,
     ) -> ServiceMetrics:
         """Query the four series; p95 is empty without Loki."""
-        end = datetime.now(UTC)
+        end = until or datetime.now(UTC)
         start = end - timedelta(seconds=window_s)
         queries = promql(tenant_id, service)
         series = {
@@ -235,6 +287,46 @@ class HttpTelemetry:
             active_connections=series["active_connections"],
         )
 
+    async def engine_metrics(
+        self,
+        tenant_id: UUID,
+        engine: str,
+        *,
+        window_s: int,
+        step_s: int,
+        until: datetime | None = None,
+    ) -> EngineMetrics:
+        """Query the four engine series and the headline numbers (instant queries at the end)."""
+        end = until or datetime.now(UTC)
+        start = end - timedelta(seconds=window_s)
+        queries = engine_promql(tenant_id, engine)
+        series = {
+            name: await self._range(
+                self._prom, "/api/v1/query_range", queries[name], start, end, step_s
+            )
+            for name in ("cpu_percent", "memory_used_bytes", "haproxy_sessions", "traffic_in_bps")
+        }
+        instant: dict[str, float | None] = {}
+        for name in ("vcpus", "memory_total_bytes"):
+            body = await self._get(
+                self._prom + "/api/v1/query", {"query": queries[name], "time": end.timestamp()}
+            )
+            result = body["data"]["result"]
+            instant[name] = float(result[0]["value"][1]) if result else None
+        return EngineMetrics(
+            window_s=window_s,
+            step_s=step_s,
+            summary=EngineSummary(
+                cpu_percent=_last(series["cpu_percent"]),
+                vcpus=instant["vcpus"],
+                memory_used_bytes=_last(series["memory_used_bytes"]),
+                memory_total_bytes=instant["memory_total_bytes"],
+                haproxy_sessions=_last(series["haproxy_sessions"]),
+                traffic_in_bps=_last(series["traffic_in_bps"]),
+            ),
+            **series,
+        )
+
     async def summaries(
         self, tenant_id: UUID, services: list[str], *, window_s: int
     ) -> dict[str, MetricSummary]:
@@ -252,7 +344,7 @@ class HttpTelemetry:
     async def logs(
         self,
         tenant_id: UUID,
-        service: str,
+        service: str | None,
         *,
         since: datetime,
         until: datetime,
@@ -263,7 +355,10 @@ class HttpTelemetry:
         """Query Loki, newest first; filters run in LogQL after the tenant matcher."""
         if self._loki is None:
             raise TelemetryError("no log backend is configured")
-        query = "{" + f'tenant="{tenant_id}",frontend="{frontend_name(service)}"' + "}"
+        selector = f'tenant="{tenant_id}"'
+        if service is not None:
+            selector += f',frontend="{frontend_name(service)}"'
+        query = "{" + selector + "}"
         if contains:
             query += " |= `" + contains.replace("`", "") + "`"
         if status_class is not None:
@@ -298,14 +393,23 @@ class FakeTelemetry:
     def __init__(self) -> None:
         """Create an empty fake."""
         self.asked: list[UUID] = []
+        self.engines: list[str] = []
+        self.until: datetime | None = None
         self.entries: list[AccessLogEntry] = []
 
     async def metrics(
-        self, tenant_id: UUID, service: str, *, window_s: int, step_s: int
+        self,
+        tenant_id: UUID,
+        service: str,
+        *,
+        window_s: int,
+        step_s: int,
+        until: datetime | None = None,
     ) -> ServiceMetrics:
         """Two flat points per series."""
         self.asked.append(tenant_id)
-        now = datetime.now(UTC)
+        self.until = until
+        now = until or datetime.now(UTC)
         pts = [MetricPoint(t=now - timedelta(seconds=step_s), v=1.0), MetricPoint(t=now, v=2.0)]
         return ServiceMetrics(
             window_s=window_s,
@@ -315,6 +419,38 @@ class FakeTelemetry:
             p95_ms=pts,
             error_5xx_ratio=pts,
             active_connections=pts,
+        )
+
+    async def engine_metrics(
+        self,
+        tenant_id: UUID,
+        engine: str,
+        *,
+        window_s: int,
+        step_s: int,
+        until: datetime | None = None,
+    ) -> EngineMetrics:
+        """Two points per series; records the tenant and engine it was asked for."""
+        self.asked.append(tenant_id)
+        self.engines.append(engine)
+        self.until = until
+        now = until or datetime.now(UTC)
+        pts = [MetricPoint(t=now - timedelta(seconds=step_s), v=1.0), MetricPoint(t=now, v=2.0)]
+        return EngineMetrics(
+            window_s=window_s,
+            step_s=step_s,
+            summary=EngineSummary(
+                cpu_percent=32.0,
+                vcpus=4,
+                memory_used_bytes=2.6 * 2**30,
+                memory_total_bytes=8 * 2**30,
+                haproxy_sessions=1980,
+                traffic_in_bps=147e6,
+            ),
+            cpu_percent=pts,
+            memory_used_bytes=pts,
+            haproxy_sessions=pts,
+            traffic_in_bps=pts,
         )
 
     async def summaries(
@@ -327,7 +463,7 @@ class FakeTelemetry:
     async def logs(
         self,
         tenant_id: UUID,
-        service: str,
+        service: str | None,
         *,
         since: datetime,
         until: datetime,
@@ -338,6 +474,8 @@ class FakeTelemetry:
         """The stored entries inside the window, filtered like the real client."""
         self.asked.append(tenant_id)
         out = [e for e in self.entries if since <= e.at < until]
+        if service is not None:
+            out = [e for e in out if e.frontend == frontend_name(service)]
         if contains:
             out = [e for e in out if contains in e.raw]
         if status_class is not None:

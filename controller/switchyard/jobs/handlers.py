@@ -18,6 +18,7 @@ from switchyard.jobs.progress import JobProgress
 from switchyard.jobs.queue import Job
 from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
+from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator
 from switchyard.services.certificates import (
     ISSUE_CERT_JOB,
     RENEW_CERTS_JOB,
@@ -28,6 +29,7 @@ from switchyard.services.certificates import (
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
+from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
@@ -36,6 +38,7 @@ from switchyard.services.infra import (
     DeployRequest,
     InfraService,
 )
+from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
@@ -43,6 +46,7 @@ GIT_MIRROR_JOB = "git_mirror"
 
 
 POLL_STATUS_JOB = "poll_status"
+EXPIRE_DRAINS_JOB = "expire_drains"
 
 
 def build_handlers(
@@ -54,15 +58,21 @@ def build_handlers(
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
     controller: ControllerSettings | None = None,
+    members: MemberService | None = None,
+    discovery: DiscoveryService | None = None,
+    alerts: AlertEvaluator | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
+        discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
         controller: Checks controller settings changes that wait for confirmation; ``None`` skips
             the ``controller_tick`` kind.
+        alerts: The alert evaluator; ``None`` skips the ``evaluate_alerts`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
@@ -97,12 +107,30 @@ def build_handlers(
             return {"events": await controller.tick()}
 
         handlers[CONTROLLER_TICK_JOB] = controller_tick
+    if members is not None:
+
+        async def expire_drains(job: Job) -> dict[str, Any]:
+            return {"disabled": await members.expire_drains()}
+
+        handlers[EXPIRE_DRAINS_JOB] = expire_drains
     if gc is not None:
 
         async def collect_garbage(job: Job) -> dict[str, Any]:
             return dict(await gc.run())
 
         handlers[GC_JOB] = collect_garbage
+    if discovery is not None:
+
+        async def discover_pool_members(job: Job) -> dict[str, Any]:
+            return {"changed": await discovery.run()}
+
+        handlers[DISCOVER_POOLS_JOB] = discover_pool_members
+    if alerts is not None:
+
+        async def evaluate_alerts(job: Job) -> dict[str, Any]:
+            return dict(await alerts.run())
+
+        handlers[EVALUATE_ALERTS_JOB] = evaluate_alerts
     if certs is not None:
 
         async def issue_cert(job: Job) -> dict[str, Any]:

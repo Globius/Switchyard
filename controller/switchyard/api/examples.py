@@ -547,7 +547,7 @@ ME = {
             "via": [{"provider": "authentik", "group": "acme-admins"}],
         }
     ],
-    "links": {"grafana": "https://grafana.example.test"},
+    "links": {"grafana": "https://grafana.example.test", "grafana_embedded": True},
     "features": {"lxc_guests": False},
 }
 PERMISSIONS = {
@@ -709,6 +709,68 @@ SUMMARY = {
     },
 }
 
+GRAFANA_LAUNCH = {
+    "url": "/grafana/launch?ticket=sygt_Qm9vdHN0cmFwLXRpY2tldC1leGFtcGxlLW9ubHk",
+    "expires_at": WHEN,
+    "tenant_id": TENANT,
+}
+
+ALERT_TARGET = {
+    "id": "0192f3a0-0000-7000-8000-0000000000a1",
+    "name": "ops-chat",
+    "kind": "chat",
+    "config": {"url": "https://hooks.example.test/services/T000/B000/XXXX", "format": "slack"},
+    "secret_ref": None,
+    "enabled": True,
+    "version": 1,
+    "created_by": "user:authentik:alice",
+    "created_at": WHEN,
+}
+
+ALERT_RULE = {
+    "id": "0192f3a0-0000-7000-8000-0000000000a2",
+    "name": "certs-expiring",
+    "kind": "cert_expiry",
+    "spec": {"days": [30, 14, 7]},
+    "targets": ["ops-chat"],
+    "enabled": True,
+    "version": 1,
+    "created_by": "user:authentik:alice",
+    "created_at": WHEN,
+}
+
+ALERT_STATUS = {
+    "firing": [
+        {
+            "rule": "certs-expiring",
+            "key": "cert:shop-example",
+            "state": "firing",
+            "since": WHEN,
+            "details": {"tier": 14, "not_after": WHEN},
+        }
+    ],
+    "deliveries": [
+        {
+            "rule": "certs-expiring",
+            "target": "ops-chat",
+            "key": "cert:shop-example",
+            "kind": "firing",
+            "status": "sent",
+            "error": None,
+            "at": WHEN,
+        }
+    ],
+}
+
+ALERT_CATALOG = {
+    "metrics": [
+        {"name": "vs_5xx_ratio", "label": "Share of 5xx responses", "unit": "%", "scope": "vs"}
+    ],
+    "event_actions": ["change_set.failed", "drift.detected"],
+    "chat_formats": ["slack", "teams", "mattermost"],
+    "email_configured": False,
+}
+
 METRICS = {
     "available": True,
     "reason": None,
@@ -727,6 +789,27 @@ METRICS = {
         "active_connections": [{"t": WHEN, "v": 42}],
     },
 }
+ENGINE_METRICS = {
+    "available": True,
+    "reason": None,
+    "metrics": {
+        "window_s": 3600,
+        "step_s": 30,
+        "summary": {
+            "cpu_percent": 32.0,
+            "vcpus": 4,
+            "memory_used_bytes": 2791728742,
+            "memory_total_bytes": 8589934592,
+            "haproxy_sessions": 1980,
+            "traffic_in_bps": 147000000,
+        },
+        "cpu_percent": [{"t": WHEN, "v": 32.0}],
+        "memory_used_bytes": [{"t": WHEN, "v": 2791728742}],
+        "haproxy_sessions": [{"t": WHEN, "v": 1980}],
+        "traffic_in_bps": [{"t": WHEN, "v": 147000000}],
+    },
+}
+
 METRICS_OVERVIEW = {
     "available": True,
     "reason": None,

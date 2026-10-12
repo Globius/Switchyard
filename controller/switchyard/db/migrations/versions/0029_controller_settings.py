@@ -4,7 +4,7 @@
 - ``certificate.challenge`` may now be ``tls-alpn-01``.
 
 Revision ID: 0029
-Revises: 0023
+Revises: 0028
 """
 
 from alembic import op
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0029"
-down_revision = "0023"
+down_revision = "0028"
 branch_labels = None
 depends_on = None
 

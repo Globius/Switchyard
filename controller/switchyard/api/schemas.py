@@ -35,7 +35,12 @@ from pydantic import (
 from switchyard.domain import models as dm
 from switchyard.domain.changes import Action, DraftStatus, ObjectType
 from switchyard.domain.snapshot import Snapshot
-from switchyard.domain.telemetry import AccessLogEntry, MetricSummary, ServiceMetrics
+from switchyard.domain.telemetry import (
+    AccessLogEntry,
+    EngineMetrics,
+    MetricSummary,
+    ServiceMetrics,
+)
 from switchyard.domain.workflow import ChangeSetState, EngineState, Role
 
 
@@ -255,7 +260,14 @@ OBJECT_MODELS: dict[ObjectType, tuple[type[BaseModel], ...]] = {
     ObjectType.POOL: (dm.Pool,),
     ObjectType.HEALTH_MONITOR: (dm.HealthMonitor,),
     ObjectType.CERTIFICATE: (dm.Certificate,),
-    ObjectType.POLICY_SET: (dm.RedirectPolicySet, dm.AllowListPolicySet),
+    ObjectType.POLICY_SET: (
+        dm.RedirectPolicySet,
+        dm.AllowListPolicySet,
+        dm.RewritePolicySet,
+        dm.RespondPolicySet,
+        dm.ErrorPagesPolicySet,
+        dm.RateLimitPolicySet,
+    ),
     ObjectType.ROUTING_PROFILE: (dm.VrrpProfile, dm.BgpProfile),
 }
 OBJECT_APIS: dict[ObjectType, ObjectApi] = {t: ObjectApi(m) for t, m in OBJECT_MODELS.items()}
@@ -462,6 +474,33 @@ class MeLinks(ApiModel):
         default=None,
         description="Base URL of Grafana (`SWITCHYARD_GRAFANA_URL`), or null when none is set.",
     )
+    grafana_embedded: bool = Field(
+        default=False,
+        description="Grafana is behind the controller: `POST /tenants/{t}/grafana/launch` returns "
+        "a link that opens it in a new tab, scoped to the tenant (ADR 0085).",
+    )
+
+
+class GrafanaLaunchIn(ApiModel):
+    """Where to land in the embedded Grafana."""
+
+    landing: str = Field(
+        default="",
+        max_length=400,
+        description="A path inside Grafana: empty (the tenant's home dashboard), "
+        "`/d/<uid>[/<slug>]`, `/explore` or `/dashboards`, optionally with a query string.",
+    )
+
+
+class GrafanaLaunchOut(ApiModel):
+    """A one-time link to the embedded Grafana."""
+
+    url: str = Field(
+        description="Open this path in a new browser tab within `expires_at`. It works "
+        "once: Switchyard exchanges it for a short session cookie and redirects into Grafana."
+    )
+    expires_at: datetime = Field(description="When the link stops working if it was not opened.")
+    tenant_id: UUID | None = Field(description="The tenant Grafana is scoped to; null for all.")
 
 
 class Me(ApiModel):
@@ -1481,6 +1520,16 @@ class MetricsRead(ApiModel):
     metrics: ServiceMetrics | None = None
 
 
+class EngineMetricsRead(ApiModel):
+    """Metrics of one service engine, or why there are none."""
+
+    available: bool = Field(
+        description="False when no metrics backend is configured or it cannot be reached."
+    )
+    reason: str | None = Field(default=None, description="Why `available` is false.")
+    metrics: EngineMetrics | None = None
+
+
 class MetricsOverviewItem(ApiModel):
     """Headline numbers of one virtual service."""
 
@@ -1751,7 +1800,7 @@ class EngineIn(ApiModel):
     agent_url: str | None = None
 
 
-# -- ACME providers and DNS credentials (ADR 0080) -------------------------------------------------
+# -- ACME providers and DNS credentials (ADR 0085) -------------------------------------------------
 
 
 class DnsFieldRead(ApiModel):

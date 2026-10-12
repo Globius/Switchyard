@@ -8,6 +8,7 @@ import { api, ApiError, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCan, useMe } from "@/auth/session";
 import { NicAddresses, nicPoolsBody } from "./NicAddresses";
+import { EngineMetrics } from "./EngineMetrics";
 import { ChipInput } from "@/components/sy/ChipInput";
 import { ShowOnceSecret } from "@/components/sy/ShowOnceSecret";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
@@ -238,6 +239,7 @@ function EnginesCard({
     null,
   );
   const [tokenStored, setTokenStored] = useState(false);
+  const [metricsFor, setMetricsFor] = useState<Engine | null>(null);
   const [token, setToken] = useState<{ name: string; token: string; expires_at: string } | null>(
     null,
   );
@@ -361,6 +363,10 @@ function EnginesCard({
                           label={t("More")}
                           items={[
                             {
+                              label: t("Metrics"),
+                              onSelect: () => setMetricsFor(e),
+                            },
+                            {
                               label: t("Enrollment token"),
                               disabled: !manage.allowed,
                               onSelect: async () => {
@@ -393,6 +399,22 @@ function EnginesCard({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+      {metricsFor && rows.some((e) => e.id === metricsFor.id) && (
+        <div className="m-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <h3 className="font-mono text-sm font-semibold">{metricsFor.name}</h3>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="ml-auto"
+              onClick={() => setMetricsFor(null)}
+            >
+              {t("Close metrics")}
+            </Button>
+          </div>
+          <EngineMetrics tenant={tenant} engineId={metricsFor.id} />
         </div>
       )}
       {drifted.map((e) => (

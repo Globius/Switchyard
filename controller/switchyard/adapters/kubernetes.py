@@ -3,7 +3,8 @@
 Read-only except for one call: writing the VIP back to ``Service.status.loadBalancer``. The client
 speaks plain REST with a bearer token (a service account), verifies the API server's certificate
 against the CA given in the cluster's settings, and returns the raw JSON objects; the planner
-(``switchyard.connectors.kubernetes``) reads them. :class:`FakeKube` is an in-memory cluster for tests.
+(``switchyard.connectors.kubernetes``) reads them. :class:`FakeKube` is an in-memory cluster
+for tests.
 
 Needed RBAC (``docs/kubernetes.md`` has the manifest): ``get, list`` on ``nodes``, ``services``,
 ``endpointslices``, ``gateways`` and ``httproutes``; ``patch`` on ``services/status``.

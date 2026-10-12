@@ -36,6 +36,8 @@ class JobKind(StrEnum):
         GC: Scheduled housekeeping.
         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
             confirmation; reverts it when the window runs out.
+        DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+        EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
 
     APPLY_CHANGE_SET = "apply_change_set"
@@ -50,6 +52,8 @@ class JobKind(StrEnum):
     GIT_MIRROR = "git_mirror"
     GC = "gc"
     CONTROLLER_TICK = "controller_tick"
+    DISCOVER_POOL_MEMBERS = "discover_pool_members"
+    EVALUATE_ALERTS = "evaluate_alerts"
 
 
 class JobStage(ApiModel):

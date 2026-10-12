@@ -8,13 +8,14 @@ environment or the network.
 Files produced (paths are relative to ``/etc/switchyard/`` on the SE, the only directory the agent
 and the Data Plane API write to):
 
-=============================== ===================================================================
-``haproxy/haproxy.cfg``         global, defaults, one frontend per service, one backend per pool
-``certs/<vs>.crtlist``          certificates and their SNI filters for a service's TLS ports
-``haproxy/maps/<vs>-host.map``  exact host -> backend, for host-only routes
-``haproxy/maps/<vs>-wild.map``  ``*.`` wildcard host regex -> backend, for host-only routes
-``haproxy/lists/<policy>.cidr`` source networks of an allow-list policy set
-=============================== ===================================================================
+================================= =================================================================
+``haproxy/haproxy.cfg``           global, defaults, one frontend per service, one backend per pool
+``certs/<vs>.crtlist``            certificates and their SNI filters for a service's TLS ports
+``haproxy/maps/<vs>-host.map``    exact host -> backend, for host-only routes
+``haproxy/maps/<vs>-wild.map``    ``*.`` wildcard host regex -> backend, for host-only routes
+``haproxy/lists/<policy>.cidr``   source networks of an allow-list policy set
+``haproxy/lists/<policy>-*.page`` bodies of fixed responses and error pages
+================================= =================================================================
 
 Certificate and key material is *not* rendered: ``crt-list`` entries point at
 ``/etc/switchyard/certs/<certificate-name>.pem``, which the agent writes from OpenBao.
@@ -24,13 +25,16 @@ detection compares it with what an SE reports. The crt-list lives beside the cer
 the Data Plane API stores both in one directory, and object names contain no dots because the API
 rewrites dots in file names.
 
-Request handling order inside an HTTP frontend, which the output makes explicit:
+Request handling order inside an HTTP frontend, which the output makes explicit (``docs/render.md``,
+ADR 0100):
 
 1. connection filter (allow list), client-IP restoration, header hygiene;
 2. HTTP to HTTPS redirects, then policy-set redirects, then redirect routes;
-3. path-qualified pool routes, in route ``order``;
-4. host-only pool routes: exact host first, then single-label wildcard hosts;
-5. the default pool, if any.
+3. fixed responses (``respond`` policy sets);
+4. request rewrites (``rewrite`` policy sets, request phase);
+5. conditional pool routes (a route with more than a host), in route ``order``;
+6. host-only pool routes: exact host first, then single-label wildcard hosts;
+7. the default pool, if any; response rewrites run on the way out.
 """
 
 import hashlib
@@ -43,7 +47,7 @@ from uuid import UUID
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
 from switchyard.domain import models as dm
-from switchyard.domain.snapshot import Snapshot, ensure_valid
+from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
 from switchyard.render import escape as esc
 from switchyard.render.escape import RenderError
 
@@ -58,6 +62,15 @@ CERT_DIR = "/etc/switchyard/certs"
 ACME_MAP_FILE = "haproxy/maps/acme-http01.map"
 ACME_MAP = f"{BASE_DIR}/maps/acme-http01.map"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
+PEERS_SECTION = "sy_peers"
+
+#: Protocol-aware health checks HAProxy ships, by monitor ``preset`` (ADR 0108).
+_TCP_PRESETS = {
+    "redis": "option redis-check",
+    "smtp": "option smtpchk",
+    "ldap": "option ldap-check",
+    "mysql": "option mysql-check",
+}
 
 #: TLS 1.3 cipher suites (Mozilla server-side TLS, 5.7).
 _TLS13_SUITES = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
@@ -227,10 +240,31 @@ def _allow_list(policy: object) -> dm.AllowListPolicySet:
     return policy
 
 
-def _redirect_set(policy: object) -> dm.RedirectPolicySet:
-    if not isinstance(policy, dm.RedirectPolicySet):
-        raise RenderError("expected a redirect policy set")
-    return policy
+#: Sample fetches behind the header variables (the fixed list; users never write expressions).
+_VARIABLES = {
+    dm.HeaderVariable.CLIENT_IP: "src",
+    dm.HeaderVariable.CLIENT_PORT: "src_port",
+    dm.HeaderVariable.HOST: "var(txn.host)",
+    dm.HeaderVariable.VIP: "dst",
+    dm.HeaderVariable.VIP_PORT: "dst_port",
+    dm.HeaderVariable.METHOD: "method",
+    dm.HeaderVariable.TLS_VERSION: "ssl_fc_protocol",
+    dm.HeaderVariable.TLS_CIPHER: "ssl_fc_cipher",
+    dm.HeaderVariable.TLS_SNI: "ssl_fc_sni",
+    dm.HeaderVariable.REQUEST_ID: "uuid",
+}
+#: Back-reference to the first regex group in a ``replace-path`` replacement (single-quoted, so
+#: HAProxy passes the backslash through unchanged).
+_GROUP_1 = "\\1"
+#: Header comparisons as ACL match flags.
+_HEADER_FLAGS = {
+    dm.HeaderOp.EQUALS: "str",
+    dm.HeaderOp.PREFIX: "beg",
+    dm.HeaderOp.SUFFIX: "end",
+    dm.HeaderOp.CONTAINS: "sub",
+}
+#: Frontend rules by stage, filled while the policy sets of a service are rendered.
+_Stages = tuple[list[str], list[str], list[str], list[str]]
 
 
 def _is_wild(host: str) -> bool:
@@ -246,6 +280,23 @@ def _quote_regex(regex: str) -> str:
 
 def _map_text(entries: Mapping[str, str]) -> str:
     return "".join(f"{key} {entries[key]}\n" for key in sorted(entries))
+
+
+def _cookie_value(pool: dm.Pool, member: dm.PoolMember) -> str:
+    """Opaque, stable cookie value of a member (ADR 0105).
+
+    The server name often encodes the member's address, which must not reach clients, so the value
+    is a short hash of the pool and member ids.
+
+    Example:
+        >>> import uuid
+        >>> pool = dm.Pool(id=uuid.UUID(int=1), tenant_id=uuid.UUID(int=2), name="p")
+        >>> member = dm.PoolMember(id=uuid.UUID(int=3), address="10.0.0.5")
+        >>> _cookie_value(pool, member)
+        'm0d1b1f77b038'
+    """
+    digest = hashlib.sha256(f"{pool.id}/{member.id}".encode()).hexdigest()
+    return f"m{digest[:12]}"
 
 
 def _map_rule(converter: str, path: str) -> str:
@@ -285,6 +336,8 @@ class _Renderer:
         self.warnings: list[str] = []
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
+        self.limit_backends: list[dict[str, Any]] = []
+        self.stick_counters = 0
 
     def render(self) -> RenderResult:
         services = sorted(
@@ -299,6 +352,7 @@ class _Renderer:
                 self.pool_modes[pool_id] = mode
             frontends.append(self._frontend(svc, mode))
         backends = [self._backend(self.pools[pid], mode) for pid, mode in self.pool_modes.items()]
+        backends += self.limit_backends
         backends.sort(key=lambda b: b["name"])
         template = _ENV.get_template("haproxy.cfg.j2")
 
@@ -309,7 +363,9 @@ class _Renderer:
                 frontends=frontends,
                 backends=backends,
                 exporter=self._exporter(),
+                stick_counters=self.stick_counters if self.stick_counters > 3 else None,
                 fingerprint=fingerprint,
+                peers=self._peers(),
             )
 
         # The fingerprint covers every file; the config is hashed with a placeholder in its own
@@ -323,6 +379,19 @@ class _Renderer:
         )
 
     # -- helpers ---------------------------------------------------------------------------------
+
+    def _peers(self) -> dict[str, Any] | None:
+        """The ``peers`` section that syncs persistence tables between the group's engines."""
+        sync = self.group.peers
+        if sync is None:
+            return None
+        return {
+            "name": PEERS_SECTION,
+            "members": [
+                {"name": esc.ident(m.name), "target": esc.bind_address(m.address, sync.port)}
+                for m in sorted(sync.members, key=lambda m: m.name)
+            ],
+        }
 
     def _exporter(self) -> dict[str, Any] | None:
         """Where the Prometheus exporter listens: port 8405, only for the management networks.
@@ -351,7 +420,7 @@ class _Renderer:
 
     @staticmethod
     def _pool_ids(svc: dm.VirtualService) -> list[UUID]:
-        ids = [r.pool_id for r in svc.routes if r.pool_id]
+        ids = [pid for r in svc.routes for pid in r.pool_ids]
         if svc.default_pool_id:
             ids.append(svc.default_pool_id)
         return list(dict.fromkeys(ids))
@@ -378,9 +447,23 @@ class _Renderer:
                 lst = self._list_path(allow)
                 connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
         request_rules: list[str] = []
+        tarpit_s: int | None = None
+        response_rules: list[str] = []
+        error_rules: list[str] = []
         routing_rules: list[str] = []
+        options: list[str] = []
+        if mode == "tcp" and svc.routes:
+            request_rules = [
+                "tcp-request inspect-delay 5s",
+                "tcp-request content accept if { req.ssl_hello_type 1 }",
+            ]
+            routing_rules = self._sni_rules(svc, name)
         if mode == "http":
+            options = self._http_options(svc, ports)
             request_rules = self._request_rules(svc, ports, allow)
+            tarpit_s = self._tarpit(svc)
+            response_rules = self._policy_stages(svc)[3]
+            error_rules = self._error_lines(svc)
             if any(p.port == 80 and not p.tls for p in ports):
                 # First, before redirects and routes: the CA's request must reach the answer.
                 request_rules.insert(0, _acme_rule())
@@ -389,14 +472,67 @@ class _Renderer:
         return {
             "name": name,
             "mode": mode,
-            "binds": [self._bind(svc, p, name, mode) for p in ports],
+            "binds": [bind for p in ports for bind in self._binds(svc, p, name, mode)],
+            "options": options,
             "connection_rules": connection_rules,
             "request_rules": request_rules,
+            "response_rules": response_rules,
+            "error_rules": error_rules,
+            "tarpit_s": tarpit_s,
             "routing_rules": routing_rules,
             "default_backend": (
                 self._backend_name(svc.default_pool_id) if svc.default_pool_id else None
             ),
         }
+
+    @staticmethod
+    def _http_options(svc: dm.VirtualService, ports: list[dm.VsPort]) -> list[str]:
+        """Frontend keywords of an HTTP service: compression, ``Alt-Svc`` (ADR 0116, 0117)."""
+        options: list[str] = []
+        if svc.compression is not None:
+            options.append("compression algo " + " ".join(svc.compression.algorithms))
+            options.append(
+                "compression type "
+                + " ".join(esc.media_type(t) for t in svc.compression.content_types)
+            )
+        for port in ports:
+            if port.http3:
+                options.append(f"http-response set-header alt-svc 'h3=\":{port.port}\"; ma=86400'")
+        return options
+
+    def _sni_rules(self, svc: dm.VirtualService, name: str) -> list[str]:
+        """Route a passthrough ``tcp`` service by the SNI of the client hello (ADR 0115)."""
+        exact: dict[str, str] = {}
+        wild: dict[str, str] = {}
+        for route in svc.routes:
+            host = _need(route.match.host, "passthrough route host")
+            target = self._backend_name(_need(route.pool_id, "passthrough route pool"))
+            if _is_wild(host):
+                wild[esc.wildcard_regex(host)] = target
+            else:
+                exact[esc.hostname(host)] = target
+        rules: list[str] = []
+        for converter, entries, suffix in (("map", exact, "sni"), ("map_reg", wild, "sni-wild")):
+            if not entries:
+                continue
+            path = f"{BASE_DIR}/maps/{name}-{suffix}.map"
+            self.files[f"haproxy/maps/{name}-{suffix}.map"] = _map_text(entries)
+            lookup = f"req.ssl_sni,lower,{converter}({path})"
+            rules.append(f"use_backend %[{lookup}] if {{ {lookup} -m found }}")
+        return rules
+
+    def _binds(self, svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> list[str]:
+        bind = self._bind(svc, port, name, mode)
+        if not port.http3:
+            return [bind]
+        # The same listener again over QUIC (UDP), with ALPN h3 instead of h2 and http/1.1.
+        quic = bind.replace("alpn h2,http/1.1", "alpn h3")
+        family = "quic6@" if svc.vip.version == 6 else "quic4@"
+        address = f"[{svc.vip}]:{port.port}" if svc.vip.version == 6 else f"{svc.vip}:{port.port}"
+        quic = quic.replace(
+            f"bind {esc.bind_address(svc.vip, port.port)}", f"bind {family}{address}", 1
+        )
+        return [bind, quic]
 
     def _bind(self, svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> str:
         parts = [f"bind {esc.bind_address(svc.vip, port.port)}"]
@@ -438,6 +574,166 @@ class _Renderer:
         nets = sorted(policy.cidrs, key=lambda n: (n.version, int(n.network_address), n.prefixlen))
         return "".join(f"{n}\n" for n in nets)
 
+    def _limit_rules(self, svc: dm.VirtualService) -> list[str]:
+        """Track and enforce the service's rate-limit rules; each rule gets a counter and a table.
+
+        The table is a dummy backend that only holds the stick table; the counter slot
+        (``track-sc<n>``) is the rule's position in the service, so rules never share state.
+        """
+        rules: list[str] = []
+        for slot, (policy, index, rule) in enumerate(rate_limit_rules(svc, self.policies)):
+            table = f"rl_{esc.ident(svc.name)}_{esc.ident(policy.name)}_{index}"
+            esc.ident(table)
+            if rule.key == "header":
+                key = f"req.hdr({esc.header_name(_need(rule.header_name, 'header name'))})"
+                table_type = "string len 64"
+            else:
+                key = "src"
+                table_type = "ipv6"
+            if rule.max_requests is not None:
+                store = f"http_req_rate({rule.period_s}s)"
+                check = f"{{ sc_http_req_rate({slot},{table}) gt {rule.max_requests} }}"
+                expire = max(rule.period_s, 60)
+                retry = f" hdr Retry-After {rule.period_s}"
+            else:
+                store = "conn_cur"
+                check = (
+                    f"{{ sc_conn_cur({slot},{table}) gt {_need(rule.max_concurrent, 'limit')} }}"
+                )
+                expire = 60
+                retry = ""
+            self.limit_backends.append(
+                {
+                    "name": table,
+                    "lines": [
+                        f"stick-table type {table_type} size {rule.table_size} "
+                        f"expire {expire}s store {store}"
+                    ],
+                    "servers": [],
+                }
+            )
+            self.stick_counters = max(self.stick_counters, slot + 1)
+            cond = " ".join(self._conditions(rule.match))
+            track = f"http-request track-sc{slot} {key} table {table}"
+            rules.append(track + (f" if {cond}" if cond else ""))
+            if rule.action == "deny":
+                rules.append(f"http-request return status {rule.deny_status}{retry} if {check}")
+            elif rule.action == "tarpit":
+                rules.append(f"http-request tarpit deny_status 429 if {check}")
+            else:
+                rules.append(f"http-request silent-drop if {check}")
+        return rules
+
+    def _tarpit(self, svc: dm.VirtualService) -> int | None:
+        delays = {
+            r.tarpit_s for _, _, r in rate_limit_rules(svc, self.policies) if r.action == "tarpit"
+        }
+        return min(delays) if delays else None
+
+    def _policy_stages(self, svc: dm.VirtualService) -> _Stages:
+        """Rules of the attached policy sets: redirects, responses, request and response rewrites.
+
+        Sets apply in attachment order within their kind; the kinds run in the stage order of
+        ``docs/render.md``, not in attachment order across kinds (ADR 0100).
+        """
+        redirects: list[str] = []
+        responses: list[str] = []
+        rewrites: list[str] = []
+        outgoing: list[str] = []
+        flags: list[str] = []
+        for pid in svc.policy_set_ids:
+            policy = self.policies[pid]
+            if isinstance(policy, dm.RedirectPolicySet):
+                for rule in policy.rules:
+                    redirects.append(self._redirect_line(rule.match, rule.redirect))
+            elif isinstance(policy, dm.RespondPolicySet):
+                for index, response in enumerate(policy.rules, start=1):
+                    responses.append(self._response_line(policy, index, response))
+            elif isinstance(policy, dm.RewritePolicySet):
+                for rewrite in policy.rules:
+                    cond = " ".join(self._conditions(rewrite.match))
+                    if rewrite.phase == "request":
+                        rewrites += self._rewrite_lines(rewrite, cond)
+                        continue
+                    if not cond:
+                        outgoing += self._rewrite_lines(rewrite, cond)
+                        continue
+                    # The request attributes are gone by the time a response rule runs, so the
+                    # match is evaluated with the request and remembered in a transaction flag.
+                    flag = f"txn.sy_m{len(flags) + 1}"
+                    flags.append(flag)
+                    rewrites.append(f"http-request set-var({flag}) bool(true) if {cond}")
+                    outgoing += self._rewrite_lines(rewrite, f"{{ var({flag}) -m bool }}")
+        return redirects, responses, rewrites, outgoing
+
+    def _redirect_line(self, match: dm.RouteMatch, redirect: dm.RedirectAction) -> str:
+        cond = " ".join(self._conditions(match))
+        location = esc.location(redirect.location)
+        return f"http-request redirect location {location} code {redirect.code} if {cond}"
+
+    def _page(self, policy: dm.TenantOwned, tag: str, body: str) -> str:
+        """Store a response body as a general-storage file (beside the lists); return its path."""
+        name = f"{esc.ident(policy.name)}-{tag}.page"
+        self.files[f"haproxy/lists/{name}"] = body if body.endswith("\n") else body + "\n"
+        return f"{BASE_DIR}/lists/{name}"
+
+    def _response_line(self, policy: dm.RespondPolicySet, index: int, rule: dm.ResponseRule) -> str:
+        parts = [f"http-request return status {rule.status}"]
+        if rule.body is not None:
+            parts.append(f"content-type {_need(rule.content_type, 'content type')}")
+            parts.append(f"file {self._page(policy, f'r{index}', rule.body)}")
+        if rule.retry_after_s is not None:
+            parts.append(f"hdr Retry-After {rule.retry_after_s}")
+        cond = " ".join(self._conditions(rule.match))
+        return " ".join(parts) + (f" if {cond}" if cond else "")
+
+    def _error_lines(self, svc: dm.VirtualService) -> list[str]:
+        lines: dict[int, str] = {}
+        for pid in svc.policy_set_ids:
+            policy = self.policies[pid]
+            if isinstance(policy, dm.ErrorPagesPolicySet):
+                for page in policy.pages:
+                    path = self._page(policy, f"e{page.status}", page.body)
+                    lines[page.status] = (
+                        f"http-error status {page.status} content-type {page.content_type} "
+                        f"file {path}"
+                    )
+        return [lines[status] for status in sorted(lines)]
+
+    def _rewrite_lines(self, rule: dm.RewriteRule, cond: str) -> list[str]:
+        phase = "http-response" if rule.phase == "response" else "http-request"
+        suffix = f" if {cond}" if cond else ""
+        action = rule.action
+        if isinstance(action, dm.RemoveHeader):
+            return [f"{phase} del-header {esc.header_name(action.name)}{suffix}"]
+        if isinstance(action, dm.ReplacePrefix):
+            return self._replace_prefix(action, cond)
+        verb = "set-header" if isinstance(action, dm.SetHeader) else "add-header"
+        if action.variable is not None:
+            value = f'"%[{_VARIABLES[action.variable]}]"'
+        else:
+            value = esc.quoted(_need(action.value, "header value"))
+        return [f"{phase} {verb} {esc.header_name(action.name)} {value}{suffix}"]
+
+    @staticmethod
+    def _replace_prefix(action: dm.ReplacePrefix, cond: str) -> list[str]:
+        """``replace-path`` on path-segment boundaries; ``/`` as target strips the prefix.
+
+        The regex and the replacement are single-quoted (nothing inside is expanded) and are
+        built from validated path characters, with ``.`` and ``+`` written as classes.
+        """
+        source = esc.path_regex(action.from_prefix)
+        target = esc.path_text(action.to_prefix)
+        suffix = f" if {cond}" if cond else ""
+        if action.to_prefix == "/":
+            exact = f"{{ path {esc.arg(action.from_prefix)} }}"
+            guard = f" if {cond} {exact}" if cond else f" if {exact}"
+            return [
+                f"http-request set-path /{guard}",
+                f"http-request replace-path '^{source}(/.*)$' '{_GROUP_1}'{suffix}",
+            ]
+        return [f"http-request replace-path '^{source}(/.*)?$' '{target}{_GROUP_1}'{suffix}"]
+
     def _request_rules(
         self,
         svc: dm.VirtualService,
@@ -469,24 +765,24 @@ class _Renderer:
                     f'http-request redirect prefix "https://%[var(txn.host)]{suffix}" code 301 '
                     f"if {{ dst_port {port.port} }}"
                 )
-        for match, redirect in self._redirects(svc):
-            cond = " ".join(self._conditions(match))
-            location = esc.location(redirect.location)
-            rules.append(
-                f"http-request redirect location {location} code {redirect.code} if {cond}"
-            )
-        return rules
-
-    def _redirects(self, svc: dm.VirtualService) -> list[tuple[dm.RouteMatch, dm.RedirectAction]]:
-        out: list[tuple[dm.RouteMatch, dm.RedirectAction]] = []
-        for pid in svc.policy_set_ids:
-            out += [(r.match, r.redirect) for r in _redirect_set(self.policies[pid]).rules]
+        if any(r.pools for r in svc.routes):
+            rules.append("http-request set-var(txn.pick) rand(100)")
+        rules += self._limit_rules(svc)
+        redirects, responses, rewrites, _ = self._policy_stages(svc)
+        rules += redirects
         ordered = sorted(enumerate(svc.routes), key=lambda ir: (ir[1].order, ir[0]))
-        out += [(r.match, r.redirect) for _, r in ordered if r.redirect is not None]
-        return out
+        rules += [
+            self._redirect_line(r.match, r.redirect) for _, r in ordered if r.redirect is not None
+        ]
+        return rules + responses + rewrites
 
     @staticmethod
     def _conditions(match: dm.RouteMatch) -> list[str]:
+        """The ACL conditions of a match, ANDed (an empty match gives none).
+
+        Header and query operands are double-quoted after validation; the wildcard regexes are
+        single-quoted so ``$`` is never expanded.
+        """
         conds: list[str] = []
         if match.host:
             if _is_wild(match.host):
@@ -498,21 +794,66 @@ class _Renderer:
             conds.append(f"{{ path_beg {esc.arg(match.path_prefix)} }}")
         if match.path_exact:
             conds.append(f"{{ path {esc.arg(match.path_exact)} }}")
+        if match.methods:
+            conds.append("{ method " + " ".join(sorted(m.value for m in match.methods)) + " }")
+        for header in match.headers:
+            fetch = f"req.hdr({esc.header_name(header.name)})"
+            if header.op is dm.HeaderOp.PRESENT:
+                conds.append(f"{{ {fetch} -m found }}")
+            elif header.op is dm.HeaderOp.ABSENT:
+                conds.append(f"!{{ {fetch} -m found }}")
+            else:
+                value = esc.quoted(_need(header.value, "header value"))
+                conds.append(f"{{ {fetch} -m {_HEADER_FLAGS[header.op]} {value} }}")
+        for param in match.query:
+            fetch = f"url_param({esc.query_param(param.name)})"
+            if param.op is dm.QueryOp.PRESENT:
+                conds.append(f"{{ {fetch} -m found }}")
+            else:
+                conds.append(f"{{ {fetch} -m str {esc.quoted(_need(param.value, 'value'))} }}")
+        if match.source_cidrs:
+            nets = sorted(match.source_cidrs, key=lambda n: (n.version, int(n.network_address)))
+            conds.append("{ src " + " ".join(str(n) for n in nets) + " }")
+        if match.sni:
+            if _is_wild(match.sni):
+                regex = _quote_regex(esc.wildcard_regex(match.sni))
+                conds.append(f"{{ ssl_fc_sni -m reg {regex} }}")
+            else:
+                conds.append(f"{{ ssl_fc_sni -m str {esc.hostname(match.sni)} }}")
         return conds
+
+    def _weighted_rules(self, route: dm.VsRoute, cond: str) -> list[str]:
+        """Split a route over its pools by the request's draw in ``txn.pick`` (ADR 0119)."""
+        rules: list[str] = []
+        cumulative = 0
+        for i, target in enumerate(route.pools):
+            backend = self._backend_name(target.pool_id)
+            cumulative += target.weight
+            if i == len(route.pools) - 1:
+                rules.append(f"use_backend {backend} if {cond}")
+            else:
+                rules.append(
+                    f"use_backend {backend} if {cond} {{ var(txn.pick) -m int lt {cumulative} }}"
+                )
+        return rules
 
     def _routing_rules(self, svc: dm.VirtualService, name: str) -> list[str]:
         rules: list[str] = []
-        pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_id is not None]
-        path_routes = [(i, r) for i, r in pool_routes if r.match.path_prefix or r.match.path_exact]
+        pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_ids]
+        # Weighted routes are conditional even on a bare host: the map files hold one pool per key.
+        path_routes = [(i, r) for i, r in pool_routes if r.pools or not r.match.is_host_only]
         for _, route in sorted(path_routes, key=lambda ir: (ir[1].order, ir[0])):
             cond = " ".join(self._conditions(route.match))
+            if route.pools:
+                rules += self._weighted_rules(route, cond)
+                continue
             backend = self._backend_name(_need(route.pool_id, "route pool"))
             rules.append(f"use_backend {backend} if {cond}")
         exact: dict[str, str] = {}
         wild: dict[str, str] = {}
         for _, route in pool_routes:
             host = route.match.host
-            if host is None or route.match.path_prefix or route.match.path_exact:
+            if host is None or route.pools or not route.match.is_host_only:
                 continue
             target = self._backend_name(_need(route.pool_id, "route pool"))
             if _is_wild(host):
@@ -533,19 +874,50 @@ class _Renderer:
         monitor = self.monitors.get(pool.health_monitor_id) if pool.health_monitor_id else None
         lines: list[str] = [f"mode {mode}", f"balance {pool.algorithm.value}"]
         if pool.persistence is not None:
-            lines += [
-                f"stick-table type ipv6 size {pool.persistence.table_size} "
-                f"expire {pool.persistence.timeout_s}s",
-                "stick on src",
-            ]
+            lines += self._persistence_lines(pool.persistence, self.group.peers is not None)
+        if pool.tunnel_timeout_s is not None:
+            lines.append(f"timeout tunnel {pool.tunnel_timeout_s}s")
         if monitor is not None:
             lines += self._monitor_lines(monitor)
         servers = sorted(self._server(pool, m, monitor, mode) for m in pool.members)
         return {"name": self._backend_name(pool.id), "lines": lines, "servers": servers}
 
     @staticmethod
+    def _persistence_lines(persistence: dm.Persistence, peers: bool) -> list[str]:
+        """Backend lines for one persistence profile (ADR 0105)."""
+        if isinstance(persistence, dm.PersistenceCookie):
+            line = f"cookie {esc.cookie_name(persistence.name)} {persistence.mode}"
+            if persistence.mode == "insert":
+                line += " indirect nocache"
+                if persistence.ttl_s is not None:
+                    line += f" maxlife {persistence.ttl_s}s"
+                if persistence.secure:
+                    line += " secure"
+                if persistence.http_only:
+                    line += " httponly"
+            return [line]
+        if isinstance(persistence, dm.PersistenceSourceIp):
+            table = f"type ipv6 size {persistence.table_size} expire {persistence.timeout_s}s"
+            key = "src"
+        else:
+            table = (
+                f"type string len 128 size {persistence.table_size} expire {persistence.timeout_s}s"
+            )
+            if isinstance(persistence, dm.PersistenceHeader):
+                key = f"req.hdr({esc.header_name(persistence.header)})"
+            elif persistence.source == "path":
+                key = "path"
+            else:
+                key = f"url_param({esc.ident(_need(persistence.param, 'url parameter'))})"
+        if peers:
+            table += f" peers {PEERS_SECTION}"
+        return [f"stick-table {table}", f"stick on {key}"]
+
+    @staticmethod
     def _monitor_lines(monitor: dm.HealthMonitor) -> list[str]:
         lines: list[str] = []
+        if monitor.preset is not None:
+            lines.append(_TCP_PRESETS[monitor.preset])
         if monitor.type is dm.MonitorType.HTTP:
             http = _need(monitor.http, "http monitor block")
             lines.append("option httpchk")
@@ -556,27 +928,38 @@ class _Renderer:
             if http.expect_status:
                 codes = ",".join(str(c) for c in sorted(set(http.expect_status)))
                 lines.append(f"http-check expect status {codes}")
+            elif http.expect_body is not None:
+                lines.append(f"http-check expect string {esc.match_text(http.expect_body)}")
+            elif http.expect_header is not None:
+                expected = http.expect_header
+                line = f"http-check expect hdr name {esc.header_name(expected.name)}"
+                if expected.value is not None:
+                    line += f" value {esc.match_text(expected.value)}"
+                lines.append(line)
         lines += [
             f"timeout check {monitor.timeout_s}s",
             f"default-server inter {monitor.interval_s}s fall {monitor.fall} rise {monitor.rise}",
         ]
         return lines
 
-    @staticmethod
     def _server(
-        pool: dm.Pool, member: dm.PoolMember, monitor: dm.HealthMonitor | None, mode: str
+        self, pool: dm.Pool, member: dm.PoolMember, monitor: dm.HealthMonitor | None, mode: str
     ) -> str:
         address = member.address
         target = str(address) if address.version == 4 else f"ipv6@{address}"
         if member.port is not None:
             target += f":{member.port}"
         parts = [f"server {esc.ident(member.server_name)} {target}"]
+        if isinstance(pool.persistence, dm.PersistenceCookie):
+            parts.append(f"cookie {_cookie_value(pool, member)}")
         if monitor is not None:
             parts.append("check")
             if monitor.port is not None:
                 parts.append(f"port {monitor.port}")
             if pool.tls:
                 parts.append("check-ssl")
+            if pool.send_proxy is not None:
+                parts.append("check-send-proxy")
             if pool.passive_check is not None:
                 passive = pool.passive_check
                 parts.append(
@@ -589,9 +972,22 @@ class _Renderer:
             parts.append(
                 f"ssl verify required ca-file {CA_BUNDLE}" if pool.tls_verify else "ssl verify none"
             )
+            if pool.client_certificate_id is not None:
+                cert = self.certs[pool.client_certificate_id]
+                parts.append(f"crt {CERT_DIR}/{esc.ident(cert.name)}.pem")
             if mode == "http":
                 parts.append("sni req.hdr(host),field(1,:),lower")
+            if pool.backend_protocol == "h2":
+                parts.append("alpn h2")
+        if pool.backend_protocol == "h2c":
+            parts.append("proto h2")
+        if pool.send_proxy is not None:
+            parts.append("send-proxy" if pool.send_proxy == "v1" else "send-proxy-v2")
         parts.append(f"weight {member.weight}")
+        if member.maxconn is not None:
+            parts.append(f"maxconn {member.maxconn}")
+        if member.backup:
+            parts.append("backup")
         if member.admin_state is not dm.AdminState.ENABLED:
             parts.append("disabled")  # drain and disabled both start out of rotation
         return " ".join(parts)

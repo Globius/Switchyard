@@ -27,6 +27,9 @@ for list in /etc/switchyard/certs/*.crtlist; do
   [ -e "$list" ] || continue
   while read -r path _; do cp /tmp/bundle.pem "$path"; done < "$list"
 done
+# Client certificates HAProxy presents to pool members (``crt`` on a server line).
+grep -oE ' crt /etc/switchyard/certs/[^ ]+[.]pem' /etc/switchyard/haproxy/haproxy.cfg | sort -u |
+while read -r _ path; do cp /tmp/bundle.pem "$path"; done
 # Client CAs and their revocation lists: a throwaway CA certificate and an empty CRL.
 if grep -qE 'ca-file|crl-file' /etc/switchyard/haproxy/haproxy.cfg; then
   mkdir -p /tmp/ca && touch /tmp/ca/index.txt && echo 01 > /tmp/ca/crlnumber
@@ -80,8 +83,14 @@ def _tar(files: Mapping[str, str]) -> bytes:
 def haproxy_check(files: Mapping[str, str]) -> CheckResult:
     """Run ``haproxy -c`` against rendered ``files`` and return the verdict and its output."""
     client = docker.from_env()
+    # A ``peers`` section only stays when one of its peers carries the host name of the engine.
+    local = re.search(r"^\s+peer (\S+) ", files.get("haproxy/haproxy.cfg", ""), re.MULTILINE)
     container = client.containers.create(
-        HAPROXY_IMAGE, command=["sh", "-c", _SCRIPT], user="root", network_mode="none"
+        HAPROXY_IMAGE,
+        command=["sh", "-c", _SCRIPT],
+        user="root",
+        network_mode="none",
+        hostname=local.group(1) if local else None,
     )
     try:
         container.put_archive("/", _tar(files))
