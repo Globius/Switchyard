@@ -265,18 +265,21 @@ def policy_open() -> bool:
     return os.environ.get("SWITCHYARD_ENGINE_POLICY", "strict") == "open"
 
 
-def allowed_dns_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
-    """Private networks DNS servers may live in: ``SWITCHYARD_DNS_CIDRS``, comma separated."""
-    raw = os.environ.get("SWITCHYARD_DNS_CIDRS", "")
+def allowed_dns_networks(
+    env: str = "SWITCHYARD_DNS_CIDRS",
+) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    """Private networks a named server may live in: the variable ``env``, comma separated."""
+    raw = os.environ.get(env, "")
     return [ipaddress.ip_network(p.strip()) for p in raw.split(",") if p.strip()]
 
 
-def check_endpoint(host: str, what: str) -> None:
+def check_endpoint(host: str, what: str, *, env: str = "SWITCHYARD_DNS_CIDRS") -> None:
     """Raise ``ValueError`` unless the controller may connect to ``host`` for DNS updates.
 
     A tenant administrator names the server, so the address must not be loopback, link-local
     (cloud metadata), multicast or unspecified, and private addresses need an operator allow list
-    (``SWITCHYARD_DNS_CIDRS``). Every address the name resolves to is checked.
+    (the variable ``env``, ``SWITCHYARD_DNS_CIDRS`` by default). Every address the name resolves
+    to is checked.
 
     Example:
         >>> check_endpoint("169.254.169.254", "server")
@@ -294,7 +297,7 @@ def check_endpoint(host: str, what: str) -> None:
         except OSError as exc:
             raise ValueError(f"{what}: cannot resolve {host}") from exc
         addresses = [ipaddress.ip_address(item[4][0]) for item in found]
-    allow = allowed_dns_networks()
+    allow = allowed_dns_networks(env)
     for address in addresses:
         if policy_open():
             continue

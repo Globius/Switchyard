@@ -28,6 +28,8 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
+from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.gslb import PROBE_GSLB_JOB, SYNC_GSLB_JOB, GslbProber, GslbSync
 from switchyard.services.infra import (
@@ -37,6 +39,8 @@ from switchyard.services.infra import (
     DeployRequest,
     InfraService,
 )
+from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
+from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
@@ -44,6 +48,7 @@ GIT_MIRROR_JOB = "git_mirror"
 
 
 POLL_STATUS_JOB = "poll_status"
+EXPIRE_DRAINS_JOB = "expire_drains"
 
 
 def build_handlers(
@@ -54,6 +59,10 @@ def build_handlers(
     infra: InfraService | None = None,
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
+    controller: ControllerSettings | None = None,
+    kubernetes: KubernetesClusters | None = None,
+    members: MemberService | None = None,
+    discovery: DiscoveryService | None = None,
     alerts: AlertEvaluator | None = None,
     gslb: GslbSync | None = None,
     prober: GslbProber | None = None,
@@ -63,7 +72,13 @@ def build_handlers(
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
+        discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
+        kubernetes: Syncs the tenants' Kubernetes clusters; ``None`` skips the ``kubernetes_sync``
+            kind.
+        controller: Checks controller settings changes that wait for confirmation; ``None`` skips
+            the ``controller_tick`` kind.
         alerts: The alert evaluator; ``None`` skips the ``evaluate_alerts`` kind.
         gslb: The GSLB sync; ``None`` skips the ``sync_gslb`` kind.
         prober: The latency prober; ``None`` skips the ``probe_gslb`` kind.
@@ -95,12 +110,36 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}
+    if kubernetes is not None:
+
+        async def kubernetes_sync(job: Job) -> dict[str, Any]:
+            return {"clusters": await kubernetes.sync_all()}
+
+        handlers[KUBERNETES_SYNC_JOB] = kubernetes_sync
+    if controller is not None:
+
+        async def controller_tick(job: Job) -> dict[str, Any]:
+            return {"events": await controller.tick()}
+
+        handlers[CONTROLLER_TICK_JOB] = controller_tick
+    if members is not None:
+
+        async def expire_drains(job: Job) -> dict[str, Any]:
+            return {"disabled": await members.expire_drains()}
+
+        handlers[EXPIRE_DRAINS_JOB] = expire_drains
     if gc is not None:
 
         async def collect_garbage(job: Job) -> dict[str, Any]:
             return dict(await gc.run())
 
         handlers[GC_JOB] = collect_garbage
+    if discovery is not None:
+
+        async def discover_pool_members(job: Job) -> dict[str, Any]:
+            return {"changed": await discovery.run()}
+
+        handlers[DISCOVER_POOLS_JOB] = discover_pool_members
     if alerts is not None:
 
         async def evaluate_alerts(job: Job) -> dict[str, Any]:

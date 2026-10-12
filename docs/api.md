@@ -63,8 +63,12 @@ Policy sets and routing profiles are unions on `kind`:
 
 | Collection | `kind` values | Fields |
 | --- | --- | --- |
-| `policy-sets` | `redirect` | `rules[]` |
+| `policy-sets` | `redirect` | `rules[]` (`match`, `redirect`) |
 | | `allow_list` | `cidrs[]`, `managed_by` |
+| | `rewrite` | `rules[]` (`phase`, `match`, `action`: `set_header`, `add_header`, `remove_header`, `replace_prefix`), ADR 0102 |
+| | `respond` | `rules[]` (`match`, `status`, `content_type`, `body`, `retry_after_s`), ADR 0103 |
+| | `error_pages` | `pages[]` (`status`, `content_type`, `body`), ADR 0103 |
+| | `rate_limit` | `rules[]` (`match`, `key`, `header_name`, `max_requests`, `period_s`, `max_concurrent`, `action`, `deny_status`, `tarpit_s`, `table_size`), ADR 0110 |
 | `routing-profiles` | `vrrp` | `vrid`, `interface`, `advert_interval_s`, `base_priority`, `priority_step`, `static_routes[]` |
 | | `bgp` | `asn`, `bfd`, `peers[]` (`peer_ip`, `remote_asn`, `md5_ref`, `max_prefixes`), `max_prefixes`, `max_paths`, `static_routes[]` |
 
@@ -83,7 +87,7 @@ the change reaches) and `se_groups` with the changed files (`before`, `after`, u
 
 `POST …/apply` takes an optional `message` (up to 2000 characters) that is kept as the revision message: revisions return `message`, and the Git mirror commit body carries it.
 
-Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`. A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type, and `members`, the number of people with a
+Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`, plus `stick_table_entries` (total rate-limit table size, ADR 0110). A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type, and `members`, the number of people with a
 grant in the tenant.
 
 `POST …/apply` returns `202 {job_id}`. When the tenant has `require_approval` it answers `403` unless the caller is
@@ -183,6 +187,32 @@ expires. Read it with the certificate, change it with a normal update operation.
   checks as `{ok, problems:[{path, message}]}` without queueing.
 - `GET /tenants/{t}/certificate-renewals` (status per certificate) and
   `GET /tenants/{t}/certificates/{id}/renewals` (history with the CA's error).
+
+## The controller's own address
+
+`GET /system/controller`, `PUT /system/controller/pending`, `POST /system/controller/confirm` and
+`POST /system/controller/revert` (system administrators). A proposal is applied to the `controller`
+service of the management tenant and reverted by the worker unless confirmed on the new FQDN in time;
+see `docs/controller-settings.md` and ADR 0081.
+
+## Kubernetes clusters
+
+`/tenants/{t}/kubernetes-clusters` (tenant-admin to write, viewer to read; see `docs/kubernetes.md`).
+
+| Call | Purpose |
+| --- | --- |
+| `GET` / `POST` | List, register. Body: `name`, `api_url`, `token` (write-only, stored in OpenBao), `ca_pem?`, `se_group`, `vip_pool`, `mode` (`nodeport`/`pods`), `class_name?`, `gateway_class?`, `enabled?` |
+| `GET` / `PATCH` / `DELETE` `/{cluster}` | Read (ETag), change (`If-Match`; `token` replaces the secret), remove |
+| `POST /{cluster}/test` | `{ok, version, nodes, services, gateway_api, permissions, detail}` |
+| `POST /{cluster}/sync` | 202 with `job_id`; a sync opens one change set as `system:k8s` |
+
+A cluster reads back with `last_sync` (`created`, `updated`, `deleted`, `change_set_id`,
+`addresses_written`), `last_sync_ok`, `last_sync_error` and `waiting_for_change_set`. The token is never returned.
+
+## Importing an Avi export
+
+`POST /tenants/{t}/imports/avi` converts an Avi configuration export into a draft change set (dry run by default)
+and lists every decision as a finding; see `docs/import-avi.md` and ADR 0150.
 
 ## Jobs
 

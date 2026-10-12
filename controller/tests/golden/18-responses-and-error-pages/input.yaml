@@ -1,0 +1,124 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+certificates:
+- id: c-shop
+  tenant_id: t-acme
+  name: shop-example-test
+  source: cloudflare_origin
+  sans:
+  - shop.example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/shop-example-test
+pools:
+- id: p-shop
+  tenant_id: t-acme
+  name: shop
+  members:
+  - address: 10.20.3.11
+    port: 8080
+policy_sets:
+- id: ps-responses
+  tenant_id: t-acme
+  name: shop-responses
+  kind: respond
+  rules:
+  # the load balancer answers health probes of an upstream CDN itself
+  - match:
+      path_exact: /lb-ping
+    status: 200
+    content_type: text/plain
+    body: ok
+  # a path the service never had: answer 404 at the edge
+  - match:
+      path_prefix: /wp-admin
+    status: 404
+  # no body: an empty 204 for browsers asking for the favicon
+  - match:
+      path_exact: /favicon.ico
+      methods: [GET]
+    status: 204
+  # turn a known abusive client away with a retry hint
+  - match:
+      headers:
+      - name: User-Agent
+        op: contains
+        value: BadBot
+    status: 429
+    content_type: application/json
+    body: '{"error":"slow down"}'
+    retry_after_s: 120
+- id: ps-maintenance
+  tenant_id: t-acme
+  name: maintenance
+  kind: respond
+  rules:
+  - match:
+      headers:
+      - name: X-Maintenance
+        op: equals
+        value: 'on'
+    status: 503
+    content_type: text/html
+    body: |-
+      <!doctype html>
+      <title>Back soon</title>
+      <h1>Down for maintenance</h1>
+      <p>We will be back shortly.</p>
+    retry_after_s: 600
+- id: ps-errors
+  tenant_id: t-acme
+  name: shop-errors
+  kind: error_pages
+  pages:
+  - status: 503
+    content_type: text/html
+    body: |-
+      <!doctype html>
+      <title>Unavailable</title>
+      <h1>Service unavailable</h1>
+  - status: 502
+    content_type: text/plain
+    body: Bad gateway
+  - status: 504
+    content_type: application/json
+    body: '{"error":"upstream timeout"}'
+virtual_services:
+- id: v-shop
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: shop
+  protocol: http
+  vip: 192.0.2.32
+  ports:
+  - port: 443
+    tls: true
+  certificate_ids:
+  - c-shop
+  policy_set_ids:
+  - ps-responses
+  - ps-maintenance
+  - ps-errors
+  default_pool_id: p-shop

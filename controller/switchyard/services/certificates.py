@@ -29,6 +29,8 @@ from switchyard.adapters.acme import (
     NoProgress,
     Progress,
     Solver,
+    TlsAlpn01Solver,
+    TlsAlpnPublisher,
 )
 from switchyard.adapters.cloudflare import Cloudflare, CloudflareError
 from switchyard.adapters.secrets import SecretBackendError, SecretsReader, SecretsWriter
@@ -211,6 +213,7 @@ class CertificateService:
         acme_providers: AcmeProviders | None = None,
         dns_providers: DnsProviders | None = None,
         http_publisher: Callable[[UUID], HttpPublisher] | None = None,
+        alpn_publisher: Callable[[UUID], TlsAlpnPublisher] | None = None,
         dns_wait_s: float = 15.0,
     ) -> None:
         """Create the service; issuers are optional and checked when used.
@@ -225,6 +228,8 @@ class CertificateService:
             dns_providers: The tenants' DNS credentials.
             http_publisher: Builds, for a tenant, the publisher that makes the engines answer
                 HTTP-01 challenges.
+            alpn_publisher: Builds, for a tenant, the publisher that makes the engines present
+                TLS-ALPN-01 challenge certificates.
             dns_wait_s: Pause after publishing DNS records.
         """
         self._db = db
@@ -234,6 +239,7 @@ class CertificateService:
         self._acme_providers = acme_providers
         self._dns_providers = dns_providers
         self._http_publisher = http_publisher
+        self._alpn_publisher = alpn_publisher
         self._dns_wait = dns_wait_s
 
     # -- storing material -------------------------------------------------------------------------
@@ -436,9 +442,16 @@ class CertificateService:
         if self._acme_providers is None:
             raise CertificateError("ACME is not configured")
         resolver = None
-        publisher: HttpPublisher | None = None
+        publisher: HttpPublisher | TlsAlpnPublisher | None = None
         solver: Solver
-        if how.challenge is dm.AcmeChallenge.HTTP01:
+        if how.challenge is dm.AcmeChallenge.TLSALPN01:
+            if any(name.startswith("*.") for name in sans):
+                raise CertificateError("TLS-ALPN-01 cannot validate wildcard names; use DNS-01")
+            if self._alpn_publisher is None:
+                raise CertificateError("TLS-ALPN-01 is not configured")
+            publisher = self._alpn_publisher(tenant_id)
+            solver = TlsAlpn01Solver(publisher)
+        elif how.challenge is dm.AcmeChallenge.HTTP01:
             if any(name.startswith("*.") for name in sans):
                 raise CertificateError("HTTP-01 cannot validate wildcard names; use DNS-01")
             if self._http_publisher is None:

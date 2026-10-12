@@ -147,3 +147,77 @@ async def test_unchanged_snapshots_write_nothing(admin_engine: AsyncEngine) -> N
     async with admin_session(admin_engine) as s:
         delta = await apply_delta(s, base, base)
     assert delta.is_empty
+
+
+async def test_new_policy_kinds_and_route_match_conditions_round_trip(
+    admin_engine: AsyncEngine,
+) -> None:
+    """Rewrite, respond and error-page sets and the extra route conditions survive PostgreSQL."""
+    t = "t-acme"
+    data = base_data()
+    data["policy_sets"] = [
+        {
+            "id": "ps-rw",
+            "tenant_id": t,
+            "name": "rw",
+            "kind": "rewrite",
+            "rules": [
+                {"action": {"type": "set_header", "name": "X-A", "value": "a b"}},
+                {
+                    "phase": "response",
+                    "match": {"methods": ["GET"], "path_prefix": "/s"},
+                    "action": {"type": "remove_header", "name": "Server"},
+                },
+            ],
+        },
+        {
+            "id": "ps-resp",
+            "tenant_id": t,
+            "name": "resp",
+            "kind": "respond",
+            "rules": [
+                {
+                    "match": {"headers": [{"name": "X-M", "op": "present"}]},
+                    "status": 503,
+                    "content_type": "text/html",
+                    "body": "<p>down</p>",
+                    "retry_after_s": 30,
+                },
+                {"status": 404},
+            ],
+        },
+        {
+            "id": "ps-err",
+            "tenant_id": t,
+            "name": "err",
+            "kind": "error_pages",
+            "pages": [{"status": 502, "content_type": "text/plain", "body": "bad"}],
+        },
+    ]
+    data["virtual_services"][0]["policy_set_ids"] = ["ps-resp", "ps-rw", "ps-err"]
+    data["virtual_services"][0]["routes"] = [
+        {
+            "order": 1,
+            "match": {
+                "host": "app.example.test",
+                "methods": ["POST", "PUT"],
+                "headers": [{"name": "X-Env", "op": "prefix", "value": "ca"}],
+                "query": [{"name": "c", "value": "1"}],
+                "source_cidrs": ["10.0.0.0/8", "fd00::/8"],
+                "sni": "*.example.test",
+            },
+            "pool_id": "pool-web",
+        },
+        {"match": {"host": "app.example.test"}, "pool_id": "pool-web"},
+    ]
+    snap = snapshot_from_mapping(data)
+    async with admin_session(admin_engine) as s:
+        await add_snapshot(s, snap)
+    async with admin_session(admin_engine) as s:
+        loaded = await load_snapshot(s)
+    assert canonical(loaded) == canonical(snap)
+    kinds = {p.name: p.kind for p in loaded.policy_sets}
+    assert kinds == {"rw": "rewrite", "resp": "respond", "err": "error_pages"}
+    assert [str(p) for p in loaded.virtual_services[0].policy_set_ids] == [
+        str(uuid.UUID(symbolic_uuid(x))) for x in ("ps-resp", "ps-rw", "ps-err")
+    ]

@@ -6,16 +6,18 @@ that uses the pool, through the Runtime API and without a reload.
 """
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from switchyard.adapters.haproxy import HaproxyError, ServerAdminState
 from switchyard.db import audit_log
 from switchyard.db.models import PoolMemberRow, PoolRow
 from switchyard.db.repository import load_snapshot
-from switchyard.db.tenancy import tenant_session
+from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain.models import AdminState
+from switchyard.domain.workflow import Role
 from switchyard.pipeline.engines import EngineDirectory
 from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
@@ -71,6 +73,48 @@ class MemberService:
         if not principal.can_access(tenant_id):
             raise PermissionDeniedError(f"{principal.actor} has no access to this tenant")
         require(principal, "set_state", "member")
+        return await self._set_state(principal, tenant_id, pool_id, member_id, state, request_id)
+
+    async def expire_drains(self, *, now: datetime | None = None) -> int:
+        """Disable members whose ``drain_timeout_s`` has run out (the ``expire_drains`` job).
+
+        A member found draining without a start time gets one now, so a change-set apply that
+        rewrote the row does not stop the clock for good. Returns the number disabled.
+        """
+        now = now or datetime.now(UTC)
+        due: list[tuple[UUID, UUID, UUID]] = []
+        async with admin_session(self._db.admin) as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(PoolMemberRow).where(
+                            PoolMemberRow.admin_state == AdminState.DRAIN.value,
+                            PoolMemberRow.drain_timeout_s.is_not(None),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                if row.drain_since is None:
+                    row.drain_since = now
+                elif (now - row.drain_since).total_seconds() >= (row.drain_timeout_s or 0):
+                    due.append((row.tenant_id, row.pool_id, row.id))
+        system = Principal("system:drain-timeout", Role.SYSTEM_ADMIN)
+        for tenant_id, pool_id, member_id in due:
+            await self._set_state(system, tenant_id, pool_id, member_id, AdminState.DISABLED, None)
+        return len(due)
+
+    async def _set_state(
+        self,
+        principal: Principal,
+        tenant_id: UUID,
+        pool_id: UUID,
+        member_id: UUID,
+        state: AdminState,
+        request_id: str | None,
+    ) -> MemberStateResult:
         async with tenant_session(self._db.app, [tenant_id]) as session:
             snapshot = await load_snapshot(session)
             pool = next((p for p in snapshot.pools if p.id == pool_id), None)
@@ -80,7 +124,10 @@ class MemberService:
             await session.execute(
                 update(PoolMemberRow)
                 .where(PoolMemberRow.id == member_id)
-                .values(admin_state=state.value)
+                .values(
+                    admin_state=state.value,
+                    drain_since=datetime.now(UTC) if state is AdminState.DRAIN else None,
+                )
             )
             await session.execute(
                 update(PoolRow).where(PoolRow.id == pool_id).values(version=PoolRow.version + 1)
@@ -98,7 +145,7 @@ class MemberService:
                 s.se_group_id
                 for s in snapshot.virtual_services
                 if s.enabled
-                and (s.default_pool_id == pool_id or any(r.pool_id == pool_id for r in s.routes))
+                and (s.default_pool_id == pool_id or any(pool_id in r.pool_ids for r in s.routes))
             }
         result = MemberStateResult(state=state)
         for group_id in sorted(group_ids):

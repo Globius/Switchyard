@@ -17,6 +17,8 @@ deterministic `haproxy.cfg` from PostgreSQL. M2 (change sets, API, jobs) and M3 
 | [Production guide](docs/production.md) | Sizing, HA, security checklist, OpenBao, TLS and CA, backups, monitoring, upgrades, what is proven |
 | [Runbooks](docs/runbooks/README.md) | Restore the database, rotate the CA, replace an engine, roll back, set up lab hosts |
 | [Render guide](docs/render.md) | How each object maps to HAProxy configuration |
+| [Pool discovery](docs/pool-discovery.md) | Pools filled from tagged Proxmox guests |
+| [OpenTofu provider](provider/README.md) | Manage a tenant with OpenTofu; generated from the OpenAPI |
 | [Operating guide](docs/operating.md) | Processes, configuration, login, `syctl api`, agents, housekeeping |
 | [API conventions](docs/api.md) | Auth, errors, filters, pagination, health, live events, metrics; live docs at `/api/v1/docs` and `/api/v1/redoc` |
 | [Frontend scope](docs/design/04-frontend-scope.md) | Screens, fields, states and the endpoint behind each; what is still not backed |

@@ -148,7 +148,13 @@ def test_object_reads_document_etag_and_if_match_problems() -> None:
 
 @pytest.mark.parametrize(
     ("slug", "tags"),
-    [("policy-sets", {"redirect", "allow_list"}), ("routing-profiles", {"vrrp", "bgp"})],
+    [
+        (
+            "policy-sets",
+            {"redirect", "allow_list", "rewrite", "respond", "error_pages", "rate_limit"},
+        ),
+        ("routing-profiles", {"vrrp", "bgp"}),
+    ],
 )
 def test_policy_sets_and_routing_profiles_are_discriminated_unions(
     slug: str, tags: set[str]
@@ -163,7 +169,7 @@ def test_policy_sets_and_routing_profiles_are_discriminated_unions(
     for schema in schemas:
         assert schema["discriminator"]["propertyName"] == "kind"
         assert set(schema["discriminator"]["mapping"]) == tags
-        assert len(schema["oneOf"]) == 2
+        assert len(schema["oneOf"]) == len(tags)
 
 
 def test_new_field_level_errors_keep_a_plain_path() -> None:

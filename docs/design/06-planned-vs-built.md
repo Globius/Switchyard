@@ -46,10 +46,14 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Engine host online state | done | `host_online` on `GET /engines` (ADR 0049) | |
 | Proxmox host layout and capacity (Placement) | done | `GET /se-groups/{group}/placement` (ADR 0049) | |
 | Certificates: import, PKCS#12 (ADR 0043), replace (ADR 0044), ACME DNS-01 (incl. step-ca), Origin CA, renew job (M5) | done | | |
+| Kubernetes connector (D2): LoadBalancer Services and Gateway API to pools and services, address write-back | done | ADR 0151, `docs/kubernetes.md` | |
+| Avi importer (D3): export to a draft change set with findings | done | ADR 0150, `docs/import-avi.md` | |
+| TLS-ALPN-01 (RFC 8737) through HAProxy runtime certificates | done | ADR 0082 | Expiry notifications wait for the alerting block (P6) |
+| Controller FQDN, VIP and certificate from the UI, with confirm and automatic revert | done | ADR 0081, `docs/controller-settings.md` | |
 | ACME providers (several CAs, EAB, OAuth), DNS credentials per tenant (Cloudflare, Route 53, Azure, Google, RFC 2136, PowerDNS), HTTP-01, renewal history | done | ADR 0080, `docs/acme.md` | |
 | OCSP stapling, cipher and TLS-version profiles | done | `tls_profile` on ports, `ocsp_stapling` on certificates (ADR 0067) | |
 | mTLS: client certificate verification | done | `client_ca` certificates and `client_ca_id` on ports (ADR 0070) | |
-| mTLS to the backend members | missing | *not built*: client certificate on server lines (ADR 0070) | Pool field, bundle, golden case |
+| mTLS to the backend members | done | `client_certificate_id` on a TLS pool; certificate in the bundle (ADR 0107) | |
 | Cloudflare-only allow list sync job | done | | |
 | Cloudflare DNS record created from a virtual service | partial | Adapter has DNS calls; no service flow uses them (01 phase 2) | A job or change-set hook plus a model flag |
 | Login: OIDC, SAML, break-glass, sessions, refresh (T1, G1-2, G1-4, G1-7) | done | | |

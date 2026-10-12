@@ -858,6 +858,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/controller": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The controller's address, VIP and certificate
+         * @description The public URL in effect and where the `controller` service answers.
+         *
+         *     Also its certificate, the change that waits for confirmation (with the seconds left) and
+         *     the redirect addresses each identity provider must allow for the new FQDN.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_controller_api_v1_system_controller_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep the new controller settings
+         * @description Make the pending FQDN the public URL.
+         *
+         *     The request has to arrive on the new FQDN (`403` otherwise): reaching it is the proof it
+         *     works. `409` when nothing waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["confirm_controller_api_v1_system_controller_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Propose a new FQDN, VIP or certificate
+         * @description Validate, then apply the change to the `controller` service.
+         *
+         *     It is a change set of the management tenant with a recorded reason. When it has applied,
+         *     a confirmation window starts.
+         *
+         *     Update the identity providers' redirect addresses first (`redirect_urls`). The worker
+         *     reverts the change if it is not confirmed in time; nothing depends on this API. `409`
+         *     while another change waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["propose_controller_api_v1_system_controller_pending_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert the pending controller change now
+         * @description Put the previous VIP and certificate back with another change set.
+         *
+         *     Works from either address. `409` when nothing waits.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["revert_controller_api_v1_system_controller_revert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/settings": {
         parameters: {
             query?: never;
@@ -1994,6 +2097,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/gslb-zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List GSLB zones
+         * @description DNS zones hosted for this tenant on the controller's PowerDNS. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_gslb_zones_api_v1_tenants__t__gslb_zones_get"];
+        put?: never;
+        /**
+         * Host a zone for a tenant
+         * @description Creates the zone on PowerDNS and assigns it to the tenant. A zone name belongs to one tenant and may not overlap another tenant's zone. Delegate it at its parent to the nameservers you name. Requires `system-admin`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_gslb_zone_api_v1_tenants__t__gslb_zones_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a zone
+         * @description Removes the zone from PowerDNS and every wide IP in it. Requires `system-admin`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_gslb_zone_api_v1_tenants__t__gslb_zones__zone__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/dnssec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign a zone (DNSSEC)
+         * @description Turns DNSSEC on (PowerDNS creates the keys) and returns the DS records to publish at the zone's parent. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["enable_gslb_dnssec_api_v1_tenants__t__gslb_zones__zone__dnssec_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/ds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DS records of a zone
+         * @description Whether the zone is signed and its DS records. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["gslb_ds_api_v1_tenants__t__gslb_zones__zone__ds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/wide-ips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a wide IP
+         * @description Publishes a name in the zone. `failover` answers with the first priority tier that has a member up; `all` with every member that is up; `weighted` picks among members that are up by weight; `subnet` answers by the client's network; `geo` picks the member closest to the client (the PowerDNS server needs a GeoIP database). A member is an address or a virtual service (its VIP is followed when it moves). PowerDNS checks health itself, from the DNS servers. Applies at once and is audited. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a wide IP
+         * @description Removes the records. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a wide IP
+         * @description Change the algorithm, TTL, health check or members, or switch it off (its records are removed) and on. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Wide IPs against PowerDNS
+         * @description Compares each wide IP with the records PowerDNS holds: `in_sync`, `drift` (they differ; nothing is changed), `pending`, `error` (the last push failed) or `off`. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["gslb_status_api_v1_tenants__t__gslb_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write every wide IP to PowerDNS again
+         * @description Rewrites the records of every enabled wide IP, which also repairs drift. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["gslb_sync_api_v1_tenants__t__gslb_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/health-monitors": {
         parameters: {
             query?: never;
@@ -2096,6 +2387,34 @@ export interface paths {
         get: operations["rendered_health_monitors_api_v1_tenants__t__health_monitors__object_id__rendered_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/imports/avi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import an Avi configuration export
+         * @description Convert the export; with `dry_run: false` open a draft change set from it.
+         *
+         *     SNI parents and their children become one HTTP service with host routes. Pools, health
+         *     monitors, certificates (with keys, stored in the secrets backend), HTTP redirects and pool
+         *     switches are converted; WAF, DataScripts and other things are listed under `findings` as
+         *     `manual`. VIPs do not carry over: they come from `vip_pool` or `vip_map`. The draft is not
+         *     applied; review it like any change set.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["import_avi_api_v1_tenants__t__imports_avi_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2206,6 +2525,118 @@ export interface paths {
          *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["retry_job_api_v1_tenants__t__jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's Kubernetes clusters
+         * @description Connected clusters by name, with the last sync result. The token is never shown.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_kubernetes_clusters_api_v1_tenants__t__kubernetes_clusters_get"];
+        put?: never;
+        /**
+         * Connect a Kubernetes cluster
+         * @description Connect a cluster.
+         *
+         *     Services of type `LoadBalancer` with the cluster's class and Gateways with its gateway
+         *     class become virtual services. The token is stored in the secrets backend; run the test
+         *     to check access.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a Kubernetes cluster
+         * @description One cluster with its version in the `ETag`.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["get_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect a Kubernetes cluster
+         * @description Forget the cluster; the objects it created stay until you delete them.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a Kubernetes cluster
+         * @description Change settings or replace the token; omitted fields stay.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync a Kubernetes cluster now
+         * @description Queue a sync of every cluster of the platform; the sync also runs every 30 seconds.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["sync_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/kubernetes-clusters/{cluster}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a Kubernetes cluster connection
+         * @description Reach the API server, count nodes and services and check what the token may do.
+         *
+         *     Always answers `200`; `ok: false` lists the problems.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["test_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3416,6 +3847,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/wide-ips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List wide IPs
+         * @description Names whose answer follows the health of their members; `zone` narrows to one zone. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_wide_ips_api_v1_tenants__t__wide_ips_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -3612,7 +4065,7 @@ export interface components {
          * @description How an ACME certificate authority checks control of a name.
          * @enum {string}
          */
-        AcmeChallenge: "dns-01" | "http-01";
+        AcmeChallenge: "dns-01" | "http-01" | "tls-alpn-01";
         /**
          * AcmeOauthIn
          * @description OAuth settings for a CA behind an identity provider (client-credentials grant).
@@ -3875,6 +4328,22 @@ export interface components {
          * @enum {string}
          */
         Action: "create" | "update" | "delete";
+        /**
+         * AddHeader
+         * @description Add a header, keeping any existing values.
+         */
+        AddHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "add_header";
+            /** Value */
+            value?: string | null;
+            variable?: components["schemas"]["HeaderVariable"] | null;
+        };
         /**
          * AdminState
          * @description Operator-controlled pool member state.
@@ -4400,6 +4869,129 @@ export interface components {
             providers: components["schemas"]["AuthProvider"][];
         };
         /**
+         * AviFindingRead
+         * @description One decision of the conversion.
+         */
+        AviFindingRead: {
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "info" | "warning" | "manual" | "skipped";
+            /** Message */
+            message: string;
+            /** Object */
+            object: string;
+        };
+        /**
+         * AviImportIn
+         * @description Convert an Avi configuration export into a draft change set.
+         */
+        AviImportIn: {
+            /**
+             * Dry Run
+             * @description Only report what would be created. Send `false` to create the draft.
+             * @default true
+             */
+            dry_run: boolean;
+            /**
+             * Export
+             * @description The decoded Avi configuration export (`POST /api/configuration/export`, or the `avi_config.json` of a backup): an object with a list per object type.
+             */
+            export: {
+                [key: string]: unknown;
+            };
+            /**
+             * Include Unused
+             * @description Also convert pools and other objects no service uses.
+             * @default false
+             */
+            include_unused: boolean;
+            /**
+             * Only
+             * @description Convert only these virtual services (Avi names).
+             */
+            only?: string[];
+            /**
+             * Prefix
+             * @description Put in front of every new name.
+             * @default
+             */
+            prefix: string;
+            /**
+             * Se Group
+             * @description Name of the SE group the services will use.
+             */
+            se_group: string;
+            /**
+             * Vip Map
+             * @description Fixed new addresses, keyed by the Avi VIP name or its old address.
+             */
+            vip_map?: {
+                [key: string]: string;
+            };
+            /**
+             * Vip Pool
+             * @description VIP pool the new VIPs are taken from, one per Avi VIP.
+             */
+            vip_pool?: string | null;
+        };
+        /**
+         * AviImportRead
+         * @description What the import did or would do.
+         */
+        AviImportRead: {
+            /**
+             * Change Set Id
+             * @description The draft change set; empty for a dry run.
+             */
+            change_set_id: string | null;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Dry Run */
+            dry_run: boolean;
+            /** Findings */
+            findings: components["schemas"]["AviFindingRead"][];
+            /** Objects */
+            objects: components["schemas"]["AviMappedRead"][];
+            /** Vips */
+            vips: components["schemas"]["AviVipRead"][];
+        };
+        /**
+         * AviMappedRead
+         * @description An Avi object and what it became.
+         */
+        AviMappedRead: {
+            /** Avi Name */
+            avi_name: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * AviVipRead
+         * @description An Avi VIP and the address that replaces it.
+         */
+        AviVipRead: {
+            /**
+             * Address
+             * @description The address in the export.
+             */
+            address: string | null;
+            /** Avi Vsvip */
+            avi_vsvip: string;
+            /**
+             * New Address
+             * @description The address it gets here, if one was found.
+             */
+            new_address: string | null;
+            /** Services */
+            services: string[];
+        };
+        /**
          * BgpPeer
          * @description An upstream BGP neighbour (for example a tenant's FortiGate VDOM).
          *
@@ -4760,9 +5352,9 @@ export interface components {
             acme_provider?: string | null;
             /**
              * Challenge
-             * @description `dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.
+             * @description `dns-01` (default), `http-01` or `tls-alpn-01`. The last two cannot validate wildcard names. TLS-ALPN-01 answers every HTTPS handshake for the name with the challenge certificate while it runs, so a name that is serving traffic is interrupted for a few seconds (see `warnings` in the check).
              */
-            challenge?: ("dns-01" | "http-01") | null;
+            challenge?: ("dns-01" | "http-01" | "tls-alpn-01") | null;
             /**
              * Dns Provider
              * @description DNS credential name for `dns-01`. Chosen by zone when empty.
@@ -5131,6 +5723,209 @@ export interface components {
             state: components["schemas"]["ChangeSetState"];
             /** Summary */
             summary: string;
+        };
+        /**
+         * Compression
+         * @description Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
+         *
+         *     Attributes:
+         *         algorithms: In order of preference: ``gzip``, ``deflate``.
+         *         content_types: Media types to compress, such as ``text/html``. Never images or archives.
+         *
+         *     Example:
+         *         >>> Compression().algorithms
+         *         ('gzip',)
+         */
+        Compression: {
+            /**
+             * Algorithms
+             * @default [
+             *       "gzip"
+             *     ]
+             */
+            algorithms: ("gzip" | "deflate")[];
+            /**
+             * Content Types
+             * @default [
+             *       "text/html",
+             *       "text/plain",
+             *       "text/css",
+             *       "text/javascript",
+             *       "application/javascript",
+             *       "application/json",
+             *       "application/xml",
+             *       "image/svg+xml"
+             *     ]
+             */
+            content_types: string[];
+        };
+        /**
+         * ControllerCertificateRead
+         * @description The certificate the `controller` service presents.
+         */
+        ControllerCertificateRead: {
+            /** Name */
+            name: string;
+            /**
+             * Not After
+             * Format: date-time
+             */
+            not_after: string;
+            /** Sans */
+            sans: string[];
+        };
+        /**
+         * ControllerChangeIn
+         * @description Propose a change to the controller's address.
+         */
+        ControllerChangeIn: {
+            /**
+             * Certificate
+             * @description Name of a server certificate in the management tenant.
+             */
+            certificate?: string | null;
+            /**
+             * Confirm Within S
+             * @description Seconds to confirm before the change is reverted (default 120).
+             */
+            confirm_within_s?: number | null;
+            /**
+             * Fqdn
+             * @description The host name users will open.
+             */
+            fqdn: string;
+            /**
+             * Vip
+             * @description A new VIP for the `controller` service.
+             */
+            vip?: string | null;
+        };
+        /**
+         * ControllerChangeRead
+         * @description A change that waits for confirmation (or is still being applied).
+         */
+        ControllerChangeRead: {
+            after: components["schemas"]["ControllerStateRead"];
+            before: components["schemas"]["ControllerStateRead"];
+            /**
+             * Change Set Id
+             * @description The management tenant's change set.
+             */
+            change_set_id: string | null;
+            /**
+             * Expires At
+             * @description Set once the change set has applied.
+             */
+            expires_at: string | null;
+            /**
+             * Proposed At
+             * Format: date-time
+             */
+            proposed_at: string;
+            /** Proposed By */
+            proposed_by: string;
+            /** Revision After */
+            revision_after: number | null;
+            /** Revision Before */
+            revision_before: number | null;
+            /** Seconds Left */
+            seconds_left: number | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "applying" | "waiting";
+            /** Window S */
+            window_s: number;
+        };
+        /**
+         * ControllerListenRead
+         * @description Where the `controller` service answers.
+         */
+        ControllerListenRead: {
+            /** Ports */
+            ports: components["schemas"]["ControllerPortRead"][];
+            /** Vip */
+            vip: string;
+        };
+        /**
+         * ControllerPortRead
+         * @description A port of the `controller` service.
+         */
+        ControllerPortRead: {
+            /** Https Redirect Port */
+            https_redirect_port: number | null;
+            /** Port */
+            port: number;
+            /** Tls */
+            tls: boolean;
+        };
+        /**
+         * ControllerRead
+         * @description The controller's address settings.
+         */
+        ControllerRead: {
+            /**
+             * Break Glass
+             * @description How to recover without the UI.
+             */
+            break_glass: string;
+            certificate: components["schemas"]["ControllerCertificateRead"] | null;
+            /** Fqdn */
+            fqdn: string | null;
+            last_result: components["schemas"]["ControllerResultRead"] | null;
+            listen: components["schemas"]["ControllerListenRead"] | null;
+            /**
+             * Managed
+             * @description The management tenant and its `controller` service exist. Without them only the FQDN (public URL) can be set.
+             */
+            managed: boolean;
+            pending: components["schemas"]["ControllerChangeRead"] | null;
+            /** Public Url */
+            public_url: string | null;
+            /**
+             * Redirect Urls
+             * @description For a pending change: what each identity provider must allow first.
+             */
+            redirect_urls: components["schemas"]["IdpRedirectRead"][];
+        };
+        /**
+         * ControllerResultRead
+         * @description How the previous change ended.
+         */
+        ControllerResultRead: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** By */
+            by: string | null;
+            /** Fqdn */
+            fqdn?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "confirmed" | "reverted" | "failed";
+            /** Reason */
+            reason?: string | null;
+            /** Restored */
+            restored?: boolean | null;
+        };
+        /**
+         * ControllerStateRead
+         * @description The settings before or after a change.
+         */
+        ControllerStateRead: {
+            /** Certificate */
+            certificate?: string | null;
+            /** Fqdn */
+            fqdn: string | null;
+            /** Public Url */
+            public_url: string | null;
+            /** Vip */
+            vip?: string | null;
         };
         /**
          * DeployIn
@@ -5897,6 +6692,116 @@ export interface components {
             token: string;
         };
         /**
+         * ErrorPage
+         * @description The body HAProxy sends when it generates the error ``status`` itself.
+         */
+        ErrorPage: {
+            /** Body */
+            body: string;
+            /**
+             * Content Type
+             * @default text/html
+             * @enum {string}
+             */
+            content_type: "text/plain" | "text/html" | "application/json";
+            /**
+             * Status
+             * @enum {integer}
+             */
+            status: 400 | 403 | 408 | 500 | 502 | 503 | 504;
+        };
+        /**
+         * ErrorPagesPolicySet
+         * @description Custom pages for the errors HAProxy generates (no server available, timeouts, ...).
+         */
+        ErrorPagesPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ErrorPagesPolicySetCreate */
+        ErrorPagesPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+        };
+        /** ErrorPagesPolicySetPatch */
+        ErrorPagesPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name?: string | null;
+            /** Pages */
+            pages?: components["schemas"]["ErrorPage"][] | null;
+        };
+        /**
+         * ErrorPagesPolicySetRead
+         * @description ErrorPagesPolicySet as returned by the API.
+         */
+        ErrorPagesPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
          * ExpiringCertificate
          * @description A certificate that expires within 30 days (or already has).
          */
@@ -6027,11 +6932,120 @@ export interface components {
             state: ("pending" | "succeeded" | "failed" | "reverted") | string;
         };
         /**
+         * GslbDsRead
+         * @description DNSSEC state of a zone.
+         */
+        GslbDsRead: {
+            /** Dnssec */
+            dnssec: boolean;
+            /**
+             * Ds
+             * @description DS records to publish at the zone's parent.
+             */
+            ds: string[];
+            /** Zone */
+            zone: string;
+        };
+        /**
+         * GslbSyncResult
+         * @description What a sync did.
+         */
+        GslbSyncResult: {
+            /** Failed */
+            failed: number;
+            /** Written */
+            written: number;
+        };
+        /**
+         * GslbZoneIn
+         * @description A zone to host for a tenant.
+         */
+        GslbZoneIn: {
+            /**
+             * Name
+             * @description The zone, for example `gslb.example.com`.
+             */
+            name: string;
+            /**
+             * Nameservers
+             * @description Host names of your PowerDNS servers, as they appear in the zone's NS records.
+             */
+            nameservers: string[];
+        };
+        /**
+         * GslbZoneRead
+         * @description A zone.
+         */
+        GslbZoneRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Dnssec */
+            dnssec: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Nameservers */
+            nameservers: string[];
+            /** Version */
+            version: number;
+        };
+        /**
          * HaMode
          * @description How an SE group places its VIPs.
          * @enum {string}
          */
         HaMode: "bgp" | "vrrp";
+        /**
+         * HeaderExpect
+         * @description A response header the health check must see, optionally with an exact value.
+         *
+         *     Example:
+         *         >>> HeaderExpect(name="X-Health", value="ok").value
+         *         'ok'
+         */
+        HeaderExpect: {
+            /** Name */
+            name: string;
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * HeaderMatch
+         * @description Match a request header. ``value`` is required for the comparisons and forbidden otherwise.
+         *
+         *     Example:
+         *         >>> HeaderMatch(name="X-Env", op="equals", value="canary").op
+         *         <HeaderOp.EQUALS: 'equals'>
+         */
+        HeaderMatch: {
+            /** Name */
+            name: string;
+            /** @default equals */
+            op: components["schemas"]["HeaderOp"];
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * HeaderOp
+         * @description How a header match compares: presence, or a literal comparison of the value.
+         * @enum {string}
+         */
+        HeaderOp: "present" | "absent" | "equals" | "prefix" | "suffix" | "contains";
+        /**
+         * HeaderVariable
+         * @description Per-request values a header action can carry, from a fixed list (no expressions).
+         * @enum {string}
+         */
+        HeaderVariable: "client_ip" | "client_port" | "host" | "vip" | "vip_port" | "method" | "tls_version" | "tls_cipher" | "tls_sni" | "request_id";
         /**
          * Health
          * @description Liveness answer.
@@ -6058,6 +7072,8 @@ export interface components {
          *         fall: Consecutive failures to mark a server down.
          *         http: Request details; required for ``http`` and forbidden for ``tcp`` and ``udp``.
          *         udp: Optional probe details; only valid for ``udp``.
+         *         preset: Protocol-aware check for a ``tcp`` monitor: ``redis``, ``smtp``, ``ldap`` or
+         *             ``mysql``. Without one a ``tcp`` monitor only connects.
          */
         HealthMonitor: {
             /**
@@ -6080,6 +7096,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -6120,6 +7138,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -6144,6 +7164,8 @@ export interface components {
             name?: string | null;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /** Rise */
             rise?: number | null;
             /** Timeout S */
@@ -6183,6 +7205,8 @@ export interface components {
             name: string;
             /** Port */
             port?: number | null;
+            /** Preset */
+            preset?: ("redis" | "smtp" | "ldap" | "mysql") | null;
             /**
              * Rise
              * @default 2
@@ -6289,6 +7313,9 @@ export interface components {
          * @description HTTP health check request and expectation.
          */
         HttpCheck: {
+            /** Expect Body */
+            expect_body?: string | null;
+            expect_header?: components["schemas"]["HeaderExpect"] | null;
             /**
              * Expect Status
              * @default []
@@ -6307,6 +7334,24 @@ export interface components {
              * @default /
              */
             path: string;
+        };
+        /**
+         * HttpMethod
+         * @description HTTP request methods a match can name.
+         * @enum {string}
+         */
+        HttpMethod: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
+        /**
+         * IdpRedirectRead
+         * @description The address an identity provider must allow for the new FQDN.
+         */
+        IdpRedirectRead: {
+            /** Protocol */
+            protocol: string;
+            /** Provider */
+            provider: string;
+            /** Redirect Url */
+            redirect_url: string;
         };
         /**
          * IdpTestIn
@@ -6457,6 +7502,11 @@ export interface components {
             ok: boolean;
             /** Problems */
             problems: components["schemas"]["IssueProblemRead"][];
+            /**
+             * Warnings
+             * @description Things to know that do not stop the request.
+             */
+            warnings: components["schemas"]["IssueProblemRead"][];
         };
         /**
          * IssueProblemRead
@@ -6575,10 +7625,17 @@ export interface components {
          *         POLL_STATUS: Scheduled engine status poll and drift detection.
          *         GIT_MIRROR: Pushes a revision to the Git mirror.
          *         GC: Scheduled housekeeping.
+         *         PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.
+         *         SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
+         *         KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and
+         *             Gateways and applies the difference as a `system:k8s` change set.
+         *         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
+         *             confirmation; reverts it when the window runs out.
+         *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "evaluate_alerts";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "evaluate_alerts" | "sync_gslb" | "probe_gslb";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -6641,6 +7698,187 @@ export interface components {
          * @enum {string}
          */
         JobState: "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
+        /**
+         * KubernetesClusterIn
+         * @description Connect a Kubernetes cluster.
+         */
+        KubernetesClusterIn: {
+            /**
+             * Api Url
+             * @description `https://host:port` of the API server.
+             */
+            api_url: string;
+            /**
+             * Ca Pem
+             * @description PEM of the API server's CA, if private.
+             */
+            ca_pem?: string | null;
+            /**
+             * Class Name
+             * @description `loadBalancerClass` of the Services that are ours.
+             * @default switchyard.io/lb
+             */
+            class_name: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Gateway Class
+             * @description `gatewayClassName` of the Gateways that are ours.
+             * @default switchyard
+             */
+            gateway_class: string;
+            /**
+             * Mode
+             * @description `nodeport`: pools hold the ready nodes at the NodePort. `pods`: pools hold the ready endpoints (the SEs must reach the pod network).
+             * @default nodeport
+             * @enum {string}
+             */
+            mode: "nodeport" | "pods";
+            /** Name */
+            name: string;
+            /**
+             * Se Group
+             * @description Name of the SE group the services use.
+             */
+            se_group: string;
+            /**
+             * Token
+             * @description A service-account token with the access in docs/kubernetes.md. Write-only.
+             */
+            token: string;
+            /**
+             * Vip Pool
+             * @description Name of the VIP pool addresses are taken from.
+             */
+            vip_pool: string;
+        };
+        /**
+         * KubernetesClusterPatch
+         * @description Change a cluster; send only what changes.
+         */
+        KubernetesClusterPatch: {
+            /** Api Url */
+            api_url?: string | null;
+            /** Ca Pem */
+            ca_pem?: string | null;
+            /** Class Name */
+            class_name?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Gateway Class */
+            gateway_class?: string | null;
+            /** Mode */
+            mode?: ("nodeport" | "pods") | null;
+            /** Se Group */
+            se_group?: string | null;
+            /**
+             * Token
+             * @description Replaces the stored token.
+             */
+            token?: string | null;
+            /** Vip Pool */
+            vip_pool?: string | null;
+        };
+        /**
+         * KubernetesClusterRead
+         * @description A connected cluster (never the token).
+         */
+        KubernetesClusterRead: {
+            /** Api Url */
+            api_url: string;
+            /** Ca Set */
+            ca_set: boolean;
+            /** Class Name */
+            class_name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Gateway Class */
+            gateway_class: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            last_sync: components["schemas"]["KubernetesSyncRead"] | null;
+            /** Last Sync At */
+            last_sync_at: string | null;
+            /** Last Sync Error */
+            last_sync_error: string | null;
+            /** Last Sync Ok */
+            last_sync_ok: boolean | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "nodeport" | "pods";
+            /** Name */
+            name: string;
+            /** Se Group */
+            se_group: string;
+            /** Version */
+            version: number;
+            /** Vip Pool */
+            vip_pool: string;
+            /**
+             * Waiting For Change Set
+             * @description The sync waits for this change set to finish before it plans again.
+             */
+            waiting_for_change_set: string | null;
+        };
+        /**
+         * KubernetesSyncRead
+         * @description The result of the last sync.
+         */
+        KubernetesSyncRead: {
+            /** Addresses Written */
+            addresses_written?: number | null;
+            /** Change Set Id */
+            change_set_id?: string | null;
+            /** Created */
+            created?: number | null;
+            /** Deleted */
+            deleted?: number | null;
+            /** Notes */
+            notes?: string[] | null;
+            /** Planned Pools */
+            planned_pools?: number | null;
+            /** Planned Services */
+            planned_services?: number | null;
+            /** Skipped */
+            skipped?: string | null;
+            /** Updated */
+            updated?: number | null;
+        };
+        /**
+         * KubernetesTestRead
+         * @description What a connection test found.
+         */
+        KubernetesTestRead: {
+            /** Detail */
+            detail: string;
+            /**
+             * Gateway Api
+             * @description The Gateway API CRDs are installed.
+             */
+            gateway_api: boolean | null;
+            /** Nodes */
+            nodes: number | null;
+            /** Ok */
+            ok: boolean;
+            /** Permissions */
+            permissions: {
+                [key: string]: boolean;
+            };
+            /** Problems */
+            problems: string[];
+            /** Services */
+            services: number | null;
+            /** Version */
+            version: string | null;
+        };
         /**
          * LatestRevision
          * @description The newest revision.
@@ -7301,10 +8539,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -7476,6 +8714,38 @@ export interface components {
             on_error: "mark-down" | "fastinter" | "fail-check" | "sudden-death";
         };
         /**
+         * PeerMember
+         * @description One service engine in a peer group: its HAProxy host name and its backend-network address.
+         *
+         *     Example:
+         *         >>> PeerMember(name="se-1", address="10.20.0.5").name
+         *         'se-1'
+         */
+        PeerMember: {
+            /** Address */
+            address: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PeerSync
+         * @description Share persistence tables between the engines of a group (HAProxy ``peers``; ADR 0118).
+         *
+         *     Attributes:
+         *         port: TCP port the engines use to talk to each other, on the backend network.
+         *         members: Every engine of the group, by the name HAProxy finds as its own (the host name)
+         *             and the address it listens on. At least two, at most 16.
+         */
+        PeerSync: {
+            /** Members */
+            members: components["schemas"]["PeerMember"][];
+            /**
+             * Port
+             * @default 10000
+             */
+            port: number;
+        };
+        /**
          * PermissionMatrix
          * @description The permission matrix; `can(verb, object)` is `role_in(tenant) >= min_role`.
          */
@@ -7509,12 +8779,85 @@ export interface components {
              * Object
              * @enum {string}
              */
-            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
+            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "kubernetes_cluster" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
             /**
              * Verb
              * @enum {string}
              */
             verb: "apply" | "apply_bypass" | "approve" | "cancel" | "change" | "create" | "deploy" | "disable" | "edit" | "enable" | "list" | "manage" | "read" | "reject" | "request_approval" | "retry" | "rollback" | "set_state" | "write";
+        };
+        /**
+         * PersistenceCookie
+         * @description Pin a client to one member with an HTTP cookie (HAProxy ``cookie``), ``http`` pools only.
+         *
+         *     Attributes:
+         *         name: Cookie name.
+         *         mode: ``insert`` makes HAProxy set the cookie; ``rewrite`` rewrites a cookie the member
+         *             sets; ``prefix`` prefixes the member's own cookie value.
+         *         ttl_s: ``insert`` only: lifetime of the cookie in seconds (``maxlife``); omitted gives a
+         *             session cookie.
+         *         secure: ``insert`` only: add the ``Secure`` attribute.
+         *         http_only: ``insert`` only: add the ``HttpOnly`` attribute.
+         *
+         *     Example:
+         *         >>> PersistenceCookie(name="SY_SRV", mode="insert", ttl_s=3600).mode
+         *         'insert'
+         */
+        PersistenceCookie: {
+            /**
+             * Http Only
+             * @default true
+             */
+            http_only: boolean;
+            /**
+             * Mode
+             * @default insert
+             * @enum {string}
+             */
+            mode: "insert" | "rewrite" | "prefix";
+            /** Name */
+            name: string;
+            /**
+             * Secure
+             * @default false
+             */
+            secure: boolean;
+            /** Ttl S */
+            ttl_s?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "http_cookie";
+        };
+        /**
+         * PersistenceHeader
+         * @description Pin requests that carry the same value of a header to one member (``stick on hdr``).
+         *
+         *     ``http`` pools only. Requests without the header fall back to the load-balancing algorithm.
+         *
+         *     Example:
+         *         >>> PersistenceHeader(header="X-Session").timeout_s
+         *         1800
+         */
+        PersistenceHeader: {
+            /** Header */
+            header: string;
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Timeout S
+             * @default 1800
+             */
+            timeout_s: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "header";
         };
         /**
          * PersistenceSourceIp
@@ -7532,11 +8875,50 @@ export interface components {
              */
             timeout_s: number;
             /**
-             * Type
-             * @default source_ip
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             type: "source_ip";
+        };
+        /**
+         * PersistenceUri
+         * @description Pin requests with the same URI path, or the same query parameter, to one member.
+         *
+         *     ``http`` pools only.
+         *
+         *     Attributes:
+         *         source: ``path`` sticks on the request path; ``url_param`` on the value of query
+         *             parameter ``param``.
+         *         param: The query parameter name, required for ``url_param`` and forbidden for ``path``.
+         *
+         *     Example:
+         *         >>> PersistenceUri(source="url_param", param="session").source
+         *         'url_param'
+         */
+        PersistenceUri: {
+            /** Param */
+            param?: string | null;
+            /**
+             * Source
+             * @default path
+             * @enum {string}
+             */
+            source: "path" | "url_param";
+            /**
+             * Table Size
+             * @default 100000
+             */
+            table_size: number;
+            /**
+             * Timeout S
+             * @default 1800
+             */
+            timeout_s: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "uri";
         };
         /**
          * PlacementRead
@@ -7567,11 +8949,30 @@ export interface components {
          *         passive_check: Also judge members by their live traffic. Needs a health monitor.
          *         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
          *             weight (HAProxy ``slowstart``). Needs a health monitor.
-         *         members: Backend servers, unique by name.
+         *         backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,
+         *             ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,
+         *             needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).
+         *         tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2
+         *             stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``
+         *             keeps the default of one hour.
+         *         send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
+         *         client_certificate_id: Server certificate HAProxy presents to members (backend
+         *             mutual TLS). Needs ``tls``.
+         *         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
+         *         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
          */
         Pool: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -7587,7 +8988,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**
@@ -7605,6 +9009,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
             /**
              * Version
              * @default 1
@@ -7615,6 +9021,15 @@ export interface components {
         PoolCreate: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -7625,7 +9040,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**
@@ -7638,6 +9056,46 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
+        };
+        /**
+         * PoolDiscovery
+         * @description Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).
+         *
+         *     The discovery job lists running guests with ``tag``, takes the first address of each that lies
+         *     in ``cidr`` and keeps ``Pool.members`` in step through a normal change set. Members that were
+         *     discovered keep the weight and admin state an operator gave them.
+         *
+         *     Attributes:
+         *         source: Where members come from; only ``proxmox_tag`` exists.
+         *         tag: The Proxmox tag; it must start with ``sy-<tenant>.``.
+         *         cidr: Backend network; a guest's address in it becomes the member address.
+         *         port: Member port.
+         *         weight: Weight of a newly discovered member.
+         *
+         *     Example:
+         *         >>> PoolDiscovery(tag="sy-acme.web", cidr="10.20.0.0/24", port=8080).weight
+         *         100
+         */
+        PoolDiscovery: {
+            /** Cidr */
+            cidr: string;
+            /** Port */
+            port: number;
+            /**
+             * Source
+             * @default proxmox_tag
+             * @constant
+             */
+            source: "proxmox_tag";
+            /** Tag */
+            tag: string;
+            /**
+             * Weight
+             * @default 100
+             */
+            weight: number;
         };
         /**
          * PoolMember
@@ -7650,6 +9108,11 @@ export interface components {
          *         weight: 0-256; 0 takes no new connections.
          *         admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.
          *         name: HAProxy server name; derived from address and port when omitted.
+         *         backup: A backup member takes traffic only when every non-backup member is down.
+         *         maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.
+         *         drain_timeout_s: With ``admin_state`` ``drain``: seconds after which the controller moves
+         *             the member to ``disabled`` (a periodic job, ADR 0109). ``None`` drains until an
+         *             operator acts. Never reaches the engine configuration.
          */
         PoolMember: {
             /** Address */
@@ -7657,10 +9120,19 @@ export interface components {
             /** @default enabled */
             admin_state: components["schemas"]["AdminState"];
             /**
+             * Backup
+             * @default false
+             */
+            backup: boolean;
+            /** Drain Timeout S */
+            drain_timeout_s?: number | null;
+            /**
              * Id
              * Format: uuid
              */
             id: string;
+            /** Maxconn */
+            maxconn?: number | null;
             /** Name */
             name?: string | null;
             /** Port */
@@ -7674,6 +9146,11 @@ export interface components {
         /** PoolPatch */
         PoolPatch: {
             algorithm?: components["schemas"]["Algorithm"] | null;
+            /** Backend Protocol */
+            backend_protocol?: ("http1" | "h2" | "h2c") | null;
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /** Members */
@@ -7681,13 +9158,18 @@ export interface components {
             /** Name */
             name?: string | null;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /** Tls */
             tls?: boolean | null;
             /** Tls Verify */
             tls_verify?: boolean | null;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
         };
         /**
          * PoolRead
@@ -7697,10 +9179,19 @@ export interface components {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
             /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
+            /**
              * Changed Fields
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            /** Client Certificate Id */
+            client_certificate_id?: string | null;
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
             /** Health Monitor Id */
@@ -7718,7 +9209,10 @@ export interface components {
             /** Name */
             name: string;
             passive_check?: components["schemas"]["PassiveCheck"] | null;
-            persistence?: components["schemas"]["PersistenceSourceIp"] | null;
+            /** Persistence */
+            persistence?: (components["schemas"]["PersistenceSourceIp"] | components["schemas"]["PersistenceCookie"] | components["schemas"]["PersistenceHeader"] | components["schemas"]["PersistenceUri"]) | null;
+            /** Send Proxy */
+            send_proxy?: ("v1" | "v2") | null;
             /** Slow Start S */
             slow_start_s?: number | null;
             /**
@@ -7736,6 +9230,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
             /**
              * Version
              * @default 1
@@ -7839,6 +9335,187 @@ export interface components {
              * @description Virtual service fields that are rejected.
              */
             service_forbidden: string[];
+        };
+        /**
+         * QueryMatch
+         * @description Match a query-string parameter (``?name=value``).
+         */
+        QueryMatch: {
+            /** Name */
+            name: string;
+            /** @default equals */
+            op: components["schemas"]["QueryOp"];
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * QueryOp
+         * @description How a query-parameter match compares.
+         * @enum {string}
+         */
+        QueryOp: "present" | "equals";
+        /**
+         * RateLimitPolicySet
+         * @description Rate and concurrency limits per client or key (ADR 0110).
+         *
+         *     A service may carry at most 8 rate-limit rules across its sets.
+         */
+        RateLimitPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RateLimitPolicySetCreate */
+        RateLimitPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+        };
+        /** RateLimitPolicySetPatch */
+        RateLimitPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["RateLimitRule"][] | null;
+        };
+        /**
+         * RateLimitPolicySetRead
+         * @description RateLimitPolicySet as returned by the API.
+         */
+        RateLimitPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * RateLimitRule
+         * @description Limit how often one client (or one key) may use the service; excess requests get ``action``.
+         *
+         *     Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
+         *     flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
+         *
+         *     Attributes:
+         *         match: Requests this rule counts and limits; empty counts every request. Use a path in
+         *             the match for a per-path limit (a login page, an API prefix).
+         *         key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
+         *             (an API key header; requests without the header are not counted).
+         *         max_requests: Requests allowed per ``period_s`` before the action applies.
+         *         period_s: Length of the window for ``max_requests``.
+         *         max_concurrent: Requests allowed at the same time.
+         *         action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
+         *             seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
+         *         table_size: Number of keys the table holds; the oldest are evicted when it is full.
+         */
+        RateLimitRule: {
+            /**
+             * Action
+             * @default deny
+             * @enum {string}
+             */
+            action: "deny" | "tarpit" | "silent_drop";
+            /**
+             * Deny Status
+             * @default 429
+             * @enum {integer}
+             */
+            deny_status: 403 | 429 | 503;
+            /** Header Name */
+            header_name?: string | null;
+            /**
+             * Key
+             * @default client_ip
+             * @enum {string}
+             */
+            key: "client_ip" | "header";
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /** Max Concurrent */
+            max_concurrent?: number | null;
+            /** Max Requests */
+            max_requests?: number | null;
+            /**
+             * Period S
+             * @default 10
+             * @enum {integer}
+             */
+            period_s: 1 | 10 | 60 | 300 | 3600;
+            /**
+             * Table Size
+             * @default 10000
+             */
+            table_size: number;
+            /**
+             * Tarpit S
+             * @default 5
+             */
+            tarpit_s: number;
         };
         /**
          * ReasonIn
@@ -7960,6 +9637,19 @@ export interface components {
         RedirectRule: {
             match: components["schemas"]["RouteMatch"];
             redirect: components["schemas"]["RedirectAction"];
+        };
+        /**
+         * RemoveHeader
+         * @description Remove every value of a header.
+         */
+        RemoveHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "remove_header";
         };
         /**
          * RenderedConfig
@@ -8117,6 +9807,149 @@ export interface components {
             source: string;
         };
         /**
+         * ReplacePrefix
+         * @description Replace a path prefix, on path-segment boundaries (request phase only).
+         *
+         *     ``/api`` to ``/v2`` turns ``/api`` into ``/v2`` and ``/api/x`` into ``/v2/x``; ``/apix`` is
+         *     left alone. A ``to_prefix`` of ``/`` strips the prefix (``/api/x`` becomes ``/x``, ``/api``
+         *     becomes ``/``).
+         */
+        ReplacePrefix: {
+            /** From Prefix */
+            from_prefix: string;
+            /** To Prefix */
+            to_prefix: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "replace_prefix";
+        };
+        /**
+         * RespondPolicySet
+         * @description Fixed responses sent instead of routing (ADR 0103); the first match wins.
+         */
+        RespondPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RespondPolicySetCreate */
+        RespondPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+        };
+        /** RespondPolicySetPatch */
+        RespondPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["ResponseRule"][] | null;
+        };
+        /**
+         * RespondPolicySetRead
+         * @description RespondPolicySet as returned by the API.
+         */
+        RespondPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * ResponseRule
+         * @description Answer requests that match ``match`` with a fixed response, without asking a pool.
+         *
+         *     Attributes:
+         *         match: Conditions; an empty match answers every request (a maintenance page).
+         *         status: Status code.
+         *         content_type: Media type of ``body``; needed with a body.
+         *         body: Response text; omitted for an empty response.
+         *         retry_after_s: Seconds for a ``Retry-After`` header (only with 429 or 503).
+         */
+        ResponseRule: {
+            /** Body */
+            body?: string | null;
+            /** Content Type */
+            content_type?: ("text/plain" | "text/html" | "application/json") | null;
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /** Retry After S */
+            retry_after_s?: number | null;
+            /**
+             * Status
+             * @enum {integer}
+             */
+            status: 200 | 202 | 204 | 400 | 401 | 403 | 404 | 405 | 410 | 429 | 451 | 500 | 502 | 503 | 504;
+        };
+        /**
          * RevisionRead
          * @description A revision with the full desired state it recorded.
          */
@@ -8166,6 +9999,128 @@ export interface components {
             number: number;
             /** Summary */
             summary: string;
+        };
+        /**
+         * RewritePolicySet
+         * @description Ordered header and URL rewrite rules (ADR 0102).
+         *
+         *     Request rules run after redirects and fixed responses and before routing; response rules run
+         *     on the way out. Rules apply in order within a set and sets in attachment order.
+         */
+        RewritePolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RewritePolicySetCreate */
+        RewritePolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+        };
+        /** RewritePolicySetPatch */
+        RewritePolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["RewriteRule"][] | null;
+        };
+        /**
+         * RewritePolicySetRead
+         * @description RewritePolicySet as returned by the API.
+         */
+        RewritePolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * RewriteRule
+         * @description Change a request (before routing) or a response (before it leaves) when ``match`` holds.
+         *
+         *     Attributes:
+         *         phase: ``request`` or ``response``. Response rules match on the request that was made.
+         *         match: Conditions; an empty match applies to every request.
+         *         action: What to change.
+         */
+        RewriteRule: {
+            /** Action */
+            action: components["schemas"]["SetHeader"] | components["schemas"]["AddHeader"] | components["schemas"]["RemoveHeader"] | components["schemas"]["ReplacePrefix"];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Phase
+             * @default request
+             * @enum {string}
+             */
+            phase: "request" | "response";
         };
         /**
          * Role
@@ -8244,15 +10199,54 @@ export interface components {
         };
         /**
          * RouteMatch
-         * @description Request match: an optional host (exact or ``*.`` wildcard) and an optional path.
+         * @description Request match shared by routes and policy rules; every condition given must hold (AND).
+         *
+         *     Attributes:
+         *         host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).
+         *         path_prefix: Path starts with this.
+         *         path_exact: Path equals this. Not together with ``path_prefix``.
+         *         methods: Request method is one of these.
+         *         headers: Request header conditions, all of which must hold.
+         *         query: Query-string parameter conditions, all of which must hold.
+         *         source_cidrs: Client address is inside one of these networks (after client-IP restoration).
+         *         sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a
+         *             port without TLS.
+         *
+         *     Example:
+         *         >>> RouteMatch(methods=["GET"], path_prefix="/api").is_empty
+         *         False
+         *         >>> RouteMatch().is_empty
+         *         True
          */
         RouteMatch: {
+            /**
+             * Headers
+             * @default []
+             */
+            headers: components["schemas"]["HeaderMatch"][];
             /** Host */
             host?: string | null;
+            /**
+             * Methods
+             * @default []
+             */
+            methods: components["schemas"]["HttpMethod"][];
             /** Path Exact */
             path_exact?: string | null;
             /** Path Prefix */
             path_prefix?: string | null;
+            /**
+             * Query
+             * @default []
+             */
+            query: components["schemas"]["QueryMatch"][];
+            /** Sni */
+            sni?: string | null;
+            /**
+             * Source Cidrs
+             * @default []
+             */
+            source_cidrs: (string)[];
         };
         /**
          * RunningAgentFileRead
@@ -8559,6 +10553,7 @@ export interface components {
          *             a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.
          *         canary_seconds: How long the canary SE is watched after a push before the rest of the
          *             group is updated (0 skips the wait).
+         *         peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
          */
         SeGroup: {
             /**
@@ -8581,6 +10576,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
             /**
@@ -8611,6 +10607,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
         };
@@ -8637,6 +10634,7 @@ export interface components {
             name?: string | null;
             /** Networks */
             networks?: components["schemas"]["SeGroupNetwork"][] | null;
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
         };
@@ -8672,6 +10670,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
             /**
@@ -8801,6 +10800,22 @@ export interface components {
             revoked: number;
         };
         /**
+         * SetHeader
+         * @description Set a header, replacing any existing values.
+         */
+        SetHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "set_header";
+            /** Value */
+            value?: string | null;
+            variable?: components["schemas"]["HeaderVariable"] | null;
+        };
+        /**
          * Snapshot
          * @description All desired-state objects visible to a render or a validation run.
          *
@@ -8836,7 +10851,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -9492,11 +11507,12 @@ export interface components {
          *         routes: L7 routes (``http`` only).
          *         default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.
          *         certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.
-         *         policy_set_ids: Redirect policy sets, applied before routing, in order.
+         *         policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.
          *         allow_list_id: Allow-list policy set (for example the Cloudflare ranges).
          *         enforce_allow_list: Reject connections from sources outside the allow list.
          *         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
          *             client address; honoured only when the connection source is in the allow list.
+         *         compression: Response compression (``http`` only; ADR 0117).
          */
         VirtualService: {
             /** Allow List Id */
@@ -9506,6 +11522,7 @@ export interface components {
              * @default []
              */
             certificate_ids: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /**
@@ -9569,6 +11586,7 @@ export interface components {
              * @default []
              */
             certificate_ids: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /**
@@ -9675,6 +11693,7 @@ export interface components {
             allow_list_id?: string | null;
             /** Certificate Ids */
             certificate_ids?: string[] | null;
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** Enabled */
@@ -9716,6 +11735,7 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
@@ -10023,6 +12043,10 @@ export interface components {
          *             (mutual TLS). Needs ``tls``.
          *         client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
          *             certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
+         *         tls_passthrough: ``tcp`` services only: do not terminate TLS; route by the SNI in the
+         *             client hello (ADR 0115). Excludes every TLS option of the port.
+         *         http3: Also listen for HTTP/3 over QUIC on the same number (UDP) and advertise it with
+         *             ``Alt-Svc`` (ADR 0116). Needs ``tls`` and ``http2``.
          */
         VsPort: {
             /** Client Ca Id */
@@ -10038,6 +12062,11 @@ export interface components {
              * @default false
              */
             http2: boolean;
+            /**
+             * Http3
+             * @default false
+             */
+            http3: boolean;
             /** Https Redirect Port */
             https_redirect_port?: number | null;
             /** Port */
@@ -10052,18 +12081,37 @@ export interface components {
              * @default false
              */
             tls: boolean;
+            /**
+             * Tls Passthrough
+             * @default false
+             */
+            tls_passthrough: boolean;
             tls_profile?: components["schemas"]["TlsProfile"] | null;
         };
         /**
          * VsRoute
-         * @description Route a request to a pool or answer it with a redirect.
+         * @description Route a request to a pool, split it over weighted pools, or answer it with a redirect.
          *
          *     Attributes:
          *         order: Position among path routes; lower runs first. Host-only routes are looked up in map
          *             files and are order-independent (exact host wins over wildcard).
          *         match: What the request must match. Must not be empty.
-         *         pool_id: Target pool, or ``None`` when ``redirect`` is set.
-         *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` is set.
+         *         pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.
+         *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.
+         *         pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each
+         *             request is sent to one of them at random in that proportion (ADR 0119).
+         *
+         *     Example:
+         *         >>> import uuid
+         *         >>> route = VsRoute(
+         *         ...     match=RouteMatch(host="app.example.test"),
+         *         ...     pools=(
+         *         ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),
+         *         ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),
+         *         ...     ),
+         *         ... )
+         *         >>> len(route.pool_ids)
+         *         2
          */
         VsRoute: {
             match: components["schemas"]["RouteMatch"];
@@ -10074,7 +12122,212 @@ export interface components {
             order: number;
             /** Pool Id */
             pool_id?: string | null;
+            /**
+             * Pools
+             * @default []
+             */
+            pools: components["schemas"]["WeightedPool"][];
             redirect?: components["schemas"]["RedirectAction"] | null;
+        };
+        /**
+         * WeightedPool
+         * @description One target of a weighted route: a pool and its share of the matching requests.
+         *
+         *     Example:
+         *         >>> import uuid
+         *         >>> WeightedPool(pool_id=uuid.UUID(int=1), weight=90).weight
+         *         90
+         */
+        WeightedPool: {
+            /**
+             * Pool Id
+             * Format: uuid
+             */
+            pool_id: string;
+            /** Weight */
+            weight: number;
+        };
+        /**
+         * WideIpHealth
+         * @description How PowerDNS decides whether a member is up (it checks from the DNS servers).
+         */
+        WideIpHealth: {
+            /**
+             * Host
+             * @description Host name to ask for (default: the wide IP).
+             */
+            host?: string | null;
+            /**
+             * Kind
+             * @default tcp
+             * @enum {string}
+             */
+            kind: "tcp" | "http";
+            /**
+             * Match
+             * @description Text the response must contain.
+             */
+            match?: string | null;
+            /**
+             * Path
+             * @description `http` checks only; starts with `/`.
+             */
+            path?: string | null;
+            /**
+             * Port
+             * @default 443
+             */
+            port: number;
+            /**
+             * Scheme
+             * @description `http` checks only.
+             */
+            scheme?: ("http" | "https") | null;
+            /**
+             * Timeout Ms
+             * @description How long PowerDNS waits for one check.
+             * @default 1000
+             */
+            timeout_ms: number;
+        };
+        /**
+         * WideIpIn
+         * @description A name whose answer follows the health of its members.
+         */
+        WideIpIn: {
+            /**
+             * Algorithm
+             * @default failover
+             * @enum {string}
+             */
+            algorithm: "failover" | "weighted" | "all" | "subnet" | "geo" | "latency";
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            health?: components["schemas"]["WideIpHealth"];
+            /** Members */
+            members: components["schemas"]["WideIpMember"][];
+            /**
+             * Name
+             * @description `@` (the zone apex) or a name inside the zone, like `shop`.
+             */
+            name: string;
+            /**
+             * Ttl
+             * @default 30
+             */
+            ttl: number;
+        };
+        /**
+         * WideIpMember
+         * @description One answer a wide IP can give.
+         */
+        WideIpMember: {
+            /**
+             * Address
+             * @description An IPv4 or IPv6 address.
+             */
+            address?: string | null;
+            /**
+             * Priority
+             * @description `failover` only: 1 is tried first.
+             * @default 1
+             */
+            priority: number;
+            /**
+             * Site
+             * @description A label for the site (a lab host, a data centre).
+             */
+            site?: string | null;
+            /**
+             * Subnets
+             * @description `subnet` only: clients in these CIDR blocks get this member.
+             */
+            subnets?: string[];
+            /**
+             * Virtual Service
+             * @description Instead of `address`: a virtual service; its VIP is followed.
+             */
+            virtual_service?: string | null;
+            /**
+             * Weight
+             * @description `weighted` only.
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
+         * WideIpPatch
+         * @description Fields of a wide IP that can change; omitted fields stay as they are.
+         */
+        WideIpPatch: {
+            /** Algorithm */
+            algorithm?: ("failover" | "weighted" | "all" | "subnet" | "geo" | "latency") | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            health?: components["schemas"]["WideIpHealth"] | null;
+            /** Members */
+            members?: components["schemas"]["WideIpMember"][] | null;
+            /** Ttl */
+            ttl?: number | null;
+        };
+        /**
+         * WideIpRead
+         * @description A wide IP.
+         */
+        WideIpRead: {
+            /** Algorithm */
+            algorithm: string;
+            /** Applied At */
+            applied_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Fqdn */
+            fqdn: string;
+            health: components["schemas"]["WideIpHealth"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Error */
+            last_error: string | null;
+            /** Members */
+            members: components["schemas"]["WideIpMember"][];
+            /** Name */
+            name: string;
+            /** Ttl */
+            ttl: number;
+            /** Version */
+            version: number;
+            /** Zone */
+            zone: string;
+        };
+        /**
+         * WideIpState
+         * @description A wide IP against what PowerDNS holds.
+         */
+        WideIpState: {
+            /** Applied At */
+            applied_at: string | null;
+            /** Fqdn */
+            fqdn: string;
+            /** Last Error */
+            last_error: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "in_sync" | "drift" | "pending" | "error" | "off" | "unknown";
         };
         /**
          * WouldGrant
@@ -13700,6 +15953,514 @@ export interface operations {
             };
         };
     };
+    get_controller_api_v1_system_controller_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    confirm_controller_api_v1_system_controller_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    propose_controller_api_v1_system_controller_pending_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "certificate": "controller-new",
+                 *       "confirm_within_s": 120,
+                 *       "fqdn": "sy.example.test",
+                 *       "vip": "192.0.2.11"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ControllerChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    revert_controller_api_v1_system_controller_revert_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "break_glass": "On a controller node: `syctl controller status` and `syctl controller revert` need only database access; the break-glass login still works.",
+                     *       "certificate": {
+                     *         "name": "controller",
+                     *         "not_after": "2027-01-10T02:01:00Z",
+                     *         "sans": [
+                     *           "switchyard.example.test"
+                     *         ]
+                     *       },
+                     *       "fqdn": "switchyard.example.test",
+                     *       "last_result": {
+                     *         "at": "2026-10-01T09:00:00Z",
+                     *         "by": "user:root",
+                     *         "fqdn": "switchyard.example.test",
+                     *         "kind": "confirmed"
+                     *       },
+                     *       "listen": {
+                     *         "ports": [
+                     *           {
+                     *             "port": 443,
+                     *             "tls": true
+                     *           },
+                     *           {
+                     *             "https_redirect_port": 443,
+                     *             "port": 80,
+                     *             "tls": false
+                     *           }
+                     *         ],
+                     *         "vip": "192.0.2.10"
+                     *       },
+                     *       "managed": true,
+                     *       "pending": {
+                     *         "after": {
+                     *           "certificate": "controller-new",
+                     *           "fqdn": "sy.example.test",
+                     *           "public_url": "https://sy.example.test",
+                     *           "vip": "192.0.2.11"
+                     *         },
+                     *         "before": {
+                     *           "certificate": "controller",
+                     *           "fqdn": "switchyard.example.test",
+                     *           "public_url": "https://switchyard.example.test",
+                     *           "vip": "192.0.2.10"
+                     *         },
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+                     *         "expires_at": "2026-10-12T05:02:20Z",
+                     *         "proposed_at": "2026-10-12T05:00:00Z",
+                     *         "proposed_by": "user:root",
+                     *         "revision_after": 8,
+                     *         "revision_before": 7,
+                     *         "seconds_left": 95,
+                     *         "state": "waiting",
+                     *         "window_s": 120
+                     *       },
+                     *       "public_url": "https://switchyard.example.test",
+                     *       "redirect_urls": [
+                     *         {
+                     *           "protocol": "oidc",
+                     *           "provider": "authentik",
+                     *           "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_system_settings_api_v1_system_settings_get: {
         parameters: {
             query?: never;
@@ -16206,7 +18967,8 @@ export interface operations {
                      *           "message": "no DNS credential covers this name",
                      *           "path": "sans[1]"
                      *         }
-                     *       ]
+                     *       ],
+                     *       "warnings": []
                      *     }
                      */
                     "application/json": components["schemas"]["IssueCheckRead"];
@@ -19352,6 +22114,883 @@ export interface operations {
             };
         };
     };
+    list_gslb_zones_api_v1_tenants__t__gslb_zones_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-10-10T08:30:00Z",
+                     *         "created_by": "user:authentik:root",
+                     *         "dnssec": false,
+                     *         "id": "0192f3a0-0000-7000-8000-0000000000b1",
+                     *         "name": "gslb.example.test",
+                     *         "nameservers": [
+                     *           "ns1.example.test",
+                     *           "ns2.example.test"
+                     *         ],
+                     *         "version": 1
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["GslbZoneRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_gslb_zone_api_v1_tenants__t__gslb_zones_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "gslb.example.test",
+                 *       "nameservers": [
+                 *         "ns1.example.test"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["GslbZoneIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:root",
+                     *       "dnssec": false,
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000b1",
+                     *       "name": "gslb.example.test",
+                     *       "nameservers": [
+                     *         "ns1.example.test",
+                     *         "ns2.example.test"
+                     *       ],
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GslbZoneRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_gslb_zone_api_v1_tenants__t__gslb_zones__zone__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    enable_gslb_dnssec_api_v1_tenants__t__gslb_zones__zone__dnssec_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "dnssec": true,
+                     *       "ds": [
+                     *         "gslb.example.test. IN DS 12345 13 2 ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+                     *       ],
+                     *       "zone": "gslb.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GslbDsRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    gslb_ds_api_v1_tenants__t__gslb_zones__zone__ds_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "dnssec": true,
+                     *       "ds": [
+                     *         "gslb.example.test. IN DS 12345 13 2 ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+                     *       ],
+                     *       "zone": "gslb.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GslbDsRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "algorithm": "failover",
+                 *       "members": [
+                 *         {
+                 *           "address": "192.0.2.10",
+                 *           "priority": 1,
+                 *           "site": "pve1"
+                 *         },
+                 *         {
+                 *           "priority": 2,
+                 *           "site": "pve2",
+                 *           "virtual_service": "shop"
+                 *         }
+                 *       ],
+                 *       "name": "shop"
+                 *     }
+                 */
+                "application/json": components["schemas"]["WideIpIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "algorithm": "failover",
+                     *       "applied_at": "2026-10-10T08:30:00Z",
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "enabled": true,
+                     *       "fqdn": "shop.gslb.example.test",
+                     *       "health": {
+                     *         "kind": "tcp",
+                     *         "port": 443,
+                     *         "timeout_ms": 1000
+                     *       },
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                     *       "members": [
+                     *         {
+                     *           "address": "192.0.2.10",
+                     *           "priority": 1,
+                     *           "site": "pve1",
+                     *           "subnets": [],
+                     *           "weight": 1
+                     *         },
+                     *         {
+                     *           "priority": 2,
+                     *           "site": "pve2",
+                     *           "subnets": [],
+                     *           "virtual_service": "shop",
+                     *           "weight": 1
+                     *         }
+                     *       ],
+                     *       "name": "shop",
+                     *       "ttl": 30,
+                     *       "version": 1,
+                     *       "zone": "gslb.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["WideIpRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "ttl": 60
+                 *     }
+                 */
+                "application/json": components["schemas"]["WideIpPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "algorithm": "failover",
+                     *       "applied_at": "2026-10-10T08:30:00Z",
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "enabled": true,
+                     *       "fqdn": "shop.gslb.example.test",
+                     *       "health": {
+                     *         "kind": "tcp",
+                     *         "port": 443,
+                     *         "timeout_ms": 1000
+                     *       },
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                     *       "members": [
+                     *         {
+                     *           "address": "192.0.2.10",
+                     *           "priority": 1,
+                     *           "site": "pve1",
+                     *           "subnets": [],
+                     *           "weight": 1
+                     *         },
+                     *         {
+                     *           "priority": 2,
+                     *           "site": "pve2",
+                     *           "subnets": [],
+                     *           "virtual_service": "shop",
+                     *           "weight": 1
+                     *         }
+                     *       ],
+                     *       "name": "shop",
+                     *       "ttl": 30,
+                     *       "version": 1,
+                     *       "zone": "gslb.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["WideIpRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    gslb_status_api_v1_tenants__t__gslb_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "applied_at": "2026-10-10T08:30:00Z",
+                     *         "fqdn": "shop.gslb.example.test",
+                     *         "state": "in_sync"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["WideIpState"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    gslb_sync_api_v1_tenants__t__gslb_sync_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "failed": 0,
+                     *       "written": 2
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GslbSyncResult"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_health_monitors_api_v1_tenants__t__health_monitors_get: {
         parameters: {
             query?: {
@@ -20066,6 +23705,136 @@ export interface operations {
             };
         };
     };
+    import_avi_api_v1_tenants__t__imports_avi_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "dry_run": true,
+                 *       "export": {
+                 *         "Pool": [],
+                 *         "VirtualService": []
+                 *       },
+                 *       "prefix": "avi-",
+                 *       "se_group": "edge",
+                 *       "vip_map": {
+                 *         "vip-20": "192.0.2.20"
+                 *       },
+                 *       "vip_pool": "main"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AviImportIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "counts": {
+                     *         "certificate": 1,
+                     *         "health_monitor": 1,
+                     *         "pool": 2,
+                     *         "virtual_service": 1
+                     *       },
+                     *       "dry_run": true,
+                     *       "findings": [
+                     *         {
+                     *           "level": "manual",
+                     *           "message": "WAF policy detect-only is not converted (no WAF yet)",
+                     *           "object": "virtual_service:External-ParentSNI"
+                     *         }
+                     *       ],
+                     *       "objects": [
+                     *         {
+                     *           "avi_name": "Keycloak Pool",
+                     *           "kind": "pool",
+                     *           "name": "keycloak-pool"
+                     *         },
+                     *         {
+                     *           "avi_name": "External-ParentSNI",
+                     *           "kind": "virtual_service",
+                     *           "name": "external-parentsni"
+                     *         }
+                     *       ],
+                     *       "vips": [
+                     *         {
+                     *           "address": "10.60.3.20",
+                     *           "avi_vsvip": "vip-20",
+                     *           "new_address": "192.0.2.20",
+                     *           "services": [
+                     *             "External-ParentSNI"
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AviImportRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_jobs_api_v1_tenants__t__jobs_get: {
         parameters: {
             query?: {
@@ -20615,6 +24384,689 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_kubernetes_clusters_api_v1_tenants__t__kubernetes_clusters_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "api_url": "https://k8s.example.test:6443",
+                     *         "ca_set": true,
+                     *         "class_name": "switchyard.io/lb",
+                     *         "enabled": true,
+                     *         "gateway_class": "switchyard",
+                     *         "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *         "last_sync": {
+                     *           "addresses_written": 2,
+                     *           "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *           "created": 1,
+                     *           "deleted": 0,
+                     *           "notes": [],
+                     *           "planned_pools": 3,
+                     *           "planned_services": 3,
+                     *           "updated": 0
+                     *         },
+                     *         "last_sync_at": "2026-10-12T05:00:00Z",
+                     *         "last_sync_ok": true,
+                     *         "mode": "nodeport",
+                     *         "name": "prod",
+                     *         "se_group": "edge",
+                     *         "version": 2,
+                     *         "vip_pool": "main"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "api_url": "https://k8s.example.test:6443",
+                 *       "mode": "nodeport",
+                 *       "name": "prod",
+                 *       "se_group": "edge",
+                 *       "token": "eyJhbGciOi...",
+                 *       "vip_pool": "main"
+                 *     }
+                 */
+                "application/json": components["schemas"]["KubernetesClusterIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    get_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "mode": "pods"
+                 *     }
+                 */
+                "application/json": components["schemas"]["KubernetesClusterPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "api_url": "https://k8s.example.test:6443",
+                     *       "ca_set": true,
+                     *       "class_name": "switchyard.io/lb",
+                     *       "enabled": true,
+                     *       "gateway_class": "switchyard",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000b701",
+                     *       "last_sync": {
+                     *         "addresses_written": 2,
+                     *         "change_set_id": "0192f1a2-0000-7000-8000-00000000c701",
+                     *         "created": 1,
+                     *         "deleted": 0,
+                     *         "notes": [],
+                     *         "planned_pools": 3,
+                     *         "planned_services": 3,
+                     *         "updated": 0
+                     *       },
+                     *       "last_sync_at": "2026-10-12T05:00:00Z",
+                     *       "last_sync_ok": true,
+                     *       "mode": "nodeport",
+                     *       "name": "prod",
+                     *       "se_group": "edge",
+                     *       "version": 2,
+                     *       "vip_pool": "main"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesClusterRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    sync_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__sync_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job_id": "0192f3a0-0000-7000-8000-000000000021"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobAccepted"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_kubernetes_cluster_api_v1_tenants__t__kubernetes_clusters__cluster__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Kubernetes cluster id. */
+                cluster: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "detail": "reachable, with the access the connector needs",
+                     *       "gateway_api": true,
+                     *       "nodes": 3,
+                     *       "ok": true,
+                     *       "permissions": {
+                     *         "list nodes": true,
+                     *         "list services": true,
+                     *         "patch services/status": true
+                     *       },
+                     *       "problems": [],
+                     *       "services": 42,
+                     *       "version": "v1.31.2"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["KubernetesTestRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -21495,7 +25947,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -21586,7 +26038,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"];
             };
         };
         responses: {
@@ -21703,7 +26155,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -21881,7 +26333,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"];
             };
         };
         responses: {
@@ -27641,6 +32093,109 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["EngineRenderedRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_wide_ips_api_v1_tenants__t__wide_ips_get: {
+        parameters: {
+            query?: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone?: string | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "algorithm": "failover",
+                     *         "applied_at": "2026-10-10T08:30:00Z",
+                     *         "created_at": "2026-10-10T08:30:00Z",
+                     *         "created_by": "user:authentik:alice",
+                     *         "enabled": true,
+                     *         "fqdn": "shop.gslb.example.test",
+                     *         "health": {
+                     *           "kind": "tcp",
+                     *           "port": 443,
+                     *           "timeout_ms": 1000
+                     *         },
+                     *         "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                     *         "members": [
+                     *           {
+                     *             "address": "192.0.2.10",
+                     *             "priority": 1,
+                     *             "site": "pve1",
+                     *             "subnets": [],
+                     *             "weight": 1
+                     *           },
+                     *           {
+                     *             "priority": 2,
+                     *             "site": "pve2",
+                     *             "subnets": [],
+                     *             "virtual_service": "shop",
+                     *             "weight": 1
+                     *           }
+                     *         ],
+                     *         "name": "shop",
+                     *         "ttl": 30,
+                     *         "version": 1,
+                     *         "zone": "gslb.example.test"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["WideIpRead"][];
                 };
             };
             /** @description Missing, invalid or expired credentials. */

@@ -190,6 +190,47 @@ class TestMemberState:
                 "no change set, no revision"
             )
 
+    async def test_a_drain_with_a_timeout_ends_in_disabled(self, pg_url: str) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        async with world(pg_url) as w:
+            directory = StaticEngineDirectory(
+                {GROUP: [(engine_record(n), e) for n, e in w.engines.items()]}
+            )
+            service = MemberService(w.db, directory)
+            member = self.member_id(await w.snapshot())
+            async with admin_session(w.db.admin) as s:
+                await s.execute(
+                    text("UPDATE pool_member SET drain_timeout_s = 60 WHERE id = :i"), {"i": member}
+                )
+            await service.set_state(
+                principal(Role.OPERATOR), TENANT, POOL, member, AdminState.DRAIN
+            )
+            now = datetime.now(UTC)
+            assert await service.expire_drains(now=now + timedelta(seconds=30)) == 0
+            assert (await w.snapshot()).pools[0].members[0].admin_state is AdminState.DRAIN
+            assert await service.expire_drains(now=now + timedelta(seconds=90)) == 1
+            assert (await w.snapshot()).pools[0].members[0].admin_state is AdminState.DISABLED
+            for engine in w.engines.values():
+                assert [st.status for st in await engine.server_statuses()] == ["MAINT"]
+            assert await scalar(w, "SELECT drain_since FROM pool_member") is None
+            assert await service.expire_drains(now=now + timedelta(days=1)) == 0
+
+    async def test_a_drain_without_a_start_time_starts_its_clock(self, pg_url: str) -> None:
+        from datetime import UTC, datetime
+
+        async with world(pg_url) as w:
+            service = MemberService(w.db, StaticEngineDirectory({}))
+            async with admin_session(w.db.admin) as s:
+                await s.execute(
+                    text(
+                        "UPDATE pool_member SET admin_state = 'drain', drain_timeout_s = 5,"
+                        " drain_since = NULL"
+                    )
+                )
+            assert await service.expire_drains(now=datetime.now(UTC)) == 0
+            assert await scalar(w, "SELECT drain_since FROM pool_member") is not None
+
     async def test_unreachable_engines_are_reported_but_the_state_is_kept(
         self, pg_url: str
     ) -> None:

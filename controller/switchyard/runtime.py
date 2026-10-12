@@ -38,7 +38,7 @@ from switchyard.adapters.telemetry import HttpTelemetry, Telemetry
 from switchyard.config import database_url
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
 from switchyard.domain.validators import configure_secret_policy
-from switchyard.jobs.handlers import POLL_STATUS_JOB, build_handlers
+from switchyard.jobs.handlers import EXPIRE_DRAINS_JOB, POLL_STATUS_JOB, build_handlers
 from switchyard.jobs.scheduler import Scheduler
 from switchyard.jobs.worker import Worker
 from switchyard.pipeline.apply import ApplyPipeline
@@ -52,6 +52,8 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
+from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
+from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
@@ -65,9 +67,12 @@ from switchyard.services.gslb import (
 )
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
+from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
+from switchyard.services.members import MemberService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
 from switchyard.services.status import StatusService
+from switchyard.services.tlsalpn import EngineTlsAlpnPublisher
 
 
 def databases() -> Databases:
@@ -171,6 +176,7 @@ def certificates(db: Databases, secrets: SecretsReader | None = None) -> Certifi
         acme_providers=AcmeProviders(db, store),
         dns_providers=DnsProviders(db, store),
         http_publisher=lambda tenant_id: EngineHttp01Publisher(db, engines, tenant_id),
+        alpn_publisher=lambda tenant_id: EngineTlsAlpnPublisher(db, engines, tenant_id),
         dns_wait_s=float(os.environ.get("SWITCHYARD_ACME_DNS_WAIT", "15")),
     )
 
@@ -292,6 +298,12 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     return InfraService(db, client) if client else None
 
 
+def discovery_service(db: Databases) -> DiscoveryService | None:
+    """Pool discovery, if the Proxmox client is configured (same settings as the infra jobs)."""
+    client = proxmox_client()
+    return DiscoveryService(db, client, ChangeSetService(db)) if client else None
+
+
 def audit_syslog_target(value: str) -> tuple[str | tuple[str, int], socket.SocketKind]:
     """Parse ``SWITCHYARD_AUDIT_SYSLOG`` into a ``SysLogHandler`` address and socket type.
 
@@ -392,6 +404,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     pipeline = ApplyPipeline(db, engines, sandbox=sandbox, secrets=secrets)
     status = StatusService(db, engines, secrets)
     certs = certificates(db, secrets)
+    discovery = discovery_service(db)
     handlers = build_handlers(
         db,
         pipeline,
@@ -400,6 +413,10 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         infra_service(db, secrets),
         certs,
         GarbageCollector(db),
+        ControllerSettings(db, ChangeSetService(db)),
+        KubernetesClusters(db, secrets, ChangeSetService(db)),
+        MemberService(db, engines),
+        discovery,
         AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
         GslbSync(gslb, db) if (gslb := gslb_service(db)) is not None else None,
         GslbProber(gslb, db) if gslb is not None else None,
@@ -407,11 +424,16 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
         GC_JOB: timedelta(hours=1),
+        CONTROLLER_TICK_JOB: timedelta(seconds=10),
+        KUBERNETES_SYNC_JOB: timedelta(seconds=30),
+        EXPIRE_DRAINS_JOB: timedelta(seconds=30),
         EVALUATE_ALERTS_JOB: timedelta(minutes=1),
     }
     if gslb_service(db) is not None:
         schedule[SYNC_GSLB_JOB] = timedelta(minutes=5)
         schedule[PROBE_GSLB_JOB] = timedelta(minutes=1)
+    if discovery is not None:
+        schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

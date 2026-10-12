@@ -35,6 +35,7 @@ from switchyard.db import (
     alert_models,  # noqa: F401  (registers the alerting tables)
     auth_models,  # noqa: F401  (registers the login tables)
     gslb_models,  # noqa: F401  (registers the GSLB tables)
+    k8s_models,  # noqa: F401  (registers the Kubernetes cluster table)
     ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
 )
 from switchyard.db.base import (
@@ -127,6 +128,7 @@ class SeGroupRow(TenantOwnedMixin, Base):
     routing_profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     maxconn: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20000"))
     canary_seconds: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("30"))
+    peers: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class SeGroupNetworkRow(Base):
@@ -156,6 +158,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         enum_check("type", dm.MonitorType),
+        CheckConstraint("preset IN ('redis', 'smtp', 'ldap', 'mysql')", name="preset"),
         CheckConstraint("version >= 1", name="version"),
     )
 
@@ -167,6 +170,7 @@ class HealthMonitorRow(TenantOwnedMixin, Base):
     fall: Mapped[int] = mapped_column(Integer, nullable=False)
     http: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     udp: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    preset: Mapped[str | None] = mapped_column(Text)
 
 
 class CertificateRow(TenantOwnedMixin, Base):
@@ -181,7 +185,8 @@ class CertificateRow(TenantOwnedMixin, Base):
         CheckConstraint("renew_before_days BETWEEN 1 AND 365", name="renew_before_days"),
         CheckConstraint("purpose IN ('server', 'client_ca')", name="purpose"),
         CheckConstraint(
-            "challenge IS NULL OR challenge IN ('dns-01', 'http-01')", name="challenge"
+            "challenge IS NULL OR challenge IN ('dns-01', 'http-01', 'tls-alpn-01')",
+            name="challenge",
         ),
         CheckConstraint("version >= 1", name="version"),
     )
@@ -205,15 +210,18 @@ class CertificateRow(TenantOwnedMixin, Base):
 
 
 class PolicySetRow(TenantOwnedMixin, Base):
-    """``policy_set``: ``redirect`` rules (JSON) or an ``allow_list`` of CIDRs."""
+    """``policy_set``: rules (JSON; the pages of ``error_pages``) or an ``allow_list`` of CIDRs."""
 
     __tablename__ = "policy_set"
     __table_args__ = (
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
-        CheckConstraint("kind IN ('redirect', 'allow_list')", name="kind"),
         CheckConstraint(
-            "(kind = 'redirect' AND rules IS NOT NULL AND cidrs IS NULL)"
+            "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit')",
+            name="kind",
+        ),
+        CheckConstraint(
+            "(kind <> 'allow_list' AND rules IS NOT NULL AND cidrs IS NULL)"
             " OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL)",
             name="payload_matches_kind",
         ),
@@ -235,6 +243,9 @@ class PoolRow(TenantOwnedMixin, Base):
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         tenant_fk("health_monitor_id", "health_monitor"),
+        tenant_fk("client_certificate_id", "certificate"),
+        CheckConstraint("send_proxy IN ('v1', 'v2')", name="send_proxy"),
+        CheckConstraint("backend_protocol IN ('http1', 'h2', 'h2c')", name="backend_protocol"),
         enum_check("algorithm", dm.Algorithm),
         CheckConstraint("version >= 1", name="version"),
     )
@@ -246,6 +257,13 @@ class PoolRow(TenantOwnedMixin, Base):
     tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     passive_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     slow_start_s: Mapped[int | None] = mapped_column(Integer)
+    send_proxy: Mapped[str | None] = mapped_column(Text)
+    tunnel_timeout_s: Mapped[int | None] = mapped_column(Integer)
+    backend_protocol: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default=text("'http1'")
+    )
+    client_certificate_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    discovery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class PoolMemberRow(Base):
@@ -258,6 +276,8 @@ class PoolMemberRow(Base):
         UniqueConstraint("pool_id", "position"),
         enum_check("admin_state", dm.AdminState),
         CheckConstraint("weight BETWEEN 0 AND 256", name="weight"),
+        CheckConstraint("maxconn BETWEEN 1 AND 1000000", name="maxconn"),
+        CheckConstraint("drain_timeout_s BETWEEN 1 AND 604800", name="drain_timeout_s"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -269,6 +289,10 @@ class PoolMemberRow(Base):
     port: Mapped[int | None] = mapped_column(Integer)
     weight: Mapped[int] = mapped_column(Integer, nullable=False)
     admin_state: Mapped[str] = mapped_column(Text, nullable=False)
+    backup: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    maxconn: Mapped[int | None] = mapped_column(Integer)
+    drain_timeout_s: Mapped[int | None] = mapped_column(Integer)
+    drain_since: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
 
 
 class VirtualServiceRow(TenantOwnedMixin, Base):
@@ -297,6 +321,7 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
         Boolean, nullable=False, server_default=text("false")
     )
     restore_client_ip_header: Mapped[str | None] = mapped_column(Text)
+    compression: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class VsPortRow(Base):
@@ -325,6 +350,10 @@ class VsPortRow(Base):
     client_verify: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'required'")
     )
+    tls_passthrough: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    http3: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
 
 class VsRouteRow(Base):
@@ -337,7 +366,7 @@ class VsRouteRow(Base):
         tenant_fk("vs_id", "virtual_service", cascade=True),
         tenant_fk("pool_id", "pool"),
         CheckConstraint(
-            "(pool_id IS NULL) <> (redirect_location IS NULL)", name="pool_xor_redirect"
+            "num_nonnulls(pool_id, redirect_location, pool_weights) = 1", name="one_target"
         ),
     )
 
@@ -351,6 +380,8 @@ class VsRouteRow(Base):
     pool_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     redirect_location: Mapped[str | None] = mapped_column(Text)
     redirect_code: Mapped[int | None] = mapped_column(Integer)
+    pool_weights: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
+    match_extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
 
 class VsCertificateRow(Base):

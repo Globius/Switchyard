@@ -7,6 +7,7 @@ draft, ``?apply=true`` opens an implicit single-operation change set and applies
 """
 
 import hmac
+import logging
 import os
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -70,6 +71,8 @@ from switchyard.api.schemas import (
     AuditActionRead,
     AuditEventRead,
     AuthProviders,
+    AviImportIn,
+    AviImportRead,
     BreakGlassConfirmIn,
     BreakGlassEnrollIn,
     BreakGlassEnrollment,
@@ -83,6 +86,8 @@ from switchyard.api.schemas import (
     ChangeSetDiff,
     ChangeSetRead,
     ChangeSetSummary,
+    ControllerChangeIn,
+    ControllerRead,
     DeployIn,
     DiscoveryGroup,
     DnsNameMatchRead,
@@ -113,6 +118,10 @@ from switchyard.api.schemas import (
     IssueCheckRead,
     JobAccepted,
     JobRead,
+    KubernetesClusterIn,
+    KubernetesClusterPatch,
+    KubernetesClusterRead,
+    KubernetesTestRead,
     Me,
     MemberStateIn,
     MemberStateResult,
@@ -194,6 +203,7 @@ from switchyard.services.changesets import (
     require,
 )
 from switchyard.services.context import Databases, Principal
+from switchyard.services.controller_settings import ControllerSettings
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
@@ -204,8 +214,10 @@ from switchyard.services.identity_providers import (
     IdentityProviderRecord,
     IdentityProviderService,
 )
+from switchyard.services.importers import AviImportService
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.jobs import JobService
+from switchyard.services.kubernetes import KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.probes import MonitorTestService
 from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
@@ -263,6 +275,9 @@ class ApiServices:
     email_configured: bool = False
     acme_providers: AcmeProviders | None = None
     dns_providers: DnsProviders | None = None
+    controller: ControllerSettings = None  # type: ignore[assignment]
+    avi_import: AviImportService = None  # type: ignore[assignment]
+    kubernetes: KubernetesClusters | None = None
 
 
 def build_services(
@@ -332,6 +347,11 @@ def build_services(
         email_configured=email_configured,
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
         dns_providers=DnsProviders(db, secrets) if writer is not None else None,
+        controller=ControllerSettings(db, ChangeSetService(db)),
+        avi_import=AviImportService(db, ChangeSetService(db), certs),
+        kubernetes=KubernetesClusters(db, secrets, ChangeSetService(db))
+        if writer is not None
+        else None,
     )
 
 
@@ -346,6 +366,7 @@ def _services(request: Request) -> ApiServices:
 Services = Annotated[ApiServices, Depends(_services)]
 
 
+log = logging.getLogger("switchyard.api")
 SESSION_COOKIE = "sy_session"
 
 #: Metric queries: seconds back from the end of the range (up to the 30 days Prometheus keeps).
@@ -1337,6 +1358,20 @@ def create_app(
     install_handlers(app)
 
     @app.middleware("http")
+    async def public_origin(request: Request, call_next: Any) -> Response:
+        """Work out the public URL for this request (the confirmed one, or the pending one)."""
+        base = request.app.state.public_url
+        controller = getattr(services, "controller", None)
+        if controller is not None:
+            try:
+                base = await controller.public_url(request.headers.get("host"), base)
+            except Exception:
+                log.warning("could not read the controller settings", exc_info=True)
+        request.state.public_url = base
+        response: Response = await call_next(request)
+        return response
+
+    @app.middleware("http")
     async def request_id(request: Request, call_next: Any) -> Response:
         rid = request.headers.get("x-request-id") or uuid.uuid4().hex
         token = request_id_var.set(rid)
@@ -1415,13 +1450,13 @@ def create_app(
 
     # login
     def callback_url(request: Request, provider: str) -> str:
-        base = request.app.state.public_url or str(request.base_url)
+        base = request.state.public_url or str(request.base_url)
         return f"{base.rstrip('/')}/api/v1/auth/callback/{provider}"
 
     def set_session_cookie(
         request: Request, response: Response, cookie: str, info: SessionInfo
     ) -> None:
-        secure = (request.app.state.public_url or str(request.base_url)).startswith("https")
+        secure = (request.state.public_url or str(request.base_url)).startswith("https")
         response.set_cookie(
             SESSION_COOKIE,
             cookie,
@@ -3356,7 +3391,7 @@ def create_app(
 
     # identity providers
     def idp_json(request: Request, r: IdentityProviderRecord) -> dict[str, Any]:
-        base = (request.app.state.public_url or str(request.base_url)).rstrip("/")
+        base = (request.state.public_url or str(request.base_url)).rstrip("/")
         out: dict[str, Any] = {
             "protocol": r.protocol,
             "id": str(r.id),
@@ -3746,6 +3781,142 @@ def create_app(
         """
         return asdict(await require_acme(svc).test(who, provider, request_id=_rid()))
 
+    def require_k8s(svc: ApiServices) -> KubernetesClusters:
+        if svc.kubernetes is None:
+            raise ApiError(503, "Kubernetes clusters need a writable secrets backend (OpenBao)")
+        return svc.kubernetes
+
+    @router.get(
+        "/tenants/{t}/kubernetes-clusters",
+        tags=["kubernetes"],
+        summary="List the tenant's Kubernetes clusters",
+        response_model=list[KubernetesClusterRead],
+        responses=_ok([ex.KUBERNETES_CLUSTER]),
+    )
+    async def list_kubernetes_clusters(
+        tenant: Tenant, who: Who, svc: Services
+    ) -> list[dict[str, Any]]:
+        """Connected clusters by name, with the last sync result. The token is never shown."""
+        return [asdict(c) for c in await require_k8s(svc).list_clusters(who, tenant.id)]
+
+    @router.post(
+        "/tenants/{t}/kubernetes-clusters",
+        status_code=201,
+        tags=["kubernetes"],
+        summary="Connect a Kubernetes cluster",
+        response_model=KubernetesClusterRead,
+        responses=_ok(ex.KUBERNETES_CLUSTER, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_kubernetes_cluster(
+        body: KubernetesClusterIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Connect a cluster.
+
+        Services of type `LoadBalancer` with the cluster's class and Gateways with its gateway
+        class become virtual services. The token is stored in the secrets backend; run the test
+        to check access.
+        """
+        view = await require_k8s(svc).create(who, tenant.id, request_id=_rid(), **body.model_dump())
+        return asdict(view)
+
+    @router.get(
+        "/tenants/{t}/kubernetes-clusters/{cluster}",
+        tags=["kubernetes"],
+        summary="Get a Kubernetes cluster",
+        response_model=KubernetesClusterRead,
+        responses=_ok(ex.KUBERNETES_CLUSTER, headers=ETAG_HEADER),
+    )
+    async def get_kubernetes_cluster(
+        cluster: UUID, tenant: Tenant, response: Response, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """One cluster with its version in the `ETag`."""
+        view = await require_k8s(svc).get(who, tenant.id, cluster)
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.patch(
+        "/tenants/{t}/kubernetes-clusters/{cluster}",
+        tags=["kubernetes"],
+        summary="Change a Kubernetes cluster",
+        response_model=KubernetesClusterRead,
+        responses=_ok(ex.KUBERNETES_CLUSTER) | IF_MATCH_RESPONSES | VALIDATION_RESPONSE,
+    )
+    async def patch_kubernetes_cluster(
+        cluster: UUID,
+        body: KubernetesClusterPatch,
+        tenant: Tenant,
+        response: Response,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> dict[str, Any]:
+        """Change settings or replace the token; omitted fields stay."""
+        require(who, "manage", "kubernetes_cluster")
+        view = await require_k8s(svc).update(
+            who,
+            tenant.id,
+            cluster,
+            expected_version=_if_match(if_match),
+            request_id=_rid(),
+            **body.model_dump(exclude_unset=True),
+        )
+        response.headers["ETag"] = _etag(view.version)
+        return asdict(view)
+
+    @router.delete(
+        "/tenants/{t}/kubernetes-clusters/{cluster}",
+        status_code=204,
+        tags=["kubernetes"],
+        summary="Disconnect a Kubernetes cluster",
+        responses=IF_MATCH_RESPONSES,
+    )
+    async def delete_kubernetes_cluster(
+        cluster: UUID,
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        if_match: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        """Forget the cluster; the objects it created stay until you delete them."""
+        require(who, "manage", "kubernetes_cluster")
+        await require_k8s(svc).delete(
+            who, tenant.id, cluster, expected_version=_if_match(if_match), request_id=_rid()
+        )
+        return Response(status_code=204)
+
+    @router.post(
+        "/tenants/{t}/kubernetes-clusters/{cluster}/test",
+        tags=["kubernetes"],
+        summary="Test a Kubernetes cluster connection",
+        response_model=KubernetesTestRead,
+        responses=_ok(ex.KUBERNETES_TEST),
+    )
+    async def test_kubernetes_cluster(
+        cluster: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Reach the API server, count nodes and services and check what the token may do.
+
+        Always answers `200`; `ok: false` lists the problems.
+        """
+        return asdict(await require_k8s(svc).test(who, tenant.id, cluster, request_id=_rid()))
+
+    @router.post(
+        "/tenants/{t}/kubernetes-clusters/{cluster}/sync",
+        status_code=202,
+        tags=["kubernetes"],
+        summary="Sync a Kubernetes cluster now",
+        response_model=JobAccepted,
+        responses=_ok(ex.JOB_ACCEPTED, 202),
+    )
+    async def sync_kubernetes_cluster(
+        cluster: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, str]:
+        """Queue a sync of every cluster of the platform; the sync also runs every 30 seconds."""
+        require(who, "manage", "kubernetes_cluster")
+        await require_k8s(svc).get(who, tenant.id, cluster)
+        job = await require_k8s(svc).request_sync(who, tenant.id, request_id=_rid())
+        return {"job_id": str(job)}
+
     @router.get(
         "/dns-provider-types",
         tags=["dns providers"],
@@ -3909,6 +4080,83 @@ def create_app(
             request_id=_rid(),
         )
         return asdict(result)
+
+    @router.get(
+        "/system/controller",
+        tags=["system"],
+        summary="The controller's address, VIP and certificate",
+        response_model=ControllerRead,
+        responses=_ok(ex.CONTROLLER),
+    )
+    async def get_controller(request: Request, who: Who, svc: Services) -> dict[str, Any]:
+        """The public URL in effect and where the `controller` service answers.
+
+        Also its certificate, the change that waits for confirmation (with the seconds left) and
+        the redirect addresses each identity provider must allow for the new FQDN.
+        """
+        view = await svc.controller.view(who, env_public_url=request.app.state.public_url)
+        return asdict(view)
+
+    @router.put(
+        "/system/controller/pending",
+        status_code=202,
+        tags=["system"],
+        summary="Propose a new FQDN, VIP or certificate",
+        response_model=ControllerRead,
+        responses=_ok(ex.CONTROLLER, 202) | VALIDATION_RESPONSE,
+    )
+    async def propose_controller(
+        body: ControllerChangeIn, request: Request, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Validate, then apply the change to the `controller` service.
+
+        It is a change set of the management tenant with a recorded reason. When it has applied,
+        a confirmation window starts.
+
+        Update the identity providers' redirect addresses first (`redirect_urls`). The worker
+        reverts the change if it is not confirmed in time; nothing depends on this API. `409`
+        while another change waits.
+        """
+        view = await svc.controller.propose(
+            who,
+            fqdn=body.fqdn,
+            vip=body.vip,
+            certificate=body.certificate,
+            confirm_within_s=body.confirm_within_s,
+            request_id=_rid(),
+        )
+        return asdict(view)
+
+    @router.post(
+        "/system/controller/confirm",
+        tags=["system"],
+        summary="Keep the new controller settings",
+        response_model=ControllerRead,
+        responses=_ok(ex.CONTROLLER) | VALIDATION_RESPONSE,
+    )
+    async def confirm_controller(request: Request, who: Who, svc: Services) -> dict[str, Any]:
+        """Make the pending FQDN the public URL.
+
+        The request has to arrive on the new FQDN (`403` otherwise): reaching it is the proof it
+        works. `409` when nothing waits.
+        """
+        host = request.headers.get("host")
+        view = await svc.controller.confirm(who, request_host=host, request_id=_rid())
+        return asdict(view)
+
+    @router.post(
+        "/system/controller/revert",
+        tags=["system"],
+        summary="Revert the pending controller change now",
+        response_model=ControllerRead,
+        responses=_ok(ex.CONTROLLER) | VALIDATION_RESPONSE,
+    )
+    async def revert_controller(who: Who, svc: Services) -> dict[str, Any]:
+        """Put the previous VIP and certificate back with another change set.
+
+        Works from either address. `409` when nothing waits.
+        """
+        return asdict(await svc.controller.revert(who, request_id=_rid()))
 
     @router.get(
         "/system/break-glass",
@@ -4464,6 +4712,39 @@ def create_app(
         )
 
     @router.post(
+        "/tenants/{t}/imports/avi",
+        tags=["imports"],
+        summary="Import an Avi configuration export",
+        response_model=AviImportRead,
+        responses=_ok(ex.AVI_IMPORT) | VALIDATION_RESPONSE,
+    )
+    async def import_avi(
+        body: AviImportIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Convert the export; with `dry_run: false` open a draft change set from it.
+
+        SNI parents and their children become one HTTP service with host routes. Pools, health
+        monitors, certificates (with keys, stored in the secrets backend), HTTP redirects and pool
+        switches are converted; WAF, DataScripts and other things are listed under `findings` as
+        `manual`. VIPs do not carry over: they come from `vip_pool` or `vip_map`. The draft is not
+        applied; review it like any change set.
+        """
+        result = await svc.avi_import.run(
+            who,
+            tenant.id,
+            body.export,
+            se_group=body.se_group,
+            vip_pool=body.vip_pool,
+            vip_map=body.vip_map,
+            prefix=body.prefix,
+            include_unused=body.include_unused,
+            only=body.only,
+            dry_run=body.dry_run,
+            request_id=_rid(),
+        )
+        return asdict(result)
+
+    @router.post(
         "/tenants/{t}/certificates/issue/check",
         tags=["certificates"],
         summary="Check a certificate request without queueing it",
@@ -4479,8 +4760,12 @@ def create_app(
         credential that covers it (DNS-01), and an HTTP-01 name must lead to one of the tenant's
         HTTP services on port 80. Always answers `200`; `ok: false` lists the problems.
         """
-        problems = await svc.cert_requests.check(who, tenant.id, to_request(body))
-        return {"ok": not problems, "problems": [asdict(p) for p in problems]}
+        result = await svc.cert_requests.inspect(who, tenant.id, to_request(body))
+        return {
+            "ok": not result.problems,
+            "problems": [asdict(p) for p in result.problems],
+            "warnings": [asdict(p) for p in result.warnings],
+        }
 
     @router.get(
         "/tenants/{t}/certificate-renewals",
