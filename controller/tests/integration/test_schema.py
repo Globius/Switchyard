@@ -75,6 +75,8 @@ def full_data() -> dict:  # type: ignore[type-arg]
         health_monitor_id="hm-http",
         persistence={"type": "http_cookie", "name": "SY_SRV", "ttl_s": 3600, "secure": True},
         send_proxy="v2",
+        backend_protocol="h2",
+        tunnel_timeout_s=900,
         client_certificate_id="cert-wild",
         tls=True,
         algorithm="leastconn",
@@ -94,6 +96,14 @@ def full_data() -> dict:  # type: ignore[type-arg]
     )
     data["pools"].append(
         {
+            "id": "pool-split",
+            "tenant_id": "t-acme",
+            "name": "split",
+            "members": [{"address": "10.20.0.40", "port": 80}],
+        }
+    )
+    data["pools"].append(
+        {
             "id": "pool-tcp",
             "tenant_id": "t-acme",
             "name": "k8s",
@@ -101,9 +111,18 @@ def full_data() -> dict:  # type: ignore[type-arg]
             "members": [{"address": "10.20.0.30", "port": 6443}],
         }
     )
+    data["se_groups"][0]["peers"] = {
+        "port": 10001,
+        "members": [
+            {"name": "se-1", "address": "10.20.0.5"},
+            {"name": "se-2", "address": "10.20.0.6"},
+        ],
+    }
     data["certificates"][0].update(source="acme", ocsp_stapling=True, renew_before_days=14)
     vs = data["virtual_services"][0]
     vs["ports"][0]["tls_profile"] = "modern"
+    vs["ports"][0]["http3"] = True
+    vs["compression"] = {"algorithms": ["gzip", "deflate"], "content_types": ["text/html"]}
     vs.update(
         policy_set_ids=["ps-redir"],
         allow_list_id="ps-cf",
@@ -117,6 +136,14 @@ def full_data() -> dict:  # type: ignore[type-arg]
             "redirect": {"location": "https://app.example.test/new", "code": 302},
         },
         {"order": 2, "match": {"path_exact": "/status"}, "pool_id": "pool-web"},
+        {
+            "order": 3,
+            "match": {"host": "split.example.test"},
+            "pools": [
+                {"pool_id": "pool-web", "weight": 80},
+                {"pool_id": "pool-split", "weight": 20},
+            ],
+        },
     ]
     data["virtual_services"].append(
         {
@@ -181,7 +208,7 @@ async def test_member_and_port_order_is_stable(admin_engine: AsyncEngine) -> Non
     pool = next(p for p in loaded.pools if p.name == "web")
     assert [m.server_name for m in pool.members] == ["10-20-0-11-8080", "b"]
     web = next(v for v in loaded.virtual_services if v.name == "web")
-    assert [r.order for r in web.routes] == [0, 1, 2]
+    assert [r.order for r in web.routes] == [0, 1, 2, 3]
     assert [str(c) for c in web.certificate_ids] == [symbolic_uuid("cert-wild")]
 
 

@@ -180,6 +180,25 @@ def data() -> dict[str, Any]:
                 ],
             },
             {
+                "id": "lim",
+                "tenant_id": "t",
+                "name": "lim",
+                "kind": "rate_limit",
+                "rules": [
+                    {
+                        "match": {"path_exact": "/login", "methods": ["POST"]},
+                        "max_requests": 3,
+                        "period_s": 60,
+                    },
+                    {
+                        "key": "header",
+                        "header_name": "X-Api-Key",
+                        "max_requests": 2,
+                        "period_s": 60,
+                    },
+                ],
+            },
+            {
                 "id": "err",
                 "tenant_id": "t",
                 "name": "err",
@@ -219,6 +238,7 @@ def data() -> dict[str, Any]:
                 ],
             ),
             service("rewrite", 8443, policy_set_ids=["rw"]),
+            service("limits", 7443, policy_set_ids=["lim"]),
             service(
                 "respond",
                 9443,
@@ -411,3 +431,55 @@ class TestFixedResponses:
     def test_error_page_replaces_the_generated_503(self, respond_results: dict[str, str]) -> None:
         assert respond_results["dead"] == "<h1>custom 503</h1>"
         assert respond_results["dead-h"].startswith("HTTP/1.1 503")
+
+
+@pytest.fixture(scope="module")
+def limit_results(lab: Lab) -> dict[str, dict[str, str]]:
+    def run(client: str) -> dict[str, str]:
+        lines = [_hdrs(f"login{i}", 7443, "/login", "-X POST") for i in range(1, 6)]
+        lines += [_hdrs("get", 7443, "/login")]
+        lines += [_hdrs(f"key-a{i}", 7443, "/x", "-H 'X-Api-Key: a'") for i in range(1, 4)]
+        lines += [_hdrs("key-b", 7443, "/x", "-H 'X-Api-Key: b'")]
+        lines += [_hdrs(f"nokey{i}", 7443, "/x") for i in range(1, 5)]
+        return lab.curl(client, HDRS + chr(10).join(lines))
+
+    return {"99": run("192.0.2.99"), "98": run("192.0.2.98")}
+
+
+def _status(line: str) -> str:
+    return line.split("~", 1)[0]
+
+
+class TestRateLimits:
+    def test_path_limit_denies_after_the_allowance_with_a_retry_hint(
+        self, limit_results: dict[str, dict[str, str]]
+    ) -> None:
+        got = limit_results["99"]
+        assert [_status(got[f"login{i}"]) for i in range(1, 6)] == [
+            "HTTP/1.1 200 OK",
+            "HTTP/1.1 200 OK",
+            "HTTP/1.1 200 OK",
+            "HTTP/1.1 429 Too Many Requests",
+            "HTTP/1.1 429 Too Many Requests",
+        ]
+        assert "retry-after: 60" in got["login4"].lower().split("~")
+
+    def test_requests_outside_the_match_are_not_counted(
+        self, limit_results: dict[str, dict[str, str]]
+    ) -> None:
+        assert _status(limit_results["99"]["get"]) == "HTTP/1.1 200 OK"
+
+    def test_counters_are_per_client(self, limit_results: dict[str, dict[str, str]]) -> None:
+        assert _status(limit_results["98"]["login1"]) == "HTTP/1.1 200 OK"
+
+    def test_header_key_counts_per_value_and_ignores_requests_without_it(
+        self, limit_results: dict[str, dict[str, str]]
+    ) -> None:
+        got = limit_results["99"]
+        assert [_status(got[f"key-a{i}"]) for i in range(1, 4)] == [
+            "HTTP/1.1 200 OK",
+            "HTTP/1.1 200 OK",
+            "HTTP/1.1 429 Too Many Requests",
+        ]
+        assert _status(got["key-b"]) == "HTTP/1.1 200 OK"
+        assert all(_status(got[f"nokey{i}"]) == "HTTP/1.1 200 OK" for i in range(1, 5))

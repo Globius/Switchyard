@@ -149,7 +149,10 @@ def test_object_reads_document_etag_and_if_match_problems() -> None:
 @pytest.mark.parametrize(
     ("slug", "tags"),
     [
-        ("policy-sets", {"redirect", "allow_list", "rewrite", "respond", "error_pages"}),
+        (
+            "policy-sets",
+            {"redirect", "allow_list", "rewrite", "respond", "error_pages", "rate_limit"},
+        ),
         ("routing-profiles", {"vrrp", "bgp"}),
     ],
 )

@@ -5252,172 +5252,39 @@ export interface components {
             summary: string;
         };
         /**
-         * ControllerCertificateRead
-         * @description The certificate the `controller` service presents.
+         * Compression
+         * @description Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
+         *
+         *     Attributes:
+         *         algorithms: In order of preference: ``gzip``, ``deflate``.
+         *         content_types: Media types to compress, such as ``text/html``. Never images or archives.
+         *
+         *     Example:
+         *         >>> Compression().algorithms
+         *         ('gzip',)
          */
-        ControllerCertificateRead: {
-            /** Name */
-            name: string;
+        Compression: {
             /**
-             * Not After
-             * Format: date-time
+             * Algorithms
+             * @default [
+             *       "gzip"
+             *     ]
              */
-            not_after: string;
-            /** Sans */
-            sans: string[];
-        };
-        /**
-         * ControllerChangeIn
-         * @description Propose a change to the controller's address.
-         */
-        ControllerChangeIn: {
+            algorithms: ("gzip" | "deflate")[];
             /**
-             * Certificate
-             * @description Name of a server certificate in the management tenant.
+             * Content Types
+             * @default [
+             *       "text/html",
+             *       "text/plain",
+             *       "text/css",
+             *       "text/javascript",
+             *       "application/javascript",
+             *       "application/json",
+             *       "application/xml",
+             *       "image/svg+xml"
+             *     ]
              */
-            certificate?: string | null;
-            /**
-             * Confirm Within S
-             * @description Seconds to confirm before the change is reverted (default 120).
-             */
-            confirm_within_s?: number | null;
-            /**
-             * Fqdn
-             * @description The host name users will open.
-             */
-            fqdn: string;
-            /**
-             * Vip
-             * @description A new VIP for the `controller` service.
-             */
-            vip?: string | null;
-        };
-        /**
-         * ControllerChangeRead
-         * @description A change that waits for confirmation (or is still being applied).
-         */
-        ControllerChangeRead: {
-            after: components["schemas"]["ControllerStateRead"];
-            before: components["schemas"]["ControllerStateRead"];
-            /**
-             * Change Set Id
-             * @description The management tenant's change set.
-             */
-            change_set_id: string | null;
-            /**
-             * Expires At
-             * @description Set once the change set has applied.
-             */
-            expires_at: string | null;
-            /**
-             * Proposed At
-             * Format: date-time
-             */
-            proposed_at: string;
-            /** Proposed By */
-            proposed_by: string;
-            /** Revision After */
-            revision_after: number | null;
-            /** Revision Before */
-            revision_before: number | null;
-            /** Seconds Left */
-            seconds_left: number | null;
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "applying" | "waiting";
-            /** Window S */
-            window_s: number;
-        };
-        /**
-         * ControllerListenRead
-         * @description Where the `controller` service answers.
-         */
-        ControllerListenRead: {
-            /** Ports */
-            ports: components["schemas"]["ControllerPortRead"][];
-            /** Vip */
-            vip: string;
-        };
-        /**
-         * ControllerPortRead
-         * @description A port of the `controller` service.
-         */
-        ControllerPortRead: {
-            /** Https Redirect Port */
-            https_redirect_port: number | null;
-            /** Port */
-            port: number;
-            /** Tls */
-            tls: boolean;
-        };
-        /**
-         * ControllerRead
-         * @description The controller's address settings.
-         */
-        ControllerRead: {
-            /**
-             * Break Glass
-             * @description How to recover without the UI.
-             */
-            break_glass: string;
-            certificate: components["schemas"]["ControllerCertificateRead"] | null;
-            /** Fqdn */
-            fqdn: string | null;
-            last_result: components["schemas"]["ControllerResultRead"] | null;
-            listen: components["schemas"]["ControllerListenRead"] | null;
-            /**
-             * Managed
-             * @description The management tenant and its `controller` service exist. Without them only the FQDN (public URL) can be set.
-             */
-            managed: boolean;
-            pending: components["schemas"]["ControllerChangeRead"] | null;
-            /** Public Url */
-            public_url: string | null;
-            /**
-             * Redirect Urls
-             * @description For a pending change: what each identity provider must allow first.
-             */
-            redirect_urls: components["schemas"]["IdpRedirectRead"][];
-        };
-        /**
-         * ControllerResultRead
-         * @description How the previous change ended.
-         */
-        ControllerResultRead: {
-            /**
-             * At
-             * Format: date-time
-             */
-            at: string;
-            /** By */
-            by: string | null;
-            /** Fqdn */
-            fqdn?: string | null;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "confirmed" | "reverted" | "failed";
-            /** Reason */
-            reason?: string | null;
-            /** Restored */
-            restored?: boolean | null;
-        };
-        /**
-         * ControllerStateRead
-         * @description The settings before or after a change.
-         */
-        ControllerStateRead: {
-            /** Certificate */
-            certificate?: string | null;
-            /** Fqdn */
-            fqdn: string | null;
-            /** Public Url */
-            public_url: string | null;
-            /** Vip */
-            vip?: string | null;
+            content_types: string[];
         };
         /**
          * DeployIn
@@ -6767,18 +6634,6 @@ export interface components {
          */
         HttpMethod: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
         /**
-         * IdpRedirectRead
-         * @description The address an identity provider must allow for the new FQDN.
-         */
-        IdpRedirectRead: {
-            /** Protocol */
-            protocol: string;
-            /** Provider */
-            provider: string;
-            /** Redirect Url */
-            redirect_url: string;
-        };
-        /**
          * IdpTestIn
          * @description Start a test sign-in.
          */
@@ -7052,11 +6907,9 @@ export interface components {
          *         GC: Scheduled housekeeping.
          *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
-         *         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
-         *             confirmation; reverts it when the window runs out.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members" | "evaluate_alerts" | "controller_tick";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members" | "evaluate_alerts";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -7779,10 +7632,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -7952,6 +7805,38 @@ export interface components {
              * @enum {string}
              */
             on_error: "mark-down" | "fastinter" | "fail-check" | "sudden-death";
+        };
+        /**
+         * PeerMember
+         * @description One service engine in a peer group: its HAProxy host name and its backend-network address.
+         *
+         *     Example:
+         *         >>> PeerMember(name="se-1", address="10.20.0.5").name
+         *         'se-1'
+         */
+        PeerMember: {
+            /** Address */
+            address: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * PeerSync
+         * @description Share persistence tables between the engines of a group (HAProxy ``peers``; ADR 0118).
+         *
+         *     Attributes:
+         *         port: TCP port the engines use to talk to each other, on the backend network.
+         *         members: Every engine of the group, by the name HAProxy finds as its own (the host name)
+         *             and the address it listens on. At least two, at most 16.
+         */
+        PeerSync: {
+            /** Members */
+            members: components["schemas"]["PeerMember"][];
+            /**
+             * Port
+             * @default 10000
+             */
+            port: number;
         };
         /**
          * PermissionMatrix
@@ -8157,15 +8042,27 @@ export interface components {
          *         passive_check: Also judge members by their live traffic. Needs a health monitor.
          *         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
          *             weight (HAProxy ``slowstart``). Needs a health monitor.
-         *         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
+         *         backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,
+         *             ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,
+         *             needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).
+         *         tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2
+         *             stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``
+         *             keeps the default of one hour.
          *         send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
          *         client_certificate_id: Server certificate HAProxy presents to members (backend
          *             mutual TLS). Needs ``tls``.
+         *         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
          *         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
          */
         Pool: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
@@ -8205,6 +8102,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
             /**
              * Version
              * @default 1
@@ -8215,6 +8114,12 @@ export interface components {
         PoolCreate: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
@@ -8244,6 +8149,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
         };
         /**
          * PoolDiscovery
@@ -8296,6 +8203,9 @@ export interface components {
          *         name: HAProxy server name; derived from address and port when omitted.
          *         backup: A backup member takes traffic only when every non-backup member is down.
          *         maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.
+         *         drain_timeout_s: With ``admin_state`` ``drain``: seconds after which the controller moves
+         *             the member to ``disabled`` (a periodic job, ADR 0109). ``None`` drains until an
+         *             operator acts. Never reaches the engine configuration.
          */
         PoolMember: {
             /** Address */
@@ -8307,6 +8217,8 @@ export interface components {
              * @default false
              */
             backup: boolean;
+            /** Drain Timeout S */
+            drain_timeout_s?: number | null;
             /**
              * Id
              * Format: uuid
@@ -8327,6 +8239,8 @@ export interface components {
         /** PoolPatch */
         PoolPatch: {
             algorithm?: components["schemas"]["Algorithm"] | null;
+            /** Backend Protocol */
+            backend_protocol?: ("http1" | "h2" | "h2c") | null;
             /** Client Certificate Id */
             client_certificate_id?: string | null;
             discovery?: components["schemas"]["PoolDiscovery"] | null;
@@ -8347,6 +8261,8 @@ export interface components {
             tls?: boolean | null;
             /** Tls Verify */
             tls_verify?: boolean | null;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
         };
         /**
          * PoolRead
@@ -8355,6 +8271,12 @@ export interface components {
         PoolRead: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            /**
+             * Backend Protocol
+             * @default http1
+             * @enum {string}
+             */
+            backend_protocol: "http1" | "h2" | "h2c";
             /**
              * Changed Fields
              * @description Fields a draft changed; empty outside a draft.
@@ -8401,6 +8323,8 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+            /** Tunnel Timeout S */
+            tunnel_timeout_s?: number | null;
             /**
              * Version
              * @default 1
@@ -8523,6 +8447,169 @@ export interface components {
          * @enum {string}
          */
         QueryOp: "present" | "equals";
+        /**
+         * RateLimitPolicySet
+         * @description Rate and concurrency limits per client or key (ADR 0110).
+         *
+         *     A service may carry at most 8 rate-limit rules across its sets.
+         */
+        RateLimitPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RateLimitPolicySetCreate */
+        RateLimitPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+        };
+        /** RateLimitPolicySetPatch */
+        RateLimitPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["RateLimitRule"][] | null;
+        };
+        /**
+         * RateLimitPolicySetRead
+         * @description RateLimitPolicySet as returned by the API.
+         */
+        RateLimitPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * RateLimitRule
+         * @description Limit how often one client (or one key) may use the service; excess requests get ``action``.
+         *
+         *     Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
+         *     flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
+         *
+         *     Attributes:
+         *         match: Requests this rule counts and limits; empty counts every request. Use a path in
+         *             the match for a per-path limit (a login page, an API prefix).
+         *         key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
+         *             (an API key header; requests without the header are not counted).
+         *         max_requests: Requests allowed per ``period_s`` before the action applies.
+         *         period_s: Length of the window for ``max_requests``.
+         *         max_concurrent: Requests allowed at the same time.
+         *         action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
+         *             seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
+         *         table_size: Number of keys the table holds; the oldest are evicted when it is full.
+         */
+        RateLimitRule: {
+            /**
+             * Action
+             * @default deny
+             * @enum {string}
+             */
+            action: "deny" | "tarpit" | "silent_drop";
+            /**
+             * Deny Status
+             * @default 429
+             * @enum {integer}
+             */
+            deny_status: 403 | 429 | 503;
+            /** Header Name */
+            header_name?: string | null;
+            /**
+             * Key
+             * @default client_ip
+             * @enum {string}
+             */
+            key: "client_ip" | "header";
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /** Max Concurrent */
+            max_concurrent?: number | null;
+            /** Max Requests */
+            max_requests?: number | null;
+            /**
+             * Period S
+             * @default 10
+             * @enum {integer}
+             */
+            period_s: 1 | 10 | 60 | 300 | 3600;
+            /**
+             * Table Size
+             * @default 10000
+             */
+            table_size: number;
+            /**
+             * Tarpit S
+             * @default 5
+             */
+            tarpit_s: number;
+        };
         /**
          * ReasonIn
          * @description A free-text reason or comment.
@@ -9559,6 +9646,7 @@ export interface components {
          *             a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.
          *         canary_seconds: How long the canary SE is watched after a push before the rest of the
          *             group is updated (0 skips the wait).
+         *         peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
          */
         SeGroup: {
             /**
@@ -9581,6 +9669,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
             /**
@@ -9611,6 +9700,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
         };
@@ -9637,6 +9727,7 @@ export interface components {
             name?: string | null;
             /** Networks */
             networks?: components["schemas"]["SeGroupNetwork"][] | null;
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
         };
@@ -9672,6 +9763,7 @@ export interface components {
             name: string;
             /** Networks */
             networks: components["schemas"]["SeGroupNetwork"][];
+            peers?: components["schemas"]["PeerSync"] | null;
             /** Routing Profile Id */
             routing_profile_id?: string | null;
             /**
@@ -9852,7 +9944,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -10513,6 +10605,7 @@ export interface components {
          *         enforce_allow_list: Reject connections from sources outside the allow list.
          *         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
          *             client address; honoured only when the connection source is in the allow list.
+         *         compression: Response compression (``http`` only; ADR 0117).
          */
         VirtualService: {
             /** Allow List Id */
@@ -10522,6 +10615,7 @@ export interface components {
              * @default []
              */
             certificate_ids: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /**
@@ -10585,6 +10679,7 @@ export interface components {
              * @default []
              */
             certificate_ids: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /**
@@ -10691,6 +10786,7 @@ export interface components {
             allow_list_id?: string | null;
             /** Certificate Ids */
             certificate_ids?: string[] | null;
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** Enabled */
@@ -10732,6 +10828,7 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            compression?: components["schemas"]["Compression"] | null;
             /** Default Pool Id */
             default_pool_id?: string | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
@@ -11039,6 +11136,10 @@ export interface components {
          *             (mutual TLS). Needs ``tls``.
          *         client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
          *             certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
+         *         tls_passthrough: ``tcp`` services only: do not terminate TLS; route by the SNI in the
+         *             client hello (ADR 0115). Excludes every TLS option of the port.
+         *         http3: Also listen for HTTP/3 over QUIC on the same number (UDP) and advertise it with
+         *             ``Alt-Svc`` (ADR 0116). Needs ``tls`` and ``http2``.
          */
         VsPort: {
             /** Client Ca Id */
@@ -11054,6 +11155,11 @@ export interface components {
              * @default false
              */
             http2: boolean;
+            /**
+             * Http3
+             * @default false
+             */
+            http3: boolean;
             /** Https Redirect Port */
             https_redirect_port?: number | null;
             /** Port */
@@ -11068,18 +11174,37 @@ export interface components {
              * @default false
              */
             tls: boolean;
+            /**
+             * Tls Passthrough
+             * @default false
+             */
+            tls_passthrough: boolean;
             tls_profile?: components["schemas"]["TlsProfile"] | null;
         };
         /**
          * VsRoute
-         * @description Route a request to a pool or answer it with a redirect.
+         * @description Route a request to a pool, split it over weighted pools, or answer it with a redirect.
          *
          *     Attributes:
          *         order: Position among path routes; lower runs first. Host-only routes are looked up in map
          *             files and are order-independent (exact host wins over wildcard).
          *         match: What the request must match. Must not be empty.
-         *         pool_id: Target pool, or ``None`` when ``redirect`` is set.
-         *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` is set.
+         *         pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.
+         *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.
+         *         pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each
+         *             request is sent to one of them at random in that proportion (ADR 0119).
+         *
+         *     Example:
+         *         >>> import uuid
+         *         >>> route = VsRoute(
+         *         ...     match=RouteMatch(host="app.example.test"),
+         *         ...     pools=(
+         *         ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),
+         *         ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),
+         *         ...     ),
+         *         ... )
+         *         >>> len(route.pool_ids)
+         *         2
          */
         VsRoute: {
             match: components["schemas"]["RouteMatch"];
@@ -11090,7 +11215,30 @@ export interface components {
             order: number;
             /** Pool Id */
             pool_id?: string | null;
+            /**
+             * Pools
+             * @default []
+             */
+            pools: components["schemas"]["WeightedPool"][];
             redirect?: components["schemas"]["RedirectAction"] | null;
+        };
+        /**
+         * WeightedPool
+         * @description One target of a weighted route: a pool and its share of the matching requests.
+         *
+         *     Example:
+         *         >>> import uuid
+         *         >>> WeightedPool(pool_id=uuid.UUID(int=1), weight=90).weight
+         *         90
+         */
+        WeightedPool: {
+            /**
+             * Pool Id
+             * Format: uuid
+             */
+            pool_id: string;
+            /** Weight */
+            weight: number;
         };
         /**
          * WouldGrant
@@ -23020,7 +23168,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -23111,7 +23259,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"];
             };
         };
         responses: {
@@ -23228,7 +23376,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -23406,7 +23554,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"];
             };
         };
         responses: {

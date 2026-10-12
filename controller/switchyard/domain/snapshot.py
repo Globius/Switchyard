@@ -36,6 +36,8 @@ from switchyard.domain.models import (
     PolicySet,
     Pool,
     Protocol,
+    RateLimitPolicySet,
+    RateLimitRule,
     RoutingProfile,
     SeGroup,
     Tenant,
@@ -96,7 +98,7 @@ class Snapshot(Model):
         for s in services:
             if s.default_pool_id:
                 pool_ids.add(s.default_pool_id)
-            pool_ids.update(r.pool_id for r in s.routes if r.pool_id)
+            pool_ids.update(pid for r in s.routes for pid in r.pool_ids)
             cert_ids.update(s.certificate_ids)
             cert_ids.update(p.client_ca_id for p in s.ports if p.client_ca_id)
             policy_ids.update(s.policy_set_ids)
@@ -220,6 +222,23 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 f"se_groups.{g.name}.networks[{i}]", g.tenant_id, "network", gn.network_id, networks
             )
     for g in snapshot.se_groups:
+        if g.peers is None:
+            continue
+        backend_cidrs = [
+            networks[gn.network_id].cidr
+            for gn in g.networks
+            if gn.role is NetworkRole.BACKEND and gn.network_id in networks
+        ]
+        for i, peer in enumerate(g.peers.members):
+            if not any(peer.address in cidr for cidr in backend_cidrs):
+                problems.append(
+                    Problem(
+                        f"se_groups.{g.name}.peers.members[{i}].address",
+                        "peer_outside_backend_network",
+                        f"{peer.address} is not in a backend network of the group",
+                    )
+                )
+    for g in snapshot.se_groups:
         if g.routing_profile_id is None:
             continue
         profile = check_ref(
@@ -294,9 +313,13 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         used_pools: list[tuple[str, UUID]] = []
         if s.default_pool_id:
             used_pools.append((f"{base}.default_pool_id", s.default_pool_id))
-        used_pools += [
-            (f"{base}.routes[{i}].pool_id", r.pool_id) for i, r in enumerate(s.routes) if r.pool_id
-        ]
+        for i, route in enumerate(s.routes):
+            if route.pool_id:
+                used_pools.append((f"{base}.routes[{i}].pool_id", route.pool_id))
+            used_pools += [
+                (f"{base}.routes[{i}].pools[{j}].pool_id", w.pool_id)
+                for j, w in enumerate(route.pools)
+            ]
         for path, pid in used_pools:
             if check_ref(path, s.tenant_id, "pool", pid, pools_by_id) is not None:
                 pool_protocols[pid].add(s.protocol)
@@ -364,6 +387,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 )
 
         _check_routes(s, base, problems)
+        _check_rate_limits(s, policies, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
@@ -550,6 +574,22 @@ def _check_udp_pools(
                             f"{field} is not valid on a udp pool",
                         )
                     )
+            if pool.tunnel_timeout_s is not None:
+                problems.append(
+                    Problem(
+                        f"{base}.tunnel_timeout_s",
+                        "udp_field_not_allowed",
+                        "tunnel_timeout_s is not valid on a udp pool",
+                    )
+                )
+            if pool.backend_protocol != "http1":
+                problems.append(
+                    Problem(
+                        f"{base}.backend_protocol",
+                        "udp_field_not_allowed",
+                        "backend_protocol is not valid on a udp pool",
+                    )
+                )
             if pool.algorithm is Algorithm.RANDOM:
                 problems.append(
                     Problem(
@@ -611,6 +651,14 @@ def _check_live_traffic(
     ``passive_check_layer7_needs_http`` and ``persistence_needs_http`` (cookie, header and URI
     persistence on a pool a ``tcp`` service uses).
     """
+    if pool.backend_protocol != "http1" and Protocol.TCP in protocols:
+        problems.append(
+            Problem(
+                f"{base}.backend_protocol",
+                "backend_protocol_needs_http",
+                f"backend_protocol {pool.backend_protocol} needs a pool used only by http services",
+            )
+        )
     if isinstance(pool.persistence, HTTP_ONLY_PERSISTENCE) and Protocol.TCP in protocols:
         problems.append(
             Problem(
@@ -643,7 +691,90 @@ def _check_live_traffic(
         )
 
 
+#: Rate-limit rules one service may carry (one stick counter each; HAProxy tracks few per stream).
+MAX_RATE_LIMITS_PER_SERVICE = 8
+#: Stick-table entries one service may ask for in total (memory on the SE).
+MAX_TABLE_ENTRIES_PER_SERVICE = 2_000_000
+
+
+def rate_limit_rules(
+    s: VirtualService, policies: Mapping[UUID, Any]
+) -> list[tuple[RateLimitPolicySet, int, RateLimitRule]]:
+    """The rate-limit rules of a service in render order: ``(set, 1-based index in set, rule)``."""
+    out = []
+    for pid in s.policy_set_ids:
+        ps = policies.get(pid)
+        if isinstance(ps, RateLimitPolicySet):
+            out += [(ps, i, r) for i, r in enumerate(ps.rules, start=1)]
+    return out
+
+
+def stick_table_entries(snapshot: "Snapshot", tenant_id: UUID) -> int:
+    """Stick-table entries a tenant's rate-limit rules ask for, counted once per service using them.
+
+    Example:
+        >>> stick_table_entries(Snapshot(), UUID(int=1))
+        0
+    """
+    policies = {p.id: p for p in snapshot.policy_sets}
+    return sum(
+        r.table_size
+        for s in snapshot.virtual_services
+        if s.tenant_id == tenant_id
+        for _, _, r in rate_limit_rules(s, policies)
+    )
+
+
+def _check_rate_limits(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    rules = rate_limit_rules(s, policies)
+    if len(rules) > MAX_RATE_LIMITS_PER_SERVICE:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "too_many_rate_limits",
+                f"a service may have {MAX_RATE_LIMITS_PER_SERVICE} rate-limit rules; "
+                f"this one has {len(rules)}",
+            )
+        )
+    if sum(r.table_size for _, _, r in rules) > MAX_TABLE_ENTRIES_PER_SERVICE:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "stick_table_too_large",
+                f"rate-limit tables of one service may hold {MAX_TABLE_ENTRIES_PER_SERVICE} "
+                "entries in total",
+            )
+        )
+    delays = {r.tarpit_s for _, _, r in rules if r.action == "tarpit"}
+    if len(delays) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "tarpit_conflict",
+                "tarpit rules of one service must use the same tarpit_s (one timeout per frontend)",
+            )
+        )
+
+
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
+    if s.protocol is Protocol.TCP:
+        for i, r in enumerate(s.routes):
+            if (
+                r.match.host is None
+                or r.match.path_prefix
+                or r.match.path_exact
+                or r.redirect
+                or r.pools
+            ):
+                problems.append(
+                    Problem(
+                        f"{base}.routes[{i}]",
+                        "passthrough_route_invalid",
+                        "a tcp route matches the SNI host only and names a pool",
+                    )
+                )
     seen: set[str] = set()
     for i, r in enumerate(s.routes):
         key = r.match.model_dump_json()

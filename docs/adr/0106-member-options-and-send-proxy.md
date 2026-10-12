@@ -14,5 +14,4 @@ Plan item A6 asks for backup members, per-member connection limits, timed drain 
    health monitor, so checks are not rejected by a member that insists on the header.
 3. UDP pools reject all three (`udp_field_not_allowed`): IPVS has no equivalent.
 4. Tables (migration 0028): `pool_member.backup`, `pool_member.maxconn`, `pool.send_proxy`.
-5. **Timed drain is not built.** HAProxy drains by weight and holds sessions until the clients leave. Ending a drain after a time needs a
-   controller job that moves the member to `disabled`; it comes with the rolling-upgrade work (plan B4), not with this change.
+5. Timed drain is in ADR 0109.

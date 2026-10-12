@@ -83,8 +83,14 @@ def _tar(files: Mapping[str, str]) -> bytes:
 def haproxy_check(files: Mapping[str, str]) -> CheckResult:
     """Run ``haproxy -c`` against rendered ``files`` and return the verdict and its output."""
     client = docker.from_env()
+    # A ``peers`` section only stays when one of its peers carries the host name of the engine.
+    local = re.search(r"^\s+peer (\S+) ", files.get("haproxy/haproxy.cfg", ""), re.MULTILINE)
     container = client.containers.create(
-        HAPROXY_IMAGE, command=["sh", "-c", _SCRIPT], user="root", network_mode="none"
+        HAPROXY_IMAGE,
+        command=["sh", "-c", _SCRIPT],
+        user="root",
+        network_mode="none",
+        hostname=local.group(1) if local else None,
     )
     try:
         container.put_archive("/", _tar(files))

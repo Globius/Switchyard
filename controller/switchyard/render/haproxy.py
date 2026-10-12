@@ -47,7 +47,7 @@ from uuid import UUID
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
 from switchyard.domain import models as dm
-from switchyard.domain.snapshot import Snapshot, ensure_valid
+from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
 from switchyard.render import escape as esc
 from switchyard.render.escape import RenderError
 
@@ -62,6 +62,7 @@ CERT_DIR = "/etc/switchyard/certs"
 ACME_MAP_FILE = "haproxy/maps/acme-http01.map"
 ACME_MAP = f"{BASE_DIR}/maps/acme-http01.map"
 CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
+PEERS_SECTION = "sy_peers"
 
 #: Protocol-aware health checks HAProxy ships, by monitor ``preset`` (ADR 0108).
 _TCP_PRESETS = {
@@ -281,6 +282,23 @@ def _map_text(entries: Mapping[str, str]) -> str:
     return "".join(f"{key} {entries[key]}\n" for key in sorted(entries))
 
 
+def _cookie_value(pool: dm.Pool, member: dm.PoolMember) -> str:
+    """Opaque, stable cookie value of a member (ADR 0105).
+
+    The server name often encodes the member's address, which must not reach clients, so the value
+    is a short hash of the pool and member ids.
+
+    Example:
+        >>> import uuid
+        >>> pool = dm.Pool(id=uuid.UUID(int=1), tenant_id=uuid.UUID(int=2), name="p")
+        >>> member = dm.PoolMember(id=uuid.UUID(int=3), address="10.0.0.5")
+        >>> _cookie_value(pool, member)
+        'm0d1b1f77b038'
+    """
+    digest = hashlib.sha256(f"{pool.id}/{member.id}".encode()).hexdigest()
+    return f"m{digest[:12]}"
+
+
 def _map_rule(converter: str, path: str) -> str:
     """Route by map lookup.
 
@@ -318,6 +336,8 @@ class _Renderer:
         self.warnings: list[str] = []
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
+        self.limit_backends: list[dict[str, Any]] = []
+        self.stick_counters = 0
 
     def render(self) -> RenderResult:
         services = sorted(
@@ -332,6 +352,7 @@ class _Renderer:
                 self.pool_modes[pool_id] = mode
             frontends.append(self._frontend(svc, mode))
         backends = [self._backend(self.pools[pid], mode) for pid, mode in self.pool_modes.items()]
+        backends += self.limit_backends
         backends.sort(key=lambda b: b["name"])
         template = _ENV.get_template("haproxy.cfg.j2")
 
@@ -342,7 +363,9 @@ class _Renderer:
                 frontends=frontends,
                 backends=backends,
                 exporter=self._exporter(),
+                stick_counters=self.stick_counters if self.stick_counters > 3 else None,
                 fingerprint=fingerprint,
+                peers=self._peers(),
             )
 
         # The fingerprint covers every file; the config is hashed with a placeholder in its own
@@ -356,6 +379,19 @@ class _Renderer:
         )
 
     # -- helpers ---------------------------------------------------------------------------------
+
+    def _peers(self) -> dict[str, Any] | None:
+        """The ``peers`` section that syncs persistence tables between the group's engines."""
+        sync = self.group.peers
+        if sync is None:
+            return None
+        return {
+            "name": PEERS_SECTION,
+            "members": [
+                {"name": esc.ident(m.name), "target": esc.bind_address(m.address, sync.port)}
+                for m in sorted(sync.members, key=lambda m: m.name)
+            ],
+        }
 
     def _exporter(self) -> dict[str, Any] | None:
         """Where the Prometheus exporter listens: port 8405, only for the management networks.
@@ -384,7 +420,7 @@ class _Renderer:
 
     @staticmethod
     def _pool_ids(svc: dm.VirtualService) -> list[UUID]:
-        ids = [r.pool_id for r in svc.routes if r.pool_id]
+        ids = [pid for r in svc.routes for pid in r.pool_ids]
         if svc.default_pool_id:
             ids.append(svc.default_pool_id)
         return list(dict.fromkeys(ids))
@@ -411,11 +447,21 @@ class _Renderer:
                 lst = self._list_path(allow)
                 connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
         request_rules: list[str] = []
+        tarpit_s: int | None = None
         response_rules: list[str] = []
         error_rules: list[str] = []
         routing_rules: list[str] = []
+        options: list[str] = []
+        if mode == "tcp" and svc.routes:
+            request_rules = [
+                "tcp-request inspect-delay 5s",
+                "tcp-request content accept if { req.ssl_hello_type 1 }",
+            ]
+            routing_rules = self._sni_rules(svc, name)
         if mode == "http":
+            options = self._http_options(svc, ports)
             request_rules = self._request_rules(svc, ports, allow)
+            tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
             if any(p.port == 80 and not p.tls for p in ports):
@@ -426,16 +472,67 @@ class _Renderer:
         return {
             "name": name,
             "mode": mode,
-            "binds": [self._bind(svc, p, name, mode) for p in ports],
+            "binds": [bind for p in ports for bind in self._binds(svc, p, name, mode)],
+            "options": options,
             "connection_rules": connection_rules,
             "request_rules": request_rules,
             "response_rules": response_rules,
             "error_rules": error_rules,
+            "tarpit_s": tarpit_s,
             "routing_rules": routing_rules,
             "default_backend": (
                 self._backend_name(svc.default_pool_id) if svc.default_pool_id else None
             ),
         }
+
+    @staticmethod
+    def _http_options(svc: dm.VirtualService, ports: list[dm.VsPort]) -> list[str]:
+        """Frontend keywords of an HTTP service: compression, ``Alt-Svc`` (ADR 0116, 0117)."""
+        options: list[str] = []
+        if svc.compression is not None:
+            options.append("compression algo " + " ".join(svc.compression.algorithms))
+            options.append(
+                "compression type "
+                + " ".join(esc.media_type(t) for t in svc.compression.content_types)
+            )
+        for port in ports:
+            if port.http3:
+                options.append(f"http-response set-header alt-svc 'h3=\":{port.port}\"; ma=86400'")
+        return options
+
+    def _sni_rules(self, svc: dm.VirtualService, name: str) -> list[str]:
+        """Route a passthrough ``tcp`` service by the SNI of the client hello (ADR 0115)."""
+        exact: dict[str, str] = {}
+        wild: dict[str, str] = {}
+        for route in svc.routes:
+            host = _need(route.match.host, "passthrough route host")
+            target = self._backend_name(_need(route.pool_id, "passthrough route pool"))
+            if _is_wild(host):
+                wild[esc.wildcard_regex(host)] = target
+            else:
+                exact[esc.hostname(host)] = target
+        rules: list[str] = []
+        for converter, entries, suffix in (("map", exact, "sni"), ("map_reg", wild, "sni-wild")):
+            if not entries:
+                continue
+            path = f"{BASE_DIR}/maps/{name}-{suffix}.map"
+            self.files[f"haproxy/maps/{name}-{suffix}.map"] = _map_text(entries)
+            lookup = f"req.ssl_sni,lower,{converter}({path})"
+            rules.append(f"use_backend %[{lookup}] if {{ {lookup} -m found }}")
+        return rules
+
+    def _binds(self, svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> list[str]:
+        bind = self._bind(svc, port, name, mode)
+        if not port.http3:
+            return [bind]
+        # The same listener again over QUIC (UDP), with ALPN h3 instead of h2 and http/1.1.
+        quic = bind.replace("alpn h2,http/1.1", "alpn h3")
+        family = "quic6@" if svc.vip.version == 6 else "quic4@"
+        address = f"[{svc.vip}]:{port.port}" if svc.vip.version == 6 else f"{svc.vip}:{port.port}"
+        quic = quic.replace(
+            f"bind {esc.bind_address(svc.vip, port.port)}", f"bind {family}{address}", 1
+        )
+        return [bind, quic]
 
     def _bind(self, svc: dm.VirtualService, port: dm.VsPort, name: str, mode: str) -> str:
         parts = [f"bind {esc.bind_address(svc.vip, port.port)}"]
@@ -476,6 +573,62 @@ class _Renderer:
     def _allow_list_text(policy: dm.AllowListPolicySet) -> str:
         nets = sorted(policy.cidrs, key=lambda n: (n.version, int(n.network_address), n.prefixlen))
         return "".join(f"{n}\n" for n in nets)
+
+    def _limit_rules(self, svc: dm.VirtualService) -> list[str]:
+        """Track and enforce the service's rate-limit rules; each rule gets a counter and a table.
+
+        The table is a dummy backend that only holds the stick table; the counter slot
+        (``track-sc<n>``) is the rule's position in the service, so rules never share state.
+        """
+        rules: list[str] = []
+        for slot, (policy, index, rule) in enumerate(rate_limit_rules(svc, self.policies)):
+            table = f"rl_{esc.ident(svc.name)}_{esc.ident(policy.name)}_{index}"
+            esc.ident(table)
+            if rule.key == "header":
+                key = f"req.hdr({esc.header_name(_need(rule.header_name, 'header name'))})"
+                table_type = "string len 64"
+            else:
+                key = "src"
+                table_type = "ipv6"
+            if rule.max_requests is not None:
+                store = f"http_req_rate({rule.period_s}s)"
+                check = f"{{ sc_http_req_rate({slot},{table}) gt {rule.max_requests} }}"
+                expire = max(rule.period_s, 60)
+                retry = f" hdr Retry-After {rule.period_s}"
+            else:
+                store = "conn_cur"
+                check = (
+                    f"{{ sc_conn_cur({slot},{table}) gt {_need(rule.max_concurrent, 'limit')} }}"
+                )
+                expire = 60
+                retry = ""
+            self.limit_backends.append(
+                {
+                    "name": table,
+                    "lines": [
+                        f"stick-table type {table_type} size {rule.table_size} "
+                        f"expire {expire}s store {store}"
+                    ],
+                    "servers": [],
+                }
+            )
+            self.stick_counters = max(self.stick_counters, slot + 1)
+            cond = " ".join(self._conditions(rule.match))
+            track = f"http-request track-sc{slot} {key} table {table}"
+            rules.append(track + (f" if {cond}" if cond else ""))
+            if rule.action == "deny":
+                rules.append(f"http-request return status {rule.deny_status}{retry} if {check}")
+            elif rule.action == "tarpit":
+                rules.append(f"http-request tarpit deny_status 429 if {check}")
+            else:
+                rules.append(f"http-request silent-drop if {check}")
+        return rules
+
+    def _tarpit(self, svc: dm.VirtualService) -> int | None:
+        delays = {
+            r.tarpit_s for _, _, r in rate_limit_rules(svc, self.policies) if r.action == "tarpit"
+        }
+        return min(delays) if delays else None
 
     def _policy_stages(self, svc: dm.VirtualService) -> _Stages:
         """Rules of the attached policy sets: redirects, responses, request and response rewrites.
@@ -612,6 +765,9 @@ class _Renderer:
                     f'http-request redirect prefix "https://%[var(txn.host)]{suffix}" code 301 '
                     f"if {{ dst_port {port.port} }}"
                 )
+        if any(r.pools for r in svc.routes):
+            rules.append("http-request set-var(txn.pick) rand(100)")
+        rules += self._limit_rules(svc)
         redirects, responses, rewrites, _ = self._policy_stages(svc)
         rules += redirects
         ordered = sorted(enumerate(svc.routes), key=lambda ir: (ir[1].order, ir[0]))
@@ -666,19 +822,38 @@ class _Renderer:
                 conds.append(f"{{ ssl_fc_sni -m str {esc.hostname(match.sni)} }}")
         return conds
 
+    def _weighted_rules(self, route: dm.VsRoute, cond: str) -> list[str]:
+        """Split a route over its pools by the request's draw in ``txn.pick`` (ADR 0119)."""
+        rules: list[str] = []
+        cumulative = 0
+        for i, target in enumerate(route.pools):
+            backend = self._backend_name(target.pool_id)
+            cumulative += target.weight
+            if i == len(route.pools) - 1:
+                rules.append(f"use_backend {backend} if {cond}")
+            else:
+                rules.append(
+                    f"use_backend {backend} if {cond} {{ var(txn.pick) -m int lt {cumulative} }}"
+                )
+        return rules
+
     def _routing_rules(self, svc: dm.VirtualService, name: str) -> list[str]:
         rules: list[str] = []
-        pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_id is not None]
-        path_routes = [(i, r) for i, r in pool_routes if not r.match.is_host_only]
+        pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_ids]
+        # Weighted routes are conditional even on a bare host: the map files hold one pool per key.
+        path_routes = [(i, r) for i, r in pool_routes if r.pools or not r.match.is_host_only]
         for _, route in sorted(path_routes, key=lambda ir: (ir[1].order, ir[0])):
             cond = " ".join(self._conditions(route.match))
+            if route.pools:
+                rules += self._weighted_rules(route, cond)
+                continue
             backend = self._backend_name(_need(route.pool_id, "route pool"))
             rules.append(f"use_backend {backend} if {cond}")
         exact: dict[str, str] = {}
         wild: dict[str, str] = {}
         for _, route in pool_routes:
             host = route.match.host
-            if host is None or not route.match.is_host_only:
+            if host is None or route.pools or not route.match.is_host_only:
                 continue
             target = self._backend_name(_need(route.pool_id, "route pool"))
             if _is_wild(host):
@@ -699,14 +874,16 @@ class _Renderer:
         monitor = self.monitors.get(pool.health_monitor_id) if pool.health_monitor_id else None
         lines: list[str] = [f"mode {mode}", f"balance {pool.algorithm.value}"]
         if pool.persistence is not None:
-            lines += self._persistence_lines(pool.persistence)
+            lines += self._persistence_lines(pool.persistence, self.group.peers is not None)
+        if pool.tunnel_timeout_s is not None:
+            lines.append(f"timeout tunnel {pool.tunnel_timeout_s}s")
         if monitor is not None:
             lines += self._monitor_lines(monitor)
         servers = sorted(self._server(pool, m, monitor, mode) for m in pool.members)
         return {"name": self._backend_name(pool.id), "lines": lines, "servers": servers}
 
     @staticmethod
-    def _persistence_lines(persistence: dm.Persistence) -> list[str]:
+    def _persistence_lines(persistence: dm.Persistence, peers: bool) -> list[str]:
         """Backend lines for one persistence profile (ADR 0105)."""
         if isinstance(persistence, dm.PersistenceCookie):
             line = f"cookie {esc.cookie_name(persistence.name)} {persistence.mode}"
@@ -732,6 +909,8 @@ class _Renderer:
                 key = "path"
             else:
                 key = f"url_param({esc.ident(_need(persistence.param, 'url parameter'))})"
+        if peers:
+            table += f" peers {PEERS_SECTION}"
         return [f"stick-table {table}", f"stick on {key}"]
 
     @staticmethod
@@ -772,7 +951,7 @@ class _Renderer:
             target += f":{member.port}"
         parts = [f"server {esc.ident(member.server_name)} {target}"]
         if isinstance(pool.persistence, dm.PersistenceCookie):
-            parts.append(f"cookie {esc.ident(member.server_name)}")
+            parts.append(f"cookie {_cookie_value(pool, member)}")
         if monitor is not None:
             parts.append("check")
             if monitor.port is not None:
@@ -798,6 +977,10 @@ class _Renderer:
                 parts.append(f"crt {CERT_DIR}/{esc.ident(cert.name)}.pem")
             if mode == "http":
                 parts.append("sni req.hdr(host),field(1,:),lower")
+            if pool.backend_protocol == "h2":
+                parts.append("alpn h2")
+        if pool.backend_protocol == "h2c":
+            parts.append("proto h2")
         if pool.send_proxy is not None:
             parts.append("send-proxy" if pool.send_proxy == "v1" else "send-proxy-v2")
         parts.append(f"weight {member.weight}")

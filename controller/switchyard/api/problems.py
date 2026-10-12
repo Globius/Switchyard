@@ -123,6 +123,7 @@ UNION_TAGS = frozenset(
         "rewrite",
         "respond",
         "error_pages",
+        "rate_limit",
         "vrrp",
         "bgp",
         "oidc",

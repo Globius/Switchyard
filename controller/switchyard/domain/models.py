@@ -35,13 +35,14 @@ Port = Annotated[int, AfterValidator(v.validate_port)]
 UrlPath = Annotated[str, AfterValidator(v.validate_path)]
 Location = Annotated[str, AfterValidator(v.validate_location)]
 HeaderName = Annotated[str, AfterValidator(v.validate_header_name)]
+MediaType = Annotated[str, AfterValidator(v.validate_media_type)]
 CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
 MatchText = Annotated[str, AfterValidator(v.validate_match_text)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
-DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 HeaderValue = Annotated[str, AfterValidator(v.validate_header_value)]
 QueryParam = Annotated[str, AfterValidator(v.validate_query_param)]
 Body = Annotated[str, AfterValidator(v.validate_body)]
+DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
 
 class HaMode(enum.StrEnum):
@@ -218,6 +219,39 @@ class SeGroupNetwork(Model):
     role: NetworkRole
 
 
+class PeerMember(Model):
+    """One service engine in a peer group: its HAProxy host name and its backend-network address.
+
+    Example:
+        >>> PeerMember(name="se-1", address="10.20.0.5").name
+        'se-1'
+    """
+
+    name: Name
+    address: IPAddress
+
+
+class PeerSync(Model):
+    """Share persistence tables between the engines of a group (HAProxy ``peers``; ADR 0118).
+
+    Attributes:
+        port: TCP port the engines use to talk to each other, on the backend network.
+        members: Every engine of the group, by the name HAProxy finds as its own (the host name)
+            and the address it listens on. At least two, at most 16.
+    """
+
+    port: Port = 10_000
+    members: tuple[PeerMember, ...] = Field(min_length=2, max_length=16)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        names = [m.name for m in self.members]
+        addresses = [m.address for m in self.members]
+        if len(set(names)) != len(names) or len(set(addresses)) != len(addresses):
+            raise ValueError("peer names and addresses must be unique")
+        return self
+
+
 class SeGroup(TenantOwned):
     """A set of HAProxy service engines that serve the same virtual services.
 
@@ -229,6 +263,7 @@ class SeGroup(TenantOwned):
             a ``bgp`` profile for ``ha_mode: bgp``. Optional until the group is deployed.
         canary_seconds: How long the canary SE is watched after a push before the rest of the
             group is updated (0 skips the wait).
+        peers: Persistence table sync between the group's engines; ``None`` keeps each table local.
     """
 
     ha_mode: HaMode
@@ -236,6 +271,7 @@ class SeGroup(TenantOwned):
     maxconn: int = Field(default=20_000, ge=1, le=10_000_000)
     canary_seconds: int = Field(default=30, ge=0, le=600)
     routing_profile_id: UUID | None = None
+    peers: PeerSync | None = None
 
 
 InterfaceName = Annotated[str, AfterValidator(v.validate_interface)]
@@ -450,29 +486,71 @@ class RouteMatch(Model):
         return self.host is not None and self.model_copy(update={"host": None}).is_empty
 
 
+class WeightedPool(Model):
+    """One target of a weighted route: a pool and its share of the matching requests.
+
+    Example:
+        >>> import uuid
+        >>> WeightedPool(pool_id=uuid.UUID(int=1), weight=90).weight
+        90
+    """
+
+    pool_id: UUID
+    weight: int = Field(ge=1, le=99)
+
+
 class VsRoute(Model):
-    """Route a request to a pool or answer it with a redirect.
+    """Route a request to a pool, split it over weighted pools, or answer it with a redirect.
 
     Attributes:
         order: Position among path routes; lower runs first. Host-only routes are looked up in map
             files and are order-independent (exact host wins over wildcard).
         match: What the request must match. Must not be empty.
-        pool_id: Target pool, or ``None`` when ``redirect`` is set.
-        redirect: Redirect to answer with, or ``None`` when ``pool_id`` is set.
+        pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.
+        redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.
+        pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each
+            request is sent to one of them at random in that proportion (ADR 0119).
+
+    Example:
+        >>> import uuid
+        >>> route = VsRoute(
+        ...     match=RouteMatch(host="app.example.test"),
+        ...     pools=(
+        ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),
+        ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),
+        ...     ),
+        ... )
+        >>> len(route.pool_ids)
+        2
     """
 
     order: int = Field(default=0, ge=0)
     match: RouteMatch
     pool_id: UUID | None = None
     redirect: RedirectAction | None = None
+    pools: tuple[WeightedPool, ...] = Field(default=(), max_length=8)
 
     @model_validator(mode="after")
     def _one_action(self) -> Self:
-        if (self.pool_id is None) == (self.redirect is None):
-            raise ValueError("a route needs exactly one of pool_id or redirect")
+        if sum([self.pool_id is not None, self.redirect is not None, bool(self.pools)]) != 1:
+            raise ValueError("a route needs exactly one of pool_id, redirect or pools")
+        if self.pools:
+            if len(self.pools) < 2:
+                raise ValueError("a weighted route needs at least two pools")
+            if sum(p.weight for p in self.pools) != 100:
+                raise ValueError("the weights of a weighted route must add up to 100")
+            if len({p.pool_id for p in self.pools}) != len(self.pools):
+                raise ValueError("a pool can appear only once in a weighted route")
         if self.match.is_empty:
             raise ValueError("a route must match a host or a path; use default_pool_id as fallback")
         return self
+
+    @property
+    def pool_ids(self) -> tuple[UUID, ...]:
+        """Every pool the route can send traffic to (none for a redirect)."""
+        if self.pools:
+            return tuple(p.pool_id for p in self.pools)
+        return (self.pool_id,) if self.pool_id is not None else ()
 
 
 class VsPort(Model):
@@ -491,6 +569,10 @@ class VsPort(Model):
             (mutual TLS). Needs ``tls``.
         client_verify: With ``client_ca_id``: ``required`` refuses clients without a valid
             certificate; ``optional`` lets them in and the service can look at ``ssl_c_verify``.
+        tls_passthrough: ``tcp`` services only: do not terminate TLS; route by the SNI in the
+            client hello (ADR 0115). Excludes every TLS option of the port.
+        http3: Also listen for HTTP/3 over QUIC on the same number (UDP) and advertise it with
+            ``Alt-Svc`` (ADR 0116). Needs ``tls`` and ``http2``.
     """
 
     port: Port
@@ -501,9 +583,22 @@ class VsPort(Model):
     tls_profile: TlsProfile | None = None
     client_ca_id: UUID | None = None
     client_verify: Literal["required", "optional"] = "required"
+    tls_passthrough: bool = False
+    http3: bool = False
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
+        if self.tls_passthrough and (
+            self.tls
+            or self.http2
+            or self.http3
+            or self.client_ca_id is not None
+            or self.tls_profile is not None
+            or self.https_redirect_port is not None
+        ):
+            raise ValueError("tls_passthrough excludes tls, http2, http3 and the other TLS options")
+        if self.http3 and not (self.tls and self.http2):
+            raise ValueError("http3 requires tls and http2")
         if self.client_ca_id is not None and not self.tls:
             raise ValueError("client_ca_id requires tls")
         if self.http2 and not self.tls:
@@ -512,6 +607,41 @@ class VsPort(Model):
             raise ValueError("tls_profile requires tls")
         if self.https_redirect_port is not None and self.tls:
             raise ValueError("https_redirect_port is only valid on a plaintext port")
+        return self
+
+
+class Compression(Model):
+    """Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
+
+    Attributes:
+        algorithms: In order of preference: ``gzip``, ``deflate``.
+        content_types: Media types to compress, such as ``text/html``. Never images or archives.
+
+    Example:
+        >>> Compression().algorithms
+        ('gzip',)
+    """
+
+    algorithms: tuple[Literal["gzip", "deflate"], ...] = Field(default=("gzip",), min_length=1)
+    content_types: tuple[MediaType, ...] = Field(
+        default=(
+            "text/html",
+            "text/plain",
+            "text/css",
+            "text/javascript",
+            "application/javascript",
+            "application/json",
+            "application/xml",
+            "image/svg+xml",
+        ),
+        min_length=1,
+        max_length=32,
+    )
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        if len(set(self.algorithms)) != len(self.algorithms):
+            raise ValueError("algorithms must be unique")
         return self
 
 
@@ -532,6 +662,7 @@ class VirtualService(TenantOwned):
         enforce_allow_list: Reject connections from sources outside the allow list.
         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
             client address; honoured only when the connection source is in the allow list.
+        compression: Response compression (``http`` only; ADR 0117).
     """
 
     se_group_id: UUID
@@ -547,6 +678,7 @@ class VirtualService(TenantOwned):
     allow_list_id: UUID | None = None
     enforce_allow_list: bool = False
     restore_client_ip_header: HeaderName | None = None
+    compression: Compression | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -559,18 +691,30 @@ class VirtualService(TenantOwned):
             if self.default_pool_id is None:
                 raise ValueError("a udp service needs default_pool_id")
             return self
+        if self.protocol is Protocol.HTTP and any(p.tls_passthrough for p in self.ports):
+            raise ValueError("tls_passthrough is only valid for tcp services")
         if any(p.tls for p in self.ports) and not self.certificate_ids:
             raise ValueError("a TLS port needs at least one certificate")
         if self.protocol is Protocol.HTTP:
             if not self.routes and self.default_pool_id is None:
                 raise ValueError("an http service needs routes or default_pool_id")
         else:
-            if self.routes or self.policy_set_ids:
-                raise ValueError(f"a {self.protocol} service cannot have routes or policy sets")
+            passthrough = all(p.tls_passthrough for p in self.ports)
+            if self.policy_set_ids or (self.routes and not passthrough):
+                raise ValueError(
+                    f"a {self.protocol} service cannot have routes or policy sets "
+                    "(routes need every port to be tls_passthrough)"
+                )
+            if self.compression is not None:
+                raise ValueError("compression is only valid for http services")
+            if passthrough and self.protocol is not Protocol.TCP:
+                raise ValueError("tls_passthrough is only valid for tcp services")
             if self.default_pool_id is None:
                 raise ValueError(f"a {self.protocol} service needs default_pool_id")
-            if any(p.http2 or p.https_redirect_port is not None for p in self.ports):
-                raise ValueError("http2 and https_redirect_port are only valid for http services")
+            if any(p.http2 or p.http3 or p.https_redirect_port is not None for p in self.ports):
+                raise ValueError(
+                    "http2, http3 and https_redirect_port are only valid for http services"
+                )
             if self.restore_client_ip_header is not None:
                 raise ValueError("restore_client_ip_header is only valid for http services")
         if (self.enforce_allow_list or self.restore_client_ip_header) and not self.allow_list_id:
@@ -706,6 +850,9 @@ class PoolMember(Model):
         name: HAProxy server name; derived from address and port when omitted.
         backup: A backup member takes traffic only when every non-backup member is down.
         maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.
+        drain_timeout_s: With ``admin_state`` ``drain``: seconds after which the controller moves
+            the member to ``disabled`` (a periodic job, ADR 0109). ``None`` drains until an
+            operator acts. Never reaches the engine configuration.
     """
 
     id: UUID
@@ -716,6 +863,7 @@ class PoolMember(Model):
     name: Name | None = None
     backup: bool = False
     maxconn: int | None = Field(default=None, ge=1, le=1_000_000)
+    drain_timeout_s: int | None = Field(default=None, ge=1, le=604_800)
 
     @property
     def server_name(self) -> str:
@@ -771,10 +919,16 @@ class Pool(TenantOwned):
         passive_check: Also judge members by their live traffic. Needs a health monitor.
         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
             weight (HAProxy ``slowstart``). Needs a health monitor.
-        discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
+        backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,
+            ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,
+            needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).
+        tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2
+            stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``
+            keeps the default of one hour.
         send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.
         client_certificate_id: Server certificate HAProxy presents to members (backend
             mutual TLS). Needs ``tls``.
+        discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
     """
 
@@ -785,9 +939,11 @@ class Pool(TenantOwned):
     tls_verify: bool = False
     passive_check: PassiveCheck | None = None
     slow_start_s: int | None = Field(default=None, ge=1, le=3600)
-    discovery: PoolDiscovery | None = None
+    backend_protocol: Literal["http1", "h2", "h2c"] = "http1"
+    tunnel_timeout_s: int | None = Field(default=None, ge=1, le=86_400)
     send_proxy: Literal["v1", "v2"] | None = None
     client_certificate_id: UUID | None = None
+    discovery: PoolDiscovery | None = None
     members: tuple[PoolMember, ...] = ()
 
     @model_validator(mode="after")
@@ -797,6 +953,10 @@ class Pool(TenantOwned):
             raise ValueError("pool member names must be unique")
         if self.tls_verify and not self.tls:
             raise ValueError("tls_verify requires tls")
+        if self.backend_protocol == "h2" and not self.tls:
+            raise ValueError("backend_protocol h2 requires tls; use h2c without tls")
+        if self.backend_protocol == "h2c" and self.tls:
+            raise ValueError("backend_protocol h2c is for pools without tls; use h2")
         if self.client_certificate_id is not None and not self.tls:
             raise ValueError("client_certificate_id requires tls")
         return self
@@ -1174,12 +1334,62 @@ class ErrorPagesPolicySet(TenantOwned):
         return self
 
 
+class RateLimitRule(Model):
+    """Limit how often one client (or one key) may use the service; excess requests get ``action``.
+
+    Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
+    flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
+
+    Attributes:
+        match: Requests this rule counts and limits; empty counts every request. Use a path in
+            the match for a per-path limit (a login page, an API prefix).
+        key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
+            (an API key header; requests without the header are not counted).
+        max_requests: Requests allowed per ``period_s`` before the action applies.
+        period_s: Length of the window for ``max_requests``.
+        max_concurrent: Requests allowed at the same time.
+        action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
+            seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
+        table_size: Number of keys the table holds; the oldest are evicted when it is full.
+    """
+
+    match: RouteMatch = RouteMatch()
+    key: Literal["client_ip", "header"] = "client_ip"
+    header_name: HeaderName | None = None
+    max_requests: int | None = Field(default=None, ge=1, le=1_000_000)
+    period_s: Literal[1, 10, 60, 300, 3600] = 10
+    max_concurrent: int | None = Field(default=None, ge=1, le=100_000)
+    action: Literal["deny", "tarpit", "silent_drop"] = "deny"
+    deny_status: Literal[403, 429, 503] = 429
+    tarpit_s: int = Field(default=5, ge=1, le=30)
+    table_size: int = Field(default=10_000, ge=100, le=1_000_000)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.max_requests is None) == (self.max_concurrent is None):
+            raise ValueError("set exactly one of max_requests and max_concurrent")
+        if (self.key == "header") != (self.header_name is not None):
+            raise ValueError("header_name goes with key header, and only with it")
+        return self
+
+
+class RateLimitPolicySet(TenantOwned):
+    """Rate and concurrency limits per client or key (ADR 0110).
+
+    A service may carry at most 8 rate-limit rules across its sets.
+    """
+
+    kind: Literal["rate_limit"] = "rate_limit"
+    rules: tuple[RateLimitRule, ...] = Field(min_length=1, max_length=8)
+
+
 PolicySet = Annotated[
     RedirectPolicySet
     | AllowListPolicySet
     | RewritePolicySet
     | RespondPolicySet
-    | ErrorPagesPolicySet,
+    | ErrorPagesPolicySet
+    | RateLimitPolicySet,
     Field(discriminator="kind"),
 ]
 #: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).
@@ -1188,4 +1398,5 @@ ATTACHABLE_POLICY_KINDS = (
     RewritePolicySet,
     RespondPolicySet,
     ErrorPagesPolicySet,
+    RateLimitPolicySet,
 )

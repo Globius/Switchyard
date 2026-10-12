@@ -1,12 +1,12 @@
 """Policy-set kinds rewrite, respond and error_pages; extra route match conditions.
 
-- ``policy_set.kind`` accepts the three new kinds; their rules (the pages of ``error_pages``) are
+- ``policy_set.kind`` accepts the new kinds (rewrite, respond, error_pages, rate_limit); their rules (the pages of ``error_pages``) are
   JSON in ``rules``, as for ``redirect``.
 - ``vs_route.match_extra`` (JSON): methods, headers, query parameters, source networks and SNI of
   the route's match (host and path keep their columns).
 
 Revision ID: 0027
-Revises: 0023 (set to 0026 when !107 and !109 are merged)
+Revises: 0026
 """
 
 from alembic import op
@@ -19,7 +19,7 @@ branch_labels = None
 depends_on = None
 
 _OLD_KIND = "kind IN ('redirect', 'allow_list')"
-_NEW_KIND = "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages')"
+_NEW_KIND = "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit')"
 _OLD_PAYLOAD = (
     "(kind = 'redirect' AND rules IS NOT NULL AND cidrs IS NULL) "
     "OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL)"

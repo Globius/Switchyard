@@ -85,7 +85,7 @@ class MonitorTestService:
         groups = {
             s.se_group_id
             for s in snapshot.virtual_services
-            if pool_id in {r.pool_id for r in s.routes} | {s.default_pool_id}
+            if pool_id in {pid for r in s.routes for pid in r.pool_ids} | {s.default_pool_id}
         }
         candidates = [
             _record(r)
