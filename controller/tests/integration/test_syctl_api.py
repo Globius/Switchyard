@@ -12,6 +12,7 @@ import pytest_asyncio
 import uvicorn
 from typer.testing import CliRunner
 
+from switchyard.adapters.secrets import MemorySecrets
 from switchyard.api.app import build_services, create_app
 from switchyard.cli import app as cli
 from switchyard.domain.workflow import Role
@@ -49,7 +50,7 @@ async def server(
         directory = StaticEngineDirectory(
             {GROUP: [(engine_record(n), e) for n, e in w.engines.items()]}
         )
-        services = build_services(w.db, directory)
+        services = build_services(w.db, directory, MemorySecrets())
         token, _ = await services.tokens.create(
             principal(Role.SYSTEM_ADMIN, "root"), None, "cli", Role.SYSTEM_ADMIN
         )
@@ -147,3 +148,61 @@ async def test_status_and_job_commands(server: Server) -> None:
     code, out = await server.syctl("job", "00000000-0000-0000-0000-000000000000")
     assert code == 1 and "404" in out
     assert TENANT
+
+
+async def test_acme_dns_and_cert_commands(server: Server) -> None:
+    await server.syctl("login", "--url", server.url, "--token", server.token)
+
+    code, out = await server.syctl("acme", "presets")
+    assert code == 0 and "letsencrypt" in out and "keyfactor" in out
+    code, out = await server.syctl(
+        "acme",
+        "add",
+        "private",
+        "--directory-url",
+        "https://ca.example.test/dir",
+        "--terms-agreed",
+        "--default",
+    )
+    assert code == 0, out
+    code, out = await server.syctl("acme", "list")
+    assert "private" in out and "default" in out and "untested" in out
+    code, out = await server.syctl("acme", "add", "bad", "--preset", "zerossl")
+    assert code == 1 and "terms_agreed" in out and "eab_kid" in out
+
+    code, out = await server.syctl("dns", "types")
+    assert code == 0 and "cloudflare" in out and "api_token	secret	required" in out
+    code, out = await server.syctl(
+        "dns",
+        "add",
+        "cf",
+        "-t",
+        "acme",
+        "--type",
+        "cloudflare",
+        "--zone",
+        "example.test",
+        "--secret",
+        "api_token=tok",
+    )
+    assert code == 0, out
+    code, out = await server.syctl("dns", "add", "cf", "-t", "acme", "--type", "cloudflare")
+    assert code == 1 and "credentials.api_token" in out
+    code, out = await server.syctl("dns", "list", "-t", "acme")
+    assert "cf	cloudflare	example.test" in out and "tok" not in out
+
+    code, out = await server.syctl(
+        "cert", "check", "web", "-t", "acme", "--san", "a.example.test", "--san", "b.other.test"
+    )
+    assert code == 1 and "sans[1]: no DNS credential covers this name" in out
+    code, out = await server.syctl("cert", "check", "web", "-t", "acme", "--san", "a.example.test")
+    assert code == 0 and out.strip() == "ok"
+    code, out = await server.syctl("cert", "renewals", "-t", "acme")
+    assert code == 0
+
+    code, out = await server.syctl("dns", "delete", "cf", "-t", "acme")
+    assert code == 0, out
+    code, out = await server.syctl("acme", "delete", "private")
+    assert code == 0, out
+    code, out = await server.syctl("acme", "list")
+    assert out.strip() == ""

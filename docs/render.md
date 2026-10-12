@@ -125,6 +125,8 @@ Server names come from the member name or `<ip>-<port>` with dots and colons tur
 7. **Response rewrites**: `http-response` rules in attachment order (they come last in the frontend block; HAProxy runs
    them on the way out).
 
+On a service with a plain (non-TLS) port 80 the ACME HTTP-01 answer (ADR 0080) is the first request rule, before stage 2.
+
 The stages are fixed by kind: a `rewrite` set attached before a `redirect` set still runs after it (ADR 0100). Custom error
 pages (`http-error`) are not a stage; they apply when HAProxy generates the error. A service without these policy sets
 renders only stages 1, 2, 3 (HTTPS and route redirects) and 6.

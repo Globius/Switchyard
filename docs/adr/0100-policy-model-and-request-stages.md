@@ -50,7 +50,7 @@ limits, C2 weighted routes, E1 to E3 auth) add more rules to it. Doing it piecem
 - A route with any condition besides the host is rendered as a `use_backend ... if` line in `order`, not as a map entry
   (ADR 0101). Existing path routes are the same case and keep their order.
 - Tables: `policy_set.kind` accepts the new kinds (their rules are JSON in `rules`; the pages of `error_pages` too) and
-  `vs_route.match_extra` (JSON) holds the new match conditions (migration 0023).
+  `vs_route.match_extra` (JSON) holds the new match conditions (migration 0024).
 - The API schema of `RouteMatch` gains optional fields, and `policy-sets` gains three `kind` values. Both are additive.
 - Later blocks reuse the condition type (A5 rate limits, C2 weighted routes) and add a row to the stage table.
 

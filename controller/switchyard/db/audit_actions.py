@@ -28,6 +28,10 @@ def _a(action: str, description: str) -> AuditAction:
 
 
 CATALOG: tuple[AuditAction, ...] = (
+    _a("acme_provider.created", "An ACME provider was added."),
+    _a("acme_provider.deleted", "An ACME provider was removed."),
+    _a("acme_provider.tested", "An ACME account was registered or checked at its provider."),
+    _a("acme_provider.updated", "An ACME provider was changed."),
     _a("audit.export", "Audit events were downloaded as a file."),
     _a("auth.break_glass_failed", "A break-glass login failed."),
     _a("auth.break_glass_login", "The break-glass administrator signed in."),
@@ -57,6 +61,10 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("change_set.rollback", "A change set that restores an earlier revision was opened."),
     _a("drift.detected", "An engine's running configuration differs from the desired state."),
     _a("drift.resolved", "An engine's running configuration matches the desired state again."),
+    _a("dns_provider.created", "A DNS credential was added."),
+    _a("dns_provider.deleted", "A DNS credential was removed."),
+    _a("dns_provider.tested", "A DNS credential was tested with a temporary TXT record."),
+    _a("dns_provider.updated", "A DNS credential was changed."),
     _a("engine.cert_renewed", "An engine agent renewed its client certificate."),
     _a("engine.deployed", "An engine VM was cloned on Proxmox and registered."),
     _a("engine.disabled", "An engine was disabled."),

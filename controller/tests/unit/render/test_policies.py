@@ -38,7 +38,8 @@ def frontend(data: dict[str, Any]) -> list[str]:
     """The indented lines of the first frontend, stripped."""
     text = render(data)["haproxy/haproxy.cfg"]
     block = text.split("frontend vs_web\n", 1)[1].split("\n\n", 1)[0]
-    return [line.strip() for line in block.splitlines()]
+    # the ACME HTTP-01 answer (ADR 0080) is not part of what these tests are about
+    return [line.strip() for line in block.splitlines() if "acme-http01" not in line]
 
 
 def rewrite(*rules: dict[str, Any], pid: str = "ps-rw", name: str = "rw") -> dict[str, Any]:
