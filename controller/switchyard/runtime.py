@@ -31,7 +31,7 @@ from switchyard.adapters.git import GitLabMirror, GitMirror
 from switchyard.adapters.grafana import HttpGrafana
 from switchyard.adapters.iplists import HttpIpLists
 from switchyard.adapters.notify import HttpNotifier, SmtpSettings
-from switchyard.adapters.pki import OpenBaoPki
+from switchyard.adapters.pki import OpenBaoPki, PkiSigner
 from switchyard.adapters.powerdns import HttpPowerDns
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
@@ -55,6 +55,7 @@ from switchyard.services.certificates import (
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
+from switchyard.services.devices import DeviceService
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
@@ -132,6 +133,24 @@ def enrollment(db: Databases, secrets: SecretsReader | None = None) -> Enrollmen
         role=os.environ.get("SWITCHYARD_PKI_ROLE", "agents"),
     )
     return EnrollmentService(db, pki, signer.public_b64())
+
+
+def devices(db: Databases, secrets: SecretsReader | None = None) -> DeviceService:
+    """Device posture (ADR 0196).
+
+    Certificates need OpenBao; without it devices can enroll and report but get none. A posture
+    policy names the PKI role that signs its devices' certificates; the mount defaults to
+    ``pki-devices`` (``SWITCHYARD_DEVICE_PKI_MOUNT``).
+    """
+    store = secrets or secrets_backend()
+    mount = os.environ.get("SWITCHYARD_DEVICE_PKI_MOUNT", "pki-devices")
+
+    def signer(role: str) -> PkiSigner | None:
+        return (
+            OpenBaoPki(store, mount=mount, role=role) if isinstance(store, OpenBaoSecrets) else None
+        )
+
+    return DeviceService(db, signer)
 
 
 def sessions(db: Databases, secrets: SecretsReader | None = None) -> SessionService:

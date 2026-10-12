@@ -524,6 +524,44 @@ MEMBER_STATE = {"state": "drain", "applied": ["edge-1", "edge-2"], "failed": {}}
 STATE_OUT = {"state": "discarded"}
 ENGINE_STATE_OUT = {"state": "disabled"}
 ENROLLMENT_TOKEN = {"token": "sy_enroll_0123456789", "expires_at": "2026-10-10T09:30:00Z"}
+DEVICE_ENROLLMENT = {"token": "sydev_0123456789", "expires_at": "2026-10-11T09:30:00Z"}
+DEVICE_ENROLLED = {
+    "device_id": "0198b7c0-0000-7000-8000-000000000042",
+    "tenant": "acme",
+    "name": "laptop-ana",
+    "policy": "managed-laptops",
+    "cert_ttl_h": 12,
+}
+DEVICE_REPORT_OUT = {
+    "compliant": True,
+    "failures": [],
+    "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+    "ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+    "not_after": "2026-10-10T21:30:00Z",
+    "next_report_s": 14400,
+}
+DEVICE = {
+    "id": "0198b7c0-0000-7000-8000-000000000042",
+    "name": "laptop-ana",
+    "owner": "ana@example.test",
+    "policy_id": "0198b7c0-0000-7000-8000-000000000007",
+    "status": "active",
+    "compliant": True,
+    "failures": [],
+    "facts": {
+        "os": "windows",
+        "os_version": "10.0.22631",
+        "disk_encrypted": True,
+        "firewall_enabled": True,
+        "days_since_update": 6,
+    },
+    "last_report_at": "2026-10-10T09:30:00Z",
+    "cert_serial": "5f3a",
+    "cert_not_after": "2026-10-10T21:30:00Z",
+    "enrolled_at": "2026-10-01T08:00:00Z",
+    "revoked_at": None,
+}
+DEVICES = {"items": [DEVICE]}
 ENROLL_OUT = {
     "engine": "edge-1",
     "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",

@@ -130,6 +130,7 @@ UNION_TAGS = frozenset(
         "jwt",
         "client_cert",
         "directory",
+        "posture",
         "vrrp",
         "bgp",
         "oidc",

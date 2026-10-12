@@ -144,7 +144,13 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     feed=ps.feed,
                 )
             )
-        elif isinstance(ps, dm.AccessPolicySet | dm.ClientCertPolicySet | dm.DirectoryPolicySet):
+        elif isinstance(
+            ps,
+            dm.AccessPolicySet
+            | dm.ClientCertPolicySet
+            | dm.DirectoryPolicySet
+            | dm.PosturePolicySet,
+        ):
             rows.append(
                 m.PolicySetRow(
                     id=ps.id,
@@ -570,7 +576,7 @@ def _policy_to_dict(ps: m.PolicySetRow) -> dict[str, Any]:
         base["managed_by"] = ps.managed_by
         base["countries"] = tuple(ps.countries or ())
         base["feed"] = ps.feed
-    elif ps.kind in ("access", "client_cert", "directory"):
+    elif ps.kind in ("access", "client_cert", "directory", "posture"):
         base |= ps.config or {}
     elif ps.kind == "error_pages":
         base["pages"] = ps.rules

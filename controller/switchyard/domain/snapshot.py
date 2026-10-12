@@ -42,6 +42,7 @@ from switchyard.domain.models import (
     NetworkRole,
     PolicySet,
     Pool,
+    PosturePolicySet,
     ProtectionPolicySet,
     Protocol,
     RadiusConnector,
@@ -174,6 +175,10 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       namespace and out of the platform's (ADR 0071).
     - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
       ``client_ca_id`` a client CA.
+    - ``step_up_needs_flow`` and ``step_up_too_deep``: an access rule's ``min_factors`` needs a
+      directory whose login flow has at least that many steps (ADR 0195).
+    - ``pki_role_not_allowed``: a posture set's PKI role starts with its tenant's name and a dash
+      (ADR 0196).
     - ``needs_health_monitor`` and ``passive_check_layer7_needs_http``: passive checks and slow
       start build on a health monitor, and ``layer7`` observation needs an HTTP-only pool.
 
@@ -212,6 +217,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     _check_secret_scopes(snapshot, problems)
     _check_discovery_scopes(snapshot, problems)
     _check_directories(snapshot, problems)
+    _check_posture_roles(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -530,6 +536,26 @@ def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
                     f"directory {directory.name} holds local users, who have no groups",
                 )
             )
+
+
+def _check_posture_roles(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """A posture set's PKI role starts with its tenant's name and a dash (``pki_role_not_allowed``).
+
+    Each tenant's devices are signed by a role (and so a CA) of their own; a shared role would
+    make one tenant's device certificates acceptable to every other tenant's ports.
+    """
+    names = {t.id: t.name for t in snapshot.tenants}
+    for ps in snapshot.policy_sets:
+        if isinstance(ps, PosturePolicySet) and ps.tenant_id in names:
+            prefix = f"{names[ps.tenant_id]}-"
+            if not ps.pki_role.startswith(prefix) or ps.pki_role == prefix:
+                problems.append(
+                    Problem(
+                        f"policy_sets.{ps.name}.pki_role",
+                        "pki_role_not_allowed",
+                        f"the PKI role of tenant {names[ps.tenant_id]} must start with {prefix!r}",
+                    )
+                )
 
 
 def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:

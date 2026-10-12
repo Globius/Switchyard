@@ -191,6 +191,7 @@ def serve(
         alerts=runtime.alert_service(db, secrets),
         gslb=runtime.gslb_service(db),
         email_configured=runtime.smtp_settings() is not None,
+        devices=runtime.devices(db, secrets),
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
     app = create_app(

@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     ForeignKeyConstraint,
@@ -292,6 +293,71 @@ class EnrollmentTokenRow(Base):
     used_at: Mapped[datetime | None] = _timestamp()
     created_by: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
+class DeviceEnrollmentRow(Base):
+    """``device_enrollment``: a one-time token that lets a device agent enroll (ADR 0196).
+
+    Only the SHA-256 of the token is stored.
+    """
+
+    __tablename__ = "device_enrollment"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "policy_id"],
+            ["policy_set.tenant_id", "policy_set.id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("token_hash"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    policy_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = _timestamp(nullable=False)
+    used_at: Mapped[datetime | None] = _timestamp()
+    created_by: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
+class DeviceRow(Base):
+    """``device``: an enrolled device, its public key and its latest posture report (ADR 0196).
+
+    ``last_ts`` is the timestamp of the newest accepted report; an older or equal one is a replay.
+    """
+
+    __tablename__ = "device"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "policy_id"],
+            ["policy_set.tenant_id", "policy_set.id"],
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("tenant_id", "id"),
+        UniqueConstraint("tenant_id", "name"),
+        CheckConstraint("status IN ('active', 'revoked')", name="status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    policy_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    owner: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    public_key: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'active'"))
+    compliant: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    failures: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
+    facts: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    last_report_at: Mapped[datetime | None] = _timestamp()
+    last_ts: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    cert_serial: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cert_not_after: Mapped[datetime | None] = _timestamp()
+    enrolled_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    revoked_at: Mapped[datetime | None] = _timestamp()
 
 
 class EngineStatusRow(Base):

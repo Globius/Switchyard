@@ -219,14 +219,14 @@ class PolicySetRow(TenantOwnedMixin, Base):
         CheckConstraint(
             "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages',"
             " 'rate_limit', 'access', 'jwt', 'client_cert', 'directory', 'waf',"
-            " 'protection')",
+            " 'protection', 'posture')",
             name="kind",
         ),
         CheckConstraint(
-            "(kind NOT IN ('allow_list', 'access', 'client_cert', 'directory')"
+            "(kind NOT IN ('allow_list', 'access', 'client_cert', 'directory', 'posture')"
             " AND rules IS NOT NULL AND cidrs IS NULL AND config IS NULL)"
             " OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL AND config IS NULL)"
-            " OR (kind IN ('access', 'client_cert', 'directory') AND config IS NOT NULL"
+            " OR (kind IN ('access', 'client_cert', 'directory', 'posture') AND config IS NOT NULL"
             " AND rules IS NULL AND cidrs IS NULL)",
             name="payload_matches_kind",
         ),

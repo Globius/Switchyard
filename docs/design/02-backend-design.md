@@ -137,7 +137,7 @@ Roles are `viewer < operator < tenant-admin < system-admin`. They **nest**: each
 | runtime | pool member state (enable, disable, drain) | – | ✅ | ✅ | ✅ |
 | runtime | import, issue, renew certificates | – | ✅ | ✅ | ✅ |
 | runtime | retry or cancel a job | – | own action only (see note) | ✅ | ✅ |
-| infrastructure | register, enable, disable, retire, remove engine; enrollment token; deploy SE group; apply SDN; manage the tenant's DNS credentials and Kubernetes clusters | – | – | ✅ | ✅ |
+| infrastructure | register, enable, disable, retire, remove engine; enrollment token; deploy SE group; apply SDN; manage the tenant's DNS credentials and Kubernetes clusters; enrollment tokens and revocation for posture devices | – | – | ✅ | ✅ |
 | tenant settings | turn `require_approval` on | – | – | ✅ | ✅ |
 | tenant settings | turn `require_approval` off; change quotas | – | – | – | ✅ |
 | access | list, create, revoke tenant API tokens (never above own role; a token cannot create tokens) | – | – | ✅ | ✅ |

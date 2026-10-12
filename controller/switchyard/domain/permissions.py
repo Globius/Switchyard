@@ -154,6 +154,13 @@ MATRIX: tuple[Permission, ...] = (
     _p(
         13,
         "manage",
+        "device",
+        T,
+        "Create device enrollment tokens, and revoke or remove enrolled devices.",
+    ),
+    _p(
+        13,
+        "manage",
         "dns_provider",
         T,
         "Add, change, test and remove the tenant's DNS credentials.",

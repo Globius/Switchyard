@@ -25,6 +25,7 @@ from uuid import UUID
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from switchyard.domain import validators as v
+from switchyard.domain.posture import PostureRequirements
 
 IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
@@ -2368,6 +2369,29 @@ class DirectoryPolicySet(TenantOwned):
         return self
 
 
+class PosturePolicySet(TenantOwned):
+    """What a device must show to get a short-lived client certificate (ADR 0196).
+
+    The device agent (``sy-posture``) reports facts about its machine; the controller checks them
+    against ``requirements`` and, when they hold, signs the agent's certificate request through
+    the PKI role ``pki_role`` for ``cert_ttl_h`` hours. A port with ``client_ca_id`` set to the
+    role's CA and an access rule with ``posture.device_certificate`` then let only such devices
+    in. Posture sets are not attached to services.
+
+    Attributes:
+        requirements: The conditions on the reported facts.
+        pki_role: OpenBao PKI role that signs the certificates. It must start with the tenant's
+            name and a dash, so that one tenant's devices are not trusted by another tenant's CA.
+        cert_ttl_h: Lifetime of the certificates, 1 to 72 hours. It is also how long a device that
+            stops being compliant (or is revoked) keeps working.
+    """
+
+    kind: Literal["posture"] = "posture"
+    requirements: PostureRequirements = PostureRequirements()
+    pki_role: Name
+    cert_ttl_h: int = Field(default=12, ge=1, le=72)
+
+
 PolicySet = Annotated[
     RedirectPolicySet
     | AllowListPolicySet
@@ -2380,7 +2404,8 @@ PolicySet = Annotated[
     | AccessPolicySet
     | JwtPolicySet
     | ClientCertPolicySet
-    | DirectoryPolicySet,
+    | DirectoryPolicySet
+    | PosturePolicySet,
     Field(discriminator="kind"),
 ]
 #: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).

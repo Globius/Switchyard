@@ -164,6 +164,7 @@ def test_object_reads_document_etag_and_if_match_problems() -> None:
                 "waf",
                 "protection",
                 "directory",
+                "posture",
             },
         ),
         ("routing-profiles", {"vrrp", "bgp"}),
