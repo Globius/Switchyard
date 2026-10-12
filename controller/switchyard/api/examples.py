@@ -1257,6 +1257,24 @@ AVI_IMPORT = {
 }
 
 
+QUOTA_REQUEST = {
+    "id": "0192f1a2-0000-7000-8000-00000000d701",
+    "tenant_id": "0192f1a2-0000-7000-8000-000000000001",
+    "tenant": "acme",
+    "resource": "virtual_service",
+    "current_limit": 20,
+    "requested_limit": 50,
+    "reason": "Two product teams move onto the platform in November.",
+    "state": "pending",
+    "requested_by": "user:miguel@example.test",
+    "requested_at": "2026-10-12T09:00:00Z",
+    "granted_limit": None,
+    "decided_by": None,
+    "decided_at": None,
+    "decision_note": None,
+}
+
+
 KUBERNETES_CLUSTER = {
     "id": "0192f1a2-0000-7000-8000-00000000b701",
     "name": "prod",

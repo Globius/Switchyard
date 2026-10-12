@@ -52,6 +52,7 @@ from switchyard.api.gslb_models import (
     WideIpState,
 )
 from switchyard.api.overview import SearchResults, TenantSummary
+from switchyard.api.portal_models import QuotaDecisionIn, QuotaRequestIn, QuotaRequestRead
 from switchyard.api.problems import ApiError, install_handlers
 from switchyard.api.rendered_models import RenderedConfig, RenderedFragment
 from switchyard.api.schemas import (
@@ -189,6 +190,7 @@ from switchyard.domain.changes import (
 from switchyard.domain.field_rules import protocol_rules
 from switchyard.domain.impact import impact as impact_of
 from switchyard.domain.models import AcmeChallenge, CertSource, Protocol, RenewPolicy
+from switchyard.domain.quota_requests import QuotaRequestState
 from switchyard.domain.validators import labels_match
 from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
@@ -225,6 +227,7 @@ from switchyard.services.jobs import JobService
 from switchyard.services.kubernetes import KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.probes import MonitorTestService
+from switchyard.services.quota_requests import QuotaRequests
 from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
 from switchyard.services.sessions import (
     LoginError,
@@ -283,6 +286,7 @@ class ApiServices:
     controller: ControllerSettings = None  # type: ignore[assignment]
     avi_import: AviImportService = None  # type: ignore[assignment]
     kubernetes: KubernetesClusters | None = None
+    quota_requests: QuotaRequests = None  # type: ignore[assignment]
 
 
 def build_services(
@@ -357,6 +361,7 @@ def build_services(
         kubernetes=KubernetesClusters(db, secrets, ChangeSetService(db))
         if writer is not None
         else None,
+        quota_requests=QuotaRequests(db),
     )
 
 
@@ -3978,6 +3983,112 @@ def create_app(
         await require_k8s(svc).get(who, tenant.id, cluster)
         job = await require_k8s(svc).request_sync(who, tenant.id, request_id=_rid())
         return {"job_id": str(job)}
+
+    @router.get(
+        "/tenants/{t}/quota-requests",
+        tags=["quota requests"],
+        summary="List the tenant's quota requests",
+        response_model=list[QuotaRequestRead],
+        responses=_ok([ex.QUOTA_REQUEST]),
+    )
+    async def list_tenant_quota_requests(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        state: Annotated[
+            QuotaRequestState | None, Query(description="Only requests in this state.")
+        ] = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> list[dict[str, Any]]:
+        """Newest first. Anyone who can read the tenant can read its requests."""
+        found = await svc.quota_requests.list_for_tenant(who, tenant.id, state=state, limit=limit)
+        return [asdict(r) for r in found]
+
+    @router.post(
+        "/tenants/{t}/quota-requests",
+        status_code=201,
+        tags=["quota requests"],
+        summary="Ask for a higher quota",
+        response_model=QuotaRequestRead,
+        responses=_ok(ex.QUOTA_REQUEST, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_quota_request(
+        body: QuotaRequestIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """File a request for a higher limit on one resource (tenant administrators).
+
+        The tenant must already have a limit for the resource, the new limit must be higher, and
+        only one request per resource can be pending. A system administrator decides it.
+        """
+        view = await svc.quota_requests.create(
+            who, tenant.id, request_id=_rid(), **body.model_dump()
+        )
+        return asdict(view)
+
+    @router.post(
+        "/tenants/{t}/quota-requests/{request}/withdraw",
+        tags=["quota requests"],
+        summary="Withdraw a quota request",
+        response_model=QuotaRequestRead,
+        responses=_ok({**ex.QUOTA_REQUEST, "state": "withdrawn"}),
+    )
+    async def withdraw_quota_request(
+        request: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Take back a pending request. A request that was already decided answers `409`."""
+        return asdict(await svc.quota_requests.withdraw(who, tenant.id, request, request_id=_rid()))
+
+    @router.get(
+        "/quota-requests",
+        tags=["quota requests"],
+        summary="List quota requests of every tenant",
+        response_model=list[QuotaRequestRead],
+        responses=_ok([ex.QUOTA_REQUEST]),
+    )
+    async def list_quota_requests(
+        who: Who,
+        svc: Services,
+        state: Annotated[
+            QuotaRequestState | None,
+            Query(description="Only requests in this state; default `pending`."),
+        ] = QuotaRequestState.PENDING,
+        limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    ) -> list[dict[str, Any]]:
+        """The queue a system administrator works, oldest first."""
+        return [asdict(r) for r in await svc.quota_requests.list_all(who, state=state, limit=limit)]
+
+    @router.post(
+        "/quota-requests/{request}/approve",
+        tags=["quota requests"],
+        summary="Approve a quota request",
+        response_model=QuotaRequestRead,
+        responses=_ok({**ex.QUOTA_REQUEST, "state": "approved", "granted_limit": 40})
+        | VALIDATION_RESPONSE,
+    )
+    async def approve_quota_request(
+        request: UUID, body: QuotaDecisionIn, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Raise the tenant's quota to the requested limit, or to `granted_limit` if lower."""
+        view = await svc.quota_requests.decide(
+            who, request, approve=True, request_id=_rid(), **body.model_dump()
+        )
+        return asdict(view)
+
+    @router.post(
+        "/quota-requests/{request}/deny",
+        tags=["quota requests"],
+        summary="Deny a quota request",
+        response_model=QuotaRequestRead,
+        responses=_ok({**ex.QUOTA_REQUEST, "state": "denied"}) | VALIDATION_RESPONSE,
+    )
+    async def deny_quota_request(
+        request: UUID, body: QuotaDecisionIn, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Refuse it; `note` is required and is shown to the tenant."""
+        view = await svc.quota_requests.decide(
+            who, request, approve=False, request_id=_rid(), **body.model_dump()
+        )
+        return asdict(view)
 
     @router.get(
         "/dns-provider-types",
