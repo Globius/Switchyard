@@ -71,6 +71,7 @@ Date: YYYY-MM-DD
 | [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
 | [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
 | [0162](0162-gslb-zones-ownership-and-dnssec.md) | GSLB zones: ownership, DNSSEC, several sites | Accepted |
+| [0165](0165-gslb-latency-selection.md) | GSLB latency-based selection: measured round trips with hysteresis | Accepted |
 | [0164](0164-dnsdist-in-front-of-powerdns.md) | dnsdist in front of PowerDNS: ANY and transfers refused, per-network rate limits | Accepted |
 | [0163](0163-gslb-scope-and-deferred.md) | GSLB: what is built and what is not | Accepted |
 | [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |

@@ -34,6 +34,7 @@ class JobKind(StrEnum):
         POLL_STATUS: Scheduled engine status poll and drift detection.
         GIT_MIRROR: Pushes a revision to the Git mirror.
         GC: Scheduled housekeeping.
+        PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.
         SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
@@ -51,6 +52,7 @@ class JobKind(StrEnum):
     GC = "gc"
     EVALUATE_ALERTS = "evaluate_alerts"
     SYNC_GSLB = "sync_gslb"
+    PROBE_GSLB = "probe_gslb"
 
 
 class JobStage(ApiModel):

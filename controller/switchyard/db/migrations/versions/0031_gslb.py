@@ -62,6 +62,7 @@ def upgrade() -> None:
         sa.Column("spec", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("applied_hash", sa.Text(), nullable=True),
+        sa.Column("measurements", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         _ts("applied_at", nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("created_by", sa.Text(), nullable=False),

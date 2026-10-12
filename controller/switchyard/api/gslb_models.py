@@ -76,7 +76,7 @@ class WideIpIn(ApiModel):
     """A name whose answer follows the health of its members."""
 
     name: str = Field(description="`@` (the zone apex) or a name inside the zone, like `shop`.")
-    algorithm: Literal["failover", "weighted", "all", "subnet", "geo"] = "failover"
+    algorithm: Literal["failover", "weighted", "all", "subnet", "geo", "latency"] = "failover"
     ttl: int = Field(default=30, ge=5, le=3600)
     health: WideIpHealth = Field(default_factory=WideIpHealth)
     members: list[WideIpMember]
@@ -86,7 +86,7 @@ class WideIpIn(ApiModel):
 class WideIpPatch(ApiModel):
     """Fields of a wide IP that can change; omitted fields stay as they are."""
 
-    algorithm: Literal["failover", "weighted", "all", "subnet", "geo"] | None = None
+    algorithm: Literal["failover", "weighted", "all", "subnet", "geo", "latency"] | None = None
     ttl: int | None = Field(default=None, ge=5, le=3600)
     health: WideIpHealth | None = None
     members: list[WideIpMember] | None = None

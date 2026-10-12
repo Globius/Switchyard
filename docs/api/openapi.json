@@ -6893,7 +6893,7 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    SYNC_GSLB: Follows virtual service VIP moves in GSLB records.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    PROBE_GSLB: Measures round-trip times to the members of latency wide IPs.\n    SYNC_GSLB: Follows virtual service VIP moves in GSLB records.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
         "enum": [
           "apply_change_set",
           "reapply_se_group",
@@ -6907,7 +6907,8 @@
           "git_mirror",
           "gc",
           "evaluate_alerts",
-          "sync_gslb"
+          "sync_gslb",
+          "probe_gslb"
         ],
         "title": "JobKind",
         "type": "string"
@@ -14786,7 +14787,8 @@
               "weighted",
               "all",
               "subnet",
-              "geo"
+              "geo",
+              "latency"
             ],
             "title": "Algorithm",
             "type": "string"
@@ -14906,7 +14908,8 @@
                   "weighted",
                   "all",
                   "subnet",
-                  "geo"
+                  "geo",
+                  "latency"
                 ],
                 "type": "string"
               },

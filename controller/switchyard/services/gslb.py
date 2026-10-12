@@ -8,9 +8,13 @@ rewrites records that merely differ in PowerDNS: that is drift, which is reporte
 :meth:`GslbService.status` and fixed only by an explicit ``sync`` (drift is reported, not fixed).
 """
 
+import asyncio
+import contextlib
 import hashlib
 import json
 import logging
+import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -25,6 +29,7 @@ from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain.gslb import (
     GslbInvalid,
     Rrset,
+    next_order,
     render_rrsets,
     validate_label,
     validate_wide_ip,
@@ -38,6 +43,7 @@ from switchyard.services.errors import AlreadyExistsError, FieldErrors, NotFound
 log = logging.getLogger("switchyard.gslb")
 
 SYNC_GSLB_JOB = "sync_gslb"
+PROBE_GSLB_JOB = "probe_gslb"
 
 
 def _raise(exc: GslbInvalid) -> FieldErrors:
@@ -240,7 +246,8 @@ class GslbService:
             for i, m in enumerate(row.spec["members"])
             if m.get("virtual_service") in vips
         }
-        return render_rrsets(_fqdn(row.name, zone), row.spec, addresses=addresses)
+        order = (row.measurements or {}).get("order")
+        return render_rrsets(_fqdn(row.name, zone), row.spec, addresses=addresses, order=order)
 
     async def list_wide_ips(
         self, principal: Principal, tenant_id: UUID, zone: str | None = None
@@ -531,4 +538,110 @@ class GslbSync:
         return totals
 
 
-__all__ = ["SYNC_GSLB_JOB", "GslbService", "GslbSync", "datetime"]
+Connect = Callable[[str, int, float], Awaitable[float | None]]
+
+
+async def tcp_connect_ms(address: str, port: int, timeout: float) -> float | None:
+    """Milliseconds to open a TCP connection to ``address:port``, or ``None`` if it fails."""
+    started = time.perf_counter()
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection(address, port), timeout)
+    except (OSError, TimeoutError):
+        return None
+    elapsed = (time.perf_counter() - started) * 1000
+    writer.close()
+    with contextlib.suppress(OSError):
+        await writer.wait_closed()
+    return elapsed
+
+
+class GslbProber:
+    """The scheduled job behind the ``latency`` algorithm (ADR 0165).
+
+    Every run it times a TCP connect to each member's health port, from this controller, smooths the
+    result (``SMOOTHING`` weight on the new sample) and stores it. The members' order follows with
+    hysteresis (:func:`switchyard.domain.gslb.next_order`); records are rewritten only when the
+    order changes them.
+    """
+
+    SAMPLES = 3
+    SMOOTHING = 0.5
+
+    def __init__(
+        self, service: GslbService, db: Databases, connect: Connect = tcp_connect_ms
+    ) -> None:
+        """Create the prober; ``connect`` is replaceable in tests."""
+        self._service = service
+        self._db = db
+        self._connect = connect
+
+    async def run(self) -> dict[str, int]:
+        """Probe every enabled latency wide IP; returns how many were probed and rewritten."""
+        totals = {"probed": 0, "rewritten": 0}
+        async with admin_session(self._db.admin) as session:
+            tenants = list(
+                (await session.execute(select(GslbZoneRow.tenant_id).distinct())).scalars()
+            )
+        for tenant_id in tenants:
+            try:
+                r = await self._tenant(tenant_id)
+            except Exception:  # one tenant's trouble must not stop the others
+                log.exception("gslb probe failed for %s", tenant_id)
+                continue
+            totals["probed"] += r[0]
+            totals["rewritten"] += r[1]
+        return totals
+
+    async def _tenant(self, tenant_id: UUID) -> tuple[int, int]:
+        probed = rewritten = 0
+        service = self._service
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            zones = {z.id: z.name for z in (await session.execute(select(GslbZoneRow))).scalars()}
+            vips = await service._vips(session)
+            rows = (
+                await session.execute(select(GslbWideIpRow).where(GslbWideIpRow.enabled.is_(True)))
+            ).scalars()
+            for row in rows:
+                if row.spec["algorithm"] != "latency":
+                    continue
+                before = _digest(service._records(row, zones[row.zone_id], vips))
+                port = (row.spec.get("health") or {}).get("port", 443)
+                timeout = (row.spec.get("health") or {}).get("timeout_ms", 1000) / 1000
+                previous = (row.measurements or {}).get("ms", {})
+                ms: dict[int, float | None] = {}
+                for i, m in enumerate(row.spec["members"]):
+                    address = m.get("address") or vips.get(m.get("virtual_service", ""))
+                    if address is None:
+                        ms[i] = None
+                        continue
+                    samples = [
+                        await self._connect(address, port, timeout) for _ in range(self.SAMPLES)
+                    ]
+                    ok = sorted(s for s in samples if s is not None)
+                    if not ok:
+                        ms[i] = None
+                        continue
+                    median = ok[len(ok) // 2]
+                    old = previous.get(str(i))
+                    ms[i] = median if old is None else old + self.SMOOTHING * (median - old)
+                order = next_order((row.measurements or {}).get("order", []), ms)
+                row.measurements = {
+                    "ms": {str(i): v for i, v in ms.items() if v is not None},
+                    "order": order,
+                }
+                probed += 1
+                if _digest(service._records(row, zones[row.zone_id], vips)) != before:
+                    await service._apply(row, zones[row.zone_id], vips)
+                    rewritten += 1
+        return probed, rewritten
+
+
+__all__ = [
+    "PROBE_GSLB_JOB",
+    "SYNC_GSLB_JOB",
+    "GslbProber",
+    "GslbService",
+    "GslbSync",
+    "datetime",
+    "tcp_connect_ms",
+]
