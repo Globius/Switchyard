@@ -277,7 +277,7 @@ class GrafanaGrantRow(Base):
     __table_args__ = (
         UniqueConstraint("ticket_hash"),
         UniqueConstraint("session_hash"),
-        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["scope_tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         ForeignKeyConstraint(["user_session_id"], ["user_session.id"], ondelete="CASCADE"),
     )
 
@@ -286,7 +286,8 @@ class GrafanaGrantRow(Base):
     session_hash: Mapped[str | None] = mapped_column(Text)
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
-    tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    #: Not named ``tenant_id``: this is a system table (admin role only), not a tenant-owned one.
+    scope_tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     user_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     #: Where to land in Grafana after the redirect (a validated path below ``/grafana/``).
     landing: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))

@@ -1803,6 +1803,11 @@ def create_app(
         tenant_id: UUID | None,
         body: GrafanaLaunchIn,
     ) -> Any:
+        # who may ask is decided before whether the feature is on (the same answer everywhere)
+        if tenant_id is None:
+            require(who, "manage", "tenant")  # system administrators only
+        else:
+            require(who, "read", "tenant_data")
         if svc.grafana is None:
             raise ApiError(404, "Grafana is not embedded on this controller", code="not_enabled")
         session = getattr(request.state, "session", None)

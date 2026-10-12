@@ -262,7 +262,7 @@ class GrafanaService:
                     ticket_hash=hash_token(ticket),
                     subject=principal.actor,
                     display_name=principal.actor,
-                    tenant_id=tenant_id,
+                    scope_tenant_id=tenant_id,
                     user_session_id=user_session_id,
                     landing=landing,
                     ticket_expires_at=expires,
@@ -307,7 +307,7 @@ class GrafanaService:
             ).scalar_one_or_none()
             if row is None:
                 raise GrafanaLaunchError("this Grafana link has expired or was already used")
-            grant_id, tenant_id, subject = row.id, row.tenant_id, row.subject
+            grant_id, tenant_id, subject = row.id, row.scope_tenant_id, row.subject
             name, landing = row.display_name, row.landing
             expires = now + SESSION_TTL
             if row.user_session_id is not None:
@@ -399,7 +399,7 @@ class GrafanaService:
                 login=row.grafana_login,
                 name=row.display_name,
                 org_id=row.grafana_org_id,
-                tenant_id=row.tenant_id,
+                tenant_id=row.scope_tenant_id,
                 expires_at=expires,
                 renewed=renewed,
             )

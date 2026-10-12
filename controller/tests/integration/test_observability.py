@@ -141,7 +141,7 @@ def test_exposition_escapes_labels_and_formats_numbers() -> None:
 
 async def test_me_shows_the_grafana_link_and_permissions_carry_their_group(setup: Setup) -> None:
     me = (await setup.client.get("/api/v1/me", headers=setup.admin)).json()
-    assert me["links"] == {"grafana": "https://grafana.example.test"}
+    assert me["links"] == {"grafana": "https://grafana.example.test", "grafana_embedded": False}
     matrix = (await setup.client.get("/api/v1/permissions", headers=setup.admin)).json()
     groups = {p["group"] for p in matrix["permissions"]}
     assert len(groups) == 8 and {"Read", "Change sets", "System"} <= groups

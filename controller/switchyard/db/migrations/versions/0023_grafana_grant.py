@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("session_hash", sa.Text(), nullable=True),
         sa.Column("subject", sa.Text(), nullable=False),
         sa.Column("display_name", sa.Text(), nullable=False, server_default=sa.text("''")),
-        sa.Column("tenant_id", sa.UUID(), nullable=True),
+        sa.Column("scope_tenant_id", sa.UUID(), nullable=True),
         sa.Column("user_session_id", sa.UUID(), nullable=True),
         sa.Column("landing", sa.Text(), nullable=False, server_default=sa.text("''")),
         sa.Column(
@@ -44,9 +44,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("ticket_hash", name=op.f("uq_grafana_grant_ticket_hash")),
         sa.UniqueConstraint("session_hash", name=op.f("uq_grafana_grant_session_hash")),
         sa.ForeignKeyConstraint(
-            ["tenant_id"],
+            ["scope_tenant_id"],
             ["tenant.id"],
-            name=op.f("fk_grafana_grant_tenant_id_tenant"),
+            name=op.f("fk_grafana_grant_scope_tenant_id_tenant"),
             ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
