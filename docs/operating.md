@@ -22,7 +22,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_DATAPLANE_CA`, `_CERT`, `_KEY` | mTLS from the controller to Data Plane APIs and agents. With a bundle signing key the CA is required: the worker and API refuse to start without it unless `SWITCHYARD_INSECURE_AGENT=1` (lab only) |
 | `SWITCHYARD_BUNDLE_KEY_FILE` | Ed25519 key (PKCS#8 PEM) that signs agent bundles |
 | `SWITCHYARD_PKI_MOUNT`, `SWITCHYARD_PKI_ROLE` | OpenBao PKI role that signs agent certificates (defaults `pki`, `agents`) |
-| `SWITCHYARD_PVE_URL`, `_PVE_TOKEN_ID`, `_PVE_CA` | Proxmox API (token secret at reference `kv/proxmox/token`) |
+| `SWITCHYARD_PVE_URL`, `_PVE_TOKEN_ID`, `_PVE_CA` | Proxmox API (token secret at reference `kv/proxmox/token`); also turns on pool discovery by tag ([guide](pool-discovery.md)) |
 | `SWITCHYARD_CLOUDFLARE_TOKEN` | DNS-01, Origin CA and IP-range sync |
 | `SWITCHYARD_ACME_DIRECTORY`, `_EMAIL`, `_ACCOUNT_KEY_FILE` | ACME issuance |
 | `SWITCHYARD_METRICS_TOKEN` | Bearer token that may read `/metrics` and the Prometheus service-discovery list (and nothing else); system administrators can too |

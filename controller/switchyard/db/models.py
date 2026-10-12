@@ -237,6 +237,7 @@ class PoolRow(TenantOwnedMixin, Base):
     tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     passive_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     slow_start_s: Mapped[int | None] = mapped_column(Integer)
+    discovery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class PoolMemberRow(Base):

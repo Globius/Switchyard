@@ -48,6 +48,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
+from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import InfraService
@@ -195,6 +196,12 @@ def infra_service(db: Databases, secrets: SecretsReader) -> InfraService | None:
     return InfraService(db, client) if client else None
 
 
+def discovery_service(db: Databases) -> DiscoveryService | None:
+    """Pool discovery, if the Proxmox client is configured (same settings as the infra jobs)."""
+    client = proxmox_client()
+    return DiscoveryService(db, client, ChangeSetService(db)) if client else None
+
+
 def audit_syslog_target(value: str) -> tuple[str | tuple[str, int], socket.SocketKind]:
     """Parse ``SWITCHYARD_AUDIT_SYSLOG`` into a ``SysLogHandler`` address and socket type.
 
@@ -295,10 +302,20 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     pipeline = ApplyPipeline(db, engines, sandbox=sandbox, secrets=secrets)
     status = StatusService(db, engines, secrets)
     certs = certificates(db, secrets)
+    discovery = discovery_service(db)
     handlers = build_handlers(
-        db, pipeline, git_mirror(), status, infra_service(db, secrets), certs, GarbageCollector(db)
+        db,
+        pipeline,
+        git_mirror(),
+        status,
+        infra_service(db, secrets),
+        certs,
+        GarbageCollector(db),
+        discovery,
     )
     schedule = {POLL_STATUS_JOB: timedelta(seconds=10), GC_JOB: timedelta(hours=1)}
+    if discovery is not None:
+        schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

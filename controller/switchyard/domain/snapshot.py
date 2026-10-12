@@ -148,6 +148,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       a SAN of the service's certificates (wildcards cover exactly one label).
     - ``profile_kind_mismatch``: an SE group's routing profile kind equals its ``ha_mode``.
     - ``wrong_policy_kind``: redirect and allow-list references point at the right kind.
+    - ``discovery_tag_not_allowed``: a pool's Proxmox discovery tag starts with ``sy-<tenant>.``,
+      so a tenant never discovers another tenant's guests (ADR 0145).
     - ``secret_ref_not_allowed``: certificate and BGP secret references stay in the tenant's own
       namespace and out of the platform's (ADR 0071).
     - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
@@ -188,6 +190,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
 
     _check_names(snapshot, problems)
     _check_secret_scopes(snapshot, problems)
+    _check_discovery_scopes(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -356,6 +359,23 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 )
             )
     return sorted(problems)
+
+
+def _check_discovery_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """Discovery tags start with the owning tenant's prefix (``discovery_tag_not_allowed``)."""
+    names = {t.id: t.name for t in snapshot.tenants}
+    for pool in snapshot.pools:
+        if pool.discovery is None or pool.tenant_id not in names:
+            continue
+        prefix = v.discovery_tag_prefix(names[pool.tenant_id])
+        if not pool.discovery.tag.startswith(prefix) or pool.discovery.tag == prefix:
+            problems.append(
+                Problem(
+                    f"pools.{pool.name}.discovery.tag",
+                    "discovery_tag_not_allowed",
+                    f"a discovery tag must start with {prefix!r} and continue with a label",
+                )
+            )
 
 
 def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
