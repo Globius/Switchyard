@@ -140,3 +140,22 @@ func TestUDPPrefixesFollowIPVSNotHAProxy(t *testing.T) {
 		t.Fatal("nothing should be withdrawn now")
 	}
 }
+
+func TestIPv6PrefixesAreWithdrawnInTheIPv6Family(t *testing.T) {
+	r := &rec{}
+	w := &Watchdog{
+		Runner: r, Threshold: 1,
+		VIPsFile: vips(t, `{"asn":65010,"prefixes":["192.0.2.20/32","2001:db8::20/128"]}`),
+		Check:    func(context.Context) bool { return false },
+	}
+	w.Tick(context.Background())
+	if len(r.calls) != 2 {
+		t.Fatalf("expected two withdrawals: %v", r.calls)
+	}
+	if !strings.Contains(r.calls[0], "address-family ipv4 unicast") || !strings.Contains(r.calls[0], "no network 192.0.2.20/32") {
+		t.Fatalf("IPv4 prefix: %q", r.calls[0])
+	}
+	if !strings.Contains(r.calls[1], "address-family ipv6 unicast") || !strings.Contains(r.calls[1], "no network 2001:db8::20/128") {
+		t.Fatalf("IPv6 prefix must use the IPv6 address family: %q", r.calls[1])
+	}
+}

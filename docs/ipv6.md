@@ -14,7 +14,15 @@ Switchyard supports IPv6-only and dual-stack deployments. This is the support ma
 | BGP router id | IPv4 mgmt address | derived | An IPv6-only engine has no IPv4 address; its router id is derived from the engine name inside `100.64.0.0/10`, stable across renders. |
 | Engine address policy, dataplane/agent URLs | yes | yes | Literal IPs checked against the group's mgmt networks; `[addr]:port` accepted. |
 | Monitor test targets | yes | yes | Reported as `[addr]:port`. |
-| Proxmox adapter, deploy job, SE image, lab and quickstart | | | Owned by Operations (separate change). |
+| Proxmox adapter, deploy job | yes | yes | `ip=`/`gw=` or `ip6=`/`gw6=` per NIC (VM `ipconfigN`, container `netN`); engine URLs bracket IPv6 literals. A management NIC carries one family. |
+| SE image | yes | yes | IPv6 sysctls (`ip_nonlocal_bind`, forwarding, `accept_ra=2`), `nftables` enabled; agent reads IPv6 BGP peers and withdraws IPv6 VIPs (ADR 0079). |
+| Quickstart | yes | yes | `bootstrap.sh --host A,B --ipv6`; certificate names for every address; the front listens on `[::]`; Docker network with NAT66. Needs Docker IPv6 NAT enabled (Docker 26). |
+| Lab | yes | yes | Verified on two IPv6-only Proxmox hosts with an IPv4-free tenant: VRRPv3 across hosts, IPVS UDP, BGP ECMP, telemetry ([runbooks/lab-hosts.md](runbooks/lab-hosts.md)). |
 
 Limits: a management NIC carries one address (IPv4 or IPv6, not both); a UDP service cannot translate
 between families (IPVS limit); a VRRP group with both families needs both VIP networks on the group.
+
+Known gaps: the BGP renderer lists only IPv4 prefixes in `frr/vips.json`, so the route-health watchdog does not withdraw an
+IPv6 VIP when HAProxy fails. An IPv6-only host needs outbound IPv4 for nothing in this repository, but several upstream
+sites (ghcr.io, github.com release downloads) are IPv4-only; the controller image installs uv from PyPI for that reason and
+engine binaries are built on a machine that reaches them.

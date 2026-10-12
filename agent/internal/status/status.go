@@ -37,24 +37,35 @@ type Collector struct {
 	KeepalivedConf string
 }
 
-type bgpSummary struct {
-	IPv4Unicast struct {
-		Peers map[string]struct {
-			RemoteAs uint32 `json:"remoteAs"`
-			State    string `json:"state"`
-		} `json:"peers"`
-	} `json:"ipv4Unicast"`
+type bgpPeers struct {
+	Peers map[string]struct {
+		RemoteAs uint32 `json:"remoteAs"`
+		State    string `json:"state"`
+	} `json:"peers"`
 }
 
-// ParseBGP turns `vtysh -c "show bgp summary json"` output into sessions sorted by peer.
+// bgpSummary has one block per address family; a neighbor shows up in the families it is activated for.
+type bgpSummary struct {
+	IPv4Unicast bgpPeers `json:"ipv4Unicast"`
+	IPv6Unicast bgpPeers `json:"ipv6Unicast"`
+}
+
+// ParseBGP turns `vtysh -c "show bgp summary json"` output into sessions sorted by peer. Sessions of both address
+// families are reported (an IPv6-only engine has only IPv6 neighbors); a neighbor in both appears once, as seen under IPv4.
 func ParseBGP(data []byte) ([]*pb.BgpSession, error) {
 	var s bgpSummary
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}
 	var out []*pb.BgpSession
-	for peer, p := range s.IPv4Unicast.Peers {
-		out = append(out, &pb.BgpSession{Peer: peer, State: p.State, RemoteAsn: p.RemoteAs})
+	seen := map[string]bool{}
+	for _, family := range []bgpPeers{s.IPv4Unicast, s.IPv6Unicast} {
+		for peer, p := range family.Peers {
+			if !seen[peer] {
+				seen[peer] = true
+				out = append(out, &pb.BgpSession{Peer: peer, State: p.State, RemoteAsn: p.RemoteAs})
+			}
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Peer < out[j].Peer })
 	return out, nil

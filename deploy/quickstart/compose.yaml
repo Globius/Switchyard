@@ -3,7 +3,7 @@
 name: switchyard-qs
 x-controller-env: &controller-env
   SWITCHYARD_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@postgres:5432/switchyard
-  SWITCHYARD_PUBLIC_URL: https://${HOST_ADDR}:${HTTPS_PORT:-8443}
+  SWITCHYARD_PUBLIC_URL: https://${HOST_URL:-${HOST_ADDR}}:${HTTPS_PORT:-8443}
   SWITCHYARD_TRUST_FORWARDED: "1"
   SWITCHYARD_METRICS_TOKEN: ${METRICS_TOKEN}
   SWITCHYARD_OPENBAO_ADDR: http://openbao:8200

@@ -1,12 +1,12 @@
 #!/bin/sh
 # One-command setup of a Switchyard test instance on this host (docs/quickstart.md). Idempotent: run it again to
 # bring the stack back up; it keeps the passwords, keys and certificates it already made in .env and secrets/.
-#   sh bootstrap.sh --host ADDRESS [--port 8443]
+#   sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--rebuild]
 # ADDRESS is how browsers and engines reach this machine (an IP or DNS name); --port is the HTTPS port to publish.
 set -eu
 cd "$(dirname "$0")"
-HOST=""; PORTARG=""
-while [ $# -gt 0 ]; do case "$1" in --host) HOST=$2; shift 2 ;; --port) PORTARG=$2; shift 2 ;; *) echo "usage: sh bootstrap.sh --host ADDRESS [--port 8443]" >&2; exit 2 ;; esac; done
+HOST=""; PORTARG=""; IPV6ARG=""; REBUILD=""
+while [ $# -gt 0 ]; do case "$1" in --host) HOST=$2; shift 2 ;; --port) PORTARG=$2; shift 2 ;; --ipv6) IPV6ARG=1; shift ;; --rebuild) REBUILD=1; shift ;; *) echo "usage: sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--rebuild]" >&2; exit 2 ;; esac; done
 [ -n "$HOST" ] || [ -f .env ] || { echo "usage: sh bootstrap.sh --host ADDRESS" >&2; exit 2; }
 export MSYS_NO_PATHCONV=1
 say() { echo "== $*"; }
@@ -16,9 +16,13 @@ ENVGET() { sed -n "s/^$1=//p" .env 2>/dev/null | head -1; }
 
 mkdir -p secrets; chmod 755 secrets   # the controller containers (uid 10001) read it; keep it on an encrypted disk
 [ -f .env ] || : > .env
-[ -z "$HOST" ] || ENVSET HOST_ADDR "$HOST"
+# --host takes one address, or several separated by commas ("192.0.2.10,2001:db8::10"): the first is what browsers and
+# engines are told to use, and every one is a name in the TLS certificate. IPv6 literals are fine.
+[ -z "$HOST" ] || { ENVSET HOST_ALL "$HOST"; ENVSET HOST_ADDR "${HOST%%,*}"; }
 [ -z "$PORTARG" ] || ENVSET HTTPS_PORT "$PORTARG"
-HOST=$(ENVGET HOST_ADDR)
+[ -z "$IPV6ARG" ] || ENVSET COMPOSE_FILE compose.yaml:compose.ipv6.yaml   # Compose reads this from .env, so every script picks it up
+HOST=$(ENVGET HOST_ADDR); HOSTS=$(ENVGET HOST_ALL); HOSTS=${HOSTS:-$HOST}
+case "$HOST" in *:*) ENVSET HOST_URL "[$HOST]" ; HOSTURL="[$HOST]" ;; *) ENVSET HOST_URL "$HOST"; HOSTURL=$HOST ;; esac
 [ -n "$(ENVGET POSTGRES_PASSWORD)" ] || ENVSET POSTGRES_PASSWORD "$(rand)"
 [ -n "$(ENVGET METRICS_TOKEN)" ] || ENVSET METRICS_TOKEN "$(rand)"
 [ -n "$(ENVGET BREAK_GLASS)" ] || ENVSET BREAK_GLASS 1
@@ -30,7 +34,7 @@ PY() { docker run --rm -i --user 0 -v "$(pwd -W 2>/dev/null || pwd)/secrets:/sec
 
 say "controller image"
 # --network host: the build uses the host's own network, so it also works on a host with only IPv6.
-docker image inspect "$IMG" >/dev/null 2>&1 || docker build --network host -q -f ../controller/Dockerfile -t "$IMG" ../.. >/dev/null
+[ -z "$REBUILD" ] && docker image inspect "$IMG" >/dev/null 2>&1 || docker build --network host -q -f ../controller/Dockerfile -t "$IMG" ../.. >/dev/null
 
 say "PostgreSQL and OpenBao"
 dc up -d postgres openbao >/dev/null
@@ -87,7 +91,10 @@ open(f"/secrets/{name}.crt", "w").write(d["certificate"] + "\n" + d["issuing_ca"
 open(f"/secrets/{name}.key", "w").write(d["private_key"] + "\n")
 PYEOF
 }
-case "$HOST" in *[!0-9.]*) SANIP=127.0.0.1; SANDNS=$HOST ;; *) SANIP="$HOST,127.0.0.1"; SANDNS=localhost ;; esac
+SANIP=127.0.0.1,::1; SANDNS=localhost
+for h in $(echo "$HOSTS" | tr ',' ' '); do
+  case "$h" in *:*) SANIP="$SANIP,$h" ;; *[!0-9.]*) SANDNS="$SANDNS,$h" ;; *) SANIP="$SANIP,$h" ;; esac
+done
 [ -s secrets/server.crt ] || issue server "$HOST" "$SANIP" "$SANDNS"
 [ -s secrets/client.crt ] || issue client switchyard-controller "" ""
 [ -s secrets/bundle.key ] || PY <<'PYEOF'
@@ -131,9 +138,9 @@ END_PY
   chmod 600 secrets/breakglass.txt; rm -f secrets/bg.json secrets/bg.code
 fi
 echo
-echo "Switchyard is up:  https://$HOST:$PORT/   (the certificate is signed by secrets/ca.pem)"
+echo "Switchyard is up:  https://$HOSTURL:$PORT/   (the certificate is signed by secrets/ca.pem)"
 echo "Admin API token:   $(cat secrets/admin-token)"
-echo "                   syctl api login --url https://$HOST:$PORT --token <token>"
+echo "                   syctl api login --url https://$HOSTURL:$PORT --token <token>"
 echo "CA for engines:    $(pwd)/secrets/ca.pem"
 echo "Browser sign-in (break-glass): user, password and TOTP secret are in secrets/breakglass.txt"
 echo "OpenBao root token and unseal key are in secrets/ (test instance only: see docs/production.md)."

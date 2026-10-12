@@ -7,7 +7,7 @@ Commands:
   status                  engine status (reachability, members, VRRP, BGP, drift)
   reapply                 apply the newest failed change set again
   lastapply               log and result of the newest apply job
-Environment: SY_TOKEN (admin API token), TEMPLATE_VMID. Prints one JSON document.
+Environment: SY_TOKEN (admin API token), TEMPLATE_VMID, LAB_TENANT (default lab). Prints one JSON document.
 """
 
 import asyncio
@@ -20,7 +20,7 @@ import httpx
 
 from switchyard.client import ApiClient, ApiClientError, Profile
 
-TENANT = "lab"
+TENANT = os.environ.get("LAB_TENANT", "lab")
 
 
 class Lab(ApiClient):

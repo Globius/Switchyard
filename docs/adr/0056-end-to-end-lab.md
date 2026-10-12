@@ -53,6 +53,12 @@ Two more things came from the quickstart (ADR 0058): the controller's OpenBao po
 API got 403 creating the break-glass administrator), and the UI proxy kept the API's old address after the API container was
 recreated (now it re-resolves).
 
+## Two real hosts (fourth step)
+[ADR 0079](0079-two-host-lab-findings.md): the same scenarios on two Proxmox hosts in a cluster, with the controller in a
+guest. Covered there: UDP through IPVS, VRRP between engines on different hosts (over a VXLAN overlay), ECMP over both hosts,
+KVM engines on both, an unprivileged container with VRRP, telemetry with real engines, and an IPv6-only twin. The fixes
+that run produced are listed in that ADR.
+
 ## Not covered
-IPVS/UDP (the lab kernel has none), BGP or failover with unprivileged containers, the UI, certificates for virtual services, and the multi-node controller. VRRP between engines on different Proxmox hosts
-and multicast across a real switch are not exercised (all containers share one bridge).
+BGP, IPVS or failover with unprivileged containers, multicast across a physical switch (the real-host lab used a VXLAN
+overlay), the UI, certificates for virtual services, and the multi-node controller.

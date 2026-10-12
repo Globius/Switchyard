@@ -19,9 +19,9 @@ template_id() { # kind node
 # CONTROLLER_EXEC (hosts.env) runs `api.sh` where the controller lives, for a controller in a guest, e.g.
 # "ssh -i KEY root@node pct exec 9980 -- /usr/local/bin/sy-api" (install api.sh there). Default: this machine.
 api() { cmd=$1; shift
-  if [ -n "${CONTROLLER_EXEC:-}" ]; then $CONTROLLER_EXEC "$cmd" "$@" < ../e2e/drive.py; return; fi
+  if [ -n "${CONTROLLER_EXEC:-}" ]; then $CONTROLLER_EXEC --tenant "${LAB_TENANT:-lab}" "$cmd" "$@" < ../e2e/drive.py; return; fi
   docker compose -f $QS/compose.yaml --env-file $QS/.env exec -T -e SY_TOKEN="$(cat $QS/secrets/admin-token)" \
-    -e LAB_URL=http://127.0.0.1:8000 -e LAB_CA=/etc/ssl/certs/ca-certificates.crt -e CRED_REF=kv/se/dataplane api python - "$cmd" "$@" < ../e2e/drive.py; }
+    -e LAB_URL=http://127.0.0.1:8000 -e LAB_CA=/etc/ssl/certs/ca-certificates.crt -e CRED_REF=kv/se/dataplane -e LAB_TENANT="${LAB_TENANT:-lab}" api python - "$cmd" "$@" < ../e2e/drive.py; }
 getj() { python -c "import json,sys;d=json.load(sys.stdin);$1"; }
 # shq quotes each argument for the remote shell that ssh starts, so arguments with spaces or metacharacters arrive whole.
 shq() { for a in "$@"; do printf "'%s' " "$(printf %s "$a" | sed "s/'/'\\''/g")"; done; }

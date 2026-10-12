@@ -82,10 +82,14 @@ func (w *Watchdog) load() (*VIPs, error) {
 }
 
 func (w *Watchdog) apply(ctx context.Context, v *VIPs, prefix, verb string) error {
+	family := "ipv4"
+	if p, err := netip.ParsePrefix(prefix); err == nil && !p.Addr().Is4() {
+		family = "ipv6" // IPv6 VIPs are announced (and withdrawn) in the IPv6 unicast address family
+	}
 	args := []string{
 		"-c", "configure terminal",
 		"-c", fmt.Sprintf("router bgp %d", v.ASN),
-		"-c", "address-family ipv4 unicast",
+		"-c", "address-family " + family + " unicast",
 		"-c", verb + "network " + prefix,
 	}
 	_, err := w.Runner.Run(ctx, "vtysh", args...)

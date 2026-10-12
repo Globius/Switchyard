@@ -132,7 +132,11 @@ controller, enrollment and renewal, mTLS, a canary-first apply with per-engine b
 controller-less reboot, a BGP session with BFD to an upstream, route announcement and withdrawal, and data-NIC addressing.
 The three-node database restore and failover are rehearsed on a one-host lab.
 
-Also proven there: KVM VM engines with cloud-init (same scenario as containers) and ECMP over three BGP engines. Not yet proven on
-real hardware (see [runbooks/lab-hosts.md](runbooks/lab-hosts.md) for the plan): UDP services through IPVS, engines on
-different Proxmox hosts, multicast and VRRP across a real switch, unprivileged containers beyond a single VRRP engine, and the
-multi-node production Compose end to end. Treat those as pilot items.
+Proven on two real Proxmox hosts in a cluster ([runbooks/lab-hosts.md](runbooks/lab-hosts.md), section 7,
+[adr/0079](adr/0079-two-host-lab-findings.md)): KVM VM engines with cloud-init on both hosts; VRRP failover between hosts in
+4 to 5 seconds; UDP services through IPVS; an unprivileged container serving a VIP (VRRP only); ECMP over three BGP engines
+spread over both hosts; the telemetry stack with real engines (Prometheus targets, all four dashboards, Loki logs); and the
+whole set again with IPv6 only ([ipv6.md](ipv6.md)). Pilot items that remain: BGP or IPVS in unprivileged containers,
+reboot recovery of every engine kind across hosts, a real switch with VLAN trunks and IGMP snooping (the lab used a VXLAN
+overlay), IPv6 VIP withdrawal on a failed HAProxy (the renderer does not list IPv6 prefixes for the watchdog yet), and the
+multi-node production Compose end to end across hosts.

@@ -394,8 +394,8 @@ class HttpProxmox:
                 config["ssh-public-keys"] = spec.ssh_public_keys
         else:
             config["ipconfig0"] = mgmt
-            # Proxmox's generated cloud-init user-data upgrades packages on first boot by default; an engine must not
-            # need the internet (or a mirror) to start, so keep that off. The template already holds what it needs.
+            # Proxmox's cloud-init data upgrades packages on first boot by default. An engine must
+            # not need the internet to start, so keep that off: the template has what it needs.
             config["ciupgrade"] = 0
             if spec.mgmt_bridge:
                 config["net0"] = f"virtio,bridge={spec.mgmt_bridge}"
