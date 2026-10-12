@@ -503,6 +503,42 @@ async def test_policy_sets_and_routing_profiles_are_unions_on_kind(api: Api) -> 
                 ],
             },
             {"kind": "allow_list", "name": "office", "cidrs": ["203.0.113.0/24"]},
+            {
+                "kind": "rewrite",
+                "name": "edge-headers",
+                "rules": [
+                    {"action": {"type": "set_header", "name": "X-Edge", "value": "sy"}},
+                    {
+                        "phase": "response",
+                        "match": {"methods": ["GET"], "path_prefix": "/static"},
+                        "action": {"type": "remove_header", "name": "Server"},
+                    },
+                    {
+                        "action": {
+                            "type": "replace_prefix",
+                            "from_prefix": "/api/v1",
+                            "to_prefix": "/",
+                        }
+                    },
+                ],
+            },
+            {
+                "kind": "respond",
+                "name": "maintenance",
+                "rules": [
+                    {
+                        "status": 503,
+                        "content_type": "text/html",
+                        "body": "<p>back soon</p>",
+                        "retry_after_s": 60,
+                    }
+                ],
+            },
+            {
+                "kind": "error_pages",
+                "name": "pages",
+                "pages": [{"status": 503, "body": "<p>down</p>"}],
+            },
         ],
         "routing-profiles": [
             {"kind": "vrrp", "name": "vrrp-b", "vrid": 61, "interface": "eth1"},
@@ -559,6 +595,22 @@ async def test_union_validation_errors_keep_field_paths_without_the_tag(api: Api
         f"{t}/policy-sets?apply=true", json={"kind": "bogus", "name": "x"}, headers=h
     )
     assert r.status_code == 422
+    bad_rewrite = {
+        "kind": "rewrite",
+        "name": "bad-rw",
+        "rules": [{"action": {"type": "set_header", "name": "Content-Length", "value": "0"}}],
+    }
+    r = await api.client.post(f"{t}/policy-sets?apply=true", json=bad_rewrite, headers=h)
+    assert r.status_code == 422
+    assert any("cannot be changed" in e["message"] for e in r.json()["errors"])
+    unsafe = {
+        "kind": "rewrite",
+        "name": "unsafe",
+        "rules": [{"action": {"type": "set_header", "name": "X-A", "value": "%[src]"}}],
+    }
+    r = await api.client.post(f"{t}/policy-sets?apply=true", json=unsafe, headers=h)
+    assert r.status_code == 422
+    assert "rules.0.action.value" in {e["path"] for e in r.json()["errors"]}, r.json()
 
 
 async def test_job_endpoints(api: Api) -> None:

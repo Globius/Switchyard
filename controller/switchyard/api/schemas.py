@@ -260,7 +260,18 @@ OBJECT_MODELS: dict[ObjectType, tuple[type[BaseModel], ...]] = {
     ObjectType.POOL: (dm.Pool,),
     ObjectType.HEALTH_MONITOR: (dm.HealthMonitor,),
     ObjectType.CERTIFICATE: (dm.Certificate,),
-    ObjectType.POLICY_SET: (dm.RedirectPolicySet, dm.AllowListPolicySet),
+    ObjectType.POLICY_SET: (
+        dm.RedirectPolicySet,
+        dm.AllowListPolicySet,
+        dm.RewritePolicySet,
+        dm.RespondPolicySet,
+        dm.ErrorPagesPolicySet,
+        dm.RateLimitPolicySet,
+        dm.AccessPolicySet,
+        dm.JwtPolicySet,
+        dm.ClientCertPolicySet,
+        dm.DirectoryPolicySet,
+    ),
     ObjectType.ROUTING_PROFILE: (dm.VrrpProfile, dm.BgpProfile),
 }
 OBJECT_APIS: dict[ObjectType, ObjectApi] = {t: ObjectApi(m) for t, m in OBJECT_MODELS.items()}

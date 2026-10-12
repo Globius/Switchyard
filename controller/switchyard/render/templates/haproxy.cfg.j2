@@ -5,6 +5,9 @@
 global
     log /dev/log local0
     maxconn {{ maxconn }}
+{% if stick_counters %}
+    tune.stick-counters {{ stick_counters }}
+{% endif %}
     stats socket /run/haproxy/admin.sock mode 660 level admin expose-fd listeners
     ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
     ssl-default-server-options ssl-min-ver TLSv1.2

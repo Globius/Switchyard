@@ -77,3 +77,16 @@ Date: YYYY-MM-DD
 | [0123](0123-tenant-log-api.md) | Tenant-wide request log API | Accepted |
 | [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
+| [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
+| [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
+| [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
+| [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
+| [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
+| [0130](0130-auth-service-architecture.md) | Authentication service: oauth2-proxy, loopback re-entry, closed by default | Accepted |
+| [0131](0131-access-rules-and-authorization.md) | Access rules and authorization | Accepted |
+| [0132](0132-identity-headers.md) | Identity headers to the origin | Accepted |
+| [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
+| [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
+| [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
+| [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
+| [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |

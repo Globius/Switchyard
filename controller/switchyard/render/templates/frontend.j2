@@ -6,11 +6,20 @@ frontend vs_{{ f.name }}
     option {{ "httplog" if f.mode == "http" else "tcplog" }}
 {% if f.mode == "http" %}
     option forwardfor
+{% if f.tarpit_s %}
+    timeout tarpit {{ f.tarpit_s }}s
+{% endif %}
 {% endif %}
 {% for rule in f.connection_rules %}
     {{ rule }}
 {% endfor %}
+{% for rule in f.error_rules %}
+    {{ rule }}
+{% endfor %}
 {% for rule in f.request_rules %}
+    {{ rule }}
+{% endfor %}
+{% for rule in f.response_rules %}
     {{ rule }}
 {% endfor %}
 {% for rule in f.routing_rules %}

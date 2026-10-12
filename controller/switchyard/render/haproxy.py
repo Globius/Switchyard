@@ -8,13 +8,14 @@ environment or the network.
 Files produced (paths are relative to ``/etc/switchyard/`` on the SE, the only directory the agent
 and the Data Plane API write to):
 
-=============================== ===================================================================
-``haproxy/haproxy.cfg``         global, defaults, one frontend per service, one backend per pool
-``certs/<vs>.crtlist``          certificates and their SNI filters for a service's TLS ports
-``haproxy/maps/<vs>-host.map``  exact host -> backend, for host-only routes
-``haproxy/maps/<vs>-wild.map``  ``*.`` wildcard host regex -> backend, for host-only routes
-``haproxy/lists/<policy>.cidr`` source networks of an allow-list policy set
-=============================== ===================================================================
+================================= =================================================================
+``haproxy/haproxy.cfg``           global, defaults, one frontend per service, one backend per pool
+``certs/<vs>.crtlist``            certificates and their SNI filters for a service's TLS ports
+``haproxy/maps/<vs>-host.map``    exact host -> backend, for host-only routes
+``haproxy/maps/<vs>-wild.map``    ``*.`` wildcard host regex -> backend, for host-only routes
+``haproxy/lists/<policy>.cidr``   source networks of an allow-list policy set
+``haproxy/lists/<policy>-*.page`` bodies of fixed responses and error pages
+================================= =================================================================
 
 Certificate and key material is *not* rendered: ``crt-list`` entries point at
 ``/etc/switchyard/certs/<certificate-name>.pem``, which the agent writes from OpenBao.
@@ -24,13 +25,16 @@ detection compares it with what an SE reports. The crt-list lives beside the cer
 the Data Plane API stores both in one directory, and object names contain no dots because the API
 rewrites dots in file names.
 
-Request handling order inside an HTTP frontend, which the output makes explicit:
+Request handling order inside an HTTP frontend, which the output makes explicit (``docs/render.md``,
+ADR 0100):
 
 1. connection filter (allow list), client-IP restoration, header hygiene;
 2. HTTP to HTTPS redirects, then policy-set redirects, then redirect routes;
-3. path-qualified pool routes, in route ``order``;
-4. host-only pool routes: exact host first, then single-label wildcard hosts;
-5. the default pool, if any.
+3. fixed responses (``respond`` policy sets);
+4. request rewrites (``rewrite`` policy sets, request phase);
+5. conditional pool routes (a route with more than a host), in route ``order``;
+6. host-only pool routes: exact host first, then single-label wildcard hosts;
+7. the default pool, if any; response rewrites run on the way out.
 """
 
 import hashlib
@@ -43,9 +47,11 @@ from uuid import UUID
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
 from switchyard.domain import models as dm
-from switchyard.domain.snapshot import Snapshot, ensure_valid
+from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
 from switchyard.render import escape as esc
+from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
+from switchyard.render.tokens import key_file
 
 ROOT_DIR = "/etc/switchyard"
 BASE_DIR = "/etc/switchyard/haproxy"
@@ -227,10 +233,46 @@ def _allow_list(policy: object) -> dm.AllowListPolicySet:
     return policy
 
 
-def _redirect_set(policy: object) -> dm.RedirectPolicySet:
-    if not isinstance(policy, dm.RedirectPolicySet):
-        raise RenderError("expected a redirect policy set")
-    return policy
+#: Sample fetches behind the header variables (the fixed list; users never write expressions).
+_VARIABLES = {
+    dm.HeaderVariable.CLIENT_IP: "src",
+    dm.HeaderVariable.CLIENT_PORT: "src_port",
+    dm.HeaderVariable.HOST: "var(txn.host)",
+    dm.HeaderVariable.VIP: "dst",
+    dm.HeaderVariable.VIP_PORT: "dst_port",
+    dm.HeaderVariable.METHOD: "method",
+    dm.HeaderVariable.TLS_VERSION: "ssl_fc_protocol",
+    dm.HeaderVariable.TLS_CIPHER: "ssl_fc_cipher",
+    dm.HeaderVariable.TLS_SNI: "ssl_fc_sni",
+    dm.HeaderVariable.REQUEST_ID: "uuid",
+}
+#: Back-reference to the first regex group in a ``replace-path`` replacement (single-quoted, so
+#: HAProxy passes the backslash through unchanged).
+_GROUP_1 = "\\1"
+#: Header comparisons as ACL match flags.
+_HEADER_FLAGS = {
+    dm.HeaderOp.EQUALS: "str",
+    dm.HeaderOp.PREFIX: "beg",
+    dm.HeaderOp.SUFFIX: "end",
+    dm.HeaderOp.CONTAINS: "sub",
+}
+#: The request came back from the authentication proxy on the loopback bind (ADR 0130).
+LOOP_ON = "{ var(txn.sy_loop) -m bool }"
+LOOP_OFF = "!{ var(txn.sy_loop) -m bool }"
+#: Headers the authentication proxy sets for the engine; never sent to the origin (ADR 0132).
+PROXY_HEADERS = (
+    "X-Forwarded-User",
+    "X-Forwarded-Email",
+    "X-Forwarded-Groups",
+    "X-Forwarded-Preferred-Username",
+    "X-Forwarded-Access-Token",
+)
+#: Tells the second hop that the first saw a verified client certificate (ADR 0138).
+DEVICE_HEADER = "X-Sy-Device"
+#: Carries the access decision from the first hop to the loopback hop.
+ACCESS_HEADER = "X-Sy-Access"
+#: Frontend rules by stage, filled while the policy sets of a service are rendered.
+_Stages = tuple[list[str], list[str], list[str], list[str]]
 
 
 def _is_wild(host: str) -> bool:
@@ -285,6 +327,10 @@ class _Renderer:
         self.warnings: list[str] = []
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
+        self.limit_backends: list[dict[str, Any]] = []
+        self.instances = {i.service.id: i for i in auth_instances(snapshot, self.group.id)}
+        self.guard = ""
+        self.stick_counters = 0
 
     def render(self) -> RenderResult:
         services = sorted(
@@ -299,6 +345,7 @@ class _Renderer:
                 self.pool_modes[pool_id] = mode
             frontends.append(self._frontend(svc, mode))
         backends = [self._backend(self.pools[pid], mode) for pid, mode in self.pool_modes.items()]
+        backends += self.limit_backends
         backends.sort(key=lambda b: b["name"])
         template = _ENV.get_template("haproxy.cfg.j2")
 
@@ -309,6 +356,7 @@ class _Renderer:
                 frontends=frontends,
                 backends=backends,
                 exporter=self._exporter(),
+                stick_counters=self.stick_counters if self.stick_counters > 3 else None,
                 fingerprint=fingerprint,
             )
 
@@ -371,12 +419,18 @@ class _Renderer:
         if any(p.tls for p in ports):
             self._crt_list(svc, name)
         allow = _allow_list(self.policies[svc.allow_list_id]) if svc.allow_list_id else None
+        inst = self.instances.get(svc.id) if mode == "http" else None
+        self.guard = LOOP_OFF if inst is not None else ""
         connection_rules: list[str] = []
         if allow is not None:
             self.files[f"haproxy/lists/{esc.ident(allow.name)}.cidr"] = self._allow_list_text(allow)
             if svc.enforce_allow_list:
                 lst = self._list_path(allow)
-                connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
+                # the loopback hop of a login comes from the proxy, not from an allowed client
+                exempt = " !{ dst 127.0.0.1 }" if inst is not None else ""
+                connection_rules.append(
+                    f"tcp-request session reject if !{{ src -f {lst} }}{exempt}"
+                )
         deny = _allow_list(self.policies[svc.deny_list_id]) if svc.deny_list_id else None
         if deny is not None:
             self.files[f"haproxy/lists/{esc.ident(deny.name)}.cidr"] = self._allow_list_text(deny)
@@ -385,20 +439,41 @@ class _Renderer:
                     f"tcp-request session reject if {{ src -f {self._list_path(deny)} }}"
                 )
         request_rules: list[str] = []
+        tarpit_s: int | None = None
+        response_rules: list[str] = []
+        error_rules: list[str] = []
         routing_rules: list[str] = []
         if mode == "http":
-            request_rules = self._request_rules(svc, ports, allow, deny)
+            request_rules = self._request_rules(svc, ports, allow, deny, inst)
+            tarpit_s = self._tarpit(svc)
+            response_rules = self._policy_stages(svc)[3]
+            error_rules = self._error_lines(svc)
             if any(p.port == 80 and not p.tls for p in ports):
                 # First, before redirects and routes: the CA's request must reach the answer.
                 request_rules.insert(0, _acme_rule())
                 self.files[ACME_MAP_FILE] = _ACME_MAP_TEXT
             routing_rules = self._routing_rules(svc, name)
+            if inst is not None:
+                routing_rules = self._auth_routing(inst) + routing_rules
+                self.limit_backends.append(
+                    {
+                        "name": inst.backend,
+                        "lines": ["mode http"],
+                        "servers": [f"server auth 127.0.0.1:{inst.auth_port}"],
+                    }
+                )
+        binds = [self._bind(svc, p, name, mode) for p in ports]
+        if inst is not None:
+            binds.append(f"bind 127.0.0.1:{inst.loop_port}")
         return {
             "name": name,
             "mode": mode,
-            "binds": [self._bind(svc, p, name, mode) for p in ports],
+            "binds": binds,
             "connection_rules": connection_rules,
             "request_rules": request_rules,
+            "response_rules": response_rules,
+            "error_rules": error_rules,
+            "tarpit_s": tarpit_s,
             "routing_rules": routing_rules,
             "default_backend": (
                 self._backend_name(svc.default_pool_id) if svc.default_pool_id else None
@@ -441,14 +516,455 @@ class _Renderer:
         nets = sorted(policy.cidrs, key=lambda n: (n.version, int(n.network_address), n.prefixlen))
         return "".join(f"{n}\n" for n in nets)
 
+    def _limit_rules(self, svc: dm.VirtualService) -> list[str]:
+        """Track and enforce the service's rate-limit rules; each rule gets a counter and a table.
+
+        The table is a dummy backend that only holds the stick table; the counter slot
+        (``track-sc<n>``) is the rule's position in the service, so rules never share state.
+        """
+        rules: list[str] = []
+        for slot, (policy, index, rule) in enumerate(rate_limit_rules(svc, self.policies)):
+            table = f"rl_{esc.ident(svc.name)}_{esc.ident(policy.name)}_{index}"
+            esc.ident(table)
+            if rule.key == "header":
+                key = f"req.hdr({esc.header_name(_need(rule.header_name, 'header name'))})"
+                table_type = "string len 64"
+            else:
+                key = "src"
+                table_type = "ipv6"
+            if rule.max_requests is not None:
+                store = f"http_req_rate({rule.period_s}s)"
+                check = f"{{ sc_http_req_rate({slot},{table}) gt {rule.max_requests} }}"
+                expire = max(rule.period_s, 60)
+                retry = f" hdr Retry-After {rule.period_s}"
+            else:
+                store = "conn_cur"
+                check = (
+                    f"{{ sc_conn_cur({slot},{table}) gt {_need(rule.max_concurrent, 'limit')} }}"
+                )
+                expire = 60
+                retry = ""
+            self.limit_backends.append(
+                {
+                    "name": table,
+                    "lines": [
+                        f"stick-table type {table_type} size {rule.table_size} "
+                        f"expire {expire}s store {store}"
+                    ],
+                    "servers": [],
+                }
+            )
+            self.stick_counters = max(self.stick_counters, slot + 1)
+            cond = self._cond(rule.match)
+            track = f"http-request track-sc{slot} {key} table {table}"
+            rules.append(track + (f" if {cond}" if cond else ""))
+            if rule.action == "deny":
+                rules.append(f"http-request return status {rule.deny_status}{retry} if {check}")
+            elif rule.action == "tarpit":
+                rules.append(f"http-request tarpit deny_status 429 if {check}")
+            else:
+                rules.append(f"http-request silent-drop if {check}")
+        return rules
+
+    def _tarpit(self, svc: dm.VirtualService) -> int | None:
+        delays = {
+            r.tarpit_s for _, _, r in rate_limit_rules(svc, self.policies) if r.action == "tarpit"
+        }
+        return min(delays) if delays else None
+
+    def _policy_stages(self, svc: dm.VirtualService) -> _Stages:
+        """Rules of the attached policy sets: redirects, responses, request and response rewrites.
+
+        Sets apply in attachment order within their kind; the kinds run in the stage order of
+        ``docs/render.md``, not in attachment order across kinds (ADR 0100).
+        """
+        redirects: list[str] = []
+        responses: list[str] = []
+        rewrites: list[str] = []
+        outgoing: list[str] = []
+        flags: list[str] = []
+        for pid in svc.policy_set_ids:
+            policy = self.policies[pid]
+            if isinstance(policy, dm.RedirectPolicySet):
+                for rule in policy.rules:
+                    redirects.append(self._redirect_line(rule.match, rule.redirect))
+            elif isinstance(policy, dm.RespondPolicySet):
+                for index, response in enumerate(policy.rules, start=1):
+                    responses.append(self._response_line(policy, index, response))
+            elif isinstance(policy, dm.RewritePolicySet):
+                for rewrite in policy.rules:
+                    cond = self._cond(rewrite.match)
+                    if rewrite.phase == "request":
+                        rewrites += self._rewrite_lines(rewrite, cond)
+                        continue
+                    if not cond:
+                        outgoing += self._rewrite_lines(rewrite, cond)
+                        continue
+                    # The request attributes are gone by the time a response rule runs, so the
+                    # match is evaluated with the request and remembered in a transaction flag.
+                    flag = f"txn.sy_m{len(flags) + 1}"
+                    flags.append(flag)
+                    rewrites.append(f"http-request set-var({flag}) bool(true) if {cond}")
+                    outgoing += self._rewrite_lines(rewrite, f"{{ var({flag}) -m bool }}")
+        return redirects, responses, rewrites, outgoing
+
+    def _cond(self, match: dm.RouteMatch) -> str:
+        """The conditions of a match plus the stage guard (not on the loopback hop of a login)."""
+        return " ".join([*self._conditions(match), *([self.guard] if self.guard else [])])
+
+    def _redirect_line(self, match: dm.RouteMatch, redirect: dm.RedirectAction) -> str:
+        cond = self._cond(match)
+        location = esc.location(redirect.location)
+        return f"http-request redirect location {location} code {redirect.code} if {cond}"
+
+    def _page(self, policy: dm.TenantOwned, tag: str, body: str) -> str:
+        """Store a response body as a general-storage file (beside the lists); return its path."""
+        name = f"{esc.ident(policy.name)}-{tag}.page"
+        self.files[f"haproxy/lists/{name}"] = body if body.endswith("\n") else body + "\n"
+        return f"{BASE_DIR}/lists/{name}"
+
+    def _response_line(self, policy: dm.RespondPolicySet, index: int, rule: dm.ResponseRule) -> str:
+        parts = [f"http-request return status {rule.status}"]
+        if rule.body is not None:
+            parts.append(f"content-type {_need(rule.content_type, 'content type')}")
+            parts.append(f"file {self._page(policy, f'r{index}', rule.body)}")
+        if rule.retry_after_s is not None:
+            parts.append(f"hdr Retry-After {rule.retry_after_s}")
+        cond = self._cond(rule.match)
+        return " ".join(parts) + (f" if {cond}" if cond else "")
+
+    def _error_lines(self, svc: dm.VirtualService) -> list[str]:
+        lines: dict[int, str] = {}
+        for pid in svc.policy_set_ids:
+            policy = self.policies[pid]
+            if isinstance(policy, dm.ErrorPagesPolicySet):
+                for page in policy.pages:
+                    path = self._page(policy, f"e{page.status}", page.body)
+                    lines[page.status] = (
+                        f"http-error status {page.status} content-type {page.content_type} "
+                        f"file {path}"
+                    )
+        return [lines[status] for status in sorted(lines)]
+
+    def _rewrite_lines(self, rule: dm.RewriteRule, cond: str) -> list[str]:
+        phase = "http-response" if rule.phase == "response" else "http-request"
+        suffix = f" if {cond}" if cond else ""
+        action = rule.action
+        if isinstance(action, dm.RemoveHeader):
+            return [f"{phase} del-header {esc.header_name(action.name)}{suffix}"]
+        if isinstance(action, dm.ReplacePrefix):
+            return self._replace_prefix(action, cond)
+        verb = "set-header" if isinstance(action, dm.SetHeader) else "add-header"
+        if action.variable is not None:
+            value = f'"%[{_VARIABLES[action.variable]}]"'
+        else:
+            value = esc.quoted(_need(action.value, "header value"))
+        return [f"{phase} {verb} {esc.header_name(action.name)} {value}{suffix}"]
+
+    @staticmethod
+    def _replace_prefix(action: dm.ReplacePrefix, cond: str) -> list[str]:
+        """``replace-path`` on path-segment boundaries; ``/`` as target strips the prefix.
+
+        The regex and the replacement are single-quoted (nothing inside is expanded) and are
+        built from validated path characters, with ``.`` and ``+`` written as classes.
+        """
+        source = esc.path_regex(action.from_prefix)
+        target = esc.path_text(action.to_prefix)
+        suffix = f" if {cond}" if cond else ""
+        if action.to_prefix == "/":
+            exact = f"{{ path {esc.arg(action.from_prefix)} }}"
+            guard = f" if {cond} {exact}" if cond else f" if {exact}"
+            return [
+                f"http-request set-path /{guard}",
+                f"http-request replace-path '^{source}(/.*)$' '{_GROUP_1}'{suffix}",
+            ]
+        return [f"http-request replace-path '^{source}(/.*)?$' '{target}{_GROUP_1}'{suffix}"]
+
+    def _jwt_rules(self, svc: dm.VirtualService) -> list[str]:
+        """Validate bearer tokens (stage 4b, ADR 0135); the first rule that matches decides."""
+        rules: list[str] = []
+        tok = "var(txn.sy_jtok)"
+        count = 0
+        for pid in svc.policy_set_ids:
+            policy = self.policies[pid]
+            if not isinstance(policy, dm.JwtPolicySet):
+                continue
+            for index, rule in enumerate(policy.rules, start=1):
+                if not rules:
+                    rules += [
+                        f"http-request set-var(txn.sy_jtok) http_auth_bearer{self._if()}",
+                        f"http-request set-var(txn.sy_jnow) date{self._if()}",
+                    ]
+                count += 1
+                flag = f"txn.sy_j{count}"
+                match = self._conditions(rule.match)
+                fresh = "!{ var(txn.sy_jdone) -m found }"
+                base = " ".join([*match, *([self.guard] if self.guard else []), fresh])
+                claims = [
+                    f"{{ {tok},jwt_payload_query('$.iss') -m str {esc.issuer(rule.issuer)} }}"
+                ]
+                if rule.audiences:
+                    alt = "|".join(sorted(esc.audience_regex(a) for a in rule.audiences))
+                    claims.append(
+                        f"{{ {tok},jwt_payload_query('$.aud') -m reg '(^|\")({alt})(\"|$)' }}"
+                    )
+                for scope in sorted(rule.required_scopes):
+                    claims.append(
+                        f"{{ {tok},jwt_payload_query('$.scope') -m reg "
+                        f"'(^| ){esc.group_regex(scope)}( |$)' }}"
+                    )
+                claims.append(
+                    f"{{ {tok},jwt_payload_query('$.exp','int'),sub(txn.sy_jnow),"
+                    f"add({rule.leeway_s}) -m int 1: }}"
+                )
+                if rule.subject_header:
+                    name = esc.header_name(rule.subject_header)
+                    rules.append(f"http-request del-header {name}{self._if()}")
+                for key_no, key in enumerate(rule.keys, start=1):
+                    path = key_file(policy.name, index, key_no)
+                    conds = [base, f"!{{ var({flag}) -m found }}"]
+                    conds.append(f"{{ {tok},jwt_verify({key.alg},{esc.arg(path)}) -m int 1 }}")
+                    if key.kid:
+                        conds.append(
+                            f"{{ {tok},jwt_header_query('$.kid') -m str {esc.arg(key.kid)} }}"
+                        )
+                    conds += claims
+                    rules.append(f"http-request set-var({flag}) int(1) if {' '.join(conds)}")
+                rules.append(
+                    f"http-request return status 401 hdr WWW-Authenticate Bearer "
+                    f"if {base} !{{ var({flag}) -m found }}"
+                )
+                if rule.subject_header:
+                    name = esc.header_name(rule.subject_header)
+                    rules.append(
+                        f"http-request set-var(txn.sy_jsub{count}) "
+                        f"{tok},jwt_payload_query('$.sub') if {{ var({flag}) -m found }}"
+                    )
+                    rules.append(
+                        f'http-request set-header {name} "%[var(txn.sy_jsub{count})]" '
+                        f"if {{ var({flag}) -m found }}"
+                    )
+                rules.append(f"http-request set-var(txn.sy_jdone) int(1) if {base}")
+        return rules
+
+    def _cert_rules(self, svc: dm.VirtualService) -> list[str]:
+        """Use the TLS client certificate as the identity (stage 4b, ADR 0136)."""
+        rules: list[str] = []
+        policy = next(
+            (
+                p
+                for pid in svc.policy_set_ids
+                if isinstance(p := self.policies[pid], dm.ClientCertPolicySet)
+            ),
+            None,
+        )
+        if policy is None:
+            return rules
+        name = esc.ident(policy.name)
+        for header in (policy.user_header, policy.groups_header):
+            if header:
+                rules.append(f"http-request del-header {esc.header_name(header)}{self._if()}")
+        used = "{ ssl_c_used }"
+        guard = [self.guard] if self.guard else []
+        by_kind: dict[str, dict[str, str]] = {"cn": {}, "sha1": {}}
+        for ident in policy.identities:
+            by_kind[ident.by][esc.cert_key(ident.value, ident.by)] = (
+                esc.cert_label(ident.user)
+                + "|"
+                + ",".join(esc.group_label(g) for g in ident.groups)
+            )
+        for kind, fetch in (("sha1", "ssl_c_sha1,hex,lower"), ("cn", "ssl_c_s_dn(cn)")):
+            if by_kind[kind]:
+                path = f"haproxy/maps/{name}-cert{kind}.map"
+                self.files[path] = _map_text(by_kind[kind])
+                unset = "!{ var(txn.sy_cid) -m found }"
+                cond = " ".join([used, unset, *guard])
+                lookup = f"{fetch},map({BASE_DIR}/maps/{name}-cert{kind}.map)"
+                rules.append(f"http-request set-var(txn.sy_cid) {lookup} if {cond}")
+        if any(by_kind.values()):
+            rules.append(
+                "http-request set-var(txn.sy_cuser) var(txn.sy_cid),field(1,'|') "
+                "if { var(txn.sy_cid) -m found }"
+            )
+            rules.append(
+                "http-request set-var(txn.sy_cgrp) var(txn.sy_cid),field(2,'|') "
+                "if { var(txn.sy_cid) -m found }"
+            )
+        for rule in policy.rules:
+            base = " ".join(
+                [*self._conditions(rule.match), *guard, "!{ var(txn.sy_cdone) -m found }"]
+            )
+            if rule.mode == "valid":
+                test = f"!{used}"
+            elif rule.mode == "identity":
+                test = "!{ var(txn.sy_cid) -m found }"
+            else:
+                regex = "|".join(sorted(esc.group_regex(g) for g in rule.groups))
+                test = f"!{{ var(txn.sy_cgrp) -m reg '(^|,)({regex})(,|$)' }}"
+            rules.append(f"http-request return status 403 if {base} {test}")
+            rules.append(f"http-request set-var(txn.sy_cdone) int(1) if {base}")
+        if policy.user_header:
+            rules.append(
+                f"http-request set-header {esc.header_name(policy.user_header)} "
+                f'"%[var(txn.sy_cuser)]" if {{ var(txn.sy_cuser) -m found }}{self._g()}'
+            )
+        if policy.groups_header:
+            rules.append(
+                f"http-request set-header {esc.header_name(policy.groups_header)} "
+                f'"%[var(txn.sy_cgrp)]" if {{ var(txn.sy_cgrp) -m found }}{self._g()}'
+            )
+        return rules
+
+    def _if(self) -> str:
+        """`` if <guard>`` for lines that need only the stage guard (empty without one)."""
+        return f" if {self.guard}" if self.guard else ""
+
+    def _g(self) -> str:
+        """The stage guard as a trailing condition block (empty when there is none)."""
+        return f" {self.guard}" if self.guard else ""
+
+    @staticmethod
+    def _loop_entry(inst: AuthInstance) -> list[str]:
+        """Recognise the loopback hop of a login and recover the real client address on it."""
+        return [
+            "http-request set-var(txn.sy_loop) bool(true) "
+            f"if {{ dst 127.0.0.1 }} {{ dst_port {inst.loop_port} }}",
+            f"http-request set-src hdr(X-Forwarded-For) if {LOOP_ON}",
+        ]
+
+    @staticmethod
+    def _identity_names(inst: AuthInstance) -> list[str]:
+        """Headers a client may never send: ours, and the proxy's own (ADR 0132)."""
+        ours = inst.policy.identity_headers
+        names = [n for n in (ours.user, ours.email, ours.groups, ours.token) if n]
+        return [*names, *PROXY_HEADERS, ACCESS_HEADER, DEVICE_HEADER]
+
+    def _auth_hygiene(self, inst: AuthInstance) -> list[str]:
+        """Drop client-supplied identity headers; only the loopback hop may carry them."""
+        return [
+            f"http-request del-header {esc.header_name(name)} if {LOOP_OFF}"
+            for name in self._identity_names(inst)
+        ]
+
+    def _access_rules(self, inst: AuthInstance) -> list[str]:
+        """Decide what each request needs, route it through the proxy, enforce it on return.
+
+        On the first hop ``txn.sy_ad`` becomes 1 (public) or ``k + 2`` (rule *k* needs a login; the
+        default needs ``len(rules) + 2``). The value travels to the loopback hop in a header that
+        client requests cannot set (it is removed in the hygiene stage), where the groups and
+        e-mail checks run on the identity the proxy vouched for.
+        """
+        policy = inst.policy
+        rules: list[str] = []
+        fresh = "!{ var(txn.sy_ad) -m found }"
+        for k, rule in enumerate(policy.rules):
+            value = 1 if rule.mode == "public" else k + 2
+            conds = " ".join([fresh, *self._conditions(rule.match), LOOP_OFF])
+            rules.append(f"http-request set-var(txn.sy_ad) int({value}) if {conds}")
+        default = 1 if policy.default_mode == "public" else len(policy.rules) + 2
+        rules.append(f"http-request set-var(txn.sy_ad) int({default}) if {fresh} {LOOP_OFF}")
+        rules.append(
+            f'http-request set-header {ACCESS_HEADER} "%[var(txn.sy_ad)]" '
+            f"if {LOOP_OFF} {{ var(txn.sy_ad) -m int 2: }}"
+        )
+        # second hop: read the decision back, then check the identity
+        rules.append(
+            f"http-request return status 403 if {LOOP_ON} !{{ req.hdr({ACCESS_HEADER}) -m found }}"
+        )
+        rules.append(f"http-request set-var(txn.sy_ad) req.hdr_val({ACCESS_HEADER}) if {LOOP_ON}")
+        need = f"{LOOP_ON} {{ var(txn.sy_ad) -m int 2: }}"
+        rules.append(
+            f"http-request return status 401 if {need} !{{ req.hdr(X-Forwarded-User) -m found }}"
+        )
+        for k, rule in enumerate(policy.rules):
+            if rule.mode == "groups":
+                regex = "|".join(sorted(esc.group_regex(g) for g in rule.groups))
+                test = f"!{{ req.fhdr(X-Forwarded-Groups) -m reg '(^|,)({regex})(,|$)' }}"
+            elif rule.mode == "email_domains":
+                regex = "|".join(
+                    sorted(esc.hostname(d).replace(".", "[.]") for d in rule.email_domains)
+                )
+                test = f"!{{ req.hdr(X-Forwarded-Email) -m reg -i '@({regex})$' }}"
+            else:
+                continue
+            here = f"{LOOP_ON} {{ var(txn.sy_ad) -m int {k + 2} }}"
+            rules.append(f"http-request return status 403 if {here} {test}")
+        rules += self._posture_rules(policy)
+        ours = policy.identity_headers
+        for name, source in (
+            (ours.user, "X-Forwarded-User"),
+            (ours.email, "X-Forwarded-Email"),
+            (ours.groups, "X-Forwarded-Groups"),
+        ):
+            if name:
+                rules.append(
+                    f'http-request set-header {esc.header_name(name)} "%[req.fhdr({source})]" '
+                    f"if {LOOP_ON}"
+                )
+        if ours.token:
+            rules.append(
+                f"http-request set-header {esc.header_name(ours.token)} "
+                f"\"%[req.hdr(Authorization),regsub('^Bearer ',)]\" if {LOOP_ON}"
+            )
+        if ours.token or any(r.posture and r.posture.claims for r in policy.rules):
+            rules.append(f"http-request del-header Authorization if {LOOP_ON}")
+        rules += [
+            f"http-request del-header {n} if {LOOP_ON}"
+            for n in (*PROXY_HEADERS, ACCESS_HEADER, DEVICE_HEADER)
+        ]
+        return rules
+
+    @staticmethod
+    def _posture_rules(policy: dm.AccessPolicySet) -> list[str]:
+        """Device conditions on the second hop: the client certificate flag and ID-token claims."""
+        rules: list[str] = []
+        if any(r.posture and r.posture.device_certificate for r in policy.rules):
+            rules.append(
+                f"http-request set-header {DEVICE_HEADER} 1 if {LOOP_OFF} {{ ssl_c_used }}"
+            )
+        if any(r.posture and r.posture.claims for r in policy.rules):
+            rules.append(f"http-request set-var(txn.sy_idt) http_auth_bearer if {LOOP_ON}")
+        for k, rule in enumerate(policy.rules):
+            if rule.posture is None:
+                continue
+            here = f"{LOOP_ON} {{ var(txn.sy_ad) -m int {k + 2} }}"
+            if rule.posture.device_certificate:
+                test = f"!{{ req.hdr({DEVICE_HEADER}) -m str 1 }}"
+                rules.append(f"http-request return status 403 if {here} {test}")
+            for claim in rule.posture.claims:
+                fetch = f"var(txn.sy_idt),jwt_payload_query('$.{claim.name}')"
+                if claim.op == "present":
+                    test = f"!{{ {fetch} -m found }}"
+                elif claim.op == "true":
+                    test = f"!{{ {fetch} -m str true }}"
+                elif claim.op == "equals":
+                    test = f"!{{ {fetch} -m str {esc.quoted(claim.value or '')} }}"
+                else:
+                    options = " ".join(esc.quoted(v) for v in sorted(claim.values))
+                    test = f"!{{ {fetch} -m str {options} }}"
+                rules.append(f"http-request return status 403 if {here} {test}")
+        return rules
+
+    @staticmethod
+    def _auth_routing(inst: AuthInstance) -> list[str]:
+        """Send login endpoints and requests that need a login to the proxy (first hop only)."""
+        prefix = esc.arg(inst.policy.auth_path)
+        return [
+            f"use_backend {inst.backend} if {LOOP_OFF} {{ path_beg {prefix}/ }}",
+            f"use_backend {inst.backend} if {LOOP_OFF} {{ var(txn.sy_ad) -m int 2: }}",
+        ]
+
     def _request_rules(
         self,
         svc: dm.VirtualService,
         ports: list[dm.VsPort],
         allow: dm.AllowListPolicySet | None,
         deny: dm.AllowListPolicySet | None = None,
+        inst: AuthInstance | None = None,
     ) -> list[str]:
         rules: list[str] = []
+        if inst is not None:
+            rules += self._loop_entry(inst)
         # Client address and header hygiene. The trusted flag is computed first because
         # ``set-src`` changes what ``src`` means for every later rule.
         if allow is not None and svc.restore_client_ip_header:
@@ -468,8 +984,8 @@ class _Renderer:
             )
         rules += [
             "http-request del-header X-Forwarded-For",
-            "http-request set-header X-Forwarded-Proto https if { ssl_fc }",
-            "http-request set-header X-Forwarded-Proto http if !{ ssl_fc }",
+            f"http-request set-header X-Forwarded-Proto https if {{ ssl_fc }}{self._g()}",
+            f"http-request set-header X-Forwarded-Proto http if !{{ ssl_fc }}{self._g()}",
             "http-request set-var(txn.host) req.hdr(host),field(1,:),lower",
         ]
         for port in ports:
@@ -479,24 +995,30 @@ class _Renderer:
                     f'http-request redirect prefix "https://%[var(txn.host)]{suffix}" code 301 '
                     f"if {{ dst_port {port.port} }}"
                 )
-        for match, redirect in self._redirects(svc):
-            cond = " ".join(self._conditions(match))
-            location = esc.location(redirect.location)
-            rules.append(
-                f"http-request redirect location {location} code {redirect.code} if {cond}"
-            )
-        return rules
-
-    def _redirects(self, svc: dm.VirtualService) -> list[tuple[dm.RouteMatch, dm.RedirectAction]]:
-        out: list[tuple[dm.RouteMatch, dm.RedirectAction]] = []
-        for pid in svc.policy_set_ids:
-            out += [(r.match, r.redirect) for r in _redirect_set(self.policies[pid]).rules]
+        if inst is not None:
+            rules += self._auth_hygiene(inst)
+        rules += self._limit_rules(svc)
+        redirects, responses, rewrites, _ = self._policy_stages(svc)
+        rules += redirects
         ordered = sorted(enumerate(svc.routes), key=lambda ir: (ir[1].order, ir[0]))
-        out += [(r.match, r.redirect) for _, r in ordered if r.redirect is not None]
-        return out
+        rules += [
+            self._redirect_line(r.match, r.redirect) for _, r in ordered if r.redirect is not None
+        ]
+        rules += responses
+        rules += self._jwt_rules(svc)
+        rules += self._cert_rules(svc)
+        rules += rewrites
+        if inst is not None:
+            rules += self._access_rules(inst)
+        return rules
 
     @staticmethod
     def _conditions(match: dm.RouteMatch) -> list[str]:
+        """The ACL conditions of a match, ANDed (an empty match gives none).
+
+        Header and query operands are double-quoted after validation; the wildcard regexes are
+        single-quoted so ``$`` is never expanded.
+        """
         conds: list[str] = []
         if match.host:
             if _is_wild(match.host):
@@ -508,12 +1030,38 @@ class _Renderer:
             conds.append(f"{{ path_beg {esc.arg(match.path_prefix)} }}")
         if match.path_exact:
             conds.append(f"{{ path {esc.arg(match.path_exact)} }}")
+        if match.methods:
+            conds.append("{ method " + " ".join(sorted(m.value for m in match.methods)) + " }")
+        for header in match.headers:
+            fetch = f"req.hdr({esc.header_name(header.name)})"
+            if header.op is dm.HeaderOp.PRESENT:
+                conds.append(f"{{ {fetch} -m found }}")
+            elif header.op is dm.HeaderOp.ABSENT:
+                conds.append(f"!{{ {fetch} -m found }}")
+            else:
+                value = esc.quoted(_need(header.value, "header value"))
+                conds.append(f"{{ {fetch} -m {_HEADER_FLAGS[header.op]} {value} }}")
+        for param in match.query:
+            fetch = f"url_param({esc.query_param(param.name)})"
+            if param.op is dm.QueryOp.PRESENT:
+                conds.append(f"{{ {fetch} -m found }}")
+            else:
+                conds.append(f"{{ {fetch} -m str {esc.quoted(_need(param.value, 'value'))} }}")
+        if match.source_cidrs:
+            nets = sorted(match.source_cidrs, key=lambda n: (n.version, int(n.network_address)))
+            conds.append("{ src " + " ".join(str(n) for n in nets) + " }")
+        if match.sni:
+            if _is_wild(match.sni):
+                regex = _quote_regex(esc.wildcard_regex(match.sni))
+                conds.append(f"{{ ssl_fc_sni -m reg {regex} }}")
+            else:
+                conds.append(f"{{ ssl_fc_sni -m str {esc.hostname(match.sni)} }}")
         return conds
 
     def _routing_rules(self, svc: dm.VirtualService, name: str) -> list[str]:
         rules: list[str] = []
         pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_id is not None]
-        path_routes = [(i, r) for i, r in pool_routes if r.match.path_prefix or r.match.path_exact]
+        path_routes = [(i, r) for i, r in pool_routes if not r.match.is_host_only]
         for _, route in sorted(path_routes, key=lambda ir: (ir[1].order, ir[0])):
             cond = " ".join(self._conditions(route.match))
             backend = self._backend_name(_need(route.pool_id, "route pool"))
@@ -522,7 +1070,7 @@ class _Renderer:
         wild: dict[str, str] = {}
         for _, route in pool_routes:
             host = route.match.host
-            if host is None or route.match.path_prefix or route.match.path_exact:
+            if host is None or not route.match.is_host_only:
                 continue
             target = self._backend_name(_need(route.pool_id, "route pool"))
             if _is_wild(host):

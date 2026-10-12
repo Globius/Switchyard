@@ -17,6 +17,7 @@ Example:
 
 import enum
 import ipaddress
+import re
 from datetime import datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
@@ -36,6 +37,21 @@ UrlPath = Annotated[str, AfterValidator(v.validate_path)]
 Location = Annotated[str, AfterValidator(v.validate_location)]
 HeaderName = Annotated[str, AfterValidator(v.validate_header_name)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
+HeaderValue = Annotated[str, AfterValidator(v.validate_header_value)]
+QueryParam = Annotated[str, AfterValidator(v.validate_query_param)]
+Body = Annotated[str, AfterValidator(v.validate_body)]
+Issuer = Annotated[str, AfterValidator(v.validate_issuer)]
+ClaimName = Annotated[str, AfterValidator(v.validate_claim_name)]
+CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
+ClientId = Annotated[str, AfterValidator(v.validate_client_id)]
+GroupName = Annotated[str, AfterValidator(v.validate_group_name)]
+PublicKeyPem = Annotated[str, AfterValidator(v.validate_public_key_pem)]
+CertName = Annotated[str, AfterValidator(v.validate_cert_name)]
+Dn = Annotated[str, AfterValidator(v.validate_dn)]
+LdapFilter = Annotated[str, AfterValidator(v.validate_ldap_filter)]
+LdapAttr = Annotated[str, AfterValidator(v.validate_ldap_attr)]
+EmailAddress = Annotated[str, AfterValidator(v.validate_email_address)]
+CertPem = Annotated[str, AfterValidator(v.validate_cert_pem)]
 CountryCode = Annotated[str, AfterValidator(v.validate_country_code)]
 DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
@@ -319,23 +335,130 @@ class RedirectAction(Model):
     code: RedirectCode = 301
 
 
+class HttpMethod(enum.StrEnum):
+    """HTTP request methods a match can name."""
+
+    GET = "GET"
+    HEAD = "HEAD"
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
+    OPTIONS = "OPTIONS"
+
+
+class HeaderOp(enum.StrEnum):
+    """How a header match compares: presence, or a literal comparison of the value."""
+
+    PRESENT = "present"
+    ABSENT = "absent"
+    EQUALS = "equals"
+    PREFIX = "prefix"
+    SUFFIX = "suffix"
+    CONTAINS = "contains"
+
+
+class HeaderMatch(Model):
+    """Match a request header. ``value`` is required for the comparisons and forbidden otherwise.
+
+    Example:
+        >>> HeaderMatch(name="X-Env", op="equals", value="canary").op
+        <HeaderOp.EQUALS: 'equals'>
+    """
+
+    name: HeaderName
+    op: HeaderOp = HeaderOp.EQUALS
+    value: HeaderValue | None = None
+
+    @model_validator(mode="after")
+    def _value_for_op(self) -> Self:
+        has_value = self.op not in (HeaderOp.PRESENT, HeaderOp.ABSENT)
+        if has_value and self.value is None:
+            raise ValueError(f"op {self.op.value} needs a value")
+        if not has_value and self.value is not None:
+            raise ValueError(f"op {self.op.value} takes no value")
+        return self
+
+
+class QueryOp(enum.StrEnum):
+    """How a query-parameter match compares."""
+
+    PRESENT = "present"
+    EQUALS = "equals"
+
+
+class QueryMatch(Model):
+    """Match a query-string parameter (``?name=value``)."""
+
+    name: QueryParam
+    op: QueryOp = QueryOp.EQUALS
+    value: HeaderValue | None = None
+
+    @model_validator(mode="after")
+    def _value_for_op(self) -> Self:
+        if self.op is QueryOp.EQUALS and self.value is None:
+            raise ValueError("op equals needs a value")
+        if self.op is QueryOp.PRESENT and self.value is not None:
+            raise ValueError("op present takes no value")
+        return self
+
+
 class RouteMatch(Model):
-    """Request match: an optional host (exact or ``*.`` wildcard) and an optional path."""
+    """Request match shared by routes and policy rules; every condition given must hold (AND).
+
+    Attributes:
+        host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).
+        path_prefix: Path starts with this.
+        path_exact: Path equals this. Not together with ``path_prefix``.
+        methods: Request method is one of these.
+        headers: Request header conditions, all of which must hold.
+        query: Query-string parameter conditions, all of which must hold.
+        source_cidrs: Client address is inside one of these networks (after client-IP restoration).
+        sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a
+            port without TLS.
+
+    Example:
+        >>> RouteMatch(methods=["GET"], path_prefix="/api").is_empty
+        False
+        >>> RouteMatch().is_empty
+        True
+    """
 
     host: HostPattern | None = None
     path_prefix: UrlPath | None = None
     path_exact: UrlPath | None = None
+    methods: tuple[HttpMethod, ...] = Field(default=(), max_length=7)
+    headers: tuple[HeaderMatch, ...] = Field(default=(), max_length=8)
+    query: tuple[QueryMatch, ...] = Field(default=(), max_length=8)
+    source_cidrs: tuple[IPNetwork, ...] = Field(default=(), max_length=16)
+    sni: HostPattern | None = None
 
     @model_validator(mode="after")
-    def _one_path(self) -> Self:
+    def _consistent(self) -> Self:
         if self.path_prefix is not None and self.path_exact is not None:
             raise ValueError("use either path_prefix or path_exact, not both")
+        if len(set(self.methods)) != len(self.methods):
+            raise ValueError("methods must be unique")
         return self
 
     @property
     def is_empty(self) -> bool:
-        """True when the match has no host and no path (matches every request)."""
-        return self.host is None and self.path_prefix is None and self.path_exact is None
+        """True when the match has no condition (it matches every request)."""
+        return not (
+            self.host
+            or self.path_prefix
+            or self.path_exact
+            or self.methods
+            or self.headers
+            or self.query
+            or self.source_cidrs
+            or self.sni
+        )
+
+    @property
+    def is_host_only(self) -> bool:
+        """True when the host is the only condition (routed through a map file)."""
+        return self.host is not None and self.model_copy(update={"host": None}).is_empty
 
 
 class VsRoute(Model):
@@ -415,7 +538,7 @@ class VirtualService(TenantOwned):
         routes: L7 routes (``http`` only).
         default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.
         certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.
-        policy_set_ids: Redirect policy sets, applied before routing, in order.
+        policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.
         allow_list_id: Allow-list policy set (for example the Cloudflare ranges).
         enforce_allow_list: Reject connections from sources outside the allow list.
         deny_list_id: Allow-list policy set whose networks are refused (for example a country or
@@ -795,4 +918,673 @@ class AllowListPolicySet(TenantOwned):
         return self
 
 
-PolicySet = Annotated[RedirectPolicySet | AllowListPolicySet, Field(discriminator="kind")]
+class HeaderVariable(enum.StrEnum):
+    """Per-request values a header action can carry, from a fixed list (no expressions)."""
+
+    CLIENT_IP = "client_ip"
+    CLIENT_PORT = "client_port"
+    HOST = "host"
+    VIP = "vip"
+    VIP_PORT = "vip_port"
+    METHOD = "method"
+    TLS_VERSION = "tls_version"
+    TLS_CIPHER = "tls_cipher"
+    TLS_SNI = "tls_sni"
+    REQUEST_ID = "request_id"
+
+
+class _HeaderAction(Model):
+    """Common part of the header actions: a name and exactly one of ``value`` and ``variable``."""
+
+    name: HeaderName
+    value: HeaderValue | None = None
+    variable: HeaderVariable | None = None
+
+    @model_validator(mode="after")
+    def _one_source(self) -> Self:
+        if (self.value is None) == (self.variable is None):
+            raise ValueError("a header action needs exactly one of value or variable")
+        return self
+
+
+class SetHeader(_HeaderAction):
+    """Set a header, replacing any existing values."""
+
+    type: Literal["set_header"] = "set_header"
+
+
+class AddHeader(_HeaderAction):
+    """Add a header, keeping any existing values."""
+
+    type: Literal["add_header"] = "add_header"
+
+
+class RemoveHeader(Model):
+    """Remove every value of a header."""
+
+    type: Literal["remove_header"] = "remove_header"
+    name: HeaderName
+
+
+class ReplacePrefix(Model):
+    """Replace a path prefix, on path-segment boundaries (request phase only).
+
+    ``/api`` to ``/v2`` turns ``/api`` into ``/v2`` and ``/api/x`` into ``/v2/x``; ``/apix`` is
+    left alone. A ``to_prefix`` of ``/`` strips the prefix (``/api/x`` becomes ``/x``, ``/api``
+    becomes ``/``).
+    """
+
+    type: Literal["replace_prefix"] = "replace_prefix"
+    from_prefix: UrlPath
+    to_prefix: UrlPath
+
+    @model_validator(mode="after")
+    def _no_trailing_slash(self) -> Self:
+        if self.from_prefix == "/" or self.from_prefix.endswith("/"):
+            raise ValueError("from_prefix must name a directory without a trailing slash")
+        if len(self.to_prefix) > 1 and self.to_prefix.endswith("/"):
+            raise ValueError("to_prefix must not end with a slash (use / to strip the prefix)")
+        return self
+
+
+RewriteAction = Annotated[
+    SetHeader | AddHeader | RemoveHeader | ReplacePrefix, Field(discriminator="type")
+]
+
+
+class RewriteRule(Model):
+    """Change a request (before routing) or a response (before it leaves) when ``match`` holds.
+
+    Attributes:
+        phase: ``request`` or ``response``. Response rules match on the request that was made.
+        match: Conditions; an empty match applies to every request.
+        action: What to change.
+    """
+
+    phase: Literal["request", "response"] = "request"
+    match: RouteMatch = RouteMatch()
+    action: RewriteAction
+
+    @model_validator(mode="after")
+    def _allowed(self) -> Self:
+        action = self.action
+        if isinstance(action, ReplacePrefix):
+            if self.phase != "request":
+                raise ValueError("replace_prefix is only valid in the request phase")
+            return self
+        name = action.name.lower()
+        if name in v.FORBIDDEN_HEADERS:
+            raise ValueError(f"header {action.name} cannot be changed by a policy")
+        if self.phase == "request":
+            if name in v.MANAGED_REQUEST_HEADERS:
+                raise ValueError(f"request header {action.name} is managed by Switchyard")
+            if name == "host" and not isinstance(action, SetHeader):
+                raise ValueError("the Host header can only be set")
+        return self
+
+
+class RewritePolicySet(TenantOwned):
+    """Ordered header and URL rewrite rules (ADR 0102).
+
+    Request rules run after redirects and fixed responses and before routing; response rules run
+    on the way out. Rules apply in order within a set and sets in attachment order.
+    """
+
+    kind: Literal["rewrite"] = "rewrite"
+    rules: tuple[RewriteRule, ...] = Field(min_length=1, max_length=64)
+
+
+ResponseStatus = Literal[200, 202, 204, 400, 401, 403, 404, 405, 410, 429, 451, 500, 502, 503, 504]
+ErrorStatus = Literal[400, 403, 408, 500, 502, 503, 504]
+ContentType = Literal["text/plain", "text/html", "application/json"]
+
+
+class ResponseRule(Model):
+    """Answer requests that match ``match`` with a fixed response, without asking a pool.
+
+    Attributes:
+        match: Conditions; an empty match answers every request (a maintenance page).
+        status: Status code.
+        content_type: Media type of ``body``; needed with a body.
+        body: Response text; omitted for an empty response.
+        retry_after_s: Seconds for a ``Retry-After`` header (only with 429 or 503).
+    """
+
+    match: RouteMatch = RouteMatch()
+    status: ResponseStatus
+    content_type: ContentType | None = None
+    body: Body | None = Field(default=None, min_length=1)
+    retry_after_s: int | None = Field(default=None, ge=1, le=86_400)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.body is None) != (self.content_type is None):
+            raise ValueError("body and content_type go together")
+        if self.body is not None and self.status == 204:
+            raise ValueError("a 204 response has no body")
+        if self.retry_after_s is not None and self.status not in (429, 503):
+            raise ValueError("retry_after_s is only valid with status 429 or 503")
+        return self
+
+
+class RespondPolicySet(TenantOwned):
+    """Fixed responses sent instead of routing (ADR 0103); the first match wins."""
+
+    kind: Literal["respond"] = "respond"
+    rules: tuple[ResponseRule, ...] = Field(min_length=1, max_length=64)
+
+
+class ErrorPage(Model):
+    """The body HAProxy sends when it generates the error ``status`` itself."""
+
+    status: ErrorStatus
+    content_type: ContentType = "text/html"
+    body: Body = Field(min_length=1)
+
+
+class ErrorPagesPolicySet(TenantOwned):
+    """Custom pages for the errors HAProxy generates (no server available, timeouts, ...)."""
+
+    kind: Literal["error_pages"] = "error_pages"
+    pages: tuple[ErrorPage, ...] = Field(min_length=1, max_length=7)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        statuses = [p.status for p in self.pages]
+        if len(set(statuses)) != len(statuses):
+            raise ValueError("one page per status")
+        return self
+
+
+class RateLimitRule(Model):
+    """Limit how often one client (or one key) may use the service; excess requests get ``action``.
+
+    Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
+    flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
+
+    Attributes:
+        match: Requests this rule counts and limits; empty counts every request. Use a path in
+            the match for a per-path limit (a login page, an API prefix).
+        key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
+            (an API key header; requests without the header are not counted).
+        max_requests: Requests allowed per ``period_s`` before the action applies.
+        period_s: Length of the window for ``max_requests``.
+        max_concurrent: Requests allowed at the same time.
+        action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
+            seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
+        table_size: Number of keys the table holds; the oldest are evicted when it is full.
+    """
+
+    match: RouteMatch = RouteMatch()
+    key: Literal["client_ip", "header"] = "client_ip"
+    header_name: HeaderName | None = None
+    max_requests: int | None = Field(default=None, ge=1, le=1_000_000)
+    period_s: Literal[1, 10, 60, 300, 3600] = 10
+    max_concurrent: int | None = Field(default=None, ge=1, le=100_000)
+    action: Literal["deny", "tarpit", "silent_drop"] = "deny"
+    deny_status: Literal[403, 429, 503] = 429
+    tarpit_s: int = Field(default=5, ge=1, le=30)
+    table_size: int = Field(default=10_000, ge=100, le=1_000_000)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.max_requests is None) == (self.max_concurrent is None):
+            raise ValueError("set exactly one of max_requests and max_concurrent")
+        if (self.key == "header") != (self.header_name is not None):
+            raise ValueError("header_name goes with key header, and only with it")
+        return self
+
+
+class RateLimitPolicySet(TenantOwned):
+    """Rate and concurrency limits per client or key (ADR 0110).
+
+    A service may carry at most 8 rate-limit rules across its sets.
+    """
+
+    kind: Literal["rate_limit"] = "rate_limit"
+    rules: tuple[RateLimitRule, ...] = Field(min_length=1, max_length=8)
+
+
+class OidcSettings(Model):
+    """OpenID Connect login against a tenant's identity provider (ADR 0130).
+
+    Attributes:
+        issuer: The provider's issuer URL (``https``); discovery is read from it. Or:
+        directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).
+        redirect_hosts: With a directory, the hosts the service is reached on; the broker only
+            redirects back to ``https://<host><auth_path>/callback`` for these.
+        client_id: The client registered for Switchyard at the provider.
+        client_secret_ref: OpenBao path of the client secret (never the secret).
+        cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies
+            (16, 24 or 32 bytes). One key per access set; rotate it to end every session.
+        scopes: Scopes to request; ``openid`` is required.
+        groups_claim: Claim that carries the user's groups.
+        cookie_name: Session cookie name.
+        cookie_expire_s: Absolute session lifetime.
+        cookie_refresh_s: How often the session is refreshed against the provider (a user whose
+            account was disabled loses the session at the next refresh). Less than the lifetime.
+    """
+
+    issuer: Issuer | None = None
+    directory_id: UUID | None = None
+    redirect_hosts: tuple[Hostname, ...] = Field(default=(), max_length=16)
+    client_id: ClientId
+    client_secret_ref: SecretRef
+    cookie_secret_ref: SecretRef
+    scopes: tuple[Annotated[str, Field(pattern=r"^[A-Za-z0-9._:/-]{1,64}$")], ...] = (
+        "openid",
+        "email",
+        "profile",
+    )
+    groups_claim: ClaimName = "groups"
+    cookie_name: CookieName = "_sy_auth"
+    cookie_expire_s: int = Field(default=28_800, ge=300, le=604_800)
+    cookie_refresh_s: int = Field(default=900, ge=60, le=86_400)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.issuer is None) == (self.directory_id is None):
+            raise ValueError("set exactly one of issuer and directory_id")
+        if self.directory_id is not None and not self.redirect_hosts:
+            raise ValueError(
+                "a directory login needs redirect_hosts (the hosts users reach the service on)"
+            )
+        if self.directory_id is None and self.redirect_hosts:
+            raise ValueError("redirect_hosts only goes with directory_id")
+        if "openid" not in self.scopes:
+            raise ValueError("scopes must include openid")
+        if len(set(self.scopes)) != len(self.scopes) or len(self.scopes) > 10:
+            raise ValueError("scopes must be unique and at most 10")
+        if self.cookie_refresh_s >= self.cookie_expire_s:
+            raise ValueError("cookie_refresh_s must be less than cookie_expire_s")
+        return self
+
+
+class ClaimCheck(Model):
+    """A condition on a claim of the signed-in user's ID token (ADR 0138).
+
+    ``op`` is ``present``, ``true`` (a JSON ``true``), ``equals`` (``value``) or ``in``
+    (``values``). The token was verified by the authentication proxy.
+    """
+
+    name: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
+    op: Literal["present", "true", "equals", "in"] = "true"
+    value: HeaderValue | None = None
+    values: tuple[HeaderValue, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.op == "equals") != (self.value is not None):
+            raise ValueError("value goes with op equals, and only with it")
+        if (self.op == "in") != bool(self.values):
+            raise ValueError("values go with op in, and only with it")
+        return self
+
+
+class Posture(Model):
+    """Device conditions a request must meet besides the login (ADR 0138).
+
+    Attributes:
+        device_certificate: The connection presented a client certificate the port's client CA
+            accepted (the service needs a port with ``client_ca_id``).
+        claims: Conditions on ID-token claims, all of which must hold (for example a
+            ``device_compliant`` claim the identity provider issues).
+    """
+
+    device_certificate: bool = False
+    claims: tuple[ClaimCheck, ...] = Field(default=(), max_length=8)
+
+    @model_validator(mode="after")
+    def _something(self) -> Self:
+        if not self.device_certificate and not self.claims:
+            raise ValueError("posture needs device_certificate or claims")
+        return self
+
+
+class AccessRule(Model):
+    """What a request needs before it reaches the origin.
+
+    Attributes:
+        match: Requests the rule covers; the first rule that matches decides.
+        mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of
+            at least one of ``groups``) or ``email_domains`` (an address in one of the domains).
+    """
+
+    match: RouteMatch = RouteMatch()
+    mode: Literal["public", "login", "groups", "email_domains"] = "login"
+    groups: tuple[GroupName, ...] = Field(default=(), max_length=32)
+    email_domains: tuple[Hostname, ...] = Field(default=(), max_length=32)
+    posture: Posture | None = None
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if self.posture is not None and self.mode == "public":
+            raise ValueError("posture does not go with mode public")
+        if self.mode == "groups" and not self.groups:
+            raise ValueError("mode groups needs groups")
+        if self.mode == "email_domains" and not self.email_domains:
+            raise ValueError("mode email_domains needs email_domains")
+        if self.mode != "groups" and self.groups:
+            raise ValueError("groups only goes with mode groups")
+        if self.mode != "email_domains" and self.email_domains:
+            raise ValueError("email_domains only goes with mode email_domains")
+        return self
+
+
+class IdentityHeaders(Model):
+    """Headers that carry the signed-in user to the origin (ADR 0132).
+
+    A name set to ``None`` turns that header off. The names are removed from every client
+    request before the user's own values are written, so an origin can trust them when the
+    service is only reachable through the engine.
+    """
+
+    user: HeaderName | None = "X-Auth-User"
+    email: HeaderName | None = "X-Auth-Email"
+    groups: HeaderName | None = "X-Auth-Groups"
+    token: HeaderName | None = None
+
+    @model_validator(mode="after")
+    def _distinct_and_allowed(self) -> Self:
+        names = [n.lower() for n in (self.user, self.email, self.groups, self.token) if n]
+        if len(set(names)) != len(names):
+            raise ValueError("identity header names must be different")
+        reserved = v.FORBIDDEN_HEADERS | v.MANAGED_REQUEST_HEADERS | v.AUTH_INTERNAL_HEADERS
+        for name in names:
+            if name in reserved:
+                raise ValueError(f"header {name} cannot carry identity")
+        return self
+
+
+class AccessPolicySet(TenantOwned):
+    """Require a login (and optionally a group or e-mail domain) for a service (ADR 0130 to 0132).
+
+    The engine runs an authentication proxy for the set; requests that need a login are sent
+    through it and come back to the same frontend once authenticated.
+
+    Attributes:
+        oidc: The identity provider settings.
+        default_mode: What requests that match no rule need: ``login`` (the default, closed) or
+            ``public``.
+        rules: Ordered rules; the first match decides.
+        identity_headers: Which headers carry the user to the origin.
+        auth_path: Path prefix of the login endpoints (``/oauth2/start``, ``/oauth2/callback``,
+            ``/oauth2/sign_out``), reserved on every host of the service.
+    """
+
+    kind: Literal["access"] = "access"
+    oidc: OidcSettings
+    default_mode: Literal["login", "public"] = "login"
+    rules: tuple[AccessRule, ...] = Field(default=(), max_length=32)
+    identity_headers: IdentityHeaders = IdentityHeaders()
+    auth_path: UrlPath = "/oauth2"
+
+    @model_validator(mode="after")
+    def _path(self) -> Self:
+        if len(self.auth_path) < 2 or self.auth_path.endswith("/"):
+            raise ValueError("auth_path must be a directory such as /oauth2")
+        return self
+
+
+JwtAlgorithm = Literal[
+    "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512"
+]
+
+
+class JwtKey(Model):
+    """A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.
+
+    Attributes:
+        kid: The ``kid`` header the key belongs to; without it the key is tried for every token.
+        alg: The signature algorithm the token must declare.
+        public_key_pem: The key as a PEM ``PUBLIC KEY`` block (convert a JWK with
+            ``syctl jwks convert``).
+    """
+
+    kid: Annotated[str, Field(pattern=r"^[A-Za-z0-9._:/@=-]{1,128}$")] | None = None
+    alg: JwtAlgorithm = "RS256"
+    public_key_pem: PublicKeyPem
+
+
+class JwtRule(Model):
+    """Require a valid bearer token on the requests ``match`` selects.
+
+    A token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``
+    contains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and
+    every ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is
+    answered 401.
+
+    Attributes:
+        match: Requests the rule covers (empty: all).
+        issuer: The expected ``iss`` claim.
+        audiences: Accepted ``aud`` values (a string claim or an element of an array claim).
+        required_scopes: Scopes the token must carry.
+        leeway_s: Clock difference tolerated on ``exp``.
+        keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).
+        subject_header: Request header that receives the ``sub`` claim of a valid token;
+            client copies of it are removed first.
+    """
+
+    match: RouteMatch = RouteMatch()
+    issuer: Issuer
+    audiences: tuple[Annotated[str, Field(pattern=r"^[A-Za-z0-9._~:/@=+-]{1,256}$")], ...] = Field(
+        default=(), max_length=8
+    )
+    required_scopes: tuple[Annotated[str, Field(pattern=r"^[A-Za-z0-9._:/-]{1,64}$")], ...] = Field(
+        default=(), max_length=8
+    )
+    leeway_s: int = Field(default=30, ge=0, le=300)
+    keys: tuple[JwtKey, ...] = Field(min_length=1, max_length=8)
+    subject_header: HeaderName | None = None
+
+    @model_validator(mode="after")
+    def _header(self) -> Self:
+        if self.subject_header is not None:
+            name = self.subject_header.lower()
+            if name in v.FORBIDDEN_HEADERS | v.MANAGED_REQUEST_HEADERS | v.AUTH_INTERNAL_HEADERS:
+                raise ValueError(f"header {self.subject_header} cannot carry the subject")
+        return self
+
+
+class JwtPolicySet(TenantOwned):
+    """Validate JWT bearer tokens for APIs, with no login page (ADR 0135)."""
+
+    kind: Literal["jwt"] = "jwt"
+    rules: tuple[JwtRule, ...] = Field(min_length=1, max_length=16)
+
+
+class CertIdentity(Model):
+    """Map a client certificate to a user and groups (ADR 0136).
+
+    Attributes:
+        by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,
+            for individual certificates).
+        value: The common name, or 40 hex digits.
+        user: The user name written to the user header.
+        groups: Groups written to the groups header.
+    """
+
+    by: Literal["cn", "sha1"] = "cn"
+    value: CertName
+    user: CertName
+    groups: tuple[GroupName, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _sha1(self) -> Self:
+        if self.by == "sha1" and not re.fullmatch(r"[0-9a-f]{40}", self.value):
+            raise ValueError("a sha1 value is 40 lower-case hex digits")
+        return self
+
+
+class ClientCertRule(Model):
+    """What a request needs from its client certificate.
+
+    Attributes:
+        match: Requests the rule covers (empty: all). The first rule that matches decides.
+        mode: ``valid`` (any certificate the port's client CA accepts), ``identity`` (the
+            certificate must be in ``identities``) or ``groups`` (and its identity must have one of
+            ``groups``).
+        groups: Groups for mode ``groups``.
+    """
+
+    match: RouteMatch = RouteMatch()
+    mode: Literal["valid", "identity", "groups"] = "valid"
+    groups: tuple[GroupName, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _groups(self) -> Self:
+        if (self.mode == "groups") != bool(self.groups):
+            raise ValueError("groups go with mode groups, and only with it")
+        return self
+
+
+class ClientCertPolicySet(TenantOwned):
+    """Use the TLS client certificate as the identity (ADR 0136).
+
+    Attributes:
+        identities: Certificates the set knows (up to 500).
+        rules: Ordered rules; the first that matches decides. Requests that match no rule are
+            not checked.
+        user_header: Header that receives the mapped user (client copies removed first).
+        groups_header: Header that receives the mapped groups, comma separated.
+    """
+
+    kind: Literal["client_cert"] = "client_cert"
+    identities: tuple[CertIdentity, ...] = Field(default=(), max_length=500)
+    rules: tuple[ClientCertRule, ...] = Field(min_length=1, max_length=32)
+    user_header: HeaderName | None = "X-Cert-User"
+    groups_header: HeaderName | None = "X-Cert-Groups"
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        keys = [(i.by, i.value) for i in self.identities]
+        if len(set(keys)) != len(keys):
+            raise ValueError("identities must be unique")
+        names = [h.lower() for h in (self.user_header, self.groups_header) if h]
+        if len(set(names)) != len(names):
+            raise ValueError("user_header and groups_header must differ")
+        reserved = v.FORBIDDEN_HEADERS | v.MANAGED_REQUEST_HEADERS | v.AUTH_INTERNAL_HEADERS
+        if any(n in reserved for n in names):
+            raise ValueError("those headers cannot carry identity")
+        needs_identity = any(r.mode != "valid" for r in self.rules)
+        if needs_identity and not self.identities:
+            raise ValueError("rules with mode identity or groups need identities")
+        return self
+
+
+class LdapConnector(Model):
+    """Sign in against an LDAP or Active Directory server (ADR 0137).
+
+    Attributes:
+        host: Server name; ``port`` defaults to 636 (``ldaps``). With ``starttls`` use 389.
+        security: ``ldaps`` or ``starttls``; a clear-text connection is not offered.
+        root_ca_pem: PEM certificate(s) that sign the server certificate (public; omit to use the
+            broker's system roots).
+        bind_dn: Service account used to search.
+        bind_password_ref: OpenBao path of its password.
+        user_base_dn / user_filter: Where and how users are found; the sign-in name is matched
+            with ``username_attr``.
+        group_base_dn: Where groups are searched (omit for no groups); a user's groups are those
+            whose ``group_member_attr`` holds the user's ``group_user_attr`` (``DN`` or an
+            attribute name).
+    """
+
+    type: Literal["ldap"] = "ldap"
+    host: Hostname
+    port: Port = 636
+    security: Literal["ldaps", "starttls"] = "ldaps"
+    root_ca_pem: CertPem | None = None
+    bind_dn: Dn
+    bind_password_ref: SecretRef
+    user_base_dn: Dn
+    user_filter: LdapFilter = "(objectClass=person)"
+    username_attr: LdapAttr = "uid"
+    id_attr: LdapAttr = "uid"
+    email_attr: LdapAttr = "mail"
+    name_attr: LdapAttr = "cn"
+    group_base_dn: Dn | None = None
+    group_filter: LdapFilter = "(objectClass=groupOfNames)"
+    group_user_attr: LdapAttr = "DN"
+    group_member_attr: LdapAttr = "member"
+    group_name_attr: LdapAttr = "cn"
+
+
+class SamlConnector(Model):
+    """Sign in through a SAML 2.0 identity provider (ADR 0137).
+
+    Attributes:
+        sso_url: The provider's single sign-on URL (https).
+        ca_pem: The provider's signing certificate (public PEM); assertions must be signed by it.
+        username_attr / email_attr / groups_attr: Assertion attributes to read (``groups_attr`` of
+            ``None`` means no groups).
+    """
+
+    type: Literal["saml"] = "saml"
+    sso_url: Issuer
+    ca_pem: CertPem
+    username_attr: ClaimName = "name"
+    email_attr: ClaimName = "email"
+    groups_attr: ClaimName | None = "groups"
+
+
+class LocalUser(Model):
+    """A user kept by Switchyard: a name, an address and a bcrypt hash in OpenBao."""
+
+    username: CertName
+    email: EmailAddress
+    password_hash_ref: SecretRef
+
+
+class LocalConnector(Model):
+    """Users defined here, with passwords checked by the broker. They have no groups."""
+
+    type: Literal["local"] = "local"
+    users: tuple[LocalUser, ...] = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        names = [u.username for u in self.users]
+        emails = [u.email.lower() for u in self.users]
+        if len(set(names)) != len(names) or len(set(emails)) != len(emails):
+            raise ValueError("user names and addresses must be unique")
+        return self
+
+
+class DirectoryPolicySet(TenantOwned):
+    """A place users sign in that is not an OIDC provider of their own: LDAP, SAML or local users.
+
+    A central broker (Dex, one instance per directory) turns it into an OIDC issuer that an
+    access set names with ``oidc.directory_id`` (ADR 0137). Directories are not attached to
+    services.
+    """
+
+    kind: Literal["directory"] = "directory"
+    connector: Annotated[
+        LdapConnector | SamlConnector | LocalConnector, Field(discriminator="type")
+    ]
+
+
+PolicySet = Annotated[
+    RedirectPolicySet
+    | AllowListPolicySet
+    | RewritePolicySet
+    | RespondPolicySet
+    | ErrorPagesPolicySet
+    | RateLimitPolicySet
+    | AccessPolicySet
+    | JwtPolicySet
+    | ClientCertPolicySet
+    | DirectoryPolicySet,
+    Field(discriminator="kind"),
+]
+#: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).
+ATTACHABLE_POLICY_KINDS = (
+    RedirectPolicySet,
+    RewritePolicySet,
+    RespondPolicySet,
+    ErrorPagesPolicySet,
+    RateLimitPolicySet,
+    AccessPolicySet,
+    JwtPolicySet,
+    ClientCertPolicySet,
+)

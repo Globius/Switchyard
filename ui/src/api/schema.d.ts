@@ -3608,6 +3608,221 @@ export interface components {
             reason?: string | null;
         };
         /**
+         * AccessPolicySet
+         * @description Require a login (and optionally a group or e-mail domain) for a service (ADR 0130 to 0132).
+         *
+         *     The engine runs an authentication proxy for the set; requests that need a login are sent
+         *     through it and come back to the same frontend once authenticated.
+         *
+         *     Attributes:
+         *         oidc: The identity provider settings.
+         *         default_mode: What requests that match no rule need: ``login`` (the default, closed) or
+         *             ``public``.
+         *         rules: Ordered rules; the first match decides.
+         *         identity_headers: Which headers carry the user to the origin.
+         *         auth_path: Path prefix of the login endpoints (``/oauth2/start``, ``/oauth2/callback``,
+         *             ``/oauth2/sign_out``), reserved on every host of the service.
+         */
+        AccessPolicySet: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** AccessPolicySetCreate */
+        AccessPolicySetCreate: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+        };
+        /** AccessPolicySetPatch */
+        AccessPolicySetPatch: {
+            /** Auth Path */
+            auth_path?: string | null;
+            /** Default Mode */
+            default_mode?: ("login" | "public") | null;
+            identity_headers?: components["schemas"]["IdentityHeaders"] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name?: string | null;
+            oidc?: components["schemas"]["OidcSettings"] | null;
+            /** Rules */
+            rules?: components["schemas"]["AccessRule"][] | null;
+        };
+        /**
+         * AccessPolicySetRead
+         * @description AccessPolicySet as returned by the API.
+         */
+        AccessPolicySetRead: {
+            /**
+             * Auth Path
+             * @default /oauth2
+             */
+            auth_path: string;
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /**
+             * Default Mode
+             * @default login
+             * @enum {string}
+             */
+            default_mode: "login" | "public";
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @default {
+             *       "email": "X-Auth-Email",
+             *       "groups": "X-Auth-Groups",
+             *       "user": "X-Auth-User"
+             *     }
+             */
+            identity_headers: components["schemas"]["IdentityHeaders"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "access";
+            /** Name */
+            name: string;
+            oidc: components["schemas"]["OidcSettings"];
+            /**
+             * Rules
+             * @default []
+             */
+            rules: components["schemas"]["AccessRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * AccessRule
+         * @description What a request needs before it reaches the origin.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers; the first rule that matches decides.
+         *         mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of
+         *             at least one of ``groups``) or ``email_domains`` (an address in one of the domains).
+         */
+        AccessRule: {
+            /**
+             * Email Domains
+             * @default []
+             */
+            email_domains: string[];
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Mode
+             * @default login
+             * @enum {string}
+             */
+            mode: "public" | "login" | "groups" | "email_domains";
+            posture?: components["schemas"]["Posture"] | null;
+        };
+        /**
          * AcmeChallenge
          * @description How an ACME certificate authority checks control of a name.
          * @enum {string}
@@ -3875,6 +4090,22 @@ export interface components {
          * @enum {string}
          */
         Action: "create" | "update" | "delete";
+        /**
+         * AddHeader
+         * @description Add a header, keeping any existing values.
+         */
+        AddHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "add_header";
+            /** Value */
+            value?: string | null;
+            variable?: components["schemas"]["HeaderVariable"] | null;
+        };
         /**
          * AdminState
          * @description Operator-controlled pool member state.
@@ -4774,6 +5005,34 @@ export interface components {
             pem: string;
         };
         /**
+         * CertIdentity
+         * @description Map a client certificate to a user and groups (ADR 0136).
+         *
+         *     Attributes:
+         *         by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,
+         *             for individual certificates).
+         *         value: The common name, or 40 hex digits.
+         *         user: The user name written to the user header.
+         *         groups: Groups written to the groups header.
+         */
+        CertIdentity: {
+            /**
+             * By
+             * @default cn
+             * @enum {string}
+             */
+            by: "cn" | "sha1";
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /** User */
+            user: string;
+            /** Value */
+            value: string;
+        };
+        /**
          * CertImportIn
          * @description Body of ``POST /certificates/import``.
          */
@@ -5181,6 +5440,212 @@ export interface components {
             summary: string;
         };
         /**
+         * ClaimCheck
+         * @description A condition on a claim of the signed-in user's ID token (ADR 0138).
+         *
+         *     ``op`` is ``present``, ``true`` (a JSON ``true``), ``equals`` (``value``) or ``in``
+         *     (``values``). The token was verified by the authentication proxy.
+         */
+        ClaimCheck: {
+            /** Name */
+            name: string;
+            /**
+             * Op
+             * @default true
+             * @enum {string}
+             */
+            op: "present" | "true" | "equals" | "in";
+            /** Value */
+            value?: string | null;
+            /**
+             * Values
+             * @default []
+             */
+            values: string[];
+        };
+        /**
+         * ClientCertPolicySet
+         * @description Use the TLS client certificate as the identity (ADR 0136).
+         *
+         *     Attributes:
+         *         identities: Certificates the set knows (up to 500).
+         *         rules: Ordered rules; the first that matches decides. Requests that match no rule are
+         *             not checked.
+         *         user_header: Header that receives the mapped user (client copies removed first).
+         *         groups_header: Header that receives the mapped groups, comma separated.
+         */
+        ClientCertPolicySet: {
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ClientCertPolicySetCreate */
+        ClientCertPolicySetCreate: {
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+        };
+        /** ClientCertPolicySetPatch */
+        ClientCertPolicySetPatch: {
+            /** Groups Header */
+            groups_header?: string | null;
+            /** Identities */
+            identities?: components["schemas"]["CertIdentity"][] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["ClientCertRule"][] | null;
+            /** User Header */
+            user_header?: string | null;
+        };
+        /**
+         * ClientCertPolicySetRead
+         * @description ClientCertPolicySet as returned by the API.
+         */
+        ClientCertPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Groups Header
+             * @default X-Cert-Groups
+             */
+            groups_header: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Identities
+             * @default []
+             */
+            identities: components["schemas"]["CertIdentity"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "client_cert";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ClientCertRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * User Header
+             * @default X-Cert-User
+             */
+            user_header: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * ClientCertRule
+         * @description What a request needs from its client certificate.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers (empty: all). The first rule that matches decides.
+         *         mode: ``valid`` (any certificate the port's client CA accepts), ``identity`` (the
+         *             certificate must be in ``identities``) or ``groups`` (and its identity must have one of
+         *             ``groups``).
+         *         groups: Groups for mode ``groups``.
+         */
+        ClientCertRule: {
+            /**
+             * Groups
+             * @default []
+             */
+            groups: string[];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Mode
+             * @default valid
+             * @enum {string}
+             */
+            mode: "valid" | "identity" | "groups";
+        };
+        /**
          * DeployIn
          * @description Body of ``POST /se-groups/{id}/deploy``.
          */
@@ -5337,6 +5802,101 @@ export interface components {
             message: string;
             /** Path */
             path: string;
+        };
+        /**
+         * DirectoryPolicySet
+         * @description A place users sign in that is not an OIDC provider of their own: LDAP, SAML or local users.
+         *
+         *     A central broker (Dex, one instance per directory) turns it into an OIDC issuer that an
+         *     access set names with ``oidc.directory_id`` (ADR 0137). Directories are not attached to
+         *     services.
+         */
+        DirectoryPolicySet: {
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** DirectoryPolicySetCreate */
+        DirectoryPolicySetCreate: {
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+        };
+        /** DirectoryPolicySetPatch */
+        DirectoryPolicySetPatch: {
+            /** Connector */
+            connector?: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name?: string | null;
+        };
+        /**
+         * DirectoryPolicySetRead
+         * @description DirectoryPolicySet as returned by the API.
+         */
+        DirectoryPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * DiscoveryGroup
@@ -5945,6 +6505,116 @@ export interface components {
             token: string;
         };
         /**
+         * ErrorPage
+         * @description The body HAProxy sends when it generates the error ``status`` itself.
+         */
+        ErrorPage: {
+            /** Body */
+            body: string;
+            /**
+             * Content Type
+             * @default text/html
+             * @enum {string}
+             */
+            content_type: "text/plain" | "text/html" | "application/json";
+            /**
+             * Status
+             * @enum {integer}
+             */
+            status: 400 | 403 | 408 | 500 | 502 | 503 | 504;
+        };
+        /**
+         * ErrorPagesPolicySet
+         * @description Custom pages for the errors HAProxy generates (no server available, timeouts, ...).
+         */
+        ErrorPagesPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ErrorPagesPolicySetCreate */
+        ErrorPagesPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+        };
+        /** ErrorPagesPolicySetPatch */
+        ErrorPagesPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name?: string | null;
+            /** Pages */
+            pages?: components["schemas"]["ErrorPage"][] | null;
+        };
+        /**
+         * ErrorPagesPolicySetRead
+         * @description ErrorPagesPolicySet as returned by the API.
+         */
+        ErrorPagesPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
          * ExpiringCertificate
          * @description A certificate that expires within 30 days (or already has).
          */
@@ -6080,6 +6750,34 @@ export interface components {
          * @enum {string}
          */
         HaMode: "bgp" | "vrrp";
+        /**
+         * HeaderMatch
+         * @description Match a request header. ``value`` is required for the comparisons and forbidden otherwise.
+         *
+         *     Example:
+         *         >>> HeaderMatch(name="X-Env", op="equals", value="canary").op
+         *         <HeaderOp.EQUALS: 'equals'>
+         */
+        HeaderMatch: {
+            /** Name */
+            name: string;
+            /** @default equals */
+            op: components["schemas"]["HeaderOp"];
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * HeaderOp
+         * @description How a header match compares: presence, or a literal comparison of the value.
+         * @enum {string}
+         */
+        HeaderOp: "present" | "absent" | "equals" | "prefix" | "suffix" | "contains";
+        /**
+         * HeaderVariable
+         * @description Per-request values a header action can carry, from a fixed list (no expressions).
+         * @enum {string}
+         */
+        HeaderVariable: "client_ip" | "client_port" | "host" | "vip" | "vip_port" | "method" | "tls_version" | "tls_cipher" | "tls_sni" | "request_id";
         /**
          * Health
          * @description Liveness answer.
@@ -6355,6 +7053,39 @@ export interface components {
              * @default /
              */
             path: string;
+        };
+        /**
+         * HttpMethod
+         * @description HTTP request methods a match can name.
+         * @enum {string}
+         */
+        HttpMethod: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
+        /**
+         * IdentityHeaders
+         * @description Headers that carry the signed-in user to the origin (ADR 0132).
+         *
+         *     A name set to ``None`` turns that header off. The names are removed from every client
+         *     request before the user's own values are written, so an origin can trust them when the
+         *     service is only reachable through the engine.
+         */
+        IdentityHeaders: {
+            /**
+             * Email
+             * @default X-Auth-Email
+             */
+            email: string | null;
+            /**
+             * Groups
+             * @default X-Auth-Groups
+             */
+            groups: string | null;
+            /** Token */
+            token?: string | null;
+            /**
+             * User
+             * @default X-Auth-User
+             */
+            user: string | null;
         };
         /**
          * IdpTestIn
@@ -6692,6 +7423,170 @@ export interface components {
          */
         JobState: "queued" | "running" | "succeeded" | "failed" | "dead" | "cancelled";
         /**
+         * JwtKey
+         * @description A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.
+         *
+         *     Attributes:
+         *         kid: The ``kid`` header the key belongs to; without it the key is tried for every token.
+         *         alg: The signature algorithm the token must declare.
+         *         public_key_pem: The key as a PEM ``PUBLIC KEY`` block (convert a JWK with
+         *             ``syctl jwks convert``).
+         */
+        JwtKey: {
+            /**
+             * Alg
+             * @default RS256
+             * @enum {string}
+             */
+            alg: "RS256" | "RS384" | "RS512" | "ES256" | "ES384" | "ES512" | "PS256" | "PS384" | "PS512";
+            /** Kid */
+            kid?: string | null;
+            /** Public Key Pem */
+            public_key_pem: string;
+        };
+        /**
+         * JwtPolicySet
+         * @description Validate JWT bearer tokens for APIs, with no login page (ADR 0135).
+         */
+        JwtPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** JwtPolicySetCreate */
+        JwtPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+        };
+        /** JwtPolicySetPatch */
+        JwtPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["JwtRule"][] | null;
+        };
+        /**
+         * JwtPolicySetRead
+         * @description JwtPolicySet as returned by the API.
+         */
+        JwtPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "jwt";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["JwtRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * JwtRule
+         * @description Require a valid bearer token on the requests ``match`` selects.
+         *
+         *     A token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``
+         *     contains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and
+         *     every ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is
+         *     answered 401.
+         *
+         *     Attributes:
+         *         match: Requests the rule covers (empty: all).
+         *         issuer: The expected ``iss`` claim.
+         *         audiences: Accepted ``aud`` values (a string claim or an element of an array claim).
+         *         required_scopes: Scopes the token must carry.
+         *         leeway_s: Clock difference tolerated on ``exp``.
+         *         keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).
+         *         subject_header: Request header that receives the ``sub`` claim of a valid token;
+         *             client copies of it are removed first.
+         */
+        JwtRule: {
+            /**
+             * Audiences
+             * @default []
+             */
+            audiences: string[];
+            /** Issuer */
+            issuer: string;
+            /** Keys */
+            keys: components["schemas"]["JwtKey"][];
+            /**
+             * Leeway S
+             * @default 30
+             */
+            leeway_s: number;
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Required Scopes
+             * @default []
+             */
+            required_scopes: string[];
+            /** Subject Header */
+            subject_header?: string | null;
+        };
+        /**
          * LatestRevision
          * @description The newest revision.
          */
@@ -6707,6 +7602,123 @@ export interface components {
             number: number;
             /** Summary */
             summary: string;
+        };
+        /**
+         * LdapConnector
+         * @description Sign in against an LDAP or Active Directory server (ADR 0137).
+         *
+         *     Attributes:
+         *         host: Server name; ``port`` defaults to 636 (``ldaps``). With ``starttls`` use 389.
+         *         security: ``ldaps`` or ``starttls``; a clear-text connection is not offered.
+         *         root_ca_pem: PEM certificate(s) that sign the server certificate (public; omit to use the
+         *             broker's system roots).
+         *         bind_dn: Service account used to search.
+         *         bind_password_ref: OpenBao path of its password.
+         *         user_base_dn / user_filter: Where and how users are found; the sign-in name is matched
+         *             with ``username_attr``.
+         *         group_base_dn: Where groups are searched (omit for no groups); a user's groups are those
+         *             whose ``group_member_attr`` holds the user's ``group_user_attr`` (``DN`` or an
+         *             attribute name).
+         */
+        LdapConnector: {
+            /** Bind Dn */
+            bind_dn: string;
+            /** Bind Password Ref */
+            bind_password_ref: string;
+            /**
+             * Email Attr
+             * @default mail
+             */
+            email_attr: string;
+            /** Group Base Dn */
+            group_base_dn?: string | null;
+            /**
+             * Group Filter
+             * @default (objectClass=groupOfNames)
+             */
+            group_filter: string;
+            /**
+             * Group Member Attr
+             * @default member
+             */
+            group_member_attr: string;
+            /**
+             * Group Name Attr
+             * @default cn
+             */
+            group_name_attr: string;
+            /**
+             * Group User Attr
+             * @default DN
+             */
+            group_user_attr: string;
+            /** Host */
+            host: string;
+            /**
+             * Id Attr
+             * @default uid
+             */
+            id_attr: string;
+            /**
+             * Name Attr
+             * @default cn
+             */
+            name_attr: string;
+            /**
+             * Port
+             * @default 636
+             */
+            port: number;
+            /** Root Ca Pem */
+            root_ca_pem?: string | null;
+            /**
+             * Security
+             * @default ldaps
+             * @enum {string}
+             */
+            security: "ldaps" | "starttls";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ldap";
+            /** User Base Dn */
+            user_base_dn: string;
+            /**
+             * User Filter
+             * @default (objectClass=person)
+             */
+            user_filter: string;
+            /**
+             * Username Attr
+             * @default uid
+             */
+            username_attr: string;
+        };
+        /**
+         * LocalConnector
+         * @description Users defined here, with passwords checked by the broker. They have no groups.
+         */
+        LocalConnector: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "local";
+            /** Users */
+            users: components["schemas"]["LocalUser"][];
+        };
+        /**
+         * LocalUser
+         * @description A user kept by Switchyard: a name, an address and a bcrypt hash in OpenBao.
+         */
+        LocalUser: {
+            /** Email */
+            email: string;
+            /** Password Hash Ref */
+            password_hash_ref: string;
+            /** Username */
+            username: string;
         };
         /**
          * LogLine
@@ -7314,6 +8326,72 @@ export interface components {
             warnings: string[];
         };
         /**
+         * OidcSettings
+         * @description OpenID Connect login against a tenant's identity provider (ADR 0130).
+         *
+         *     Attributes:
+         *         issuer: The provider's issuer URL (``https``); discovery is read from it. Or:
+         *         directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).
+         *         redirect_hosts: With a directory, the hosts the service is reached on; the broker only
+         *             redirects back to ``https://<host><auth_path>/callback`` for these.
+         *         client_id: The client registered for Switchyard at the provider.
+         *         client_secret_ref: OpenBao path of the client secret (never the secret).
+         *         cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies
+         *             (16, 24 or 32 bytes). One key per access set; rotate it to end every session.
+         *         scopes: Scopes to request; ``openid`` is required.
+         *         groups_claim: Claim that carries the user's groups.
+         *         cookie_name: Session cookie name.
+         *         cookie_expire_s: Absolute session lifetime.
+         *         cookie_refresh_s: How often the session is refreshed against the provider (a user whose
+         *             account was disabled loses the session at the next refresh). Less than the lifetime.
+         */
+        OidcSettings: {
+            /** Client Id */
+            client_id: string;
+            /** Client Secret Ref */
+            client_secret_ref: string;
+            /**
+             * Cookie Expire S
+             * @default 28800
+             */
+            cookie_expire_s: number;
+            /**
+             * Cookie Name
+             * @default _sy_auth
+             */
+            cookie_name: string;
+            /**
+             * Cookie Refresh S
+             * @default 900
+             */
+            cookie_refresh_s: number;
+            /** Cookie Secret Ref */
+            cookie_secret_ref: string;
+            /** Directory Id */
+            directory_id?: string | null;
+            /**
+             * Groups Claim
+             * @default groups
+             */
+            groups_claim: string;
+            /** Issuer */
+            issuer?: string | null;
+            /**
+             * Redirect Hosts
+             * @default []
+             */
+            redirect_hosts: string[];
+            /**
+             * Scopes
+             * @default [
+             *       "openid",
+             *       "email",
+             *       "profile"
+             *     ]
+             */
+            scopes: string[];
+        };
+        /**
          * OpIn
          * @description One operation in a change set.
          */
@@ -7351,10 +8429,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -7836,6 +8914,28 @@ export interface components {
             version: number;
         };
         /**
+         * Posture
+         * @description Device conditions a request must meet besides the login (ADR 0138).
+         *
+         *     Attributes:
+         *         device_certificate: The connection presented a client certificate the port's client CA
+         *             accepted (the service needs a port with ``client_ca_id``).
+         *         claims: Conditions on ID-token claims, all of which must hold (for example a
+         *             ``device_compliant`` claim the identity provider issues).
+         */
+        Posture: {
+            /**
+             * Claims
+             * @default []
+             */
+            claims: components["schemas"]["ClaimCheck"][];
+            /**
+             * Device Certificate
+             * @default false
+             */
+            device_certificate: boolean;
+        };
+        /**
          * PrincipalNameRead
          * @description A principal label (`actor`, `author`, `approver`) with a name for people.
          */
@@ -7932,6 +9032,187 @@ export interface components {
              * @description Virtual service fields that are rejected.
              */
             service_forbidden: string[];
+        };
+        /**
+         * QueryMatch
+         * @description Match a query-string parameter (``?name=value``).
+         */
+        QueryMatch: {
+            /** Name */
+            name: string;
+            /** @default equals */
+            op: components["schemas"]["QueryOp"];
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * QueryOp
+         * @description How a query-parameter match compares.
+         * @enum {string}
+         */
+        QueryOp: "present" | "equals";
+        /**
+         * RateLimitPolicySet
+         * @description Rate and concurrency limits per client or key (ADR 0110).
+         *
+         *     A service may carry at most 8 rate-limit rules across its sets.
+         */
+        RateLimitPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RateLimitPolicySetCreate */
+        RateLimitPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+        };
+        /** RateLimitPolicySetPatch */
+        RateLimitPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["RateLimitRule"][] | null;
+        };
+        /**
+         * RateLimitPolicySetRead
+         * @description RateLimitPolicySet as returned by the API.
+         */
+        RateLimitPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rate_limit";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RateLimitRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * RateLimitRule
+         * @description Limit how often one client (or one key) may use the service; excess requests get ``action``.
+         *
+         *     Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
+         *     flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
+         *
+         *     Attributes:
+         *         match: Requests this rule counts and limits; empty counts every request. Use a path in
+         *             the match for a per-path limit (a login page, an API prefix).
+         *         key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
+         *             (an API key header; requests without the header are not counted).
+         *         max_requests: Requests allowed per ``period_s`` before the action applies.
+         *         period_s: Length of the window for ``max_requests``.
+         *         max_concurrent: Requests allowed at the same time.
+         *         action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
+         *             seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
+         *         table_size: Number of keys the table holds; the oldest are evicted when it is full.
+         */
+        RateLimitRule: {
+            /**
+             * Action
+             * @default deny
+             * @enum {string}
+             */
+            action: "deny" | "tarpit" | "silent_drop";
+            /**
+             * Deny Status
+             * @default 429
+             * @enum {integer}
+             */
+            deny_status: 403 | 429 | 503;
+            /** Header Name */
+            header_name?: string | null;
+            /**
+             * Key
+             * @default client_ip
+             * @enum {string}
+             */
+            key: "client_ip" | "header";
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /** Max Concurrent */
+            max_concurrent?: number | null;
+            /** Max Requests */
+            max_requests?: number | null;
+            /**
+             * Period S
+             * @default 10
+             * @enum {integer}
+             */
+            period_s: 1 | 10 | 60 | 300 | 3600;
+            /**
+             * Table Size
+             * @default 10000
+             */
+            table_size: number;
+            /**
+             * Tarpit S
+             * @default 5
+             */
+            tarpit_s: number;
         };
         /**
          * ReasonIn
@@ -8053,6 +9334,19 @@ export interface components {
         RedirectRule: {
             match: components["schemas"]["RouteMatch"];
             redirect: components["schemas"]["RedirectAction"];
+        };
+        /**
+         * RemoveHeader
+         * @description Remove every value of a header.
+         */
+        RemoveHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "remove_header";
         };
         /**
          * RenderedConfig
@@ -8210,6 +9504,149 @@ export interface components {
             source: string;
         };
         /**
+         * ReplacePrefix
+         * @description Replace a path prefix, on path-segment boundaries (request phase only).
+         *
+         *     ``/api`` to ``/v2`` turns ``/api`` into ``/v2`` and ``/api/x`` into ``/v2/x``; ``/apix`` is
+         *     left alone. A ``to_prefix`` of ``/`` strips the prefix (``/api/x`` becomes ``/x``, ``/api``
+         *     becomes ``/``).
+         */
+        ReplacePrefix: {
+            /** From Prefix */
+            from_prefix: string;
+            /** To Prefix */
+            to_prefix: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "replace_prefix";
+        };
+        /**
+         * RespondPolicySet
+         * @description Fixed responses sent instead of routing (ADR 0103); the first match wins.
+         */
+        RespondPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RespondPolicySetCreate */
+        RespondPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+        };
+        /** RespondPolicySetPatch */
+        RespondPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["ResponseRule"][] | null;
+        };
+        /**
+         * RespondPolicySetRead
+         * @description RespondPolicySet as returned by the API.
+         */
+        RespondPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * ResponseRule
+         * @description Answer requests that match ``match`` with a fixed response, without asking a pool.
+         *
+         *     Attributes:
+         *         match: Conditions; an empty match answers every request (a maintenance page).
+         *         status: Status code.
+         *         content_type: Media type of ``body``; needed with a body.
+         *         body: Response text; omitted for an empty response.
+         *         retry_after_s: Seconds for a ``Retry-After`` header (only with 429 or 503).
+         */
+        ResponseRule: {
+            /** Body */
+            body?: string | null;
+            /** Content Type */
+            content_type?: ("text/plain" | "text/html" | "application/json") | null;
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /** Retry After S */
+            retry_after_s?: number | null;
+            /**
+             * Status
+             * @enum {integer}
+             */
+            status: 200 | 202 | 204 | 400 | 401 | 403 | 404 | 405 | 410 | 429 | 451 | 500 | 502 | 503 | 504;
+        };
+        /**
          * RevisionRead
          * @description A revision with the full desired state it recorded.
          */
@@ -8259,6 +9696,128 @@ export interface components {
             number: number;
             /** Summary */
             summary: string;
+        };
+        /**
+         * RewritePolicySet
+         * @description Ordered header and URL rewrite rules (ADR 0102).
+         *
+         *     Request rules run after redirects and fixed responses and before routing; response rules run
+         *     on the way out. Rules apply in order within a set and sets in attachment order.
+         */
+        RewritePolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RewritePolicySetCreate */
+        RewritePolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+        };
+        /** RewritePolicySetPatch */
+        RewritePolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["RewriteRule"][] | null;
+        };
+        /**
+         * RewritePolicySetRead
+         * @description RewritePolicySet as returned by the API.
+         */
+        RewritePolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * RewriteRule
+         * @description Change a request (before routing) or a response (before it leaves) when ``match`` holds.
+         *
+         *     Attributes:
+         *         phase: ``request`` or ``response``. Response rules match on the request that was made.
+         *         match: Conditions; an empty match applies to every request.
+         *         action: What to change.
+         */
+        RewriteRule: {
+            /** Action */
+            action: components["schemas"]["SetHeader"] | components["schemas"]["AddHeader"] | components["schemas"]["RemoveHeader"] | components["schemas"]["ReplacePrefix"];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Phase
+             * @default request
+             * @enum {string}
+             */
+            phase: "request" | "response";
         };
         /**
          * Role
@@ -8337,15 +9896,54 @@ export interface components {
         };
         /**
          * RouteMatch
-         * @description Request match: an optional host (exact or ``*.`` wildcard) and an optional path.
+         * @description Request match shared by routes and policy rules; every condition given must hold (AND).
+         *
+         *     Attributes:
+         *         host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).
+         *         path_prefix: Path starts with this.
+         *         path_exact: Path equals this. Not together with ``path_prefix``.
+         *         methods: Request method is one of these.
+         *         headers: Request header conditions, all of which must hold.
+         *         query: Query-string parameter conditions, all of which must hold.
+         *         source_cidrs: Client address is inside one of these networks (after client-IP restoration).
+         *         sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a
+         *             port without TLS.
+         *
+         *     Example:
+         *         >>> RouteMatch(methods=["GET"], path_prefix="/api").is_empty
+         *         False
+         *         >>> RouteMatch().is_empty
+         *         True
          */
         RouteMatch: {
+            /**
+             * Headers
+             * @default []
+             */
+            headers: components["schemas"]["HeaderMatch"][];
             /** Host */
             host?: string | null;
+            /**
+             * Methods
+             * @default []
+             */
+            methods: components["schemas"]["HttpMethod"][];
             /** Path Exact */
             path_exact?: string | null;
             /** Path Prefix */
             path_prefix?: string | null;
+            /**
+             * Query
+             * @default []
+             */
+            query: components["schemas"]["QueryMatch"][];
+            /** Sni */
+            sni?: string | null;
+            /**
+             * Source Cidrs
+             * @default []
+             */
+            source_cidrs: (string)[];
         };
         /**
          * RunningAgentFileRead
@@ -8438,6 +10036,42 @@ export interface components {
              * @description The stamps are equal and the text is the same as the desired file, so a hand edit that kept the stamp shows as `false`.
              */
             matches_desired: boolean;
+        };
+        /**
+         * SamlConnector
+         * @description Sign in through a SAML 2.0 identity provider (ADR 0137).
+         *
+         *     Attributes:
+         *         sso_url: The provider's single sign-on URL (https).
+         *         ca_pem: The provider's signing certificate (public PEM); assertions must be signed by it.
+         *         username_attr / email_attr / groups_attr: Assertion attributes to read (``groups_attr`` of
+         *             ``None`` means no groups).
+         */
+        SamlConnector: {
+            /** Ca Pem */
+            ca_pem: string;
+            /**
+             * Email Attr
+             * @default email
+             */
+            email_attr: string;
+            /**
+             * Groups Attr
+             * @default groups
+             */
+            groups_attr: string | null;
+            /** Sso Url */
+            sso_url: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "saml";
+            /**
+             * Username Attr
+             * @default name
+             */
+            username_attr: string;
         };
         /**
          * SamlProviderIn
@@ -8894,6 +10528,22 @@ export interface components {
             revoked: number;
         };
         /**
+         * SetHeader
+         * @description Set a header, replacing any existing values.
+         */
+        SetHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "set_header";
+            /** Value */
+            value?: string | null;
+            variable?: components["schemas"]["HeaderVariable"] | null;
+        };
+        /**
          * Snapshot
          * @description All desired-state objects visible to a render or a validation run.
          *
@@ -8929,7 +10579,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"] | components["schemas"]["DirectoryPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -9585,7 +11235,7 @@ export interface components {
          *         routes: L7 routes (``http`` only).
          *         default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.
          *         certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.
-         *         policy_set_ids: Redirect policy sets, applied before routing, in order.
+         *         policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.
          *         allow_list_id: Allow-list policy set (for example the Cloudflare ranges).
          *         enforce_allow_list: Reject connections from sources outside the allow list.
          *         deny_list_id: Allow-list policy set whose networks are refused (for example a country or
@@ -21599,7 +23249,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -21690,7 +23340,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"] | components["schemas"]["DirectoryPolicySetCreate"];
             };
         };
         responses: {
@@ -21807,7 +23457,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -21985,7 +23635,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"] | components["schemas"]["DirectoryPolicySetPatch"];
             };
         };
         responses: {

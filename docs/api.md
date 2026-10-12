@@ -63,8 +63,16 @@ Policy sets and routing profiles are unions on `kind`:
 
 | Collection | `kind` values | Fields |
 | --- | --- | --- |
-| `policy-sets` | `redirect` | `rules[]` |
+| `policy-sets` | `redirect` | `rules[]` (`match`, `redirect`) |
 | | `allow_list` | `cidrs[]`, `managed_by` |
+| | `rewrite` | `rules[]` (`phase`, `match`, `action`: `set_header`, `add_header`, `remove_header`, `replace_prefix`), ADR 0102 |
+| | `respond` | `rules[]` (`match`, `status`, `content_type`, `body`, `retry_after_s`), ADR 0103 |
+| | `error_pages` | `pages[]` (`status`, `content_type`, `body`), ADR 0103 |
+| | `access` | `oidc`, `default_mode`, `rules[]` (`match`, `mode`, `groups`, `email_domains`), `identity_headers`, `auth_path`, ADR 0130 to 0132 |
+| | `directory` | `connector` (`type`: `ldap`, `saml` or `local`, with its settings), ADR 0137; an access set names it in `oidc.directory_id` |
+| | `jwt` | `rules[]` (`match`, `issuer`, `audiences`, `required_scopes`, `leeway_s`, `keys[]` (`kid`, `alg`, `public_key_pem`), `subject_header`), ADR 0135 |
+| | `client_cert` | `identities[]` (`by`, `value`, `user`, `groups`), `rules[]` (`match`, `mode`, `groups`), `user_header`, `groups_header`, ADR 0136 |
+| | `rate_limit` | `rules[]` (`match`, `key`, `header_name`, `max_requests`, `period_s`, `max_concurrent`, `action`, `deny_status`, `tarpit_s`, `table_size`), ADR 0110 |
 | `routing-profiles` | `vrrp` | `vrid`, `interface`, `advert_interval_s`, `base_priority`, `priority_step`, `static_routes[]` |
 | | `bgp` | `asn`, `bfd`, `peers[]` (`peer_ip`, `remote_asn`, `md5_ref`, `max_prefixes`), `max_prefixes`, `max_paths`, `static_routes[]` |
 
@@ -83,7 +91,7 @@ the change reaches) and `se_groups` with the changed files (`before`, `after`, u
 
 `POST …/apply` takes an optional `message` (up to 2000 characters) that is kept as the revision message: revisions return `message`, and the Git mirror commit body carries it.
 
-Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`. A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type, and `members`, the number of people with a
+Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`, plus `stick_table_entries` (total rate-limit table size, ADR 0110). A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type, and `members`, the number of people with a
 grant in the tenant.
 
 `POST …/apply` returns `202 {job_id}`. When the tenant has `require_approval` it answers `403` unless the caller is
