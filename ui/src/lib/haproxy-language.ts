@@ -85,6 +85,7 @@ export const haproxyLanguage = {
         "type.identifier",
       ],
       [/"([^"\\]|\\.)*"/, "string"],
+      [/\[[0-9a-fA-F:.]+\](\/\d+)?(:\d+)?/, "number.float"],
       [/\b\d{1,3}(\.\d{1,3}){3}(\/\d+)?(:\d+)?\b/, "number.float"],
       [/\b\d+(ms|s|m|h|d)?\b/, "number"],
       [/[A-Za-z_][\w.-]*/, { cases: { "@keywords": "keyword", "@default": "" } }],

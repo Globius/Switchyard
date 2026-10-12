@@ -30,7 +30,7 @@ export const VS = {
   enabled: true,
   protocol: "http",
   se_group_id: "g1",
-  vip: "10.0.0.20",
+  vip: "2001:0db8:abcd:0012:0000:0000:0000:006f",
   vip_pool_id: null,
   ports: [
     { port: 80, tls: false, http2: false, proxy_protocol: false, https_redirect_port: 443 },

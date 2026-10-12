@@ -1,4 +1,5 @@
 /** Networks and VIP pools: the subnets engines attach to, the ranges VIPs come from, and who holds each address. */
+import { compareIp } from "@/lib/ip";
 import { Combobox } from "@/components/ui/combobox";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -255,8 +256,13 @@ function NetworkSheet({
         </p>
         {input("name", t("Name"))}
         <div className="grid grid-cols-2 gap-3">
-          {input("cidr", t("CIDR"), true)}
-          {input("gateway", t("Gateway"), true)}
+          {input(
+            "cidr",
+            t("CIDR"),
+            true,
+            t("IPv4 or IPv6, for example 10.40.12.0/24 or 2001:db8:12::/64"),
+          )}
+          {input("gateway", t("Gateway"), true, t("In the same family as the CIDR"))}
           {input("sdn_zone", t("SDN zone"))}
           {input("vnet", t("VNet"))}
           {input("vlan_or_vni", t("VLAN / VNI"), false, t("A VLAN id, or a VNI for EVPN."))}
@@ -519,9 +525,7 @@ function Addresses({ tenant, pool, draftId }: { tenant: string; pool: Pool; draf
             state: "draft",
           });
     }
-    return [...byAddr.values()].sort((x, y) =>
-      x.address.localeCompare(y.address, undefined, { numeric: true }),
-    );
+    return [...byAddr.values()].sort((x, y) => compareIp(x.address, y.address));
   }, [live.data, after.data, draftId]);
   const shown = rows.filter((r) =>
     `${r.address} ${r.name}`.toLowerCase().includes(q.trim().toLowerCase()),
@@ -749,8 +753,8 @@ export function Networks({ tenant }: { tenant: string }) {
                         })()}
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs">{n.cidr}</td>
-                    <td className="px-4 py-3 font-mono text-xs">{n.gateway ?? "—"}</td>
+                    <td className="px-4 py-3 font-mono text-xs break-all">{n.cidr}</td>
+                    <td className="px-4 py-3 font-mono text-xs break-all">{n.gateway ?? "—"}</td>
                     <td className="px-4 py-3 font-mono text-xs">
                       {n.sdn_zone || n.vnet ? `${n.sdn_zone ?? "—"} · ${n.vnet ?? "—"}` : "—"}
                     </td>
