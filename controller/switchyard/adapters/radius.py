@@ -180,11 +180,15 @@ def parse_packet(data: bytes) -> Packet:
     return Packet(code, ident, data[4:20], tuple(attrs), data)
 
 
-def verify_response(data: bytes, request: bytes, secret: bytes) -> Packet:
+def verify_response(
+    data: bytes, request: bytes, secret: bytes, *, require_message_authenticator: bool = True
+) -> Packet:
     """Parse an answer and check that it answers ``request`` and was made with ``secret``.
 
     The Response Authenticator is ``MD5(code, id, length, request authenticator, attributes,
-    secret)``; when the answer carries a Message-Authenticator it is verified too.
+    secret)``, which MD5 collisions can be made to fit (BlastRADIUS, CVE-2024-3596). The
+    Message-Authenticator (an HMAC) closes that, so it is required by default; it is verified
+    whenever present. Servers that never send one need ``require_message_authenticator=False``.
 
     Raises:
         RadiusError: If either check fails (the caller treats the exchange as failed).
@@ -199,6 +203,8 @@ def verify_response(data: bytes, request: bytes, secret: bytes) -> Packet:
     if not hmac.compare_digest(expected, packet.authenticator):
         raise RadiusError("the response is not authentic (wrong shared secret?)")
     mac = packet.first(MESSAGE_AUTHENTICATOR)
+    if mac is None and require_message_authenticator:
+        raise RadiusError("the response has no Message-Authenticator")
     if mac is not None:
         zeroed = _zero_message_authenticator(packet.raw, request[4:20])
         if not hmac.compare_digest(_message_authenticator(zeroed, secret), mac):
@@ -227,6 +233,8 @@ def build_response(
     request: bytes,
     secret: bytes,
     attrs: list[tuple[int, bytes]] | None = None,
+    *,
+    message_authenticator: bool = True,
 ) -> bytes:
     """Build a signed answer to ``request`` (used by the fake server and by tests).
 
@@ -234,10 +242,19 @@ def build_response(
         >>> req = build_access_request(b"s", 1, "a", "p", nas_identifier="n")
         >>> verify_response(build_response(ACCESS_ACCEPT, req, b"s"), req, b"s").code
         2
+        >>> bare = build_response(ACCESS_ACCEPT, req, b"s", message_authenticator=False)
+        >>> verify_response(bare, req, b"s", require_message_authenticator=False).code
+        2
     """
     items = list(attrs or [])
+    if message_authenticator:
+        items.insert(0, (MESSAGE_AUTHENTICATOR, bytes(16)))
     body = _encode_attrs(items)
     head = struct.pack("!BBH", code, request[1], 20 + len(body))
+    if message_authenticator:
+        # HMAC over the packet with the request authenticator in place of the response one
+        mac = _message_authenticator(head + request[4:20] + body, secret)
+        body = body[:2] + mac + body[18:]
     auth = hashlib.md5(head + request[4:20] + body + secret).digest()  # noqa: S324
     return head + auth + body
 
@@ -290,6 +307,7 @@ class RadiusServer:
     timeout_s: float = 3.0
     retries: int = 2
     group_attribute: str = "filter_id"
+    require_message_authenticator: bool = True
 
 
 class _Protocol(asyncio.DatagramProtocol):
@@ -343,7 +361,12 @@ class UdpRadiusClient:
                     except TimeoutError:
                         break
                     try:
-                        packet = verify_response(data, request, srv.secret)
+                        packet = verify_response(
+                            data,
+                            request,
+                            srv.secret,
+                            require_message_authenticator=srv.require_message_authenticator,
+                        )
                     except RadiusError:
                         continue  # a stray or forged datagram; keep waiting for the real one
                     return interpret(packet, srv.group_attribute)
@@ -372,8 +395,14 @@ class FakeRadiusServer:
         users: Mapping[str, tuple[str, tuple[str, ...]]],
         *,
         challenge: Mapping[str, str] | None = None,
+        sign_responses: bool = True,
     ) -> None:
-        """Serve ``users`` (name to password and groups); ``challenge`` maps users to their code."""
+        """Serve ``users`` (name to password and groups); ``challenge`` maps users to their code.
+
+        ``sign_responses`` False makes it behave like a legacy server that never sends a
+        Message-Authenticator.
+        """
+        self.sign_responses = sign_responses
         self.secret = secret
         self.users = dict(users)
         #: user -> one-time code required after a challenge round
@@ -450,4 +479,7 @@ class FakeRadiusServer:
                 ok = password == user[0]
                 code = ACCESS_ACCEPT if ok else ACCESS_REJECT
                 attrs = [(FILTER_ID, g.encode()) for g in user[1]] if ok else []
-            self._sock.sendto(build_response(code, data, self.secret, attrs), addr)
+            reply = build_response(
+                code, data, self.secret, attrs, message_authenticator=self.sign_responses
+            )
+            self._sock.sendto(reply, addr)

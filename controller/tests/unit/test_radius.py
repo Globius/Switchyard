@@ -139,3 +139,50 @@ def test_wrong_secret_and_silence_are_errors_not_success() -> None:
         srv.stop()
     with pytest.raises(r.RadiusError):
         asyncio.run(_client(port).authenticate("alice", "pw"))  # nobody listens any more
+
+
+def test_a_response_without_message_authenticator_is_refused_unless_allowed() -> None:
+    req = _req()
+    bare = r.build_response(r.ACCESS_ACCEPT, req, SECRET, message_authenticator=False)
+    with pytest.raises(r.RadiusError, match="Message-Authenticator"):
+        r.verify_response(bare, req, SECRET)
+    assert r.verify_response(bare, req, SECRET, require_message_authenticator=False).code == 2
+
+
+def test_a_forged_message_authenticator_is_refused() -> None:
+    req = _req()
+    good = bytearray(r.build_response(r.ACCESS_ACCEPT, req, SECRET))
+    # attribute 80 comes first: flip a bit of its value, then fix the Response Authenticator so only
+    # the HMAC can catch it
+    good[22] ^= 1
+    import hashlib
+
+    good[4:20] = hashlib.md5(  # noqa: S324 - the protocol's own construction
+        bytes(good[:4]) + req[4:20] + bytes(good[20:]) + SECRET
+    ).digest()
+    with pytest.raises(r.RadiusError, match="Message-Authenticator"):
+        r.verify_response(bytes(good), req, SECRET)
+
+
+def test_a_legacy_server_needs_to_be_allowed_explicitly() -> None:
+    srv = r.FakeRadiusServer(SECRET, {"alice": ("pw", ())}, sign_responses=False)
+    port = srv.start()
+    try:
+        strict = r.UdpRadiusClient(
+            r.RadiusServer("127.0.0.1", port, SECRET, timeout_s=0.3, retries=0)
+        )
+        with pytest.raises(r.RadiusError):
+            asyncio.run(strict.authenticate("alice", "pw"))
+        lenient = r.UdpRadiusClient(
+            r.RadiusServer(
+                "127.0.0.1",
+                port,
+                SECRET,
+                timeout_s=0.3,
+                retries=0,
+                require_message_authenticator=False,
+            )
+        )
+        assert asyncio.run(lenient.authenticate("alice", "pw")).status == "accept"
+    finally:
+        srv.stop()

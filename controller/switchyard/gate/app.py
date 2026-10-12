@@ -164,6 +164,7 @@ def default_client(cfg: fl.GateConfig, server: str) -> RadiusClient:
             s.timeout_s,
             s.retries,
             cfg.group_attribute,
+            s.require_message_authenticator,
         )
     )
 

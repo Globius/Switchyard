@@ -2241,6 +2241,9 @@ class RadiusServerSpec(Model):
         host / port: Where the server listens (UDP, 1812 by default).
         secret_ref: OpenBao path of the shared secret (never the secret).
         timeout_s / retries: Per-attempt wait and number of retransmissions.
+        require_message_authenticator: Refuse answers without a Message-Authenticator (the
+            protection against BlastRADIUS, CVE-2024-3596). Turn it off only for a legacy server
+            that cannot send one.
     """
 
     name: Name
@@ -2249,6 +2252,7 @@ class RadiusServerSpec(Model):
     secret_ref: SecretRef
     timeout_s: int = Field(default=3, ge=1, le=10)
     retries: int = Field(default=2, ge=0, le=5)
+    require_message_authenticator: bool = True
 
 
 class FlowCondition(Model):

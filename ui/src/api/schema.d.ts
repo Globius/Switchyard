@@ -11721,6 +11721,9 @@ export interface components {
          *         host / port: Where the server listens (UDP, 1812 by default).
          *         secret_ref: OpenBao path of the shared secret (never the secret).
          *         timeout_s / retries: Per-attempt wait and number of retransmissions.
+         *         require_message_authenticator: Refuse answers without a Message-Authenticator (the
+         *             protection against BlastRADIUS, CVE-2024-3596). Turn it off only for a legacy server
+         *             that cannot send one.
          */
         RadiusServerSpec: {
             /** Host */
@@ -11732,6 +11735,11 @@ export interface components {
              * @default 1812
              */
             port: number;
+            /**
+             * Require Message Authenticator
+             * @default true
+             */
+            require_message_authenticator: boolean;
             /**
              * Retries
              * @default 2

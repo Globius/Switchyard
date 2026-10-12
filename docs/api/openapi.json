@@ -16360,7 +16360,7 @@
       },
       "RadiusServerSpec": {
         "additionalProperties": false,
-        "description": "One RADIUS server a ``radius`` directory can ask (ADR 0195).\n\nAttributes:\n    name: Name a flow step uses to pick this server.\n    host / port: Where the server listens (UDP, 1812 by default).\n    secret_ref: OpenBao path of the shared secret (never the secret).\n    timeout_s / retries: Per-attempt wait and number of retransmissions.",
+        "description": "One RADIUS server a ``radius`` directory can ask (ADR 0195).\n\nAttributes:\n    name: Name a flow step uses to pick this server.\n    host / port: Where the server listens (UDP, 1812 by default).\n    secret_ref: OpenBao path of the shared secret (never the secret).\n    timeout_s / retries: Per-attempt wait and number of retransmissions.\n    require_message_authenticator: Refuse answers without a Message-Authenticator (the\n        protection against BlastRADIUS, CVE-2024-3596). Turn it off only for a legacy server\n        that cannot send one.",
         "properties": {
           "host": {
             "title": "Host",
@@ -16374,6 +16374,11 @@
             "default": 1812,
             "title": "Port",
             "type": "integer"
+          },
+          "require_message_authenticator": {
+            "default": true,
+            "title": "Require Message Authenticator",
+            "type": "boolean"
           },
           "retries": {
             "default": 2,

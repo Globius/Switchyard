@@ -323,6 +323,7 @@ def render_gate_config(inst: BrokerInstance, secrets: Mapping[str, str], broker_
             "secret": value,
             "timeout_s": srv.timeout_s,
             "retries": srv.retries,
+            "require_message_authenticator": srv.require_message_authenticator,
         }
     signing = _secret(secrets, conn.signing_secret_ref, f"directory {name}")
     if len(signing) < 16:

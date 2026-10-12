@@ -15,6 +15,7 @@ revoke, keeps working until its certificate expires and not longer.
    `SWITCHYARD_DEVICE_PKI_MOUNT`), create an issuer, and a role named after the tenant, for example `acme-devices`, with
    `client_flag=true`, `server_flag=false`, `allow_any_name=true` (the controller sets the names), `allowed_uri_sans=urn:switchyard:device:acme:*`
    and a maximum TTL of at least the certificate lifetime. One role per tenant, so one tenant's devices are never trusted by another's ports.
+   Let the controller's token sign with it: `path "pki-devices/sign/acme-devices" { capabilities = ["update"] }`.
 2. **Store the issuing CA** of that role as a client CA certificate record (see [TLS and client certificates](features/tls.md)); call it
    `acme-device-ca`.
 3. **A posture policy:**

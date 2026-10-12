@@ -194,6 +194,7 @@ class TestFiles:
             "secret": "radius-secret-2",
             "timeout_s": 3,
             "retries": 2,
+            "require_message_authenticator": True,
         }
         assert gate["steps"][1] == {
             "name": "otp",

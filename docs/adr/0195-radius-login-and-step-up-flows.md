@@ -14,7 +14,7 @@ login service of our own" stays possible. Dex does have an `authproxy` connector
 ## Decision
 
 **A `radius` connector for `directory` policy sets.** `servers` (one to four, each `name`, `host`, `port` 1812, `secret_ref`,
-`timeout_s`, `retries`), `nas_identifier`, `group_attribute` (`filter_id` or `class`), `email_domain` (RADIUS has no address, so the
+`timeout_s`, `retries`, `require_message_authenticator`), `nas_identifier`, `group_attribute` (`filter_id` or `class`), `email_domain` (RADIUS has no address, so the
 user gets `<name>@<email_domain>`; a name that already has an `@` is used as is), `signing_secret_ref` (the key for the gate's cookies)
 and `login_timeout_s`. A server address is a host name or a routable IP; loopback, link-local, unspecified, multicast and reserved
 addresses are refused, so a tenant cannot aim the gate at services on the broker host. Shared secrets and the signing key are
@@ -25,7 +25,9 @@ connector. The controller's public proxy sends that directory's path to the gate
 directories), not to Dex. The gate
 
 - serves the sign-in page and checks the person with a RADIUS Access-Request (PAP password, Message-Authenticator, retransmission,
-  answers verified against the shared secret; a wrong secret, a forged or missing answer is a failure, never a success);
+  answers verified against the shared secret; a wrong secret, a forged answer or one without a Message-Authenticator is a failure,
+  never a success. The Message-Authenticator is required by default because the Response Authenticator alone is open to the
+  BlastRADIUS attack (CVE-2024-3596); `require_message_authenticator: false` is for a legacy server that cannot send one);
 - forwards `/callback` and `/callback/<connector>` to Dex with `X-Remote-User`, `X-Remote-User-Email` and `X-Remote-Group` **only
   after** a valid sign-in, and removes those three headers from every request that comes from outside;
 - passes every other path to Dex unchanged (discovery, keys, token endpoint).
@@ -73,8 +75,7 @@ come from `Filter-Id` unless `class` is chosen.
 
 ## Not built
 
-EAP methods, CHAP, RADIUS accounting, Message-Authenticator checks beyond the verified Response Authenticator when the server sends
-none, server failover, and a TOTP factor kept in Switchyard (the second factor is a RADIUS server). The UI has no editor for
+EAP methods, CHAP, RADIUS accounting, RadSec (RADIUS over TLS), server failover, and a TOTP factor kept in Switchyard (the second factor is a RADIUS server). The UI has no editor for
 directories yet (read-only list, [audit](../audit/2026-10-12-planned-vs-built.md)); use the API or `syctl`.
 
 ## Alternatives considered

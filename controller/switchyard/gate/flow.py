@@ -61,6 +61,7 @@ class Server:
     secret: str
     timeout_s: float = 3.0
     retries: int = 2
+    require_message_authenticator: bool = True
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,7 @@ class GateConfig:
                     s["secret"],
                     float(s.get("timeout_s", 3)),
                     int(s.get("retries", 2)),
+                    bool(s.get("require_message_authenticator", True)),
                 )
                 for n, s in data["servers"].items()
             }
