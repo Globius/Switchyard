@@ -1,0 +1,95 @@
+render:
+  se_group: seg-edge
+tenants:
+- id: t-acme
+  name: acme
+networks:
+- id: net-lb
+  tenant_id: t-acme
+  name: lb
+  cidr: 192.0.2.0/24
+  gateway: 192.0.2.1
+- id: net-be
+  tenant_id: t-acme
+  name: backend
+  cidr: 10.20.0.0/16
+se_groups:
+- id: seg-edge
+  tenant_id: t-acme
+  name: edge
+  ha_mode: vrrp
+  networks:
+  - network_id: net-lb
+    role: vip
+  - network_id: net-be
+    role: backend
+certificates:
+- id: c-vpn
+  tenant_id: t-acme
+  name: vpn-example-test
+  source: cloudflare_origin
+  sans:
+  - vpn.example.test
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/vpn-example-test
+- id: c-ca
+  tenant_id: t-acme
+  name: staff-ca
+  source: upload
+  purpose: client_ca
+  sans: []
+  not_after: '2038-01-01T00:00:00+00:00'
+  secret_ref: kv/tenants/acme/certs/staff-ca/01
+pools:
+- id: p-app
+  tenant_id: t-acme
+  name: intranet
+  members:
+  - address: 10.20.6.11
+    port: 8080
+policy_sets:
+- id: ps-certs
+  tenant_id: t-acme
+  name: staff-certs
+  kind: client_cert
+  user_header: X-Cert-User
+  groups_header: X-Cert-Groups
+  identities:
+  - by: cn
+    value: alice@example.test
+    user: alice
+    groups: [staff, ops.team]
+  - by: cn
+    value: bob@example.test
+    user: bob
+    groups: [staff]
+  - by: sha1
+    value: 0123456789abcdef0123456789abcdef01234567
+    user: build-robot
+    groups: [ops.team]
+  rules:
+  - match:
+      path_prefix: /ops
+    mode: groups
+    groups: [ops.team]
+  - match:
+      path_prefix: /staff
+    mode: identity
+  - mode: valid
+virtual_services:
+- id: v-intranet
+  tenant_id: t-acme
+  se_group_id: seg-edge
+  name: intranet
+  protocol: http
+  vip: 192.0.2.36
+  ports:
+  - port: 443
+    tls: true
+    client_ca_id: c-ca
+    client_verify: optional
+  certificate_ids:
+  - c-vpn
+  policy_set_ids:
+  - ps-certs
+  default_pool_id: p-app

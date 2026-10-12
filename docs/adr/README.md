@@ -92,3 +92,10 @@ Date: YYYY-MM-DD
 | [0142](0142-waf-sidecar-and-failure-mode.md) | WAF sidecar life cycle and failure mode | Accepted |
 | [0143](0143-waf-logs.md) | WAF logs in Loki | Accepted |
 | [0144](0144-waf-image-and-agent-contract.md) | What the SE image and the agent must provide for the WAF | Accepted |
+| [0130](0130-auth-service-architecture.md) | Authentication service: oauth2-proxy, loopback re-entry, closed by default | Accepted |
+| [0131](0131-access-rules-and-authorization.md) | Access rules and authorization | Accepted |
+| [0132](0132-identity-headers.md) | Identity headers to the origin | Accepted |
+| [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
+| [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
+| [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
+| [0137](0137-directory-logins-saml-ldap-radius-local.md) | Directory logins (SAML, LDAP, RADIUS, local users): not built, and why | Accepted |

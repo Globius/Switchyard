@@ -392,3 +392,32 @@ func TestStoppedFRRIsStartedNotReloaded(t *testing.T) {
 		t.Fatalf("removing the last frr file stops it: %v %v", resp, r.calls)
 	}
 }
+
+func TestAuthProxyConfigsAreSecretFlatCfgFilesRestartedAndStoppedWithTheirFiles(t *testing.T) {
+	a, priv, r := setup(t)
+	resp := a.Apply(context.Background(), request(t, priv, "a1", map[string]string{
+		"auth/web-sso.cfg": "client_secret = \"x\"\n",
+	}))
+	if !resp.Ok {
+		t.Fatal(resp.Error)
+	}
+	if !contains(r.calls, "systemctl restart sy-auth") {
+		t.Fatalf("the proxies must be restarted to read a new config: %v", r.calls)
+	}
+	if info, _ := os.Stat(filepath.Join(a.Root, "auth", "web-sso.cfg")); runtimeIsUnix() && info.Mode().Perm() != 0o600 {
+		t.Errorf("auth config mode %v, want 0600", info.Mode().Perm())
+	}
+	for _, bad := range []string{"auth/web.txt", "auth/sub/web.cfg"} {
+		resp = a.Apply(context.Background(), request(t, priv, "a-bad", map[string]string{bad: "x"}))
+		if resp.Ok {
+			t.Errorf("%s must not be accepted", bad)
+		}
+	}
+	resp = a.Apply(context.Background(), request(t, priv, "a2", map[string]string{"frr/frr.conf": "x"}))
+	if !resp.Ok {
+		t.Fatal(resp.Error)
+	}
+	if !contains(r.calls, "systemctl stop sy-auth") {
+		t.Fatalf("dropping the last access policy must stop the proxies: %v", r.calls)
+	}
+}
