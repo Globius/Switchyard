@@ -26,7 +26,7 @@ export interface PoolForm {
   health_monitor_id: string | null;
   tls: boolean;
   tls_verify: boolean;
-  persistence: { type: "source_ip"; table_size: number; timeout_s: number } | null;
+  persistence: NonNullable<PoolRead["persistence"]> | null;
   passive_check: PassiveCheck | null;
   slow_start_s: number | null;
   discovery: PoolDiscovery | null;
@@ -69,12 +69,15 @@ export function toForm(p: PoolRead): PoolForm {
     health_monitor_id: p.health_monitor_id ?? null,
     tls: p.tls,
     tls_verify: p.tls_verify,
+    // Cookie, header and URI persistence have no form yet: keep them as they are on save.
     persistence: p.persistence
-      ? {
-          type: "source_ip",
-          table_size: p.persistence.table_size ?? 100000,
-          timeout_s: p.persistence.timeout_s ?? 1800,
-        }
+      ? p.persistence.type === "source_ip"
+        ? {
+            type: "source_ip",
+            table_size: p.persistence.table_size ?? 100000,
+            timeout_s: p.persistence.timeout_s ?? 1800,
+          }
+        : structuredClone(p.persistence)
       : null,
     passive_check: p.passive_check ? { ...p.passive_check } : null,
     slow_start_s: p.slow_start_s ?? null,
@@ -93,7 +96,9 @@ export function poolPatch(base: PoolForm, next: PoolForm): Record<string, unknow
 }
 
 export function persistenceLabel(p: PoolForm["persistence"]): string {
-  return p ? `Source IP · ${Math.round(p.timeout_s / 60)} min` : "—";
+  if (!p) return "—";
+  if (p.type === "source_ip") return `Source IP · ${Math.round(p.timeout_s / 60)} min`;
+  return { http_cookie: "Cookie", header: "Header", uri: "URI" }[p.type];
 }
 
 function useMonitors(tenant: string, changeSet?: string) {
@@ -287,7 +292,7 @@ function PoolSheet({
                 aria-label={t("Persistence type")}
                 className={INPUT}
                 disabled={!write.allowed}
-                value={f.persistence ? "source_ip" : "none"}
+                value={f.persistence?.type ?? "none"}
                 onChange={(e) =>
                   set({
                     persistence:
@@ -299,6 +304,11 @@ function PoolSheet({
               >
                 <option value="none">{t("None")}</option>
                 <option value="source_ip">{t("Source IP")}</option>
+                {f.persistence && f.persistence.type !== "source_ip" && (
+                  <option value={f.persistence.type} disabled>
+                    {persistenceLabel(f.persistence)} {t("(set through the API)")}
+                  </option>
+                )}
               </select>
             </label>
             <label className="block space-y-1.5 text-sm font-medium">
@@ -307,10 +317,10 @@ function PoolSheet({
                 aria-label={t("Table size")}
                 type="number"
                 className={INPUT}
-                disabled={!write.allowed || !f.persistence}
-                value={f.persistence?.table_size ?? ""}
+                disabled={!write.allowed || f.persistence?.type !== "source_ip"}
+                value={f.persistence?.type === "source_ip" ? f.persistence.table_size : ""}
                 onChange={(e) =>
-                  f.persistence &&
+                  f.persistence?.type === "source_ip" &&
                   set({ persistence: { ...f.persistence, table_size: Number(e.target.value) } })
                 }
               />
@@ -321,17 +331,17 @@ function PoolSheet({
                 aria-label={t("Persistence timeout")}
                 type="number"
                 className={INPUT}
-                disabled={!write.allowed || !f.persistence}
-                value={f.persistence?.timeout_s ?? ""}
+                disabled={!write.allowed || f.persistence?.type !== "source_ip"}
+                value={f.persistence?.type === "source_ip" ? f.persistence.timeout_s : ""}
                 onChange={(e) =>
-                  f.persistence &&
+                  f.persistence?.type === "source_ip" &&
                   set({ persistence: { ...f.persistence, timeout_s: Number(e.target.value) } })
                 }
               />
             </label>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t("Source IP is the only persistence type in phase 1.")}
+            {t("Cookie, header and URI persistence are set through the API for now.")}
           </p>
         </fieldset>
         <fieldset className="space-y-3 rounded-lg border p-4">
@@ -574,6 +584,7 @@ function PoolSheet({
                       port: 8080,
                       weight: 100,
                       admin_state: "enabled",
+                      backup: false,
                     },
                   ],
                 })

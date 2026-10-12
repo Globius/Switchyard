@@ -104,6 +104,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 fall=hm.fall,
                 http=hm.http.model_dump(mode="json") if hm.http else None,
                 udp=hm.udp.model_dump(mode="json") if hm.udp else None,
+                preset=hm.preset,
             )
         )
     for c in snapshot.certificates:
@@ -167,6 +168,8 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 passive_check=p.passive_check.model_dump(mode="json") if p.passive_check else None,
                 slow_start_s=p.slow_start_s,
                 discovery=p.discovery.model_dump(mode="json") if p.discovery else None,
+                send_proxy=p.send_proxy,
+                client_certificate_id=p.client_certificate_id,
             )
         )
     for s in snapshot.virtual_services:
@@ -212,6 +215,8 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     port=mem.port,
                     weight=mem.weight,
                     admin_state=mem.admin_state.value,
+                    backup=mem.backup,
+                    maxconn=mem.maxconn,
                 )
             )
     for s in snapshot.virtual_services:
@@ -366,6 +371,7 @@ def rows_to_snapshot(
                 "fall": hm.fall,
                 "http": hm.http,
                 "udp": hm.udp,
+                "preset": hm.preset,
             }
             for hm in health_monitors
         ],
@@ -416,6 +422,8 @@ def rows_to_snapshot(
                 "passive_check": p.passive_check,
                 "slow_start_s": p.slow_start_s,
                 "discovery": p.discovery,
+                "send_proxy": p.send_proxy,
+                "client_certificate_id": p.client_certificate_id,
                 "members": [
                     {
                         "id": mem.id,
@@ -424,6 +432,8 @@ def rows_to_snapshot(
                         "port": mem.port,
                         "weight": mem.weight,
                         "admin_state": mem.admin_state,
+                        "backup": mem.backup,
+                        "maxconn": mem.maxconn,
                     }
                     for mem in members.get(p.id, [])
                 ],

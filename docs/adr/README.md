@@ -71,6 +71,10 @@ Date: YYYY-MM-DD
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
 | [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
+| [0105](0105-pool-persistence-kinds.md) | Pool persistence: cookie, header and URI | Accepted |
+| [0106](0106-member-options-and-send-proxy.md) | Member backup and maxconn, PROXY protocol to members | Accepted |
+| [0107](0107-backend-client-certificate.md) | Client certificate to pool members (backend mTLS) | Accepted |
+| [0108](0108-health-check-presets.md) | Health checks: body and header match, protocol presets | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
 | [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
 | [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |

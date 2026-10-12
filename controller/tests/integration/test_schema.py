@@ -32,6 +32,14 @@ def full_data() -> dict:  # type: ignore[type-arg]
             "http": {"path": "/healthz", "host": "app.example.test", "expect_status": [200, 204]},
         },
         {
+            "id": "hm-redis",
+            "tenant_id": "t-acme",
+            "name": "redis",
+            "type": "tcp",
+            "port": 6379,
+            "preset": "redis",
+        },
+        {
             "id": "hm-udp",
             "tenant_id": "t-acme",
             "name": "udp-probe",
@@ -65,20 +73,31 @@ def full_data() -> dict:  # type: ignore[type-arg]
     pool = data["pools"][0]
     pool.update(
         health_monitor_id="hm-http",
-        persistence={"type": "source_ip", "timeout_s": 600},
+        persistence={"type": "http_cookie", "name": "SY_SRV", "ttl_s": 3600, "secure": True},
+        send_proxy="v2",
+        client_certificate_id="cert-wild",
         tls=True,
         algorithm="leastconn",
         passive_check={"observe": "layer7", "error_limit": 4, "on_error": "fastinter"},
         slow_start_s=45,
     )
     pool["members"].append(
-        {"address": "10.20.0.12", "port": 80, "weight": 50, "admin_state": "drain", "name": "b"}
+        {
+            "address": "10.20.0.12",
+            "port": 80,
+            "weight": 50,
+            "admin_state": "drain",
+            "name": "b",
+            "backup": True,
+            "maxconn": 200,
+        }
     )
     data["pools"].append(
         {
             "id": "pool-tcp",
             "tenant_id": "t-acme",
             "name": "k8s",
+            "health_monitor_id": "hm-redis",
             "members": [{"address": "10.20.0.30", "port": 6443}],
         }
     )
