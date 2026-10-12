@@ -1317,6 +1317,13 @@ export function SecurityPolicySheet({
                   set={(n) => set({ max_connections_per_source: n })}
                   min={1}
                 />
+                {cfg.max_connections_per_source != null && cfg.max_connections_per_source < 50 && (
+                  <span role="note" className="block text-xs text-status-degraded">
+                    {t(
+                      "Below 50, people behind one shared address (an office, a mobile carrier) will be refused.",
+                    )}
+                  </span>
+                )}
               </Field>
               <Field label={t("New connections per source")}>
                 <Nums

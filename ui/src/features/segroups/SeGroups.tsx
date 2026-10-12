@@ -1230,6 +1230,21 @@ function Settings({ tenant, group }: { tenant: string; group: Group }) {
             >
               {t("Add engine")}
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!write.allowed || groupEngines.length === 0}
+              onClick={() => {
+                const backend = group.networks?.find((n) => n.role === "backend")?.network_id;
+                const members = groupEngines.slice(0, 16).map((e) => ({
+                  name: e.name,
+                  address: (e.addresses ?? []).find((a) => a.network_id === backend)?.address ?? "",
+                }));
+                setF({ ...f, peers: { ...f.peers!, members } });
+              }}
+            >
+              {t("Add all engines")}
+            </Button>
             <p className="text-xs text-muted-foreground">
               {t(
                 "Name is the host name HAProxy sees as its own; two to sixteen engines. IPv4 or IPv6.",
