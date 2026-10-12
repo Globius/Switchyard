@@ -1,0 +1,32 @@
+# Optional login broker (ADR 0137): Dex for directory logins (LDAP, SAML, local users).
+#   docker compose --env-file node.env -f compose.yaml -f compose.broker.yaml up -d
+# Set AUTH_BROKER_URL to the public base URL, for example https://auth.example.test/dex, and route
+# that path to the `proxy` service (include the generated routes.conf; see docs/runbooks/login-broker.md).
+services:
+  broker-render:
+    image: ${CONTROLLER_IMAGE:-switchyard-controller:latest}
+    restart: unless-stopped
+    entrypoint: ["sh", "-c"]
+    command:
+      - while true; do syctl broker render --out /broker || true; sleep 30; done
+    environment:
+      SWITCHYARD_DATABASE_URL: postgresql+psycopg://${DB_USER:-postgres}:${PG_SUPERUSER_PASSWORD}@${DB_HOSTS}/switchyard?target_session_attrs=read-write
+      SWITCHYARD_AUTH_BROKER_URL: ${AUTH_BROKER_URL}
+      SWITCHYARD_OPENBAO_ADDR: ${OPENBAO_ADDR:-}
+      SWITCHYARD_OPENBAO_ROLE_ID: ${OPENBAO_ROLE_ID:-}
+      SWITCHYARD_OPENBAO_SECRET_ID: ${OPENBAO_SECRET_ID:-}
+    volumes: [broker-config:/broker]
+  broker:
+    image: ghcr.io/dexidp/dex:v2.41.1-alpine
+    restart: unless-stopped
+    # Shares the proxy's network, so the instances' loopback ports are the proxy's loopback ports.
+    network_mode: "service:proxy"
+    user: root
+    entrypoint: ["/bin/sh", "/run.sh"]
+    environment: {BROKER_DIR: /broker}
+    volumes:
+      - ./broker/run.sh:/run.sh:ro
+      - broker-config:/broker:ro
+      - broker-state:/var/lib/dex
+    depends_on: [proxy, broker-render]
+volumes: {broker-config: {}, broker-state: {}}

@@ -375,6 +375,47 @@ def create_system_token(
     typer.echo(run(go()))
 
 
+broker_app = typer.Typer(
+    help="The login broker for LDAP, SAML and local users.", no_args_is_help=True
+)
+app.add_typer(broker_app, name="broker")
+
+
+@broker_app.command("render")
+def broker_render(
+    out: Annotated[Path, typer.Option("--out", help="Directory for dex/*.yaml.", file_okay=False)],
+    broker_url: Annotated[
+        str | None,
+        typer.Option(
+            "--broker-url",
+            envvar="SWITCHYARD_AUTH_BROKER_URL",
+            help="Public base URL of the broker, for example https://auth.example.test/dex.",
+        ),
+    ] = None,
+    url: DatabaseUrl = DEFAULT_DATABASE_URL,
+) -> None:
+    """Write one Dex config per directory in use (ADR 0137); print the files that changed."""
+    from switchyard import runtime
+    from switchyard.services.broker import BrokerError, build_broker_files, write_broker_files
+
+    if not broker_url:
+        raise fail("set --broker-url or SWITCHYARD_AUTH_BROKER_URL", 2)
+
+    async def go() -> dict[str, str]:
+        admin = make_engine(url, role=ADMIN_ROLE)
+        try:
+            return await build_broker_files(admin, runtime.secrets_backend(), broker_url)
+        finally:
+            await admin.dispose()
+
+    try:
+        files = run(go())
+    except BrokerError as exc:
+        raise fail(str(exc), 2) from exc
+    for rel in write_broker_files(files, out):
+        typer.echo(rel)
+
+
 jwks_app = typer.Typer(help="Work with JSON Web Key Sets (JWT policy sets).", no_args_is_help=True)
 app.add_typer(jwks_app, name="jwks")
 
@@ -1049,6 +1090,18 @@ def api_import_avi(
             typer.echo(f"{f['level']:8} {f['object']}: {f['message']}")
     if result["change_set_id"]:
         typer.echo(f"change set {result['change_set_id']}")
+
+
+@api_app.command("controller-reset")
+def api_controller_reset(
+    confirm: Annotated[bool, typer.Option(help="Confirm at once (from this address).")] = False,
+) -> None:
+    """Propose dropping the controller's configured address (the environment default applies)."""
+    result = _api_run(_call("PUT", "/system/controller/pending", {"reset_to_default": True}))
+    typer.echo(f"waiting for confirmation until {result['pending']['expires_at']}")
+    if confirm:
+        _api_run(_call("POST", "/system/controller/confirm", None))
+        typer.echo("confirmed")
 
 
 @api_app.command("k8s-sync")

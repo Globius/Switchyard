@@ -53,3 +53,7 @@ and certificate stay with whatever fronts the controller (a reverse proxy, `SWIT
 ## Environment
 
 `SWITCHYARD_PUBLIC_URL` is the fallback until a confirmed URL exists. A confirmed URL overrides it.
+
+## Going back to the default address
+
+To drop the configured public URL (the address from `SWITCHYARD_PUBLIC_URL` or the request applies again), propose `{"reset_to_default": true}` to `PUT /system/controller/pending` (or `syctl api controller-reset`) and confirm as usual. It changes only the public URL, so `vip` and `certificate` are refused with it, and no change set is opened.

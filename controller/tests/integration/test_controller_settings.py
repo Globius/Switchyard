@@ -265,6 +265,14 @@ async def test_without_a_management_tenant_only_the_public_url_can_change(pg_url
         assert proposed.pending["state"] == "waiting" and proposed.pending["change_set_id"] is None
         done = await controller.confirm(ROOT, request_host=NEW)
         assert done.public_url == f"https://{NEW}"
+        with pytest.raises(FieldErrors):
+            await controller.propose(ROOT, fqdn="", reset_to_default=True, vip="192.0.2.40")
+        reset = await controller.propose(ROOT, reset_to_default=True)
+        assert reset.pending["state"] == "waiting" and reset.pending["after"]["public_url"] is None
+        back = await controller.confirm(ROOT, request_host="anything.test")
+        assert back.public_url is None, "the environment's address applies again"
+        shown = await controller.view(ROOT, env_public_url="http://localhost:8000")
+        assert shown.public_url == "http://localhost:8000"
 
 
 async def test_only_system_administrators_may_use_it(rig: Rig) -> None:

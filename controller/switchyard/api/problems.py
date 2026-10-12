@@ -129,6 +129,7 @@ UNION_TAGS = frozenset(
         "access",
         "jwt",
         "client_cert",
+        "directory",
         "vrrp",
         "bgp",
         "oidc",
@@ -138,7 +139,9 @@ UNION_TAGS = frozenset(
 
 
 #: Tags of the rewrite-action union; Pydantic puts one right after the ``action`` field.
-ACTION_TAGS = frozenset({"set_header", "add_header", "remove_header", "replace_prefix"})
+ACTION_TAGS = frozenset(
+    {"set_header", "add_header", "remove_header", "replace_prefix", "ldap", "saml", "local"}
+)
 
 
 def strip_union_tag(loc: tuple[Any, ...]) -> str:
@@ -158,7 +161,11 @@ def strip_union_tag(loc: tuple[Any, ...]) -> str:
     parts = list(loc[1:])
     if loc and loc[0] == "body" and len(parts) > 1 and parts[0] in UNION_TAGS:
         parts = parts[1:]
-    parts = [p for i, p in enumerate(parts) if not (p in ACTION_TAGS and parts[i - 1] == "action")]
+    parts = [
+        p
+        for i, p in enumerate(parts)
+        if not (p in ACTION_TAGS and parts[i - 1] in ("action", "connector"))
+    ]
     return ".".join(str(p) for p in parts) or str(loc[0])
 
 

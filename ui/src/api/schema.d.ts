@@ -4273,6 +4273,7 @@ export interface components {
              * @enum {string}
              */
             mode: "public" | "login" | "groups" | "email_domains";
+            posture?: components["schemas"]["Posture"] | null;
         };
         /**
          * AcmeChallenge
@@ -4654,6 +4655,11 @@ export interface components {
             details: {
                 [key: string]: unknown;
             };
+            /**
+             * Fires At
+             * @description `pending` only: when the alert fires if the value stays past the threshold (`since` plus the rule's `for_minutes`).
+             */
+            fires_at?: string | null;
             /** Key */
             key: string;
             /** Rule */
@@ -6046,6 +6052,30 @@ export interface components {
             summary: string;
         };
         /**
+         * ClaimCheck
+         * @description A condition on a claim of the signed-in user's ID token (ADR 0138).
+         *
+         *     ``op`` is ``present``, ``true`` (a JSON ``true``), ``equals`` (``value``) or ``in``
+         *     (``values``). The token was verified by the authentication proxy.
+         */
+        ClaimCheck: {
+            /** Name */
+            name: string;
+            /**
+             * Op
+             * @default true
+             * @enum {string}
+             */
+            op: "present" | "true" | "equals" | "in";
+            /** Value */
+            value?: string | null;
+            /**
+             * Values
+             * @default []
+             */
+            values: string[];
+        };
+        /**
          * ClientCertPolicySet
          * @description Use the TLS client certificate as the identity (ADR 0136).
          *
@@ -6294,9 +6324,16 @@ export interface components {
             confirm_within_s?: number | null;
             /**
              * Fqdn
-             * @description The host name users will open.
+             * @description The host name users will open (not needed with `reset_to_default`).
+             * @default
              */
             fqdn: string;
+            /**
+             * Reset To Default
+             * @description Drop the confirmed public URL so the address from the environment applies again. Needs confirmation like any other change.
+             * @default false
+             */
+            reset_to_default: boolean;
             /**
              * Vip
              * @description A new VIP for the `controller` service.
@@ -6587,6 +6624,101 @@ export interface components {
             message: string;
             /** Path */
             path: string;
+        };
+        /**
+         * DirectoryPolicySet
+         * @description A place users sign in that is not an OIDC provider of their own: LDAP, SAML or local users.
+         *
+         *     A central broker (Dex, one instance per directory) turns it into an OIDC issuer that an
+         *     access set names with ``oidc.directory_id`` (ADR 0137). Directories are not attached to
+         *     services.
+         */
+        DirectoryPolicySet: {
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** DirectoryPolicySetCreate */
+        DirectoryPolicySetCreate: {
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+        };
+        /** DirectoryPolicySetPatch */
+        DirectoryPolicySetPatch: {
+            /** Connector */
+            connector?: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"] | null;
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name?: string | null;
+        };
+        /**
+         * DirectoryPolicySetRead
+         * @description DirectoryPolicySet as returned by the API.
+         */
+        DirectoryPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** Connector */
+            connector: components["schemas"]["LdapConnector"] | components["schemas"]["SamlConnector"] | components["schemas"]["LocalConnector"];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "directory";
+            /** Name */
+            name: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
         };
         /**
          * DiscoveryGroup
@@ -8634,6 +8766,123 @@ export interface components {
             summary: string;
         };
         /**
+         * LdapConnector
+         * @description Sign in against an LDAP or Active Directory server (ADR 0137).
+         *
+         *     Attributes:
+         *         host: Server name; ``port`` defaults to 636 (``ldaps``). With ``starttls`` use 389.
+         *         security: ``ldaps`` or ``starttls``; a clear-text connection is not offered.
+         *         root_ca_pem: PEM certificate(s) that sign the server certificate (public; omit to use the
+         *             broker's system roots).
+         *         bind_dn: Service account used to search.
+         *         bind_password_ref: OpenBao path of its password.
+         *         user_base_dn / user_filter: Where and how users are found; the sign-in name is matched
+         *             with ``username_attr``.
+         *         group_base_dn: Where groups are searched (omit for no groups); a user's groups are those
+         *             whose ``group_member_attr`` holds the user's ``group_user_attr`` (``DN`` or an
+         *             attribute name).
+         */
+        LdapConnector: {
+            /** Bind Dn */
+            bind_dn: string;
+            /** Bind Password Ref */
+            bind_password_ref: string;
+            /**
+             * Email Attr
+             * @default mail
+             */
+            email_attr: string;
+            /** Group Base Dn */
+            group_base_dn?: string | null;
+            /**
+             * Group Filter
+             * @default (objectClass=groupOfNames)
+             */
+            group_filter: string;
+            /**
+             * Group Member Attr
+             * @default member
+             */
+            group_member_attr: string;
+            /**
+             * Group Name Attr
+             * @default cn
+             */
+            group_name_attr: string;
+            /**
+             * Group User Attr
+             * @default DN
+             */
+            group_user_attr: string;
+            /** Host */
+            host: string;
+            /**
+             * Id Attr
+             * @default uid
+             */
+            id_attr: string;
+            /**
+             * Name Attr
+             * @default cn
+             */
+            name_attr: string;
+            /**
+             * Port
+             * @default 636
+             */
+            port: number;
+            /** Root Ca Pem */
+            root_ca_pem?: string | null;
+            /**
+             * Security
+             * @default ldaps
+             * @enum {string}
+             */
+            security: "ldaps" | "starttls";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ldap";
+            /** User Base Dn */
+            user_base_dn: string;
+            /**
+             * User Filter
+             * @default (objectClass=person)
+             */
+            user_filter: string;
+            /**
+             * Username Attr
+             * @default uid
+             */
+            username_attr: string;
+        };
+        /**
+         * LocalConnector
+         * @description Users defined here, with passwords checked by the broker. They have no groups.
+         */
+        LocalConnector: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "local";
+            /** Users */
+            users: components["schemas"]["LocalUser"][];
+        };
+        /**
+         * LocalUser
+         * @description A user kept by Switchyard: a name, an address and a bcrypt hash in OpenBao.
+         */
+        LocalUser: {
+            /** Email */
+            email: string;
+            /** Password Hash Ref */
+            password_hash_ref: string;
+            /** Username */
+            username: string;
+        };
+        /**
          * LogLine
          * @description One line of a job's log.
          */
@@ -9243,7 +9492,10 @@ export interface components {
          * @description OpenID Connect login against a tenant's identity provider (ADR 0130).
          *
          *     Attributes:
-         *         issuer: The provider's issuer URL (``https``); discovery is read from it.
+         *         issuer: The provider's issuer URL (``https``); discovery is read from it. Or:
+         *         directory_id: a ``directory`` policy set; the broker is the issuer (ADR 0137).
+         *         redirect_hosts: With a directory, the hosts the service is reached on; the broker only
+         *             redirects back to ``https://<host><auth_path>/callback`` for these.
          *         client_id: The client registered for Switchyard at the provider.
          *         client_secret_ref: OpenBao path of the client secret (never the secret).
          *         cookie_secret_ref: OpenBao path of the key that signs and encrypts session cookies
@@ -9277,13 +9529,20 @@ export interface components {
             cookie_refresh_s: number;
             /** Cookie Secret Ref */
             cookie_secret_ref: string;
+            /** Directory Id */
+            directory_id?: string | null;
             /**
              * Groups Claim
              * @default groups
              */
             groups_claim: string;
             /** Issuer */
-            issuer: string;
+            issuer?: string | null;
+            /**
+             * Redirect Hosts
+             * @default []
+             */
+            redirect_hosts: string[];
             /**
              * Scopes
              * @default [
@@ -9332,10 +9591,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -10030,6 +10289,28 @@ export interface components {
              * @default 1
              */
             version: number;
+        };
+        /**
+         * Posture
+         * @description Device conditions a request must meet besides the login (ADR 0138).
+         *
+         *     Attributes:
+         *         device_certificate: The connection presented a client certificate the port's client CA
+         *             accepted (the service needs a port with ``client_ca_id``).
+         *         claims: Conditions on ID-token claims, all of which must hold (for example a
+         *             ``device_compliant`` claim the identity provider issues).
+         */
+        Posture: {
+            /**
+             * Claims
+             * @default []
+             */
+            claims: components["schemas"]["ClaimCheck"][];
+            /**
+             * Device Certificate
+             * @default false
+             */
+            device_certificate: boolean;
         };
         /**
          * PrincipalNameRead
@@ -11410,6 +11691,42 @@ export interface components {
             matches_desired: boolean;
         };
         /**
+         * SamlConnector
+         * @description Sign in through a SAML 2.0 identity provider (ADR 0137).
+         *
+         *     Attributes:
+         *         sso_url: The provider's single sign-on URL (https).
+         *         ca_pem: The provider's signing certificate (public PEM); assertions must be signed by it.
+         *         username_attr / email_attr / groups_attr: Assertion attributes to read (``groups_attr`` of
+         *             ``None`` means no groups).
+         */
+        SamlConnector: {
+            /** Ca Pem */
+            ca_pem: string;
+            /**
+             * Email Attr
+             * @default email
+             */
+            email_attr: string;
+            /**
+             * Groups Attr
+             * @default groups
+             */
+            groups_attr: string | null;
+            /** Sso Url */
+            sso_url: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "saml";
+            /**
+             * Username Attr
+             * @default name
+             */
+            username_attr: string;
+        };
+        /**
          * SamlProviderIn
          * @description Create a SAML provider. Send metadata (URL or XML) or the fields it would fill in.
          */
@@ -11920,7 +12237,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["ProtectionPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"] | components["schemas"]["RateLimitPolicySet"] | components["schemas"]["WafPolicySet"] | components["schemas"]["ProtectionPolicySet"] | components["schemas"]["AccessPolicySet"] | components["schemas"]["JwtPolicySet"] | components["schemas"]["ClientCertPolicySet"] | components["schemas"]["DirectoryPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -27313,7 +27630,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -27404,7 +27721,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["ProtectionPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"] | components["schemas"]["RateLimitPolicySetCreate"] | components["schemas"]["WafPolicySetCreate"] | components["schemas"]["ProtectionPolicySetCreate"] | components["schemas"]["AccessPolicySetCreate"] | components["schemas"]["JwtPolicySetCreate"] | components["schemas"]["ClientCertPolicySetCreate"] | components["schemas"]["DirectoryPolicySetCreate"];
             };
         };
         responses: {
@@ -27521,7 +27838,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"] | components["schemas"]["RateLimitPolicySetRead"] | components["schemas"]["WafPolicySetRead"] | components["schemas"]["ProtectionPolicySetRead"] | components["schemas"]["AccessPolicySetRead"] | components["schemas"]["JwtPolicySetRead"] | components["schemas"]["ClientCertPolicySetRead"] | components["schemas"]["DirectoryPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -27699,7 +28016,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["ProtectionPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"] | components["schemas"]["RateLimitPolicySetPatch"] | components["schemas"]["WafPolicySetPatch"] | components["schemas"]["ProtectionPolicySetPatch"] | components["schemas"]["AccessPolicySetPatch"] | components["schemas"]["JwtPolicySetPatch"] | components["schemas"]["ClientCertPolicySetPatch"] | components["schemas"]["DirectoryPolicySetPatch"];
             };
         };
         responses: {

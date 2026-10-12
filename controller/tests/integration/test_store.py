@@ -297,6 +297,33 @@ async def test_limit_access_token_and_certificate_policy_sets_round_trip(
             "rules": [{"mode": "identity"}],
         },
     ]
+    data["policy_sets"].append(
+        {
+            "id": "ps-dir",
+            "tenant_id": t,
+            "name": "dir",
+            "kind": "directory",
+            "connector": {
+                "type": "local",
+                "users": [
+                    {
+                        "username": "alice",
+                        "email": "alice@example.test",
+                        "password_hash_ref": "kv/tenants/acme/auth/alice",
+                    }
+                ],
+            },
+        }
+    )
+    sso = next(p for p in data["policy_sets"] if p["id"] == "ps-sso")
+    sso["oidc"] = {
+        "directory_id": "ps-dir",
+        "redirect_hosts": ["app.example.test"],
+        "client_id": "web",
+        "client_secret_ref": "kv/tenants/acme/auth/c",
+        "cookie_secret_ref": "kv/tenants/acme/auth/k",
+    }
+    sso["rules"] = []
     vs = data["virtual_services"][0]
     vs["policy_set_ids"] = ["ps-lim", "ps-sso", "ps-jwt", "ps-cc"]
     vs["ports"][0] = {"port": 443, "tls": True, "client_ca_id": "ca-1"}
@@ -311,4 +338,5 @@ async def test_limit_access_token_and_certificate_policy_sets_round_trip(
         "sso": "access",
         "tok": "jwt",
         "cc": "client_cert",
+        "dir": "directory",
     }
