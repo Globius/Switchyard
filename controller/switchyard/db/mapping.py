@@ -142,6 +142,19 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     managed_by=ps.managed_by,
                 )
             )
+        elif isinstance(ps, dm.AccessPolicySet | dm.ClientCertPolicySet | dm.DirectoryPolicySet):
+            rows.append(
+                m.PolicySetRow(
+                    id=ps.id,
+                    version=ps.version,
+                    tenant_id=ps.tenant_id,
+                    name=ps.name,
+                    kind=ps.kind,
+                    config=ps.model_dump(
+                        mode="json", exclude={"id", "version", "tenant_id", "name", "kind"}
+                    ),
+                )
+            )
         else:
             items = ps.pages if isinstance(ps, dm.ErrorPagesPolicySet) else ps.rules
             rows.append(
@@ -532,6 +545,8 @@ def _policy_to_dict(ps: m.PolicySetRow) -> dict[str, Any]:
     if ps.kind == "allow_list":
         base["cidrs"] = [_net(c) for c in ps.cidrs or []]
         base["managed_by"] = ps.managed_by
+    elif ps.kind in ("access", "client_cert", "directory"):
+        base |= ps.config or {}
     elif ps.kind == "error_pages":
         base["pages"] = ps.rules
     else:

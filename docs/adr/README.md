@@ -68,16 +68,6 @@ Date: YYYY-MM-DD
 | [0077](0077-wait-for-storage-reloads.md) | Wait for the reload a storage call starts | Accepted |
 | [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
-| [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
-| [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
-| [0162](0162-gslb-zones-ownership-and-dnssec.md) | GSLB zones: ownership, DNSSEC, several sites | Accepted |
-| [0165](0165-gslb-latency-selection.md) | GSLB latency-based selection: measured round trips with hysteresis | Accepted |
-| [0164](0164-dnsdist-in-front-of-powerdns.md) | dnsdist in front of PowerDNS: ANY and transfers refused, per-network rate limits | Accepted |
-| [0163](0163-gslb-scope-and-deferred.md) | GSLB: what is built and what is not | Accepted |
-| [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
-| [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
-| [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |
-| [0123](0123-tenant-log-api.md) | Tenant-wide request log API | Accepted |
 | [0105](0105-pool-persistence-kinds.md) | Pool persistence: cookie, header and URI | Accepted |
 | [0106](0106-member-options-and-send-proxy.md) | Member backup and maxconn, PROXY protocol to members | Accepted |
 | [0107](0107-backend-client-certificate.md) | Client certificate to pool members (backend mTLS) | Accepted |
@@ -90,6 +80,16 @@ Date: YYYY-MM-DD
 | [0119](0119-weighted-pool-routes.md) | Weighted pool routes (canary and blue-green) | Accepted |
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
+| [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
+| [0162](0162-gslb-zones-ownership-and-dnssec.md) | GSLB zones: ownership, DNSSEC, several sites | Accepted |
+| [0165](0165-gslb-latency-selection.md) | GSLB latency-based selection: measured round trips with hysteresis | Accepted |
+| [0164](0164-dnsdist-in-front-of-powerdns.md) | dnsdist in front of PowerDNS: ANY and transfers refused, per-network rate limits | Accepted |
+| [0163](0163-gslb-scope-and-deferred.md) | GSLB: what is built and what is not | Accepted |
+| [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
+| [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
+| [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |
+| [0123](0123-tenant-log-api.md) | Tenant-wide request log API | Accepted |
 | [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
 | [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
@@ -101,3 +101,11 @@ Date: YYYY-MM-DD
 | [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
 | [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
 | [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |
+| [0130](0130-auth-service-architecture.md) | Authentication service: oauth2-proxy, loopback re-entry, closed by default | Accepted |
+| [0131](0131-access-rules-and-authorization.md) | Access rules and authorization | Accepted |
+| [0132](0132-identity-headers.md) | Identity headers to the origin | Accepted |
+| [0133](0133-auth-events.md) | Auth events: what is logged and where it goes | Accepted |
+| [0135](0135-jwt-validation-for-apis.md) | JWT validation for APIs | Accepted |
+| [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
+| [0137](0137-directory-logins-saml-ldap-local.md) | Directory logins (SAML, LDAP, local users) through a central login broker | Accepted |
+| [0138](0138-device-posture-signals.md) | Device posture signals in access rules | Accepted |

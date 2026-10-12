@@ -289,13 +289,17 @@ class ControllerSettings:
         self,
         principal: Principal,
         *,
-        fqdn: str,
+        fqdn: str = "",
         vip: str | None = None,
         certificate: str | None = None,
         confirm_within_s: int | None = None,
+        reset_to_default: bool = False,
         request_id: str | None = None,
     ) -> ControllerView:
         """Validate and start a change.
+
+        With ``reset_to_default`` the confirmed public URL is dropped (the address from the
+        environment applies again) once the change is confirmed; ``fqdn`` is then ignored.
 
         Without a management tenant only ``fqdn`` is accepted: it is the public URL and takes
         effect at confirm.
@@ -306,12 +310,18 @@ class ControllerSettings:
         """
         require(principal, "manage", "controller")
         errors = FieldErrors()
-        try:
-            host = v.validate_hostname(fqdn.strip().lower())
-        except ValueError as exc:
-            errors.add("fqdn", "invalid", str(exc))
-            host = ""
+        host = ""
+        if reset_to_default:
+            if vip or certificate:
+                errors.add("vip", "conflict", "a reset changes only the public URL")
+        else:
+            try:
+                host = v.validate_hostname(fqdn.strip().lower())
+            except ValueError as exc:
+                errors.add("fqdn", "invalid", str(exc))
         management = await self._management()
+        if reset_to_default:
+            management = None
         if management is None and (vip or certificate):
             errors.add(
                 "vip" if vip else "certificate",
@@ -327,7 +337,7 @@ class ControllerSettings:
             current_url = row.public_url
         now = self._clock()
         before_host = urlparse(current_url).hostname if current_url else None
-        after: dict[str, Any] = {"fqdn": host}
+        after: dict[str, Any] = {"fqdn": host or None}
         before: dict[str, Any] = {"fqdn": before_host}
         ops: list[ChangeOp] = []
         scheme, port_suffix = "https", ""
@@ -339,7 +349,7 @@ class ControllerSettings:
                 service, snapshot, host, vip, certificate, now, errors, before, after
             )
             errors.raise_if_any()
-        after["public_url"] = f"{scheme}://{host}{port_suffix}"
+        after["public_url"] = f"{scheme}://{host}{port_suffix}" if host else None
         before["public_url"] = current_url
         pending: dict[str, Any] = {
             "state": "applying" if ops else "waiting",
@@ -501,7 +511,7 @@ class ControllerSettings:
             if not pending or pending.get("state") != "waiting":
                 raise ConflictError("no change is waiting for confirmation")
             after = pending["after"]
-            changed = after["fqdn"] != pending["before"].get("fqdn")
+            changed = bool(after["fqdn"]) and after["fqdn"] != pending["before"].get("fqdn")
             seen = (request_host or "").split(":")[0].lower()
             if changed and seen != after["fqdn"]:
                 raise PermissionDeniedError(

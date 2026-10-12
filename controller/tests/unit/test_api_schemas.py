@@ -151,7 +151,18 @@ def test_object_reads_document_etag_and_if_match_problems() -> None:
     [
         (
             "policy-sets",
-            {"redirect", "allow_list", "rewrite", "respond", "error_pages", "rate_limit"},
+            {
+                "redirect",
+                "allow_list",
+                "rewrite",
+                "respond",
+                "error_pages",
+                "rate_limit",
+                "access",
+                "jwt",
+                "client_cert",
+                "directory",
+            },
         ),
         ("routing-profiles", {"vrrp", "bgp"}),
     ],
