@@ -29,7 +29,8 @@ BAO() { dc exec -T -e BAO_ADDR=http://127.0.0.1:8200 -e BAO_TOKEN="$(cat secrets
 PY() { docker run --rm -i --user 0 -v "$(pwd -W 2>/dev/null || pwd)/secrets:/secrets" --entrypoint python "$IMG" - "$@"; }
 
 say "controller image"
-docker image inspect "$IMG" >/dev/null 2>&1 || docker build -q -f ../controller/Dockerfile -t "$IMG" ../.. >/dev/null
+# --network host: the build uses the host's own network, so it also works on a host with only IPv6.
+docker image inspect "$IMG" >/dev/null 2>&1 || docker build --network host -q -f ../controller/Dockerfile -t "$IMG" ../.. >/dev/null
 
 say "PostgreSQL and OpenBao"
 dc up -d postgres openbao >/dev/null
