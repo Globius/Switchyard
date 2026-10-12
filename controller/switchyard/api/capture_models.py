@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Request and response models of the packet capture API (ADR 0194)."""
 
 from datetime import datetime

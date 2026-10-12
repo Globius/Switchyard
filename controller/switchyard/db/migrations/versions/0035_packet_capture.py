@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Packet captures taken on service engines (ADR 0194).
 
 ``packet_capture`` holds the request, how it ended and the pcap itself (at most 16 MiB), and is

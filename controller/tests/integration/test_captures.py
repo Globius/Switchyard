@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Packet captures on engines (ADR 0194): request, run through the agent, download, expire."""
 
 from collections.abc import AsyncIterator

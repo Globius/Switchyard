@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Automatic scale-out of SE groups (ADR 0194).
 
 A group with an ``autoscale`` block is watched by the ``autoscale_se_groups`` job. Each run, per

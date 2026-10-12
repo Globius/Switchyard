@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Command gen reads the controller's OpenAPI document and writes the provider's resource table.
 //
 // Usage (from the provider directory):

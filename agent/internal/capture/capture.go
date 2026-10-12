@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package capture runs tcpdump for the controller's packet capture job (ADR 0194).
 //
 // It is not a general sniffer. The filter is built here from structured fields (an interface, a
