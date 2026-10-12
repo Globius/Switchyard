@@ -2586,6 +2586,7 @@ def create_app(
         responses=_ok([ex.AUTOSCALE]),
     )
     async def list_autoscale(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        require(who, "read", "tenant_data")  # who may ask is decided before whether it is on
         if svc.autoscaler is None:
             raise ApiError(
                 404, "autoscaling needs Proxmox and agent enrollment", code="not_enabled"
@@ -2605,6 +2606,7 @@ def create_app(
         responses=_ok([ex.DNS_RECORD]),
     )
     async def list_dns_records(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        require(who, "read", "tenant_data")
         if svc.dns_records is None:
             raise ApiError(404, "DNS records need OpenBao credentials", code="not_enabled")
         return await svc.dns_records.list_records(who, tenant.id)
@@ -2621,6 +2623,7 @@ def create_app(
         responses=_ok({"written": 2, "deleted": 0, "failed": 0}),
     )
     async def sync_dns_records(tenant: Tenant, who: Who, svc: Services) -> dict[str, int]:
+        require(who, "write", "infrastructure")
         if svc.dns_records is None:
             raise ApiError(404, "DNS records need OpenBao credentials", code="not_enabled")
         return await svc.dns_records.sync(who, tenant.id, request_id=_rid())
