@@ -16,4 +16,4 @@ Plan item A8: HTTPS body and header matches, and protocol-aware checks for Redis
 2. `HealthMonitor.preset` on a `tcp` monitor: `redis`, `smtp`, `ldap` or `mysql`, rendered with HAProxy's built-in `option redis-check`,
    `option smtpchk`, `option ldap-check` and `option mysql-check`. A fixed list: no custom send and expect strings.
 3. A `preset` on a non-`tcp` monitor is refused by the model; a `tcp` monitor on a UDP pool is refused as before.
-4. Table (migration 0023): `health_monitor.preset`. The HTTP additions live in the existing `http` JSON column.
+4. Table (migration 0028): `health_monitor.preset`. The HTTP additions live in the existing `http` JSON column.

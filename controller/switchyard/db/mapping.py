@@ -123,6 +123,9 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 ocsp_stapling=c.ocsp_stapling,
                 purpose=c.purpose,
                 crl_secret_ref=c.crl_secret_ref,
+                acme_provider=c.acme_provider,
+                challenge=c.challenge.value if c.challenge else None,
+                dns_provider=c.dns_provider,
             )
         )
     for ps in snapshot.policy_sets:
@@ -384,6 +387,9 @@ def rows_to_snapshot(
                 "ocsp_stapling": c.ocsp_stapling,
                 "purpose": c.purpose,
                 "crl_secret_ref": c.crl_secret_ref,
+                "acme_provider": c.acme_provider,
+                "challenge": c.challenge,
+                "dns_provider": c.dns_provider,
             }
             for c in certificates
         ],

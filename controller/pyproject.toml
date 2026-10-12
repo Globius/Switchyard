@@ -21,6 +21,7 @@ dependencies = [
   "acme>=5.8.0",
   "joserfc>=1.7.5",
   "signxml>=5.1.0",
+  "dnspython>=2.9.0",
 ]
 
 [project.scripts]

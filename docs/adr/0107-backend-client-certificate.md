@@ -15,5 +15,5 @@ ADR 0070 left mTLS from HAProxy to the pool members out (decision 5, 06 planned-
 2. The renderer adds `crt /etc/switchyard/certs/<name>.pem` to the server options. The certificate is in the group's snapshot view and in
    `referenced_certs`, so the agent bundle writes the same `<name>.pem` file as for a front-end certificate; one certificate can serve both.
 3. UDP pools reject it. Verifying the member's certificate stays `tls_verify`.
-4. Table (migration 0023): `pool.client_certificate_id`, a same-tenant foreign key, so a certificate in use cannot be deleted.
+4. Table (migration 0028): `pool.client_certificate_id`, a same-tenant foreign key, so a certificate in use cannot be deleted.
 5. The `haproxy -c` sandbox copies a throwaway bundle to every `crt` path on a server line, as it does for crt-lists.
