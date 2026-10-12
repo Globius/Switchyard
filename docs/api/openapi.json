@@ -3138,6 +3138,44 @@
         "title": "CaImportIn",
         "type": "object"
       },
+      "CertIdentity": {
+        "additionalProperties": false,
+        "description": "Map a client certificate to a user and groups (ADR 0136).\n\nAttributes:\n    by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,\n        for individual certificates).\n    value: The common name, or 40 hex digits.\n    user: The user name written to the user header.\n    groups: Groups written to the groups header.",
+        "properties": {
+          "by": {
+            "default": "cn",
+            "enum": [
+              "cn",
+              "sha1"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "groups": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Groups",
+            "type": "array"
+          },
+          "user": {
+            "title": "User",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "user"
+        ],
+        "title": "CertIdentity",
+        "type": "object"
+      },
       "CertImportIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /certificates/import``.",
@@ -4113,6 +4151,361 @@
           "op_count"
         ],
         "title": "ChangeSetSummary",
+        "type": "object"
+      },
+      "ClientCertPolicySet": {
+        "additionalProperties": false,
+        "description": "Use the TLS client certificate as the identity (ADR 0136).\n\nAttributes:\n    identities: Certificates the set knows (up to 500).\n    rules: Ordered rules; the first that matches decides. Requests that match no rule are\n        not checked.\n    user_header: Header that receives the mapped user (client copies removed first).\n    groups_header: Header that receives the mapped groups, comma separated.",
+        "properties": {
+          "groups_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-Groups",
+            "title": "Groups Header"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CertIdentity"
+            },
+            "maxItems": 500,
+            "title": "Identities",
+            "type": "array"
+          },
+          "kind": {
+            "const": "client_cert",
+            "default": "client_cert",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCertRule"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "user_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-User",
+            "title": "User Header"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules"
+        ],
+        "title": "ClientCertPolicySet",
+        "type": "object"
+      },
+      "ClientCertPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "groups_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-Groups",
+            "title": "Groups Header"
+          },
+          "identities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CertIdentity"
+            },
+            "maxItems": 500,
+            "title": "Identities",
+            "type": "array"
+          },
+          "kind": {
+            "const": "client_cert",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCertRule"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "user_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-User",
+            "title": "User Header"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "rules"
+        ],
+        "title": "ClientCertPolicySetCreate",
+        "type": "object"
+      },
+      "ClientCertPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "groups_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Groups Header"
+          },
+          "identities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CertIdentity"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identities"
+          },
+          "kind": {
+            "const": "client_cert",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ClientCertRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          },
+          "user_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Header"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ClientCertPolicySetPatch",
+        "type": "object"
+      },
+      "ClientCertPolicySetRead": {
+        "additionalProperties": false,
+        "description": "ClientCertPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "groups_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-Groups",
+            "title": "Groups Header"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CertIdentity"
+            },
+            "maxItems": 500,
+            "title": "Identities",
+            "type": "array"
+          },
+          "kind": {
+            "const": "client_cert",
+            "default": "client_cert",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ClientCertRule"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "user_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "X-Cert-User",
+            "title": "User Header"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "ClientCertPolicySetRead",
+        "type": "object"
+      },
+      "ClientCertRule": {
+        "additionalProperties": false,
+        "description": "What a request needs from its client certificate.\n\nAttributes:\n    match: Requests the rule covers (empty: all). The first rule that matches decides.\n    mode: ``valid`` (any certificate the port's client CA accepts), ``identity`` (the\n        certificate must be in ``identities``) or ``groups`` (and its identity must have one of\n        ``groups``).\n    groups: Groups for mode ``groups``.",
+        "properties": {
+          "groups": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Groups",
+            "type": "array"
+          },
+          "match": {
+            "$ref": "#/components/schemas/RouteMatch",
+            "default": {
+              "headers": [],
+              "methods": [],
+              "query": [],
+              "source_cidrs": []
+            }
+          },
+          "mode": {
+            "default": "valid",
+            "enum": [
+              "valid",
+              "identity",
+              "groups"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "ClientCertRule",
         "type": "object"
       },
       "DeployIn": {
@@ -7680,6 +8073,305 @@
         "title": "JobState",
         "type": "string"
       },
+      "JwtKey": {
+        "additionalProperties": false,
+        "description": "A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.\n\nAttributes:\n    kid: The ``kid`` header the key belongs to; without it the key is tried for every token.\n    alg: The signature algorithm the token must declare.\n    public_key_pem: The key as a PEM ``PUBLIC KEY`` block (convert a JWK with\n        ``syctl jwks convert``).",
+        "properties": {
+          "alg": {
+            "default": "RS256",
+            "enum": [
+              "RS256",
+              "RS384",
+              "RS512",
+              "ES256",
+              "ES384",
+              "ES512",
+              "PS256",
+              "PS384",
+              "PS512"
+            ],
+            "title": "Alg",
+            "type": "string"
+          },
+          "kid": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9._:/@=-]{1,128}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kid"
+          },
+          "public_key_pem": {
+            "title": "Public Key Pem",
+            "type": "string"
+          }
+        },
+        "required": [
+          "public_key_pem"
+        ],
+        "title": "JwtKey",
+        "type": "object"
+      },
+      "JwtPolicySet": {
+        "additionalProperties": false,
+        "description": "Validate JWT bearer tokens for APIs, with no login page (ADR 0135).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "jwt",
+            "default": "jwt",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/JwtRule"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules"
+        ],
+        "title": "JwtPolicySet",
+        "type": "object"
+      },
+      "JwtPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "jwt",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/JwtRule"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "rules"
+        ],
+        "title": "JwtPolicySetCreate",
+        "type": "object"
+      },
+      "JwtPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "jwt",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/JwtRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "JwtPolicySetPatch",
+        "type": "object"
+      },
+      "JwtPolicySetRead": {
+        "additionalProperties": false,
+        "description": "JwtPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "jwt",
+            "default": "jwt",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/JwtRule"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "JwtPolicySetRead",
+        "type": "object"
+      },
+      "JwtRule": {
+        "additionalProperties": false,
+        "description": "Require a valid bearer token on the requests ``match`` selects.\n\nA token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``\ncontains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and\nevery ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is\nanswered 401.\n\nAttributes:\n    match: Requests the rule covers (empty: all).\n    issuer: The expected ``iss`` claim.\n    audiences: Accepted ``aud`` values (a string claim or an element of an array claim).\n    required_scopes: Scopes the token must carry.\n    leeway_s: Clock difference tolerated on ``exp``.\n    keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).\n    subject_header: Request header that receives the ``sub`` claim of a valid token;\n        client copies of it are removed first.",
+        "properties": {
+          "audiences": {
+            "default": [],
+            "items": {
+              "pattern": "^[A-Za-z0-9._~:/@=+-]{1,256}$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Audiences",
+            "type": "array"
+          },
+          "issuer": {
+            "title": "Issuer",
+            "type": "string"
+          },
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/JwtKey"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Keys",
+            "type": "array"
+          },
+          "leeway_s": {
+            "default": 30,
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Leeway S",
+            "type": "integer"
+          },
+          "match": {
+            "$ref": "#/components/schemas/RouteMatch",
+            "default": {
+              "headers": [],
+              "methods": [],
+              "query": [],
+              "source_cidrs": []
+            }
+          },
+          "required_scopes": {
+            "default": [],
+            "items": {
+              "pattern": "^[A-Za-z0-9._:/-]{1,64}$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Required Scopes",
+            "type": "array"
+          },
+          "subject_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Header"
+          }
+        },
+        "required": [
+          "issuer",
+          "keys"
+        ],
+        "title": "JwtRule",
+        "type": "object"
+      },
       "LatestRevision": {
         "additionalProperties": false,
         "description": "The newest revision.",
@@ -9283,7 +9975,7 @@
         "title": "OpsIn",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
@@ -9292,7 +9984,9 @@
                 "mapping": {
                   "access": "#/components/schemas/AccessPolicySetRead",
                   "allow_list": "#/components/schemas/AllowListPolicySetRead",
+                  "client_cert": "#/components/schemas/ClientCertPolicySetRead",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
+                  "jwt": "#/components/schemas/JwtPolicySetRead",
                   "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                   "redirect": "#/components/schemas/RedirectPolicySetRead",
                   "respond": "#/components/schemas/RespondPolicySetRead",
@@ -9321,6 +10015,12 @@
                 },
                 {
                   "$ref": "#/components/schemas/AccessPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/JwtPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/ClientCertPolicySetRead"
                 }
               ]
             },
@@ -9343,7 +10043,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, AccessPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -13925,7 +14625,9 @@
                 "mapping": {
                   "access": "#/components/schemas/AccessPolicySet",
                   "allow_list": "#/components/schemas/AllowListPolicySet",
+                  "client_cert": "#/components/schemas/ClientCertPolicySet",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySet",
+                  "jwt": "#/components/schemas/JwtPolicySet",
                   "rate_limit": "#/components/schemas/RateLimitPolicySet",
                   "redirect": "#/components/schemas/RedirectPolicySet",
                   "respond": "#/components/schemas/RespondPolicySet",
@@ -13954,6 +14656,12 @@
                 },
                 {
                   "$ref": "#/components/schemas/AccessPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/JwtPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/ClientCertPolicySet"
                 }
               ]
             },
@@ -34045,7 +34753,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -34212,7 +34920,9 @@
                   "mapping": {
                     "access": "#/components/schemas/AccessPolicySetCreate",
                     "allow_list": "#/components/schemas/AllowListPolicySetCreate",
+                    "client_cert": "#/components/schemas/ClientCertPolicySetCreate",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
+                    "jwt": "#/components/schemas/JwtPolicySetCreate",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetCreate",
                     "redirect": "#/components/schemas/RedirectPolicySetCreate",
                     "respond": "#/components/schemas/RespondPolicySetCreate",
@@ -34241,6 +34951,12 @@
                   },
                   {
                     "$ref": "#/components/schemas/AccessPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/JwtPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ClientCertPolicySetCreate"
                   }
                 ],
                 "title": "Body"
@@ -34596,7 +35312,9 @@
                     "mapping": {
                       "access": "#/components/schemas/AccessPolicySetRead",
                       "allow_list": "#/components/schemas/AllowListPolicySetRead",
+                      "client_cert": "#/components/schemas/ClientCertPolicySetRead",
                       "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
+                      "jwt": "#/components/schemas/JwtPolicySetRead",
                       "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                       "redirect": "#/components/schemas/RedirectPolicySetRead",
                       "respond": "#/components/schemas/RespondPolicySetRead",
@@ -34625,6 +35343,12 @@
                     },
                     {
                       "$ref": "#/components/schemas/AccessPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/JwtPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ClientCertPolicySetRead"
                     }
                   ],
                   "title": "Response Get Policy Sets Api V1 Tenants  T  Policy Sets  Object Id  Get"
@@ -34791,7 +35515,9 @@
                   "mapping": {
                     "access": "#/components/schemas/AccessPolicySetPatch",
                     "allow_list": "#/components/schemas/AllowListPolicySetPatch",
+                    "client_cert": "#/components/schemas/ClientCertPolicySetPatch",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
+                    "jwt": "#/components/schemas/JwtPolicySetPatch",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetPatch",
                     "redirect": "#/components/schemas/RedirectPolicySetPatch",
                     "respond": "#/components/schemas/RespondPolicySetPatch",
@@ -34820,6 +35546,12 @@
                   },
                   {
                     "$ref": "#/components/schemas/AccessPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/JwtPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ClientCertPolicySetPatch"
                   }
                 ],
                 "title": "Body"

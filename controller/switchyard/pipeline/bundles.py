@@ -15,6 +15,7 @@ from switchyard.render import escape as esc
 from switchyard.render.auth import auth_secret_refs, render_auth_files
 from switchyard.render.escape import RenderError
 from switchyard.render.routing import EngineSlot, render_agent_bundle
+from switchyard.render.tokens import jwt_key_files
 
 CERT_PATH = "certs/{name}.pem"
 CA_PATH = "certs/ca-{name}.pem"
@@ -129,6 +130,7 @@ async def engine_files(
         except RenderError as exc:
             raise BundleError(str(exc)) from exc
     files |= await _auth_files(snapshot, group, secrets)
+    files |= jwt_key_files(snapshot, group.id)
     for cert in referenced_certs(snapshot, group.id):
         if cert.purpose == "client_ca":
             files |= await _ca_files(cert, secrets)

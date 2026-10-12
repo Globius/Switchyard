@@ -145,6 +145,67 @@ def path_regex(prefix: str) -> str:
     return prefix.replace(".", "[.]").replace("+", "[+]")
 
 
+def audience_regex(value: str) -> str:
+    """Return the regex source for a literal token audience (``.`` and ``+`` as classes).
+
+    Example:
+        >>> audience_regex("https://api.example.test/v1")
+        'https://api[.]example[.]test/v1'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9._~:/@=+-]{1,256}", value):
+        raise RenderError(f"unsafe audience {value!r}")
+    return value.replace(".", "[.]").replace("+", "[+]")
+
+
+def issuer(value: str) -> str:
+    """Return ``value`` if it is a safe issuer URL for an ACL operand, else raise.
+
+    Example:
+        >>> issuer("https://login.example.test/realms/a")
+        'https://login.example.test/realms/a'
+    """
+    if not re.fullmatch(r"https://[a-z0-9.:-]+(/[A-Za-z0-9._~/%:@+-]{0,512})?", value):
+        raise RenderError(f"unsafe issuer {value!r}")
+    return value
+
+
+def cert_key(value: str, by: str) -> str:
+    """Return a map key for a certificate identity: a common name or a SHA-1 fingerprint.
+
+    Example:
+        >>> cert_key("alice@example.test", "cn")
+        'alice@example.test'
+    """
+    pattern = r"[0-9a-f]{40}" if by == "sha1" else r"[A-Za-z0-9._@:-]{1,128}"
+    if not re.fullmatch(pattern, value):
+        raise RenderError(f"unsafe certificate identity {value!r}")
+    return value
+
+
+def cert_label(value: str) -> str:
+    """Return a user label for a map value, or raise.
+
+    Example:
+        >>> cert_label("alice")
+        'alice'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9._@:-]{1,128}", value):
+        raise RenderError(f"unsafe user label {value!r}")
+    return value
+
+
+def group_label(value: str) -> str:
+    """Return a group name for a map value, or raise.
+
+    Example:
+        >>> group_label("ops.team")
+        'ops.team'
+    """
+    if not re.fullmatch(r"[A-Za-z0-9_.:/@=-]{1,128}", value):
+        raise RenderError(f"unsafe group {value!r}")
+    return value
+
+
 def group_regex(value: str) -> str:
     """Return the regex source for a literal identity-provider group name.
 

@@ -35,6 +35,7 @@ from switchyard.render.auth import auth_secret_refs, render_auth_files
 from switchyard.render.escape import RenderError, ident
 from switchyard.render.haproxy import fingerprint_of, render_haproxy
 from switchyard.render.routing import EngineSlot, render_agent_bundle
+from switchyard.render.tokens import jwt_key_files
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import NotFoundError, PermissionDeniedError
 
@@ -574,6 +575,8 @@ class StatusService:
         )
         with contextlib.suppress(RenderError):
             files |= render_auth_files(snapshot, group.id, placeholders)
+        with contextlib.suppress(RenderError):
+            files |= jwt_key_files(snapshot, group.id)
         return record, rendered.fingerprint, files
 
     async def running_config(

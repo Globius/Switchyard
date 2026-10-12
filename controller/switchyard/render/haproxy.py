@@ -51,6 +51,7 @@ from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
 from switchyard.render import escape as esc
 from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
+from switchyard.render.tokens import key_file
 
 ROOT_DIR = "/etc/switchyard"
 BASE_DIR = "/etc/switchyard/haproxy"
@@ -670,6 +671,145 @@ class _Renderer:
             ]
         return [f"http-request replace-path '^{source}(/.*)?$' '{target}{_GROUP_1}'{suffix}"]
 
+    def _jwt_rules(self, svc: dm.VirtualService) -> list[str]:
+        """Validate bearer tokens (stage 4b, ADR 0135); the first rule that matches decides."""
+        rules: list[str] = []
+        tok = "var(txn.sy_jtok)"
+        count = 0
+        for pid in svc.policy_set_ids:
+            policy = self.policies[pid]
+            if not isinstance(policy, dm.JwtPolicySet):
+                continue
+            for index, rule in enumerate(policy.rules, start=1):
+                if not rules:
+                    rules += [
+                        f"http-request set-var(txn.sy_jtok) http_auth_bearer{self._if()}",
+                        f"http-request set-var(txn.sy_jnow) date{self._if()}",
+                    ]
+                count += 1
+                flag = f"txn.sy_j{count}"
+                match = self._conditions(rule.match)
+                fresh = "!{ var(txn.sy_jdone) -m found }"
+                base = " ".join([*match, *([self.guard] if self.guard else []), fresh])
+                claims = [
+                    f"{{ {tok},jwt_payload_query('$.iss') -m str {esc.issuer(rule.issuer)} }}"
+                ]
+                if rule.audiences:
+                    alt = "|".join(sorted(esc.audience_regex(a) for a in rule.audiences))
+                    claims.append(
+                        f"{{ {tok},jwt_payload_query('$.aud') -m reg '(^|\")({alt})(\"|$)' }}"
+                    )
+                for scope in sorted(rule.required_scopes):
+                    claims.append(
+                        f"{{ {tok},jwt_payload_query('$.scope') -m reg "
+                        f"'(^| ){esc.group_regex(scope)}( |$)' }}"
+                    )
+                claims.append(
+                    f"{{ {tok},jwt_payload_query('$.exp','int'),sub(txn.sy_jnow),"
+                    f"add({rule.leeway_s}) -m int 1: }}"
+                )
+                if rule.subject_header:
+                    name = esc.header_name(rule.subject_header)
+                    rules.append(f"http-request del-header {name}{self._if()}")
+                for key_no, key in enumerate(rule.keys, start=1):
+                    path = key_file(policy.name, index, key_no)
+                    conds = [base, f"!{{ var({flag}) -m found }}"]
+                    conds.append(f"{{ {tok},jwt_verify({key.alg},{esc.arg(path)}) -m int 1 }}")
+                    if key.kid:
+                        conds.append(
+                            f"{{ {tok},jwt_header_query('$.kid') -m str {esc.arg(key.kid)} }}"
+                        )
+                    conds += claims
+                    rules.append(f"http-request set-var({flag}) int(1) if {' '.join(conds)}")
+                rules.append(
+                    f"http-request return status 401 hdr WWW-Authenticate Bearer "
+                    f"if {base} !{{ var({flag}) -m found }}"
+                )
+                if rule.subject_header:
+                    name = esc.header_name(rule.subject_header)
+                    rules.append(
+                        f"http-request set-var(txn.sy_jsub{count}) "
+                        f"{tok},jwt_payload_query('$.sub') if {{ var({flag}) -m found }}"
+                    )
+                    rules.append(
+                        f'http-request set-header {name} "%[var(txn.sy_jsub{count})]" '
+                        f"if {{ var({flag}) -m found }}"
+                    )
+                rules.append(f"http-request set-var(txn.sy_jdone) int(1) if {base}")
+        return rules
+
+    def _cert_rules(self, svc: dm.VirtualService) -> list[str]:
+        """Use the TLS client certificate as the identity (stage 4b, ADR 0136)."""
+        rules: list[str] = []
+        policy = next(
+            (
+                p
+                for pid in svc.policy_set_ids
+                if isinstance(p := self.policies[pid], dm.ClientCertPolicySet)
+            ),
+            None,
+        )
+        if policy is None:
+            return rules
+        name = esc.ident(policy.name)
+        for header in (policy.user_header, policy.groups_header):
+            if header:
+                rules.append(f"http-request del-header {esc.header_name(header)}{self._if()}")
+        used = "{ ssl_c_used }"
+        guard = [self.guard] if self.guard else []
+        by_kind: dict[str, dict[str, str]] = {"cn": {}, "sha1": {}}
+        for ident in policy.identities:
+            by_kind[ident.by][esc.cert_key(ident.value, ident.by)] = (
+                esc.cert_label(ident.user)
+                + "|"
+                + ",".join(esc.group_label(g) for g in ident.groups)
+            )
+        for kind, fetch in (("sha1", "ssl_c_sha1,hex,lower"), ("cn", "ssl_c_s_dn(cn)")):
+            if by_kind[kind]:
+                path = f"haproxy/maps/{name}-cert{kind}.map"
+                self.files[path] = _map_text(by_kind[kind])
+                unset = "!{ var(txn.sy_cid) -m found }"
+                cond = " ".join([used, unset, *guard])
+                lookup = f"{fetch},map({BASE_DIR}/maps/{name}-cert{kind}.map)"
+                rules.append(f"http-request set-var(txn.sy_cid) {lookup} if {cond}")
+        if any(by_kind.values()):
+            rules.append(
+                "http-request set-var(txn.sy_cuser) var(txn.sy_cid),field(1,'|') "
+                "if { var(txn.sy_cid) -m found }"
+            )
+            rules.append(
+                "http-request set-var(txn.sy_cgrp) var(txn.sy_cid),field(2,'|') "
+                "if { var(txn.sy_cid) -m found }"
+            )
+        for rule in policy.rules:
+            base = " ".join(
+                [*self._conditions(rule.match), *guard, "!{ var(txn.sy_cdone) -m found }"]
+            )
+            if rule.mode == "valid":
+                test = f"!{used}"
+            elif rule.mode == "identity":
+                test = "!{ var(txn.sy_cid) -m found }"
+            else:
+                regex = "|".join(sorted(esc.group_regex(g) for g in rule.groups))
+                test = f"!{{ var(txn.sy_cgrp) -m reg '(^|,)({regex})(,|$)' }}"
+            rules.append(f"http-request return status 403 if {base} {test}")
+            rules.append(f"http-request set-var(txn.sy_cdone) int(1) if {base}")
+        if policy.user_header:
+            rules.append(
+                f"http-request set-header {esc.header_name(policy.user_header)} "
+                f'"%[var(txn.sy_cuser)]" if {{ var(txn.sy_cuser) -m found }}{self._g()}'
+            )
+        if policy.groups_header:
+            rules.append(
+                f"http-request set-header {esc.header_name(policy.groups_header)} "
+                f'"%[var(txn.sy_cgrp)]" if {{ var(txn.sy_cgrp) -m found }}{self._g()}'
+            )
+        return rules
+
+    def _if(self) -> str:
+        """`` if <guard>`` for lines that need only the stage guard (empty without one)."""
+        return f" if {self.guard}" if self.guard else ""
+
     def _g(self) -> str:
         """The stage guard as a trailing condition block (empty when there is none)."""
         return f" {self.guard}" if self.guard else ""
@@ -814,7 +954,10 @@ class _Renderer:
         rules += [
             self._redirect_line(r.match, r.redirect) for _, r in ordered if r.redirect is not None
         ]
-        rules += responses + rewrites
+        rules += responses
+        rules += self._jwt_rules(svc)
+        rules += self._cert_rules(svc)
+        rules += rewrites
         if inst is not None:
             rules += self._access_rules(inst)
         return rules

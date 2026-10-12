@@ -36,6 +36,8 @@ API write to. (`--out DIR` reproduces that layout under `DIR`.)
 | `haproxy/maps/<service>-wild.map` | `regex backend` for wildcard-host routes | a service has a wildcard host-only route |
 | `haproxy/lists/<policy>.cidr` | one network per line, IPv4 first | a service references an allow-list policy set |
 | `haproxy/lists/<policy>-r<n>.page` | body of rule *n* of a respond policy set | a rule has a body (ADR 0103) |
+| `certs/jwt-<set>-<rule>-<key>.pem` (agent bundle) | public key of a JWT rule | a service attaches a jwt set |
+| `haproxy/maps/<set>-certcn.map`, `-certsha1.map` | client certificate identities, `key user\|groups` per line | a service attaches a client_cert set with identities of that kind |
 | `auth/<service>-<set>.cfg` (agent bundle, not HAProxy) | oauth2-proxy configuration of an access set, with its secrets, mode 0600 | a service attaches an access set |
 | `haproxy/lists/<policy>-e<status>.page` | body of an error page | a service references an error-pages policy set |
 
@@ -87,6 +89,8 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Route with `path_prefix` / `path_exact` | `use_backend pool_<n> if { var(txn.host) -m str <host> } { path_beg <path> }` (host condition only when set) |
 | Route with any other condition (`methods`, `headers`, `query`, `source_cidrs`, `sni`) | the same `use_backend ... if` line with one more `{ ... }` per condition (below); only a route that is a host and nothing else uses the maps |
 | Route `redirect` and policy-set redirect rule | `http-request redirect location <target> code <n> if <conditions>` |
+| Policy set `jwt` | per rule `set-var(txn.sy_j<n>)` lines, one per key: `jwt_verify(<alg>,certs/jwt-<set>-<rule>-<key>.pem)` plus the `iss`, `aud`, `scope` and `exp` checks, then `return status 401 hdr WWW-Authenticate Bearer` without the flag (ADR 0135) |
+| Policy set `client_cert` | maps `haproxy/maps/<set>-certsha1.map` and `-certcn.map` (`key user\|groups`), lookups on `ssl_c_sha1` and `ssl_c_s_dn(cn)`, `return status 403` per rule, identity headers (ADR 0136) |
 | Policy set `access` | a second `bind 127.0.0.1:<loop_port>`, a backend `auth_<service>-<set>` (one server, `127.0.0.1:<auth_port>`), `use_backend auth_... if !{ var(txn.sy_loop) -m bool } ...`, decision rules on `txn.sy_ad`, 401 and 403 checks and identity `set-header` lines on the loopback hop; the proxy's own config goes to `auth/<service>-<set>.cfg` in the agent bundle (ADR 0130) |
 | Policy set `rate_limit` | per rule a backend `rl_<service>_<set>_<n>` holding `stick-table ... store http_req_rate(<p>s)\|conn_cur`, `http-request track-sc<n> src\|req.hdr(Name) table ... [if <conditions>]`, and `return status ...`, `tarpit` or `silent-drop` `if { sc_http_req_rate(...) gt <max> }` (ADR 0110) |
 | Policy set `respond` | `http-request return status <n> [content-type <t> file <page>] [hdr Retry-After <s>] [if <conditions>]` per rule (ADR 0103) |
@@ -122,6 +126,7 @@ Server names come from the member name or `<ip>-<port>` with dots and colons tur
 3. **Redirects**: HTTP to HTTPS, then `redirect` policy-set rules in attachment order, then redirect routes by
    `order`. First match wins.
 4. **Fixed responses**: `respond` policy-set rules in attachment order. First match answers.
+4b. **Tokens and certificates**: `jwt` policy-set rules check the bearer token (401), `client_cert` rules check the TLS client certificate and map it to an identity (403); both set their identity headers on success (ADR 0135, 0136).
 5. **Request rewrites**: `rewrite` policy-set rules (request phase) in attachment order; each rule sees the effect of the
    earlier ones. A response rule that has a match records it here as a flag.
 5b. **Access** (`access` policy set, ADR 0130 to 0132): decide per request whether a login is needed; protected requests are sent to the authentication proxy and come back on a loopback bind of the same frontend, where the groups or e-mail rule is checked and the identity headers are written. Stages 2b to 5 and the response rewrites run on the first hop only.

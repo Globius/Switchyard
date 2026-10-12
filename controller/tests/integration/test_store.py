@@ -221,3 +221,94 @@ async def test_new_policy_kinds_and_route_match_conditions_round_trip(
     assert [str(p) for p in loaded.virtual_services[0].policy_set_ids] == [
         str(uuid.UUID(symbolic_uuid(x))) for x in ("ps-resp", "ps-rw", "ps-err")
     ]
+
+
+async def test_limit_access_token_and_certificate_policy_sets_round_trip(
+    admin_engine: AsyncEngine,
+) -> None:
+    """The kinds added by blocks P3, P8 and P9 survive PostgreSQL, including the config column."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    t = "t-acme"
+    pem = (
+        rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        .public_key()
+        .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        .decode()
+    )
+    data = base_data()
+    data["certificates"].append(
+        {
+            "id": "ca-1",
+            "tenant_id": t,
+            "name": "staff-ca",
+            "source": "upload",
+            "purpose": "client_ca",
+            "sans": [],
+            "not_after": "2038-01-01T00:00:00+00:00",
+            "secret_ref": "kv/tenants/acme/certs/staff-ca/01",
+        }
+    )
+    data["policy_sets"] = [
+        {
+            "id": "ps-lim",
+            "tenant_id": t,
+            "name": "lim",
+            "kind": "rate_limit",
+            "rules": [
+                {"max_requests": 5, "key": "header", "header_name": "X-Api-Key", "period_s": 60}
+            ],
+        },
+        {
+            "id": "ps-sso",
+            "tenant_id": t,
+            "name": "sso",
+            "kind": "access",
+            "oidc": {
+                "issuer": "https://login.example.test",
+                "client_id": "web",
+                "client_secret_ref": "kv/tenants/acme/auth/c",
+                "cookie_secret_ref": "kv/tenants/acme/auth/k",
+            },
+            "rules": [{"match": {"path_prefix": "/a"}, "mode": "groups", "groups": ["ops"]}],
+            "identity_headers": {"token": "X-Auth-Token"},
+        },
+        {
+            "id": "ps-jwt",
+            "tenant_id": t,
+            "name": "tok",
+            "kind": "jwt",
+            "rules": [
+                {
+                    "issuer": "https://login.example.test",
+                    "audiences": ["api"],
+                    "keys": [{"kid": "k1", "alg": "RS256", "public_key_pem": pem}],
+                    "subject_header": "X-Sub",
+                }
+            ],
+        },
+        {
+            "id": "ps-cc",
+            "tenant_id": t,
+            "name": "cc",
+            "kind": "client_cert",
+            "identities": [{"value": "alice@example.test", "user": "alice", "groups": ["ops"]}],
+            "rules": [{"mode": "identity"}],
+        },
+    ]
+    vs = data["virtual_services"][0]
+    vs["policy_set_ids"] = ["ps-lim", "ps-sso", "ps-jwt", "ps-cc"]
+    vs["ports"][0] = {"port": 443, "tls": True, "client_ca_id": "ca-1"}
+    snap = snapshot_from_mapping(data)
+    async with admin_session(admin_engine) as s:
+        await add_snapshot(s, snap)
+    async with admin_session(admin_engine) as s:
+        loaded = await load_snapshot(s)
+    assert canonical(loaded) == canonical(snap)
+    assert {p.name: p.kind for p in loaded.policy_sets} == {
+        "lim": "rate_limit",
+        "sso": "access",
+        "tok": "jwt",
+        "cc": "client_cert",
+    }

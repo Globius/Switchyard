@@ -594,3 +594,39 @@ def validate_group_name(value: str) -> str:
     if not _GROUP.fullmatch(value):
         raise ValueError("group must be 1-128 characters of letters, digits and . _ : / @ = -")
     return value
+
+
+_PUBLIC_KEY = re.compile(
+    r"^-----BEGIN PUBLIC KEY-----\n[A-Za-z0-9+/=\n]{40,4000}\n-----END PUBLIC KEY-----\n?$"
+)
+_CERT_NAME = re.compile(r"^[A-Za-z0-9._@:-]{1,128}$")
+
+
+def validate_public_key_pem(value: str) -> str:
+    r"""Validate a PEM public key block (never a private key).
+
+    Example:
+        >>> validate_public_key_pem("-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----")
+        Traceback (most recent call last):
+            ...
+        ValueError: public_key_pem must be one PEM PUBLIC KEY block
+    """
+    if not _PUBLIC_KEY.fullmatch(value):
+        raise ValueError("public_key_pem must be one PEM PUBLIC KEY block")
+    return value if value.endswith("\n") else value + "\n"
+
+
+def validate_cert_name(value: str) -> str:
+    """Validate a certificate common name or a user label used in a map file.
+
+    Example:
+        >>> validate_cert_name("alice@example.test")
+        'alice@example.test'
+        >>> validate_cert_name("a b")
+        Traceback (most recent call last):
+            ...
+        ValueError: name must be 1-128 characters of letters, digits and . _ @ : -
+    """
+    if not _CERT_NAME.fullmatch(value):
+        raise ValueError("name must be 1-128 characters of letters, digits and . _ @ : -")
+    return value

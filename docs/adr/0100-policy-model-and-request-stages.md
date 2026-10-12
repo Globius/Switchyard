@@ -31,7 +31,8 @@ limits, C2 weighted routes, E1 to E3 auth) add more rules to it. Doing it piecem
 | 2b Rate limits | `rate_limit` sets ([0110](0110-rate-and-concurrency-limits.md)) | yes (deny, tarpit, drop) |
    | 3 Redirects | HTTPS redirect, `redirect` sets, redirect routes | yes |
    | 4 Fixed responses | `respond` sets | yes |
-   | 5 Request rewrites | `rewrite` sets, request phase | no |
+   | 4b Tokens and certificates | `jwt` sets ([0135](0135-jwt-validation-for-apis.md)) and `client_cert` sets ([0136](0136-client-certificate-identity.md)) | yes (401, 403) |
+| 5 Request rewrites | `rewrite` sets, request phase | no |
    | 5b Access | `access` sets ([0130](0130-auth-service-architecture.md)): decision, then login through the proxy | yes (to the proxy, 401, 403) |
 | 6 Routing | path and conditional routes by `order`, host maps, default pool | no |
    | 7 Response rewrites | `rewrite` sets, response phase | no |

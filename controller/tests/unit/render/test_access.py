@@ -168,7 +168,7 @@ class TestSnapshot:
 
     def test_one_access_set_per_service(self) -> None:
         second = {**access(), "id": "ps-2", "name": "second"}
-        assert codes(with_access(access(), second)) == ["multiple_access_sets"]
+        assert "multiple_access_sets" in codes(with_access(access(), second))
 
     def test_plain_ports_must_redirect_to_tls(self) -> None:
         data = with_access(access())

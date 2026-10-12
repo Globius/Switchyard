@@ -17,6 +17,7 @@ Example:
 
 import enum
 import ipaddress
+import re
 from datetime import datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
@@ -44,6 +45,8 @@ ClaimName = Annotated[str, AfterValidator(v.validate_claim_name)]
 CookieName = Annotated[str, AfterValidator(v.validate_cookie_name)]
 ClientId = Annotated[str, AfterValidator(v.validate_client_id)]
 GroupName = Annotated[str, AfterValidator(v.validate_group_name)]
+PublicKeyPem = Annotated[str, AfterValidator(v.validate_public_key_pem)]
+CertName = Annotated[str, AfterValidator(v.validate_cert_name)]
 DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
 
@@ -1228,6 +1231,152 @@ class AccessPolicySet(TenantOwned):
         return self
 
 
+JwtAlgorithm = Literal[
+    "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512"
+]
+
+
+class JwtKey(Model):
+    """A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.
+
+    Attributes:
+        kid: The ``kid`` header the key belongs to; without it the key is tried for every token.
+        alg: The signature algorithm the token must declare.
+        public_key_pem: The key as a PEM ``PUBLIC KEY`` block (convert a JWK with
+            ``syctl jwks convert``).
+    """
+
+    kid: Annotated[str, Field(pattern=r"^[A-Za-z0-9._:/@=-]{1,128}$")] | None = None
+    alg: JwtAlgorithm = "RS256"
+    public_key_pem: PublicKeyPem
+
+
+class JwtRule(Model):
+    """Require a valid bearer token on the requests ``match`` selects.
+
+    A token is valid when one of ``keys`` verifies its signature, ``iss`` equals ``issuer``, ``aud``
+    contains one of ``audiences`` (when given), ``exp`` is in the future (allowing ``leeway_s``) and
+    every ``required_scopes`` entry is in the space-separated ``scope`` claim. Anything else is
+    answered 401.
+
+    Attributes:
+        match: Requests the rule covers (empty: all).
+        issuer: The expected ``iss`` claim.
+        audiences: Accepted ``aud`` values (a string claim or an element of an array claim).
+        required_scopes: Scopes the token must carry.
+        leeway_s: Clock difference tolerated on ``exp``.
+        keys: The issuer's public keys (1 to 8; several keep tokens valid across a key rotation).
+        subject_header: Request header that receives the ``sub`` claim of a valid token;
+            client copies of it are removed first.
+    """
+
+    match: RouteMatch = RouteMatch()
+    issuer: Issuer
+    audiences: tuple[Annotated[str, Field(pattern=r"^[A-Za-z0-9._~:/@=+-]{1,256}$")], ...] = Field(
+        default=(), max_length=8
+    )
+    required_scopes: tuple[Annotated[str, Field(pattern=r"^[A-Za-z0-9._:/-]{1,64}$")], ...] = Field(
+        default=(), max_length=8
+    )
+    leeway_s: int = Field(default=30, ge=0, le=300)
+    keys: tuple[JwtKey, ...] = Field(min_length=1, max_length=8)
+    subject_header: HeaderName | None = None
+
+    @model_validator(mode="after")
+    def _header(self) -> Self:
+        if self.subject_header is not None:
+            name = self.subject_header.lower()
+            if name in v.FORBIDDEN_HEADERS | v.MANAGED_REQUEST_HEADERS | v.AUTH_INTERNAL_HEADERS:
+                raise ValueError(f"header {self.subject_header} cannot carry the subject")
+        return self
+
+
+class JwtPolicySet(TenantOwned):
+    """Validate JWT bearer tokens for APIs, with no login page (ADR 0135)."""
+
+    kind: Literal["jwt"] = "jwt"
+    rules: tuple[JwtRule, ...] = Field(min_length=1, max_length=16)
+
+
+class CertIdentity(Model):
+    """Map a client certificate to a user and groups (ADR 0136).
+
+    Attributes:
+        by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,
+            for individual certificates).
+        value: The common name, or 40 hex digits.
+        user: The user name written to the user header.
+        groups: Groups written to the groups header.
+    """
+
+    by: Literal["cn", "sha1"] = "cn"
+    value: CertName
+    user: CertName
+    groups: tuple[GroupName, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _sha1(self) -> Self:
+        if self.by == "sha1" and not re.fullmatch(r"[0-9a-f]{40}", self.value):
+            raise ValueError("a sha1 value is 40 lower-case hex digits")
+        return self
+
+
+class ClientCertRule(Model):
+    """What a request needs from its client certificate.
+
+    Attributes:
+        match: Requests the rule covers (empty: all). The first rule that matches decides.
+        mode: ``valid`` (any certificate the port's client CA accepts), ``identity`` (the
+            certificate must be in ``identities``) or ``groups`` (and its identity must have one of
+            ``groups``).
+        groups: Groups for mode ``groups``.
+    """
+
+    match: RouteMatch = RouteMatch()
+    mode: Literal["valid", "identity", "groups"] = "valid"
+    groups: tuple[GroupName, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _groups(self) -> Self:
+        if (self.mode == "groups") != bool(self.groups):
+            raise ValueError("groups go with mode groups, and only with it")
+        return self
+
+
+class ClientCertPolicySet(TenantOwned):
+    """Use the TLS client certificate as the identity (ADR 0136).
+
+    Attributes:
+        identities: Certificates the set knows (up to 500).
+        rules: Ordered rules; the first that matches decides. Requests that match no rule are
+            not checked.
+        user_header: Header that receives the mapped user (client copies removed first).
+        groups_header: Header that receives the mapped groups, comma separated.
+    """
+
+    kind: Literal["client_cert"] = "client_cert"
+    identities: tuple[CertIdentity, ...] = Field(default=(), max_length=500)
+    rules: tuple[ClientCertRule, ...] = Field(min_length=1, max_length=32)
+    user_header: HeaderName | None = "X-Cert-User"
+    groups_header: HeaderName | None = "X-Cert-Groups"
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        keys = [(i.by, i.value) for i in self.identities]
+        if len(set(keys)) != len(keys):
+            raise ValueError("identities must be unique")
+        names = [h.lower() for h in (self.user_header, self.groups_header) if h]
+        if len(set(names)) != len(names):
+            raise ValueError("user_header and groups_header must differ")
+        reserved = v.FORBIDDEN_HEADERS | v.MANAGED_REQUEST_HEADERS | v.AUTH_INTERNAL_HEADERS
+        if any(n in reserved for n in names):
+            raise ValueError("those headers cannot carry identity")
+        needs_identity = any(r.mode != "valid" for r in self.rules)
+        if needs_identity and not self.identities:
+            raise ValueError("rules with mode identity or groups need identities")
+        return self
+
+
 PolicySet = Annotated[
     RedirectPolicySet
     | AllowListPolicySet
@@ -1235,7 +1384,9 @@ PolicySet = Annotated[
     | RespondPolicySet
     | ErrorPagesPolicySet
     | RateLimitPolicySet
-    | AccessPolicySet,
+    | AccessPolicySet
+    | JwtPolicySet
+    | ClientCertPolicySet,
     Field(discriminator="kind"),
 ]
 #: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).
@@ -1246,4 +1397,6 @@ ATTACHABLE_POLICY_KINDS = (
     ErrorPagesPolicySet,
     RateLimitPolicySet,
     AccessPolicySet,
+    JwtPolicySet,
+    ClientCertPolicySet,
 )

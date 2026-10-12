@@ -26,9 +26,11 @@ from switchyard.domain.models import (
     AllowListPolicySet,
     BgpProfile,
     Certificate,
+    ClientCertPolicySet,
     Entity,
     ErrorPagesPolicySet,
     HealthMonitor,
+    JwtPolicySet,
     Model,
     MonitorType,
     Network,
@@ -685,6 +687,26 @@ def _check_access(
 ) -> None:
     """A service has at most one access set and offers a login only over TLS."""
     sets = [p for pid in s.policy_set_ids if isinstance(p := policies.get(pid), AccessPolicySet)]
+    attached = [policies[pid] for pid in s.policy_set_ids if pid in policies]
+    tokens = [p for p in attached if isinstance(p, JwtPolicySet)]
+    certs = [p for p in attached if isinstance(p, ClientCertPolicySet)]
+    _check_identity_headers(sets, tokens, certs, base, problems)
+    if len(certs) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "multiple_client_cert_sets",
+                "a service may attach one client-certificate policy set",
+            )
+        )
+    if certs and not any(p.client_ca_id for p in s.ports):
+        problems.append(
+            Problem(
+                f"{base}.ports",
+                "client_cert_needs_client_ca",
+                "a client-certificate policy set needs a port with client_ca_id",
+            )
+        )
     if len(sets) > 1:
         problems.append(
             Problem(
@@ -693,17 +715,43 @@ def _check_access(
                 "a service may attach one access policy set",
             )
         )
-    if sets:
+    if sets or tokens:
         for i, port in enumerate(s.ports):
             if not port.tls and port.https_redirect_port is None:
                 problems.append(
                     Problem(
                         f"{base}.ports[{i}]",
                         "access_needs_tls",
-                        f"port {port.port} would carry logins in clear text; make it a TLS port "
-                        "or redirect it to one (https_redirect_port)",
+                        f"port {port.port} would carry credentials in clear text; make it a TLS "
+                        "port or redirect it to one (https_redirect_port)",
                     )
                 )
+
+
+def _check_identity_headers(
+    access: list[AccessPolicySet],
+    tokens: list[JwtPolicySet],
+    certs: list[ClientCertPolicySet],
+    base: str,
+    problems: list[Problem],
+) -> None:
+    """No two policies on a service may write the same identity header."""
+    names: list[str] = []
+    for a in access:
+        h = a.identity_headers
+        names += [n.lower() for n in (h.user, h.email, h.groups, h.token) if n]
+    for t in tokens:
+        names += [r.subject_header.lower() for r in t.rules if r.subject_header]
+    for c in certs:
+        names += [n.lower() for n in (c.user_header, c.groups_header) if n]
+    if len(set(names)) != len(names):
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "identity_header_conflict",
+                "two policies on this service write the same identity header",
+            )
+        )
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
