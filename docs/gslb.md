@@ -75,6 +75,13 @@ Run PowerDNS at each site, answer the zone from all of them, and make the others
 to (`secondary` zones with `primary` set to it; `allow-axfr-ips`/`also-notify` on the primary). Each site then evaluates the records
 and runs the health checks from its own network. [runbooks/gslb-lab.md](runbooks/gslb-lab.md) is the two-host lab check.
 
+## dnsdist (DNS firewall)
+
+`deploy/dns/` puts dnsdist in front of PowerDNS: `ANY`, `AXFR` and `IXFR` are refused, each client network is rate limited
+(`DNSDIST_QPS_LIMIT`, default 50 per second, burst 100; over the limit queries are dropped) and abusive networks are blocked for
+a minute. Only dnsdist is published on port 53; PowerDNS listens on 5300 inside it. Zone transfers between your own servers use
+5300. See [ADR 0164](adr/0164-dnsdist-in-front-of-powerdns.md).
+
 ## Safety
 
 A tenant can set only validated fields; none of them reaches the DNS server as code (ADR 0161). Names are lowercase DNS labels, a

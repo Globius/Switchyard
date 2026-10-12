@@ -1,7 +1,8 @@
 # Authoritative DNS for GSLB (ADR 0160): PowerDNS Authoritative with LUA records, driven by the controller's API.
 #   cp dns.env.example dns.env ; edit it ; docker compose --env-file dns.env up -d
 # Controller side: SWITCHYARD_POWERDNS_URL=http://<this host>:8081 and SWITCHYARD_POWERDNS_API_KEY=<same key>.
-# Run at least two of these (one per site), each with its own zone copy: the controller writes zones to the one named in
+# dnsdist (the DNS firewall: rate limits, no ANY, no transfers from outside) answers on port 53 and forwards to pdns on its
+# private port 5300; only dnsdist is published. Run at least two of these (one per site), each with its own zone copy: the controller writes zones to the one named in
 # SWITCHYARD_POWERDNS_URL, so replicate with AXFR/IXFR secondaries (docs/gslb.md) or point the URL at a primary.
 name: switchyard-dns
 services:
@@ -18,13 +19,30 @@ services:
       - --webserver-allow-from=${PDNS_API_ALLOW_FROM:-127.0.0.1,::1}
       # GSLB needs LUA records; health checks run from here (ifportup/ifurlup), every few seconds.
       - --enable-lua-records=yes
+      # Private port: dnsdist is the only thing that talks to it on the public side.
+      - --local-port=5300
       - --lua-health-checks-interval=5
     volumes:
       - pdns-data:/var/lib/powerdns
     ports:
+      # dnsdist shares this container's network and answers on 53 (PowerDNS itself listens on 5300).
       - "${DNS_BIND:-0.0.0.0}:53:53/udp"
       - "${DNS_BIND:-0.0.0.0}:53:53/tcp"
       # The API is for the controller only: bind it to the management address, never to the internet.
       - "${PDNS_API_BIND:-127.0.0.1}:8081:8081"
+  dnsdist:
+    image: powerdns/dnsdist-19:latest
+    restart: unless-stopped
+    depends_on: [pdns]
+    # Same network namespace as pdns: the backend is 127.0.0.1:5300 (dnsdist takes addresses, not names).
+    network_mode: "service:pdns"
+    environment:
+      DNSDIST_BACKEND: 127.0.0.1:5300
+      DNSDIST_QPS_LIMIT: ${DNSDIST_QPS_LIMIT:-50}
+      DNSDIST_QPS_BURST: ${DNSDIST_QPS_BURST:-100}
+      DNSDIST_BLOCK_SECONDS: ${DNSDIST_BLOCK_SECONDS:-60}
+    volumes:
+      - ./dnsdist.conf:/etc/dnsdist/dnsdist.conf:ro
+    command: ["--supervised", "--disable-syslog"]
 volumes:
   pdns-data: {}
