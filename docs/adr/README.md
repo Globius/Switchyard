@@ -139,3 +139,4 @@ Date: YYYY-MM-DD
 | [0180](0180-multi-site-and-remote-engines.md) | Multi-site: sites, remote engines over an outbound channel, per-site DNS and probes | Proposed |
 | [0190](0190-docs-site-mkdocs-material.md) | Docs site: MkDocs with the Material theme | Accepted |
 | [0191](0191-kubernetes-deployment.md) | Kubernetes is a supported place to run the controller (Helm chart) | Accepted |
+| [0195](0195-radius-login-and-step-up-flows.md) | RADIUS logins, a login gate, and multi-step (nFactor style) flows | Accepted |

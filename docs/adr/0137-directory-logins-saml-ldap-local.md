@@ -47,7 +47,7 @@ two services: `broker-render` (loops the command) and `broker` (the Dex image wi
 Dex per config, restarts one when its file changes and stops it when the file goes). The engines' bundles carry the broker's URL in
 `oidc_issuer_url` only; the controller refuses to build a bundle for such an access set while `SWITCHYARD_AUTH_BROKER_URL` is unset.
 
-**RADIUS is not offered.** Dex has no RADIUS connector. RADIUS-only tenants federate through an OIDC provider that has one
+**RADIUS is not offered here** (superseded: [0195](0195-radius-login-and-step-up-flows.md) adds it through a login gate). Dex has no RADIUS connector. RADIUS-only tenants federate through an OIDC provider that has one
 (Keycloak, Authentik, FreeRADIUS behind an adapter) or wait for a Dex connector or a service of our own; the model leaves room for a
 `radius` connector type.
 
