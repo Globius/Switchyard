@@ -130,7 +130,10 @@ async def canary_check(
             )
         info = await engine.info()
         if info.pid != started.pid:
-            problems.append(f"{engine.name}: HAProxy restarted during the canary window")
+            problems.append(
+                f"{engine.name}: HAProxy restarted during the canary window "
+                f"(worker {started.pid}, then {info.pid})"
+            )
         now_serving = serving_backends(await engine.server_statuses())
         for backend in sorted(was_serving):
             if backend in now_serving and not now_serving[backend]:
