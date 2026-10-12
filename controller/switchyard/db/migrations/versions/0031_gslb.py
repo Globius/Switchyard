@@ -11,8 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0031"
-# Temporarily 0025 on this branch; rebased onto 0030 (Kubernetes) before merging.
-down_revision = "0025"
+down_revision = "0030"
 branch_labels = None
 depends_on = None
 
