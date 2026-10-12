@@ -71,5 +71,9 @@ Date: YYYY-MM-DD
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
 | [0147](0147-country-and-reputation-ip-lists.md) | Country and reputation IP lists | Accepted |
+| [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
+| [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
+| [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |
+| [0123](0123-tenant-log-api.md) | Tenant-wide request log API | Accepted |
 | [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |

@@ -124,6 +124,50 @@ async def test_a_name_that_resolves_to_a_private_address_is_refused(
         await notifier.send("webhook", {"url": "https://rebind.example.test/x"}, None, ALERT)
 
 
+async def test_the_request_goes_to_the_address_that_was_checked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DNS rebinding: a name that answers public once and private the next time."""
+    import asyncio
+
+    answers = iter(["93.184.216.34", "10.9.9.9", "10.9.9.9"])
+
+    async def rebinding_getaddrinfo(self, host, port, **kw):  # type: ignore[no-untyped-def]
+        return [(2, 1, 6, "", (next(answers), 0))]
+
+    monkeypatch.setattr(asyncio.get_running_loop().__class__, "getaddrinfo", rebinding_getaddrinfo)
+    seen: list[httpx.Request] = []
+    notifier = HttpNotifier(client=client(recording(seen)))
+    await notifier.send("webhook", {"url": "https://rebind.example.test:8443/in?x=1"}, None, ALERT)
+    request = seen[0]
+    # connected to the checked address, not to the name a second lookup could redirect
+    assert request.url.host == "93.184.216.34" and request.url.port == 8443
+    assert request.url.path == "/in" and request.url.query == b"x=1"
+    assert request.headers["host"] == "rebind.example.test:8443"
+    assert request.extensions["sni_hostname"] == "rebind.example.test"
+
+
+async def test_an_ipv6_answer_is_bracketed_and_redirects_are_not_followed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    async def v6(self, host, port, **kw):  # type: ignore[no-untyped-def]
+        return [(10, 1, 6, "", ("2606:2800:220:1::1", 0, 0, 0))]
+
+    monkeypatch.setattr(asyncio.get_running_loop().__class__, "getaddrinfo", v6)
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(302, headers={"Location": "https://10.0.0.5/internal"})
+
+    notifier = HttpNotifier(client=client(handler))
+    with pytest.raises(NotifyError, match="HTTP 302"):
+        await notifier.send("webhook", {"url": "https://hooks.example.test/in"}, None, ALERT)
+    assert len(seen) == 1 and seen[0].url.host == "2606:2800:220:1::1"
+
+
 async def test_email_needs_a_mail_server_and_sends_through_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
