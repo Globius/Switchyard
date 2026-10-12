@@ -341,6 +341,7 @@ ACCESS: list[tuple[str, str, str, bool]] = [
         False,
     ),
     ("POST", r"/tenants/\{t\}/gslb/sync", "tenant-admin", False),
+    ("POST", r"/tenants/\{t\}/dns-records/sync", "tenant-admin", False),
     ("POST", r"/tenants/\{t\}/grafana/launch", "viewer", False),
     (
         "(POST|PATCH|DELETE)",

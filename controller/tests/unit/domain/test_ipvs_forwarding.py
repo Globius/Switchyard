@@ -3,12 +3,16 @@
 import copy
 from typing import Any
 
+import pytest
+
 from switchyard.domain.loader import snapshot_from_mapping
 from switchyard.domain.snapshot import validate_snapshot
 from tests.factories import BASE
 
 
-def build(mode: str, member: str = "10.20.0.50", port: int = 5004, **service: Any) -> dict[str, Any]:
+def build(
+    mode: str, member: str = "10.20.0.50", port: int = 5004, **service: Any
+) -> dict[str, Any]:
     data = copy.deepcopy(BASE)
     data["pools"].append(
         {
@@ -66,3 +70,25 @@ def test_forward_mode_is_only_for_udp() -> None:
     data = build("dr")
     data["virtual_services"][-1]["protocol"] = "tcp"
     assert any(c == "forward_mode_not_allowed" for _, c in codes(data))
+
+
+def test_dns_publication_rules() -> None:
+    from pydantic import ValidationError
+
+    from switchyard.domain.models import DnsPublication
+
+    assert DnsPublication(names=("App.Example.test",)).ttl == 300
+    for bad in (("*.example.test",), ("a.example.test", "A.example.test"), ("not a host",)):
+        with pytest.raises(ValidationError):
+            DnsPublication(names=bad)
+
+
+def test_a_udp_service_cannot_be_proxied() -> None:
+    data = build("nat", dns={"names": ["m.example.test"], "proxied": True})
+    assert ("virtual_services.media.dns.proxied", "dns_proxy_not_allowed") in codes(data)
+
+
+def test_a_name_belongs_to_one_service() -> None:
+    data = build("nat", dns={"names": ["app.example.test"]})
+    data["virtual_services"][0]["dns"] = {"names": ["app.example.test"]}
+    assert any(c == "dns_name_taken" for _, c in codes(data))

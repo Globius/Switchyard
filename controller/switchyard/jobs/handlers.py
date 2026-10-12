@@ -30,6 +30,7 @@ from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
 from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.discovery import DISCOVER_POOLS_JOB, DiscoveryService
+from switchyard.services.dns_records import SYNC_DNS_RECORDS_JOB, DnsRecordSync
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.gslb import PROBE_GSLB_JOB, SYNC_GSLB_JOB, GslbProber, GslbSync
 from switchyard.services.infra import (
@@ -70,6 +71,7 @@ def build_handlers(
     gslb: GslbSync | None = None,
     prober: GslbProber | None = None,
     jwks: JwksSync | None = None,
+    dns_records: DnsRecordSync | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -78,6 +80,8 @@ def build_handlers(
         pipeline: The apply pipeline.
         members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
         iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
+        dns_records: Publishes virtual services as DNS address records; ``None`` skips the
+            ``sync_dns_records`` kind.
         jwks: Refreshes JWT keys from ``jwks_url``; ``None`` skips the ``sync_jwks`` kind.
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
@@ -170,6 +174,12 @@ def build_handlers(
             return dict(await gslb.run())
 
         handlers[SYNC_GSLB_JOB] = sync_gslb
+    if dns_records is not None:
+
+        async def sync_dns_records(job: Job) -> dict[str, Any]:
+            return dict(await dns_records.run())
+
+        handlers[SYNC_DNS_RECORDS_JOB] = sync_dns_records
     if prober is not None:
 
         async def probe_gslb(job: Job) -> dict[str, Any]:

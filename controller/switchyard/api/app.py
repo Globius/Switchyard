@@ -40,6 +40,7 @@ from switchyard.api.alert_models import (
     AlertTargetRead,
     AlertTargetTest,
 )
+from switchyard.api.dns_record_models import DnsRecordRead, DnsRecordSyncResult
 from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
 from switchyard.api.gslb_models import (
     GslbDsRead,
@@ -209,6 +210,7 @@ from switchyard.services.changesets import (
 from switchyard.services.context import Databases, Principal
 from switchyard.services.controller_settings import ControllerSettings
 from switchyard.services.dns_providers import DnsProviders
+from switchyard.services.dns_records import DnsRecordSync
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
 from switchyard.services.grafana import GrafanaLaunchError, GrafanaService
@@ -282,6 +284,7 @@ class ApiServices:
     controller: ControllerSettings = None  # type: ignore[assignment]
     avi_import: AviImportService = None  # type: ignore[assignment]
     kubernetes: KubernetesClusters | None = None
+    dns_records: DnsRecordSync | None = None
 
 
 def build_services(
@@ -322,6 +325,7 @@ def build_services(
             forced=sessions.break_glass_enabled,
         )
     engines = EngineService(db)
+    dns_providers = DnsProviders(db, secrets) if writer is not None else None
     return ApiServices(
         db=db,
         tenants=TenantService(db),
@@ -350,7 +354,8 @@ def build_services(
         gslb=gslb,
         email_configured=email_configured,
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
-        dns_providers=DnsProviders(db, secrets) if writer is not None else None,
+        dns_providers=dns_providers,
+        dns_records=DnsRecordSync(db, dns_providers) if dns_providers is not None else None,
         controller=ControllerSettings(db, ChangeSetService(db)),
         avi_import=AviImportService(db, ChangeSetService(db), certs),
         kubernetes=KubernetesClusters(db, secrets, ChangeSetService(db))
@@ -2496,6 +2501,39 @@ def create_app(
         return await need_gslb(svc, who).sync(  # type: ignore[no-any-return]
             who, tenant.id, force=True, request_id=_rid()
         )
+
+    # DNS address records of virtual services (ADR 0193)
+    @router.get(
+        "/tenants/{t}/dns-records",
+        tags=["virtual-services"],
+        summary="DNS records published for virtual services",
+        description="The `A`/`AAAA` records the controller created from the `dns` block of virtual "
+        "services, with their state (`published`, `pending` or `error` with the reason). Records "
+        "the controller did not create are never listed or changed. Requires any role in the "
+        "tenant.",
+        response_model=list[DnsRecordRead],
+        responses=_ok([ex.DNS_RECORD]),
+    )
+    async def list_dns_records(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        if svc.dns_records is None:
+            raise ApiError(404, "DNS records need OpenBao credentials", code="not_enabled")
+        return await svc.dns_records.list_records(who, tenant.id)
+
+    @router.post(
+        "/tenants/{t}/dns-records/sync",
+        tags=["virtual-services"],
+        summary="Publish DNS records now",
+        description="Reconciles the records of every virtual service with a `dns` block through "
+        "the tenant's DNS credential: creates or updates the records, deletes the ones whose "
+        "service, name or `dns` block is gone. A scheduled job does the same every minute. "
+        "Requires `tenant-admin`.",
+        response_model=DnsRecordSyncResult,
+        responses=_ok({"written": 2, "deleted": 0, "failed": 0}),
+    )
+    async def sync_dns_records(tenant: Tenant, who: Who, svc: Services) -> dict[str, int]:
+        if svc.dns_records is None:
+            raise ApiError(404, "DNS records need OpenBao credentials", code="not_enabled")
+        return await svc.dns_records.sync(who, tenant.id, request_id=_rid())
 
     # telemetry
     async def _service_name(svc: ApiServices, tenant: TenantRecord, service_id: UUID) -> str:

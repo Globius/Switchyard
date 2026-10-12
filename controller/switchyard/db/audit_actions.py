@@ -90,6 +90,7 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("engine.retired", "An engine VM was destroyed and its record removed."),
     _a("gc.run", "Housekeeping removed expired records."),
     _a("grafana.launch", "A user opened the embedded Grafana for a tenant (or for all tenants)."),
+    _a("dns_record.sync", "DNS address records were synchronised from a tenant's services."),
     _a("gslb_wide_ip.create", "A wide IP was created and published."),
     _a("gslb_wide_ip.delete", "A wide IP was deleted."),
     _a("gslb_wide_ip.sync", "A tenant's wide IPs were written to PowerDNS again."),

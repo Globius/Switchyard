@@ -6629,6 +6629,153 @@
         "title": "DnsProviderTypeRead",
         "type": "object"
       },
+      "DnsPublication": {
+        "additionalProperties": false,
+        "description": "Publish a service's VIP as DNS address records (ADR 0193).\n\nAttributes:\n    names: Host names that should resolve to the VIP (an ``A`` record for an IPv4 VIP, an\n        ``AAAA`` record for IPv6). No wildcards.\n    ttl: Record TTL in seconds; Cloudflare treats ``1`` as automatic.\n    proxied: Send the name through Cloudflare's proxy (the orange cloud). Not for UDP.\n    credential: Name of the tenant's DNS credential; empty picks the one whose zones cover\n        the name.\n\nExample:\n    >>> DnsPublication(names=(\"app.example.test\",)).ttl\n    300",
+        "properties": {
+          "credential": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential"
+          },
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "title": "Names",
+            "type": "array"
+          },
+          "proxied": {
+            "default": false,
+            "title": "Proxied",
+            "type": "boolean"
+          },
+          "ttl": {
+            "default": 300,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Ttl",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "title": "DnsPublication",
+        "type": "object"
+      },
+      "DnsRecordRead": {
+        "additionalProperties": false,
+        "description": "An address record the controller publishes for a virtual service.",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "hostname": {
+            "title": "Hostname",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "proxied": {
+            "title": "Proxied",
+            "type": "boolean"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "published",
+              "error"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "ttl": {
+            "title": "Ttl",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "A",
+              "AAAA"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "virtual_service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Virtual Service"
+          }
+        },
+        "required": [
+          "hostname",
+          "type",
+          "content",
+          "ttl",
+          "proxied",
+          "state",
+          "virtual_service",
+          "last_error",
+          "updated_at"
+        ],
+        "title": "DnsRecordRead",
+        "type": "object"
+      },
+      "DnsRecordSyncResult": {
+        "additionalProperties": false,
+        "description": "What a sync did.",
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "written",
+          "deleted",
+          "failed"
+        ],
+        "title": "DnsRecordSyncResult",
+        "type": "object"
+      },
       "DnsZoneTestRead": {
         "additionalProperties": false,
         "description": "The test in one zone.",
@@ -9280,6 +9427,16 @@
         "title": "IpRange",
         "type": "object"
       },
+      "IpvsForward": {
+        "description": "How IPVS sends a UDP service's packets to a real server (ADR 0192).\n\n``nat`` rewrites the destination and masquerades the source, so replies return through the SE.\n``dr`` (direct return) rewrites only the MAC address: the real server must share a layer-2\nsegment with the SE, own the VIP on a loopback and answer the client directly. ``tunnel``\nencapsulates the packet in IPIP: the real server needs an ``ipip`` interface that owns the VIP\nand answers the client directly; no layer-2 adjacency is needed.",
+        "enum": [
+          "nat",
+          "dr",
+          "tunnel"
+        ],
+        "title": "IpvsForward",
+        "type": "string"
+      },
       "IpvsRealServerStatus": {
         "additionalProperties": false,
         "description": "One IPVS real server of a UDP virtual service, with its counters.",
@@ -9611,7 +9768,8 @@
           "sync_jwks",
           "evaluate_alerts",
           "sync_gslb",
-          "probe_gslb"
+          "probe_gslb",
+          "sync_dns_records"
         ],
         "title": "JobKind",
         "type": "string"
@@ -19804,7 +19962,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).\n    forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or\n        ``tunnel`` (ADR 0192). The last two need every member on the service port.\n    dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -19871,6 +20029,16 @@
             ],
             "title": "Deny List Id"
           },
+          "dns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsPublication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -19880,6 +20048,10 @@
             "default": false,
             "title": "Enforce Allow List",
             "type": "boolean"
+          },
+          "forward_mode": {
+            "$ref": "#/components/schemas/IpvsForward",
+            "default": "nat"
           },
           "id": {
             "format": "uuid",
@@ -20051,6 +20223,16 @@
             ],
             "title": "Deny List Id"
           },
+          "dns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsPublication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "enabled": {
             "default": true,
             "title": "Enabled",
@@ -20060,6 +20242,10 @@
             "default": false,
             "title": "Enforce Allow List",
             "type": "boolean"
+          },
+          "forward_mode": {
+            "$ref": "#/components/schemas/IpvsForward",
+            "default": "nat"
           },
           "name": {
             "title": "Name",
@@ -20334,6 +20520,16 @@
             ],
             "title": "Deny List Id"
           },
+          "dns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsPublication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "enabled": {
             "anyOf": [
               {
@@ -20355,6 +20551,16 @@
               }
             ],
             "title": "Enforce Allow List"
+          },
+          "forward_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IpvsForward"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "name": {
             "anyOf": [
@@ -20552,6 +20758,16 @@
             ],
             "title": "Deny List Id"
           },
+          "dns": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DnsPublication"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
             "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
@@ -20565,6 +20781,10 @@
             "default": false,
             "title": "Enforce Allow List",
             "type": "boolean"
+          },
+          "forward_mode": {
+            "$ref": "#/components/schemas/IpvsForward",
+            "default": "nat"
           },
           "id": {
             "format": "uuid",
@@ -35622,6 +35842,221 @@
         "summary": "Test a DNS credential",
         "tags": [
           "dns providers"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/dns-records": {
+      "get": {
+        "description": "The `A`/`AAAA` records the controller created from the `dns` block of virtual services, with their state (`published`, `pending` or `error` with the reason). Records the controller did not create are never listed or changed. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_dns_records_api_v1_tenants__t__dns_records_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "content": "192.0.2.20",
+                    "hostname": "app.example.test",
+                    "proxied": false,
+                    "state": "published",
+                    "ttl": 300,
+                    "type": "A",
+                    "updated_at": "2026-10-10T08:30:00Z",
+                    "virtual_service": "web"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DnsRecordRead"
+                  },
+                  "title": "Response List Dns Records Api V1 Tenants  T  Dns Records Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "DNS records published for virtual services",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/dns-records/sync": {
+      "post": {
+        "description": "Reconciles the records of every virtual service with a `dns` block through the tenant's DNS credential: creates or updates the records, deletes the ones whose service, name or `dns` block is gone. A scheduled job does the same every minute. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "sync_dns_records_api_v1_tenants__t__dns_records_sync_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "deleted": 0,
+                  "failed": 0,
+                  "written": 2
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DnsRecordSyncResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Publish DNS records now",
+        "tags": [
+          "virtual-services"
         ],
         "x-required-role": "tenant-admin"
       }

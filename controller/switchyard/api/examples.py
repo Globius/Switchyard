@@ -853,6 +853,18 @@ WIDE_IP_STATE = {
     "applied_at": WHEN,
 }
 
+DNS_RECORD = {
+    "hostname": "app.example.test",
+    "type": "A",
+    "content": "192.0.2.20",
+    "ttl": 300,
+    "proxied": False,
+    "state": "published",
+    "virtual_service": "web",
+    "last_error": None,
+    "updated_at": WHEN,
+}
+
 METRICS = {
     "available": True,
     "reason": None,

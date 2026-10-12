@@ -649,6 +649,36 @@ class VsPort(Model):
         return self
 
 
+class DnsPublication(Model):
+    """Publish a service's VIP as DNS address records (ADR 0193).
+
+    Attributes:
+        names: Host names that should resolve to the VIP (an ``A`` record for an IPv4 VIP, an
+            ``AAAA`` record for IPv6). No wildcards.
+        ttl: Record TTL in seconds; Cloudflare treats ``1`` as automatic.
+        proxied: Send the name through Cloudflare's proxy (the orange cloud). Not for UDP.
+        credential: Name of the tenant's DNS credential; empty picks the one whose zones cover
+            the name.
+
+    Example:
+        >>> DnsPublication(names=("app.example.test",)).ttl
+        300
+    """
+
+    names: tuple[Hostname, ...] = Field(min_length=1, max_length=16)
+    ttl: int = Field(default=300, ge=1, le=86400)
+    proxied: bool = False
+    credential: str | None = None
+
+    @model_validator(mode="after")
+    def _names(self) -> Self:
+        if len({n.lower() for n in self.names}) != len(self.names):
+            raise ValueError("names must be unique")
+        if any(n.startswith("*") for n in self.names):
+            raise ValueError("wildcard names are not published")
+        return self
+
+
 class Compression(Model):
     """Compress responses for clients that accept it (HAProxy ``compression``), ``http`` only.
 
@@ -733,6 +763,7 @@ class VirtualService(TenantOwned):
         cache: Response cache (``http`` only; ADR 0117).
         forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or
             ``tunnel`` (ADR 0192). The last two need every member on the service port.
+        dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).
     """
 
     se_group_id: UUID
@@ -752,6 +783,7 @@ class VirtualService(TenantOwned):
     compression: Compression | None = None
     cache: CacheSettings | None = None
     forward_mode: IpvsForward = IpvsForward.NAT
+    dns: DnsPublication | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:

@@ -225,6 +225,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 compression=s.compression.model_dump(mode="json") if s.compression else None,
                 cache=s.cache.model_dump(mode="json") if s.cache else None,
                 forward_mode=s.forward_mode.value,
+                dns=s.dns.model_dump(mode="json") if s.dns else None,
             )
         )
     # Child rows come after their parents so inserts satisfy the foreign keys.
@@ -505,6 +506,7 @@ def rows_to_snapshot(
                 "compression": s.compression,
                 "cache": s.cache,
                 "forward_mode": s.forward_mode,
+                "dns": s.dns,
                 "ports": [
                     {
                         "port": p.port,

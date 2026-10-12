@@ -428,7 +428,8 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
             _check_ipvs_forwarding(s, group, networks, pools_by_id, base, problems)
-        elif s.forward_mode is not IpvsForward.NAT:
+        _check_dns(s, base, problems)
+        if s.protocol is not Protocol.UDP and s.forward_mode is not IpvsForward.NAT:
             problems.append(
                 Problem(
                     f"{base}.forward_mode",
@@ -441,6 +442,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         listeners += [v.Listener(s.name, s.vip, p.port, transport) for p in s.ports]
 
     _check_udp_pools(snapshot, pool_protocols, monitors, problems)
+    _check_dns_names(snapshot, problems)
     _check_failover(snapshot, problems)
     _check_cache_quota(snapshot, problems)
 
@@ -632,6 +634,35 @@ def _check_udp_service(s: VirtualService, base: str, problems: list[Problem]) ->
                         f"{field} is not valid on udp",
                     )
                 )
+
+
+def _check_dns(s: VirtualService, base: str, problems: list[Problem]) -> None:
+    """Reject ``proxied`` on UDP: Cloudflare's proxy only carries HTTP(S) and TCP ports."""
+    if s.dns is not None and s.dns.proxied and s.protocol is Protocol.UDP:
+        problems.append(
+            Problem(
+                f"{base}.dns.proxied", "dns_proxy_not_allowed", "a udp service cannot be proxied"
+            )
+        )
+
+
+def _check_dns_names(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """A host name is published by one service only (ADR 0193)."""
+    owner: dict[tuple[UUID, str], str] = {}
+    for s in snapshot.virtual_services:
+        if s.dns is None:
+            continue
+        for i, name in enumerate(s.dns.names):
+            key = (s.tenant_id, name.lower())
+            if key in owner and owner[key] != s.name:
+                problems.append(
+                    Problem(
+                        f"virtual_services.{s.name}.dns.names[{i}]",
+                        "dns_name_taken",
+                        f"{name} is already published by virtual service {owner[key]}",
+                    )
+                )
+            owner.setdefault(key, s.name)
 
 
 def _check_ipvs_forwarding(

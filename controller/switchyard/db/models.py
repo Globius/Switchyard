@@ -338,6 +338,7 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
     restore_client_ip_header: Mapped[str | None] = mapped_column(Text)
     compression: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     cache: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    dns: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class VsPortRow(Base):
