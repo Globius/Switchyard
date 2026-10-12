@@ -1021,12 +1021,62 @@ class ErrorPagesPolicySet(TenantOwned):
         return self
 
 
+class RateLimitRule(Model):
+    """Limit how often one client (or one key) may use the service; excess requests get ``action``.
+
+    Exactly one of ``max_requests`` (per ``period_s``) and ``max_concurrent`` (requests in
+    flight) is set. Each rule keeps its own counter table of ``table_size`` entries.
+
+    Attributes:
+        match: Requests this rule counts and limits; empty counts every request. Use a path in
+            the match for a per-path limit (a login page, an API prefix).
+        key: What the counters are kept per: ``client_ip`` or the value of ``header_name``
+            (an API key header; requests without the header are not counted).
+        max_requests: Requests allowed per ``period_s`` before the action applies.
+        period_s: Length of the window for ``max_requests``.
+        max_concurrent: Requests allowed at the same time.
+        action: ``deny`` answers ``deny_status``; ``tarpit`` holds the request ``tarpit_s``
+            seconds, then answers 429; ``silent_drop`` closes the connection without an answer.
+        table_size: Number of keys the table holds; the oldest are evicted when it is full.
+    """
+
+    match: RouteMatch = RouteMatch()
+    key: Literal["client_ip", "header"] = "client_ip"
+    header_name: HeaderName | None = None
+    max_requests: int | None = Field(default=None, ge=1, le=1_000_000)
+    period_s: Literal[1, 10, 60, 300, 3600] = 10
+    max_concurrent: int | None = Field(default=None, ge=1, le=100_000)
+    action: Literal["deny", "tarpit", "silent_drop"] = "deny"
+    deny_status: Literal[403, 429, 503] = 429
+    tarpit_s: int = Field(default=5, ge=1, le=30)
+    table_size: int = Field(default=10_000, ge=100, le=1_000_000)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.max_requests is None) == (self.max_concurrent is None):
+            raise ValueError("set exactly one of max_requests and max_concurrent")
+        if (self.key == "header") != (self.header_name is not None):
+            raise ValueError("header_name goes with key header, and only with it")
+        return self
+
+
+class RateLimitPolicySet(TenantOwned):
+    """Rate and concurrency limits per client or key (ADR 0110).
+
+    A service may carry at most 8 rate-limit rules across its sets.
+    """
+
+    kind: Literal["rate_limit"] = "rate_limit"
+    rules: tuple[RateLimitRule, ...] = Field(min_length=1, max_length=8)
+
+
 PolicySet = Annotated[
     RedirectPolicySet
     | AllowListPolicySet
     | RewritePolicySet
     | RespondPolicySet
-    | ErrorPagesPolicySet,
+    | ErrorPagesPolicySet
+    | RateLimitPolicySet,
     Field(discriminator="kind"),
 ]
 #: Policy-set classes a virtual service may list in ``policy_set_ids`` (not the allow list).
@@ -1035,4 +1085,5 @@ ATTACHABLE_POLICY_KINDS = (
     RewritePolicySet,
     RespondPolicySet,
     ErrorPagesPolicySet,
+    RateLimitPolicySet,
 )

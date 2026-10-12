@@ -35,6 +35,8 @@ from switchyard.domain.models import (
     PolicySet,
     Pool,
     Protocol,
+    RateLimitPolicySet,
+    RateLimitRule,
     RoutingProfile,
     SeGroup,
     Tenant,
@@ -340,6 +342,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                 )
 
         _check_routes(s, base, problems)
+        _check_rate_limits(s, policies, base, problems)
         _check_certificate_coverage(s, certs, base, problems)
         if s.protocol is Protocol.UDP:
             _check_udp_service(s, base, problems)
@@ -579,6 +582,73 @@ def _check_live_traffic(
                 f"{base}.passive_check.observe",
                 "passive_check_layer7_needs_http",
                 "layer7 observation needs a pool used only by http services; use layer4 for tcp",
+            )
+        )
+
+
+#: Rate-limit rules one service may carry (one stick counter each; HAProxy tracks few per stream).
+MAX_RATE_LIMITS_PER_SERVICE = 8
+#: Stick-table entries one service may ask for in total (memory on the SE).
+MAX_TABLE_ENTRIES_PER_SERVICE = 2_000_000
+
+
+def rate_limit_rules(
+    s: VirtualService, policies: Mapping[UUID, Any]
+) -> list[tuple[RateLimitPolicySet, int, RateLimitRule]]:
+    """The rate-limit rules of a service in render order: ``(set, 1-based index in set, rule)``."""
+    out = []
+    for pid in s.policy_set_ids:
+        ps = policies.get(pid)
+        if isinstance(ps, RateLimitPolicySet):
+            out += [(ps, i, r) for i, r in enumerate(ps.rules, start=1)]
+    return out
+
+
+def stick_table_entries(snapshot: "Snapshot", tenant_id: UUID) -> int:
+    """Stick-table entries a tenant's rate-limit rules ask for, counted once per service using them.
+
+    Example:
+        >>> stick_table_entries(Snapshot(), UUID(int=1))
+        0
+    """
+    policies = {p.id: p for p in snapshot.policy_sets}
+    return sum(
+        r.table_size
+        for s in snapshot.virtual_services
+        if s.tenant_id == tenant_id
+        for _, _, r in rate_limit_rules(s, policies)
+    )
+
+
+def _check_rate_limits(
+    s: VirtualService, policies: Mapping[UUID, Any], base: str, problems: list[Problem]
+) -> None:
+    rules = rate_limit_rules(s, policies)
+    if len(rules) > MAX_RATE_LIMITS_PER_SERVICE:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "too_many_rate_limits",
+                f"a service may have {MAX_RATE_LIMITS_PER_SERVICE} rate-limit rules; "
+                f"this one has {len(rules)}",
+            )
+        )
+    if sum(r.table_size for _, _, r in rules) > MAX_TABLE_ENTRIES_PER_SERVICE:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "stick_table_too_large",
+                f"rate-limit tables of one service may hold {MAX_TABLE_ENTRIES_PER_SERVICE} "
+                "entries in total",
+            )
+        )
+    delays = {r.tarpit_s for _, _, r in rules if r.action == "tarpit"}
+    if len(delays) > 1:
+        problems.append(
+            Problem(
+                f"{base}.policy_set_ids",
+                "tarpit_conflict",
+                "tarpit rules of one service must use the same tarpit_s (one timeout per frontend)",
             )
         )
 

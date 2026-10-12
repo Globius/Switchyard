@@ -47,7 +47,7 @@ from uuid import UUID
 from jinja2 import Environment, PackageLoader, StrictUndefined
 
 from switchyard.domain import models as dm
-from switchyard.domain.snapshot import Snapshot, ensure_valid
+from switchyard.domain.snapshot import Snapshot, ensure_valid, rate_limit_rules
 from switchyard.render import escape as esc
 from switchyard.render.escape import RenderError
 
@@ -310,6 +310,8 @@ class _Renderer:
         self.warnings: list[str] = []
         self.notices: list[RenderWarning] = []
         self.pool_modes: dict[UUID, str] = {}
+        self.limit_backends: list[dict[str, Any]] = []
+        self.stick_counters = 0
 
     def render(self) -> RenderResult:
         services = sorted(
@@ -324,6 +326,7 @@ class _Renderer:
                 self.pool_modes[pool_id] = mode
             frontends.append(self._frontend(svc, mode))
         backends = [self._backend(self.pools[pid], mode) for pid, mode in self.pool_modes.items()]
+        backends += self.limit_backends
         backends.sort(key=lambda b: b["name"])
         template = _ENV.get_template("haproxy.cfg.j2")
 
@@ -334,6 +337,7 @@ class _Renderer:
                 frontends=frontends,
                 backends=backends,
                 exporter=self._exporter(),
+                stick_counters=self.stick_counters if self.stick_counters > 3 else None,
                 fingerprint=fingerprint,
             )
 
@@ -403,11 +407,13 @@ class _Renderer:
                 lst = self._list_path(allow)
                 connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
         request_rules: list[str] = []
+        tarpit_s: int | None = None
         response_rules: list[str] = []
         error_rules: list[str] = []
         routing_rules: list[str] = []
         if mode == "http":
             request_rules = self._request_rules(svc, ports, allow)
+            tarpit_s = self._tarpit(svc)
             response_rules = self._policy_stages(svc)[3]
             error_rules = self._error_lines(svc)
             if any(p.port == 80 and not p.tls for p in ports):
@@ -423,6 +429,7 @@ class _Renderer:
             "request_rules": request_rules,
             "response_rules": response_rules,
             "error_rules": error_rules,
+            "tarpit_s": tarpit_s,
             "routing_rules": routing_rules,
             "default_backend": (
                 self._backend_name(svc.default_pool_id) if svc.default_pool_id else None
@@ -464,6 +471,62 @@ class _Renderer:
     def _allow_list_text(policy: dm.AllowListPolicySet) -> str:
         nets = sorted(policy.cidrs, key=lambda n: (n.version, int(n.network_address), n.prefixlen))
         return "".join(f"{n}\n" for n in nets)
+
+    def _limit_rules(self, svc: dm.VirtualService) -> list[str]:
+        """Track and enforce the service's rate-limit rules; each rule gets a counter and a table.
+
+        The table is a dummy backend that only holds the stick table; the counter slot
+        (``track-sc<n>``) is the rule's position in the service, so rules never share state.
+        """
+        rules: list[str] = []
+        for slot, (policy, index, rule) in enumerate(rate_limit_rules(svc, self.policies)):
+            table = f"rl_{esc.ident(svc.name)}_{esc.ident(policy.name)}_{index}"
+            esc.ident(table)
+            if rule.key == "header":
+                key = f"req.hdr({esc.header_name(_need(rule.header_name, 'header name'))})"
+                table_type = "string len 64"
+            else:
+                key = "src"
+                table_type = "ipv6"
+            if rule.max_requests is not None:
+                store = f"http_req_rate({rule.period_s}s)"
+                check = f"{{ sc_http_req_rate({slot},{table}) gt {rule.max_requests} }}"
+                expire = max(rule.period_s, 60)
+                retry = f" hdr Retry-After {rule.period_s}"
+            else:
+                store = "conn_cur"
+                check = (
+                    f"{{ sc_conn_cur({slot},{table}) gt {_need(rule.max_concurrent, 'limit')} }}"
+                )
+                expire = 60
+                retry = ""
+            self.limit_backends.append(
+                {
+                    "name": table,
+                    "lines": [
+                        f"stick-table type {table_type} size {rule.table_size} "
+                        f"expire {expire}s store {store}"
+                    ],
+                    "servers": [],
+                }
+            )
+            self.stick_counters = max(self.stick_counters, slot + 1)
+            cond = " ".join(self._conditions(rule.match))
+            track = f"http-request track-sc{slot} {key} table {table}"
+            rules.append(track + (f" if {cond}" if cond else ""))
+            if rule.action == "deny":
+                rules.append(f"http-request return status {rule.deny_status}{retry} if {check}")
+            elif rule.action == "tarpit":
+                rules.append(f"http-request tarpit deny_status 429 if {check}")
+            else:
+                rules.append(f"http-request silent-drop if {check}")
+        return rules
+
+    def _tarpit(self, svc: dm.VirtualService) -> int | None:
+        delays = {
+            r.tarpit_s for _, _, r in rate_limit_rules(svc, self.policies) if r.action == "tarpit"
+        }
+        return min(delays) if delays else None
 
     def _policy_stages(self, svc: dm.VirtualService) -> _Stages:
         """Rules of the attached policy sets: redirects, responses, request and response rewrites.
@@ -600,6 +663,7 @@ class _Renderer:
                     f'http-request redirect prefix "https://%[var(txn.host)]{suffix}" code 301 '
                     f"if {{ dst_port {port.port} }}"
                 )
+        rules += self._limit_rules(svc)
         redirects, responses, rewrites, _ = self._policy_stages(svc)
         rules += redirects
         ordered = sorted(enumerate(svc.routes), key=lambda ir: (ir[1].order, ir[0]))

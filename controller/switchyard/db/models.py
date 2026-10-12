@@ -210,7 +210,8 @@ class PolicySetRow(TenantOwnedMixin, Base):
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         CheckConstraint(
-            "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages')", name="kind"
+            "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages', 'rate_limit')",
+            name="kind",
         ),
         CheckConstraint(
             "(kind <> 'allow_list' AND rules IS NOT NULL AND cidrs IS NULL)"
