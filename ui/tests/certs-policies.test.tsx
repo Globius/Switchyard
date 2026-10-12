@@ -965,3 +965,73 @@ describe("rule editor details", () => {
     expect(screen.queryByLabelText("Page 502 body")).toBeNull();
   });
 });
+
+describe("rate limit policies", () => {
+  it("limits requests per client with an error answer", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New rate limit" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "login-limit");
+    await userEvent.clear(screen.getByLabelText("Rule 1 max requests"));
+    await userEvent.type(screen.getByLabelText("Rule 1 max requests"), "5");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 period"), "60");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 deny status"), "503");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 path match"), "prefix");
+    await userEvent.type(screen.getByLabelText("Rule 1 path"), "login");
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "rate_limit",
+      name: "login-limit",
+      rules: [
+        {
+          key: "client_ip",
+          max_requests: 5,
+          period_s: 60,
+          action: "deny",
+          deny_status: 503,
+          match: { path_prefix: "/login" },
+        },
+      ],
+    });
+  });
+
+  it("counts requests in flight per header value and holds offenders", async () => {
+    renderAt("/t/acme/policies");
+    const n = await screen.findByRole("button", { name: "New rate limit" });
+    await waitFor(() => expect(n).toBeEnabled());
+    await userEvent.click(n);
+    await userEvent.type(await screen.findByLabelText("Name"), "api-key-limit");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 key"), "header");
+    await userEvent.type(screen.getByLabelText("Rule 1 key header"), "X-Api-Key");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 limit type"), "concurrent");
+    expect(screen.queryByLabelText("Rule 1 period")).toBeNull();
+    await userEvent.clear(screen.getByLabelText("Rule 1 max concurrent"));
+    await userEvent.type(screen.getByLabelText("Rule 1 max concurrent"), "8");
+    await userEvent.selectOptions(screen.getByLabelText("Rule 1 action"), "tarpit");
+    await userEvent.clear(screen.getByLabelText("Rule 1 tarpit seconds"));
+    await userEvent.type(screen.getByLabelText("Rule 1 tarpit seconds"), "3");
+    await userEvent.click(screen.getByRole("button", { name: "Add rule" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move up 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move down 1" }));
+    await userEvent.click(screen.getByRole("button", { name: /Remove Rule 2/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Save to draft" }));
+    await waitFor(() => expect(posted?.ops[0]?.body).toBeDefined());
+    expect(posted!.ops[0]!.body).toMatchObject({
+      kind: "rate_limit",
+      rules: [
+        {
+          key: "header",
+          header_name: "X-Api-Key",
+          max_concurrent: 8,
+          action: "tarpit",
+          tarpit_s: 3,
+        },
+      ],
+    });
+    const rule = (posted!.ops[0]!.body as { rules: Record<string, unknown>[] }).rules[0]!;
+    expect(rule).not.toHaveProperty("period_s");
+    expect(rule).not.toHaveProperty("deny_status");
+  });
+});
