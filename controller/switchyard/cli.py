@@ -1030,6 +1030,17 @@ def api_import_avi(
         typer.echo(f"change set {result['change_set_id']}")
 
 
+@api_app.command("k8s-sync")
+def api_k8s_sync(cluster: str, tenant: Tenant) -> None:
+    """Queue a sync of a Kubernetes cluster (name or id) and print the job."""
+    found = _api_run(_call("GET", f"/tenants/{tenant}/kubernetes-clusters"))
+    match = next((c for c in found if cluster in (c["name"], c["id"])), None)
+    if match is None:
+        raise fail(f"no Kubernetes cluster {cluster}", 2)
+    job = _api_run(_call("POST", f"/tenants/{tenant}/kubernetes-clusters/{match['id']}/sync", None))
+    typer.echo(f"job {job['job_id']}")
+
+
 @cert_app.command("check")
 def cert_check(
     name: str,

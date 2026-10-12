@@ -391,6 +391,7 @@ def fill(path: str) -> str:
         "token",
         "certificate",
         "idp",
+        "cluster",
         "test_id",
     ):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))

@@ -90,3 +90,4 @@ Date: YYYY-MM-DD
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
 | [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
 | [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |
+| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |

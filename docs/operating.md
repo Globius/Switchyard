@@ -26,6 +26,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_CLOUDFLARE_TOKEN` | DNS-01, Origin CA and IP-range sync |
 | `SWITCHYARD_ACME_DIRECTORY`, `_EMAIL`, `_ACCOUNT_KEY_FILE` | The ACME provider of earlier versions; on first use it becomes the provider `default`. Manage providers in the UI instead (`docs/acme.md`) |
 | `SWITCHYARD_ACME_DNS_WAIT` | Seconds to wait after publishing DNS-01 records (default 15) |
+| `SWITCHYARD_K8S_CIDRS` | Private networks that Kubernetes API servers named in cluster registrations may live in (comma-separated); loopback and link-local are never allowed |
 | `SWITCHYARD_DNS_CIDRS` | Private networks that RFC 2136 and PowerDNS servers named in DNS credentials may live in (comma-separated); loopback and link-local are never allowed |
 | `SWITCHYARD_METRICS_TOKEN` | Bearer token that may read `/metrics` and the Prometheus service-discovery list (and nothing else); system administrators can too |
 | `SWITCHYARD_ENGINE_CIDRS`, `SWITCHYARD_ENGINE_POLICY` | Networks hand-registered engines may live in besides their group's `mgmt` networks (comma-separated); `open` turns the engine address policy off (labs). ADR 0072 |

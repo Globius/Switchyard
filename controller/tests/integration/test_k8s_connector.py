@@ -308,7 +308,7 @@ async def test_a_cluster_without_usable_nodes_publishes_an_empty_pool(rig: Rig) 
     summary = await rig.sync(cluster)
     assert summary["created"] == 2, "the Service is still published, with no member yet"
     await rig.settle()
-    assert (await rig.names("pools"))["k8s-prod--shop-web-80"].members == []
+    assert (await rig.names("pools"))["k8s-prod--shop-web-80"].members == ()
 
 
 async def test_the_test_reports_version_counts_and_missing_access(rig: Rig) -> None:
