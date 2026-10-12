@@ -100,3 +100,4 @@ Date: YYYY-MM-DD
 | [0136](0136-client-certificate-identity.md) | Client certificate identity | Accepted |
 | [0137](0137-directory-logins-saml-ldap-radius-local.md) | Directory logins (SAML, LDAP, RADIUS, local users): not built, and why | Accepted |
 | [0170](0170-bot-and-ddos-protection.md) | Bot and DDoS protection set | Accepted |
+| [0171](0171-javascript-challenge.md) | JavaScript challenge (proof of work) | Accepted |

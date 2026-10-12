@@ -1768,6 +1768,41 @@ KNOWN_SCANNERS = (
 UserAgentToken = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._/+-]{1,63}$")]
 
 
+class JsChallenge(Model):
+    """Make a new client prove it runs a browser before it gets any answer (ADR 0171).
+
+    The page asks the browser to find a number whose SHA-256 (with the client address) starts
+    with ``difficulty`` zero hex digits: a fraction of a second of work for a person and a cost
+    per client for a bot farm. The result is kept in a cookie for ``valid_for_s``. Nothing secret
+    is involved.
+
+    Attributes:
+        difficulty: Leading zero hex digits required; 3 is about 4,000 hashes, 4 about 65,000,
+            5 about a million.
+        valid_for_s: How long a solved challenge lasts.
+        skip_paths: Paths that are never challenged (``path_beg``), such as an API.
+        skip_user_agents: Lower-case ``User-Agent`` substrings that are never challenged (search
+            engines). The header is easy to fake; use it only where that risk is acceptable.
+
+    Example:
+        >>> JsChallenge().difficulty
+        4
+    """
+
+    difficulty: int = Field(default=4, ge=3, le=5)
+    valid_for_s: int = Field(default=3600, ge=300, le=86_400)
+    skip_paths: tuple[UrlPath, ...] = Field(default=(), max_length=16)
+    skip_user_agents: tuple[UserAgentToken, ...] = Field(default=(), max_length=16)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        if len(set(self.skip_paths)) != len(self.skip_paths):
+            raise ValueError("skip_paths must be unique")
+        if len(set(self.skip_user_agents)) != len(self.skip_user_agents):
+            raise ValueError("skip_user_agents must be unique")
+        return self
+
+
 class ProtectionPolicySet(TenantOwned):
     """Bot and DDoS protection for a service (ADR 0170).
 
@@ -1787,6 +1822,7 @@ class ProtectionPolicySet(TenantOwned):
         deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.
         bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.
         exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).
+        challenge: A JavaScript proof-of-work challenge for new clients (ADR 0171).
         table_size: Addresses the connection table holds.
 
     Example:
@@ -1809,6 +1845,7 @@ class ProtectionPolicySet(TenantOwned):
     deny_user_agents: tuple[UserAgentToken, ...] = Field(default=(), max_length=32)
     bot_action: Literal["deny", "silent_drop"] = "deny"
     exempt_cidrs: tuple[IPNetwork, ...] = Field(default=(), max_length=32)
+    challenge: JsChallenge | None = None
     table_size: int = Field(default=100_000, ge=1_000, le=1_000_000)
 
     @model_validator(mode="after")
@@ -1823,6 +1860,7 @@ class ProtectionPolicySet(TenantOwned):
             or self.block_empty_user_agent
             or self.block_scanners
             or self.deny_user_agents
+            or self.challenge
         ):
             raise ValueError("a protection set needs at least one protection")
         return self

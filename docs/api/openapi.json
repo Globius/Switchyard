@@ -8259,6 +8259,47 @@
         "title": "JobState",
         "type": "string"
       },
+      "JsChallenge": {
+        "additionalProperties": false,
+        "description": "Make a new client prove it runs a browser before it gets any answer (ADR 0171).\n\nThe page asks the browser to find a number whose SHA-256 (with the client address) starts\nwith ``difficulty`` zero hex digits: a fraction of a second of work for a person and a cost\nper client for a bot farm. The result is kept in a cookie for ``valid_for_s``. Nothing secret\nis involved.\n\nAttributes:\n    difficulty: Leading zero hex digits required; 3 is about 4,000 hashes, 4 about 65,000,\n        5 about a million.\n    valid_for_s: How long a solved challenge lasts.\n    skip_paths: Paths that are never challenged (``path_beg``), such as an API.\n    skip_user_agents: Lower-case ``User-Agent`` substrings that are never challenged (search\n        engines). The header is easy to fake; use it only where that risk is acceptable.\n\nExample:\n    >>> JsChallenge().difficulty\n    4",
+        "properties": {
+          "difficulty": {
+            "default": 4,
+            "maximum": 5.0,
+            "minimum": 3.0,
+            "title": "Difficulty",
+            "type": "integer"
+          },
+          "skip_paths": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Skip Paths",
+            "type": "array"
+          },
+          "skip_user_agents": {
+            "default": [],
+            "items": {
+              "pattern": "^[a-z0-9][a-z0-9._/+-]{1,63}$",
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Skip User Agents",
+            "type": "array"
+          },
+          "valid_for_s": {
+            "default": 3600,
+            "maximum": 86400.0,
+            "minimum": 300.0,
+            "title": "Valid For S",
+            "type": "integer"
+          }
+        },
+        "title": "JsChallenge",
+        "type": "object"
+      },
       "JwtKey": {
         "additionalProperties": false,
         "description": "A public key that signs tokens (ADR 0135); the engine never holds a private or shared key.\n\nAttributes:\n    kid: The ``kid`` header the key belongs to; without it the key is tried for every token.\n    alg: The signature algorithm the token must declare.\n    public_key_pem: The key as a PEM ``PUBLIC KEY`` block (convert a JWK with\n        ``syctl jwks convert``).",
@@ -12055,7 +12096,7 @@
       },
       "ProtectionPolicySet": {
         "additionalProperties": false,
-        "description": "Bot and DDoS protection for a service (ADR 0170).\n\nPer-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits\nstay in ``rate_limit`` sets.\n\nAttributes:\n    max_connections_per_source: Connections one address may hold open; more are refused.\n    max_new_connections_per_source: New connections one address may open per\n        ``connection_rate_period_s``; more are refused.\n    connection_rate_period_s: Window of the connection rate.\n    header_timeout_s: How long a client has to send the whole request head (``timeout\n        http-request``); the answer to slow-header attacks.\n    client_timeout_s: Idle time allowed on a client connection (``timeout client``).\n    block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.\n    block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).\n    deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.\n    bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.\n    exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).\n    table_size: Addresses the connection table holds.\n\nExample:\n    >>> ProtectionPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"p\",\n    ...      \"block_scanners\": True}\n    ... ).bot_action\n    'deny'",
+        "description": "Bot and DDoS protection for a service (ADR 0170).\n\nPer-source connection limits, slow-request timeouts and user-agent rules. Request-rate limits\nstay in ``rate_limit`` sets.\n\nAttributes:\n    max_connections_per_source: Connections one address may hold open; more are refused.\n    max_new_connections_per_source: New connections one address may open per\n        ``connection_rate_period_s``; more are refused.\n    connection_rate_period_s: Window of the connection rate.\n    header_timeout_s: How long a client has to send the whole request head (``timeout\n        http-request``); the answer to slow-header attacks.\n    client_timeout_s: Idle time allowed on a client connection (``timeout client``).\n    block_empty_user_agent: Refuse requests with a missing or empty ``User-Agent``.\n    block_scanners: Refuse the user agents of well-known scanners (``KNOWN_SCANNERS``).\n    deny_user_agents: More lower-case substrings to refuse in the ``User-Agent``.\n    bot_action: ``deny`` answers 403; ``silent_drop`` closes the connection without an answer.\n    exempt_cidrs: Sources that skip every rule of the set (monitoring, trusted partners).\n    challenge: A JavaScript proof-of-work challenge for new clients (ADR 0171).\n    table_size: Addresses the connection table holds.\n\nExample:\n    >>> ProtectionPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"p\",\n    ...      \"block_scanners\": True}\n    ... ).bot_action\n    'deny'",
         "properties": {
           "block_empty_user_agent": {
             "default": false,
@@ -12075,6 +12116,16 @@
             ],
             "title": "Bot Action",
             "type": "string"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsChallenge"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "client_timeout_s": {
             "anyOf": [
@@ -12229,6 +12280,16 @@
             ],
             "title": "Bot Action",
             "type": "string"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsChallenge"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "client_timeout_s": {
             "anyOf": [
@@ -12385,6 +12446,16 @@
             ],
             "title": "Bot Action"
           },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsChallenge"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "client_timeout_s": {
             "anyOf": [
               {
@@ -12540,6 +12611,16 @@
             ],
             "title": "Bot Action",
             "type": "string"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsChallenge"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "changed_fields": {
             "description": "Fields a draft changed; empty outside a draft.",

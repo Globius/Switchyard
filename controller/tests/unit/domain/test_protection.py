@@ -154,3 +154,41 @@ def test_the_renderer_refuses_an_unsafe_token_even_if_validation_was_bypassed() 
     broken = snap.model_copy(update={"policy_sets": (bad,)})
     with pytest.raises(RenderError, match="user agent token"):
         render_haproxy(broken, broken.se_groups[0].id)
+
+
+# -- JavaScript challenge (ADR 0171) -------------------------------------------------------------
+
+
+def test_challenge_bounds_and_it_counts_as_a_protection() -> None:
+    for bad in (
+        {"difficulty": 2},
+        {"difficulty": 6},
+        {"valid_for_s": 10},
+        {"skip_paths": ["/a", "/a"]},
+    ):
+        with pytest.raises(ValidationError):
+            dm.JsChallenge.model_validate(bad)
+    snapshot_from_mapping(with_sets(protection(challenge={})))
+
+
+def test_challenge_rules_page_and_skips() -> None:
+    d = with_sets(
+        protection(
+            challenge={
+                "difficulty": 3,
+                "valid_for_s": 600,
+                "skip_paths": ["/api"],
+                "skip_user_agents": ["googlebot"],
+            },
+            exempt_cidrs=["198.51.100.0/24"],
+        )
+    )
+    snap = snapshot_from_mapping(d)
+    result = render_haproxy(snap, snap.se_groups[0].id)
+    cfg = result.files["haproxy/haproxy.cfg"]
+    assert "{ var(txn.sy_hash) -m beg 000 }" in cfg and "le 600 }" in cfg
+    assert "lf-file /etc/switchyard/haproxy/challenge/web.html" in cfg
+    assert "!{ path_beg /api }" in cfg and "-m sub googlebot" in cfg
+    page = result.files["haproxy/challenge/web.html"]
+    assert 'zeros = "0".repeat(3)' in page and "Max-Age=600" in page and "%[src]" in page
+    assert "@" not in page.replace("@", "", 0) or "@SALT@" not in page
