@@ -140,3 +140,4 @@ Date: YYYY-MM-DD
 | [0190](0190-docs-site-mkdocs-material.md) | Docs site: MkDocs with the Material theme | Accepted |
 | [0191](0191-kubernetes-deployment.md) | Kubernetes is a supported place to run the controller (Helm chart) | Accepted |
 | [0195](0195-radius-login-and-step-up-flows.md) | RADIUS logins, a login gate, and multi-step (nFactor style) flows | Accepted |
+| [0197](0197-waf-api-schema-protection.md) | API schema protection in the WAF policy | Accepted |
