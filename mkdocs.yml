@@ -115,6 +115,7 @@ nav:
       - Switchyard — Frontend Scope and Claude Design Handoff: design/04-frontend-scope.md
       - Backend tickets required by the frontend: design/05-frontend-backend-tickets.md
       - Planned vs built: design/06-planned-vs-built.md
+      - "Planned vs built, 2026-10-12": audit/2026-10-12-planned-vs-built.md
       - 07 - Built UI vs Design artboards (handoff v46): design/07-ui-vs-artboards.md
       - Competitive parity matrix and phased plan: design/08-competitive-parity-plan.md
       - Parity work blocks: design/09-parity-work-blocks.md
