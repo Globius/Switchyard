@@ -147,6 +147,7 @@ class DataPlaneEngine:
         if kind == "config":  # pragma: no cover - callers route the config separately
             raise ValueError("the configuration is not a storage file")
         segment = _STORAGE[kind]
+        before = await self.info()  # a storage call may start a reload; see _settle
         params = {"skip_reload": "true"}
         if kind == "general":
             replace = await self._send(
@@ -164,6 +165,7 @@ class DataPlaneEngine:
                 headers={"Content-Type": "text/plain"},
             )
         if replace.status_code in (200, 202, 204):
+            await self._settle(replace, before)
             return
         if replace.status_code != 404:
             raise self._unexpected(f"replacing {path}", replace)
@@ -175,6 +177,23 @@ class DataPlaneEngine:
         )
         if created.status_code not in (200, 201, 202):
             raise self._unexpected(f"creating {path}", created)
+        await self._settle(created, before)
+
+    async def _settle(self, response: httpx.Response, before: EngineInfo | None = None) -> None:
+        """Wait for the reload a storage call started, if it started one.
+
+        Creating a crt-list answers ``202`` with a ``Reload-Id`` even with ``force_reload=false``:
+        the Data Plane API reloads HAProxy after its reload delay. If that reload were left to
+        fire on its own, it would land after the configuration push and replace the worker a second
+        time, which the canary would take for a crash (found by the end-to-end test). Waiting for
+        it here keeps every reload inside the call that caused it.
+        """
+        reload_id = response.headers.get("Reload-Id")
+        if response.status_code == 202 and reload_id:
+            await self._await_reload(reload_id)
+            if before is not None:
+                # "succeeded" only means the reload command exited; the new worker follows.
+                await self._await_new_worker(before, reload_id)
 
     async def _delete(self, path: str) -> None:
         kind = storage_kind(path)
