@@ -153,6 +153,15 @@ Things this lab taught that are not in the scripts:
 - The guest agent is not ready for the first seconds of a VM boot: `enroll-engine.sh` fails with "QEMU guest agent is not
   running" until it is. Run it again.
 
+## Public VIPs
+
+`tenantpub.yaml` puts the VIP network on the hosts' own public /64 (the uplink bridge), with management and backend still
+on the lab ULA networks, so a VIP is an internet-reachable IPv6 address while the backend stays lab-only (edit the prefix
+first). Adopt it, deploy a VRRP group (the VIP NIC lands on `vmbr0`) and create an HTTP and a UDP service from the `vips`
+pool. Checked from outside the hosts: `curl -g http://[VIP]/` returns the helper's answer through the VRRP engines, and a UDP
+datagram to the UDP VIP's port 5301 is echoed back through IPVS. A BGP group would need a real upstream router for public
+reachability, so BGP stays lab-only.
+
 ## Tearing down
 
 Delete the lab guests (ids in `hosts.env` and the engines the controller created), remove the SDN zone `lab`
