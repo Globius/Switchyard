@@ -1,6 +1,7 @@
 """The CAPTCHA gate of a protection set: a Lua service that checks the provider's answer (ADR 0172).
 
-Per protected service the renderer writes two files under ``haproxy/captcha/``: a fixed Lua script
+Per protected service the renderer writes two files under ``haproxy/lists/`` (the Data Plane API
+keeps general files there): a fixed Lua script
 (only validated constants are filled in) and the page that shows the provider's widget. The
 provider secret never appears in either; it travels in the agent bundle as
 ``certs/captcha-<service>.secret`` and the script reads it once at start.

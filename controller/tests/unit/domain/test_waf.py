@@ -84,7 +84,7 @@ def test_tcp_services_cannot_carry_policy_sets() -> None:
 def test_detect_mode_inspects_but_never_blocks() -> None:
     files, agent = render(with_waf(waf()))
     cfg = files["haproxy/haproxy.cfg"]
-    assert "filter spoe engine coraza config /etc/switchyard/haproxy/waf/web.spoe" in cfg
+    assert "filter spoe engine coraza config /etc/switchyard/haproxy/lists/waf-web.spoe" in cfg
     assert "txn.coraza.action" not in cfg
     assert "SecRuleEngine DetectionOnly" in agent["coraza/config.yaml"]
     assert "backend sy_coraza_spoa" in cfg
@@ -114,7 +114,7 @@ def test_fail_open_has_no_error_rule_and_the_other_settings_reach_the_files() ->
     )
     assert "txn.coraza.error" not in files["haproxy/haproxy.cfg"]
     assert "http-buffer-request" not in files["haproxy/haproxy.cfg"]
-    spoe = files["haproxy/waf/web.spoe"]
+    spoe = files["haproxy/lists/waf-web.spoe"]
     assert "timeout processing 300ms" in spoe
     assert "body=req.body" not in spoe
     assert "if !{ path_beg /upload }" in spoe
@@ -145,7 +145,7 @@ def test_the_agent_file_lists_every_protected_service_and_none_without_a_waf() -
     files, agent = render(plain)
     assert agent == {}
     assert "sy_coraza_spoa" not in files["haproxy/haproxy.cfg"]
-    assert not any(path.startswith("haproxy/waf/") for path in files)
+    assert not any(path.startswith("haproxy/lists/waf-") for path in files)
 
 
 def test_disabled_services_are_not_protected() -> None:
