@@ -667,7 +667,7 @@ class _Renderer:
             return []
         name = esc.ident(svc.name)
         salt = hashlib.sha256(f"{svc.id}/{protection.id}".encode()).hexdigest()[:16]
-        self.files[f"haproxy/challenge/{name}.html"] = _challenge_page(
+        self.files[f"haproxy/lists/challenge-{name}.html"] = _challenge_page(
             gate.difficulty, gate.valid_for_s, salt
         )
         skips = []
@@ -682,7 +682,7 @@ class _Renderer:
         unsolved = " ".join([*skips, "!{ var(txn.sy_pass) -m bool }"])
         has = "if { var(txn.sy_cv) -m found }"
         zeros = "0" * gate.difficulty
-        page = f"{BASE_DIR}/challenge/{name}.html"
+        page = f"{BASE_DIR}/lists/challenge-{name}.html"
         return [
             "http-request set-var(txn.sy_cv) req.cook(sy_chal) if { req.cook(sy_chal) -m found }",
             f"http-request set-var(txn.sy_ts) var(txn.sy_cv),field(1,-),add(0) {has}",
@@ -706,9 +706,9 @@ class _Renderer:
             return []
         name = esc.ident(svc.name)
         ident = captcha.lua_id(svc)
-        self.files[f"haproxy/captcha/{name}.lua"] = captcha.render_lua(svc, gate)
-        self.files[f"haproxy/captcha/{name}.html"] = captcha.render_page(gate)
-        self.lua_loads.append(f"{BASE_DIR}/captcha/{name}.lua")
+        self.files[f"haproxy/lists/captcha-{name}.lua"] = captcha.render_lua(svc, gate)
+        self.files[f"haproxy/lists/captcha-{name}.html"] = captcha.render_page(gate)
+        self.lua_loads.append(f"{BASE_DIR}/lists/captcha-{name}.lua")
         skips = []
         if protection.exempt_cidrs:
             skips.append(f"!{self._exempt(protection)}")
@@ -724,7 +724,7 @@ class _Renderer:
             f"http-request use-service lua.sy_cap_{ident} if {{ path {captcha.SUBMIT_PATH} }}"
             " { method POST }",
             "http-request return status 200 content-type text/html hdr cache-control no-store"
-            f" lf-file {BASE_DIR}/captcha/{name}.html if {{ method GET HEAD }} {unsolved}",
+            f" lf-file {BASE_DIR}/lists/captcha-{name}.html if {{ method GET HEAD }} {unsolved}",
             f"http-request deny deny_status 403 if {unsolved}",
         ]
 

@@ -187,9 +187,9 @@ def test_challenge_rules_page_and_skips() -> None:
     result = render_haproxy(snap, snap.se_groups[0].id)
     cfg = result.files["haproxy/haproxy.cfg"]
     assert "{ var(txn.sy_hash) -m beg 000 }" in cfg and "le 600 }" in cfg
-    assert "lf-file /etc/switchyard/haproxy/challenge/web.html" in cfg
+    assert "lf-file /etc/switchyard/haproxy/lists/challenge-web.html" in cfg
     assert "!{ path_beg /api }" in cfg and "-m sub googlebot" in cfg
-    page = result.files["haproxy/challenge/web.html"]
+    page = result.files["haproxy/lists/challenge-web.html"]
     assert 'zeros = "0".repeat(3)' in page and "Max-Age=600" in page and "%[src]" in page
     assert "@" not in page.replace("@", "", 0) or "@SALT@" not in page
 
@@ -229,21 +229,21 @@ def test_captcha_files_rules_and_widgets() -> None:
     snap = snapshot_from_mapping(d)
     files = render_haproxy(snap, snap.se_groups[0].id).files
     cfg = files["haproxy/haproxy.cfg"]
-    assert "lua-load /etc/switchyard/haproxy/captcha/web.lua" in cfg
+    assert "lua-load /etc/switchyard/haproxy/lists/captcha-web.lua" in cfg
     assert "httpclient.ssl.verify required" in cfg and "resolvers sy_dns" in cfg
     assert "use-service lua.sy_cap_" in cfg and "{ path /.sy/captcha } { method POST }" in cfg
     assert "!{ path_beg /api }" in cfg
-    lua = files["haproxy/captcha/web.lua"]
+    lua = files["haproxy/lists/captcha-web.lua"]
     assert "challenges.cloudflare.com/turnstile/v0/siteverify" in lua
     assert "cf-turnstile-response" in lua and "/etc/switchyard/certs/captcha-web.secret" in lua
     assert "@" not in lua.replace("\\", "")  # every placeholder was filled
-    page = files["haproxy/captcha/web.html"]
+    page = files["haproxy/lists/captcha-web.html"]
     assert 'data-sitekey="1x00000000000000000000AA"' in page and "turnstile" in page
     hcaptcha = with_sets(protection(captcha={**GATE, "provider": "hcaptcha"}))
     snap = snapshot_from_mapping(hcaptcha)
     files = render_haproxy(snap, snap.se_groups[0].id).files
-    assert "api.hcaptcha.com/siteverify" in files["haproxy/captcha/web.lua"]
-    assert "h-captcha" in files["haproxy/captcha/web.html"]
+    assert "api.hcaptcha.com/siteverify" in files["haproxy/lists/captcha-web.lua"]
+    assert "h-captcha" in files["haproxy/lists/captcha-web.html"]
 
 
 def test_the_captcha_secret_must_stay_in_the_tenants_namespace() -> None:

@@ -3,7 +3,7 @@
 Like the other renderers these are pure functions of a snapshot (ADR 0140 to 0144). Per group:
 
 ======================================= ===========================================================
-``haproxy/waf/<service>.spoe``          The SPOE engine configuration HAProxy loads for one
+``haproxy/lists/waf-<service>.spoe``        The SPOE engine configuration HAProxy loads for one
                                         service: which request data goes to the agent, the
                                         processing timeout, and the paths that skip inspection.
                                         Part of the HAProxy files.
@@ -48,7 +48,7 @@ def waf_policy(svc: dm.VirtualService, policies: Mapping[UUID, object]) -> dm.Wa
 
 def spoe_path(svc: dm.VirtualService) -> str:
     """Path of the SPOE file of a service, relative to ``/etc/switchyard/``."""
-    return f"haproxy/waf/{esc.ident(svc.name)}.spoe"
+    return f"haproxy/lists/waf-{esc.ident(svc.name)}.spoe"
 
 
 def render_spoe(svc: dm.VirtualService, policy: dm.WafPolicySet) -> str:
@@ -109,7 +109,7 @@ def frontend_lines(svc: dm.VirtualService, policy: dm.WafPolicySet) -> tuple[lis
     request is refused (503) when the agent did not answer in time.
     """
     name = esc.ident(svc.name)
-    options = [f"filter spoe engine coraza config {BASE_DIR}/waf/{name}.spoe"]
+    options = [f"filter spoe engine coraza config {BASE_DIR}/lists/waf-{name}.spoe"]
     if policy.inspect_body:
         options.append("option http-buffer-request")
     rules: list[str] = []
