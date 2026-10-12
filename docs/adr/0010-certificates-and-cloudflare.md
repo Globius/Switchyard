@@ -39,3 +39,11 @@ the SEs, and renewed; the Cloudflare-only allow list must stay current.
   Runtime API: a changed certificate currently causes a graceful `haproxy` reload.
 - Expiry alerting beyond the failed-renewal audit event.
 - Certificates for engines without an agent.
+
+## Update: certificates are staged before validation
+
+HAProxy checks that every certificate file named in the configuration exists, so validating a first
+TLS service on an engine failed before the certificate bundle had been sent. The pipeline now sends the
+bundle to the canary first when a certificate is new there, then validates and pushes. The canary is
+recorded as pushed before that, so a rejected configuration reverts it. The optional Docker sandbox
+receives the same `certs/` files.

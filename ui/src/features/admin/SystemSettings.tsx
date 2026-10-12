@@ -1,5 +1,6 @@
 /** Admin: controller-wide settings (system-admin role). Today: whether SE groups may be containers. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { api, unwrap } from "@/api/client";
 import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
@@ -70,6 +71,13 @@ export function SystemSettings() {
                 </p>
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {t("Who changed this and when is in the")}{" "}
+              <Link to="/admin/audit-log" className="text-primary hover:underline">
+                {t("audit log")}
+              </Link>
+              .
+            </p>
             {s!.allow_lxc_guests_forced && (
               <p role="note" className="rounded-md bg-muted p-3 text-sm">
                 {t(

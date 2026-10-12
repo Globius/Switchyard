@@ -1,0 +1,30 @@
+# Public IPv6 twin: the VIP network is the hosts' own public /64 on the uplink bridge (vmbr0), so VIPs are real,
+# internet-reachable IPv6 addresses; management and backend stay on the lab-only ULA networks (tenant6.yaml addressing).
+# Edit the prefix to match your hosts. Groups: `edgepub` (VRRP). The VRRP group's VIPs come from `vips`.
+tenants:
+  - {id: labpub, name: labpub}
+networks:
+  - {id: netp-mgmt, tenant_id: labpub, name: mgmt, cidr: "fd30:0:0:1::/64", gateway: "fd30:0:0:1::1", vnet: labmgmt}
+  - {id: netp-vip, tenant_id: labpub, name: vip, cidr: "2602:f9d0:902:5602::/64", gateway: "2602:f9d0:902:5602::1", vnet: vmbr0}
+  - {id: netp-be, tenant_id: labpub, name: backend, cidr: "fd30:0:0:3::/64", gateway: "fd30:0:0:3::1", vnet: labbe}
+vip_pools:
+  - {id: poolp-mgmt, tenant_id: labpub, name: mgmt-addrs, network_id: netp-mgmt, ranges: [{start: "fd30:0:0:1::200", end: "fd30:0:0:1::239"}]}
+  - {id: poolp-se-vip, tenant_id: labpub, name: se-vip-addrs, network_id: netp-vip, ranges: [{start: "2602:f9d0:902:5602:ffa:0:1:100", end: "2602:f9d0:902:5602:ffa:0:1:139"}]}
+  - {id: poolp-se-be, tenant_id: labpub, name: se-be-addrs, network_id: netp-be, ranges: [{start: "fd30:0:0:3::200", end: "fd30:0:0:3::239"}]}
+  - {id: poolp-vips, tenant_id: labpub, name: vips, network_id: netp-vip, ranges: [{start: "2602:f9d0:902:5602:ffa:0:2:100", end: "2602:f9d0:902:5602:ffa:0:2:1ff"}]}
+routing_profiles:
+  - {id: rpp-vrrp, tenant_id: labpub, name: vrrp, kind: vrrp, vrid: 71, interface: eth1}
+se_groups:
+  - id: sgp-vrrp
+    tenant_id: labpub
+    name: edgepub
+    ha_mode: vrrp
+    routing_profile_id: rpp-vrrp
+    canary_seconds: 5
+    networks: [{network_id: netp-mgmt, role: mgmt}, {network_id: netp-vip, role: vip}, {network_id: netp-be, role: backend}]
+health_monitors:
+  - {id: hmp, tenant_id: labpub, name: web-up, type: http, http: {path: /, expect_status: [200]}}
+  - {id: hmp-udp, tenant_id: labpub, name: echo-udp, type: udp}
+pools:
+  - {id: poolp-web, tenant_id: labpub, name: web, health_monitor_id: hmp, members: [{address: "fd30:0:0:3::fa", port: 8001}]}
+  - {id: poolp-echo, tenant_id: labpub, name: echo, health_monitor_id: hmp-udp, members: [{address: "fd30:0:0:3::fa", port: 5301}]}

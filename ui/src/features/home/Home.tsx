@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { api, unwrap } from "@/api/client";
-import { StatusPill, expiryStatus } from "@/components/sy/StatusPill";
+import { ExpiryPill, StatusPill, expiryStatus } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -232,7 +232,7 @@ export function Home({ tenant }: { tenant: string }) {
                         {c.name}
                       </Link>
                       <span className="ml-auto">
-                        <StatusPill status={e.status}>{e.label}</StatusPill>
+                        <ExpiryPill ex={e} />
                       </span>
                     </li>
                   );

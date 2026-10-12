@@ -175,6 +175,9 @@ const server = setupServer(
       },
     ]),
   ),
+  http.get("*/api/v1/tenants/acme/virtual-services/:id/metrics", () =>
+    HttpResponse.json({ available: false, reason: "Prometheus is not configured", metrics: null }),
+  ),
   http.get("*/api/v1/tenants/acme/metrics/virtual-services", () =>
     HttpResponse.json({
       available: false,
