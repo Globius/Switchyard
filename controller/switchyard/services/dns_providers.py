@@ -63,12 +63,39 @@ class DnsProviderView:
 
 
 @dataclass(frozen=True)
+class DnsZoneResult:
+    """Outcome of the test in one zone."""
+
+    zone: str
+    ok: bool
+    detail: str
+
+
+@dataclass(frozen=True)
 class DnsTestResult:
-    """Outcome of publishing and removing a test record."""
+    """Outcome of publishing and removing a test record in each zone of a credential."""
 
     ok: bool
     detail: str
-    zone: str | None = None
+    zones: list[DnsZoneResult]
+
+
+@dataclass(frozen=True)
+class Candidate:
+    """A credential that could publish records for a name."""
+
+    id: UUID
+    name: str
+    type: str
+    zone: str | None
+
+
+@dataclass(frozen=True)
+class NameMatch:
+    """The credentials that cover one name, best first (the longest zone, then catch-alls)."""
+
+    name: str
+    candidates: list[Candidate]
 
 
 def _view(row: DnsProviderRow) -> DnsProviderView:
@@ -96,6 +123,23 @@ def _zones(raw: list[str], errors: FieldErrors) -> list[str]:
         if clean not in out:
             out.append(clean)
     return out
+
+
+def rank(rows: list[DnsProviderRow], domain: str) -> list[tuple[DnsProviderRow, str | None]]:
+    """The credentials that can serve ``domain``, best first, with the zone that matched.
+
+    A wildcard name is matched by its base domain. Credentials without zones come last.
+    """
+    base = domain.removeprefix("*.")
+    hits: list[tuple[int, str, DnsProviderRow, str | None]] = []
+    for row in rows:
+        zones = [z for z in row.zones if in_zone(base, z)]
+        if zones:
+            best = max(zones, key=len)
+            hits.append((-len(best), row.name, row, best))
+        elif not row.zones:
+            hits.append((1, row.name, row, None))
+    return [(row, zone) for _, _, row, zone in sorted(hits, key=lambda h: (h[0], h[1]))]
 
 
 class DnsResolver:
@@ -142,16 +186,9 @@ class DnsResolver:
                 if row.name == self._pinned:
                     return row
             raise DnsError(f"DNS credential {self._pinned} does not exist or is disabled")
-        best: tuple[int, DnsProviderRow] | None = None
-        for row in rows:
-            for zone in row.zones:
-                if in_zone(domain, zone) and (best is None or len(zone) > best[0]):
-                    best = (len(zone), row)
-        if best:
-            return best[1]
-        open_ended = [r for r in rows if not r.zones]
-        if len(open_ended) == 1:
-            return open_ended[0]
+        ranked = rank(rows, domain)
+        if ranked:
+            return ranked[0][0]
         raise DnsError(
             f"no DNS credential serves {domain}: add one whose zones include it, "
             "or name the credential on the certificate"
@@ -258,6 +295,7 @@ class DnsProviders:
         for path, message in check_settings(type_, config, credentials).items():
             errors.add(path, "invalid", message)
         clean_zones = _zones(zones, errors)
+        await self._zone_conflicts(tenant_id, clean_zones, None, errors)
         errors.raise_if_any()
         tenant_name = await self._tenant_name(tenant_id)
         ref = f"kv/tenants/{tenant_name}/dns/{name}"
@@ -317,6 +355,8 @@ class DnsProviders:
         ).items():
             errors.add(path, "invalid", message)
         clean_zones = _zones(zones, errors) if zones is not None else None
+        if clean_zones is not None:
+            await self._zone_conflicts(tenant_id, clean_zones, provider_id, errors)
         errors.raise_if_any()
         if credentials:
             try:
@@ -383,6 +423,42 @@ class DnsProviders:
         await self._audit(
             principal, tenant_id, "dns_provider.deleted", current.name, {}, request_id
         )
+
+    async def _zone_conflicts(
+        self, tenant_id: UUID, zones: list[str], own: UUID | None, errors: FieldErrors
+    ) -> None:
+        """Two credentials of a tenant cannot claim the same zone."""
+        async with tenant_session(self._db.app, [tenant_id]) as session:
+            others = (
+                (await session.execute(select(DnsProviderRow).where(DnsProviderRow.id != own)))
+                .scalars()
+                .all()
+                if own
+                else (await session.execute(select(DnsProviderRow))).scalars().all()
+            )
+        claimed = {zone: row.name for row in others for zone in row.zones}
+        for index, zone in enumerate(zones):
+            if zone in claimed:
+                errors.add(
+                    f"{_ZONE_LABEL}[{index}]",
+                    "conflict",
+                    f"already served by the credential {claimed[zone]}",
+                )
+
+    async def match(
+        self, principal: Principal, tenant_id: UUID, names: list[str]
+    ) -> list[NameMatch]:
+        """For each name, the enabled credentials that cover it, best first."""
+        self._check_tenant(principal, tenant_id)
+        require(principal, "read", "tenant_data")
+        rows = await self.enabled_rows(tenant_id)
+        return [
+            NameMatch(
+                name,
+                [Candidate(r.id, r.name, r.type, zone) for r, zone in rank(rows, name)],
+            )
+            for name in names
+        ]
 
     @staticmethod
     def _check_version(row: DnsProviderRow, expected: int | None) -> None:
@@ -458,21 +534,38 @@ class DnsProviders:
         self._check_tenant(principal, tenant_id)
         require(principal, "manage", "dns_provider")
         row = await self._row(tenant_id, provider_id)
-        chosen = zone or row.config.get("zone") or (row.zones[0] if row.zones else None)
+        chosen = (
+            [zone]
+            if zone
+            else list(row.zones) or ([row.config["zone"]] if row.config.get("zone") else [])
+        )
         if not chosen:
-            return DnsTestResult(False, "give a zone to test in (the credential lists none)")
+            return DnsTestResult(False, "give a zone to test in (the credential lists none)", [])
+        results: list[DnsZoneResult] = []
         provider: DnsProvider | None = None
         try:
             provider = await self.build(row)
-            name = f"_switchyard-test.{chosen}"
-            handle = await provider.create_txt(name, "switchyard-test", ttl=60)
-            await provider.delete_txt(name, handle)
-            result = DnsTestResult(True, f"published and removed a TXT record at {name}", chosen)
+            for name_zone in chosen:
+                name = f"_switchyard-test.{name_zone}"
+                try:
+                    handle = await provider.create_txt(name, "switchyard-test", ttl=60)
+                    await provider.delete_txt(name, handle)
+                    results.append(DnsZoneResult(name_zone, True, f"published and removed {name}"))
+                except (DnsError, ValueError) as exc:
+                    results.append(DnsZoneResult(name_zone, False, str(exc)))
         except (DnsError, ValueError) as exc:
-            result = DnsTestResult(False, str(exc), chosen)
+            results = [DnsZoneResult(z, False, str(exc)) for z in chosen]
         finally:
             if provider is not None:
                 await provider.close()
+        failed = [r for r in results if not r.ok]
+        result = DnsTestResult(
+            not failed,
+            "every zone works"
+            if not failed
+            else f"{len(failed)} of {len(results)} zones failed: {failed[0].detail}",
+            results,
+        )
         await self._audit(
             principal, tenant_id, "dns_provider.tested", row.name, {"ok": result.ok}, request_id
         )

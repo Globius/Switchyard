@@ -905,9 +905,28 @@ DNS_PROVIDER = {
 }
 DNS_PROVIDER_TEST = {
     "ok": True,
-    "detail": "published and removed a TXT record at _switchyard-test.example.test",
-    "zone": "example.test",
+    "detail": "every zone works",
+    "zones": [
+        {
+            "zone": "example.test",
+            "ok": True,
+            "detail": "published and removed _switchyard-test.example.test",
+        }
+    ],
 }
+DNS_MATCH = [
+    {
+        "name": "*.example.test",
+        "candidates": [
+            {
+                "id": "0192f1a2-0000-7000-8000-00000000d501",
+                "name": "cloudflare-main",
+                "type": "cloudflare",
+                "zone": "example.test",
+            }
+        ],
+    }
+]
 ACME_PRESETS = [
     {
         "key": "letsencrypt",
@@ -930,13 +949,24 @@ ACME_PROVIDER = {
     "oauth": None,
     "oauth_secret_set": False,
     "account_registered": True,
+    "ca_bundle_set": False,
+    "terms_agreed": True,
     "enabled": True,
     "default": True,
+    "used_by": 3,
     "version": 1,
 }
 ACME_PROVIDER_TEST = {
     "ok": True,
     "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+    "stages": [
+        {"name": "directory", "ok": True, "detail": "reachable"},
+        {
+            "name": "account",
+            "ok": True,
+            "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+        },
+    ],
     "tos_url": "https://letsencrypt.org/documents/LE-SA-v1.5.pdf",
     "external_account_required": False,
 }

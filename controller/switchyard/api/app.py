@@ -62,6 +62,7 @@ from switchyard.api.schemas import (
     ChangeSetSummary,
     DeployIn,
     DiscoveryGroup,
+    DnsNameMatchRead,
     DnsProviderIn,
     DnsProviderPatch,
     DnsProviderRead,
@@ -2937,6 +2938,9 @@ def create_app(
             eab_hmac_key=body.eab_hmac_key,
             oauth=body.oauth.model_dump(exclude_none=True) if body.oauth else None,
             oauth_client_secret=body.oauth_client_secret,
+            account_key=body.account_key,
+            ca_bundle_pem=body.ca_bundle_pem,
+            terms_agreed=body.terms_agreed,
             enabled=body.enabled,
             default=body.default,
             request_id=_rid(),
@@ -3075,6 +3079,28 @@ def create_app(
             request_id=_rid(),
         )
         return asdict(view)
+
+    @router.get(
+        "/tenants/{t}/dns-providers/match",
+        tags=["dns providers"],
+        summary="Which credentials can validate these names",
+        response_model=list[DnsNameMatchRead],
+        responses=_ok(ex.DNS_MATCH),
+    )
+    async def match_dns_providers(
+        tenant: Tenant,
+        who: Who,
+        svc: Services,
+        names: Annotated[
+            list[str], Query(description="Names to look up (repeat the parameter); wildcards ok.")
+        ],
+    ) -> list[dict[str, Any]]:
+        """For each name, the tenant's enabled credentials whose zones cover it, longest zone first.
+
+        A credential without a zone list comes last. An empty `candidates` list means the name
+        cannot be validated with DNS-01 until a credential covers it.
+        """
+        return [asdict(m) for m in await require_dns(svc).match(who, tenant.id, names)]
 
     @router.get(
         "/tenants/{t}/dns-providers/{provider}",

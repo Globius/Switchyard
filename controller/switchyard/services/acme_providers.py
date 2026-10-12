@@ -8,14 +8,20 @@ secret in the secrets backend; the database holds only references. Tenants choos
 when they issue a certificate; the default provider is used when they do not.
 """
 
+import hashlib
 import os
+import tempfile
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID
 
 from acme import challenges
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from sqlalchemy import func, select
 
 from switchyard.adapters.acme import (
@@ -23,8 +29,8 @@ from switchyard.adapters.acme import (
     AcmeError,
     AcmeIssuer,
     Eab,
-    Registration,
     Solver,
+    Stage,
     new_account_key,
 )
 from switchyard.adapters.oauth import ClientCredentials
@@ -147,22 +153,26 @@ class AcmeProviderView:
     oauth: dict[str, Any] | None
     oauth_secret_set: bool
     account_registered: bool
+    ca_bundle_set: bool
+    terms_agreed: bool
     enabled: bool
     default: bool
+    used_by: int
     version: int
 
 
 @dataclass(frozen=True)
 class TestResult:
-    """Outcome of registering the account."""
+    """Outcome of testing a provider: the steps, then the verdict."""
 
     ok: bool
     detail: str
+    stages: list[Stage]
     tos_url: str | None = None
     external_account_required: bool = False
 
 
-def _view(row: AcmeProviderRow) -> AcmeProviderView:
+def _view(row: AcmeProviderRow, used_by: int = 0) -> AcmeProviderView:
     return AcmeProviderView(
         id=row.id,
         name=row.name,
@@ -175,10 +185,46 @@ def _view(row: AcmeProviderRow) -> AcmeProviderView:
         oauth=dict(row.oauth) if row.oauth else None,
         oauth_secret_set=bool(row.oauth_secret_ref),
         account_registered=row.account_registered,
+        ca_bundle_set=bool(row.ca_bundle),
+        terms_agreed=row.terms_agreed_at is not None,
         enabled=row.enabled,
         default=row.is_default,
+        used_by=used_by,
         version=row.version,
     )
+
+
+def check_account_key(pem: str) -> str | None:
+    """Why ``pem`` cannot be an ACME account key, or ``None`` (RSA of 2048 bits or more)."""
+    try:
+        key = serialization.load_pem_private_key(pem.encode(), password=None)
+    except (ValueError, TypeError):
+        return "must be an unencrypted PEM private key"
+    if not isinstance(key, rsa.RSAPrivateKey) or key.key_size < 2048:
+        return "must be an RSA key of at least 2048 bits"
+    return None
+
+
+def check_ca_bundle(pem: str) -> str | None:
+    """Why ``pem`` is not a bundle of CA certificates, or ``None`` when it is."""
+    try:
+        certs = x509.load_pem_x509_certificates(pem.encode())
+    except ValueError:
+        return "must be PEM certificates"
+    if not certs:
+        return "must hold at least one certificate"
+    if "PRIVATE KEY" in pem:
+        return "must not contain a private key"
+    return None
+
+
+def bundle_file(pem: str) -> str:
+    """A file holding ``pem`` (public certificates), named by its hash, for TLS verification."""
+    digest = hashlib.sha256(pem.encode()).hexdigest()[:16]
+    path = Path(tempfile.gettempdir()) / f"switchyard-ca-{digest}.pem"
+    if not path.exists():
+        path.write_text(pem)
+    return str(path)
 
 
 def _secret_ref(name: str, what: str) -> str:
@@ -219,11 +265,22 @@ class AcmeProviders:
                 .scalars()
                 .all()
             )
-        return [_view(r) for r in rows]
+            return [_view(r, await self._used_by(session, r.name)) for r in rows]
+
+    @staticmethod
+    async def _used_by(session: Any, name: str) -> int:
+        count = await session.execute(
+            select(func.count())
+            .select_from(CertificateRow)
+            .where(CertificateRow.acme_provider == name)
+        )
+        return int(count.scalar_one())
 
     async def get(self, provider_id: UUID) -> AcmeProviderView:
         """One provider."""
-        return _view(await self._row(provider_id))
+        row = await self._row(provider_id)
+        async with admin_session(self._db.admin) as session:
+            return _view(row, await self._used_by(session, row.name))
 
     async def _row(self, provider_id: UUID) -> AcmeProviderRow:
         async with admin_session(self._db.admin) as session:
@@ -246,7 +303,16 @@ class AcmeProviders:
         eab_kid: str | None,
         has_eab_key: bool,
         email: str | None,
+        account_key: str | None = None,
+        ca_bundle: str | None = None,
+        terms_agreed: bool = True,
     ) -> None:
+        if not terms_agreed:
+            errors.add("terms_agreed", "required", "accept the CA's terms of service")
+        if account_key is not None and (problem := check_account_key(account_key)):
+            errors.add("account_key", "invalid", problem)
+        if ca_bundle and (problem := check_ca_bundle(ca_bundle)):
+            errors.add("ca_bundle_pem", "invalid", problem)
         if preset not in _PRESET:
             errors.add("preset", "invalid", f"must be one of {', '.join(_PRESET)}")
         url = urlparse(directory_url or "")
@@ -294,11 +360,14 @@ class AcmeProviders:
         eab_hmac_key: str | None = None,
         oauth: dict[str, Any] | None = None,
         oauth_client_secret: str | None = None,
+        account_key: str | None = None,
+        ca_bundle_pem: str | None = None,
+        terms_agreed: bool = False,
         enabled: bool = True,
         default: bool = False,
         request_id: str | None = None,
     ) -> AcmeProviderView:
-        """Register a provider and create its account key.
+        """Register a provider and create its account key (or store the one given).
 
         Raises:
             FieldErrors: With the path of every invalid field.
@@ -324,6 +393,9 @@ class AcmeProviders:
             eab_kid=eab_kid,
             has_eab_key=bool(eab_hmac_key),
             email=email,
+            account_key=account_key,
+            ca_bundle=ca_bundle_pem,
+            terms_agreed=terms_agreed,
         )
         errors.raise_if_any()
         url = url or ""
@@ -337,11 +409,13 @@ class AcmeProviders:
             oauth=oauth_clean if mode == "oauth" else None,
             eab_kid=eab_kid if mode == "eab" else None,
             account_key_ref=_secret_ref(name, "account-key"),
+            ca_bundle=ca_bundle_pem or None,
+            terms_agreed_at=datetime.now(UTC),
             is_default=default,
             enabled=enabled,
         )
         try:
-            await self._secrets.put(row.account_key_ref, new_account_key())
+            await self._secrets.put(row.account_key_ref, account_key or new_account_key())
             if mode == "eab" and eab_hmac_key:
                 row.eab_hmac_ref = _secret_ref(name, "eab-hmac")
                 await self._secrets.put(row.eab_hmac_ref, eab_hmac_key)
@@ -395,11 +469,17 @@ class AcmeProviders:
         eab_hmac_key: str | None = None,
         oauth: dict[str, Any] | None = None,
         oauth_client_secret: str | None = None,
+        account_key: str | None = None,
+        ca_bundle_pem: str | None = None,
         enabled: bool | None = None,
         default: bool | None = None,
         request_id: str | None = None,
     ) -> AcmeProviderView:
         """Change a provider; omitted fields (and omitted secrets) stay as they are.
+
+        A new ``account_key`` replaces the account (it has to be registered again). An empty
+        ``ca_bundle_pem`` removes the extra trusted roots.
+
 
         Changing the directory or the authentication means the account must be registered again,
         so ``account_registered`` goes back to false.
@@ -423,9 +503,13 @@ class AcmeProviders:
             eab_kid=eab_kid or current.eab_kid,
             has_eab_key=bool(eab_hmac_key or current.eab_hmac_ref),
             email=email if email is not None else current.email,
+            account_key=account_key,
+            ca_bundle=ca_bundle_pem,
         )
         errors.raise_if_any()
         try:
+            if account_key:
+                await self._secrets.put(current.account_key_ref, account_key)
             if eab_hmac_key:
                 await self._secrets.put(_secret_ref(current.name, "eab-hmac"), eab_hmac_key)
             if oauth_client_secret:
@@ -448,6 +532,12 @@ class AcmeProviders:
                 changed["directory_url"] = directory_url
             if email is not None:
                 row.email = email or None
+            if account_key:
+                row.account_registered = False
+                changed["account_key"] = "replaced"
+            if ca_bundle_pem is not None:
+                row.ca_bundle = ca_bundle_pem or None
+                changed["ca_bundle"] = bool(ca_bundle_pem)
             if mode != row.auth_mode:
                 row.auth_mode, row.account_registered = mode, False
                 changed["auth_mode"] = mode
@@ -482,7 +572,7 @@ class AcmeProviders:
                 diff=changed,
                 request_id=request_id,
             )
-            return _view(row)
+            return _view(row, await self._used_by(session, row.name))
 
     async def delete(
         self,
@@ -573,6 +663,7 @@ class AcmeProviders:
             email=os.environ.get("SWITCHYARD_ACME_EMAIL"),
             auth_mode="none",
             account_key_ref=ref,
+            terms_agreed_at=datetime.now(UTC),
             is_default=True,
         )
         async with admin_session(self._db.admin) as session:
@@ -622,13 +713,16 @@ class AcmeProviders:
                 )
         except Exception as exc:
             raise AcmeError(f"cannot read the secrets of ACME provider {row.name}: {exc}") from exc
+        verify: bool | str = self._verify
+        if row.ca_bundle:
+            verify = bundle_file(row.ca_bundle)
         return AcmeIssuer(
             row.directory_url,
             account_key,
             solver,
             email=row.email,
             auth=auth,
-            verify=self._verify,
+            verify=verify,
             http_transport=self._transport,
         )
 
@@ -641,15 +735,19 @@ class AcmeProviders:
         result: TestResult
         try:
             issuer = await self._issuer(row, _NoSolver())
-            registration: Registration = await issuer.register()
+            stages = await issuer.probe()
+            ok = all(s.ok for s in stages)
+            failed = next((s for s in stages if not s.ok), None)
+            registration = await issuer.register() if ok else None
             result = TestResult(
-                True,
-                f"account {registration.uri}",
-                registration.terms_of_service,
-                registration.external_account_required,
+                ok,
+                stages[-1].detail if ok else f"{failed.name}: {failed.detail}" if failed else "",
+                stages,
+                registration.terms_of_service if registration else None,
+                registration.external_account_required if registration else False,
             )
         except AcmeError as exc:
-            result = TestResult(False, str(exc))
+            result = TestResult(False, str(exc), [Stage("account", False, str(exc))])
         async with admin_session(self._db.admin) as session:
             stored = await session.get(AcmeProviderRow, provider_id)
             if stored is not None:

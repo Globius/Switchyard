@@ -20,6 +20,7 @@ it, and used to fetch a fresh EAB key from a management endpoint, as Keyfactor d
 import asyncio
 import datetime
 import logging
+import ssl
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -195,6 +196,27 @@ class _BearerNetwork(client.ClientNetwork):
         return super()._send_request(method, url, *args, **kwargs)
 
 
+def _httpx_verify(verify: bool | str) -> bool | ssl.SSLContext:
+    if isinstance(verify, str):
+        return ssl.create_default_context(cafile=verify)
+    return verify
+
+
+@dataclass(frozen=True)
+class Stage:
+    """One step of a connection test.
+
+    Attributes:
+        name: ``directory``, ``eab`` or ``account``.
+        ok: Whether it worked.
+        detail: What was found, or why it failed.
+    """
+
+    name: str
+    ok: bool
+    detail: str
+
+
 @dataclass(frozen=True)
 class Registration:
     """The result of registering (or finding) the ACME account."""
@@ -215,7 +237,7 @@ class AcmeIssuer:
         *,
         email: str | None = None,
         auth: AcmeAuth | None = None,
-        verify: bool = True,
+        verify: bool | str = True,
         timeout_s: float = 180.0,
         http_transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
@@ -228,7 +250,8 @@ class AcmeIssuer:
             solver: How control of a name is proven.
             email: Contact address for the ACME account.
             auth: How to authenticate to the CA (EAB, OAuth); none when empty.
-            verify: TLS verification of the ACME server (``False`` only for test servers).
+            verify: TLS verification of the ACME server: ``True``, ``False`` (test servers only)
+                or the path of a PEM file with the CA certificates to trust (private CAs).
             timeout_s: How long to wait for the CA to validate and issue.
             http_transport: Replaceable transport for the EAB fetch (tests).
         """
@@ -240,6 +263,7 @@ class AcmeIssuer:
         self._email = email
         self._auth = auth or AcmeAuth()
         self._verify = verify
+        self._verify_ssl: Any = verify  # the acme library passes it on to requests
         self._timeout = timeout_s
         self._transport = http_transport
 
@@ -263,7 +287,7 @@ class AcmeIssuer:
     async def _fetch_eab(self, url: str, bearer: str) -> Eab:
         try:
             async with httpx.AsyncClient(
-                transport=self._transport, verify=self._verify, timeout=30.0
+                transport=self._transport, verify=_httpx_verify(self._verify), timeout=30.0
             ) as http:
                 response = await http.get(url, headers={"Authorization": f"Bearer {bearer}"})
         except httpx.HTTPError as exc:
@@ -288,7 +312,7 @@ class AcmeIssuer:
         net = _BearerNetwork(
             self._key,
             account=None,
-            verify_ssl=self._verify,
+            verify_ssl=self._verify_ssl,
             bearer=bearer if self._auth.bearer_on_acme else None,
         )
         directory = client.ClientV2.get_directory(self._url, net)
@@ -330,6 +354,45 @@ class AcmeIssuer:
                 if not bad_nonce or attempt == 2:
                     raise
         raise AssertionError("unreachable")  # pragma: no cover
+
+    async def probe(self) -> list[Stage]:
+        """Test the connection step by step: the directory, the EAB credentials, the account.
+
+        Nothing is ordered. The list stops at the first step that fails.
+        """
+        stages: list[Stage] = []
+        try:
+            net = client.ClientNetwork(self._key, account=None, verify_ssl=self._verify_ssl)
+            directory = await self._call(client.ClientV2.get_directory, self._url, net)
+            required = bool(
+                getattr(getattr(directory, "meta", None), "external_account_required", False)
+            )
+            stages.append(
+                Stage(
+                    "directory",
+                    True,
+                    "external account binding required" if required else "reachable",
+                )
+            )
+        except (errors.Error, OSError, ValueError) as exc:
+            return [Stage("directory", False, str(exc))]
+        try:
+            bearer = await self._bearer()
+            eab = await self._eab(bearer)
+        except AcmeError as exc:
+            return [*stages, Stage("eab", False, str(exc))]
+        if eab is not None:
+            stages.append(Stage("eab", True, f"key {eab.kid}"))
+        elif required:
+            return [
+                *stages,
+                Stage("eab", False, "the CA requires External Account Binding credentials"),
+            ]
+        try:
+            _, registration = await self._call(self._account, bearer, eab)
+        except (errors.Error, AcmeError, OSError, ValueError) as exc:
+            return [*stages, Stage("account", False, str(exc))]
+        return [*stages, Stage("account", True, f"account {registration.uri}")]
 
     async def register(self) -> Registration:
         """Register the account (or find it) without ordering anything.

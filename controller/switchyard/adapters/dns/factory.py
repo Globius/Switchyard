@@ -14,6 +14,7 @@ from switchyard.adapters.dns.base import (
     check_endpoint,
     check_settings,
 )
+from switchyard.adapters.dns.google import GoogleDns
 from switchyard.adapters.dns.powerdns import PowerDns
 from switchyard.adapters.dns.rfc2136 import Rfc2136
 from switchyard.adapters.dns.route53 import AwsCredentials, Route53
@@ -65,6 +66,14 @@ def build_provider(
             resource_group=cfg["resource_group"],
             zone=cfg["zone"],
             cloud=cfg.get("cloud", "public"),
+            transport=transport,
+        )
+    if type_ == "google":
+        return GoogleDns(
+            credentials["service_account_json"],
+            cfg["project_id"],
+            cfg["managed_zone"],
+            cfg["zone"],
             transport=transport,
         )
     if type_ == "powerdns":

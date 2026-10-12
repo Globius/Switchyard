@@ -422,6 +422,7 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "name": "letsencrypt",
         "preset": "letsencrypt",
         "email": "pki@example.test",
+        "terms_agreed": True,
         "default": True,
     },
     "PATCH /acme-providers/{provider}": {"email": "certs@example.test", "default": True},

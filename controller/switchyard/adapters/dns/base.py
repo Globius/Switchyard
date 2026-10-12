@@ -150,6 +150,23 @@ CATALOGUE: dict[str, ProviderType] = {
             False,
         ),
         ProviderType(
+            "google",
+            "Google Cloud DNS",
+            (
+                Field(
+                    "service_account_json",
+                    "Service account key",
+                    kind="textarea",
+                    secret=True,
+                    help="The JSON key file of a service account that may edit the zone.",
+                ),
+                Field("project_id", "Project ID"),
+                Field("managed_zone", "Managed zone", help="The zone's name in Cloud DNS."),
+                Field("zone", "DNS name", help="The zone's DNS name, for example example.test."),
+            ),
+            False,
+        ),
+        ProviderType(
             "rfc2136",
             "RFC 2136 (BIND, Knot, PowerDNS ...)",
             (

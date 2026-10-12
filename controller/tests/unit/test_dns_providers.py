@@ -365,3 +365,66 @@ async def test_rfc2136_sends_signed_updates_that_add_and_remove_single_values(
         await client.create_txt(NAME, "x")
     with pytest.raises(DnsError, match="not inside"):
         await client.create_txt("x.other.test", "v")
+
+
+# -- Google Cloud DNS ------------------------------------------------------------------------
+
+
+def service_account() -> str:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    return json.dumps(
+        {
+            "client_email": "sa@project.iam.gserviceaccount.com",
+            "private_key": pem,
+            "token_uri": "http://169.254.169.254/steal",
+        }
+    )
+
+
+async def test_google_adds_and_removes_single_values_and_ignores_the_key_files_token_uri() -> None:
+    from switchyard.adapters.dns.google import GoogleDns
+
+    state: dict[str, Any] = {"rrdatas": [], "hosts": set()}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        state["hosts"].add(request.url.host)
+        if request.url.host == "oauth2.googleapis.com":
+            form = parse_qs(request.content.decode())
+            assert form["grant_type"] == ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
+            return httpx.Response(200, json={"access_token": "gtok", "expires_in": 3600})
+        assert request.headers["authorization"] == "Bearer gtok"
+        assert request.url.path.startswith("/dns/v1/projects/proj/managedZones/mz")
+        if request.method == "GET":
+            sets = (
+                [{"name": f"{NAME}.", "type": "TXT", "ttl": 60, "rrdatas": state["rrdatas"]}]
+                if state["rrdatas"]
+                else []
+            )
+            return httpx.Response(200, json={"rrsets": sets})
+        change = json.loads(request.content)
+        state["rrdatas"] = [v for a in change.get("additions", []) for v in a["rrdatas"]]
+        return httpx.Response(200, json={})
+
+    dns_client = GoogleDns(
+        service_account(), "proj", "mz", "example.test", transport=transport(handler)
+    )
+    a = await dns_client.create_txt(NAME, "one")
+    b = await dns_client.create_txt(NAME, "two")
+    assert state["rrdatas"] == ['"one"', '"two"']
+    await dns_client.delete_txt(NAME, a)
+    assert state["rrdatas"] == ['"two"']
+    await dns_client.delete_txt(NAME, b)
+    assert state["rrdatas"] == []
+    assert state["hosts"] == {"oauth2.googleapis.com", "dns.googleapis.com"}
+    with pytest.raises(DnsError, match="not inside"):
+        await dns_client.create_txt("x.other.test", "v")
+    with pytest.raises(DnsError, match="client_email"):
+        GoogleDns("{}", "p", "m", "example.test")

@@ -53,6 +53,9 @@ class AcmeProviderRow(EntityMixin, Base):
     eab_kid: Mapped[str | None] = mapped_column(Text)
     eab_hmac_ref: Mapped[str | None] = mapped_column(Text)
     account_key_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    #: PEM of extra trusted root certificates for a private CA (public data).
+    ca_bundle: Mapped[str | None] = mapped_column(Text)
+    terms_agreed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     account_registered: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )

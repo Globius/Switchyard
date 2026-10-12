@@ -34,6 +34,8 @@ def upgrade() -> None:
         sa.Column("eab_kid", sa.Text(), nullable=True),
         sa.Column("eab_hmac_ref", sa.Text(), nullable=True),
         sa.Column("account_key_ref", sa.Text(), nullable=False),
+        sa.Column("ca_bundle", sa.Text(), nullable=True),
+        sa.Column("terms_agreed_at", postgresql.TIMESTAMP(timezone=True), nullable=True),
         sa.Column(
             "account_registered", sa.Boolean(), server_default=sa.text("false"), nullable=False
         ),

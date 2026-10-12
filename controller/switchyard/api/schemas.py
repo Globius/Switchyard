@@ -1814,16 +1814,43 @@ class DnsProviderTestIn(ApiModel):
     """Optionally name the zone to test in."""
 
     zone: str | None = Field(
-        default=None, description="Defaults to the credential's zone setting or first zone."
+        default=None,
+        description="Test only this zone. By default every zone of the credential is tested.",
     )
 
 
+class DnsZoneTestRead(ApiModel):
+    """The test in one zone."""
+
+    zone: str
+    ok: bool
+    detail: str
+
+
 class DnsProviderTestRead(ApiModel):
-    """Result of publishing and removing a test TXT record."""
+    """Result of publishing and removing a test TXT record in each zone of a credential."""
 
     ok: bool
     detail: str
-    zone: str | None
+    zones: list[DnsZoneTestRead]
+
+
+class DnsCandidateRead(ApiModel):
+    """A credential that could publish records for a name."""
+
+    id: UUID
+    name: str
+    type: str
+    zone: str | None = Field(
+        description="The zone that matched; empty for a credential without a zone list."
+    )
+
+
+class DnsNameMatchRead(ApiModel):
+    """The credentials that cover one name, best first."""
+
+    name: str
+    candidates: list[DnsCandidateRead]
 
 
 class AcmePresetRead(ApiModel):
@@ -1883,6 +1910,18 @@ class AcmeProviderIn(ApiModel):
     )
     oauth: AcmeOauthIn | None = None
     oauth_client_secret: str | None = Field(default=None, description="Write-only.")
+    account_key: str | None = Field(
+        default=None,
+        description="Write-only PEM of an RSA account key (2048 bits or more) to use instead of "
+        "a generated one.",
+    )
+    ca_bundle_pem: str | None = Field(
+        default=None,
+        description="PEM certificates of extra trusted roots, for a private CA. Public data.",
+    )
+    terms_agreed: bool = Field(
+        default=False, description="Must be true: the controller accepts the CA's terms."
+    )
     enabled: bool = True
     default: bool = Field(
         default=False, description="Use this provider when a certificate names none."
@@ -1899,6 +1938,12 @@ class AcmeProviderPatch(ApiModel):
     eab_hmac_key: str | None = None
     oauth: AcmeOauthIn | None = None
     oauth_client_secret: str | None = None
+    account_key: str | None = Field(
+        default=None, description="Replaces the account key; the account is registered again."
+    )
+    ca_bundle_pem: str | None = Field(
+        default=None, description="Replaces the extra trusted roots; empty removes them."
+    )
     enabled: bool | None = None
     default: bool | None = None
 
@@ -1919,15 +1964,29 @@ class AcmeProviderRead(ApiModel):
     account_registered: bool = Field(
         description="True after a successful test (the CA accepted the account)."
     )
+    ca_bundle_set: bool = Field(description="Extra trusted roots are configured.")
+    terms_agreed: bool
     enabled: bool
     default: bool
+    used_by: int = Field(description="Certificates that name this provider.")
     version: int
 
 
+class AcmeTestStageRead(ApiModel):
+    """One step of a connection test."""
+
+    name: Literal["directory", "eab", "account"]
+    ok: bool
+    detail: str
+
+
 class AcmeProviderTestRead(ApiModel):
-    """Result of registering the account at the CA."""
+    """Result of testing a provider: the directory, then the EAB credentials, then the account."""
 
     ok: bool
     detail: str
+    stages: list[AcmeTestStageRead] = Field(
+        description="The steps in order; the list stops at the first one that fails."
+    )
     tos_url: str | None
     external_account_required: bool

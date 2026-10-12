@@ -394,10 +394,10 @@ class CertificateService:
         resolver = None
         solver: Solver
         if how.challenge is dm.AcmeChallenge.HTTP01:
-            if self._http_publisher is None:
-                raise CertificateError("HTTP-01 is not configured")
             if any(name.startswith("*.") for name in sans):
                 raise CertificateError("HTTP-01 cannot validate wildcard names; use DNS-01")
+            if self._http_publisher is None:
+                raise CertificateError("HTTP-01 is not configured")
             solver = Http01Solver(self._http_publisher)
         else:
             if self._dns_providers is None:
