@@ -53,7 +53,7 @@ from switchyard.domain.snapshot import (
     protection_set,
     rate_limit_rules,
 )
-from switchyard.render import captcha, waf
+from switchyard.render import apischema, captcha, waf
 from switchyard.render import escape as esc
 from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
@@ -581,6 +581,8 @@ class _Renderer:
             routing_rules = self._routing_rules(svc, name)
             policy = waf.waf_policy(svc, self.policies)
             if policy is not None:
+                if policy.api is not None:
+                    request_rules += apischema.request_lines(policy.api)
                 waf_options, waf_rules = waf.frontend_lines(svc, policy)
                 options += waf_options
                 request_rules += waf_rules

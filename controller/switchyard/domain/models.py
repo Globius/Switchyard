@@ -1471,6 +1471,121 @@ class RateLimitPolicySet(TenantOwned):
 CRS_VERSIONS = ("4.8.0",)
 
 
+#: Value types an API schema can require of a query or path parameter (ADR 0197).
+ApiParamKind = Literal["string", "integer", "number", "boolean", "uuid", "enum"]
+_PATH_TEMPLATE = r"^(/([A-Za-z0-9._~-]{1,64}|\{[A-Za-z_][A-Za-z0-9_]{0,31}\})){1,16}$"
+API_METHODS = ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+
+
+class ApiParam(Model):
+    """A parameter of an API operation: a query parameter, or a ``{name}`` of the path (ADR 0197).
+
+    Attributes:
+        name: Parameter name.
+        kind: ``string`` (up to ``max_length`` characters), ``integer``, ``number``, ``boolean``,
+            ``uuid`` or ``enum`` (one of ``values``).
+        required: Query parameters only: the request must carry it (path parameters always do).
+        values: The allowed values of an ``enum``.
+        max_length: Longest accepted ``string`` value.
+    """
+
+    name: QueryParam
+    kind: ApiParamKind = "string"
+    required: bool = False
+    values: tuple[Annotated[str, Field(pattern=r"^[A-Za-z0-9._~-]{1,64}$")], ...] = Field(
+        default=(), max_length=32
+    )
+    max_length: int = Field(default=256, ge=1, le=2048)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        if (self.kind == "enum") != bool(self.values):
+            raise ValueError("values go with kind enum, and only with it")
+        if len(set(self.values)) != len(self.values):
+            raise ValueError("enum values must be unique")
+        return self
+
+
+class ApiOperation(Model):
+    """One request the API accepts: a method and a path template (ADR 0197).
+
+    Attributes:
+        method: HTTP method.
+        path: Path template such as ``/pets/{id}``; each ``{name}`` is a path parameter.
+        path_params: Types of the ``{name}`` parts (default: any non-empty segment without ``/``).
+        query: The query parameters the operation accepts; any other one is a violation unless the
+            schema allows unknown ones.
+        content_types: Media types a request body may have (empty: no check).
+        max_body_bytes: Largest ``Content-Length``; a chunked body is refused when this is set
+            (empty: the schema default).
+    """
+
+    method: Literal["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    path: Annotated[str, Field(pattern=_PATH_TEMPLATE)]
+    path_params: tuple[ApiParam, ...] = Field(default=(), max_length=16)
+    query: tuple[ApiParam, ...] = Field(default=(), max_length=32)
+    content_types: tuple[MediaType, ...] = Field(default=(), max_length=8)
+    max_body_bytes: int | None = Field(default=None, ge=0, le=1_073_741_824)
+
+    @property
+    def placeholders(self) -> tuple[str, ...]:
+        """Names of the ``{name}`` parts of the path, in order."""
+        return tuple(re.findall(r"\{([A-Za-z0-9_]+)\}", self.path))
+
+    @model_validator(mode="after")
+    def _consistent(self) -> Self:
+        names = self.placeholders
+        if len(set(names)) != len(names):
+            raise ValueError("a path parameter name appears twice in the path")
+        declared = [p.name for p in self.path_params]
+        if len(set(declared)) != len(declared) or not set(declared) <= set(names):
+            raise ValueError("path_params must be unique and name parameters that the path has")
+        if any(p.required for p in self.path_params):
+            raise ValueError("path parameters are always required; do not set required")
+        queries = [q.name for q in self.query]
+        if len(set(queries)) != len(queries):
+            raise ValueError("query parameter names must be unique")
+        if len(set(self.content_types)) != len(self.content_types):
+            raise ValueError("content_types must be unique")
+        return self
+
+
+class ApiSchema(Model):
+    """The requests an API accepts, as a positive security model for the WAF (ADR 0197).
+
+    A request is checked in HAProxy before the WAF sees it: its method and path must match an
+    operation, its query string may contain only that operation's parameters with values of the
+    right type, its body type and size must fit. Everything else is a violation.
+
+    Attributes:
+        mode: ``detect`` records the violation in the access log and lets the request through;
+            ``block`` refuses it (404 unknown path, 405 wrong method, 400 bad parameters, 411 or
+            413 body size, 415 body type).
+        operations: The accepted operations (at most 500).
+        base_path: Prefix of every operation (for example ``/v1``); requests outside it are
+            unknown operations.
+        allow_unknown_query: Accept query parameters the operation does not list.
+        max_body_bytes: Default largest body for operations that set none.
+    """
+
+    mode: Literal["detect", "block"] = "detect"
+    operations: tuple[ApiOperation, ...] = Field(min_length=1, max_length=500)
+    base_path: Annotated[str, Field(pattern=r"^(/[A-Za-z0-9._~-]{1,64}){0,4}$")] = ""
+    allow_unknown_query: bool = False
+    max_body_bytes: int | None = Field(default=None, ge=0, le=1_073_741_824)
+
+    @model_validator(mode="after")
+    def _unique(self) -> Self:
+        seen = set()
+        for op in self.operations:
+            # {a} and {b} in the same position are the same template
+            shape = (op.method, re.sub(r"\{[A-Za-z0-9_]+\}", "{}", op.path))
+            if shape in seen:
+                raise ValueError(f"operation {op.method} {op.path} is listed twice")
+            seen.add(shape)
+        return self
+
+
 class WafPolicySet(TenantOwned):
     """Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).
 
@@ -1489,6 +1604,7 @@ class WafPolicySet(TenantOwned):
         fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the
             request through, ``closed`` refuses it with 503 (ADR 0142).
         timeout_ms: How long HAProxy waits for the WAF's verdict.
+        api: An API schema (ADR 0197): requests that are not among its operations are violations.
 
     Example:
         >>> WafPolicySet.model_validate(
@@ -1509,6 +1625,7 @@ class WafPolicySet(TenantOwned):
     inspect_body: bool = True
     fail_mode: Literal["open", "closed"] = "open"
     timeout_ms: int = Field(default=100, ge=10, le=2000)
+    api: ApiSchema | None = None
 
     @model_validator(mode="after")
     def _rules(self) -> Self:

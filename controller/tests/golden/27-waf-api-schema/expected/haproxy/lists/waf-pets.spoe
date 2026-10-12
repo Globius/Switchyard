@@ -1,0 +1,15 @@
+# Managed by Switchyard. Do not edit: changes are reported as drift.
+[coraza]
+spoe-agent coraza-agent
+    messages coraza-req
+    option var-prefix coraza
+    option set-on-error error
+    timeout hello 2s
+    timeout idle 2m
+    timeout processing 100ms
+    use-backend sy_coraza_spoa
+    log global
+
+spoe-message coraza-req
+    args app=str(pets) src-ip=src src-port=src_port dst-ip=dst dst-port=dst_port method=method path=path query=query version=req.ver headers=req.hdrs body=req.body
+    event on-frontend-http-request
