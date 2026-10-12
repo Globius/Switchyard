@@ -63,8 +63,11 @@ Policy sets and routing profiles are unions on `kind`:
 
 | Collection | `kind` values | Fields |
 | --- | --- | --- |
-| `policy-sets` | `redirect` | `rules[]` |
+| `policy-sets` | `redirect` | `rules[]` (`match`, `redirect`) |
 | | `allow_list` | `cidrs[]`, `managed_by` |
+| | `rewrite` | `rules[]` (`phase`, `match`, `action`: `set_header`, `add_header`, `remove_header`, `replace_prefix`), ADR 0102 |
+| | `respond` | `rules[]` (`match`, `status`, `content_type`, `body`, `retry_after_s`), ADR 0103 |
+| | `error_pages` | `pages[]` (`status`, `content_type`, `body`), ADR 0103 |
 | `routing-profiles` | `vrrp` | `vrid`, `interface`, `advert_interval_s`, `base_priority`, `priority_step`, `static_routes[]` |
 | | `bgp` | `asn`, `bfd`, `peers[]` (`peer_ip`, `remote_asn`, `md5_ref`, `max_prefixes`), `max_prefixes`, `max_paths`, `static_routes[]` |
 

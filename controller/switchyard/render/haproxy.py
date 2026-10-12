@@ -8,13 +8,14 @@ environment or the network.
 Files produced (paths are relative to ``/etc/switchyard/`` on the SE, the only directory the agent
 and the Data Plane API write to):
 
-=============================== ===================================================================
-``haproxy/haproxy.cfg``         global, defaults, one frontend per service, one backend per pool
-``certs/<vs>.crtlist``          certificates and their SNI filters for a service's TLS ports
-``haproxy/maps/<vs>-host.map``  exact host -> backend, for host-only routes
-``haproxy/maps/<vs>-wild.map``  ``*.`` wildcard host regex -> backend, for host-only routes
-``haproxy/lists/<policy>.cidr`` source networks of an allow-list policy set
-=============================== ===================================================================
+================================= ={65}
+``haproxy/haproxy.cfg``           global, defaults, one frontend per service, one backend per pool
+``certs/<vs>.crtlist``            certificates and their SNI filters for a service's TLS ports
+``haproxy/maps/<vs>-host.map``    exact host -> backend, for host-only routes
+``haproxy/maps/<vs>-wild.map``    ``*.`` wildcard host regex -> backend, for host-only routes
+``haproxy/lists/<policy>.cidr``   source networks of an allow-list policy set
+``haproxy/lists/<policy>-*.page`` bodies of fixed responses and error pages
+================================= ={65}
 
 Certificate and key material is *not* rendered: ``crt-list`` entries point at
 ``/etc/switchyard/certs/<certificate-name>.pem``, which the agent writes from OpenBao.
@@ -24,13 +25,16 @@ detection compares it with what an SE reports. The crt-list lives beside the cer
 the Data Plane API stores both in one directory, and object names contain no dots because the API
 rewrites dots in file names.
 
-Request handling order inside an HTTP frontend, which the output makes explicit:
+Request handling order inside an HTTP frontend, which the output makes explicit (``docs/render.md``,
+ADR 0100):
 
 1. connection filter (allow list), client-IP restoration, header hygiene;
 2. HTTP to HTTPS redirects, then policy-set redirects, then redirect routes;
-3. path-qualified pool routes, in route ``order``;
-4. host-only pool routes: exact host first, then single-label wildcard hosts;
-5. the default pool, if any.
+3. fixed responses (``respond`` policy sets);
+4. request rewrites (``rewrite`` policy sets, request phase);
+5. conditional pool routes (a route with more than a host), in route ``order``;
+6. host-only pool routes: exact host first, then single-label wildcard hosts;
+7. the default pool, if any; response rewrites run on the way out.
 """
 
 import hashlib
@@ -223,10 +227,31 @@ def _allow_list(policy: object) -> dm.AllowListPolicySet:
     return policy
 
 
-def _redirect_set(policy: object) -> dm.RedirectPolicySet:
-    if not isinstance(policy, dm.RedirectPolicySet):
-        raise RenderError("expected a redirect policy set")
-    return policy
+#: Sample fetches behind the header variables (the fixed list; users never write expressions).
+_VARIABLES = {
+    dm.HeaderVariable.CLIENT_IP: "src",
+    dm.HeaderVariable.CLIENT_PORT: "src_port",
+    dm.HeaderVariable.HOST: "var(txn.host)",
+    dm.HeaderVariable.VIP: "dst",
+    dm.HeaderVariable.VIP_PORT: "dst_port",
+    dm.HeaderVariable.METHOD: "method",
+    dm.HeaderVariable.TLS_VERSION: "ssl_fc_protocol",
+    dm.HeaderVariable.TLS_CIPHER: "ssl_fc_cipher",
+    dm.HeaderVariable.TLS_SNI: "ssl_fc_sni",
+    dm.HeaderVariable.REQUEST_ID: "uuid",
+}
+#: Back-reference to the first regex group in a ``replace-path`` replacement (single-quoted, so
+#: HAProxy passes the backslash through unchanged).
+_GROUP_1 = "\\1"
+#: Header comparisons as ACL match flags.
+_HEADER_FLAGS = {
+    dm.HeaderOp.EQUALS: "str",
+    dm.HeaderOp.PREFIX: "beg",
+    dm.HeaderOp.SUFFIX: "end",
+    dm.HeaderOp.CONTAINS: "sub",
+}
+#: Frontend rules by stage, filled while the policy sets of a service are rendered.
+_Stages = tuple[list[str], list[str], list[str], list[str]]
 
 
 def _is_wild(host: str) -> bool:
@@ -359,9 +384,13 @@ class _Renderer:
                 lst = self._list_path(allow)
                 connection_rules.append(f"tcp-request session reject if !{{ src -f {lst} }}")
         request_rules: list[str] = []
+        response_rules: list[str] = []
+        error_rules: list[str] = []
         routing_rules: list[str] = []
         if mode == "http":
             request_rules = self._request_rules(svc, ports, allow)
+            response_rules = self._policy_stages(svc)[3]
+            error_rules = self._error_lines(svc)
             routing_rules = self._routing_rules(svc, name)
         return {
             "name": name,
@@ -369,6 +398,8 @@ class _Renderer:
             "binds": [self._bind(svc, p, name, mode) for p in ports],
             "connection_rules": connection_rules,
             "request_rules": request_rules,
+            "response_rules": response_rules,
+            "error_rules": error_rules,
             "routing_rules": routing_rules,
             "default_backend": (
                 self._backend_name(svc.default_pool_id) if svc.default_pool_id else None
@@ -411,6 +442,110 @@ class _Renderer:
         nets = sorted(policy.cidrs, key=lambda n: (n.version, int(n.network_address), n.prefixlen))
         return "".join(f"{n}\n" for n in nets)
 
+    def _policy_stages(self, svc: dm.VirtualService) -> _Stages:
+        """Rules of the attached policy sets: redirects, responses, request and response rewrites.
+
+        Sets apply in attachment order within their kind; the kinds run in the stage order of
+        ``docs/render.md``, not in attachment order across kinds (ADR 0100).
+        """
+        redirects: list[str] = []
+        responses: list[str] = []
+        rewrites: list[str] = []
+        outgoing: list[str] = []
+        flags: list[str] = []
+        for pid in svc.policy_set_ids:
+            policy = self.policies[pid]
+            if isinstance(policy, dm.RedirectPolicySet):
+                for rule in policy.rules:
+                    redirects.append(self._redirect_line(rule.match, rule.redirect))
+            elif isinstance(policy, dm.RespondPolicySet):
+                for index, response in enumerate(policy.rules, start=1):
+                    responses.append(self._response_line(policy, index, response))
+            elif isinstance(policy, dm.RewritePolicySet):
+                for rewrite in policy.rules:
+                    cond = " ".join(self._conditions(rewrite.match))
+                    if rewrite.phase == "request":
+                        rewrites += self._rewrite_lines(rewrite, cond)
+                        continue
+                    if not cond:
+                        outgoing += self._rewrite_lines(rewrite, cond)
+                        continue
+                    # The request attributes are gone by the time a response rule runs, so the
+                    # match is evaluated with the request and remembered in a transaction flag.
+                    flag = f"txn.sy_m{len(flags) + 1}"
+                    flags.append(flag)
+                    rewrites.append(f"http-request set-var({flag}) bool(true) if {cond}")
+                    outgoing += self._rewrite_lines(rewrite, f"{{ var({flag}) -m bool }}")
+        return redirects, responses, rewrites, outgoing
+
+    def _redirect_line(self, match: dm.RouteMatch, redirect: dm.RedirectAction) -> str:
+        cond = " ".join(self._conditions(match))
+        location = esc.location(redirect.location)
+        return f"http-request redirect location {location} code {redirect.code} if {cond}"
+
+    def _page(self, policy: dm.TenantOwned, tag: str, body: str) -> str:
+        """Store a response body as a general-storage file (beside the lists); return its path."""
+        name = f"{esc.ident(policy.name)}-{tag}.page"
+        self.files[f"haproxy/lists/{name}"] = body if body.endswith("\n") else body + "\n"
+        return f"{BASE_DIR}/lists/{name}"
+
+    def _response_line(self, policy: dm.RespondPolicySet, index: int, rule: dm.ResponseRule) -> str:
+        parts = [f"http-request return status {rule.status}"]
+        if rule.body is not None:
+            parts.append(f"content-type {_need(rule.content_type, 'content type')}")
+            parts.append(f"file {self._page(policy, f'r{index}', rule.body)}")
+        if rule.retry_after_s is not None:
+            parts.append(f"hdr Retry-After {rule.retry_after_s}")
+        cond = " ".join(self._conditions(rule.match))
+        return " ".join(parts) + (f" if {cond}" if cond else "")
+
+    def _error_lines(self, svc: dm.VirtualService) -> list[str]:
+        lines: dict[int, str] = {}
+        for pid in svc.policy_set_ids:
+            policy = self.policies[pid]
+            if isinstance(policy, dm.ErrorPagesPolicySet):
+                for page in policy.pages:
+                    path = self._page(policy, f"e{page.status}", page.body)
+                    lines[page.status] = (
+                        f"http-error status {page.status} content-type {page.content_type} "
+                        f"file {path}"
+                    )
+        return [lines[status] for status in sorted(lines)]
+
+    def _rewrite_lines(self, rule: dm.RewriteRule, cond: str) -> list[str]:
+        phase = "http-response" if rule.phase == "response" else "http-request"
+        suffix = f" if {cond}" if cond else ""
+        action = rule.action
+        if isinstance(action, dm.RemoveHeader):
+            return [f"{phase} del-header {esc.header_name(action.name)}{suffix}"]
+        if isinstance(action, dm.ReplacePrefix):
+            return self._replace_prefix(action, cond)
+        verb = "set-header" if isinstance(action, dm.SetHeader) else "add-header"
+        if action.variable is not None:
+            value = f'"%[{_VARIABLES[action.variable]}]"'
+        else:
+            value = esc.quoted(_need(action.value, "header value"))
+        return [f"{phase} {verb} {esc.header_name(action.name)} {value}{suffix}"]
+
+    @staticmethod
+    def _replace_prefix(action: dm.ReplacePrefix, cond: str) -> list[str]:
+        """``replace-path`` on path-segment boundaries; ``/`` as target strips the prefix.
+
+        The regex and the replacement are single-quoted (nothing inside is expanded) and are
+        built from validated path characters, with ``.`` and ``+`` written as classes.
+        """
+        source = esc.path_regex(action.from_prefix)
+        target = esc.path_text(action.to_prefix)
+        suffix = f" if {cond}" if cond else ""
+        if action.to_prefix == "/":
+            exact = f"{{ path {esc.arg(action.from_prefix)} }}"
+            guard = f" if {cond} {exact}" if cond else f" if {exact}"
+            return [
+                f"http-request set-path /{guard}",
+                f"http-request replace-path '^{source}(/.*)$' '{_GROUP_1}'{suffix}",
+            ]
+        return [f"http-request replace-path '^{source}(/.*)?$' '{target}{_GROUP_1}'{suffix}"]
+
     def _request_rules(
         self,
         svc: dm.VirtualService,
@@ -442,24 +577,21 @@ class _Renderer:
                     f'http-request redirect prefix "https://%[var(txn.host)]{suffix}" code 301 '
                     f"if {{ dst_port {port.port} }}"
                 )
-        for match, redirect in self._redirects(svc):
-            cond = " ".join(self._conditions(match))
-            location = esc.location(redirect.location)
-            rules.append(
-                f"http-request redirect location {location} code {redirect.code} if {cond}"
-            )
-        return rules
-
-    def _redirects(self, svc: dm.VirtualService) -> list[tuple[dm.RouteMatch, dm.RedirectAction]]:
-        out: list[tuple[dm.RouteMatch, dm.RedirectAction]] = []
-        for pid in svc.policy_set_ids:
-            out += [(r.match, r.redirect) for r in _redirect_set(self.policies[pid]).rules]
+        redirects, responses, rewrites, _ = self._policy_stages(svc)
+        rules += redirects
         ordered = sorted(enumerate(svc.routes), key=lambda ir: (ir[1].order, ir[0]))
-        out += [(r.match, r.redirect) for _, r in ordered if r.redirect is not None]
-        return out
+        rules += [
+            self._redirect_line(r.match, r.redirect) for _, r in ordered if r.redirect is not None
+        ]
+        return rules + responses + rewrites
 
     @staticmethod
     def _conditions(match: dm.RouteMatch) -> list[str]:
+        """The ACL conditions of a match, ANDed (an empty match gives none).
+
+        Header and query operands are double-quoted after validation; the wildcard regexes are
+        single-quoted so ``$`` is never expanded.
+        """
         conds: list[str] = []
         if match.host:
             if _is_wild(match.host):
@@ -471,12 +603,38 @@ class _Renderer:
             conds.append(f"{{ path_beg {esc.arg(match.path_prefix)} }}")
         if match.path_exact:
             conds.append(f"{{ path {esc.arg(match.path_exact)} }}")
+        if match.methods:
+            conds.append("{ method " + " ".join(sorted(m.value for m in match.methods)) + " }")
+        for header in match.headers:
+            fetch = f"req.hdr({esc.header_name(header.name)})"
+            if header.op is dm.HeaderOp.PRESENT:
+                conds.append(f"{{ {fetch} -m found }}")
+            elif header.op is dm.HeaderOp.ABSENT:
+                conds.append(f"!{{ {fetch} -m found }}")
+            else:
+                value = esc.quoted(_need(header.value, "header value"))
+                conds.append(f"{{ {fetch} -m {_HEADER_FLAGS[header.op]} {value} }}")
+        for param in match.query:
+            fetch = f"url_param({esc.query_param(param.name)})"
+            if param.op is dm.QueryOp.PRESENT:
+                conds.append(f"{{ {fetch} -m found }}")
+            else:
+                conds.append(f"{{ {fetch} -m str {esc.quoted(_need(param.value, 'value'))} }}")
+        if match.source_cidrs:
+            nets = sorted(match.source_cidrs, key=lambda n: (n.version, int(n.network_address)))
+            conds.append("{ src " + " ".join(str(n) for n in nets) + " }")
+        if match.sni:
+            if _is_wild(match.sni):
+                regex = _quote_regex(esc.wildcard_regex(match.sni))
+                conds.append(f"{{ ssl_fc_sni -m reg {regex} }}")
+            else:
+                conds.append(f"{{ ssl_fc_sni -m str {esc.hostname(match.sni)} }}")
         return conds
 
     def _routing_rules(self, svc: dm.VirtualService, name: str) -> list[str]:
         rules: list[str] = []
         pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_id is not None]
-        path_routes = [(i, r) for i, r in pool_routes if r.match.path_prefix or r.match.path_exact]
+        path_routes = [(i, r) for i, r in pool_routes if not r.match.is_host_only]
         for _, route in sorted(path_routes, key=lambda ir: (ir[1].order, ir[0])):
             cond = " ".join(self._conditions(route.match))
             backend = self._backend_name(_need(route.pool_id, "route pool"))
@@ -485,7 +643,7 @@ class _Renderer:
         wild: dict[str, str] = {}
         for _, route in pool_routes:
             host = route.match.host
-            if host is None or route.match.path_prefix or route.match.path_exact:
+            if host is None or not route.match.is_host_only:
                 continue
             target = self._backend_name(_need(route.pool_id, "route pool"))
             if _is_wild(host):

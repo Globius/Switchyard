@@ -19,6 +19,12 @@ _NAME = re.compile(r"^[a-z0-9]([a-z0-9_-]{0,61}[a-z0-9])?$")
 _PATH = re.compile(r"^/[A-Za-z0-9._~/%:@+,;=-]{0,1023}$")
 _LOCATION_TAIL = re.compile(r"^[A-Za-z0-9._~/%:@+,;=?&-]{0,1023}$")
 _HEADER = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?$")
+# Header values are rendered inside double quotes: no quote, backslash, ``$`` (environment
+# expansion), ``%`` (log-format variables), ``#`` or control characters. Spaces are allowed inside.
+_VALUE_CHARS = r"A-Za-z0-9._~/:@+,;=*()&!'-"
+_HEADER_VALUE = re.compile(rf"^[{_VALUE_CHARS}]([ {_VALUE_CHARS}]{{0,254}}[{_VALUE_CHARS}])?$")
+_BAD_VALUE = "header value must be 1-256 characters without quotes, backslash, $, % or #"
+_QUERY_PARAM = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 _SECRET_REF = re.compile(r"^[a-z0-9][a-z0-9/_.-]{0,254}$")
 
 
@@ -383,3 +389,83 @@ def host_port(host: str, port: int) -> str:
         '[2001:db8::5]:5556'
     """
     return f"[{host}]:{port}" if ":" in host and not host.startswith("[") else f"{host}:{port}"
+
+
+def validate_header_value(value: str) -> str:
+    """Validate a literal header value (match operand or value to set).
+
+    One to 256 characters of ``A-Z a-z 0-9`` and ``. _ ~ / : @ + , ; = * ( ) & ! ' -``, with
+    single spaces allowed between them. No quotes, backslash, ``$``, ``%`` or ``#``: a value that
+    must vary per request uses a variable from the fixed list instead.
+
+    Example:
+        >>> validate_header_value("max-age=31536000; includeSubDomains")
+        'max-age=31536000; includeSubDomains'
+        >>> validate_header_value("%[src]")
+        Traceback (most recent call last):
+            ...
+        ValueError: header value must be 1-256 characters without quotes, backslash, $, % or #
+    """
+    if not _HEADER_VALUE.fullmatch(value):
+        raise ValueError(_BAD_VALUE)
+    return value
+
+
+def validate_query_param(value: str) -> str:
+    """Validate a query-string parameter name.
+
+    Example:
+        >>> validate_query_param("utm_source")
+        'utm_source'
+        >>> validate_query_param("a b")
+        Traceback (most recent call last):
+            ...
+        ValueError: query parameter name must be 1-64 characters of letters, digits, '_', '.' or '-'
+    """
+    if not _QUERY_PARAM.fullmatch(value):
+        raise ValueError(
+            "query parameter name must be 1-64 characters of letters, digits, '_', '.' or '-'"
+        )
+    return value
+
+
+#: Headers a policy may never set, add or remove: message framing and hop-by-hop headers.
+FORBIDDEN_HEADERS = frozenset(
+    {
+        "content-length",
+        "transfer-encoding",
+        "connection",
+        "keep-alive",
+        "te",
+        "trailer",
+        "upgrade",
+        "expect",
+        "proxy-authorization",
+        "proxy-authenticate",
+        "proxy-connection",
+    }
+)
+#: Request headers the renderer owns (client-address hygiene); a policy cannot touch them.
+MANAGED_REQUEST_HEADERS = frozenset({"x-forwarded-for", "x-forwarded-proto"})
+
+
+def validate_body(value: str) -> str:
+    r"""Validate the text of a fixed response or an error page.
+
+    At most 16 KiB of UTF-8, no NUL or other control characters except tab, CR and LF. The text is
+    stored as a file and served as is, so it needs no escaping, but it must not break the file
+    format or the HTTP message.
+
+    Example:
+        >>> validate_body("Down for maintenance")
+        'Down for maintenance'
+        >>> validate_body("a\x00b")
+        Traceback (most recent call last):
+            ...
+        ValueError: body must not contain control characters
+    """
+    if len(value.encode("utf-8")) > 16_384:
+        raise ValueError("body must be at most 16 KiB")
+    if any((ord(c) < 32 and c not in "\t\r\n") or ord(c) == 127 for c in value):
+        raise ValueError("body must not contain control characters")
+    return value

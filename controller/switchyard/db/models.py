@@ -196,15 +196,17 @@ class CertificateRow(TenantOwnedMixin, Base):
 
 
 class PolicySetRow(TenantOwnedMixin, Base):
-    """``policy_set``: ``redirect`` rules (JSON) or an ``allow_list`` of CIDRs."""
+    """``policy_set``: rules (JSON; the pages of ``error_pages``) or an ``allow_list`` of CIDRs."""
 
     __tablename__ = "policy_set"
     __table_args__ = (
         *tenant_unique(),
         ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
-        CheckConstraint("kind IN ('redirect', 'allow_list')", name="kind"),
         CheckConstraint(
-            "(kind = 'redirect' AND rules IS NOT NULL AND cidrs IS NULL)"
+            "kind IN ('redirect', 'allow_list', 'rewrite', 'respond', 'error_pages')", name="kind"
+        ),
+        CheckConstraint(
+            "(kind <> 'allow_list' AND rules IS NOT NULL AND cidrs IS NULL)"
             " OR (kind = 'allow_list' AND cidrs IS NOT NULL AND rules IS NULL)",
             name="payload_matches_kind",
         ),
@@ -342,6 +344,7 @@ class VsRouteRow(Base):
     pool_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     redirect_location: Mapped[str | None] = mapped_column(Text)
     redirect_code: Mapped[int | None] = mapped_column(Integer)
+    match_extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
 
 class VsCertificateRow(Base):

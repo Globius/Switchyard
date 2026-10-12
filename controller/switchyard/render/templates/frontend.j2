@@ -10,7 +10,13 @@ frontend vs_{{ f.name }}
 {% for rule in f.connection_rules %}
     {{ rule }}
 {% endfor %}
+{% for rule in f.error_rules %}
+    {{ rule }}
+{% endfor %}
 {% for rule in f.request_rules %}
+    {{ rule }}
+{% endfor %}
+{% for rule in f.response_rules %}
     {{ rule }}
 {% endfor %}
 {% for rule in f.routing_rules %}
