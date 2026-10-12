@@ -222,6 +222,9 @@ func (a *Applier) read(rel string) ([]byte, bool) {
 }
 
 // managed returns the files currently on disk under the managed directories.
+// stagingPrefix names the temporary files write creates before renaming them into place.
+const stagingPrefix = ".sy-"
+
 func (a *Applier) managed() (map[string][]byte, error) {
 	out := map[string][]byte{}
 	for prefix := range Units {
@@ -233,9 +236,14 @@ func (a *Applier) managed() (map[string][]byte, error) {
 				}
 				return err
 			}
-			if d.Type().IsRegular() && managedFile(filepath.ToSlash(relTo(a.Root, p))) {
+			// Skip write's staging files (.sy-*): they are renamed or removed while we walk.
+			if d.Type().IsRegular() && !strings.HasPrefix(d.Name(), stagingPrefix) &&
+				managedFile(filepath.ToSlash(relTo(a.Root, p))) {
 				rel, _ := filepath.Rel(a.Root, p)
 				data, rerr := os.ReadFile(p)
+				if errors.Is(rerr, fs.ErrNotExist) {
+					return nil
+				}
 				if rerr != nil {
 					return rerr
 				}
@@ -255,7 +263,7 @@ func (a *Applier) write(rel string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(target), ".sy-*")
+	tmp, err := os.CreateTemp(filepath.Dir(target), stagingPrefix+"*")
 	if err != nil {
 		return err
 	}
