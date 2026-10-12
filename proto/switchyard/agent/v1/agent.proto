@@ -15,6 +15,29 @@ service Agent {
   // Runs one health probe from this engine against a pool member that is in the applied
   // configuration. Anything else is refused: this is not a general network tool.
   rpc ProbeMember(ProbeRequest) returns (ProbeResponse);
+  // Captures packets with tcpdump for a bounded time and streams the pcap file back. The filter is
+  // built from structured fields (never accepted as text), one capture runs at a time, and
+  // duration, packets and bytes are capped. Anything outside those limits is refused.
+  rpc Capture(CaptureRequest) returns (stream CaptureChunk);
+}
+
+message CaptureRequest {
+  string interface = 1;    // "any" or the name of an interface of this engine
+  string protocol = 2;     // "", tcp, udp or icmp (icmp includes icmp6)
+  string host = 3;         // optional IP address, matched as source or destination
+  uint32 port = 4;         // optional, only with protocol "", tcp or udp
+  uint32 duration_s = 5;   // 1 to 60
+  uint32 max_packets = 6;  // 1 to 20000
+  uint32 snaplen = 7;      // bytes kept per packet, 64 to 262144; 0 means 262144
+}
+
+// A piece of the pcap file in order. The last message has done set and carries the totals.
+message CaptureChunk {
+  bytes data = 1;
+  bool done = 2;
+  uint64 packets = 3;      // packets captured, on the last message
+  bool truncated = 4;      // the byte cap was reached before the time or packet limit
+  string error = 5;        // why the capture could not run or failed (never a stack trace)
 }
 
 message ProbeRequest {

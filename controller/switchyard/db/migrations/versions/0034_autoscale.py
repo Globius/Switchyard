@@ -1,15 +1,15 @@
 """Automatic SE scale-out: ``se_group.autoscale`` and ``autoscale_state`` (ADR 0194).
 
-Revision ID: 0035
-Revises: 0034
+Revision ID: 0034
+Revises: 0033
 """
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "0035"
-down_revision = "0034"
+revision = "0034"
+down_revision = "0033"
 branch_labels = None
 depends_on = None
 

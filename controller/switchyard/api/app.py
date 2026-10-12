@@ -22,7 +22,7 @@ import httpx
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from switchyard.adapters.agent import AgentError
+from switchyard.adapters.agent import AgentError, CaptureSpec
 from switchyard.adapters.pki import PkiError
 from switchyard.adapters.proxmox import Proxmox
 from switchyard.adapters.secrets import SecretsReader, SecretsWriter
@@ -41,6 +41,7 @@ from switchyard.api.alert_models import (
     AlertTargetTest,
 )
 from switchyard.api.autoscale_models import AutoscaleRead
+from switchyard.api.capture_models import CaptureIn, CaptureRead
 from switchyard.api.dns_record_models import DnsRecordRead, DnsRecordSyncResult
 from switchyard.api.grafana_proxy import PROXY_COOKIE, GrafanaProxy
 from switchyard.api.gslb_models import (
@@ -201,6 +202,7 @@ from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.alerts import EVENT_ACTIONS, AlertService
 from switchyard.services.autoscale import Autoscaler
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
+from switchyard.services.captures import PacketCaptures
 from switchyard.services.cert_requests import CertificateRequests, IssueRequest
 from switchyard.services.certificates import CertificateJobs, CertificateService
 from switchyard.services.changesets import (
@@ -288,6 +290,7 @@ class ApiServices:
     kubernetes: KubernetesClusters | None = None
     dns_records: DnsRecordSync | None = None
     autoscaler: Autoscaler | None = None
+    captures: PacketCaptures = None  # type: ignore[assignment]
 
 
 def build_services(
@@ -361,6 +364,7 @@ def build_services(
         dns_providers=dns_providers,
         dns_records=DnsRecordSync(db, dns_providers) if dns_providers is not None else None,
         autoscaler=autoscaler,
+        captures=PacketCaptures(db, directory),
         controller=ControllerSettings(db, ChangeSetService(db)),
         avi_import=AviImportService(db, ChangeSetService(db), certs),
         kubernetes=KubernetesClusters(db, secrets, ChangeSetService(db))
@@ -2505,6 +2509,68 @@ def create_app(
     async def gslb_sync(tenant: Tenant, who: Who, svc: Services) -> dict[str, int]:
         return await need_gslb(svc, who).sync(  # type: ignore[no-any-return]
             who, tenant.id, force=True, request_id=_rid()
+        )
+
+    # Packet captures on engines (ADR 0194)
+    @router.post(
+        "/tenants/{t}/engines/{engine}/captures",
+        status_code=202,
+        tags=["engines"],
+        summary="Capture packets on an engine",
+        description="Queues a bounded `tcpdump` on the engine: an interface (or `any`), an "
+        "optional protocol, host and port, up to 60 seconds and 20000 packets. The agent builds "
+        "the filter from these fields; free text is never accepted. One capture runs per engine "
+        "at a time. Poll `GET /captures/{id}` until it is `done`, then download the pcap. A "
+        "capture holds real traffic: it needs `tenant-admin`, is audited, and is deleted after "
+        "24 hours.",
+        response_model=CaptureRead,
+        responses=_ok(ex.CAPTURE, 202),
+    )
+    async def request_capture(
+        engine: UUID, body: CaptureIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        return await svc.captures.request(
+            who, tenant.id, engine, CaptureSpec(**body.model_dump()), request_id=_rid()
+        )
+
+    @router.get(
+        "/tenants/{t}/captures",
+        tags=["engines"],
+        summary="Packet captures",
+        description="The tenant's captures, newest first, without the pcap data. Requires "
+        "`tenant-admin`.",
+        response_model=list[CaptureRead],
+        responses=_ok([ex.CAPTURE]),
+    )
+    async def list_captures(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        return await svc.captures.list_captures(who, tenant.id)
+
+    @router.get(
+        "/tenants/{t}/captures/{capture}",
+        tags=["engines"],
+        summary="One packet capture",
+        description="State, packet count and size of a capture. Requires `tenant-admin`.",
+        response_model=CaptureRead,
+        responses=_ok(ex.CAPTURE),
+    )
+    async def get_capture(capture: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        return await svc.captures.get(who, tenant.id, capture)
+
+    @router.get(
+        "/tenants/{t}/captures/{capture}/pcap",
+        tags=["engines"],
+        summary="Download a packet capture",
+        description="The pcap file, for Wireshark or `tcpdump -r`. Audited. Requires "
+        "`tenant-admin`.",
+        response_class=Response,
+        responses={200: {"content": {"application/vnd.tcpdump.pcap": {}}, "description": "pcap"}},
+    )
+    async def download_capture(capture: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
+        name, data = await svc.captures.download(who, tenant.id, capture, request_id=_rid())
+        return Response(
+            data,
+            media_type="application/vnd.tcpdump.pcap",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
         )
 
     @router.get(

@@ -48,6 +48,7 @@ from switchyard.pipeline.engines import DataPlaneTls, DbEngineDirectory
 from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator, AlertService
 from switchyard.services.autoscale import AUTOSCALE_JOB, Autoscaler
+from switchyard.services.captures import PacketCaptures
 from switchyard.services.certificates import (
     RENEW_CERTS_JOB,
     SYNC_CLOUDFLARE_IPS_JOB,
@@ -472,6 +473,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         JwksSync(db, ChangeSetService(db)),
         dns_record_sync(db, secrets),
         scaler := autoscaler(db, engines, secrets),
+        PacketCaptures(db, engines),
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),

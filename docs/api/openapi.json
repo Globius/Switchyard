@@ -3855,6 +3855,171 @@
         "title": "CaptchaGate",
         "type": "object"
       },
+      "CaptureIn": {
+        "additionalProperties": false,
+        "description": "What to capture on an engine. The agent builds the filter from these fields.",
+        "properties": {
+          "duration_s": {
+            "default": 10,
+            "description": "Stop after this many seconds (1 to 60).",
+            "title": "Duration S",
+            "type": "integer"
+          },
+          "host": {
+            "default": "",
+            "description": "Only packets to or from this IP address.",
+            "title": "Host",
+            "type": "string"
+          },
+          "interface": {
+            "default": "any",
+            "description": "`any`, or the name of an interface of the engine (`eth0`).",
+            "title": "Interface",
+            "type": "string"
+          },
+          "max_packets": {
+            "default": 1000,
+            "description": "Stop after this many packets (1 to 20000).",
+            "title": "Max Packets",
+            "type": "integer"
+          },
+          "port": {
+            "default": 0,
+            "description": "Only this port (tcp or udp), 0 for any.",
+            "title": "Port",
+            "type": "integer"
+          },
+          "protocol": {
+            "default": "",
+            "description": "Only this protocol; empty captures every protocol.",
+            "enum": [
+              "",
+              "tcp",
+              "udp",
+              "icmp"
+            ],
+            "title": "Protocol",
+            "type": "string"
+          },
+          "snaplen": {
+            "default": 0,
+            "description": "Bytes kept per packet (64 to 262144); 0 keeps whole packets.",
+            "title": "Snaplen",
+            "type": "integer"
+          }
+        },
+        "title": "CaptureIn",
+        "type": "object"
+      },
+      "CaptureRead": {
+        "additionalProperties": false,
+        "description": "A packet capture and how it went (the pcap itself is downloaded separately).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "expires_at": {
+            "description": "The capture is deleted at this time.",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "packets": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Packets"
+          },
+          "requested_by": {
+            "title": "Requested By",
+            "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/CaptureIn"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "truncated": {
+            "description": "The size limit (16 MiB) ended the capture early.",
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "engine",
+          "requested_by",
+          "spec",
+          "state",
+          "packets",
+          "size_bytes",
+          "truncated",
+          "error",
+          "created_at",
+          "finished_at",
+          "expires_at"
+        ],
+        "title": "CaptureRead",
+        "type": "object"
+      },
       "CertIdentity": {
         "additionalProperties": false,
         "description": "Map a client certificate to a user and groups (ADR 0136).\n\nAttributes:\n    by: ``cn`` (the subject common name) or ``sha1`` (the certificate's SHA-1 fingerprint, hex,\n        for individual certificates).\n    value: The common name, or 40 hex digits.\n    user: The user name written to the user header.\n    groups: Groups written to the groups header.",
@@ -10014,7 +10179,8 @@
           "sync_gslb",
           "probe_gslb",
           "sync_dns_records",
-          "autoscale_se_groups"
+          "autoscale_se_groups",
+          "packet_capture"
         ],
         "title": "JobKind",
         "type": "string"
@@ -31612,6 +31778,348 @@
         "x-required-role": "viewer"
       }
     },
+    "/api/v1/tenants/{t}/captures": {
+      "get": {
+        "description": "The tenant's captures, newest first, without the pcap data. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "list_captures_api_v1_tenants__t__captures_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-10T08:30:00Z",
+                    "engine": "edge-1",
+                    "expires_at": "2026-10-10T08:30:00Z",
+                    "finished_at": "2026-10-10T08:30:00Z",
+                    "id": "0192f9a0-0000-7000-8000-000000000042",
+                    "packets": 214,
+                    "requested_by": "user:alice",
+                    "size_bytes": 48210,
+                    "spec": {
+                      "duration_s": 10,
+                      "host": "192.0.2.20",
+                      "interface": "any",
+                      "max_packets": 1000,
+                      "port": 443,
+                      "protocol": "tcp",
+                      "snaplen": 0
+                    },
+                    "state": "done",
+                    "truncated": false
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CaptureRead"
+                  },
+                  "title": "Response List Captures Api V1 Tenants  T  Captures Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Packet captures",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/captures/{capture}": {
+      "get": {
+        "description": "State, packet count and size of a capture. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "get_capture_api_v1_tenants__t__captures__capture__get",
+        "parameters": [
+          {
+            "description": "Id of a packet capture (`id` in the capture list).",
+            "in": "path",
+            "name": "capture",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Capture",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "engine": "edge-1",
+                  "expires_at": "2026-10-10T08:30:00Z",
+                  "finished_at": "2026-10-10T08:30:00Z",
+                  "id": "0192f9a0-0000-7000-8000-000000000042",
+                  "packets": 214,
+                  "requested_by": "user:alice",
+                  "size_bytes": 48210,
+                  "spec": {
+                    "duration_s": 10,
+                    "host": "192.0.2.20",
+                    "interface": "any",
+                    "max_packets": 1000,
+                    "port": 443,
+                    "protocol": "tcp",
+                    "snaplen": 0
+                  },
+                  "state": "done",
+                  "truncated": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One packet capture",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/captures/{capture}/pcap": {
+      "get": {
+        "description": "The pcap file, for Wireshark or `tcpdump -r`. Audited. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "download_capture_api_v1_tenants__t__captures__capture__pcap_get",
+        "parameters": [
+          {
+            "description": "Id of a packet capture (`id` in the capture list).",
+            "in": "path",
+            "name": "capture",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Capture",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.tcpdump.pcap": {}
+            },
+            "description": "pcap"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download a packet capture",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
     "/api/v1/tenants/{t}/certificate-renewals": {
       "get": {
         "description": "For each server certificate: issuer, expiry, when renewal starts and the last result.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
@@ -36833,6 +37341,158 @@
           "engines"
         ],
         "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/engines/{engine}/captures": {
+      "post": {
+        "description": "Queues a bounded `tcpdump` on the engine: an interface (or `any`), an optional protocol, host and port, up to 60 seconds and 20000 packets. The agent builds the filter from these fields; free text is never accepted. One capture runs per engine at a time. Poll `GET /captures/{id}` until it is `done`, then download the pcap. A capture holds real traffic: it needs `tenant-admin`, is audited, and is deleted after 24 hours.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "request_capture_api_v1_tenants__t__engines__engine__captures_post",
+        "parameters": [
+          {
+            "description": "Engine id.",
+            "in": "path",
+            "name": "engine",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engine",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "duration_s": 10,
+                "host": "192.0.2.20",
+                "interface": "any",
+                "max_packets": 1000,
+                "port": 443,
+                "protocol": "tcp"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CaptureIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "engine": "edge-1",
+                  "expires_at": "2026-10-10T08:30:00Z",
+                  "finished_at": "2026-10-10T08:30:00Z",
+                  "id": "0192f9a0-0000-7000-8000-000000000042",
+                  "packets": 214,
+                  "requested_by": "user:alice",
+                  "size_bytes": 48210,
+                  "spec": {
+                    "duration_s": 10,
+                    "host": "192.0.2.20",
+                    "interface": "any",
+                    "max_packets": 1000,
+                    "port": 443,
+                    "protocol": "tcp",
+                    "snaplen": 0
+                  },
+                  "state": "done",
+                  "truncated": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capture packets on an engine",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "tenant-admin"
       }
     },
     "/api/v1/tenants/{t}/engines/{engine}/enrollment-token": {

@@ -4,6 +4,7 @@ from switchyard.api.job_models import JobKind
 from switchyard.jobs.handlers import GIT_MIRROR_JOB, POLL_STATUS_JOB
 from switchyard.services.alerts import EVALUATE_ALERTS_JOB
 from switchyard.services.autoscale import AUTOSCALE_JOB
+from switchyard.services.captures import PACKET_CAPTURE_JOB
 from switchyard.services.certificates import (
     ISSUE_CERT_JOB,
     RENEW_CERTS_JOB,
@@ -44,5 +45,6 @@ def test_every_job_kind_is_published() -> None:
         PROBE_GSLB_JOB,
         SYNC_DNS_RECORDS_JOB,
         AUTOSCALE_JOB,
+        PACKET_CAPTURE_JOB,
     }
     assert kinds == {k.value for k in JobKind}

@@ -17,7 +17,7 @@ name, the same rule as ACME).
 - The controller keeps one `A` (IPv4 VIP) or `AAAA` (IPv6 VIP) record per name, through the `sync_dns_records` job (every
   minute) or `POST /tenants/{t}/dns-records/sync`. `GET /tenants/{t}/dns-records` lists what it manages and each record's
   state.
-- **Ownership.** The `dns_record` table (migration 0034) is the controller's list of what it created. It changes and deletes
+- **Ownership.** The `dns_record` table (migration 0033) is the controller's list of what it created. It changes and deletes
   only those records. A name that already has a record with another value is reported as `error` and left alone. A record
   with the same value is adopted; deleting the service then deletes that record too.
 - Records follow the service: a moved VIP updates the record in place, and a disabled or deleted service, a removed name or a

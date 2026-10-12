@@ -7,7 +7,7 @@ coraza}/`` and reloads an allowlisted set of units. The transport is gRPC over m
 
 import base64
 import time
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -117,6 +117,41 @@ class AgentStatus:
 
 
 @dataclass(frozen=True)
+class CaptureSpec:
+    """One packet capture to run on an engine (ADR 0194).
+
+    Attributes:
+        interface: ``any`` or an interface name of the engine.
+        protocol: ``""`` (any), ``tcp``, ``udp`` or ``icmp``.
+        host: Optional IP address, matched as source or destination.
+        port: Optional port (0 for none); not with ``icmp``.
+        duration_s: 1 to 60.
+        max_packets: 1 to 20000.
+        snaplen: Bytes kept per packet, 64 to 262144 (0: the maximum).
+    """
+
+    interface: str = "any"
+    protocol: str = ""
+    host: str = ""
+    port: int = 0
+    duration_s: int = 10
+    max_packets: int = 1000
+    snaplen: int = 0
+
+
+@dataclass(frozen=True)
+class CaptureResult:
+    """How a capture ended: packets captured, whether the byte cap cut it short, and an error."""
+
+    packets: int = 0
+    truncated: bool = False
+    error: str | None = None
+
+
+CaptureSink = Callable[[bytes], Awaitable[None]]
+
+
+@dataclass(frozen=True)
 class ProbeRequest:
     """One health probe to run from an engine against a configured pool member.
 
@@ -173,6 +208,10 @@ class AgentEngine(Protocol):
 
     async def probe(self, request: ProbeRequest) -> ProbeResult:
         """Run one health probe from this engine against a configured pool member."""
+        ...
+
+    async def capture(self, spec: CaptureSpec, sink: CaptureSink) -> CaptureResult:
+        """Run a packet capture on the engine and pass the pcap bytes to ``sink`` in order."""
         ...
 
     def watch(self) -> AsyncIterator[AgentStatus]:
@@ -351,6 +390,37 @@ class GrpcAgent:
                 f"{self._name}: {exc.code().name}: {exc.details()}"
             ) from exc
 
+    async def capture(self, spec: CaptureSpec, sink: CaptureSink) -> CaptureResult:
+        """Stream a capture from the agent into ``sink``."""
+        result = CaptureResult()
+        try:
+            call = self._stub.Capture(
+                agent_pb2.CaptureRequest(
+                    interface=spec.interface,
+                    protocol=spec.protocol,
+                    host=spec.host,
+                    port=spec.port,
+                    duration_s=spec.duration_s,
+                    max_packets=spec.max_packets,
+                    snaplen=spec.snaplen,
+                ),
+                timeout=spec.duration_s + 15,
+            )
+            async for chunk in call:
+                if chunk.data:
+                    await sink(bytes(chunk.data))
+                if chunk.done:
+                    result = CaptureResult(
+                        packets=int(chunk.packets),
+                        truncated=chunk.truncated,
+                        error=chunk.error or None,
+                    )
+        except grpc.aio.AioRpcError as exc:
+            raise AgentUnreachableError(
+                f"{self._name}: {exc.code().name}: {exc.details()}"
+            ) from exc
+        return result
+
     async def probe(self, request: ProbeRequest) -> ProbeResult:
         """Ask the agent to run the probe."""
         try:
@@ -412,6 +482,10 @@ class FakeAgent:
         self.waf_running = True
         self.probe_result = ProbeResult(ok=True, latency_ms=1, detail="connected")
         self.probes: list[ProbeRequest] = []
+        #: Captures asked for, the pcap bytes the fake returns and how the capture ends.
+        self.captures: list[CaptureSpec] = []
+        self.capture_data = b""
+        self.capture_result = CaptureResult()
         self.fail_next: str | None = None
 
     @property
@@ -448,6 +522,16 @@ class FakeAgent:
             waf_expected="coraza/config.yaml" in self.files,
             waf_running=self.waf_running,
         )
+
+    async def capture(self, spec: CaptureSpec, sink: CaptureSink) -> CaptureResult:
+        """Record the request, pass ``capture_data`` to the sink and return ``capture_result``."""
+        self.captures.append(spec)
+        if self.fail_next == "capture":
+            self.fail_next = None
+            raise AgentUnreachableError(f"{self._name}: injected failure in capture")
+        for start in range(0, len(self.capture_data), 4096):
+            await sink(self.capture_data[start : start + 4096])
+        return self.capture_result
 
     async def probe(self, request: ProbeRequest) -> ProbeResult:
         """Record the request and return the prepared result."""

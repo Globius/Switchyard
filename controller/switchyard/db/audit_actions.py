@@ -90,6 +90,8 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("engine.retired", "An engine VM was destroyed and its record removed."),
     _a("gc.run", "Housekeeping removed expired records."),
     _a("grafana.launch", "A user opened the embedded Grafana for a tenant (or for all tenants)."),
+    _a("capture.requested", "A packet capture was requested on an engine."),
+    _a("capture.downloaded", "A packet capture file was downloaded."),
     _a("autoscale.scale_out", "The autoscaler queued one more engine for a busy SE group."),
     _a("autoscale.engine_joined", "An autoscaled engine enrolled and joined its SE group."),
     _a("dns_record.sync", "DNS address records were synchronised from a tenant's services."),

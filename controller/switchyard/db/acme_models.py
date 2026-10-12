@@ -127,6 +127,7 @@ class DnsRecordRow(Base):
 
     __tablename__ = "dns_record"
     __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenant.id"], ondelete="CASCADE"),
         UniqueConstraint("tenant_id", "hostname", "rtype"),
         CheckConstraint("rtype IN ('A', 'AAAA')", name="rtype"),
         CheckConstraint("state IN ('pending', 'published', 'error')", name="state"),

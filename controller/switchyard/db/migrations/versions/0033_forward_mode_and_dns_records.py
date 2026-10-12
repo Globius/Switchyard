@@ -1,23 +1,33 @@
-"""DNS address records published from virtual services (ADR 0193).
+"""UDP forwarding method and DNS records published from virtual services (ADR 0192, 0193).
 
-Adds ``virtual_service.dns`` and ``dns_record``, which remembers which records the controller
-created so it never edits or deletes one it does not own.
+Adds ``virtual_service.forward_mode`` (``nat``, ``dr`` or ``tunnel``), ``virtual_service.dns``
+and ``dns_record``, which remembers which records the controller created so it never edits or
+deletes one it does not own.
 
-Revision ID: 0034
-Revises: 0033
+Revision ID: 0033
+Revises: 0032
 """
 
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "0034"
-down_revision = "0033"
+revision = "0033"
+down_revision = "0032"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
+    op.add_column(
+        "virtual_service",
+        sa.Column("forward_mode", sa.Text(), nullable=False, server_default=sa.text("'nat'")),
+    )
+    op.create_check_constraint(
+        op.f("ck_virtual_service_forward_mode"),
+        "virtual_service",
+        "forward_mode IN ('nat', 'dr', 'tunnel')",
+    )
     op.add_column(
         "virtual_service", sa.Column("dns", postgresql.JSONB(astext_type=sa.Text()), nullable=True)
     )
@@ -52,7 +62,9 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_dns_record")),
-        sa.UniqueConstraint("tenant_id", "hostname", "rtype", name=op.f("uq_dns_record_host")),
+        sa.UniqueConstraint(
+            "tenant_id", "hostname", "rtype", name=op.f("uq_dns_record_tenant_id_hostname_rtype")
+        ),
     )
     op.execute("ALTER TABLE dns_record ENABLE ROW LEVEL SECURITY")
     op.execute("ALTER TABLE dns_record FORCE ROW LEVEL SECURITY")
@@ -69,3 +81,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table("dns_record")
     op.drop_column("virtual_service", "dns")
+    op.drop_constraint(op.f("ck_virtual_service_forward_mode"), "virtual_service", type_="check")
+    op.drop_column("virtual_service", "forward_mode")

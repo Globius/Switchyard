@@ -20,6 +20,7 @@ from switchyard.jobs.worker import Handler
 from switchyard.pipeline.apply import ApplyPipeline
 from switchyard.services.alerts import EVALUATE_ALERTS_JOB, AlertEvaluator
 from switchyard.services.autoscale import AUTOSCALE_JOB, Autoscaler
+from switchyard.services.captures import PACKET_CAPTURE_JOB, PacketCaptures
 from switchyard.services.certificates import (
     ISSUE_CERT_JOB,
     RENEW_CERTS_JOB,
@@ -74,6 +75,7 @@ def build_handlers(
     jwks: JwksSync | None = None,
     dns_records: DnsRecordSync | None = None,
     autoscaler: Autoscaler | None = None,
+    captures: PacketCaptures | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -84,6 +86,7 @@ def build_handlers(
         iplists: Country and reputation list sync; ``None`` skips the ``sync_ip_lists`` kind.
         dns_records: Publishes virtual services as DNS address records; ``None`` skips the
             ``sync_dns_records`` kind.
+        captures: Packet captures on engines; ``None`` skips the ``packet_capture`` kind.
         autoscaler: Adds engines to busy SE groups; ``None`` skips the ``autoscale_se_groups`` kind.
         jwks: Refreshes JWT keys from ``jwks_url``; ``None`` skips the ``sync_jwks`` kind.
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
@@ -177,6 +180,14 @@ def build_handlers(
             return dict(await gslb.run())
 
         handlers[SYNC_GSLB_JOB] = sync_gslb
+    if captures is not None:
+
+        async def packet_capture(job: Job) -> dict[str, Any]:
+            return dict(
+                await captures.run(UUID(job.payload["tenant_id"]), UUID(job.payload["capture_id"]))
+            )
+
+        handlers[PACKET_CAPTURE_JOB] = packet_capture
     if autoscaler is not None:
 
         async def autoscale_se_groups(job: Job) -> dict[str, Any]:
