@@ -172,7 +172,7 @@ def render_haproxy(
         se_group_id: The group to render.
         broker_url: Public base URL of the login broker (``SWITCHYARD_AUTH_BROKER_URL``); only
             needed by access rules with ``min_factors``, which redirect to the login gate
-            (ADR 0196).
+            (ADR 0195).
 
     Returns:
         The files and any warnings.
@@ -288,8 +288,6 @@ PROXY_HEADERS = (
     "X-Forwarded-Access-Token",
 )
 #: Tells the second hop that the first saw a verified client certificate (ADR 0138).
-#: Content of the step-up address map until the auth files replace it (ADR 0196).
-STEP_UP_PLACEHOLDER = "elevate https://broker.invalid/_gate/elevate\n"
 DEVICE_HEADER = "X-Sy-Device"
 #: Carries the access decision from the first hop to the loopback hop.
 ACCESS_HEADER = "X-Sy-Access"

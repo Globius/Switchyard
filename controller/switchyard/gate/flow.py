@@ -2,7 +2,7 @@
 
 Everything here is pure (no I/O) except :func:`verify_step`, which asks RADIUS through a
 :class:`~switchyard.adapters.radius.RadiusClient`. A *flow* is an ordered list of steps with
-conditions (ADR 0196); a person who has passed *n* factors holds the groups ``sy-factors-1`` ..
+conditions (ADR 0195); a person who has passed *n* factors holds the groups ``sy-factors-1`` ..
 ``sy-factors-n``, which access rules read with ``min_factors``.
 
 Example:
@@ -178,7 +178,7 @@ def next_step(
     """The index of the next step to ask, or ``None`` when the sign-in is complete.
 
     In normal operation the steps after the last one done are visited in order and skipped when
-    their condition fails. With ``want`` (a step-up for that many factors, ADR 0196) conditions
+    their condition fails. With ``want`` (a step-up for that many factors, ADR 0195) conditions
     are ignored and the first undone step is asked until ``want`` factors have passed.
 
     Example:

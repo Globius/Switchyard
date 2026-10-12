@@ -1,8 +1,8 @@
-"""The login gate application (ADR 0195, 0196): an ASGI reverse proxy in front of Dex.
+"""The login gate application (ADR 0195): an ASGI reverse proxy in front of Dex.
 
 For each ``radius`` directory the broker runs a Dex instance with an ``authproxy`` connector: Dex
 trusts the headers of whoever sits in front of its ``/callback``. That is this gate. It serves a
-sign-in page, checks the person against RADIUS (one or more steps, ADR 0196), and only then
+sign-in page, checks the person against RADIUS (one or more steps, ADR 0195), and only then
 forwards ``/callback`` to Dex with ``X-Remote-User``, ``X-Remote-User-Email`` and
 ``X-Remote-Group`` set by the gate. The same headers are removed from every request that comes from
 outside, so no client can name itself.

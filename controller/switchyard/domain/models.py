@@ -1629,7 +1629,7 @@ class AccessRule(Model):
             at least one of ``groups``) or ``email_domains`` (an address in one of the domains).
         posture: Device conditions (ADR 0138).
         min_factors: The person must have passed at least this many factors of the directory's
-            login flow (ADR 0196); a session with fewer is sent to complete the next one.
+            login flow (ADR 0195); a session with fewer is sent to complete the next one.
     """
 
     match: RouteMatch = RouteMatch()
@@ -2134,7 +2134,7 @@ class RadiusServerSpec(Model):
 
 
 class FlowCondition(Model):
-    """When a step applies (ADR 0196); everything given must hold.
+    """When a step applies (ADR 0195); everything given must hold.
 
     Attributes:
         groups_any: The person has at least one of these groups from the steps already passed.
@@ -2157,7 +2157,7 @@ class FlowCondition(Model):
 
 
 class FlowStep(Model):
-    """One factor of a login flow (ADR 0196).
+    """One factor of a login flow (ADR 0195).
 
     Attributes:
         name: Step name (unique in the flow).
@@ -2176,7 +2176,7 @@ class FlowStep(Model):
 
 
 class LoginFlow(Model):
-    """Ordered factors with conditions, in the manner of Citrix nFactor (ADR 0196).
+    """Ordered factors with conditions, in the manner of Citrix nFactor (ADR 0195).
 
     The steps run in order; a step whose ``when`` does not hold is skipped. After every passed
     step the person holds ``sy-factors-<n>`` for n factors so far, so access rules can ask for a

@@ -204,7 +204,7 @@ def rendered_fragments(
         snapshot: Desired state, live or with a change set applied.
         object_type: Kind of object; must be in :data:`RENDERED_TYPES`.
         object_id: The object.
-        broker_url: The login broker's public URL, needed by step-up rules (ADR 0196).
+        broker_url: The login broker's public URL, needed by step-up rules (ADR 0195).
 
     Returns:
         Fragments sorted by SE group name, then in the order the object's text appears. Empty when
