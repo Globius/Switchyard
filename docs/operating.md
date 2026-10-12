@@ -24,7 +24,9 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_PKI_MOUNT`, `SWITCHYARD_PKI_ROLE` | OpenBao PKI role that signs agent certificates (defaults `pki`, `agents`) |
 | `SWITCHYARD_PVE_URL`, `_PVE_TOKEN_ID`, `_PVE_CA` | Proxmox API (token secret at reference `kv/proxmox/token`) |
 | `SWITCHYARD_CLOUDFLARE_TOKEN` | DNS-01, Origin CA and IP-range sync |
-| `SWITCHYARD_ACME_DIRECTORY`, `_EMAIL`, `_ACCOUNT_KEY_FILE` | ACME issuance |
+| `SWITCHYARD_ACME_DIRECTORY`, `_EMAIL`, `_ACCOUNT_KEY_FILE` | The ACME provider of earlier versions; on first use it becomes the provider `default`. Manage providers in the UI instead (`docs/acme.md`) |
+| `SWITCHYARD_ACME_DNS_WAIT` | Seconds to wait after publishing DNS-01 records (default 15) |
+| `SWITCHYARD_DNS_CIDRS` | Private networks that RFC 2136 and PowerDNS servers named in DNS credentials may live in (comma-separated); loopback and link-local are never allowed |
 | `SWITCHYARD_METRICS_TOKEN` | Bearer token that may read `/metrics` and the Prometheus service-discovery list (and nothing else); system administrators can too |
 | `SWITCHYARD_ENGINE_CIDRS`, `SWITCHYARD_ENGINE_POLICY` | Networks hand-registered engines may live in besides their group's `mgmt` networks (comma-separated); `open` turns the engine address policy off (labs). ADR 0072 |
 | `SWITCHYARD_SHARED_SECRET_PREFIXES`, `SWITCHYARD_SECRET_POLICY` | Secret paths every tenant may name besides `kv/tenants/<tenant>/` (each ending in `/`); `open` allows any path (labs). `syctl openbao-policy` prints the matching OpenBao policy. ADR 0072 |

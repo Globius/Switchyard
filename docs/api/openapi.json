@@ -178,6 +178,701 @@
         "title": "AccessLogs",
         "type": "object"
       },
+      "AcmeChallenge": {
+        "description": "How an ACME certificate authority checks control of a name.",
+        "enum": [
+          "dns-01",
+          "http-01"
+        ],
+        "title": "AcmeChallenge",
+        "type": "string"
+      },
+      "AcmeOauthIn": {
+        "additionalProperties": false,
+        "description": "OAuth settings for a CA behind an identity provider (client-credentials grant).",
+        "properties": {
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "bearer_on_acme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Send the token on every ACME request.",
+            "title": "Bearer On Acme"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "eab_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Endpoint that returns a fresh EAB key (JSON with a key id and an HMAC key) when called with the bearer token.",
+            "title": "Eab Url"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "token_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Url"
+          }
+        },
+        "title": "AcmeOauthIn",
+        "type": "object"
+      },
+      "AcmeOauthRead": {
+        "additionalProperties": false,
+        "description": "The stored OAuth settings (the client secret is never returned).",
+        "properties": {
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "bearer_on_acme": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bearer On Acme"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "eab_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eab Url"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "token_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Url"
+          }
+        },
+        "title": "AcmeOauthRead",
+        "type": "object"
+      },
+      "AcmePresetRead": {
+        "additionalProperties": false,
+        "description": "A well-known certificate authority.",
+        "properties": {
+          "auth_mode": {
+            "enum": [
+              "none",
+              "eab",
+              "oauth"
+            ],
+            "title": "Auth Mode",
+            "type": "string"
+          },
+          "directory_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty when the administrator must enter it.",
+            "title": "Directory Url"
+          },
+          "eab_required": {
+            "title": "Eab Required",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "directory_url",
+          "auth_mode",
+          "eab_required",
+          "note"
+        ],
+        "title": "AcmePresetRead",
+        "type": "object"
+      },
+      "AcmeProviderIn": {
+        "additionalProperties": false,
+        "description": "Register an ACME provider.",
+        "properties": {
+          "account_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Write-only PEM of an RSA account key (2048 bits or more) to use instead of a generated one.",
+            "title": "Account Key"
+          },
+          "auth_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "eab",
+                  "oauth"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Defaults to what the preset usually needs.",
+            "title": "Auth Mode"
+          },
+          "ca_bundle_pem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "PEM certificates of extra trusted roots, for a private CA. Public data.",
+            "title": "Ca Bundle Pem"
+          },
+          "default": {
+            "default": false,
+            "description": "Use this provider when a certificate names none.",
+            "title": "Default",
+            "type": "boolean"
+          },
+          "directory_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for presets without a fixed directory.",
+            "title": "Directory Url"
+          },
+          "eab_hmac_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base64url HMAC key of the EAB credentials. Write-only.",
+            "title": "Eab Hmac Key"
+          },
+          "eab_kid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eab Kid"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Contact address for the ACME account.",
+            "title": "Email"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oauth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcmeOauthIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oauth_client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Write-only.",
+            "title": "Oauth Client Secret"
+          },
+          "preset": {
+            "default": "custom",
+            "description": "A key from `GET /acme-provider-presets`.",
+            "title": "Preset",
+            "type": "string"
+          },
+          "terms_agreed": {
+            "default": false,
+            "description": "Must be true: the controller accepts the CA's terms.",
+            "title": "Terms Agreed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AcmeProviderIn",
+        "type": "object"
+      },
+      "AcmeProviderPatch": {
+        "additionalProperties": false,
+        "description": "Change an ACME provider; send only what changes.",
+        "properties": {
+          "account_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces the account key; the account is registered again.",
+            "title": "Account Key"
+          },
+          "auth_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "eab",
+                  "oauth"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Mode"
+          },
+          "ca_bundle_pem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces the extra trusted roots; empty removes them.",
+            "title": "Ca Bundle Pem"
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default"
+          },
+          "directory_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Directory Url"
+          },
+          "eab_hmac_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eab Hmac Key"
+          },
+          "eab_kid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eab Kid"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "oauth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcmeOauthIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oauth_client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oauth Client Secret"
+          }
+        },
+        "title": "AcmeProviderPatch",
+        "type": "object"
+      },
+      "AcmeProviderRead": {
+        "additionalProperties": false,
+        "description": "An ACME provider (never any secret).",
+        "properties": {
+          "account_registered": {
+            "description": "True after a successful test (the CA accepted the account).",
+            "title": "Account Registered",
+            "type": "boolean"
+          },
+          "auth_mode": {
+            "enum": [
+              "none",
+              "eab",
+              "oauth"
+            ],
+            "title": "Auth Mode",
+            "type": "string"
+          },
+          "ca_bundle_set": {
+            "description": "Extra trusted roots are configured.",
+            "title": "Ca Bundle Set",
+            "type": "boolean"
+          },
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "directory_url": {
+            "title": "Directory Url",
+            "type": "string"
+          },
+          "eab_configured": {
+            "title": "Eab Configured",
+            "type": "boolean"
+          },
+          "eab_kid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eab Kid"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "oauth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcmeOauthRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oauth_secret_set": {
+            "title": "Oauth Secret Set",
+            "type": "boolean"
+          },
+          "preset": {
+            "title": "Preset",
+            "type": "string"
+          },
+          "terms_agreed": {
+            "title": "Terms Agreed",
+            "type": "boolean"
+          },
+          "used_by": {
+            "description": "Certificates that name this provider.",
+            "title": "Used By",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "preset",
+          "directory_url",
+          "email",
+          "auth_mode",
+          "eab_kid",
+          "eab_configured",
+          "oauth",
+          "oauth_secret_set",
+          "account_registered",
+          "ca_bundle_set",
+          "terms_agreed",
+          "enabled",
+          "default",
+          "used_by",
+          "version"
+        ],
+        "title": "AcmeProviderRead",
+        "type": "object"
+      },
+      "AcmeProviderTestRead": {
+        "additionalProperties": false,
+        "description": "Result of testing a provider: the directory, then the EAB credentials, then the account.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "external_account_required": {
+            "title": "External Account Required",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "stages": {
+            "description": "The steps in order; the list stops at the first one that fails.",
+            "items": {
+              "$ref": "#/components/schemas/AcmeTestStageRead"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "tos_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tos Url"
+          }
+        },
+        "required": [
+          "ok",
+          "detail",
+          "stages",
+          "tos_url",
+          "external_account_required"
+        ],
+        "title": "AcmeProviderTestRead",
+        "type": "object"
+      },
+      "AcmeTestStageRead": {
+        "additionalProperties": false,
+        "description": "One step of a connection test.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "enum": [
+              "directory",
+              "eab",
+              "account"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "ok",
+          "detail"
+        ],
+        "title": "AcmeTestStageRead",
+        "type": "object"
+      },
       "Action": {
         "description": "What an operation does to its object.",
         "enum": [
@@ -1564,9 +2259,79 @@
         "additionalProperties": false,
         "description": "Body of ``POST /certificates/issue``.",
         "properties": {
+          "acme_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ACME provider name (`acme` only). The default provider when empty.",
+            "title": "Acme Provider"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dns-01",
+                  "http-01"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`dns-01` (default) or `http-01`. HTTP-01 cannot validate wildcard names.",
+            "title": "Challenge"
+          },
+          "dns_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "DNS credential name for `dns-01`. Chosen by zone when empty.",
+            "title": "Dns Provider"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "renew_before_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How long before expiry an automatic renewal starts.",
+            "title": "Renew Before Days"
+          },
+          "renew_policy": {
+            "anyOf": [
+              {
+                "enum": [
+                  "auto",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Defaults to `auto` for a new certificate.",
+            "title": "Renew Policy"
           },
           "sans": {
             "items": {
@@ -1656,8 +2421,29 @@
       },
       "Certificate": {
         "additionalProperties": false,
-        "description": "Certificate metadata. Key material lives in OpenBao; only ``secret_ref`` is stored.\n\nAttributes:\n    source: Where it came from.\n    sans: Subject alternative names; wildcards cover one label.\n    not_after: Expiry (timezone-aware).\n    secret_ref: OpenBao path of the PEM bundle.\n    renew_policy: Whether the controller renews it.\n    renew_before_days: How many days before ``not_after`` an ``auto`` certificate is\n        renewed (the artboard's \"Auto, 30 days before\").\n    ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate\n        (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not\n        ``cloudflare_origin``.\n    purpose: ``server`` (a certificate with a key that a port presents) or ``client_ca``\n        (trusted CA certificates, no key, that a port uses to check client certificates).\n    crl_secret_ref: OpenBao path of a PEM certificate revocation list (``client_ca`` only).",
+        "description": "Certificate metadata. Key material lives in OpenBao; only ``secret_ref`` is stored.\n\nAttributes:\n    source: Where it came from.\n    sans: Subject alternative names; wildcards cover one label.\n    not_after: Expiry (timezone-aware).\n    secret_ref: OpenBao path of the PEM bundle.\n    renew_policy: Whether the controller renews it.\n    renew_before_days: How many days before ``not_after`` an ``auto`` certificate is\n        renewed (the artboard's \"Auto, 30 days before\").\n    ocsp_stapling: Let the engine fetch and staple OCSP responses for this certificate\n        (HAProxy ``ocsp-update``). Needs a certificate with an OCSP responder, so not\n        ``cloudflare_origin``.\n    purpose: ``server`` (a certificate with a key that a port presents) or ``client_ca``\n        (trusted CA certificates, no key, that a port uses to check client certificates).\n    crl_secret_ref: OpenBao path of a PEM certificate revocation list (``client_ca`` only).\n    acme_provider: Name of the ACME provider that issues and renews it (``acme`` only; the\n        default provider when empty).\n    challenge: ``dns-01`` (the default) or ``http-01`` (``acme`` only; no wildcard names).\n    dns_provider: Name of the DNS credential that publishes the DNS-01 records (``dns-01``\n        only; chosen by zone when empty).",
         "properties": {
+          "acme_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acme Provider"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcmeChallenge"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crl_secret_ref": {
             "anyOf": [
               {
@@ -1668,6 +2454,17 @@
               }
             ],
             "title": "Crl Secret Ref"
+          },
+          "dns_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dns Provider"
           },
           "id": {
             "format": "uuid",
@@ -1749,6 +2546,27 @@
       "CertificateCreate": {
         "additionalProperties": false,
         "properties": {
+          "acme_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acme Provider"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcmeChallenge"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crl_secret_ref": {
             "anyOf": [
               {
@@ -1759,6 +2577,17 @@
               }
             ],
             "title": "Crl Secret Ref"
+          },
+          "dns_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dns Provider"
           },
           "name": {
             "title": "Name",
@@ -1822,6 +2651,27 @@
       "CertificatePatch": {
         "additionalProperties": false,
         "properties": {
+          "acme_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acme Provider"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcmeChallenge"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crl_secret_ref": {
             "anyOf": [
               {
@@ -1832,6 +2682,17 @@
               }
             ],
             "title": "Crl Secret Ref"
+          },
+          "dns_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dns Provider"
           },
           "name": {
             "anyOf": [
@@ -1946,6 +2807,27 @@
         "additionalProperties": false,
         "description": "Certificate as returned by the API.",
         "properties": {
+          "acme_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acme Provider"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcmeChallenge"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "changed_fields": {
             "description": "Fields a draft changed; empty outside a draft.",
             "items": {
@@ -1964,6 +2846,17 @@
               }
             ],
             "title": "Crl Secret Ref"
+          },
+          "dns_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dns Provider"
           },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
@@ -2645,6 +3538,414 @@
           "labels"
         ],
         "title": "DiscoveryGroup",
+        "type": "object"
+      },
+      "DnsCandidateRead": {
+        "additionalProperties": false,
+        "description": "A credential that could publish records for a name.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The zone that matched; empty for a credential without a zone list.",
+            "title": "Zone"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "zone"
+        ],
+        "title": "DnsCandidateRead",
+        "type": "object"
+      },
+      "DnsFieldRead": {
+        "additionalProperties": false,
+        "description": "One field of a DNS provider type's form.",
+        "properties": {
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Used when the field is left empty.",
+            "title": "Default"
+          },
+          "help": {
+            "title": "Help",
+            "type": "string"
+          },
+          "key": {
+            "description": "Name in `config`, or in `credentials` when `secret`.",
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "select",
+              "textarea"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "options": {
+            "description": "Allowed values of a `select`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "secret": {
+            "description": "Write-only: sent in `credentials`, never returned.",
+            "title": "Secret",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "kind",
+          "required",
+          "secret",
+          "help",
+          "options",
+          "default"
+        ],
+        "title": "DnsFieldRead",
+        "type": "object"
+      },
+      "DnsNameMatchRead": {
+        "additionalProperties": false,
+        "description": "The credentials that cover one name, best first.",
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/DnsCandidateRead"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "candidates"
+        ],
+        "title": "DnsNameMatchRead",
+        "type": "object"
+      },
+      "DnsProviderIn": {
+        "additionalProperties": false,
+        "description": "Create a DNS credential.",
+        "properties": {
+          "config": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The non-secret fields.",
+            "title": "Config",
+            "type": "object"
+          },
+          "credentials": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "The secret fields. Stored in the secrets backend.",
+            "title": "Credentials",
+            "type": "object"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "description": "One of the types from `GET /dns-provider-types`.",
+            "title": "Type",
+            "type": "string"
+          },
+          "zones": {
+            "description": "Domains this credential serves, for example `example.test`. The longest match wins; a credential without zones serves every name nobody else claims.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ],
+        "title": "DnsProviderIn",
+        "type": "object"
+      },
+      "DnsProviderPatch": {
+        "additionalProperties": false,
+        "description": "Change a DNS credential; send only what changes.",
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Settings to set (merged with the stored ones).",
+            "title": "Config"
+          },
+          "credentials": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Secret fields to replace; the others keep their stored value.",
+            "title": "Credentials"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "zones": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zones"
+          }
+        },
+        "title": "DnsProviderPatch",
+        "type": "object"
+      },
+      "DnsProviderRead": {
+        "additionalProperties": false,
+        "description": "A DNS credential (never any secret).",
+        "properties": {
+          "config": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Config",
+            "type": "object"
+          },
+          "credentials_set": {
+            "title": "Credentials Set",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "zones": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "zones",
+          "config",
+          "credentials_set",
+          "enabled",
+          "version"
+        ],
+        "title": "DnsProviderRead",
+        "type": "object"
+      },
+      "DnsProviderTestIn": {
+        "additionalProperties": false,
+        "description": "Optionally name the zone to test in.",
+        "properties": {
+          "zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Test only this zone. By default every zone of the credential is tested.",
+            "title": "Zone"
+          }
+        },
+        "title": "DnsProviderTestIn",
+        "type": "object"
+      },
+      "DnsProviderTestRead": {
+        "additionalProperties": false,
+        "description": "Result of publishing and removing a test TXT record in each zone of a credential.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "zones": {
+            "items": {
+              "$ref": "#/components/schemas/DnsZoneTestRead"
+            },
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "detail",
+          "zones"
+        ],
+        "title": "DnsProviderTestRead",
+        "type": "object"
+      },
+      "DnsProviderTypeRead": {
+        "additionalProperties": false,
+        "description": "A kind of DNS provider and the form it needs.",
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/DnsFieldRead"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "supports_zone_discovery": {
+            "description": "The provider finds the zone of a name itself; `zones` then only chooses between credentials.",
+            "title": "Supports Zone Discovery",
+            "type": "boolean"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "label",
+          "fields",
+          "supports_zone_discovery"
+        ],
+        "title": "DnsProviderTypeRead",
+        "type": "object"
+      },
+      "DnsZoneTestRead": {
+        "additionalProperties": false,
+        "description": "The test in one zone.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "zone": {
+            "title": "Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone",
+          "ok",
+          "detail"
+        ],
+        "title": "DnsZoneTestRead",
         "type": "object"
       },
       "DraftStatus": {
@@ -4469,6 +5770,50 @@
           "out_bytes"
         ],
         "title": "IpvsRealServerStatus",
+        "type": "object"
+      },
+      "IssueCheckRead": {
+        "additionalProperties": false,
+        "description": "What is wrong with a certificate request, if anything.",
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/IssueProblemRead"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "problems"
+        ],
+        "title": "IssueCheckRead",
+        "type": "object"
+      },
+      "IssueProblemRead": {
+        "additionalProperties": false,
+        "description": "One finding of a certificate request check.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "description": "Field path, for example `sans[1]` or `acme_provider`.",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ],
+        "title": "IssueProblemRead",
         "type": "object"
       },
       "Job": {
@@ -6861,10 +8206,12 @@
           },
           "object": {
             "enum": [
+              "acme_provider",
               "application",
               "break_glass",
               "certificate",
               "change_set",
+              "dns_provider",
               "draft",
               "engine",
               "enrollment_token",
@@ -8002,6 +9349,232 @@
         ],
         "title": "RenewPolicy",
         "type": "string"
+      },
+      "RenewalRead": {
+        "additionalProperties": false,
+        "description": "One issuance or renewal attempt.",
+        "properties": {
+          "acme_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acme Provider"
+          },
+          "certificate": {
+            "title": "Certificate",
+            "type": "string"
+          },
+          "challenge": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Challenge"
+          },
+          "change_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The `system:certs` change set it opened.",
+            "title": "Change Set Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The CA's or provider's error, quoted.",
+            "title": "Error"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "title": "Finished At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "not_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Expiry of the certificate it obtained.",
+            "title": "Not After"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "trigger": {
+            "enum": [
+              "manual",
+              "auto"
+            ],
+            "title": "Trigger",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "certificate",
+          "trigger",
+          "started_at",
+          "finished_at",
+          "ok",
+          "error",
+          "change_set_id",
+          "not_after",
+          "acme_provider",
+          "challenge"
+        ],
+        "title": "RenewalRead",
+        "type": "object"
+      },
+      "RenewalStatusRead": {
+        "additionalProperties": false,
+        "description": "When a certificate renews and how the last attempts went.",
+        "properties": {
+          "certificate": {
+            "title": "Certificate",
+            "type": "string"
+          },
+          "certificate_id": {
+            "format": "uuid",
+            "title": "Certificate Id",
+            "type": "string"
+          },
+          "failures_in_a_row": {
+            "title": "Failures In A Row",
+            "type": "integer"
+          },
+          "issuer": {
+            "description": "The ACME provider, or the kind of source.",
+            "title": "Issuer",
+            "type": "string"
+          },
+          "last_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Ok"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "not_after": {
+            "format": "date-time",
+            "title": "Not After",
+            "type": "string"
+          },
+          "renew_before_days": {
+            "title": "Renew Before Days",
+            "type": "integer"
+          },
+          "renew_due_at": {
+            "description": "`not_after` minus `renew_before_days`.",
+            "format": "date-time",
+            "title": "Renew Due At",
+            "type": "string"
+          },
+          "renew_policy": {
+            "enum": [
+              "auto",
+              "manual"
+            ],
+            "title": "Renew Policy",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "certificate_id",
+          "certificate",
+          "source",
+          "issuer",
+          "not_after",
+          "renew_policy",
+          "renew_before_days",
+          "renew_due_at",
+          "last_attempt_at",
+          "last_ok",
+          "last_error",
+          "last_success_at",
+          "failures_in_a_row"
+        ],
+        "title": "RenewalStatusRead",
+        "type": "object"
       },
       "RevisionRead": {
         "additionalProperties": false,
@@ -12273,6 +13846,830 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/acme-provider-presets": {
+      "get": {
+        "description": "Let's Encrypt, ZeroSSL, Google, Buypass, Keyfactor and a custom entry.\n\n**Access:** Any authenticated caller.",
+        "operationId": "list_acme_presets_api_v1_acme_provider_presets_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "auth_mode": "none",
+                    "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                    "eab_required": false,
+                    "key": "letsencrypt",
+                    "label": "Let's Encrypt",
+                    "note": "Free certificates, rate limited; use staging for tests."
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AcmePresetRead"
+                  },
+                  "title": "Response List Acme Presets Api V1 Acme Provider Presets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Known certificate authorities",
+        "tags": [
+          "acme providers"
+        ],
+        "x-required-role": "authenticated"
+      }
+    },
+    "/api/v1/acme-providers": {
+      "get": {
+        "description": "Every provider, by name. Everyone signed in can read them so they can choose one.\n\n**Access:** Any authenticated caller.",
+        "operationId": "list_acme_providers_api_v1_acme_providers_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "account_registered": true,
+                    "auth_mode": "none",
+                    "ca_bundle_set": false,
+                    "default": true,
+                    "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                    "eab_configured": false,
+                    "email": "pki@example.test",
+                    "enabled": true,
+                    "id": "0192f1a2-0000-7000-8000-00000000a501",
+                    "name": "letsencrypt",
+                    "oauth_secret_set": false,
+                    "preset": "letsencrypt",
+                    "terms_agreed": true,
+                    "used_by": 3,
+                    "version": 1
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AcmeProviderRead"
+                  },
+                  "title": "Response List Acme Providers Api V1 Acme Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List ACME providers",
+        "tags": [
+          "acme providers"
+        ],
+        "x-required-role": "authenticated"
+      },
+      "post": {
+        "description": "Register a certificate authority. The controller creates the ACME account key itself.\n\nSecrets (`eab_hmac_key`, `oauth_client_secret`) go to the secrets backend and are never\nreturned. Call the test endpoint to register the account at the CA.\n\n**Access:** `system-admin` only.",
+        "operationId": "create_acme_provider_api_v1_acme_providers_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "default": true,
+                "email": "pki@example.test",
+                "name": "letsencrypt",
+                "preset": "letsencrypt",
+                "terms_agreed": true
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AcmeProviderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "account_registered": true,
+                  "auth_mode": "none",
+                  "ca_bundle_set": false,
+                  "default": true,
+                  "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                  "eab_configured": false,
+                  "email": "pki@example.test",
+                  "enabled": true,
+                  "id": "0192f1a2-0000-7000-8000-00000000a501",
+                  "name": "letsencrypt",
+                  "oauth_secret_set": false,
+                  "preset": "letsencrypt",
+                  "terms_agreed": true,
+                  "used_by": 3,
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AcmeProviderRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Register an ACME provider",
+        "tags": [
+          "acme providers"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/acme-providers/{provider}": {
+      "delete": {
+        "description": "Remove a provider that no certificate uses (`409` otherwise).\n\n**Access:** `system-admin` only.",
+        "operationId": "delete_acme_provider_api_v1_acme_providers__provider__delete",
+        "parameters": [
+          {
+            "description": "Identity provider id.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The object's version as a quoted integer (the `ETag` of a read), for example `\"3\"`.",
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Remove an ACME provider",
+        "tags": [
+          "acme providers"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "get": {
+        "description": "One provider with its version in the `ETag`.\n\n**Access:** Any authenticated caller.",
+        "operationId": "get_acme_provider_api_v1_acme_providers__provider__get",
+        "parameters": [
+          {
+            "description": "Identity provider id.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "account_registered": true,
+                  "auth_mode": "none",
+                  "ca_bundle_set": false,
+                  "default": true,
+                  "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                  "eab_configured": false,
+                  "email": "pki@example.test",
+                  "enabled": true,
+                  "id": "0192f1a2-0000-7000-8000-00000000a501",
+                  "name": "letsencrypt",
+                  "oauth_secret_set": false,
+                  "preset": "letsencrypt",
+                  "terms_agreed": true,
+                  "used_by": 3,
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AcmeProviderRead"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "ETag": {
+                "description": "The object's version as a quoted integer, for example `\"3\"`. Send it back as `If-Match` on PATCH and DELETE.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get an ACME provider",
+        "tags": [
+          "acme providers"
+        ],
+        "x-required-role": "authenticated"
+      },
+      "patch": {
+        "description": "Change settings or replace secrets.\n\nChanging the directory or the authentication means the account has to be registered again\n(run the test).\n\n**Access:** `system-admin` only.",
+        "operationId": "patch_acme_provider_api_v1_acme_providers__provider__patch",
+        "parameters": [
+          {
+            "description": "Identity provider id.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The object's version as a quoted integer (the `ETag` of a read), for example `\"3\"`.",
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "default": true,
+                "email": "certs@example.test"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AcmeProviderPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "account_registered": true,
+                  "auth_mode": "none",
+                  "ca_bundle_set": false,
+                  "default": true,
+                  "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+                  "eab_configured": false,
+                  "email": "pki@example.test",
+                  "enabled": true,
+                  "id": "0192f1a2-0000-7000-8000-00000000a501",
+                  "name": "letsencrypt",
+                  "oauth_secret_set": false,
+                  "preset": "letsencrypt",
+                  "terms_agreed": true,
+                  "used_by": 3,
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AcmeProviderRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Change an ACME provider",
+        "tags": [
+          "acme providers"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/acme-providers/{provider}/test": {
+      "post": {
+        "description": "Contact the CA, sign in (EAB or OAuth) and register the account or find it.\n\nAlways answers `200`; `ok: false` carries the reason. A success sets `account_registered`.\n\n**Access:** `system-admin` only.",
+        "operationId": "test_acme_provider_api_v1_acme_providers__provider__test_post",
+        "parameters": [
+          {
+            "description": "Identity provider id.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+                  "external_account_required": false,
+                  "ok": true,
+                  "stages": [
+                    {
+                      "detail": "reachable",
+                      "name": "directory",
+                      "ok": true
+                    },
+                    {
+                      "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+                      "name": "account",
+                      "ok": true
+                    }
+                  ],
+                  "tos_url": "https://letsencrypt.org/documents/LE-SA-v1.5.pdf"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AcmeProviderTestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Register the account at the CA",
+        "tags": [
+          "acme providers"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
     "/api/v1/audit-actions": {
       "get": {
         "description": "Every `action` an audit event can carry, with its category (the part before the dot) and a one-sentence description, for labels and filters. Any authenticated caller.\n\n**Access:** Any authenticated caller.",
@@ -13683,6 +16080,110 @@
           "meta"
         ],
         "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/dns-provider-types": {
+      "get": {
+        "description": "Each type lists its fields; `secret` fields are write-only. Render the form from this.\n\n**Access:** Any authenticated caller.",
+        "operationId": "list_dns_provider_types_api_v1_dns_provider_types_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "fields": [
+                      {
+                        "help": "A token with Zone:Read and DNS:Edit on the zones you validate.",
+                        "key": "api_token",
+                        "kind": "text",
+                        "label": "API token",
+                        "options": [],
+                        "required": true,
+                        "secret": true
+                      }
+                    ],
+                    "label": "Cloudflare",
+                    "supports_zone_discovery": true,
+                    "type": "cloudflare"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DnsProviderTypeRead"
+                  },
+                  "title": "Response List Dns Provider Types Api V1 Dns Provider Types Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "DNS provider types and their forms",
+        "tags": [
+          "dns providers"
+        ],
+        "x-required-role": "authenticated"
       }
     },
     "/api/v1/enroll": {
@@ -17972,6 +20473,118 @@
         "x-required-role": "viewer"
       }
     },
+    "/api/v1/tenants/{t}/certificate-renewals": {
+      "get": {
+        "description": "For each server certificate: issuer, expiry, when renewal starts and the last result.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "renewal_status_api_v1_tenants__t__certificate_renewals_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "certificate": "web-example",
+                    "certificate_id": "0192f1a2-0000-7000-8000-00000000f501",
+                    "failures_in_a_row": 0,
+                    "issuer": "letsencrypt",
+                    "last_attempt_at": "2026-10-12T02:00:00Z",
+                    "last_ok": true,
+                    "last_success_at": "2026-10-12T02:01:10Z",
+                    "not_after": "2027-01-10T02:01:00Z",
+                    "renew_before_days": 30,
+                    "renew_due_at": "2026-12-11T02:01:00Z",
+                    "renew_policy": "auto",
+                    "source": "acme"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RenewalStatusRead"
+                  },
+                  "title": "Response Renewal Status Api V1 Tenants  T  Certificate Renewals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Renewal status of every certificate",
+        "tags": [
+          "certificates"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
     "/api/v1/tenants/{t}/certificates": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
@@ -18764,7 +21377,12 @@
           "content": {
             "application/json": {
               "example": {
+                "acme_provider": "letsencrypt",
+                "challenge": "dns-01",
+                "dns_provider": "cloudflare-main",
                 "name": "web-example",
+                "renew_before_days": 30,
+                "renew_policy": "auto",
                 "sans": [
                   "www.example.test"
                 ],
@@ -18843,6 +21461,136 @@
           }
         },
         "summary": "Issue a certificate (ACME or Cloudflare Origin CA)",
+        "tags": [
+          "certificates"
+        ],
+        "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/certificates/issue/check": {
+      "post": {
+        "description": "Run the checks the issue call runs, and return every finding with its field path.\n\nUse it while the request sheet is open: the ACME provider must exist, each name needs a DNS\ncredential that covers it (DNS-01), and an HTTP-01 name must lead to one of the tenant's\nHTTP services on port 80. Always answers `200`; `ok: false` lists the problems.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "check_certificate_request_api_v1_tenants__t__certificates_issue_check_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "challenge": "dns-01",
+                "name": "web-example",
+                "sans": [
+                  "www.example.test",
+                  "*.example.test"
+                ],
+                "source": "acme"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CertIssueIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "ok": false,
+                  "problems": [
+                    {
+                      "message": "no DNS credential covers this name",
+                      "path": "sans[1]"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/IssueCheckRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Check a certificate request without queueing it",
         "tags": [
           "certificates"
         ],
@@ -18963,6 +21711,141 @@
           "certificates"
         ],
         "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/certificates/{certificate}/renewals": {
+      "get": {
+        "description": "Issuance and renewal attempts, newest first, with the CA's error when one failed.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "renewal_history_api_v1_tenants__t__certificates__certificate__renewals_get",
+        "parameters": [
+          {
+            "description": "Certificate id.",
+            "in": "path",
+            "name": "certificate",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Page size.",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "acme_provider": "letsencrypt",
+                    "certificate": "web-example",
+                    "challenge": "dns-01",
+                    "change_set_id": "0192f1a2-0000-7000-8000-00000000c501",
+                    "finished_at": "2026-10-12T02:01:10Z",
+                    "id": "0192f1a2-0000-7000-8000-00000000e501",
+                    "not_after": "2027-01-10T02:01:00Z",
+                    "ok": true,
+                    "started_at": "2026-10-12T02:00:00Z",
+                    "trigger": "auto"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RenewalRead"
+                  },
+                  "title": "Response Renewal History Api V1 Tenants  T  Certificates  Certificate  Renewals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Renewal history of a certificate",
+        "tags": [
+          "certificates"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/certificates/{certificate}/replace": {
@@ -21263,6 +24146,956 @@
           "change-sets"
         ],
         "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/dns-providers": {
+      "get": {
+        "description": "The credentials DNS-01 can use, by name. Secrets are never returned.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_dns_providers_api_v1_tenants__t__dns_providers_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "config": {},
+                    "credentials_set": true,
+                    "enabled": true,
+                    "id": "0192f1a2-0000-7000-8000-00000000d501",
+                    "name": "cloudflare-main",
+                    "type": "cloudflare",
+                    "version": 1,
+                    "zones": [
+                      "example.test"
+                    ]
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DnsProviderRead"
+                  },
+                  "title": "Response List Dns Providers Api V1 Tenants  T  Dns Providers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List the tenant's DNS credentials",
+        "tags": [
+          "dns providers"
+        ],
+        "x-required-role": "viewer"
+      },
+      "post": {
+        "description": "Add a credential for a provider type.\n\nValidation errors name the field, for example `credentials.api_token`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "create_dns_provider_api_v1_tenants__t__dns_providers_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "config": {},
+                "credentials": {
+                  "api_token": "example-token"
+                },
+                "name": "cloudflare-main",
+                "type": "cloudflare",
+                "zones": [
+                  "example.test"
+                ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/DnsProviderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "config": {},
+                  "credentials_set": true,
+                  "enabled": true,
+                  "id": "0192f1a2-0000-7000-8000-00000000d501",
+                  "name": "cloudflare-main",
+                  "type": "cloudflare",
+                  "version": 1,
+                  "zones": [
+                    "example.test"
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DnsProviderRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Add a DNS credential",
+        "tags": [
+          "dns providers"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/dns-providers/match": {
+      "get": {
+        "description": "For each name, the tenant's enabled credentials whose zones cover it, longest zone first.\n\nA credential without a zone list comes last. An empty `candidates` list means the name\ncannot be validated with DNS-01 until a credential covers it.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "match_dns_providers_api_v1_tenants__t__dns_providers_match_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Names to look up (repeat the parameter); wildcards ok.",
+            "in": "query",
+            "name": "names",
+            "required": true,
+            "schema": {
+              "description": "Names to look up (repeat the parameter); wildcards ok.",
+              "items": {
+                "type": "string"
+              },
+              "title": "Names",
+              "type": "array"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "candidates": [
+                      {
+                        "id": "0192f1a2-0000-7000-8000-00000000d501",
+                        "name": "cloudflare-main",
+                        "type": "cloudflare",
+                        "zone": "example.test"
+                      }
+                    ],
+                    "name": "*.example.test"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DnsNameMatchRead"
+                  },
+                  "title": "Response Match Dns Providers Api V1 Tenants  T  Dns Providers Match Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Which credentials can validate these names",
+        "tags": [
+          "dns providers"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/dns-providers/{provider}": {
+      "delete": {
+        "description": "Remove a credential that no certificate names (`409` otherwise).\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "delete_dns_provider_api_v1_tenants__t__dns_providers__provider__delete",
+        "parameters": [
+          {
+            "description": "Identity provider id.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The object's version as a quoted integer (the `ETag` of a read), for example `\"3\"`.",
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Remove a DNS credential",
+        "tags": [
+          "dns providers"
+        ],
+        "x-required-role": "tenant-admin"
+      },
+      "get": {
+        "description": "One credential with its version in the `ETag`.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "get_dns_provider_api_v1_tenants__t__dns_providers__provider__get",
+        "parameters": [
+          {
+            "description": "Identity provider id.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "config": {},
+                  "credentials_set": true,
+                  "enabled": true,
+                  "id": "0192f1a2-0000-7000-8000-00000000d501",
+                  "name": "cloudflare-main",
+                  "type": "cloudflare",
+                  "version": 1,
+                  "zones": [
+                    "example.test"
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DnsProviderRead"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "ETag": {
+                "description": "The object's version as a quoted integer, for example `\"3\"`. Send it back as `If-Match` on PATCH and DELETE.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a DNS credential",
+        "tags": [
+          "dns providers"
+        ],
+        "x-required-role": "viewer"
+      },
+      "patch": {
+        "description": "Change zones, settings or secrets; omitted secrets keep their stored value.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "patch_dns_provider_api_v1_tenants__t__dns_providers__provider__patch",
+        "parameters": [
+          {
+            "description": "Identity provider id.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The object's version as a quoted integer (the `ETag` of a read), for example `\"3\"`.",
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "zones": [
+                  "example.test",
+                  "example.org"
+                ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/DnsProviderPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "config": {},
+                  "credentials_set": true,
+                  "enabled": true,
+                  "id": "0192f1a2-0000-7000-8000-00000000d501",
+                  "name": "cloudflare-main",
+                  "type": "cloudflare",
+                  "version": 1,
+                  "zones": [
+                    "example.test"
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DnsProviderRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Change a DNS credential",
+        "tags": [
+          "dns providers"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/dns-providers/{provider}/test": {
+      "post": {
+        "description": "Publish and remove a TXT record under `_switchyard-test.<zone>`.\n\nAlways answers `200`; `ok: false` carries the provider's reason.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "test_dns_provider_api_v1_tenants__t__dns_providers__provider__test_post",
+        "parameters": [
+          {
+            "description": "Identity provider id.",
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "zone": "example.test"
+              },
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DnsProviderTestIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "detail": "every zone works",
+                  "ok": true,
+                  "zones": [
+                    {
+                      "detail": "published and removed _switchyard-test.example.test",
+                      "ok": true,
+                      "zone": "example.test"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DnsProviderTestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Test a DNS credential",
+        "tags": [
+          "dns providers"
+        ],
+        "x-required-role": "tenant-admin"
       }
     },
     "/api/v1/tenants/{t}/engines": {
@@ -36794,6 +40627,14 @@
     {
       "description": "Controller-wide settings (system administrators).",
       "name": "system"
+    },
+    {
+      "description": "Certificate authorities (ACME) and their accounts; system administrators write, everyone signed in reads.",
+      "name": "acme providers"
+    },
+    {
+      "description": "A tenant's DNS credentials for DNS-01 validation, and the catalogue of provider types with their forms.",
+      "name": "dns providers"
     }
   ]
 }

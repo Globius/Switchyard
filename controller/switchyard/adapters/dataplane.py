@@ -19,6 +19,7 @@ import time
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -333,6 +334,34 @@ class DataPlaneEngine:
             (_server_status(r) for r in rows),
             key=lambda s: (s.backend, s.server),
         )
+
+    @staticmethod
+    def _map_entries_path(map_file: str) -> str:
+        return f"{API}/runtime/maps/{quote(map_file.rsplit('/', 1)[-1], safe='')}/entries"
+
+    async def set_map_entry(self, map_file: str, key: str, value: str) -> None:
+        """Add or replace a map entry through the Runtime API, and keep it in the file."""
+        path = self._map_entries_path(map_file)
+        params = {"force_sync": "true"}
+        response = await self._send("POST", path, params=params, json={"key": key, "value": value})
+        if response.status_code == 409:  # the key exists: replace its value
+            response = await self._send(
+                "PUT", f"{path}/{quote(key, safe='')}", params=params, json={"value": value}
+            )
+        if response.status_code == 404:
+            raise HaproxyError(f"{self._name}: map {map_file} is not loaded on this engine")
+        if response.status_code not in (200, 201):
+            raise self._unexpected(f"setting an entry of {map_file}", response)
+
+    async def remove_map_entry(self, map_file: str, key: str) -> None:
+        """Remove a map entry through the Runtime API (a missing entry is fine)."""
+        response = await self._send(
+            "DELETE",
+            f"{self._map_entries_path(map_file)}/{quote(key, safe='')}",
+            params={"force_sync": "true"},
+        )
+        if response.status_code not in (200, 204, 404):
+            raise self._unexpected(f"removing an entry of {map_file}", response)
 
     async def set_server_state(self, backend: str, server: str, state: ServerAdminState) -> None:
         """Set a server's admin state through the Runtime API (no reload)."""

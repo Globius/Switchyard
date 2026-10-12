@@ -9,7 +9,7 @@
 ==> haproxy/haproxy.cfg (haproxy, whole file)
 # Managed by Switchyard. Do not edit: changes are reported as drift.
 # SE group: edge
-# switchyard-render: sha256:3e07031c4c3eca88eac659378ea9f190c278ef203cab23581e4401da64544e9a
+# switchyard-render: sha256:4c6e756ad6cc714999fe8aa6b74b316d60a33b1f2ceffaa844d444116573be04
 
 global
     log /dev/log local0
@@ -49,6 +49,7 @@ frontend vs_external-sni
     option httplog
     option forwardfor
     tcp-request session reject if !{ src -f /etc/switchyard/haproxy/lists/cloudflare-ranges.cidr }
+    http-request return status 200 content-type text/plain lf-string "%[path,map(/etc/switchyard/haproxy/maps/acme-http01.map)]" if { dst_port 80 } { path,map(/etc/switchyard/haproxy/maps/acme-http01.map) -m found }
     http-request set-var(txn.trusted) bool(true) if { src -f /etc/switchyard/haproxy/lists/cloudflare-ranges.cidr }
     http-request set-src hdr(CF-Connecting-IP) if { var(txn.trusted) -m bool } { hdr(CF-Connecting-IP) -m found }
     http-request del-header CF-Connecting-IP if !{ var(txn.trusted) -m bool }
@@ -210,6 +211,9 @@ backend pool_ubiquiti
 198.51.100.0/24
 203.0.113.0/24
 2001:db8:100::/40
+
+==> haproxy/maps/acme-http01.map (plaintext, whole file)
+# ACME HTTP-01 answers are added at run time (Switchyard).
 
 ==> haproxy/maps/external-sni-host.map (plaintext, whole file)
 billing.svc.example.net pool_billing

@@ -872,3 +872,133 @@ SYSTEM_TOKEN_CREATED = {
     "role": "system-admin",
     "expires_at": "2026-11-09T12:00:00Z",
 }
+
+
+DNS_PROVIDER_TYPES = [
+    {
+        "type": "cloudflare",
+        "label": "Cloudflare",
+        "supports_zone_discovery": True,
+        "fields": [
+            {
+                "key": "api_token",
+                "label": "API token",
+                "kind": "text",
+                "required": True,
+                "secret": True,
+                "help": "A token with Zone:Read and DNS:Edit on the zones you validate.",
+                "options": [],
+                "default": None,
+            }
+        ],
+    }
+]
+DNS_PROVIDER = {
+    "id": "0192f1a2-0000-7000-8000-00000000d501",
+    "name": "cloudflare-main",
+    "type": "cloudflare",
+    "zones": ["example.test"],
+    "config": {},
+    "credentials_set": True,
+    "enabled": True,
+    "version": 1,
+}
+DNS_PROVIDER_TEST = {
+    "ok": True,
+    "detail": "every zone works",
+    "zones": [
+        {
+            "zone": "example.test",
+            "ok": True,
+            "detail": "published and removed _switchyard-test.example.test",
+        }
+    ],
+}
+ISSUE_CHECK = {
+    "ok": False,
+    "problems": [{"path": "sans[1]", "message": "no DNS credential covers this name"}],
+}
+RENEWAL = {
+    "id": "0192f1a2-0000-7000-8000-00000000e501",
+    "certificate": "web-example",
+    "trigger": "auto",
+    "started_at": "2026-10-12T02:00:00Z",
+    "finished_at": "2026-10-12T02:01:10Z",
+    "ok": True,
+    "error": None,
+    "change_set_id": "0192f1a2-0000-7000-8000-00000000c501",
+    "not_after": "2027-01-10T02:01:00Z",
+    "acme_provider": "letsencrypt",
+    "challenge": "dns-01",
+}
+RENEWAL_STATUS = {
+    "certificate_id": "0192f1a2-0000-7000-8000-00000000f501",
+    "certificate": "web-example",
+    "source": "acme",
+    "issuer": "letsencrypt",
+    "not_after": "2027-01-10T02:01:00Z",
+    "renew_policy": "auto",
+    "renew_before_days": 30,
+    "renew_due_at": "2026-12-11T02:01:00Z",
+    "last_attempt_at": "2026-10-12T02:00:00Z",
+    "last_ok": True,
+    "last_error": None,
+    "last_success_at": "2026-10-12T02:01:10Z",
+    "failures_in_a_row": 0,
+}
+DNS_MATCH = [
+    {
+        "name": "*.example.test",
+        "candidates": [
+            {
+                "id": "0192f1a2-0000-7000-8000-00000000d501",
+                "name": "cloudflare-main",
+                "type": "cloudflare",
+                "zone": "example.test",
+            }
+        ],
+    }
+]
+ACME_PRESETS = [
+    {
+        "key": "letsencrypt",
+        "label": "Let's Encrypt",
+        "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+        "auth_mode": "none",
+        "eab_required": False,
+        "note": "Free certificates, rate limited; use staging for tests.",
+    }
+]
+ACME_PROVIDER = {
+    "id": "0192f1a2-0000-7000-8000-00000000a501",
+    "name": "letsencrypt",
+    "preset": "letsencrypt",
+    "directory_url": "https://acme-v02.api.letsencrypt.org/directory",
+    "email": "pki@example.test",
+    "auth_mode": "none",
+    "eab_kid": None,
+    "eab_configured": False,
+    "oauth": None,
+    "oauth_secret_set": False,
+    "account_registered": True,
+    "ca_bundle_set": False,
+    "terms_agreed": True,
+    "enabled": True,
+    "default": True,
+    "used_by": 3,
+    "version": 1,
+}
+ACME_PROVIDER_TEST = {
+    "ok": True,
+    "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+    "stages": [
+        {"name": "directory", "ok": True, "detail": "reachable"},
+        {
+            "name": "account",
+            "ok": True,
+            "detail": "account https://acme-v02.api.letsencrypt.org/acme/acct/1",
+        },
+    ],
+    "tos_url": "https://letsencrypt.org/documents/LE-SA-v1.5.pdf",
+    "external_account_required": False,
+}
