@@ -20,11 +20,13 @@ from switchyard.domain import validators as v
 from switchyard.domain.errors import DomainValidationError, Problem
 from switchyard.domain.field_rules import UDP_FORBIDDEN_PORT_FIELDS, UDP_FORBIDDEN_SERVICE_FIELDS
 from switchyard.domain.models import (
+    ATTACHABLE_POLICY_KINDS,
     Algorithm,
     AllowListPolicySet,
     BgpProfile,
     Certificate,
     Entity,
+    ErrorPagesPolicySet,
     HealthMonitor,
     Model,
     MonitorType,
@@ -33,7 +35,6 @@ from switchyard.domain.models import (
     PolicySet,
     Pool,
     Protocol,
-    RedirectPolicySet,
     RoutingProfile,
     SeGroup,
     Tenant,
@@ -306,16 +307,28 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
                         f"certificate {ca.name} is a server certificate, not a client CA",
                     )
                 )
+        error_statuses: set[int] = set()
         for i, pid in enumerate(s.policy_set_ids):
             ps = check_ref(f"{base}.policy_set_ids[{i}]", s.tenant_id, "policy set", pid, policies)
-            if ps is not None and not isinstance(ps, RedirectPolicySet):
+            if ps is not None and not isinstance(ps, ATTACHABLE_POLICY_KINDS):
                 problems.append(
                     Problem(
                         f"{base}.policy_set_ids[{i}]",
                         "wrong_policy_kind",
-                        f"policy set {ps.name} is not a redirect policy set",
+                        f"policy set {ps.name} (kind {ps.kind}) cannot be attached to a service",
                     )
                 )
+            if isinstance(ps, ErrorPagesPolicySet):
+                for page in ps.pages:
+                    if page.status in error_statuses:
+                        problems.append(
+                            Problem(
+                                f"{base}.policy_set_ids[{i}]",
+                                "duplicate_error_page",
+                                f"another error-page policy set already defines {page.status}",
+                            )
+                        )
+                    error_statuses.add(page.status)
         if s.allow_list_id:
             ps = check_ref(
                 f"{base}.allow_list_id", s.tenant_id, "policy set", s.allow_list_id, policies
@@ -591,15 +604,15 @@ def _check_live_traffic(
 
 
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
-    seen: set[tuple[str | None, str | None, str | None]] = set()
+    seen: set[str] = set()
     for i, r in enumerate(s.routes):
-        key = (r.match.host, r.match.path_prefix, r.match.path_exact)
+        key = r.match.model_dump_json()
         if key in seen:
             problems.append(
                 Problem(
                     f"{base}.routes[{i}]",
                     "duplicate_route",
-                    "same host and path match as an earlier route",
+                    "same match as an earlier route",
                 )
             )
         seen.add(key)

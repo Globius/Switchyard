@@ -35,6 +35,8 @@ API write to. (`--out DIR` reproduces that layout under `DIR`.)
 | `haproxy/maps/<service>-host.map` | `host backend` for exact-host routes | a service has an exact host-only route |
 | `haproxy/maps/<service>-wild.map` | `regex backend` for wildcard-host routes | a service has a wildcard host-only route |
 | `haproxy/lists/<policy>.cidr` | one network per line, IPv4 first | a service references an allow-list policy set |
+| `haproxy/lists/<policy>-r<n>.page` | body of rule *n* of a respond policy set | a rule has a body (ADR 0103) |
+| `haproxy/lists/<policy>-e<status>.page` | body of an error page | a service references an error-pages policy set |
 
 `haproxy/haproxy.cfg` has a `# switchyard-render: sha256:<hex>` line, a hash of every file. The Data
 Plane API rewrites the config but keeps comments, so the fingerprint is how drift detection knows what
@@ -82,7 +84,12 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Route `host` (exact) | line in `haproxy/maps/<name>-host.map`; routed by `use_backend %[...map(...)]` |
 | Route `host` (`*.example.test`) | line in `haproxy/maps/<name>-wild.map` with an anchored one-label regex; routed with `map_reg` |
 | Route with `path_prefix` / `path_exact` | `use_backend pool_<n> if { var(txn.host) -m str <host> } { path_beg <path> }` (host condition only when set) |
+| Route with any other condition (`methods`, `headers`, `query`, `source_cidrs`, `sni`) | the same `use_backend ... if` line with one more `{ ... }` per condition (below); only a route that is a host and nothing else uses the maps |
 | Route `redirect` and policy-set redirect rule | `http-request redirect location <target> code <n> if <conditions>` |
+| Policy set `respond` | `http-request return status <n> [content-type <t> file <page>] [hdr Retry-After <s>] [if <conditions>]` per rule (ADR 0103) |
+| Policy set `error_pages` | `http-error status <n> content-type <t> file <page>` per page, in the frontend (ADR 0103) |
+| Policy set `rewrite`, request rule | `http-request set-header\|add-header <Name> "<value>"`, `del-header <Name>`, or `replace-path` / `set-path` for a prefix replacement, `if <conditions>` (ADR 0102) |
+| Policy set `rewrite`, response rule | `http-response set-header\|add-header\|del-header ...`; a rule with a match tests a flag set at request time: `http-request set-var(txn.sy_m<n>) bool(true) if <conditions>` then `http-response ... if { var(txn.sy_m<n>) -m bool }` |
 | Service `allow_list_id` + `enforce_allow_list` | `tcp-request session reject if !{ src -f <dir>/lists/<name>.cidr }` |
 | Service `restore_client_ip_header` | trust flag, `set-src hdr(<H>)` if trusted, `del-header <H>` if not (see below) |
 | Pool `name`, `algorithm` | `backend pool_<name>`, `balance <algorithm>` |
@@ -108,11 +115,38 @@ Server names come from the member name or `<ip>-<port>` with dots and colons tur
 2. **Header hygiene**: restore the client address (below), delete any client `X-Forwarded-For`, set
    `X-Forwarded-Proto`, store the lower-cased `Host` without port in `txn.host`. `option forwardfor`
    then adds the connection's source address.
-3. **Redirects**: HTTP to HTTPS, then policy-set rules in attachment order, then redirect routes by
+3. **Redirects**: HTTP to HTTPS, then `redirect` policy-set rules in attachment order, then redirect routes by
    `order`. First match wins.
-4. **Path routes** by `order`.
-5. **Host routes**: exact host, then wildcard host.
-6. **Default pool**, or HAProxy's 503 when there is none.
+4. **Fixed responses**: `respond` policy-set rules in attachment order. First match answers.
+5. **Request rewrites**: `rewrite` policy-set rules (request phase) in attachment order; each rule sees the effect of the
+   earlier ones. A response rule that has a match records it here as a flag.
+6. **Routing**: conditional routes (any route that is more than a host) by `order`, then host routes (exact host, then
+   wildcard host), then the default pool, or HAProxy's 503 when there is none.
+7. **Response rewrites**: `http-response` rules in attachment order (they come last in the frontend block; HAProxy runs
+   them on the way out).
+
+On a service with a plain (non-TLS) port 80 the ACME HTTP-01 answer (ADR 0080) is the first request rule, before stage 2.
+
+The stages are fixed by kind: a `rewrite` set attached before a `redirect` set still runs after it (ADR 0100). Custom error
+pages (`http-error`) are not a stage; they apply when HAProxy generates the error. A service without these policy sets
+renders only stages 1, 2, 3 (HTTPS and route redirects) and 6.
+
+### Conditions
+
+The conditions of a `match` (routes, redirect, rewrite and respond rules) render as one `{ ... }` block each, ANDed, in this
+order. Values are validated, then re-checked and double-quoted by the renderer.
+
+| Match field | Rendered as |
+| --- | --- |
+| `host` | `{ var(txn.host) -m str <host> }`, or `-m reg '<regex>'` for `*.` wildcards |
+| `path_prefix`, `path_exact` | `{ path_beg <path> }`, `{ path <path> }` |
+| `methods` | `{ method GET POST }` (sorted) |
+| `headers[]` | `{ req.hdr(Name) -m found }`, `!{ req.hdr(Name) -m found }` (absent), `{ req.hdr(Name) -m str\|beg\|end\|sub "<value>" }` |
+| `query[]` | `{ url_param(name) -m found }`, `{ url_param(name) -m str "<value>" }` |
+| `source_cidrs[]` | `{ src 10.0.0.0/8 fd00::/8 }` (IPv4 first, sorted) |
+| `sni` | `{ ssl_fc_sni -m str <name> }`, or `-m reg '<regex>'` for a wildcard |
+
+An empty match (allowed in rewrite and respond rules) renders no `if`, so the rule applies to every request.
 
 Wildcards match exactly one label: `*.example.test` matches `a.example.test`, not `example.test` and
 not `a.b.example.test`. Certificate coverage uses the same rule.
@@ -193,7 +227,7 @@ as `content`, the group's `fingerprint` and, when the object owns only part of t
 | Health monitor | the `backend` block of each pool that uses it |
 | Certificate | its line in the crt-list of each service that serves it |
 | Allow-list policy set | the `.cidr` file |
-| Redirect policy set | the `frontend` block of each service that applies it |
+| Redirect, rewrite, respond and error-pages policy sets | the `frontend` block of each service that applies it; a respond or error-pages set also shows its `.page` files |
 | SE group | every file |
 
 `GET …/change-sets/{cs}/diff` lists each changed file as `{path, status, diff, before, after}`, so a
@@ -204,9 +238,9 @@ diff viewer has both sides. See ADR 0015.
 | Check | Where |
 | --- | --- |
 | Domain rules (references, VIP placement, collisions, SAN coverage) | `switchyard.domain.snapshot.validate_snapshot`, run before every render |
-| Exact output | `controller/tests/golden/<case>/input.yaml` → `expected/`; 11 cases |
+| Exact output | `controller/tests/golden/<case>/input.yaml` → `expected/`; 18 cases |
 | `haproxy -c` in `haproxy:3.2` | `tests/integration/test_golden_haproxy.py`, every golden case, no warnings allowed |
-| Real requests through rendered config | `tests/integration/test_haproxy_behavior.py` |
+| Real requests through rendered config | `tests/integration/test_haproxy_behavior.py` (routing, headers, client IP), `tests/integration/test_haproxy_policies.py` (match model, rewrites, fixed responses, error pages) |
 | Determinism and input-order independence | `tests/unit/render/test_haproxy.py` |
 | Hostile values | `tests/unit/render/test_haproxy.py::TestInjection`, `test_escape.py` |
 

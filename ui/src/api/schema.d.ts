@@ -3674,6 +3674,22 @@ export interface components {
          */
         Action: "create" | "update" | "delete";
         /**
+         * AddHeader
+         * @description Add a header, keeping any existing values.
+         */
+        AddHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "add_header";
+            /** Value */
+            value?: string | null;
+            variable?: components["schemas"]["HeaderVariable"] | null;
+        };
+        /**
          * AdminState
          * @description Operator-controlled pool member state.
          * @enum {string}
@@ -5430,6 +5446,116 @@ export interface components {
             token: string;
         };
         /**
+         * ErrorPage
+         * @description The body HAProxy sends when it generates the error ``status`` itself.
+         */
+        ErrorPage: {
+            /** Body */
+            body: string;
+            /**
+             * Content Type
+             * @default text/html
+             * @enum {string}
+             */
+            content_type: "text/plain" | "text/html" | "application/json";
+            /**
+             * Status
+             * @enum {integer}
+             */
+            status: 400 | 403 | 408 | 500 | 502 | 503 | 504;
+        };
+        /**
+         * ErrorPagesPolicySet
+         * @description Custom pages for the errors HAProxy generates (no server available, timeouts, ...).
+         */
+        ErrorPagesPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** ErrorPagesPolicySetCreate */
+        ErrorPagesPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+        };
+        /** ErrorPagesPolicySetPatch */
+        ErrorPagesPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name?: string | null;
+            /** Pages */
+            pages?: components["schemas"]["ErrorPage"][] | null;
+        };
+        /**
+         * ErrorPagesPolicySetRead
+         * @description ErrorPagesPolicySet as returned by the API.
+         */
+        ErrorPagesPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "error_pages";
+            /** Name */
+            name: string;
+            /** Pages */
+            pages: components["schemas"]["ErrorPage"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
          * ExpiringCertificate
          * @description A certificate that expires within 30 days (or already has).
          */
@@ -5565,6 +5691,34 @@ export interface components {
          * @enum {string}
          */
         HaMode: "bgp" | "vrrp";
+        /**
+         * HeaderMatch
+         * @description Match a request header. ``value`` is required for the comparisons and forbidden otherwise.
+         *
+         *     Example:
+         *         >>> HeaderMatch(name="X-Env", op="equals", value="canary").op
+         *         <HeaderOp.EQUALS: 'equals'>
+         */
+        HeaderMatch: {
+            /** Name */
+            name: string;
+            /** @default equals */
+            op: components["schemas"]["HeaderOp"];
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * HeaderOp
+         * @description How a header match compares: presence, or a literal comparison of the value.
+         * @enum {string}
+         */
+        HeaderOp: "present" | "absent" | "equals" | "prefix" | "suffix" | "contains";
+        /**
+         * HeaderVariable
+         * @description Per-request values a header action can carry, from a fixed list (no expressions).
+         * @enum {string}
+         */
+        HeaderVariable: "client_ip" | "client_port" | "host" | "vip" | "vip_port" | "method" | "tls_version" | "tls_cipher" | "tls_sni" | "request_id";
         /**
          * Health
          * @description Liveness answer.
@@ -5841,6 +5995,12 @@ export interface components {
              */
             path: string;
         };
+        /**
+         * HttpMethod
+         * @description HTTP request methods a match can name.
+         * @enum {string}
+         */
+        HttpMethod: "GET" | "HEAD" | "POST" | "PUT" | "PATCH" | "DELETE" | "OPTIONS";
         /**
          * IdpTestIn
          * @description Start a test sign-in.
@@ -6834,10 +6994,10 @@ export interface components {
             /** Ops */
             ops: components["schemas"]["OpIn"][];
         };
-        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
-        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
+        /** Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]] */
+        Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____: {
             /** Items */
-            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"])[];
+            items: (components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"])[];
             /**
              * Next Cursor
              * @description Opaque cursor of the next page, or null on the last page.
@@ -7417,6 +7577,24 @@ export interface components {
             service_forbidden: string[];
         };
         /**
+         * QueryMatch
+         * @description Match a query-string parameter (``?name=value``).
+         */
+        QueryMatch: {
+            /** Name */
+            name: string;
+            /** @default equals */
+            op: components["schemas"]["QueryOp"];
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * QueryOp
+         * @description How a query-parameter match compares.
+         * @enum {string}
+         */
+        QueryOp: "present" | "equals";
+        /**
          * ReasonIn
          * @description A free-text reason or comment.
          */
@@ -7536,6 +7714,19 @@ export interface components {
         RedirectRule: {
             match: components["schemas"]["RouteMatch"];
             redirect: components["schemas"]["RedirectAction"];
+        };
+        /**
+         * RemoveHeader
+         * @description Remove every value of a header.
+         */
+        RemoveHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "remove_header";
         };
         /**
          * RenderedConfig
@@ -7693,6 +7884,149 @@ export interface components {
             source: string;
         };
         /**
+         * ReplacePrefix
+         * @description Replace a path prefix, on path-segment boundaries (request phase only).
+         *
+         *     ``/api`` to ``/v2`` turns ``/api`` into ``/v2`` and ``/api/x`` into ``/v2/x``; ``/apix`` is
+         *     left alone. A ``to_prefix`` of ``/`` strips the prefix (``/api/x`` becomes ``/x``, ``/api``
+         *     becomes ``/``).
+         */
+        ReplacePrefix: {
+            /** From Prefix */
+            from_prefix: string;
+            /** To Prefix */
+            to_prefix: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "replace_prefix";
+        };
+        /**
+         * RespondPolicySet
+         * @description Fixed responses sent instead of routing (ADR 0103); the first match wins.
+         */
+        RespondPolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RespondPolicySetCreate */
+        RespondPolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+        };
+        /** RespondPolicySetPatch */
+        RespondPolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["ResponseRule"][] | null;
+        };
+        /**
+         * RespondPolicySetRead
+         * @description RespondPolicySet as returned by the API.
+         */
+        RespondPolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "respond";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["ResponseRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * ResponseRule
+         * @description Answer requests that match ``match`` with a fixed response, without asking a pool.
+         *
+         *     Attributes:
+         *         match: Conditions; an empty match answers every request (a maintenance page).
+         *         status: Status code.
+         *         content_type: Media type of ``body``; needed with a body.
+         *         body: Response text; omitted for an empty response.
+         *         retry_after_s: Seconds for a ``Retry-After`` header (only with 429 or 503).
+         */
+        ResponseRule: {
+            /** Body */
+            body?: string | null;
+            /** Content Type */
+            content_type?: ("text/plain" | "text/html" | "application/json") | null;
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /** Retry After S */
+            retry_after_s?: number | null;
+            /**
+             * Status
+             * @enum {integer}
+             */
+            status: 200 | 202 | 204 | 400 | 401 | 403 | 404 | 405 | 410 | 429 | 451 | 500 | 502 | 503 | 504;
+        };
+        /**
          * RevisionRead
          * @description A revision with the full desired state it recorded.
          */
@@ -7742,6 +8076,128 @@ export interface components {
             number: number;
             /** Summary */
             summary: string;
+        };
+        /**
+         * RewritePolicySet
+         * @description Ordered header and URL rewrite rules (ADR 0102).
+         *
+         *     Request rules run after redirects and fixed responses and before routing; response rules run
+         *     on the way out. Rules apply in order within a set and sets in attachment order.
+         */
+        RewritePolicySet: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /** RewritePolicySetCreate */
+        RewritePolicySetCreate: {
+            /**
+             * @description Which kind of object this is. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+        };
+        /** RewritePolicySetPatch */
+        RewritePolicySetPatch: {
+            /**
+             * @description Must equal the object's kind. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name?: string | null;
+            /** Rules */
+            rules?: components["schemas"]["RewriteRule"][] | null;
+        };
+        /**
+         * RewritePolicySetRead
+         * @description RewritePolicySet as returned by the API.
+         */
+        RewritePolicySetRead: {
+            /**
+             * Changed Fields
+             * @description Fields a draft changed; empty outside a draft.
+             */
+            changed_fields: string[];
+            /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
+            draft_status: components["schemas"]["DraftStatus"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "rewrite";
+            /** Name */
+            name: string;
+            /** Rules */
+            rules: components["schemas"]["RewriteRule"][];
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+        };
+        /**
+         * RewriteRule
+         * @description Change a request (before routing) or a response (before it leaves) when ``match`` holds.
+         *
+         *     Attributes:
+         *         phase: ``request`` or ``response``. Response rules match on the request that was made.
+         *         match: Conditions; an empty match applies to every request.
+         *         action: What to change.
+         */
+        RewriteRule: {
+            /** Action */
+            action: components["schemas"]["SetHeader"] | components["schemas"]["AddHeader"] | components["schemas"]["RemoveHeader"] | components["schemas"]["ReplacePrefix"];
+            /**
+             * @default {
+             *       "headers": [],
+             *       "methods": [],
+             *       "query": [],
+             *       "source_cidrs": []
+             *     }
+             */
+            match: components["schemas"]["RouteMatch"];
+            /**
+             * Phase
+             * @default request
+             * @enum {string}
+             */
+            phase: "request" | "response";
         };
         /**
          * Role
@@ -7820,15 +8276,54 @@ export interface components {
         };
         /**
          * RouteMatch
-         * @description Request match: an optional host (exact or ``*.`` wildcard) and an optional path.
+         * @description Request match shared by routes and policy rules; every condition given must hold (AND).
+         *
+         *     Attributes:
+         *         host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).
+         *         path_prefix: Path starts with this.
+         *         path_exact: Path equals this. Not together with ``path_prefix``.
+         *         methods: Request method is one of these.
+         *         headers: Request header conditions, all of which must hold.
+         *         query: Query-string parameter conditions, all of which must hold.
+         *         source_cidrs: Client address is inside one of these networks (after client-IP restoration).
+         *         sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a
+         *             port without TLS.
+         *
+         *     Example:
+         *         >>> RouteMatch(methods=["GET"], path_prefix="/api").is_empty
+         *         False
+         *         >>> RouteMatch().is_empty
+         *         True
          */
         RouteMatch: {
+            /**
+             * Headers
+             * @default []
+             */
+            headers: components["schemas"]["HeaderMatch"][];
             /** Host */
             host?: string | null;
+            /**
+             * Methods
+             * @default []
+             */
+            methods: components["schemas"]["HttpMethod"][];
             /** Path Exact */
             path_exact?: string | null;
             /** Path Prefix */
             path_prefix?: string | null;
+            /**
+             * Query
+             * @default []
+             */
+            query: components["schemas"]["QueryMatch"][];
+            /** Sni */
+            sni?: string | null;
+            /**
+             * Source Cidrs
+             * @default []
+             */
+            source_cidrs: (string)[];
         };
         /**
          * RunningAgentFileRead
@@ -8377,6 +8872,22 @@ export interface components {
             revoked: number;
         };
         /**
+         * SetHeader
+         * @description Set a header, replacing any existing values.
+         */
+        SetHeader: {
+            /** Name */
+            name: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "set_header";
+            /** Value */
+            value?: string | null;
+            variable?: components["schemas"]["HeaderVariable"] | null;
+        };
+        /**
          * Snapshot
          * @description All desired-state objects visible to a render or a validation run.
          *
@@ -8412,7 +8923,7 @@ export interface components {
              * Policy Sets
              * @default []
              */
-            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"])[];
+            policy_sets: (components["schemas"]["RedirectPolicySet"] | components["schemas"]["AllowListPolicySet"] | components["schemas"]["RewritePolicySet"] | components["schemas"]["RespondPolicySet"] | components["schemas"]["ErrorPagesPolicySet"])[];
             /**
              * Pools
              * @default []
@@ -9068,7 +9579,7 @@ export interface components {
          *         routes: L7 routes (``http`` only).
          *         default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.
          *         certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.
-         *         policy_set_ids: Redirect policy sets, applied before routing, in order.
+         *         policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.
          *         allow_list_id: Allow-list policy set (for example the Cloudflare ranges).
          *         enforce_allow_list: Reject connections from sources outside the allow list.
          *         restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real
@@ -19993,7 +20504,7 @@ export interface operations {
                      *       ]
                      *     }
                      */
-                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
+                    "application/json": components["schemas"]["Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"];
                 };
             };
             /** @description `cursor` is not a value this endpoint returned. */
@@ -20084,7 +20595,7 @@ export interface operations {
                  *       ]
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"];
+                "application/json": components["schemas"]["RedirectPolicySetCreate"] | components["schemas"]["AllowListPolicySetCreate"] | components["schemas"]["RewritePolicySetCreate"] | components["schemas"]["RespondPolicySetCreate"] | components["schemas"]["ErrorPagesPolicySetCreate"];
             };
         };
         responses: {
@@ -20201,7 +20712,7 @@ export interface operations {
                      *       "version": 3
                      *     }
                      */
-                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"];
+                    "application/json": components["schemas"]["RedirectPolicySetRead"] | components["schemas"]["AllowListPolicySetRead"] | components["schemas"]["RewritePolicySetRead"] | components["schemas"]["RespondPolicySetRead"] | components["schemas"]["ErrorPagesPolicySetRead"];
                 };
             };
             /** @description Missing, invalid or expired credentials. */
@@ -20379,7 +20890,7 @@ export interface operations {
                  *       "kind": "allow_list"
                  *     }
                  */
-                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"];
+                "application/json": components["schemas"]["RedirectPolicySetPatch"] | components["schemas"]["AllowListPolicySetPatch"] | components["schemas"]["RewritePolicySetPatch"] | components["schemas"]["RespondPolicySetPatch"] | components["schemas"]["ErrorPagesPolicySetPatch"];
             };
         };
         responses: {

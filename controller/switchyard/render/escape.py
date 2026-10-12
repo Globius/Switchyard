@@ -26,6 +26,9 @@ _ARG = re.compile(r"[A-Za-z0-9._~/%:@+,;=*-]+")
 _LOCATION = re.compile(r"[A-Za-z0-9._~/%:@+,;=?&*-]+")
 _HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*")
 _HEADER = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?")
+_VALUE = re.compile(r"[A-Za-z0-9 ._~/:@+,;=*()&!'-]+")
+_PATH = re.compile(r"/[A-Za-z0-9._~/%:@+,;=-]*")
+_PARAM = re.compile(r"[A-Za-z0-9_.-]+")
 
 
 def ident(value: str) -> str:
@@ -86,6 +89,60 @@ def header_name(value: str) -> str:
     if not _HEADER.fullmatch(value):
         raise RenderError(f"unsafe header name {value!r}")
     return value
+
+
+def quoted(value: str) -> str:
+    """Return ``value`` in double quotes if it is a safe literal header value, else raise.
+
+    Example:
+        >>> quoted("max-age=60; includeSubDomains")
+        '"max-age=60; includeSubDomains"'
+        >>> quoted('a"b')
+        Traceback (most recent call last):
+            ...
+        switchyard.render.escape.RenderError: unsafe header value 'a"b'
+    """
+    if not _VALUE.fullmatch(value):
+        raise RenderError(f"unsafe header value {value!r}")
+    return f'"{value}"'
+
+
+def query_param(value: str) -> str:
+    """Return ``value`` if it is a plain query-parameter name, else raise.
+
+    Example:
+        >>> query_param("utm_source")
+        'utm_source'
+    """
+    if not _PARAM.fullmatch(value):
+        raise RenderError(f"unsafe query parameter {value!r}")
+    return value
+
+
+def path_text(value: str) -> str:
+    """Return ``value`` if it is a safe literal path for a ``replace-path`` replacement.
+
+    ``%`` is doubled because the replacement is a log-format string.
+
+    Example:
+        >>> path_text("/v2/a%20b")
+        '/v2/a%%20b'
+    """
+    if not _PATH.fullmatch(value):
+        raise RenderError(f"unsafe path {value!r}")
+    return value.replace("%", "%%")
+
+
+def path_regex(prefix: str) -> str:
+    """Return the regex source for a literal path prefix (``.`` and ``+`` written as classes).
+
+    Example:
+        >>> path_regex("/api/v1.2")
+        '/api/v1[.]2'
+    """
+    if not _PATH.fullmatch(prefix):
+        raise RenderError(f"unsafe path {prefix!r}")
+    return prefix.replace(".", "[.]").replace("+", "[+]")
 
 
 def hostname(value: str) -> str:

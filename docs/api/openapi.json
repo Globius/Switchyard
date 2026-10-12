@@ -883,6 +883,48 @@
         "title": "Action",
         "type": "string"
       },
+      "AddHeader": {
+        "additionalProperties": false,
+        "description": "Add a header, keeping any existing values.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "const": "add_header",
+            "default": "add_header",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "variable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeaderVariable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AddHeader",
+        "type": "object"
+      },
       "AdminState": {
         "description": "Operator-controlled pool member state.",
         "enum": [
@@ -4763,6 +4805,230 @@
         "title": "EnrollmentToken",
         "type": "object"
       },
+      "ErrorPage": {
+        "additionalProperties": false,
+        "description": "The body HAProxy sends when it generates the error ``status`` itself.",
+        "properties": {
+          "body": {
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "content_type": {
+            "default": "text/html",
+            "enum": [
+              "text/plain",
+              "text/html",
+              "application/json"
+            ],
+            "title": "Content Type",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              400,
+              403,
+              408,
+              500,
+              502,
+              503,
+              504
+            ],
+            "title": "Status",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "body"
+        ],
+        "title": "ErrorPage",
+        "type": "object"
+      },
+      "ErrorPagesPolicySet": {
+        "additionalProperties": false,
+        "description": "Custom pages for the errors HAProxy generates (no server available, timeouts, ...).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "error_pages",
+            "default": "error_pages",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorPage"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Pages",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "pages"
+        ],
+        "title": "ErrorPagesPolicySet",
+        "type": "object"
+      },
+      "ErrorPagesPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "error_pages",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorPage"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Pages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "pages"
+        ],
+        "title": "ErrorPagesPolicySetCreate",
+        "type": "object"
+      },
+      "ErrorPagesPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "error_pages",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ErrorPage"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ErrorPagesPolicySetPatch",
+        "type": "object"
+      },
+      "ErrorPagesPolicySetRead": {
+        "additionalProperties": false,
+        "description": "ErrorPagesPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "error_pages",
+            "default": "error_pages",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorPage"
+            },
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Pages",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "pages",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "ErrorPagesPolicySetRead",
+        "type": "object"
+      },
       "ExpiringCertificate": {
         "additionalProperties": false,
         "description": "A certificate that expires within 30 days (or already has).",
@@ -5020,6 +5286,66 @@
           "vrrp"
         ],
         "title": "HaMode",
+        "type": "string"
+      },
+      "HeaderMatch": {
+        "additionalProperties": false,
+        "description": "Match a request header. ``value`` is required for the comparisons and forbidden otherwise.\n\nExample:\n    >>> HeaderMatch(name=\"X-Env\", op=\"equals\", value=\"canary\").op\n    <HeaderOp.EQUALS: 'equals'>",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "op": {
+            "$ref": "#/components/schemas/HeaderOp",
+            "default": "equals"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "HeaderMatch",
+        "type": "object"
+      },
+      "HeaderOp": {
+        "description": "How a header match compares: presence, or a literal comparison of the value.",
+        "enum": [
+          "present",
+          "absent",
+          "equals",
+          "prefix",
+          "suffix",
+          "contains"
+        ],
+        "title": "HeaderOp",
+        "type": "string"
+      },
+      "HeaderVariable": {
+        "description": "Per-request values a header action can carry, from a fixed list (no expressions).",
+        "enum": [
+          "client_ip",
+          "client_port",
+          "host",
+          "vip",
+          "vip_port",
+          "method",
+          "tls_version",
+          "tls_cipher",
+          "tls_sni",
+          "request_id"
+        ],
+        "title": "HeaderVariable",
         "type": "string"
       },
       "Health": {
@@ -5669,6 +5995,20 @@
         },
         "title": "HttpCheck",
         "type": "object"
+      },
+      "HttpMethod": {
+        "description": "HTTP request methods a match can name.",
+        "enum": [
+          "GET",
+          "HEAD",
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE",
+          "OPTIONS"
+        ],
+        "title": "HttpMethod",
+        "type": "string"
       },
       "IdpTestIn": {
         "additionalProperties": false,
@@ -7923,7 +8263,7 @@
         "title": "OpsIn",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
@@ -7931,7 +8271,10 @@
               "discriminator": {
                 "mapping": {
                   "allow_list": "#/components/schemas/AllowListPolicySetRead",
-                  "redirect": "#/components/schemas/RedirectPolicySetRead"
+                  "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
+                  "redirect": "#/components/schemas/RedirectPolicySetRead",
+                  "respond": "#/components/schemas/RespondPolicySetRead",
+                  "rewrite": "#/components/schemas/RewritePolicySetRead"
                 },
                 "propertyName": "kind"
               },
@@ -7941,6 +8284,15 @@
                 },
                 {
                   "$ref": "#/components/schemas/AllowListPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/RewritePolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/RespondPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorPagesPolicySetRead"
                 }
               ]
             },
@@ -7963,7 +8315,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -9333,6 +9685,45 @@
         "title": "ProtocolRulesRead",
         "type": "object"
       },
+      "QueryMatch": {
+        "additionalProperties": false,
+        "description": "Match a query-string parameter (``?name=value``).",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "op": {
+            "$ref": "#/components/schemas/QueryOp",
+            "default": "equals"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "QueryMatch",
+        "type": "object"
+      },
+      "QueryOp": {
+        "description": "How a query-parameter match compares.",
+        "enum": [
+          "present",
+          "equals"
+        ],
+        "title": "QueryOp",
+        "type": "string"
+      },
       "ReasonIn": {
         "additionalProperties": false,
         "description": "A free-text reason or comment.",
@@ -9574,6 +9965,27 @@
           "redirect"
         ],
         "title": "RedirectRule",
+        "type": "object"
+      },
+      "RemoveHeader": {
+        "additionalProperties": false,
+        "description": "Remove every value of a header.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "const": "remove_header",
+            "default": "remove_header",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "RemoveHeader",
         "type": "object"
       },
       "RenderedConfig": {
@@ -9896,6 +10308,298 @@
         "title": "RenewalStatusRead",
         "type": "object"
       },
+      "ReplacePrefix": {
+        "additionalProperties": false,
+        "description": "Replace a path prefix, on path-segment boundaries (request phase only).\n\n``/api`` to ``/v2`` turns ``/api`` into ``/v2`` and ``/api/x`` into ``/v2/x``; ``/apix`` is\nleft alone. A ``to_prefix`` of ``/`` strips the prefix (``/api/x`` becomes ``/x``, ``/api``\nbecomes ``/``).",
+        "properties": {
+          "from_prefix": {
+            "title": "From Prefix",
+            "type": "string"
+          },
+          "to_prefix": {
+            "title": "To Prefix",
+            "type": "string"
+          },
+          "type": {
+            "const": "replace_prefix",
+            "default": "replace_prefix",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_prefix",
+          "to_prefix"
+        ],
+        "title": "ReplacePrefix",
+        "type": "object"
+      },
+      "RespondPolicySet": {
+        "additionalProperties": false,
+        "description": "Fixed responses sent instead of routing (ADR 0103); the first match wins.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "respond",
+            "default": "respond",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ResponseRule"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules"
+        ],
+        "title": "RespondPolicySet",
+        "type": "object"
+      },
+      "RespondPolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "respond",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ResponseRule"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "rules"
+        ],
+        "title": "RespondPolicySetCreate",
+        "type": "object"
+      },
+      "RespondPolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "respond",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ResponseRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "RespondPolicySetPatch",
+        "type": "object"
+      },
+      "RespondPolicySetRead": {
+        "additionalProperties": false,
+        "description": "RespondPolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "respond",
+            "default": "respond",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/ResponseRule"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "RespondPolicySetRead",
+        "type": "object"
+      },
+      "ResponseRule": {
+        "additionalProperties": false,
+        "description": "Answer requests that match ``match`` with a fixed response, without asking a pool.\n\nAttributes:\n    match: Conditions; an empty match answers every request (a maintenance page).\n    status: Status code.\n    content_type: Media type of ``body``; needed with a body.\n    body: Response text; omitted for an empty response.\n    retry_after_s: Seconds for a ``Retry-After`` header (only with 429 or 503).",
+        "properties": {
+          "body": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "text/plain",
+                  "text/html",
+                  "application/json"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "match": {
+            "$ref": "#/components/schemas/RouteMatch",
+            "default": {
+              "headers": [],
+              "methods": [],
+              "query": [],
+              "source_cidrs": []
+            }
+          },
+          "retry_after_s": {
+            "anyOf": [
+              {
+                "maximum": 86400.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After S"
+          },
+          "status": {
+            "enum": [
+              200,
+              202,
+              204,
+              400,
+              401,
+              403,
+              404,
+              405,
+              410,
+              429,
+              451,
+              500,
+              502,
+              503,
+              504
+            ],
+            "title": "Status",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ResponseRule",
+        "type": "object"
+      },
       "RevisionRead": {
         "additionalProperties": false,
         "description": "A revision with the full desired state it recorded.",
@@ -9994,6 +10698,245 @@
           "created_at"
         ],
         "title": "RevisionSummary",
+        "type": "object"
+      },
+      "RewritePolicySet": {
+        "additionalProperties": false,
+        "description": "Ordered header and URL rewrite rules (ADR 0102).\n\nRequest rules run after redirects and fixed responses and before routing; response rules run\non the way out. Rules apply in order within a set and sets in attachment order.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "rewrite",
+            "default": "rewrite",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RewriteRule"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules"
+        ],
+        "title": "RewritePolicySet",
+        "type": "object"
+      },
+      "RewritePolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "rewrite",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RewriteRule"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "rules"
+        ],
+        "title": "RewritePolicySetCreate",
+        "type": "object"
+      },
+      "RewritePolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "rewrite",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/RewriteRule"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rules"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "RewritePolicySetPatch",
+        "type": "object"
+      },
+      "RewritePolicySetRead": {
+        "additionalProperties": false,
+        "description": "RewritePolicySet as returned by the API.",
+        "properties": {
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "rewrite",
+            "default": "rewrite",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/RewriteRule"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Rules",
+            "type": "array"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "rules",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "RewritePolicySetRead",
+        "type": "object"
+      },
+      "RewriteRule": {
+        "additionalProperties": false,
+        "description": "Change a request (before routing) or a response (before it leaves) when ``match`` holds.\n\nAttributes:\n    phase: ``request`` or ``response``. Response rules match on the request that was made.\n    match: Conditions; an empty match applies to every request.\n    action: What to change.",
+        "properties": {
+          "action": {
+            "discriminator": {
+              "mapping": {
+                "add_header": "#/components/schemas/AddHeader",
+                "remove_header": "#/components/schemas/RemoveHeader",
+                "replace_prefix": "#/components/schemas/ReplacePrefix",
+                "set_header": "#/components/schemas/SetHeader"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SetHeader"
+              },
+              {
+                "$ref": "#/components/schemas/AddHeader"
+              },
+              {
+                "$ref": "#/components/schemas/RemoveHeader"
+              },
+              {
+                "$ref": "#/components/schemas/ReplacePrefix"
+              }
+            ],
+            "title": "Action"
+          },
+          "match": {
+            "$ref": "#/components/schemas/RouteMatch",
+            "default": {
+              "headers": [],
+              "methods": [],
+              "query": [],
+              "source_cidrs": []
+            }
+          },
+          "phase": {
+            "default": "request",
+            "enum": [
+              "request",
+              "response"
+            ],
+            "title": "Phase",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "RewriteRule",
         "type": "object"
       },
       "Role": {
@@ -10176,8 +11119,17 @@
       },
       "RouteMatch": {
         "additionalProperties": false,
-        "description": "Request match: an optional host (exact or ``*.`` wildcard) and an optional path.",
+        "description": "Request match shared by routes and policy rules; every condition given must hold (AND).\n\nAttributes:\n    host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).\n    path_prefix: Path starts with this.\n    path_exact: Path equals this. Not together with ``path_prefix``.\n    methods: Request method is one of these.\n    headers: Request header conditions, all of which must hold.\n    query: Query-string parameter conditions, all of which must hold.\n    source_cidrs: Client address is inside one of these networks (after client-IP restoration).\n    sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a\n        port without TLS.\n\nExample:\n    >>> RouteMatch(methods=[\"GET\"], path_prefix=\"/api\").is_empty\n    False\n    >>> RouteMatch().is_empty\n    True",
         "properties": {
+          "headers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HeaderMatch"
+            },
+            "maxItems": 8,
+            "title": "Headers",
+            "type": "array"
+          },
           "host": {
             "anyOf": [
               {
@@ -10188,6 +11140,15 @@
               }
             ],
             "title": "Host"
+          },
+          "methods": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HttpMethod"
+            },
+            "maxItems": 7,
+            "title": "Methods",
+            "type": "array"
           },
           "path_exact": {
             "anyOf": [
@@ -10210,6 +11171,44 @@
               }
             ],
             "title": "Path Prefix"
+          },
+          "query": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/QueryMatch"
+            },
+            "maxItems": 8,
+            "title": "Query",
+            "type": "array"
+          },
+          "sni": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sni"
+          },
+          "source_cidrs": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 16,
+            "title": "Source Cidrs",
+            "type": "array"
           }
         },
         "title": "RouteMatch",
@@ -11528,6 +12527,48 @@
         "title": "SessionsRevoked",
         "type": "object"
       },
+      "SetHeader": {
+        "additionalProperties": false,
+        "description": "Set a header, replacing any existing values.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "const": "set_header",
+            "default": "set_header",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "variable": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeaderVariable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SetHeader",
+        "type": "object"
+      },
       "Snapshot": {
         "additionalProperties": false,
         "description": "All desired-state objects visible to a render or a validation run.\n\nAttributes:\n    tenants: Tenants that own the objects below.\n    networks: Networks.\n    vip_pools: VIP pools.\n    se_groups: SE groups.\n    virtual_services: Virtual services.\n    pools: Pools.\n    health_monitors: Health monitors.\n    certificates: Certificate metadata.\n    policy_sets: Redirect and allow-list policy sets.\n    routing_profiles: VRRP and BGP profiles of SE groups.",
@@ -11562,7 +12603,10 @@
               "discriminator": {
                 "mapping": {
                   "allow_list": "#/components/schemas/AllowListPolicySet",
-                  "redirect": "#/components/schemas/RedirectPolicySet"
+                  "error_pages": "#/components/schemas/ErrorPagesPolicySet",
+                  "redirect": "#/components/schemas/RedirectPolicySet",
+                  "respond": "#/components/schemas/RespondPolicySet",
+                  "rewrite": "#/components/schemas/RewritePolicySet"
                 },
                 "propertyName": "kind"
               },
@@ -11572,6 +12616,15 @@
                 },
                 {
                   "$ref": "#/components/schemas/AllowListPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/RewritePolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/RespondPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/ErrorPagesPolicySet"
                 }
               ]
             },
@@ -12838,7 +13891,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect policy sets, applied before routing, in order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -30080,7 +31133,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -30246,7 +31299,10 @@
                 "discriminator": {
                   "mapping": {
                     "allow_list": "#/components/schemas/AllowListPolicySetCreate",
-                    "redirect": "#/components/schemas/RedirectPolicySetCreate"
+                    "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
+                    "redirect": "#/components/schemas/RedirectPolicySetCreate",
+                    "respond": "#/components/schemas/RespondPolicySetCreate",
+                    "rewrite": "#/components/schemas/RewritePolicySetCreate"
                   },
                   "propertyName": "kind"
                 },
@@ -30256,6 +31312,15 @@
                   },
                   {
                     "$ref": "#/components/schemas/AllowListPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RewritePolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RespondPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ErrorPagesPolicySetCreate"
                   }
                 ],
                 "title": "Body"
@@ -30610,7 +31675,10 @@
                   "discriminator": {
                     "mapping": {
                       "allow_list": "#/components/schemas/AllowListPolicySetRead",
-                      "redirect": "#/components/schemas/RedirectPolicySetRead"
+                      "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
+                      "redirect": "#/components/schemas/RedirectPolicySetRead",
+                      "respond": "#/components/schemas/RespondPolicySetRead",
+                      "rewrite": "#/components/schemas/RewritePolicySetRead"
                     },
                     "propertyName": "kind"
                   },
@@ -30620,6 +31688,15 @@
                     },
                     {
                       "$ref": "#/components/schemas/AllowListPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RewritePolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RespondPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorPagesPolicySetRead"
                     }
                   ],
                   "title": "Response Get Policy Sets Api V1 Tenants  T  Policy Sets  Object Id  Get"
@@ -30785,7 +31862,10 @@
                 "discriminator": {
                   "mapping": {
                     "allow_list": "#/components/schemas/AllowListPolicySetPatch",
-                    "redirect": "#/components/schemas/RedirectPolicySetPatch"
+                    "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
+                    "redirect": "#/components/schemas/RedirectPolicySetPatch",
+                    "respond": "#/components/schemas/RespondPolicySetPatch",
+                    "rewrite": "#/components/schemas/RewritePolicySetPatch"
                   },
                   "propertyName": "kind"
                 },
@@ -30795,6 +31875,15 @@
                   },
                   {
                     "$ref": "#/components/schemas/AllowListPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RewritePolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RespondPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ErrorPagesPolicySetPatch"
                   }
                 ],
                 "title": "Body"
