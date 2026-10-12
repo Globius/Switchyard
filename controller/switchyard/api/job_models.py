@@ -34,6 +34,8 @@ class JobKind(StrEnum):
         POLL_STATUS: Scheduled engine status poll and drift detection.
         GIT_MIRROR: Pushes a revision to the Git mirror.
         GC: Scheduled housekeeping.
+        CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
+            confirmation; reverts it when the window runs out.
     """
 
     APPLY_CHANGE_SET = "apply_change_set"
@@ -47,6 +49,7 @@ class JobKind(StrEnum):
     POLL_STATUS = "poll_status"
     GIT_MIRROR = "git_mirror"
     GC = "gc"
+    CONTROLLER_TICK = "controller_tick"
 
 
 class JobStage(ApiModel):

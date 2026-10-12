@@ -27,6 +27,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
 from switchyard.services.context import Databases
+from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.infra import (
     APPLY_SDN_JOB,
@@ -52,6 +53,7 @@ def build_handlers(
     infra: InfraService | None = None,
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
+    controller: ControllerSettings | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -59,6 +61,8 @@ def build_handlers(
         db: Database handles.
         pipeline: The apply pipeline.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
+        controller: Checks controller settings changes that wait for confirmation; ``None`` skips
+            the ``controller_tick`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
         status: Status poller; when ``None`` the ``poll_status`` kind is not handled.
@@ -87,6 +91,12 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}
+    if controller is not None:
+
+        async def controller_tick(job: Job) -> dict[str, Any]:
+            return {"events": await controller.tick()}
+
+        handlers[CONTROLLER_TICK_JOB] = controller_tick
     if gc is not None:
 
         async def collect_garbage(job: Job) -> dict[str, Any]:

@@ -48,6 +48,7 @@ from switchyard.services.certificates import (
 )
 from switchyard.services.changesets import ChangeSetService
 from switchyard.services.context import Databases
+from switchyard.services.controller_settings import CONTROLLER_TICK_JOB, ControllerSettings
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
@@ -293,9 +294,20 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     status = StatusService(db, engines, secrets)
     certs = certificates(db, secrets)
     handlers = build_handlers(
-        db, pipeline, git_mirror(), status, infra_service(db, secrets), certs, GarbageCollector(db)
+        db,
+        pipeline,
+        git_mirror(),
+        status,
+        infra_service(db, secrets),
+        certs,
+        GarbageCollector(db),
+        ControllerSettings(db, ChangeSetService(db)),
     )
-    schedule = {POLL_STATUS_JOB: timedelta(seconds=10), GC_JOB: timedelta(hours=1)}
+    schedule = {
+        POLL_STATUS_JOB: timedelta(seconds=10),
+        GC_JOB: timedelta(hours=1),
+        CONTROLLER_TICK_JOB: timedelta(seconds=10),
+    }
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

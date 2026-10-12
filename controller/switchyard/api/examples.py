@@ -1002,3 +1002,62 @@ ACME_PROVIDER_TEST = {
     "tos_url": "https://letsencrypt.org/documents/LE-SA-v1.5.pdf",
     "external_account_required": False,
 }
+
+
+CONTROLLER = {
+    "managed": True,
+    "fqdn": "switchyard.example.test",
+    "public_url": "https://switchyard.example.test",
+    "listen": {
+        "vip": "192.0.2.10",
+        "ports": [
+            {"port": 443, "tls": True, "https_redirect_port": None},
+            {"port": 80, "tls": False, "https_redirect_port": 443},
+        ],
+    },
+    "certificate": {
+        "name": "controller",
+        "sans": ["switchyard.example.test"],
+        "not_after": "2027-01-10T02:01:00Z",
+    },
+    "pending": {
+        "state": "waiting",
+        "proposed_by": "user:root",
+        "proposed_at": "2026-10-12T05:00:00Z",
+        "window_s": 120,
+        "expires_at": "2026-10-12T05:02:20Z",
+        "seconds_left": 95,
+        "before": {
+            "fqdn": "switchyard.example.test",
+            "public_url": "https://switchyard.example.test",
+            "vip": "192.0.2.10",
+            "certificate": "controller",
+        },
+        "after": {
+            "fqdn": "sy.example.test",
+            "public_url": "https://sy.example.test",
+            "vip": "192.0.2.11",
+            "certificate": "controller-new",
+        },
+        "change_set_id": "0192f1a2-0000-7000-8000-00000000c601",
+        "revision_before": 7,
+        "revision_after": 8,
+    },
+    "last_result": {
+        "kind": "confirmed",
+        "at": "2026-10-01T09:00:00Z",
+        "by": "user:root",
+        "fqdn": "switchyard.example.test",
+    },
+    "redirect_urls": [
+        {
+            "provider": "authentik",
+            "protocol": "oidc",
+            "redirect_url": "https://sy.example.test/api/v1/auth/callback/authentik",
+        }
+    ],
+    "break_glass": (
+        "On a controller node: `syctl controller status` and `syctl controller revert` need only "
+        "database access; the break-glass login still works."
+    ),
+}

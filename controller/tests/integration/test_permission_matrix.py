@@ -191,6 +191,10 @@ for _path in (
 ):
     ROUTES[("GET", _path)] = READ
 ROUTES[("POST", "/tenants/{t}/certificates/issue/check")] = ("manage", "certificate")
+ROUTES[("GET", "/system/controller")] = ("manage", "controller")
+ROUTES[("PUT", "/system/controller/pending")] = ("manage", "controller")
+ROUTES[("POST", "/system/controller/confirm")] = ("manage", "controller")
+ROUTES[("POST", "/system/controller/revert")] = ("manage", "controller")
 ROUTES[("GET", "/system/settings")] = ("manage", "tenant")
 ROUTES[("PATCH", "/system/settings")] = ("manage", "tenant")
 ROUTES[("GET", "/audit-events/export")] = ("manage", "tenant")
@@ -234,6 +238,7 @@ BODIES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
+    ("PUT", "/system/controller/pending"): {"fqdn": "sy.example.test"},
     ("POST", "/acme-providers"): {"name": "x", "preset": "letsencrypt", "terms_agreed": True},
     ("PATCH", "/acme-providers/{provider}"): {},
     ("POST", "/tenants/{t}/dns-providers"): {

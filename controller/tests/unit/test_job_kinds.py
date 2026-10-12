@@ -8,6 +8,7 @@ from switchyard.services.certificates import (
     SYNC_CLOUDFLARE_IPS_JOB,
 )
 from switchyard.services.changesets import APPLY_JOB, REAPPLY_JOB
+from switchyard.services.controller_settings import CONTROLLER_TICK_JOB
 from switchyard.services.gc import GC_JOB
 from switchyard.services.infra import APPLY_SDN_JOB, DEPLOY_SE_GROUP_JOB, RETIRE_ENGINE_JOB
 
@@ -25,5 +26,6 @@ def test_every_job_kind_is_published() -> None:
         GIT_MIRROR_JOB,
         POLL_STATUS_JOB,
         GC_JOB,
+        CONTROLLER_TICK_JOB,
     }
     assert kinds == {k.value for k in JobKind}

@@ -494,6 +494,12 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     "PATCH /tenants/{t}/role-mappings/{mapping}": {"role": "viewer"},
     "POST /system/break-glass/admin/confirm": {"totp": "123456"},
     "PATCH /system/settings": {"allow_lxc_guests": True},
+    "PUT /system/controller/pending": {
+        "fqdn": "sy.example.test",
+        "vip": "192.0.2.11",
+        "certificate": "controller-new",
+        "confirm_within_s": 120,
+    },
     "PUT /system/break-glass": {"enabled": True, "ttl_minutes": 30, "reason": "SSO outage"},
     "POST /system/break-glass/admin": {"username": "breakglass"},
     "POST /system/tokens": {"name": "bootstrap", "ttl_days": 30},

@@ -7,6 +7,7 @@ draft, ``?apply=true`` opens an implicit single-operation change set and applies
 """
 
 import hmac
+import logging
 import os
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -60,6 +61,8 @@ from switchyard.api.schemas import (
     ChangeSetDiff,
     ChangeSetRead,
     ChangeSetSummary,
+    ControllerChangeIn,
+    ControllerRead,
     DeployIn,
     DiscoveryGroup,
     DnsNameMatchRead,
@@ -167,6 +170,7 @@ from switchyard.services.changesets import (
     require,
 )
 from switchyard.services.context import Databases, Principal
+from switchyard.services.controller_settings import ControllerSettings
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.engines import EngineDetail, EngineService
 from switchyard.services.enrollment import EnrollmentError, EnrollmentService
@@ -230,6 +234,7 @@ class ApiServices:
     settings: SystemSettings = None  # type: ignore[assignment]
     acme_providers: AcmeProviders | None = None
     dns_providers: DnsProviders | None = None
+    controller: ControllerSettings = None  # type: ignore[assignment]
 
 
 def build_services(
@@ -291,6 +296,7 @@ def build_services(
         settings=SystemSettings(db),
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
         dns_providers=DnsProviders(db, secrets) if writer is not None else None,
+        controller=ControllerSettings(db, ChangeSetService(db)),
     )
 
 
@@ -305,6 +311,7 @@ def _services(request: Request) -> ApiServices:
 Services = Annotated[ApiServices, Depends(_services)]
 
 
+log = logging.getLogger("switchyard.api")
 SESSION_COOKIE = "sy_session"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -1259,6 +1266,20 @@ def create_app(
     install_handlers(app)
 
     @app.middleware("http")
+    async def public_origin(request: Request, call_next: Any) -> Response:
+        """Work out the public URL for this request (the confirmed one, or the pending one)."""
+        base = request.app.state.public_url
+        controller = getattr(services, "controller", None)
+        if controller is not None:
+            try:
+                base = await controller.public_url(request.headers.get("host"), base)
+            except Exception:
+                log.warning("could not read the controller settings", exc_info=True)
+        request.state.public_url = base
+        response: Response = await call_next(request)
+        return response
+
+    @app.middleware("http")
     async def request_id(request: Request, call_next: Any) -> Response:
         rid = request.headers.get("x-request-id") or uuid.uuid4().hex
         token = request_id_var.set(rid)
@@ -1337,13 +1358,13 @@ def create_app(
 
     # login
     def callback_url(request: Request, provider: str) -> str:
-        base = request.app.state.public_url or str(request.base_url)
+        base = request.state.public_url or str(request.base_url)
         return f"{base.rstrip('/')}/api/v1/auth/callback/{provider}"
 
     def set_session_cookie(
         request: Request, response: Response, cookie: str, info: SessionInfo
     ) -> None:
-        secure = (request.app.state.public_url or str(request.base_url)).startswith("https")
+        secure = (request.state.public_url or str(request.base_url)).startswith("https")
         response.set_cookie(
             SESSION_COOKIE,
             cookie,
@@ -2648,7 +2669,7 @@ def create_app(
 
     # identity providers
     def idp_json(request: Request, r: IdentityProviderRecord) -> dict[str, Any]:
-        base = (request.app.state.public_url or str(request.base_url)).rstrip("/")
+        base = (request.state.public_url or str(request.base_url)).rstrip("/")
         out: dict[str, Any] = {
             "protocol": r.protocol,
             "id": str(r.id),
@@ -3201,6 +3222,83 @@ def create_app(
             request_id=_rid(),
         )
         return asdict(result)
+
+    @router.get(
+        "/system/controller",
+        tags=["system"],
+        summary="The controller's address, VIP and certificate",
+        response_model=ControllerRead,
+        responses=_ok(ex.CONTROLLER),
+    )
+    async def get_controller(request: Request, who: Who, svc: Services) -> dict[str, Any]:
+        """The public URL in effect and where the `controller` service answers.
+
+        Also its certificate, the change that waits for confirmation (with the seconds left) and
+        the redirect addresses each identity provider must allow for the new FQDN.
+        """
+        view = await svc.controller.view(who, env_public_url=request.app.state.public_url)
+        return asdict(view)
+
+    @router.put(
+        "/system/controller/pending",
+        status_code=202,
+        tags=["system"],
+        summary="Propose a new FQDN, VIP or certificate",
+        response_model=ControllerRead,
+        responses=_ok(ex.CONTROLLER, 202) | VALIDATION_RESPONSE,
+    )
+    async def propose_controller(
+        body: ControllerChangeIn, request: Request, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Validate, then apply the change to the `controller` service.
+
+        It is a change set of the management tenant with a recorded reason. When it has applied,
+        a confirmation window starts.
+
+        Update the identity providers' redirect addresses first (`redirect_urls`). The worker
+        reverts the change if it is not confirmed in time; nothing depends on this API. `409`
+        while another change waits.
+        """
+        view = await svc.controller.propose(
+            who,
+            fqdn=body.fqdn,
+            vip=body.vip,
+            certificate=body.certificate,
+            confirm_within_s=body.confirm_within_s,
+            request_id=_rid(),
+        )
+        return asdict(view)
+
+    @router.post(
+        "/system/controller/confirm",
+        tags=["system"],
+        summary="Keep the new controller settings",
+        response_model=ControllerRead,
+        responses=_ok(ex.CONTROLLER) | VALIDATION_RESPONSE,
+    )
+    async def confirm_controller(request: Request, who: Who, svc: Services) -> dict[str, Any]:
+        """Make the pending FQDN the public URL.
+
+        The request has to arrive on the new FQDN (`403` otherwise): reaching it is the proof it
+        works. `409` when nothing waits.
+        """
+        host = request.headers.get("host")
+        view = await svc.controller.confirm(who, request_host=host, request_id=_rid())
+        return asdict(view)
+
+    @router.post(
+        "/system/controller/revert",
+        tags=["system"],
+        summary="Revert the pending controller change now",
+        response_model=ControllerRead,
+        responses=_ok(ex.CONTROLLER) | VALIDATION_RESPONSE,
+    )
+    async def revert_controller(who: Who, svc: Services) -> dict[str, Any]:
+        """Put the previous VIP and certificate back with another change set.
+
+        Works from either address. `409` when nothing waits.
+        """
+        return asdict(await svc.controller.revert(who, request_id=_rid()))
 
     @router.get(
         "/system/break-glass",
