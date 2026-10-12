@@ -106,6 +106,8 @@ class K8sPlan:
     notes: list[Note] = field(default_factory=list)
     #: ``vip_key -> (namespace, service)`` for the Services that get their address written back.
     status_targets: dict[str, tuple[str, str]] = field(default_factory=dict)
+    #: ``vip_key -> (namespace, gateway)`` for the Gateways that get address and conditions back.
+    gateway_targets: dict[str, tuple[str, str]] = field(default_factory=dict)
 
     def note(self, level: Literal["info", "warning"], obj: str, message: str) -> None:
         """Record a note."""
@@ -422,3 +424,4 @@ def _plan_gateway(
         certificate=str(certificate) if certificate else None,
         source=("Gateway", namespace, name),
     )
+    result.gateway_targets[f"gw/{namespace}/{name}"] = (namespace, name)
