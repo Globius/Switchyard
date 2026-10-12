@@ -13319,7 +13319,7 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,\n        ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,\n        needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).\n    tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2\n        stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``\n        keeps the default of one hour.\n    send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.\n    client_certificate_id: Server certificate HAProxy presents to members (backend\n        mutual TLS). Needs ``tls``.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,\n        ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,\n        needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).\n    tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2\n        stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``\n        keeps the default of one hour.\n    send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.\n    client_certificate_id: Server certificate HAProxy presents to members (backend\n        mutual TLS). Needs ``tls``.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.\n    labels: Free key/value tags for finding the pool (``?label=``; ADR 0198). Never rendered.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
@@ -13373,6 +13373,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "members": {
             "default": [],
@@ -13550,6 +13557,13 @@
               }
             ],
             "title": "Health Monitor Id"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "members": {
             "default": [],
@@ -13868,6 +13882,20 @@
             ],
             "title": "Health Monitor Id"
           },
+          "labels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels"
+          },
           "members": {
             "anyOf": [
               {
@@ -14067,6 +14095,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "members": {
             "default": [],
@@ -19804,7 +19839,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).\n    labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -19885,6 +19920,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "name": {
             "title": "Name",
@@ -20060,6 +20102,13 @@
             "default": false,
             "title": "Enforce Allow List",
             "type": "boolean"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "name": {
             "title": "Name",
@@ -20356,6 +20405,20 @@
             ],
             "title": "Enforce Allow List"
           },
+          "labels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels"
+          },
           "name": {
             "anyOf": [
               {
@@ -20570,6 +20633,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "name": {
             "title": "Name",
@@ -43989,6 +44059,27 @@
             }
           },
           {
+            "description": "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels.",
+            "in": "query",
+            "name": "label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels.",
+              "title": "Label"
+            }
+          },
+          {
             "description": "Checked by this monitor.",
             "in": "query",
             "name": "health_monitor",
@@ -51832,6 +51923,27 @@
               ],
               "description": "Uses this certificate.",
               "title": "Certificate"
+            }
+          },
+          {
+            "description": "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels.",
+            "in": "query",
+            "name": "label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels.",
+              "title": "Label"
             }
           },
           {

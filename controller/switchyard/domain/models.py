@@ -56,6 +56,7 @@ LdapFilter = Annotated[str, AfterValidator(v.validate_ldap_filter)]
 LdapAttr = Annotated[str, AfterValidator(v.validate_ldap_attr)]
 EmailAddress = Annotated[str, AfterValidator(v.validate_email_address)]
 CertPem = Annotated[str, AfterValidator(v.validate_cert_pem)]
+Labels = Annotated[dict[str, str], AfterValidator(v.validate_labels)]
 CountryCode = Annotated[str, AfterValidator(v.validate_country_code)]
 DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
@@ -716,6 +717,7 @@ class VirtualService(TenantOwned):
             client address; honoured only when the connection source is in the allow list.
         compression: Response compression (``http`` only; ADR 0117).
         cache: Response cache (``http`` only; ADR 0117).
+        labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.
     """
 
     se_group_id: UUID
@@ -734,6 +736,7 @@ class VirtualService(TenantOwned):
     restore_client_ip_header: HeaderName | None = None
     compression: Compression | None = None
     cache: CacheSettings | None = None
+    labels: Labels = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _consistent(self) -> Self:
@@ -985,6 +988,7 @@ class Pool(TenantOwned):
             mutual TLS). Needs ``tls``.
         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
+        labels: Free key/value tags for finding the pool (``?label=``; ADR 0198). Never rendered.
     """
 
     algorithm: Algorithm = Algorithm.ROUNDROBIN
@@ -1000,6 +1004,7 @@ class Pool(TenantOwned):
     client_certificate_id: UUID | None = None
     discovery: PoolDiscovery | None = None
     members: tuple[PoolMember, ...] = ()
+    labels: Labels = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _members(self) -> Self:

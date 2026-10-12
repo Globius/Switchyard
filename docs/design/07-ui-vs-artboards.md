@@ -445,3 +445,14 @@ Built: **Observe** nav group (Request logs, Alerts); Tenant home **Alerts firing
 Also built (all of v53): rule "When" blocks collapse to a summary with "Edit conditions" (open while a rule has no conditions); variable picker with a description per variable; inline flag for platform-managed headers; body Edit/Preview (sandboxed, no scripts); rate-limit table size under Advanced; Login secret paths typed after the fixed `kv/tenants/<t>/` prefix with a "Put a secret" card and a Provider CA field; JWKS import converted in the browser (added / already here / skipped); client certificate CSV import with per-line errors (500 max); WAF Detect/Block cards with a Request logs link; Split bar and total; "If it's down, try:" label; pool Discovered badge; monitor "Healthy when"; port flags as switches with their rules; Expiry alerts button; request log rows expand to the raw line; Alerts "nothing set up" note; "WAF sidecar not running" on engines. Deviations: pool member options (Backup, Max connections, Disable after) are a row of labelled fields under each member, not table columns; Split weights stay relative (the API takes 1 to 1000), so the bar and total read as percent only when they add up to 100; "Put a secret" explains the OpenBao command because the API takes no secret; the Alerts "not enabled" state shows the generic error because the API has no enabled flag. Design E8 posture: built as Device conditions on Login rules (see above).
 
 Also built from the v53 API (!119): WAF disabled rule IDs suggest rules from the CRS catalogue with a "?" link to the CRS docs; JWT rules take a JWKS URL ("keys arrive within a few minutes"); request log rows mark WAF-denied and WAF-dropped requests; the Kubernetes test lists each permission found (including Gateway API); GSLB latency wide IPs show each member's measured latency and the fastest.
+
+## Gaps from the planned-vs-built audit (2026-10-12)
+
+The v53 handoff has no artboard for these three items (its files are not in the repository), so they are built from the
+API and the ADRs and need a design pass.
+
+- **Labels and the Label filter (ADR 0198).** The disabled "Label" button is a text box that takes comma-separated
+  selectors (`env=prod, team, !legacy, tier!=db`) and keeps them in the URL. Rows on the virtual services and pools
+  lists show label chips; clicking one adds its selector. Labels are edited with a chip input ("key=value") in the
+  virtual service settings and the pool sheet. Deviation from the handoff: a text box, not a menu of known keys, because
+  the API has no list of keys.

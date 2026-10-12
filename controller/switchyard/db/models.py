@@ -275,6 +275,9 @@ class PoolRow(TenantOwnedMixin, Base):
     )
     client_certificate_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     discovery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    labels: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
 
 
 class PoolMemberRow(Base):
@@ -336,6 +339,9 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
     restore_client_ip_header: Mapped[str | None] = mapped_column(Text)
     compression: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     cache: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    labels: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
 
 
 class VsPortRow(Base):

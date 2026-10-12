@@ -189,6 +189,7 @@ from switchyard.domain.changes import (
 from switchyard.domain.field_rules import protocol_rules
 from switchyard.domain.impact import impact as impact_of
 from switchyard.domain.models import AcmeChallenge, CertSource, Protocol, RenewPolicy
+from switchyard.domain.validators import labels_match
 from switchyard.domain.workflow import ChangeSetState, EngineState, JobState
 from switchyard.ids import uuid7
 from switchyard.pipeline.engines import EngineDirectory
@@ -921,6 +922,14 @@ class ListFilters:
     ] = "name"
 
 
+LABEL_FILTER = Query(
+    description=(
+        "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. "
+        "Only virtual services and pools have labels."
+    ),
+)
+
+
 @dataclass
 class VirtualServiceFilters(ListFilters):
     """Extra filters of virtual services."""
@@ -932,11 +941,14 @@ class VirtualServiceFilters(ListFilters):
         None
     )
     certificate: Annotated[UUID | None, Query(description="Uses this certificate.")] = None
+    label: Annotated[list[str] | None, LABEL_FILTER] = None
 
 
 @dataclass
 class PoolFilters(ListFilters):
     """Extra filters of pools."""
+
+    label: Annotated[list[str] | None, LABEL_FILTER] = None
 
     health_monitor: Annotated[UUID | None, Query(description="Checked by this monitor.")] = None
 
@@ -1000,6 +1012,13 @@ def _filtered(items: list[dict[str, Any]], f: ListFilters) -> list[dict[str, Any
             ]
         if f.certificate:
             out = [o for o in out if str(f.certificate) in o.get("certificate_ids", [])]
+    if isinstance(f, VirtualServiceFilters | PoolFilters) and f.label:
+        try:
+            for selector in f.label:
+                labels_match({}, [selector])  # reject a bad selector before filtering
+        except ValueError as e:
+            raise ApiError(422, str(e)) from e
+        out = [o for o in out if labels_match(o.get("labels") or {}, f.label)]
     if isinstance(f, PoolFilters) and f.health_monitor:
         out = [o for o in out if o.get("health_monitor_id") == str(f.health_monitor)]
     if isinstance(f, KindFilters) and f.kind:

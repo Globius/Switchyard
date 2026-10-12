@@ -10224,6 +10224,7 @@ export interface components {
          *             mutual TLS). Needs ``tls``.
          *         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
          *         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
+         *         labels: Free key/value tags for finding the pool (``?label=``; ADR 0198). Never rendered.
          */
         Pool: {
             /** @default roundrobin */
@@ -10244,6 +10245,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /**
              * Members
              * @default []
@@ -10296,6 +10301,10 @@ export interface components {
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /**
              * Members
              * @default []
@@ -10417,6 +10426,10 @@ export interface components {
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            } | null;
             /** Members */
             members?: components["schemas"]["PoolMember"][] | null;
             /** Name */
@@ -10465,6 +10478,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /**
              * Members
              * @default []
@@ -13133,6 +13150,7 @@ export interface components {
          *             client address; honoured only when the connection source is in the allow list.
          *         compression: Response compression (``http`` only; ADR 0117).
          *         cache: Response cache (``http`` only; ADR 0117).
+         *         labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.
          */
         VirtualService: {
             /** Allow List Id */
@@ -13163,6 +13181,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /** Name */
             name: string;
             /**
@@ -13225,6 +13247,10 @@ export interface components {
              * @default false
              */
             enforce_allow_list: boolean;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /** Name */
             name: string;
             /**
@@ -13329,6 +13355,10 @@ export interface components {
             enabled?: boolean | null;
             /** Enforce Allow List */
             enforce_allow_list?: boolean | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            } | null;
             /** Name */
             name?: string | null;
             /** Policy Set Ids */
@@ -13387,6 +13417,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /** Name */
             name: string;
             /**
@@ -28498,6 +28532,8 @@ export interface operations {
                 q?: string | null;
                 /** @description Order by name, ascending or descending. */
                 sort?: "name" | "-name";
+                /** @description Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels. */
+                label?: string[] | null;
                 /** @description Checked by this monitor. */
                 health_monitor?: string | null;
             };
@@ -33215,6 +33251,8 @@ export interface operations {
                 pool?: string | null;
                 /** @description Uses this certificate. */
                 certificate?: string | null;
+                /** @description Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels. */
+                label?: string[] | null;
             };
             header?: {
                 /** @description `Bearer <API token>`. Browsers send the session cookie instead. */

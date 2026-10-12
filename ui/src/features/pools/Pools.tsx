@@ -19,6 +19,10 @@ import { useCertificates } from "@/features/vs/queries";
 import { PersistenceEditor } from "./PersistenceEditor";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { LabelChips } from "@/components/sy/LabelChips";
+import { LabelFilter } from "@/components/sy/LabelFilter";
+import { ChipInput } from "@/components/sy/ChipInput";
+import { chipsToLabels, labelChips, parseSelectors, validateLabelChip } from "@/lib/labels";
 
 type Member = PoolRead["members"][number];
 type PoolDiscovery = NonNullable<PoolRead["discovery"]>;
@@ -37,6 +41,7 @@ export interface PoolForm {
   backend_protocol: PoolRead["backend_protocol"];
   tunnel_timeout_s: number | null;
   members: Member[];
+  labels: Record<string, string>;
 }
 export type PassiveCheck = {
   observe: "layer4" | "layer7";
@@ -69,6 +74,7 @@ export function emptyPool(): PoolForm {
     backend_protocol: "http1",
     tunnel_timeout_s: null,
     members: [],
+    labels: {},
   };
 }
 
@@ -97,6 +103,7 @@ export function toForm(p: PoolRead): PoolForm {
     backend_protocol: p.backend_protocol ?? "http1",
     tunnel_timeout_s: p.tunnel_timeout_s ?? null,
     members: structuredClone(p.members),
+    labels: { ...p.labels },
   };
 }
 
@@ -260,6 +267,22 @@ function PoolSheet({
               ))}
             </select>
           </label>
+          <div className="space-y-1.5 text-sm font-medium sm:col-span-2">
+            {t("Labels")}
+            <ChipInput
+              label={t("Labels")}
+              value={labelChips(f.labels)}
+              onChange={(chips) => set({ labels: chipsToLabels(chips) })}
+              freeText={{ validate: (x) => validateLabelChip(x) && t(validateLabelChip(x)!) }}
+              placeholder="env=prod"
+              disabled={!write.allowed}
+            />
+            {errors.labels && (
+              <span role="alert" className="block text-xs font-normal text-status-down">
+                {errors.labels}
+              </span>
+            )}
+          </div>
           <label className="block space-y-1.5 text-sm font-medium">
             {t("Health monitor")}
             <Combobox
@@ -829,9 +852,9 @@ function PoolSheet({
 }
 
 /** Pools: members' admin state, algorithm, monitor, persistence, and which services use each. */
-export function Pools({ tenant, q = "" }: { tenant: string; q?: string }) {
+export function Pools({ tenant, q = "", label }: { tenant: string; q?: string; label?: string }) {
   const { draft } = useDraft(tenant);
-  const pools = usePools(tenant, draft?.id);
+  const pools = usePools(tenant, draft?.id, parseSelectors(label));
   const monitors = useMonitors(tenant, draft?.id);
   const services = useServices(tenant, draft?.id);
   const can = useCan(tenant);
@@ -865,27 +888,43 @@ export function Pools({ tenant, q = "" }: { tenant: string; q?: string }) {
           </Button>
         </Tip>
       </div>
-      <input
-        aria-label={t("Filter by name")}
-        placeholder={t("Filter by name")}
-        className={cn(INPUT, "w-64")}
-        defaultValue={q}
-        onChange={(e) =>
-          void navigate({
-            to: "/t/$tenant/pools",
-            params: { tenant },
-            search: { q: e.target.value || undefined },
-            replace: true,
-          })
-        }
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          aria-label={t("Filter by name")}
+          placeholder={t("Filter by name")}
+          className={cn(INPUT, "w-64")}
+          defaultValue={q}
+          onChange={(e) =>
+            void navigate({
+              to: "/t/$tenant/pools",
+              params: { tenant },
+              search: (prev: { q?: string; label?: string }) => ({
+                ...prev,
+                q: e.target.value || undefined,
+              }),
+              replace: true,
+            })
+          }
+        />
+        <LabelFilter
+          value={label}
+          onChange={(text) =>
+            void navigate({
+              to: "/t/$tenant/pools",
+              params: { tenant },
+              search: (prev: { q?: string; label?: string }) => ({ ...prev, label: text }),
+              replace: true,
+            })
+          }
+        />
+      </div>
       <div className="overflow-x-auto rounded-lg border bg-card">
         {pools.isPending ? (
           <TableSkeleton cols={7} />
         ) : pools.isError ? (
           <ErrorState error={pools.error} onRetry={() => void pools.refetch()} />
         ) : rows.length === 0 ? (
-          q ? (
+          q || label ? (
             <EmptyState title={t("No pools match")} body={t("Clear the filter to see more.")} />
           ) : (
             <EmptyState
@@ -942,6 +981,20 @@ export function Pools({ tenant, q = "" }: { tenant: string; q?: string }) {
                           </span>
                         )}
                       </span>
+                      <LabelChips
+                        labels={p.labels}
+                        onPick={(chip) =>
+                          void navigate({
+                            to: "/t/$tenant/pools",
+                            params: { tenant },
+                            search: (prev: { q?: string; label?: string }) => ({
+                              ...prev,
+                              label: [...new Set([...parseSelectors(label), chip])].join(","),
+                            }),
+                            replace: true,
+                          })
+                        }
+                      />
                     </td>
                     <td className="px-4 py-3">{t(ALGO[p.algorithm] ?? p.algorithm)}</td>
                     <td className="px-4 py-3">

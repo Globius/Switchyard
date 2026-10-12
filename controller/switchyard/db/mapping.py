@@ -203,6 +203,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 backend_protocol=p.backend_protocol,
                 client_certificate_id=p.client_certificate_id,
                 discovery=p.discovery.model_dump(mode="json") if p.discovery else None,
+                labels=dict(p.labels),
             )
         )
     for s in snapshot.virtual_services:
@@ -224,6 +225,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 restore_client_ip_header=s.restore_client_ip_header,
                 compression=s.compression.model_dump(mode="json") if s.compression else None,
                 cache=s.cache.model_dump(mode="json") if s.cache else None,
+                labels=dict(s.labels),
             )
         )
     # Child rows come after their parents so inserts satisfy the foreign keys.
@@ -468,6 +470,7 @@ def rows_to_snapshot(
                 "backend_protocol": p.backend_protocol,
                 "client_certificate_id": p.client_certificate_id,
                 "discovery": p.discovery,
+                "labels": p.labels or {},
                 "members": [
                     {
                         "id": mem.id,
@@ -503,6 +506,7 @@ def rows_to_snapshot(
                 "restore_client_ip_header": s.restore_client_ip_header,
                 "compression": s.compression,
                 "cache": s.cache,
+                "labels": s.labels or {},
                 "ports": [
                     {
                         "port": p.port,

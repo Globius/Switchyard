@@ -65,7 +65,7 @@ var Definitions = []Definition{
 		Slug:      "virtual-services",
 		Doc:       "",
 		Resource:  true,
-		PatchKeys: []string{"allow_list_id", "cache", "certificate_ids", "compression", "default_pool_id", "deny_list_id", "enabled", "enforce_allow_list", "name", "policy_set_ids", "ports", "protocol", "restore_client_ip_header", "routes", "se_group_id", "vip", "vip_pool_id"},
+		PatchKeys: []string{"allow_list_id", "cache", "certificate_ids", "compression", "default_pool_id", "deny_list_id", "enabled", "enforce_allow_list", "labels", "name", "policy_set_ids", "ports", "protocol", "restore_client_ip_header", "routes", "se_group_id", "vip", "vip_pool_id"},
 		Attrs: []Attr{
 			{Name: "allow_list_id", Kind: KindString},
 			{Name: "cache", Kind: KindObject, Doc: "HAProxy small-object cache for the responses of an ``http`` service (ADR 0117).", Attrs: []Attr{
@@ -82,6 +82,7 @@ var Definitions = []Definition{
 			{Name: "deny_list_id", Kind: KindString},
 			{Name: "enabled", Kind: KindBool},
 			{Name: "enforce_allow_list", Kind: KindBool},
+			{Name: "labels", Kind: KindMap, Elem: &Attr{Kind: KindString}},
 			{Name: "name", Kind: KindString, Required: true},
 			{Name: "policy_set_ids", Kind: KindList, Elem: &Attr{Kind: KindString}},
 			{Name: "ports", Kind: KindList, Required: true, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
@@ -139,7 +140,7 @@ var Definitions = []Definition{
 		Slug:      "pools",
 		Doc:       "",
 		Resource:  true,
-		PatchKeys: []string{"algorithm", "backend_protocol", "client_certificate_id", "discovery", "health_monitor_id", "members", "name", "passive_check", "persistence", "send_proxy", "slow_start_s", "tls", "tls_verify", "tunnel_timeout_s"},
+		PatchKeys: []string{"algorithm", "backend_protocol", "client_certificate_id", "discovery", "health_monitor_id", "labels", "members", "name", "passive_check", "persistence", "send_proxy", "slow_start_s", "tls", "tls_verify", "tunnel_timeout_s"},
 		Attrs: []Attr{
 			{Name: "algorithm", Kind: KindString, Doc: "Pool load-balancing algorithm.", Enum: []string{"roundrobin", "leastconn", "source", "random"}},
 			{Name: "backend_protocol", Kind: KindString, Enum: []string{"http1", "h2", "h2c"}},
@@ -152,6 +153,7 @@ var Definitions = []Definition{
 				{Name: "weight", Kind: KindInt},
 			}},
 			{Name: "health_monitor_id", Kind: KindString},
+			{Name: "labels", Kind: KindMap, Elem: &Attr{Kind: KindString}},
 			{Name: "members", Kind: KindList, Elem: &Attr{Kind: KindObject, Attrs: []Attr{
 				{Name: "address", Kind: KindString, Required: true},
 				{Name: "admin_state", Kind: KindString, Doc: "Operator-controlled pool member state.", Enum: []string{"enabled", "disabled", "drain"}},
