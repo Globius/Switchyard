@@ -1,6 +1,6 @@
 #!/bin/sh
 # Builds the SE *container* template on a Proxmox node (run as root on the node). Usage:
-#   build-template.sh VMID AGENT_BIN DATAPLANE_BIN [STORAGE]
+#   [BUILD_BRIDGE=vmbr0] [BUILD_NET_IP="ip=dhcp"|"ip=manual,ip6=auto" for an IPv6-only network] build-template.sh VMID AGENT_BIN DATAPLANE_BIN [STORAGE]
 # Creates a privileged Debian 13 container, runs provision.sh inside it, stops it and converts it to a
 # template. Clone it with VmSpec kind "lxc" (deploy request guest_kind: "lxc"; ADR 0055).
 #
@@ -13,7 +13,7 @@ HERE=$(cd "$(dirname "$0")/.." && pwd)
 IMG=debian-13-standard_13.6-1_amd64.tar.zst
 pveam list "$STORAGE" | grep -q "$IMG" || { pveam update >/dev/null; pveam download "$STORAGE" "$IMG"; }
 pct create "$VMID" "$STORAGE:vztmpl/$IMG" --hostname sy-se-template --memory 1024 --cores 2 \
-  --unprivileged "$UNPRIVILEGED" --features nesting=1 --net0 name=eth0,bridge=vmbr0,ip=dhcp --rootfs "$STORAGE:4"
+  --unprivileged "$UNPRIVILEGED" --features nesting=1 --net0 "name=eth0,bridge=${BUILD_BRIDGE:-vmbr0},${BUILD_NET_IP:-ip=dhcp}" --rootfs "$STORAGE:4"
 pct start "$VMID"
 n=0; until pct exec "$VMID" -- sh -c 'getent hosts deb.debian.org >/dev/null 2>&1'; do
   n=$((n+1)); [ $n -lt 30 ] || { echo "container has no network" >&2; exit 1; }; sleep 2; done
