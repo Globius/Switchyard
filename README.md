@@ -71,8 +71,8 @@ Notes:
 - Tests that need PostgreSQL or HAProxy start their own containers with testcontainers, so they behave the
   same on Windows, WSL2 and CI. Run `uv run pytest -m "not docker"` for the fast, Docker-free subset.
 - Line endings are LF (`.gitattributes`). Keep `core.autocrlf` off or `input` for this repo.
-- On Linux/macOS or WSL2, `make -C controller check` runs all gates, same as `.gitlab-ci.yml`. CI is paused for now, so run
-  the gates (and `make docs`) locally before a merge request.
+- On Linux/macOS or WSL2, `make -C controller check` runs all gates, same as `.gitlab-ci.yml`; run them
+  (and `make docs`) locally before pushing a merge request.
 - The UI (`ui/`, Node 22 and pnpm) has its own targets in the root `Makefile` (`make ui-check`); see [docs/ui/README.md](docs/ui/README.md).
 
 ## Working with Claude Code

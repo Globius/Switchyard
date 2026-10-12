@@ -7,7 +7,7 @@ Date: 2026-10-12
 
 The docs are Markdown under `docs/` (guides, runbooks, ADRs, lab results) and read well on GitLab, but there was no
 built site, no navigation across them, no search, and nothing caught a broken link. The site has to publish to GitLab
-Pages (the primary remote) and GitHub Pages (a mirror), and it has to build locally because GitLab CI is paused.
+Pages (the primary remote) and GitHub Pages (a mirror), and it has to build locally too (GitLab CI was paused when this was written; it was re-enabled with this change).
 
 ## Decision
 
@@ -26,7 +26,6 @@ Pages (the primary remote) and GitHub Pages (a mirror), and it has to build loca
 - Docs stay plain Markdown; nothing about writing an ADR or runbook changes. New pages should be added to `nav` in
   `mkdocs.yml`, otherwise they build but are only reachable by link or search.
 - Material-specific syntax (admonitions, details) renders on the site and degrades to plain text on GitLab.
-- GitLab Pages publishes only once CI is re-enabled; until then `make docs` is the check.
 
 ## Alternatives considered
 

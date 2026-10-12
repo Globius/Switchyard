@@ -1,8 +1,4 @@
 # Same gates as controller/Makefile.
-# CI is paused while we build and test locally. Delete this block to re-enable.
-workflow:
-  rules:
-    - when: never
 
 stages: [check, deploy]
 
