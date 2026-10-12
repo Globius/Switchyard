@@ -5,15 +5,15 @@
 - ``vs_route.match_extra`` (JSON): methods, headers, query parameters, source networks and SNI of
   the route's match (host and path keep their columns).
 
-Revision ID: 0024
-Revises: 0023
+Revision ID: 0027
+Revises: 0023 (set to 0026 when !107 and !109 are merged)
 """
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "0024"
+revision = "0027"
 down_revision = "0023"
 branch_labels = None
 depends_on = None
