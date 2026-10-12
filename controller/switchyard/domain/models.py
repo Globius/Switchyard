@@ -36,6 +36,7 @@ UrlPath = Annotated[str, AfterValidator(v.validate_path)]
 Location = Annotated[str, AfterValidator(v.validate_location)]
 HeaderName = Annotated[str, AfterValidator(v.validate_header_name)]
 SecretRef = Annotated[str, AfterValidator(v.validate_secret_ref)]
+DiscoveryTag = Annotated[str, AfterValidator(v.validate_discovery_tag)]
 
 
 class HaMode(enum.StrEnum):
@@ -532,6 +533,32 @@ class PoolMember(Model):
         return f"{base}-{self.port}" if self.port is not None else base
 
 
+class PoolDiscovery(Model):
+    """Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).
+
+    The discovery job lists running guests with ``tag``, takes the first address of each that lies
+    in ``cidr`` and keeps ``Pool.members`` in step through a normal change set. Members that were
+    discovered keep the weight and admin state an operator gave them.
+
+    Attributes:
+        source: Where members come from; only ``proxmox_tag`` exists.
+        tag: The Proxmox tag; it must start with ``sy-<tenant>.``.
+        cidr: Backend network; a guest's address in it becomes the member address.
+        port: Member port.
+        weight: Weight of a newly discovered member.
+
+    Example:
+        >>> PoolDiscovery(tag="sy-acme.web", cidr="10.20.0.0/24", port=8080).weight
+        100
+    """
+
+    source: Literal["proxmox_tag"] = "proxmox_tag"
+    tag: DiscoveryTag
+    cidr: IPNetwork
+    port: Port
+    weight: int = Field(default=100, ge=0, le=256)
+
+
 class Pool(TenantOwned):
     """A group of backend servers.
 
@@ -545,7 +572,8 @@ class Pool(TenantOwned):
         passive_check: Also judge members by their live traffic. Needs a health monitor.
         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
             weight (HAProxy ``slowstart``). Needs a health monitor.
-        members: Backend servers, unique by name.
+        discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
+        members: Backend servers, unique by name. With ``discovery`` the job owns this list.
     """
 
     algorithm: Algorithm = Algorithm.ROUNDROBIN
@@ -555,6 +583,7 @@ class Pool(TenantOwned):
     tls_verify: bool = False
     passive_check: PassiveCheck | None = None
     slow_start_s: int | None = Field(default=None, ge=1, le=3600)
+    discovery: PoolDiscovery | None = None
     members: tuple[PoolMember, ...] = ()
 
     @model_validator(mode="after")

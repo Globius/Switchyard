@@ -5936,9 +5936,10 @@ export interface components {
          *         POLL_STATUS: Scheduled engine status poll and drift detection.
          *         GIT_MIRROR: Pushes a revision to the Git mirror.
          *         GC: Scheduled housekeeping.
+         *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "discover_pool_members";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -6921,11 +6922,13 @@ export interface components {
          *         passive_check: Also judge members by their live traffic. Needs a health monitor.
          *         slow_start_s: Seconds over which a member that comes back up ramps from zero to its full
          *             weight (HAProxy ``slowstart``). Needs a health monitor.
-         *         members: Backend servers, unique by name.
+         *         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
+         *         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
          */
         Pool: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -6969,6 +6972,7 @@ export interface components {
         PoolCreate: {
             /** @default roundrobin */
             algorithm: components["schemas"]["Algorithm"];
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /**
@@ -6992,6 +6996,44 @@ export interface components {
              * @default false
              */
             tls_verify: boolean;
+        };
+        /**
+         * PoolDiscovery
+         * @description Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).
+         *
+         *     The discovery job lists running guests with ``tag``, takes the first address of each that lies
+         *     in ``cidr`` and keeps ``Pool.members`` in step through a normal change set. Members that were
+         *     discovered keep the weight and admin state an operator gave them.
+         *
+         *     Attributes:
+         *         source: Where members come from; only ``proxmox_tag`` exists.
+         *         tag: The Proxmox tag; it must start with ``sy-<tenant>.``.
+         *         cidr: Backend network; a guest's address in it becomes the member address.
+         *         port: Member port.
+         *         weight: Weight of a newly discovered member.
+         *
+         *     Example:
+         *         >>> PoolDiscovery(tag="sy-acme.web", cidr="10.20.0.0/24", port=8080).weight
+         *         100
+         */
+        PoolDiscovery: {
+            /** Cidr */
+            cidr: string;
+            /** Port */
+            port: number;
+            /**
+             * Source
+             * @default proxmox_tag
+             * @constant
+             */
+            source: "proxmox_tag";
+            /** Tag */
+            tag: string;
+            /**
+             * Weight
+             * @default 100
+             */
+            weight: number;
         };
         /**
          * PoolMember
@@ -7028,6 +7070,7 @@ export interface components {
         /** PoolPatch */
         PoolPatch: {
             algorithm?: components["schemas"]["Algorithm"] | null;
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
             /** Members */
@@ -7055,6 +7098,7 @@ export interface components {
              * @description Fields a draft changed; empty outside a draft.
              */
             changed_fields: string[];
+            discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** @description Whether a draft (`?change_set=`) created, changed or deleted it. */
             draft_status: components["schemas"]["DraftStatus"];
             /** Health Monitor Id */

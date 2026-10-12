@@ -5997,7 +5997,7 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.",
         "enum": [
           "apply_change_set",
           "reapply_se_group",
@@ -6009,7 +6009,8 @@
           "sync_cloudflare_ips",
           "poll_status",
           "git_mirror",
-          "gc"
+          "gc",
+          "discover_pool_members"
         ],
         "title": "JobKind",
         "type": "string"
@@ -8337,11 +8338,21 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    members: Backend servers, unique by name.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolDiscovery"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "health_monitor_id": {
             "anyOf": [
@@ -8442,6 +8453,16 @@
             "$ref": "#/components/schemas/Algorithm",
             "default": "roundrobin"
           },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolDiscovery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "health_monitor_id": {
             "anyOf": [
               {
@@ -8516,6 +8537,53 @@
         "title": "PoolCreate",
         "type": "object"
       },
+      "PoolDiscovery": {
+        "additionalProperties": false,
+        "description": "Fill a pool's members from Proxmox guests that carry a tag (ADR 0145).\n\nThe discovery job lists running guests with ``tag``, takes the first address of each that lies\nin ``cidr`` and keeps ``Pool.members`` in step through a normal change set. Members that were\ndiscovered keep the weight and admin state an operator gave them.\n\nAttributes:\n    source: Where members come from; only ``proxmox_tag`` exists.\n    tag: The Proxmox tag; it must start with ``sy-<tenant>.``.\n    cidr: Backend network; a guest's address in it becomes the member address.\n    port: Member port.\n    weight: Weight of a newly discovered member.\n\nExample:\n    >>> PoolDiscovery(tag=\"sy-acme.web\", cidr=\"10.20.0.0/24\", port=8080).weight\n    100",
+        "properties": {
+          "cidr": {
+            "anyOf": [
+              {
+                "format": "ipv4network",
+                "type": "string"
+              },
+              {
+                "format": "ipv6network",
+                "type": "string"
+              }
+            ],
+            "title": "Cidr"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "source": {
+            "const": "proxmox_tag",
+            "default": "proxmox_tag",
+            "title": "Source",
+            "type": "string"
+          },
+          "tag": {
+            "title": "Tag",
+            "type": "string"
+          },
+          "weight": {
+            "default": 100,
+            "maximum": 256.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tag",
+          "cidr",
+          "port"
+        ],
+        "title": "PoolDiscovery",
+        "type": "object"
+      },
       "PoolMember": {
         "additionalProperties": false,
         "description": "One backend server.\n\nAttributes:\n    id: Stable id, used by the runtime enable/disable/drain endpoint.\n    address: Backend IP address.\n    port: Backend port, or ``None`` to reuse the port the client connected to.\n    weight: 0-256; 0 takes no new connections.\n    admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.\n    name: HAProxy server name; derived from address and port when omitted.",
@@ -8586,6 +8654,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Algorithm"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolDiscovery"
               },
               {
                 "type": "null"
@@ -8701,6 +8779,16 @@
             },
             "title": "Changed Fields",
             "type": "array"
+          },
+          "discovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PoolDiscovery"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
