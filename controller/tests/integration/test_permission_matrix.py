@@ -232,6 +232,19 @@ for _path in (
 ):
     ROUTES[("GET", _path)] = READ
 ROUTES[("GET", "/system/controller")] = ("manage", "controller")
+for _method, _path in (
+    ("GET", "/system/controller/members"),
+    ("POST", "/system/controller/members"),
+    ("PATCH", "/system/controller/members/{controller_member}"),
+    ("DELETE", "/system/controller/members/{controller_member}"),
+):
+    ROUTES[(_method, _path)] = ("manage", "controller")
+ROUTES[("GET", "/tenants/{t}/quota-requests")] = READ
+ROUTES[("POST", "/tenants/{t}/quota-requests")] = ("request", "quota_request")
+ROUTES[("POST", "/tenants/{t}/quota-requests/{request}/withdraw")] = ("request", "quota_request")
+ROUTES[("GET", "/quota-requests")] = ("decide", "quota_request")
+ROUTES[("POST", "/quota-requests/{request}/approve")] = ("decide", "quota_request")
+ROUTES[("POST", "/quota-requests/{request}/deny")] = ("decide", "quota_request")
 ROUTES[("PUT", "/system/controller/pending")] = ("manage", "controller")
 ROUTES[("POST", "/system/controller/confirm")] = ("manage", "controller")
 ROUTES[("POST", "/system/controller/revert")] = ("manage", "controller")
@@ -300,6 +313,19 @@ BODIES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
+    ("POST", "/system/controller/members"): {
+        "name": "ctl-x",
+        "address": "10.0.0.13",
+        "platform": "esxi",
+    },
+    ("PATCH", "/system/controller/members/{controller_member}"): {},
+    ("POST", "/tenants/{t}/quota-requests"): {
+        "resource": "pool",
+        "requested_limit": 5,
+        "reason": "growth",
+    },
+    ("POST", "/quota-requests/{request}/approve"): {},
+    ("POST", "/quota-requests/{request}/deny"): {"note": "no"},
     ("PUT", "/system/controller/pending"): {"fqdn": "sy.example.test"},
     ("POST", "/tenants/{t}/imports/avi"): {"export": {}, "se_group": "edge"},
     ("POST", "/tenants/{t}/kubernetes-clusters"): {
@@ -414,6 +440,8 @@ def fill(path: str) -> str:
         "certificate",
         "idp",
         "cluster",
+        "controller_member",
+        "request",
         "test_id",
     ):
         out = out.replace("{" + key + "}", str(uuid.uuid4()))
