@@ -5,6 +5,8 @@ edit_uri: -/edit/main/docs/
 docs_dir: docs
 site_dir: public
 strict: true
+not_in_nav: |
+  /adr/0*.md
 exclude_docs: |
   requirements.txt
   prompts/
@@ -35,3 +37,90 @@ markdown_extensions:
   - pymdownx.details
 hooks:
   - docs/hooks/repo_links.py
+nav:
+  - Home: index.md
+  - Guides:
+      - Quickstart - a test instance on its own machine: quickstart.md
+      - Production guide: production.md
+      - Running and operating the controller: operating.md
+      - The controller's own address, VIP and certificate: controller-settings.md
+      - Signing in, roles and access: auth.md
+      - Login in front of a service (access policy sets): access.md
+      - Certificates from ACME providers: acme.md
+      - Alerting: alerting.md
+      - GSLB - wide IPs on PowerDNS: gslb.md
+      - Country and reputation lists: ip-lists.md
+      - IPv6 and dual-stack: ipv6.md
+      - Kubernetes connector: kubernetes.md
+      - Pool discovery by Proxmox tag: pool-discovery.md
+      - Importing an Avi (NSX ALB) configuration: import-avi.md
+      - HTTP API: api.md
+      - How Switchyard objects render to HAProxy: render.md
+  - Features:
+      - Overview: features/index.md
+      - Virtual services and routing: features/virtual-services.md
+      - Pools and members: features/pools.md
+      - Health checks and drain: features/health-checks.md
+      - Persistence: features/persistence.md
+      - UDP services: features/udp.md
+      - HTTP/2, HTTP/3, gRPC and WebSocket: features/http-protocols.md
+      - Compression and cache: features/compression-cache.md
+      - TLS on the front end: features/tls.md
+      - Certificates and ACME: features/certificates.md
+      - Policy sets and request stages: features/policies.md
+      - Rate and concurrency limits: features/rate-limits.md
+      - Country and reputation lists: features/ip-lists.md
+      - WAF: features/waf.md
+      - Bot and DDoS protection: features/bot-protection.md
+      - Login in front of a service: features/access-login.md
+      - API tokens and client certificates: features/api-protection.md
+      - "VIP placement: VRRP and BGP": features/vip-placement.md
+      - Engines on Proxmox: features/engines.md
+      - GSLB: features/gslb.md
+      - Change sets, revisions and drift: features/change-sets.md
+      - Alerting: features/alerting.md
+      - Metrics and logs: features/telemetry.md
+      - Audit log: features/audit.md
+      - Tenants, roles and sign-in: features/tenancy.md
+      - Kubernetes: features/kubernetes.md
+      - Pool discovery from Proxmox tags: features/pool-discovery.md
+      - Avi importer: features/avi-import.md
+      - OpenTofu provider: features/opentofu.md
+  - Whitepapers:
+      - Overview: whitepapers/index.md
+      - Architecture: whitepapers/architecture.md
+      - Security model: whitepapers/security-model.md
+      - HA and the data plane: whitepapers/ha-data-plane.md
+      - Multi-tenancy: whitepapers/multi-tenancy.md
+  - Runbooks:
+      - Overview: runbooks/README.md
+      - Build or refresh the SE template: runbooks\build-se-template.md
+      - Emergency rollback: runbooks\emergency-rollback.md
+      - GSLB on the two-host lab: runbooks\gslb-lab.md
+      - Set up two Proxmox hosts for the Switchyard lab: runbooks\lab-hosts.md
+      - Runbook - the login broker (Dex): runbooks\login-broker.md
+      - Replace a service engine: runbooks\replace-se.md
+      - Restore the database (pgBackRest + Patroni): runbooks\restore-database.md
+      - Roll an SE group to a new template, or scale it out: runbooks\rolling-upgrade.md
+      - Rotate the certificate authority: runbooks\rotate-ca.md
+      - Telemetry stack (Prometheus, Loki, Grafana): runbooks\telemetry.md
+  - Decisions:
+      - Why it works this way: why.md
+      - ADR index: adr/README.md
+  - Design:
+      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/bf06390f-6cf2-4fa9-9128-b6e8286ecb93: design\01-replacement-plan.md
+      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/3698c8a8-230c-4787-998c-007be6665190: design\02-backend-design.md
+      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/23e2b8ae-c97b-4555-ab71-66d5dfc0485f: design\03-frontend-design.md
+      - Switchyard — Frontend Scope and Claude Design Handoff: design\04-frontend-scope.md
+      - Backend tickets required by the frontend: design\05-frontend-backend-tickets.md
+      - Planned vs built: design\06-planned-vs-built.md
+      - 07 - Built UI vs Design artboards (handoff v46): design\07-ui-vs-artboards.md
+      - Competitive parity matrix and phased plan: design\08-competitive-parity-plan.md
+      - Parity work blocks: design\09-parity-work-blocks.md
+      - UI handoff: design/ui-handoff/README.md
+      - UI: ui/README.md
+      - Backend security review: security/backend-review.md
+      - UI security review: security/ui-review.md
+  - Lab results:
+      - Lab pass on two real Proxmox hosts, 2026-10-12: lab\2026-10-12-full-pass.md
+      - Kubernetes connector on a real cluster (2026-10-12): lab\2026-10-12-kubernetes.md
