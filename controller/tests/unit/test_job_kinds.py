@@ -2,6 +2,7 @@
 
 from switchyard.api.job_models import JobKind
 from switchyard.jobs.handlers import GIT_MIRROR_JOB, POLL_STATUS_JOB
+from switchyard.services.alerts import EVALUATE_ALERTS_JOB
 from switchyard.services.certificates import (
     ISSUE_CERT_JOB,
     RENEW_CERTS_JOB,
@@ -25,5 +26,6 @@ def test_every_job_kind_is_published() -> None:
         GIT_MIRROR_JOB,
         POLL_STATUS_JOB,
         GC_JOB,
+        EVALUATE_ALERTS_JOB,
     }
     assert kinds == {k.value for k in JobKind}

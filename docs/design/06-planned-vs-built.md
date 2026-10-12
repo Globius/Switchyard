@@ -63,7 +63,9 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Metrics and logs endpoints (A9) | partial | API done and answers `available: false`; the pipeline (HAProxy exporter, Prometheus, Vector, Loki) is not built, `HttpTelemetry` never run against a real stack | Deploy and document the pipeline; test against it |
 | Prometheus HTTP service-discovery endpoint for SEs | done | `GET /discovery/prometheus` (ADR 0061); the SE image must serve the exporters | |
 | Controller own `/metrics` | done | Database-derived, text format (ADR 0061) | |
-| Grafana embed or proxy (01, 03) | partial | `links.grafana` on `GET /me` (`SWITCHYARD_GRAFANA_URL`, ADR 0068); no proxy or embed | Link in the UI; proxy if wanted (*design question*) |
+| Alerts: webhook, email and chat targets, rules on events, metrics and certificate expiry (B2, C7 notifications) | done | ADRs 0120 to 0122, `docs/alerting.md`; evaluator job `evaluate_alerts`; API only, UI follows | UI screens (no artboard yet) |
+| Request-log view across the tenant (B3) | done | `GET /tenants/{t}/logs` (ADR 0123); UI follows | UI view |
+| Grafana embed or proxy (01, 03) | done | Grafana behind the controller (opened in its own tab), one organization per tenant, every data source query rewritten to the tenant (ADR 0085); off until its settings are present, then `links.grafana_embedded` on `GET /me`; the plain link (`SWITCHYARD_GRAFANA_URL`, ADR 0068) remains. Checked against real Prometheus, Loki and Grafana; not yet on the two-host lab | Lab run; a separate origin for Grafana if the shared one is not acceptable |
 | `waf_policy`, Coraza SPOA | missing | *deferred*: phase 2 | Table, renderer, agent bundle, UI |
 | Rate limits, IP groups | missing | *deferred*: phase 2 | |
 | CrowdSec, oauth2-proxy SSO, caching, compression, Lua | missing | *deferred* or out of scope in 01 | |

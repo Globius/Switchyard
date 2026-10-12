@@ -851,6 +851,47 @@ async def test_metrics_and_logs_are_tenant_scoped_and_degrade_when_unconfigured(
     assert set(fake.asked) == {TENANT}
 
 
+async def test_engine_metrics_are_tenant_scoped_ranged_and_degrade(api: Api) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from switchyard.adapters.telemetry import FakeTelemetry
+
+    h = await api.token(Role.VIEWER)
+    admin = await api.token()
+    base = f"{V1}/tenants/acme"
+    engine = (
+        await api.client.post(
+            f"{base}/se-groups/{GROUP}/engines",
+            json={"name": "se-metrics-1", "dataplane_url": "https://198.51.100.9:5555"},
+            headers=admin,
+        )
+    ).json()
+    url = f"{base}/engines/{engine['id']}/metrics"
+    off = (await api.client.get(url, headers=h)).json()
+    assert off["available"] is False and off["reason"]
+    fake = FakeTelemetry()
+    api.services.telemetry = fake
+    end = datetime.now(UTC) - timedelta(hours=2)
+    on = await api.client.get(url, params={"window_s": 7200, "until": end.isoformat()}, headers=h)
+    body = on.json()
+    assert on.status_code == 200 and body["available"]
+    assert body["metrics"]["summary"]["vcpus"] == 4 and body["metrics"]["window_s"] == 7200
+    assert fake.engines == ["se-metrics-1"] and set(fake.asked) == {TENANT}
+    assert fake.until is not None and abs((fake.until - end).total_seconds()) < 1
+    future = datetime.now(UTC) + timedelta(hours=1)
+    assert (
+        await api.client.get(url, params={"until": future.isoformat()}, headers=h)
+    ).status_code == 422
+    assert (await api.client.get(url, params={"window_s": 5}, headers=h)).status_code == 422
+    unknown = await api.client.get(f"{base}/engines/{uuid.uuid4()}/metrics", headers=h)
+    assert unknown.status_code == 404
+    # a tenant that does not own the engine cannot read it
+    globex = (await api.services.tenants.create(ROOT, "globex-metrics")).id
+    other = await api.token(Role.VIEWER, tenant=globex)
+    foreign = f"{V1}/tenants/globex-metrics/engines/{engine['id']}/metrics"
+    assert (await api.client.get(foreign, headers=other)).status_code == 404
+
+
 async def test_monitor_test_runs_from_an_engine_through_the_agent(api: Api) -> None:
     from switchyard.adapters.agent import FakeAgent, ProbeResult
 

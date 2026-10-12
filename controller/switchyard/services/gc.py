@@ -6,10 +6,15 @@ finished jobs, stale engine status, and expired login and enrollment material.
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 
 from switchyard.db import audit_log
-from switchyard.db.auth_models import LoginStateRow, LoginThrottleRow, UserSessionRow
+from switchyard.db.auth_models import (
+    GrafanaGrantRow,
+    LoginStateRow,
+    LoginThrottleRow,
+    UserSessionRow,
+)
 from switchyard.db.ops_models import (
     ChangeSetRow,
     EngineStatusRow,
@@ -79,6 +84,15 @@ class GarbageCollector:
                 )
             )
             done["login_throttle_deleted"] = throttle.rowcount  # type: ignore[attr-defined]
+            grants = await session.execute(
+                delete(GrafanaGrantRow).where(
+                    func.coalesce(
+                        GrafanaGrantRow.session_expires_at, GrafanaGrantRow.ticket_expires_at
+                    )
+                    < now - timedelta(days=1)
+                )
+            )
+            done["grafana_grants_deleted"] = grants.rowcount  # type: ignore[attr-defined]
             old = now - CREDENTIAL_GRACE
             sessions = await session.execute(
                 delete(UserSessionRow).where(

@@ -2,6 +2,8 @@
 #   cp telemetry.env.example telemetry.env ; put the scrape token in secrets/metrics.token
 #   docker compose --env-file telemetry.env up -d
 # Point the controller at them: SWITCHYARD_PROMETHEUS_URL=http://<host>:9090, SWITCHYARD_LOKI_URL=http://<host>:3100.
+# To embed Grafana in the UI also set GRAFANA_PROXY_WHITELIST (comma-separated controller addresses) and, on the controller,
+# SWITCHYARD_GRAFANA_INTERNAL_URL=http://<host>:3000 plus the settings in docs/runbooks/telemetry.md.
 name: switchyard-telemetry
 services:
   prometheus:
@@ -49,6 +51,24 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
+      # Behind the controller, opened from the Switchyard UI in its own tab (ADR 0085). Grafana trusts the identity header only from the
+      # controller's addresses and creates no users, organizations or memberships by itself: the controller does, one
+      # organization per tenant. Reach Grafana only from the controller; the admin password is for the controller's API calls.
+      # The default whitelist (loopback) trusts nobody, so the embedding stays off until GRAFANA_PROXY_WHITELIST names the
+      # controller. The proxy strips /grafana before Grafana sees the path; only the links Grafana writes carry it.
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3000/grafana/}
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: X-WEBAUTH-USER
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "false"
+      GF_AUTH_PROXY_WHITELIST: ${GRAFANA_PROXY_WHITELIST:-127.0.0.1}
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_AUTO_ASSIGN_ORG: "false"
+      GF_USERS_ALLOW_ORG_CREATE: "false"
+      GF_USERS_VIEWERS_CAN_EDIT: "false"
+      GF_LIVE_MAX_CONNECTIONS: "0"
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

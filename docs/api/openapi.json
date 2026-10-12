@@ -964,6 +964,552 @@
         "title": "AgentStatusRead",
         "type": "object"
       },
+      "AlertCatalog": {
+        "additionalProperties": false,
+        "description": "What the rule and target forms offer.",
+        "properties": {
+          "chat_formats": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Chat Formats",
+            "type": "array"
+          },
+          "email_configured": {
+            "description": "False when email targets cannot send.",
+            "title": "Email Configured",
+            "type": "boolean"
+          },
+          "event_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Event Actions",
+            "type": "array"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/AlertMetricInfo"
+            },
+            "title": "Metrics",
+            "type": "array"
+          }
+        },
+        "required": [
+          "metrics",
+          "event_actions",
+          "chat_formats",
+          "email_configured"
+        ],
+        "title": "AlertCatalog",
+        "type": "object"
+      },
+      "AlertDeliveryRead": {
+        "additionalProperties": false,
+        "description": "One attempt to tell one target.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "firing",
+              "resolved",
+              "test"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "rule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rule"
+          },
+          "status": {
+            "enum": [
+              "sent",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "target",
+          "key",
+          "kind",
+          "status",
+          "error",
+          "at"
+        ],
+        "title": "AlertDeliveryRead",
+        "type": "object"
+      },
+      "AlertFiring": {
+        "additionalProperties": false,
+        "description": "One watched thing that is firing (or waiting out `for_minutes`).",
+        "properties": {
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "firing",
+              "pending"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "key",
+          "state",
+          "since",
+          "details"
+        ],
+        "title": "AlertFiring",
+        "type": "object"
+      },
+      "AlertMetricInfo": {
+        "additionalProperties": false,
+        "description": "A series a metric rule can watch.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "vs",
+              "engine"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "unit",
+          "scope"
+        ],
+        "title": "AlertMetricInfo",
+        "type": "object"
+      },
+      "AlertRuleIn": {
+        "additionalProperties": false,
+        "description": "What to watch and who to tell.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "event",
+              "metric",
+              "cert_expiry"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "description": "`event`: `{actions: [audit action, ...]}`. `metric`: `{metric, op: gt|lt, threshold, for_minutes, scope?}` with `metric` from `GET /alert-catalog`. `cert_expiry`: `{days: [30, 14, 7]}`.",
+            "title": "Spec",
+            "type": "object"
+          },
+          "targets": {
+            "description": "Names of targets in the same tenant (1 to 10).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "spec",
+          "targets"
+        ],
+        "title": "AlertRuleIn",
+        "type": "object"
+      },
+      "AlertRulePatch": {
+        "additionalProperties": false,
+        "description": "Fields of a rule that can change; omitted fields stay as they are.",
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targets"
+          }
+        },
+        "title": "AlertRulePatch",
+        "type": "object"
+      },
+      "AlertRuleRead": {
+        "additionalProperties": false,
+        "description": "A rule.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Targets",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "spec",
+          "targets",
+          "enabled",
+          "version",
+          "created_by",
+          "created_at"
+        ],
+        "title": "AlertRuleRead",
+        "type": "object"
+      },
+      "AlertStatus": {
+        "additionalProperties": false,
+        "description": "What is firing now and the latest deliveries.",
+        "properties": {
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/AlertDeliveryRead"
+            },
+            "title": "Deliveries",
+            "type": "array"
+          },
+          "firing": {
+            "items": {
+              "$ref": "#/components/schemas/AlertFiring"
+            },
+            "title": "Firing",
+            "type": "array"
+          }
+        },
+        "required": [
+          "firing",
+          "deliveries"
+        ],
+        "title": "AlertStatus",
+        "type": "object"
+      },
+      "AlertTargetIn": {
+        "additionalProperties": false,
+        "description": "A place alerts go.",
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "description": "`webhook`: `{url}`. `chat`: `{url, format: slack|teams|mattermost}`. `email`: `{to: [address, ...]}`. URLs are https and name no private address.",
+            "title": "Config",
+            "type": "object"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "webhook",
+              "chat",
+              "email"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "description": "Lowercase letters, digits, `-` and `_`; unique in the tenant.",
+            "title": "Name",
+            "type": "string"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Webhooks only: an OpenBao path (`kv/...`) whose value signs each body (`X-Switchyard-Signature: sha256=<hmac>`). The secret itself is never stored here.",
+            "title": "Secret Ref"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "config"
+        ],
+        "title": "AlertTargetIn",
+        "type": "object"
+      },
+      "AlertTargetPatch": {
+        "additionalProperties": false,
+        "description": "Fields of a target that can change; omitted fields stay as they are.",
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Ref"
+          }
+        },
+        "title": "AlertTargetPatch",
+        "type": "object"
+      },
+      "AlertTargetRead": {
+        "additionalProperties": false,
+        "description": "A target.",
+        "properties": {
+          "config": {
+            "additionalProperties": true,
+            "title": "Config",
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secret_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret Ref"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "config",
+          "secret_ref",
+          "enabled",
+          "version",
+          "created_by",
+          "created_at"
+        ],
+        "title": "AlertTargetRead",
+        "type": "object"
+      },
+      "AlertTargetTest": {
+        "additionalProperties": false,
+        "description": "The outcome of a test message.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why delivery failed, when it did.",
+            "title": "Error"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "AlertTargetTest",
+        "type": "object"
+      },
       "Algorithm": {
         "description": "Pool load-balancing algorithm.",
         "enum": [
@@ -4215,6 +4761,100 @@
         "title": "EngineIn",
         "type": "object"
       },
+      "EngineMetrics": {
+        "additionalProperties": false,
+        "description": "Time series and headline numbers of one service engine.",
+        "properties": {
+          "cpu_percent": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "title": "Cpu Percent",
+            "type": "array"
+          },
+          "haproxy_sessions": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "title": "Haproxy Sessions",
+            "type": "array"
+          },
+          "memory_used_bytes": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "title": "Memory Used Bytes",
+            "type": "array"
+          },
+          "step_s": {
+            "title": "Step S",
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EngineSummary"
+          },
+          "traffic_in_bps": {
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            },
+            "title": "Traffic In Bps",
+            "type": "array"
+          },
+          "window_s": {
+            "title": "Window S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "window_s",
+          "step_s",
+          "summary",
+          "cpu_percent",
+          "memory_used_bytes",
+          "haproxy_sessions",
+          "traffic_in_bps"
+        ],
+        "title": "EngineMetrics",
+        "type": "object"
+      },
+      "EngineMetricsRead": {
+        "additionalProperties": false,
+        "description": "Metrics of one service engine, or why there are none.",
+        "properties": {
+          "available": {
+            "description": "False when no metrics backend is configured or it cannot be reached.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngineMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why `available` is false.",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "EngineMetricsRead",
+        "type": "object"
+      },
       "EngineRead": {
         "additionalProperties": false,
         "description": "A service engine (SE VM) with where it runs and whether its agent has enrolled.\n\nLive health (reachable, drift, BGP/VRRP) is in `GET /status/engines`, not here.",
@@ -4504,6 +5144,86 @@
         "title": "EngineStatusRead",
         "type": "object"
       },
+      "EngineSummary": {
+        "additionalProperties": false,
+        "description": "The latest value of each headline metric of one service engine.",
+        "properties": {
+          "cpu_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "CPU used, as a percentage of all vCPUs (0 to 100).",
+            "title": "Cpu Percent"
+          },
+          "haproxy_sessions": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current HAProxy sessions on this engine.",
+            "title": "Haproxy Sessions"
+          },
+          "memory_total_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Memory the engine has.",
+            "title": "Memory Total Bytes"
+          },
+          "memory_used_bytes": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Memory in use.",
+            "title": "Memory Used Bytes"
+          },
+          "traffic_in_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bits per second received by HAProxy on this engine.",
+            "title": "Traffic In Bps"
+          },
+          "vcpus": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Number of vCPUs the engine sees.",
+            "title": "Vcpus"
+          }
+        },
+        "title": "EngineSummary",
+        "type": "object"
+      },
       "EnrollIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential).",
@@ -4699,6 +5419,58 @@
           "last_checked_at"
         ],
         "title": "FailingMember",
+        "type": "object"
+      },
+      "GrafanaLaunchIn": {
+        "additionalProperties": false,
+        "description": "Where to land in the embedded Grafana.",
+        "properties": {
+          "landing": {
+            "default": "",
+            "description": "A path inside Grafana: empty (the tenant's home dashboard), `/d/<uid>[/<slug>]`, `/explore` or `/dashboards`, optionally with a query string.",
+            "maxLength": 400,
+            "title": "Landing",
+            "type": "string"
+          }
+        },
+        "title": "GrafanaLaunchIn",
+        "type": "object"
+      },
+      "GrafanaLaunchOut": {
+        "additionalProperties": false,
+        "description": "A one-time link to the embedded Grafana.",
+        "properties": {
+          "expires_at": {
+            "description": "When the link stops working if it was not opened.",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The tenant Grafana is scoped to; null for all.",
+            "title": "Tenant Id"
+          },
+          "url": {
+            "description": "Open this path in a new browser tab within `expires_at`. It works once: Switchyard exchanges it for a short session cookie and redirects into Grafana.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at",
+          "tenant_id"
+        ],
+        "title": "GrafanaLaunchOut",
         "type": "object"
       },
       "GrantSourceRead": {
@@ -5997,7 +6769,7 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
         "enum": [
           "apply_change_set",
           "reapply_se_group",
@@ -6009,7 +6781,8 @@
           "sync_cloudflare_ips",
           "poll_status",
           "git_mirror",
-          "gc"
+          "gc",
+          "evaluate_alerts"
         ],
         "title": "JobKind",
         "type": "string"
@@ -6353,6 +7126,12 @@
             ],
             "description": "Base URL of Grafana (`SWITCHYARD_GRAFANA_URL`), or null when none is set.",
             "title": "Grafana"
+          },
+          "grafana_embedded": {
+            "default": false,
+            "description": "Grafana is behind the controller: `POST /tenants/{t}/grafana/launch` returns a link that opens it in a new tab, scoped to the tenant (ADR 0085).",
+            "title": "Grafana Embedded",
+            "type": "boolean"
           }
         },
         "title": "MeLinks",
@@ -14670,6 +15449,108 @@
         "x-required-role": "system-admin"
       }
     },
+    "/api/v1/alert-catalog": {
+      "get": {
+        "description": "Metrics a rule can watch, audit actions an event rule can name, chat formats.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "alert_catalog_api_v1_alert_catalog_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "chat_formats": [
+                    "slack",
+                    "teams",
+                    "mattermost"
+                  ],
+                  "email_configured": false,
+                  "event_actions": [
+                    "change_set.failed",
+                    "drift.detected"
+                  ],
+                  "metrics": [
+                    {
+                      "label": "Share of 5xx responses",
+                      "name": "vs_5xx_ratio",
+                      "scope": "vs",
+                      "unit": "%"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AlertCatalog"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "What alert rules and targets can use",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
     "/api/v1/audit-actions": {
       "get": {
         "description": "Every `action` an audit event can carry, with its category (the part before the dot) and a one-sentence description, for labels and filters. Any authenticated caller.\n\n**Access:** Any authenticated caller.",
@@ -15302,7 +16183,8 @@
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
                   "links": {
-                    "grafana": "https://grafana.example.test"
+                    "grafana": "https://grafana.example.test",
+                    "grafana_embedded": true
                   },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
@@ -15785,7 +16667,8 @@
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
                   "links": {
-                    "grafana": "https://grafana.example.test"
+                    "grafana": "https://grafana.example.test",
+                    "grafana_embedded": true
                   },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
@@ -16250,6 +17133,108 @@
           "engines"
         ],
         "x-required-role": "public"
+      }
+    },
+    "/api/v1/grafana/launch": {
+      "post": {
+        "description": "Like the tenant form, for the administrator's own Grafana organization with the dashboards that span tenants. Requires the system-admin role.\n\n**Access:** `system-admin` only.",
+        "operationId": "grafana_launch_all_api_v1_grafana_launch_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "landing": ""
+              },
+              "schema": {
+                "$ref": "#/components/schemas/GrafanaLaunchIn",
+                "default": {
+                  "landing": ""
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "expires_at": "2026-10-10T08:30:00Z",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                  "url": "/grafana/launch?ticket=sygt_Qm9vdHN0cmFwLXRpY2tldC1leGFtcGxlLW9ubHk"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GrafanaLaunchOut"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Grafana for every tenant",
+        "tags": [
+          "grafana"
+        ],
+        "x-required-role": "system-admin"
       }
     },
     "/api/v1/healthz": {
@@ -17396,7 +18381,8 @@
                   "id": "0192f3a0-0000-7000-8000-000000000031",
                   "is_system": false,
                   "links": {
-                    "grafana": "https://grafana.example.test"
+                    "grafana": "https://grafana.example.test",
+                    "grafana_embedded": true
                   },
                   "name": "Alice Example",
                   "principal": "user:authentik:alice",
@@ -19972,6 +20958,1246 @@
           "tenants"
         ],
         "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/alert-rules": {
+      "get": {
+        "description": "What this tenant watches. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_alert_rules_api_v1_tenants__t__alert_rules_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-10T08:30:00Z",
+                    "created_by": "user:authentik:alice",
+                    "enabled": true,
+                    "id": "0192f3a0-0000-7000-8000-0000000000a2",
+                    "kind": "cert_expiry",
+                    "name": "certs-expiring",
+                    "spec": {
+                      "days": [
+                        30,
+                        14,
+                        7
+                      ]
+                    },
+                    "targets": [
+                      "ops-chat"
+                    ],
+                    "version": 1
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AlertRuleRead"
+                  },
+                  "title": "Response List Alert Rules Api V1 Tenants  T  Alert Rules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List alert rules",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "viewer"
+      },
+      "post": {
+        "description": "`event`: tell me when an audit event with one of these actions is written. `metric`: tell me when a built-in series is over or under a threshold for N minutes (and when it recovers). `cert_expiry`: tell me when a certificate is within 30, 14 or 7 days (or your own days) of expiring, and when it is renewed. Applies live and is audited. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "create_alert_rule_api_v1_tenants__t__alert_rules_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "kind": "cert_expiry",
+                "name": "certs-expiring",
+                "spec": {
+                  "days": [
+                    30,
+                    14,
+                    7
+                  ]
+                },
+                "targets": [
+                  "ops-chat"
+                ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AlertRuleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "created_by": "user:authentik:alice",
+                  "enabled": true,
+                  "id": "0192f3a0-0000-7000-8000-0000000000a2",
+                  "kind": "cert_expiry",
+                  "name": "certs-expiring",
+                  "spec": {
+                    "days": [
+                      30,
+                      14,
+                      7
+                    ]
+                  },
+                  "targets": [
+                    "ops-chat"
+                  ],
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Create an alert rule",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/alert-rules/{name}": {
+      "delete": {
+        "description": "Also forgets what it was firing. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "delete_alert_rule_api_v1_tenants__t__alert_rules__name__delete",
+        "parameters": [
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete an alert rule",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "tenant-admin"
+      },
+      "patch": {
+        "description": "Change the specification, the targets or the enabled flag. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "patch_alert_rule_api_v1_tenants__t__alert_rules__name__patch",
+        "parameters": [
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "enabled": false
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AlertRulePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "created_by": "user:authentik:alice",
+                  "enabled": true,
+                  "id": "0192f3a0-0000-7000-8000-0000000000a2",
+                  "kind": "cert_expiry",
+                  "name": "certs-expiring",
+                  "spec": {
+                    "days": [
+                      30,
+                      14,
+                      7
+                    ]
+                  },
+                  "targets": [
+                    "ops-chat"
+                  ],
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AlertRuleRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Change an alert rule",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/alert-targets": {
+      "get": {
+        "description": "Where this tenant's alerts go. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_alert_targets_api_v1_tenants__t__alert_targets_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "config": {
+                      "format": "slack",
+                      "url": "https://hooks.example.test/services/T000/B000/XXXX"
+                    },
+                    "created_at": "2026-10-10T08:30:00Z",
+                    "created_by": "user:authentik:alice",
+                    "enabled": true,
+                    "id": "0192f3a0-0000-7000-8000-0000000000a1",
+                    "kind": "chat",
+                    "name": "ops-chat",
+                    "version": 1
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AlertTargetRead"
+                  },
+                  "title": "Response List Alert Targets Api V1 Tenants  T  Alert Targets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List alert targets",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "viewer"
+      },
+      "post": {
+        "description": "A webhook (JSON body, optionally signed with a secret kept in OpenBao), a chat incoming webhook (Slack, Teams or Mattermost) or a list of email addresses. URLs must be https and must not name a private address. Applies live (no change set) and is audited. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "create_alert_target_api_v1_tenants__t__alert_targets_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "config": {
+                  "format": "slack",
+                  "url": "https://hooks.example.test/services/T000/B000/XXXX"
+                },
+                "kind": "chat",
+                "name": "ops-chat"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AlertTargetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "config": {
+                    "format": "slack",
+                    "url": "https://hooks.example.test/services/T000/B000/XXXX"
+                  },
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "created_by": "user:authentik:alice",
+                  "enabled": true,
+                  "id": "0192f3a0-0000-7000-8000-0000000000a1",
+                  "kind": "chat",
+                  "name": "ops-chat",
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AlertTargetRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Create an alert target",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/alert-targets/{name}": {
+      "delete": {
+        "description": "Rules that name it skip it from then on. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "delete_alert_target_api_v1_tenants__t__alert_targets__name__delete",
+        "parameters": [
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete an alert target",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "tenant-admin"
+      },
+      "patch": {
+        "description": "Change the configuration, the secret reference or the enabled flag. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "patch_alert_target_api_v1_tenants__t__alert_targets__name__patch",
+        "parameters": [
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "enabled": false
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AlertTargetPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "config": {
+                    "format": "slack",
+                    "url": "https://hooks.example.test/services/T000/B000/XXXX"
+                  },
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "created_by": "user:authentik:alice",
+                  "enabled": true,
+                  "id": "0192f3a0-0000-7000-8000-0000000000a1",
+                  "kind": "chat",
+                  "name": "ops-chat",
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AlertTargetRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Change an alert target",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/alert-targets/{name}/test": {
+      "post": {
+        "description": "Sends one clearly marked test message now and reports whether it was delivered. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "test_alert_target_api_v1_tenants__t__alert_targets__name__test_post",
+        "parameters": [
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "ok": true
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AlertTargetTest"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send a test message through an alert target",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/alerts": {
+      "get": {
+        "description": "Alerts firing or waiting out their duration, and the latest deliveries with their outcome. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "alert_status_api_v1_tenants__t__alerts_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "deliveries": [
+                    {
+                      "at": "2026-10-10T08:30:00Z",
+                      "key": "cert:shop-example",
+                      "kind": "firing",
+                      "rule": "certs-expiring",
+                      "status": "sent",
+                      "target": "ops-chat"
+                    }
+                  ],
+                  "firing": [
+                    {
+                      "details": {
+                        "not_after": "2026-10-10T08:30:00Z",
+                        "tier": 14
+                      },
+                      "key": "cert:shop-example",
+                      "rule": "certs-expiring",
+                      "since": "2026-10-10T08:30:00Z",
+                      "state": "firing"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AlertStatus"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "What is firing and what was sent",
+        "tags": [
+          "alerts"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/audit-events": {
@@ -25607,6 +27833,201 @@
         "x-required-role": "tenant-admin"
       }
     },
+    "/api/v1/tenants/{t}/engines/{engine}/metrics": {
+      "get": {
+        "description": "CPU as a percentage of all vCPUs, memory in use, current HAProxy sessions and traffic received (bits per second) of one engine over the last `window_s` seconds (ending at `until` when given), one point per `step_s`, plus the latest value of each and the engine's vCPU count and memory. Read from Prometheus with the tenant and engine labels enforced. `available: false` (with a `reason`) when no backend is configured or it fails; a missing sample is a gap in the series, never zero. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "engine_metrics_api_v1_tenants__t__engines__engine__metrics_get",
+        "parameters": [
+          {
+            "description": "Engine id.",
+            "in": "path",
+            "name": "engine",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Engine",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Seconds back from `until` (default: now).",
+            "in": "query",
+            "name": "window_s",
+            "required": false,
+            "schema": {
+              "default": 3600,
+              "description": "Seconds back from `until` (default: now).",
+              "maximum": 2592000,
+              "minimum": 60,
+              "title": "Window S",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Seconds between points; default fits ~120 points.",
+            "in": "query",
+            "name": "step_s",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 3600,
+                  "minimum": 5,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Seconds between points; default fits ~120 points.",
+              "title": "Step S"
+            }
+          },
+          {
+            "description": "End of the range (RFC 3339); default now. Not more than five minutes ahead.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the range (RFC 3339); default now. Not more than five minutes ahead.",
+              "title": "Until"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "available": true,
+                  "metrics": {
+                    "cpu_percent": [
+                      {
+                        "t": "2026-10-10T08:30:00Z",
+                        "v": 32.0
+                      }
+                    ],
+                    "haproxy_sessions": [
+                      {
+                        "t": "2026-10-10T08:30:00Z",
+                        "v": 1980
+                      }
+                    ],
+                    "memory_used_bytes": [
+                      {
+                        "t": "2026-10-10T08:30:00Z",
+                        "v": 2791728742
+                      }
+                    ],
+                    "step_s": 30,
+                    "summary": {
+                      "cpu_percent": 32.0,
+                      "haproxy_sessions": 1980,
+                      "memory_total_bytes": 8589934592,
+                      "memory_used_bytes": 2791728742,
+                      "traffic_in_bps": 147000000,
+                      "vcpus": 4
+                    },
+                    "traffic_in_bps": [
+                      {
+                        "t": "2026-10-10T08:30:00Z",
+                        "v": 147000000
+                      }
+                    ],
+                    "window_s": 3600
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/EngineMetricsRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Metrics of a service engine",
+        "tags": [
+          "engines"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
     "/api/v1/tenants/{t}/engines/{engine}/retire": {
       "post": {
         "description": "Disable an engine, destroy its VM and remove it (refused for the last serving engine).\n\n**Access:** `tenant-admin` or higher in the tenant.",
@@ -25975,6 +28396,128 @@
           "engines"
         ],
         "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/grafana/launch": {
+      "post": {
+        "description": "Returns a link that works once, for 60 seconds. Opening it in a new browser tab starts a Grafana session that can read this tenant's metrics and logs and nothing else: the controller scopes every query Grafana sends to Prometheus and Loki. The session ends 30 minutes after its last use (8 hours at most) and with the browser session. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "grafana_launch_tenant_api_v1_tenants__t__grafana_launch_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "landing": "/d/sy-tenant-services"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/GrafanaLaunchIn",
+                "default": {
+                  "landing": ""
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "expires_at": "2026-10-10T08:30:00Z",
+                  "tenant_id": "0192f3a0-0000-7000-8000-000000000001",
+                  "url": "/grafana/launch?ticket=sygt_Qm9vdHN0cmFwLXRpY2tldC1leGFtcGxlLW9ubHk"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GrafanaLaunchOut"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open Grafana for a tenant",
+        "tags": [
+          "grafana"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/health-monitors": {
@@ -28020,6 +30563,247 @@
           "jobs"
         ],
         "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/logs": {
+      "get": {
+        "description": "HAProxy HTTP log lines of every virtual service of the tenant (or of one, with `service`), newest first. Same filters and paging as the per-service log: `since`/`until` (default: the last hour), `q`, `status_class`, `limit`, `cursor`. Read from Loki with the tenant label enforced. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
+        "operationId": "tenant_logs_api_v1_tenants__t__logs_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Virtual service id.",
+            "in": "query",
+            "name": "service",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 63,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Service"
+            }
+          },
+          {
+            "description": "Only events at or after this time (ISO 8601).",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Only events before this time (ISO 8601).",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Until"
+            }
+          },
+          {
+            "description": "Free text.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Only responses of this class: 2, 3, 4 or 5.",
+            "in": "query",
+            "name": "status_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 5,
+                  "minimum": 2,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status Class"
+            }
+          },
+          {
+            "description": "`next_cursor` of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "available": true,
+                  "entries": [
+                    {
+                      "at": "2026-10-10T08:30:00Z",
+                      "backend": "pool_web",
+                      "bytes": 512,
+                      "client_ip": "198.51.100.7",
+                      "duration_ms": 13,
+                      "frontend": "vs_shop",
+                      "method": "GET",
+                      "path": "/cart",
+                      "raw": "198.51.100.7:51514 [10/Oct/2026:08:30:00.123] vs_shop pool_web/web-1 0/0/1/12/13 200 512 - - ---- 1/1/0/0/0 0/0 \"GET /cart HTTP/1.1\"",
+                      "server": "web-1",
+                      "status": 200
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AccessLogs"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`cursor` is not a value this endpoint returned."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Access log of the whole tenant",
+        "tags": [
+          "virtual-services"
+        ],
+        "x-required-role": "viewer"
       }
     },
     "/api/v1/tenants/{t}/metrics/virtual-services": {
@@ -39222,14 +42006,14 @@
             }
           },
           {
-            "description": "Seconds back from now.",
+            "description": "Seconds back from `until` (default: now).",
             "in": "query",
             "name": "window_s",
             "required": false,
             "schema": {
               "default": 3600,
-              "description": "Seconds back from now.",
-              "maximum": 604800,
+              "description": "Seconds back from `until` (default: now).",
+              "maximum": 2592000,
               "minimum": 60,
               "title": "Window S",
               "type": "integer"
@@ -39253,6 +42037,25 @@
               ],
               "description": "Seconds between points; default fits ~120 points.",
               "title": "Step S"
+            }
+          },
+          {
+            "description": "End of the range (RFC 3339); default now. Not more than five minutes ahead.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End of the range (RFC 3339); default now. Not more than five minutes ahead.",
+              "title": "Until"
             }
           },
           {
@@ -40559,6 +43362,14 @@
     {
       "description": "Listeners: VIP, ports, TLS, routes.",
       "name": "virtual-services"
+    },
+    {
+      "description": "Grafana embedded in the UI: one-time launch links, scoped to a tenant.",
+      "name": "grafana"
+    },
+    {
+      "description": "Alert targets (webhook, chat, email), rules on events, metrics and certificate expiry, and what is firing.",
+      "name": "alerts"
     },
     {
       "description": "Backend pools and members; runtime member state.",

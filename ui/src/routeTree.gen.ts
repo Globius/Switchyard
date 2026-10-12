@@ -26,6 +26,7 @@ import { Route as TTenantNewRouteImport } from './routes/t.$tenant.new'
 import { Route as TTenantShellIndexRouteImport } from './routes/t.$tenant._shell.index'
 import { Route as TTenantShellSplatRouteImport } from './routes/t.$tenant._shell.$'
 import { Route as TTenantShellAccessRouteImport } from './routes/t.$tenant._shell.access'
+import { Route as TTenantShellAlertsRouteImport } from './routes/t.$tenant._shell.alerts'
 import { Route as TTenantShellCertificatesRouteImport } from './routes/t.$tenant._shell.certificates'
 import { Route as TTenantShellChangeSetsRouteImport } from './routes/t.$tenant._shell.change-sets'
 import { Route as TTenantShellHealthMonitorsRouteImport } from './routes/t.$tenant._shell.health-monitors'
@@ -126,6 +127,11 @@ const TTenantShellSplatRoute = TTenantShellSplatRouteImport.update({
 const TTenantShellAccessRoute = TTenantShellAccessRouteImport.update({
   id: '/access',
   path: '/access',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
+const TTenantShellAlertsRoute = TTenantShellAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
   getParentRoute: () => TTenantShellRoute,
 } as any)
 const TTenantShellCertificatesRoute =
@@ -239,6 +245,7 @@ export interface FileRoutesByFullPath {
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/$': typeof TTenantShellSplatRoute
   '/t/$tenant/access': typeof TTenantShellAccessRoute
+  '/t/$tenant/alerts': typeof TTenantShellAlertsRoute
   '/t/$tenant/certificates': typeof TTenantShellCertificatesRoute
   '/t/$tenant/change-sets': typeof TTenantShellChangeSetsRoute
   '/t/$tenant/health-monitors': typeof TTenantShellHealthMonitorsRoute
@@ -273,6 +280,7 @@ export interface FileRoutesByTo {
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/$': typeof TTenantShellSplatRoute
   '/t/$tenant/access': typeof TTenantShellAccessRoute
+  '/t/$tenant/alerts': typeof TTenantShellAlertsRoute
   '/t/$tenant/certificates': typeof TTenantShellCertificatesRoute
   '/t/$tenant/change-sets': typeof TTenantShellChangeSetsRoute
   '/t/$tenant/health-monitors': typeof TTenantShellHealthMonitorsRoute
@@ -308,6 +316,7 @@ export interface FileRoutesById {
   '/t/$tenant/new': typeof TTenantNewRoute
   '/t/$tenant/_shell/$': typeof TTenantShellSplatRoute
   '/t/$tenant/_shell/access': typeof TTenantShellAccessRoute
+  '/t/$tenant/_shell/alerts': typeof TTenantShellAlertsRoute
   '/t/$tenant/_shell/certificates': typeof TTenantShellCertificatesRoute
   '/t/$tenant/_shell/change-sets': typeof TTenantShellChangeSetsRoute
   '/t/$tenant/_shell/health-monitors': typeof TTenantShellHealthMonitorsRoute
@@ -345,6 +354,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/new'
     | '/t/$tenant/$'
     | '/t/$tenant/access'
+    | '/t/$tenant/alerts'
     | '/t/$tenant/certificates'
     | '/t/$tenant/change-sets'
     | '/t/$tenant/health-monitors'
@@ -379,6 +389,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/new'
     | '/t/$tenant/$'
     | '/t/$tenant/access'
+    | '/t/$tenant/alerts'
     | '/t/$tenant/certificates'
     | '/t/$tenant/change-sets'
     | '/t/$tenant/health-monitors'
@@ -413,6 +424,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/new'
     | '/t/$tenant/_shell/$'
     | '/t/$tenant/_shell/access'
+    | '/t/$tenant/_shell/alerts'
     | '/t/$tenant/_shell/certificates'
     | '/t/$tenant/_shell/change-sets'
     | '/t/$tenant/_shell/health-monitors'
@@ -559,6 +571,13 @@ declare module '@tanstack/react-router' {
       path: '/access'
       fullPath: '/t/$tenant/access'
       preLoaderRoute: typeof TTenantShellAccessRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
+    '/t/$tenant/_shell/alerts': {
+      id: '/t/$tenant/_shell/alerts'
+      path: '/alerts'
+      fullPath: '/t/$tenant/alerts'
+      preLoaderRoute: typeof TTenantShellAlertsRouteImport
       parentRoute: typeof TTenantShellRoute
     }
     '/t/$tenant/_shell/certificates': {
@@ -734,6 +753,7 @@ const TTenantShellVirtualServicesIdRouteWithChildren =
 interface TTenantShellRouteChildren {
   TTenantShellSplatRoute: typeof TTenantShellSplatRoute
   TTenantShellAccessRoute: typeof TTenantShellAccessRoute
+  TTenantShellAlertsRoute: typeof TTenantShellAlertsRoute
   TTenantShellCertificatesRoute: typeof TTenantShellCertificatesRoute
   TTenantShellChangeSetsRoute: typeof TTenantShellChangeSetsRoute
   TTenantShellHealthMonitorsRoute: typeof TTenantShellHealthMonitorsRoute
@@ -752,6 +772,7 @@ interface TTenantShellRouteChildren {
 const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellSplatRoute: TTenantShellSplatRoute,
   TTenantShellAccessRoute: TTenantShellAccessRoute,
+  TTenantShellAlertsRoute: TTenantShellAlertsRoute,
   TTenantShellCertificatesRoute: TTenantShellCertificatesRoute,
   TTenantShellChangeSetsRoute: TTenantShellChangeSetsRoute,
   TTenantShellHealthMonitorsRoute: TTenantShellHealthMonitorsRoute,
