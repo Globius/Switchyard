@@ -48,6 +48,8 @@ from switchyard.api.schemas import (
     AuditActionRead,
     AuditEventRead,
     AuthProviders,
+    AviImportIn,
+    AviImportRead,
     BreakGlassConfirmIn,
     BreakGlassEnrollIn,
     BreakGlassEnrollment,
@@ -179,6 +181,7 @@ from switchyard.services.identity_providers import (
     IdentityProviderRecord,
     IdentityProviderService,
 )
+from switchyard.services.importers import AviImportService
 from switchyard.services.infra import DeployRequest, InfraJobs
 from switchyard.services.jobs import JobService
 from switchyard.services.members import MemberService
@@ -235,6 +238,7 @@ class ApiServices:
     acme_providers: AcmeProviders | None = None
     dns_providers: DnsProviders | None = None
     controller: ControllerSettings = None  # type: ignore[assignment]
+    avi_import: AviImportService = None  # type: ignore[assignment]
 
 
 def build_services(
@@ -297,6 +301,7 @@ def build_services(
         acme_providers=AcmeProviders(db, secrets) if writer is not None else None,
         dns_providers=DnsProviders(db, secrets) if writer is not None else None,
         controller=ControllerSettings(db, ChangeSetService(db)),
+        avi_import=AviImportService(db, ChangeSetService(db), certs),
     )
 
 
@@ -3852,6 +3857,39 @@ def create_app(
             RenewPolicy(body.renew_policy) if body.renew_policy else RenewPolicy.AUTO,
             body.renew_before_days,
         )
+
+    @router.post(
+        "/tenants/{t}/imports/avi",
+        tags=["imports"],
+        summary="Import an Avi configuration export",
+        response_model=AviImportRead,
+        responses=_ok(ex.AVI_IMPORT) | VALIDATION_RESPONSE,
+    )
+    async def import_avi(
+        body: AviImportIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Convert the export; with `dry_run: false` open a draft change set from it.
+
+        SNI parents and their children become one HTTP service with host routes. Pools, health
+        monitors, certificates (with keys, stored in the secrets backend), HTTP redirects and pool
+        switches are converted; WAF, DataScripts and other things are listed under `findings` as
+        `manual`. VIPs do not carry over: they come from `vip_pool` or `vip_map`. The draft is not
+        applied; review it like any change set.
+        """
+        result = await svc.avi_import.run(
+            who,
+            tenant.id,
+            body.export,
+            se_group=body.se_group,
+            vip_pool=body.vip_pool,
+            vip_map=body.vip_map,
+            prefix=body.prefix,
+            include_unused=body.include_unused,
+            only=body.only,
+            dry_run=body.dry_run,
+            request_id=_rid(),
+        )
+        return asdict(result)
 
     @router.post(
         "/tenants/{t}/certificates/issue/check",

@@ -71,3 +71,4 @@ Date: YYYY-MM-DD
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
 | [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
 | [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |
+| [0150](0150-avi-importer.md) | Avi configuration importer | Accepted |

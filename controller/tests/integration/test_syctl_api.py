@@ -19,6 +19,7 @@ from switchyard.domain.workflow import Role
 from switchyard.jobs.handlers import build_handlers
 from switchyard.jobs.worker import Worker
 from switchyard.pipeline.engines import StaticEngineDirectory
+from switchyard.services.certificates import CertificateService
 from tests.pipeline_env import GROUP, TENANT, World, engine_record, principal, world
 
 pytestmark = pytest.mark.usefixtures("owner_engine")
@@ -50,7 +51,10 @@ async def server(
         directory = StaticEngineDirectory(
             {GROUP: [(engine_record(n), e) for n, e in w.engines.items()]}
         )
-        services = build_services(w.db, directory, MemorySecrets())
+        secrets = MemorySecrets()
+        services = build_services(
+            w.db, directory, secrets, CertificateService(w.db, secrets, w.service)
+        )
         token, _ = await services.tokens.create(
             principal(Role.SYSTEM_ADMIN, "root"), None, "cli", Role.SYSTEM_ADMIN
         )
@@ -206,3 +210,32 @@ async def test_acme_dns_and_cert_commands(server: Server) -> None:
     assert code == 0, out
     code, out = await server.syctl("acme", "list")
     assert out.strip() == ""
+
+
+async def test_import_avi_reports_then_creates_a_draft(server: Server, tmp_path: Path) -> None:
+    from tests.avi_support import export
+
+    await server.syctl("login", "--url", server.url, "--token", server.token)
+    path = tmp_path / "avi.json"
+    path.write_text(json.dumps(export()))
+    code, out = await server.syctl(
+        "import-avi", str(path), "-t", "acme", "--se-group", "edge", "--vip-pool", "main"
+    )
+    assert code == 0, out
+    assert out.startswith("dry run: ") and "3 virtual service" in out
+    assert "VIP vip-20: 10.60.3.20 -> 192.0.2." in out
+    assert "manual   virtual_service:External-ParentSNI: WAF policy detect-only" in out
+    code, out = await server.syctl(
+        "import-avi",
+        str(path),
+        "-t",
+        "acme",
+        "--se-group",
+        "edge",
+        "--vip-pool",
+        "main",
+        "--commit",
+    )
+    assert code == 0 and "created a draft change set" in out and "change set " in out
+    code, out = await server.syctl("import-avi", str(path), "-t", "acme", "--se-group", "ghost")
+    assert code == 1 and "se_group" in out

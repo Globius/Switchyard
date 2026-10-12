@@ -1062,3 +1062,29 @@ CONTROLLER = {
         "database access; the break-glass login still works."
     ),
 }
+
+
+AVI_IMPORT = {
+    "dry_run": True,
+    "change_set_id": None,
+    "counts": {"health_monitor": 1, "pool": 2, "virtual_service": 1, "certificate": 1},
+    "objects": [
+        {"kind": "pool", "avi_name": "Keycloak Pool", "name": "keycloak-pool"},
+        {"kind": "virtual_service", "avi_name": "External-ParentSNI", "name": "external-parentsni"},
+    ],
+    "vips": [
+        {
+            "avi_vsvip": "vip-20",
+            "address": "10.60.3.20",
+            "new_address": "192.0.2.20",
+            "services": ["External-ParentSNI"],
+        }
+    ],
+    "findings": [
+        {
+            "level": "manual",
+            "object": "virtual_service:External-ParentSNI",
+            "message": "WAF policy detect-only is not converted (no WAF yet)",
+        }
+    ],
+}

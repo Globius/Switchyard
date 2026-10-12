@@ -979,6 +979,54 @@ def _issue_body(
     return body
 
 
+@api_app.command("import-avi")
+def api_import_avi(
+    file: Annotated[Path, typer.Argument(help="Avi configuration export (JSON).")],
+    tenant: Tenant,
+    se_group: Annotated[str, typer.Option(help="SE group the services will use.")],
+    vip_pool: Annotated[str | None, typer.Option(help="VIP pool for the new VIPs.")] = None,
+    vip: Annotated[
+        list[str] | None, typer.Option(help="OLD=NEW fixed address (Avi VIP name or address).")
+    ] = None,
+    prefix: Annotated[str, typer.Option(help="Put in front of every new name.")] = "",
+    include_unused: Annotated[bool, typer.Option(help="Also convert unused objects.")] = False,
+    only: Annotated[list[str] | None, typer.Option(help="Convert only this service.")] = None,
+    commit: Annotated[
+        bool, typer.Option(help="Create the draft change set (default: report only).")
+    ] = False,
+) -> None:
+    """Convert an Avi export; report what would be created, or open a draft change set."""
+    import json
+
+    try:
+        export = json.loads(file.read_text("utf-8"))
+    except (OSError, ValueError) as exc:
+        raise fail(f"cannot read {file}: {exc}", 2) from exc
+    body = {
+        "export": export,
+        "se_group": se_group,
+        "vip_pool": vip_pool,
+        "vip_map": _pairs(vip),
+        "prefix": prefix,
+        "include_unused": include_unused,
+        "only": only or [],
+        "dry_run": not commit,
+    }
+    result = _api_run(_call("POST", f"/tenants/{tenant}/imports/avi", body))
+    typer.echo(
+        ("created a draft change set" if commit else "dry run")
+        + ": "
+        + ", ".join(f"{n} {k.replace('_', ' ')}" for k, n in result["counts"].items())
+    )
+    for v in result["vips"]:
+        typer.echo(f"VIP {v['avi_vsvip']}: {v['address']} -> {v['new_address'] or '(none)'}")
+    for f in result["findings"]:
+        if f["level"] != "info":
+            typer.echo(f"{f['level']:8} {f['object']}: {f['message']}")
+    if result["change_set_id"]:
+        typer.echo(f"change set {result['change_set_id']}")
+
+
 @cert_app.command("check")
 def cert_check(
     name: str,

@@ -63,6 +63,10 @@ TAGS: list[dict[str, str]] = [
     {"name": "break-glass", "description": "The local emergency administrator and system tokens."},
     {"name": "system", "description": "Controller-wide settings (system administrators)."},
     {
+        "name": "imports",
+        "description": "Convert another vendor's configuration into a draft change set.",
+    },
+    {
         "name": "acme providers",
         "description": "Certificate authorities (ACME) and their accounts; system administrators "
         "write, everyone signed in reads.",
@@ -410,6 +414,14 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "dns_provider": "cloudflare-main",
         "renew_policy": "auto",
         "renew_before_days": 30,
+    },
+    "POST /tenants/{t}/imports/avi": {
+        "export": {"VirtualService": [], "Pool": []},
+        "se_group": "edge",
+        "vip_pool": "main",
+        "vip_map": {"vip-20": "192.0.2.20"},
+        "prefix": "avi-",
+        "dry_run": True,
     },
     "POST /tenants/{t}/certificates/issue/check": {
         "name": "web-example",

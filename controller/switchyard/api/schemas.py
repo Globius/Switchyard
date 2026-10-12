@@ -2159,3 +2159,70 @@ class ControllerChangeIn(ApiModel):
         le=600,
         description="Seconds to confirm before the change is reverted (default 120).",
     )
+
+
+# -- Importing an Avi configuration (ADR 0150) ----------------------------------------------------
+
+
+class AviImportIn(ApiModel):
+    """Convert an Avi configuration export into a draft change set."""
+
+    export: dict[str, Any] = Field(
+        description="The decoded Avi configuration export (`POST /api/configuration/export`, or "
+        "the `avi_config.json` of a backup): an object with a list per object type."
+    )
+    se_group: str = Field(description="Name of the SE group the services will use.")
+    vip_pool: str | None = Field(
+        default=None, description="VIP pool the new VIPs are taken from, one per Avi VIP."
+    )
+    vip_map: dict[str, str] = Field(
+        default_factory=dict,
+        description="Fixed new addresses, keyed by the Avi VIP name or its old address.",
+    )
+    prefix: str = Field(default="", max_length=20, description="Put in front of every new name.")
+    include_unused: bool = Field(
+        default=False, description="Also convert pools and other objects no service uses."
+    )
+    only: list[str] = Field(
+        default_factory=list, description="Convert only these virtual services (Avi names)."
+    )
+    dry_run: bool = Field(
+        default=True,
+        description="Only report what would be created. Send `false` to create the draft.",
+    )
+
+
+class AviMappedRead(ApiModel):
+    """An Avi object and what it became."""
+
+    kind: str
+    avi_name: str
+    name: str
+
+
+class AviVipRead(ApiModel):
+    """An Avi VIP and the address that replaces it."""
+
+    avi_vsvip: str
+    address: str | None = Field(description="The address in the export.")
+    new_address: str | None = Field(description="The address it gets here, if one was found.")
+    services: list[str]
+
+
+class AviFindingRead(ApiModel):
+    """One decision of the conversion."""
+
+    level: Literal["info", "warning", "manual", "skipped"]
+    object: str
+    message: str
+
+
+class AviImportRead(ApiModel):
+    """What the import did or would do."""
+
+    dry_run: bool
+    change_set_id: UUID | None = Field(description="The draft change set; empty for a dry run.")
+    counts: dict[str, int]
+    objects: list[AviMappedRead]
+    vips: list[AviVipRead]
+    findings: list[AviFindingRead]

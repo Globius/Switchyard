@@ -1477,6 +1477,242 @@
         "title": "AuthProviders",
         "type": "object"
       },
+      "AviFindingRead": {
+        "additionalProperties": false,
+        "description": "One decision of the conversion.",
+        "properties": {
+          "level": {
+            "enum": [
+              "info",
+              "warning",
+              "manual",
+              "skipped"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "object": {
+            "title": "Object",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "object",
+          "message"
+        ],
+        "title": "AviFindingRead",
+        "type": "object"
+      },
+      "AviImportIn": {
+        "additionalProperties": false,
+        "description": "Convert an Avi configuration export into a draft change set.",
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "description": "Only report what would be created. Send `false` to create the draft.",
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "export": {
+            "additionalProperties": true,
+            "description": "The decoded Avi configuration export (`POST /api/configuration/export`, or the `avi_config.json` of a backup): an object with a list per object type.",
+            "title": "Export",
+            "type": "object"
+          },
+          "include_unused": {
+            "default": false,
+            "description": "Also convert pools and other objects no service uses.",
+            "title": "Include Unused",
+            "type": "boolean"
+          },
+          "only": {
+            "description": "Convert only these virtual services (Avi names).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Only",
+            "type": "array"
+          },
+          "prefix": {
+            "default": "",
+            "description": "Put in front of every new name.",
+            "maxLength": 20,
+            "title": "Prefix",
+            "type": "string"
+          },
+          "se_group": {
+            "description": "Name of the SE group the services will use.",
+            "title": "Se Group",
+            "type": "string"
+          },
+          "vip_map": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Fixed new addresses, keyed by the Avi VIP name or its old address.",
+            "title": "Vip Map",
+            "type": "object"
+          },
+          "vip_pool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "VIP pool the new VIPs are taken from, one per Avi VIP.",
+            "title": "Vip Pool"
+          }
+        },
+        "required": [
+          "export",
+          "se_group"
+        ],
+        "title": "AviImportIn",
+        "type": "object"
+      },
+      "AviImportRead": {
+        "additionalProperties": false,
+        "description": "What the import did or would do.",
+        "properties": {
+          "change_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The draft change set; empty for a dry run.",
+            "title": "Change Set Id"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/AviFindingRead"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "objects": {
+            "items": {
+              "$ref": "#/components/schemas/AviMappedRead"
+            },
+            "title": "Objects",
+            "type": "array"
+          },
+          "vips": {
+            "items": {
+              "$ref": "#/components/schemas/AviVipRead"
+            },
+            "title": "Vips",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "change_set_id",
+          "counts",
+          "objects",
+          "vips",
+          "findings"
+        ],
+        "title": "AviImportRead",
+        "type": "object"
+      },
+      "AviMappedRead": {
+        "additionalProperties": false,
+        "description": "An Avi object and what it became.",
+        "properties": {
+          "avi_name": {
+            "title": "Avi Name",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "avi_name",
+          "name"
+        ],
+        "title": "AviMappedRead",
+        "type": "object"
+      },
+      "AviVipRead": {
+        "additionalProperties": false,
+        "description": "An Avi VIP and the address that replaces it.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The address in the export.",
+            "title": "Address"
+          },
+          "avi_vsvip": {
+            "title": "Avi Vsvip",
+            "type": "string"
+          },
+          "new_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The address it gets here, if one was found.",
+            "title": "New Address"
+          },
+          "services": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Services",
+            "type": "array"
+          }
+        },
+        "required": [
+          "avi_vsvip",
+          "address",
+          "new_address",
+          "services"
+        ],
+        "title": "AviVipRead",
+        "type": "object"
+      },
       "BgpPeer": {
         "additionalProperties": false,
         "description": "An upstream BGP neighbour (for example a tenant's FortiGate VDOM).\n\nAttributes:\n    peer_ip: Neighbour address.\n    remote_asn: Neighbour AS number.\n    md5_ref: OpenBao reference of the session password; the password itself is never stored.\n    max_prefixes: Prefix limit for this neighbour; overrides the profile's ``max_prefixes``.",
@@ -28296,6 +28532,169 @@
         "x-required-role": "viewer"
       }
     },
+    "/api/v1/tenants/{t}/imports/avi": {
+      "post": {
+        "description": "Convert the export; with `dry_run: false` open a draft change set from it.\n\nSNI parents and their children become one HTTP service with host routes. Pools, health\nmonitors, certificates (with keys, stored in the secrets backend), HTTP redirects and pool\nswitches are converted; WAF, DataScripts and other things are listed under `findings` as\n`manual`. VIPs do not carry over: they come from `vip_pool` or `vip_map`. The draft is not\napplied; review it like any change set.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "import_avi_api_v1_tenants__t__imports_avi_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "dry_run": true,
+                "export": {
+                  "Pool": [],
+                  "VirtualService": []
+                },
+                "prefix": "avi-",
+                "se_group": "edge",
+                "vip_map": {
+                  "vip-20": "192.0.2.20"
+                },
+                "vip_pool": "main"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/AviImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "counts": {
+                    "certificate": 1,
+                    "health_monitor": 1,
+                    "pool": 2,
+                    "virtual_service": 1
+                  },
+                  "dry_run": true,
+                  "findings": [
+                    {
+                      "level": "manual",
+                      "message": "WAF policy detect-only is not converted (no WAF yet)",
+                      "object": "virtual_service:External-ParentSNI"
+                    }
+                  ],
+                  "objects": [
+                    {
+                      "avi_name": "Keycloak Pool",
+                      "kind": "pool",
+                      "name": "keycloak-pool"
+                    },
+                    {
+                      "avi_name": "External-ParentSNI",
+                      "kind": "virtual_service",
+                      "name": "external-parentsni"
+                    }
+                  ],
+                  "vips": [
+                    {
+                      "address": "10.60.3.20",
+                      "avi_vsvip": "vip-20",
+                      "new_address": "192.0.2.20",
+                      "services": [
+                        "External-ParentSNI"
+                      ]
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/AviImportRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Import an Avi configuration export",
+        "tags": [
+          "imports"
+        ],
+        "x-required-role": "operator"
+      }
+    },
     "/api/v1/tenants/{t}/jobs": {
       "get": {
         "description": "The tenant's jobs, newest first, filtered by `state` and `kind`. Page with `cursor`.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
@@ -41733,6 +42132,10 @@
     {
       "description": "Controller-wide settings (system administrators).",
       "name": "system"
+    },
+    {
+      "description": "Convert another vendor's configuration into a draft change set.",
+      "name": "imports"
     },
     {
       "description": "Certificate authorities (ACME) and their accounts; system administrators write, everyone signed in reads.",
