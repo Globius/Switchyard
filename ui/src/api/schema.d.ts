@@ -11075,14 +11075,28 @@ export interface components {
         };
         /**
          * VsRoute
-         * @description Route a request to a pool or answer it with a redirect.
+         * @description Route a request to a pool, split it over weighted pools, or answer it with a redirect.
          *
          *     Attributes:
          *         order: Position among path routes; lower runs first. Host-only routes are looked up in map
          *             files and are order-independent (exact host wins over wildcard).
          *         match: What the request must match. Must not be empty.
-         *         pool_id: Target pool, or ``None`` when ``redirect`` is set.
-         *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` is set.
+         *         pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.
+         *         redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.
+         *         pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each
+         *             request is sent to one of them at random in that proportion (ADR 0119).
+         *
+         *     Example:
+         *         >>> import uuid
+         *         >>> route = VsRoute(
+         *         ...     match=RouteMatch(host="app.example.test"),
+         *         ...     pools=(
+         *         ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),
+         *         ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),
+         *         ...     ),
+         *         ... )
+         *         >>> len(route.pool_ids)
+         *         2
          */
         VsRoute: {
             match: components["schemas"]["RouteMatch"];
@@ -11093,7 +11107,30 @@ export interface components {
             order: number;
             /** Pool Id */
             pool_id?: string | null;
+            /**
+             * Pools
+             * @default []
+             */
+            pools: components["schemas"]["WeightedPool"][];
             redirect?: components["schemas"]["RedirectAction"] | null;
+        };
+        /**
+         * WeightedPool
+         * @description One target of a weighted route: a pool and its share of the matching requests.
+         *
+         *     Example:
+         *         >>> import uuid
+         *         >>> WeightedPool(pool_id=uuid.UUID(int=1), weight=90).weight
+         *         90
+         */
+        WeightedPool: {
+            /**
+             * Pool Id
+             * Format: uuid
+             */
+            pool_id: string;
+            /** Weight */
+            weight: number;
         };
         /**
          * WouldGrant

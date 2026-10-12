@@ -237,3 +237,96 @@ def test_peers_must_sit_on_a_backend_network_of_the_group() -> None:
         (p.path, p.code) for p in validate_snapshot(snapshot_from_mapping(with_peers(A, outside)))
     ]
     assert got == [("se_groups.edge.peers.members[1].address", "peer_outside_backend_network")]
+
+
+# -- C2: weighted pools ------------------------------------------------------------------------
+
+
+def weighted(*weights: int, match: dict[str, Any] | None = None) -> dict[str, Any]:
+    pools = [{"pool_id": f"pool-{i}", "weight": w} for i, w in enumerate(weights)]
+    return {"match": match or {"host": "split.example.test"}, "pools": pools}
+
+
+def with_weighted_route(route: dict[str, Any]) -> dict[str, Any]:
+    d = copy.deepcopy(BASE)
+    d["pools"] += [
+        {
+            "id": f"pool-{i}",
+            "tenant_id": "t-acme",
+            "name": f"w{i}",
+            "members": [{"address": f"10.20.0.{20 + i}", "port": 80}],
+        }
+        for i in range(3)
+    ]
+    d["certificates"][0]["sans"].append("split.example.test")
+    d["virtual_services"][0]["routes"].append(route)
+    return d
+
+
+@pytest.mark.parametrize(
+    "weights",
+    [(90,), (50, 40), (60, 50), (100, 0), (1, 1, 98, 0)],
+)
+def test_weighted_routes_need_two_pools_adding_up_to_100(weights: tuple[int, ...]) -> None:
+    with pytest.raises(ValidationError):
+        dm.VsRoute.model_validate(weighted(*weights))
+
+
+def test_a_route_has_exactly_one_target() -> None:
+    one = "00000000-0000-0000-0000-000000000001"
+    two = "00000000-0000-0000-0000-000000000002"
+    pools = [{"pool_id": one, "weight": 50}, {"pool_id": two, "weight": 50}]
+    match = {"host": "a.example.test"}
+    with pytest.raises(ValidationError, match="exactly one"):
+        dm.VsRoute.model_validate({"match": match, "pools": pools, "pool_id": one})
+    with pytest.raises(ValidationError, match="exactly one"):
+        dm.VsRoute.model_validate({"match": match})
+
+
+def test_the_same_pool_cannot_appear_twice() -> None:
+    pools = [{"pool_id": "00000000-0000-0000-0000-000000000001", "weight": w} for w in (50, 50)]
+    with pytest.raises(ValidationError, match="only once"):
+        dm.VsRoute.model_validate({"match": {"host": "a.example.test"}, "pools": pools})
+
+
+def test_weighted_routes_validate_render_and_reference_every_pool() -> None:
+    d = with_weighted_route(weighted(70, 30))
+    assert problems(d) == []
+    snap = snapshot_from_mapping(d)
+    group = snap.se_groups[0].id
+    cfg = render_haproxy(snap, group).files["haproxy/haproxy.cfg"]
+    assert "http-request set-var(txn.pick) rand(100)" in cfg
+    assert "{ var(txn.pick) -m int lt 70 }" in cfg
+    assert {p.name for p in snap.for_se_group(group).pools} >= {"w0", "w1"}
+    assert "w2" not in {p.name for p in snap.for_se_group(group).pools}
+
+
+def test_a_weighted_route_to_a_missing_pool_is_reported_at_the_pool() -> None:
+    d = with_weighted_route(weighted(70, 30))
+    d["virtual_services"][0]["routes"][-1]["pools"][1]["pool_id"] = "pool-missing"
+    assert problems(d) == [("virtual_services.web.routes[1].pools[1].pool_id", "unknown_reference")]
+
+
+def test_tcp_routes_cannot_be_weighted() -> None:
+    route = {"match": {"host": "a.example.test"}, "pools": weighted(50, 50)["pools"]}
+    d = with_weighted_route(route)
+    d["virtual_services"].append(
+        {
+            **PASSTHROUGH,
+            "id": "vs-sni",
+            "tenant_id": "t-acme",
+            "se_group_id": "seg-1",
+            "routes": [
+                {
+                    **route,
+                    "pools": [
+                        {"pool_id": "pool-0", "weight": 50},
+                        {"pool_id": "pool-1", "weight": 50},
+                    ],
+                }
+            ],
+            "default_pool_id": "pool-0",
+            "vip": "192.0.2.43",
+        }
+    )
+    assert ("virtual_services.raw.routes[0]", "passthrough_route_invalid") in problems(d)

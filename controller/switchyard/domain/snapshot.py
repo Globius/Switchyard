@@ -98,7 +98,7 @@ class Snapshot(Model):
         for s in services:
             if s.default_pool_id:
                 pool_ids.add(s.default_pool_id)
-            pool_ids.update(r.pool_id for r in s.routes if r.pool_id)
+            pool_ids.update(pid for r in s.routes for pid in r.pool_ids)
             cert_ids.update(s.certificate_ids)
             cert_ids.update(p.client_ca_id for p in s.ports if p.client_ca_id)
             policy_ids.update(s.policy_set_ids)
@@ -313,9 +313,13 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
         used_pools: list[tuple[str, UUID]] = []
         if s.default_pool_id:
             used_pools.append((f"{base}.default_pool_id", s.default_pool_id))
-        used_pools += [
-            (f"{base}.routes[{i}].pool_id", r.pool_id) for i, r in enumerate(s.routes) if r.pool_id
-        ]
+        for i, route in enumerate(s.routes):
+            if route.pool_id:
+                used_pools.append((f"{base}.routes[{i}].pool_id", route.pool_id))
+            used_pools += [
+                (f"{base}.routes[{i}].pools[{j}].pool_id", w.pool_id)
+                for j, w in enumerate(route.pools)
+            ]
         for path, pid in used_pools:
             if check_ref(path, s.tenant_id, "pool", pid, pools_by_id) is not None:
                 pool_protocols[pid].add(s.protocol)
@@ -757,7 +761,13 @@ def _check_rate_limits(
 def _check_routes(s: VirtualService, base: str, problems: list[Problem]) -> None:
     if s.protocol is Protocol.TCP:
         for i, r in enumerate(s.routes):
-            if r.match.host is None or r.match.path_prefix or r.match.path_exact or r.redirect:
+            if (
+                r.match.host is None
+                or r.match.path_prefix
+                or r.match.path_exact
+                or r.redirect
+                or r.pools
+            ):
                 problems.append(
                     Problem(
                         f"{base}.routes[{i}]",

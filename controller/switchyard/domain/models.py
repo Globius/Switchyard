@@ -485,29 +485,71 @@ class RouteMatch(Model):
         return self.host is not None and self.model_copy(update={"host": None}).is_empty
 
 
+class WeightedPool(Model):
+    """One target of a weighted route: a pool and its share of the matching requests.
+
+    Example:
+        >>> import uuid
+        >>> WeightedPool(pool_id=uuid.UUID(int=1), weight=90).weight
+        90
+    """
+
+    pool_id: UUID
+    weight: int = Field(ge=1, le=99)
+
+
 class VsRoute(Model):
-    """Route a request to a pool or answer it with a redirect.
+    """Route a request to a pool, split it over weighted pools, or answer it with a redirect.
 
     Attributes:
         order: Position among path routes; lower runs first. Host-only routes are looked up in map
             files and are order-independent (exact host wins over wildcard).
         match: What the request must match. Must not be empty.
-        pool_id: Target pool, or ``None`` when ``redirect`` is set.
-        redirect: Redirect to answer with, or ``None`` when ``pool_id`` is set.
+        pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.
+        redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.
+        pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each
+            request is sent to one of them at random in that proportion (ADR 0119).
+
+    Example:
+        >>> import uuid
+        >>> route = VsRoute(
+        ...     match=RouteMatch(host="app.example.test"),
+        ...     pools=(
+        ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),
+        ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),
+        ...     ),
+        ... )
+        >>> len(route.pool_ids)
+        2
     """
 
     order: int = Field(default=0, ge=0)
     match: RouteMatch
     pool_id: UUID | None = None
     redirect: RedirectAction | None = None
+    pools: tuple[WeightedPool, ...] = Field(default=(), max_length=8)
 
     @model_validator(mode="after")
     def _one_action(self) -> Self:
-        if (self.pool_id is None) == (self.redirect is None):
-            raise ValueError("a route needs exactly one of pool_id or redirect")
+        if sum([self.pool_id is not None, self.redirect is not None, bool(self.pools)]) != 1:
+            raise ValueError("a route needs exactly one of pool_id, redirect or pools")
+        if self.pools:
+            if len(self.pools) < 2:
+                raise ValueError("a weighted route needs at least two pools")
+            if sum(p.weight for p in self.pools) != 100:
+                raise ValueError("the weights of a weighted route must add up to 100")
+            if len({p.pool_id for p in self.pools}) != len(self.pools):
+                raise ValueError("a pool can appear only once in a weighted route")
         if self.match.is_empty:
             raise ValueError("a route must match a host or a path; use default_pool_id as fallback")
         return self
+
+    @property
+    def pool_ids(self) -> tuple[UUID, ...]:
+        """Every pool the route can send traffic to (none for a redirect)."""
+        if self.pools:
+            return tuple(p.pool_id for p in self.pools)
+        return (self.pool_id,) if self.pool_id is not None else ()
 
 
 class VsPort(Model):

@@ -16733,7 +16733,7 @@
       },
       "VsRoute": {
         "additionalProperties": false,
-        "description": "Route a request to a pool or answer it with a redirect.\n\nAttributes:\n    order: Position among path routes; lower runs first. Host-only routes are looked up in map\n        files and are order-independent (exact host wins over wildcard).\n    match: What the request must match. Must not be empty.\n    pool_id: Target pool, or ``None`` when ``redirect`` is set.\n    redirect: Redirect to answer with, or ``None`` when ``pool_id`` is set.",
+        "description": "Route a request to a pool, split it over weighted pools, or answer it with a redirect.\n\nAttributes:\n    order: Position among path routes; lower runs first. Host-only routes are looked up in map\n        files and are order-independent (exact host wins over wildcard).\n    match: What the request must match. Must not be empty.\n    pool_id: Target pool, or ``None`` when ``redirect`` or ``pools`` is set.\n    redirect: Redirect to answer with, or ``None`` when ``pool_id`` or ``pools`` is set.\n    pools: Canary or blue-green split: two to eight pools whose weights add up to 100. Each\n        request is sent to one of them at random in that proportion (ADR 0119).\n\nExample:\n    >>> import uuid\n    >>> route = VsRoute(\n    ...     match=RouteMatch(host=\"app.example.test\"),\n    ...     pools=(\n    ...         WeightedPool(pool_id=uuid.UUID(int=1), weight=90),\n    ...         WeightedPool(pool_id=uuid.UUID(int=2), weight=10),\n    ...     ),\n    ... )\n    >>> len(route.pool_ids)\n    2",
         "properties": {
           "match": {
             "$ref": "#/components/schemas/RouteMatch"
@@ -16756,6 +16756,15 @@
             ],
             "title": "Pool Id"
           },
+          "pools": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WeightedPool"
+            },
+            "maxItems": 8,
+            "title": "Pools",
+            "type": "array"
+          },
           "redirect": {
             "anyOf": [
               {
@@ -16771,6 +16780,29 @@
           "match"
         ],
         "title": "VsRoute",
+        "type": "object"
+      },
+      "WeightedPool": {
+        "additionalProperties": false,
+        "description": "One target of a weighted route: a pool and its share of the matching requests.\n\nExample:\n    >>> import uuid\n    >>> WeightedPool(pool_id=uuid.UUID(int=1), weight=90).weight\n    90",
+        "properties": {
+          "pool_id": {
+            "format": "uuid",
+            "title": "Pool Id",
+            "type": "string"
+          },
+          "weight": {
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pool_id",
+          "weight"
+        ],
+        "title": "WeightedPool",
         "type": "object"
       },
       "WouldGrant": {

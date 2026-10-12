@@ -145,7 +145,7 @@ class MemberService:
                 s.se_group_id
                 for s in snapshot.virtual_services
                 if s.enabled
-                and (s.default_pool_id == pool_id or any(r.pool_id == pool_id for r in s.routes))
+                and (s.default_pool_id == pool_id or any(pool_id in r.pool_ids for r in s.routes))
             }
         result = MemberStateResult(state=state)
         for group_id in sorted(group_ids):

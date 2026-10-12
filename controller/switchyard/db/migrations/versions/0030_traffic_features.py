@@ -2,6 +2,8 @@
 
 - ``vs_port.tls_passthrough`` and ``vs_port.http3``.
 - ``virtual_service.compression`` (JSON).
+- ``vs_route.pool_weights`` (JSON list of ``{pool_id, weight}``); a route has exactly one of ``pool_id``,
+  ``redirect_location`` and ``pool_weights``.
 - ``se_group.peers`` (JSON, see ``PeerSync``).
 - ``pool.backend_protocol`` (``http1``, ``h2`` or ``h2c``) and ``pool.tunnel_timeout_s``.
 
@@ -26,6 +28,13 @@ def upgrade() -> None:
             sa.Column(column, sa.Boolean(), server_default=sa.text("false"), nullable=False),
         )
     op.add_column("virtual_service", sa.Column("compression", postgresql.JSONB(), nullable=True))
+    op.add_column("vs_route", sa.Column("pool_weights", postgresql.JSONB(), nullable=True))
+    op.drop_constraint(op.f("ck_vs_route_pool_xor_redirect"), "vs_route", type_="check")
+    op.create_check_constraint(
+        op.f("ck_vs_route_one_target"),
+        "vs_route",
+        "num_nonnulls(pool_id, redirect_location, pool_weights) = 1",
+    )
     op.add_column("se_group", sa.Column("peers", postgresql.JSONB(), nullable=True))
     op.add_column("pool", sa.Column("tunnel_timeout_s", sa.Integer(), nullable=True))
     op.add_column(
@@ -42,6 +51,13 @@ def downgrade() -> None:
     op.drop_column("pool", "backend_protocol")
     op.drop_column("pool", "tunnel_timeout_s")
     op.drop_column("se_group", "peers")
+    op.drop_constraint(op.f("ck_vs_route_one_target"), "vs_route", type_="check")
+    op.create_check_constraint(
+        op.f("ck_vs_route_pool_xor_redirect"),
+        "vs_route",
+        "(pool_id IS NULL) <> (redirect_location IS NULL)",
+    )
+    op.drop_column("vs_route", "pool_weights")
     op.drop_column("virtual_service", "compression")
     op.drop_column("vs_port", "http3")
     op.drop_column("vs_port", "tls_passthrough")

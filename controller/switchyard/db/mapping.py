@@ -256,6 +256,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     pool_id=r.pool_id,
                     redirect_location=r.redirect.location if r.redirect else None,
                     redirect_code=r.redirect.code if r.redirect else None,
+                    pool_weights=[w.model_dump(mode="json") for w in r.pools] or None,
                 )
             )
         for i, cid in enumerate(s.certificate_ids):
@@ -511,6 +512,7 @@ def _route_to_dict(r: m.VsRouteRow) -> dict[str, Any]:
             **(r.match_extra or {}),
         },
         "pool_id": r.pool_id,
+        "pools": r.pool_weights or [],
         "redirect": (
             {"location": r.redirect_location, "code": r.redirect_code}
             if r.redirect_location is not None

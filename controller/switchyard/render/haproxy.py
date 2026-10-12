@@ -420,7 +420,7 @@ class _Renderer:
 
     @staticmethod
     def _pool_ids(svc: dm.VirtualService) -> list[UUID]:
-        ids = [r.pool_id for r in svc.routes if r.pool_id]
+        ids = [pid for r in svc.routes for pid in r.pool_ids]
         if svc.default_pool_id:
             ids.append(svc.default_pool_id)
         return list(dict.fromkeys(ids))
@@ -761,6 +761,8 @@ class _Renderer:
                     f'http-request redirect prefix "https://%[var(txn.host)]{suffix}" code 301 '
                     f"if {{ dst_port {port.port} }}"
                 )
+        if any(r.pools for r in svc.routes):
+            rules.append("http-request set-var(txn.pick) rand(100)")
         rules += self._limit_rules(svc)
         redirects, responses, rewrites, _ = self._policy_stages(svc)
         rules += redirects
@@ -816,19 +818,38 @@ class _Renderer:
                 conds.append(f"{{ ssl_fc_sni -m str {esc.hostname(match.sni)} }}")
         return conds
 
+    def _weighted_rules(self, route: dm.VsRoute, cond: str) -> list[str]:
+        """Split a route over its pools by the request's draw in ``txn.pick`` (ADR 0119)."""
+        rules: list[str] = []
+        cumulative = 0
+        for i, target in enumerate(route.pools):
+            backend = self._backend_name(target.pool_id)
+            cumulative += target.weight
+            if i == len(route.pools) - 1:
+                rules.append(f"use_backend {backend} if {cond}")
+            else:
+                rules.append(
+                    f"use_backend {backend} if {cond} {{ var(txn.pick) -m int lt {cumulative} }}"
+                )
+        return rules
+
     def _routing_rules(self, svc: dm.VirtualService, name: str) -> list[str]:
         rules: list[str] = []
-        pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_id is not None]
-        path_routes = [(i, r) for i, r in pool_routes if not r.match.is_host_only]
+        pool_routes = [(i, r) for i, r in enumerate(svc.routes) if r.pool_ids]
+        # Weighted routes are conditional even on a bare host: the map files hold one pool per key.
+        path_routes = [(i, r) for i, r in pool_routes if r.pools or not r.match.is_host_only]
         for _, route in sorted(path_routes, key=lambda ir: (ir[1].order, ir[0])):
             cond = " ".join(self._conditions(route.match))
+            if route.pools:
+                rules += self._weighted_rules(route, cond)
+                continue
             backend = self._backend_name(_need(route.pool_id, "route pool"))
             rules.append(f"use_backend {backend} if {cond}")
         exact: dict[str, str] = {}
         wild: dict[str, str] = {}
         for _, route in pool_routes:
             host = route.match.host
-            if host is None or not route.match.is_host_only:
+            if host is None or route.pools or not route.match.is_host_only:
                 continue
             target = self._backend_name(_need(route.pool_id, "route pool"))
             if _is_wild(host):

@@ -363,7 +363,7 @@ class VsRouteRow(Base):
         tenant_fk("vs_id", "virtual_service", cascade=True),
         tenant_fk("pool_id", "pool"),
         CheckConstraint(
-            "(pool_id IS NULL) <> (redirect_location IS NULL)", name="pool_xor_redirect"
+            "num_nonnulls(pool_id, redirect_location, pool_weights) = 1", name="one_target"
         ),
     )
 
@@ -377,6 +377,7 @@ class VsRouteRow(Base):
     pool_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     redirect_location: Mapped[str | None] = mapped_column(Text)
     redirect_code: Mapped[int | None] = mapped_column(Integer)
+    pool_weights: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB(none_as_null=True))
     match_extra: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
 

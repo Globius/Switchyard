@@ -53,7 +53,7 @@ def _pool_in_group(snapshot: Snapshot, pool_id: UUID, se_group_id: UUID) -> bool
     return any(
         s.se_group_id == se_group_id
         and s.enabled
-        and (s.default_pool_id == pool_id or any(r.pool_id == pool_id for r in s.routes))
+        and (s.default_pool_id == pool_id or any(pool_id in r.pool_ids for r in s.routes))
         for s in snapshot.virtual_services
     )
 
