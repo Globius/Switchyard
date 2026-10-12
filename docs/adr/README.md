@@ -80,6 +80,14 @@ Date: YYYY-MM-DD
 | [0119](0119-weighted-pool-routes.md) | Weighted pool routes (canary and blue-green) | Accepted |
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
+| [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
+| [0162](0162-gslb-zones-ownership-and-dnssec.md) | GSLB zones: ownership, DNSSEC, several sites | Accepted |
+| [0163](0163-gslb-scope-and-deferred.md) | GSLB: what is built and what is not | Accepted |
+| [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
+| [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
+| [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |
+| [0123](0123-tenant-log-api.md) | Tenant-wide request log API | Accepted |
 | [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
 | [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |

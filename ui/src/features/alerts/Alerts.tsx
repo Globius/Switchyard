@@ -1,19 +1,18 @@
 /**
- * Alerts: what is firing now and the latest deliveries, the rules a tenant watches, and the
- * targets (webhook, chat, email) that are told. Rules and targets save live (no change set) and
- * are audited; changing them needs tenant-admin.
+ * Alerts (ADR 0120): where a tenant's alerts go, what they watch, what is firing and what was sent.
+ *
+ * There is no artboard for this screen yet (docs/design/07-ui-vs-artboards.md): it reuses the
+ * shared table, sheet and state components and should be redrawn by Design. Everything here applies
+ * live (no change set), and only tenant administrators can change anything.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { ApiError, api, unwrap } from "@/api/client";
+import { api, unwrap } from "@/api/client";
 import type { components } from "@/api/schema";
-import { useMe } from "@/auth/session";
-import { ChipInput } from "@/components/sy/ChipInput";
-import { ConfirmDialog } from "@/components/sy/ConfirmDialog";
+import { useCan } from "@/auth/session";
 import { StatusPill } from "@/components/sy/StatusPill";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/ui/combobox";
 import { Sheet } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
@@ -21,525 +20,185 @@ import { shortWhen } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-type Rule = components["schemas"]["AlertRuleRead"];
 type Target = components["schemas"]["AlertTargetRead"];
+type Rule = components["schemas"]["AlertRuleRead"];
 type Catalog = components["schemas"]["AlertCatalog"];
 
-const INPUT =
-  "h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
-type Obj = Record<string, unknown>;
-const str = (v: unknown) => (typeof v === "string" ? v : "");
+const INPUT = "h-9 w-full rounded-md border border-input bg-card px-3 text-sm";
+const CARD = "overflow-hidden rounded-lg border bg-card";
 
-function useAdmin(tenant: string) {
-  const me = useMe().data;
-  const role = me?.tenants.find((x) => x.name === tenant)?.role;
-  const ok = !!me?.is_system || role === "tenant-admin" || role === "system-admin";
-  return { ok, reason: ok ? undefined : t("Needs tenant-admin") };
-}
-
-/** One line for the rules table. */
-export function ruleSummary(r: Pick<Rule, "kind" | "spec">): string {
-  const s = r.spec as Obj;
-  if (r.kind === "event")
-    return t("on {a}", { a: (Array.isArray(s.actions) ? s.actions : []).join(", ") });
-  if (r.kind === "metric")
-    return `${str(s.metric)} ${s.op === "lt" ? "<" : ">"} ${String(s.threshold)} ${t("for {n} min", { n: Number(s.for_minutes ?? 0) })}${s.scope ? ` · ${str(s.scope)}` : ""}`;
-  return t("{d} days before expiry", {
-    d: (Array.isArray(s.days) ? s.days : [30, 14, 7]).join(", "),
+function useAlerts(tenant: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "alerts"],
+    refetchInterval: 30_000,
+    queryFn: async () =>
+      unwrap(await api.GET("/api/v1/tenants/{t}/alerts", { params: { path: { t: tenant } } })),
   });
 }
-
-/** One line for the targets table. */
-export function targetSummary(tg: Pick<Target, "kind" | "config">): string {
-  const c = tg.config as Obj;
-  if (tg.kind === "email") return (Array.isArray(c.to) ? c.to : []).join(", ");
-  return `${str(c.url)}${tg.kind === "chat" && c.format ? ` · ${str(c.format)}` : ""}`;
+function useTargets(tenant: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "alert-targets"],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/v1/tenants/{t}/alert-targets", { params: { path: { t: tenant } } }),
+      ),
+  });
 }
-
+function useRules(tenant: string) {
+  return useQuery({
+    queryKey: ["t", tenant, "alert-rules"],
+    queryFn: async () =>
+      unwrap(await api.GET("/api/v1/tenants/{t}/alert-rules", { params: { path: { t: tenant } } })),
+  });
+}
 function useCatalog() {
   return useQuery({
     queryKey: ["alert-catalog"],
-    staleTime: 300_000,
     queryFn: async () => unwrap(await api.GET("/api/v1/alert-catalog")),
   });
 }
 
-function fieldErrors(e: unknown): Record<string, string> {
-  const m: Record<string, string> = {};
-  if (e instanceof ApiError && e.status === 422)
-    for (const x of e.problem?.errors ?? []) m[x.path.split(".")[0] ?? x.path] = x.message;
-  return m;
+function hostOf(url: string | undefined): string {
+  try {
+    return new URL(url ?? "").host;
+  } catch {
+    return "";
+  }
 }
 
-function RuleSheet({
-  tenant,
-  rule,
-  catalog,
-  targets,
-  onClose,
-}: {
-  tenant: string;
-  rule: Rule | null;
-  catalog: Catalog;
-  targets: Target[];
-  onClose: () => void;
-}) {
+/** One line that says what a target does, without showing its URL (chat URLs are secrets). */
+export function targetSummary(t_: Pick<Target, "kind" | "config">): string {
+  const c = t_.config as { url?: string; format?: string; to?: string[] };
+  if (t_.kind === "email") return (c.to ?? []).join(", ");
+  const host = hostOf(c.url);
+  return t_.kind === "chat" ? `${c.format ?? "slack"} · ${host}` : host;
+}
+
+/** One line that says what a rule watches. */
+export function ruleSummary(r: Pick<Rule, "kind" | "spec">): string {
+  const s = r.spec as {
+    actions?: string[];
+    metric?: string;
+    op?: string;
+    threshold?: number;
+    for_minutes?: number;
+    scope?: string;
+    days?: number[];
+  };
+  if (r.kind === "event") return (s.actions ?? []).join(", ");
+  if (r.kind === "cert_expiry")
+    return t("{days} days before expiry", { days: (s.days ?? []).join(", ") });
+  return t("{metric} {op} {value} for {min} min{scope}", {
+    metric: s.metric ?? "",
+    op: s.op === "lt" ? "<" : ">",
+    value: s.threshold ?? "",
+    min: s.for_minutes ?? 0,
+    scope: s.scope ? ` · ${s.scope}` : "",
+  });
+}
+
+function useInvalidate(tenant: string) {
   const qc = useQueryClient();
-  const editing = rule !== null;
-  const [name, setName] = useState(rule?.name ?? "");
-  const [kind, setKind] = useState<"event" | "metric" | "cert_expiry">(
-    (rule?.kind as "event") ?? "event",
-  );
-  const spec0 = (rule?.spec ?? {}) as Obj;
-  const [actions, setActions] = useState<string[]>(
-    Array.isArray(spec0.actions) ? (spec0.actions as string[]) : [],
-  );
-  const [metric, setMetric] = useState(str(spec0.metric));
-  const [op, setOp] = useState<"gt" | "lt">(spec0.op === "lt" ? "lt" : "gt");
-  const [threshold, setThreshold] = useState(
-    spec0.threshold != null ? String(spec0.threshold) : "",
-  );
-  const [forMin, setForMin] = useState(String(spec0.for_minutes ?? 5));
-  const [days, setDays] = useState<string[]>(
-    (Array.isArray(spec0.days) ? (spec0.days as number[]) : [30, 14, 7]).map(String),
-  );
-  const [picked, setPicked] = useState<string[]>(rule?.targets ?? []);
-  const [enabled, setEnabled] = useState(rule?.enabled ?? true);
-  const [problem, setProblem] = useState<unknown>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [confirmDelete, setConfirmDelete] = useState(false);
-
-  const spec: Obj =
-    kind === "event"
-      ? { actions }
-      : kind === "metric"
-        ? { metric, op, threshold: Number(threshold), for_minutes: Number(forMin) }
-        : { days: days.map(Number) };
-  const m = catalog.metrics.find((x) => x.name === metric);
-  const save = useMutation({
-    mutationFn: async () => {
-      setProblem(null);
-      setErrors({});
-      if (!rule)
-        return unwrap(
-          await api.POST("/api/v1/tenants/{t}/alert-rules", {
-            params: { path: { t: tenant } },
-            body: { name, kind, spec, targets: picked, enabled },
-          }),
-        );
-      return unwrap(
-        await api.PATCH("/api/v1/tenants/{t}/alert-rules/{name}", {
-          params: { path: { t: tenant, name: rule.name } },
-          body: { spec, targets: picked, enabled },
-        }),
-      );
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["t", tenant, "alerts"] });
-      onClose();
-    },
-    onError: (e) => {
-      const f = fieldErrors(e);
-      if (Object.keys(f).length) setErrors(f);
-      else setProblem(e);
-    },
-  });
-  const remove = useMutation({
-    mutationFn: async () =>
-      unwrap(
-        await api.DELETE("/api/v1/tenants/{t}/alert-rules/{name}", {
-          params: { path: { t: tenant, name: rule!.name } },
-        }),
-      ),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["t", tenant, "alerts"] });
-      onClose();
-    },
-    onError: (e) => {
-      setConfirmDelete(false);
-      setProblem(e);
-    },
-  });
-  const valid =
-    name !== "" &&
-    picked.length > 0 &&
-    (kind === "event"
-      ? actions.length > 0
-      : kind === "metric"
-        ? metric !== "" && threshold !== ""
-        : days.length > 0);
-
-  return (
-    <Sheet
-      open
-      onOpenChange={(o) => !o && onClose()}
-      title={editing ? t("Edit {name}", { name: rule.name }) : t("Add alert rule")}
-      badge={<StatusPill status="pending">{t("Live")}</StatusPill>}
-      footer={
-        <>
-          {editing && (
-            <Button variant="ghost" onClick={() => setConfirmDelete(true)}>
-              {t("Delete")}
-            </Button>
-          )}
-          <Button variant="ghost" className="ml-auto" onClick={onClose}>
-            {t("Cancel")}
-          </Button>
-          <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>
-            {editing ? t("Save") : t("Add rule")}
-          </Button>
-        </>
-      }
-    >
-      {problem != null && <ErrorState error={problem} />}
-      <label className="block space-y-1.5 text-sm font-medium">
-        {t("Name")}
-        <input
-          aria-label={t("Name")}
-          className={INPUT}
-          disabled={editing}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        {errors.name && (
-          <span role="alert" className="block text-xs font-normal text-status-down">
-            {errors.name}
-          </span>
-        )}
-      </label>
-      <fieldset className="space-y-2" disabled={editing}>
-        <legend className="text-sm font-medium">{t("Watch")}</legend>
-        <div className="grid grid-cols-3 gap-2">
-          {(
-            [
-              ["event", "An event", "An audit event, such as a failed apply."],
-              ["metric", "A metric", "A series over or under a threshold."],
-              ["cert_expiry", "Certificate expiry", "Certificates close to expiring."],
-            ] as const
-          ).map(([k, label, help]) => (
-            <label
-              key={k}
-              className={cn(
-                "flex cursor-pointer items-start gap-2 rounded-lg border bg-card p-2.5 text-sm",
-                kind === k && "border-primary bg-primary/10",
-              )}
-            >
-              <input
-                type="radio"
-                name="alert-kind"
-                aria-label={label}
-                className="mt-1"
-                checked={kind === k}
-                onChange={() => setKind(k)}
-              />
-              <span>
-                <span className="font-medium">{t(label)}</span>
-                <span className="block text-xs text-muted-foreground">{t(help)}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-      {kind === "event" && (
-        <div className="space-y-1.5">
-          <div className="text-sm font-medium">{t("Audit actions")}</div>
-          <ChipInput
-            label={t("Audit actions")}
-            value={actions}
-            onChange={setActions}
-            options={catalog.event_actions.map((a) => ({ value: a, label: a }))}
-            placeholder={t("Add an action")}
-          />
-          {errors.spec && (
-            <p role="alert" className="text-xs text-status-down">
-              {errors.spec}
-            </p>
-          )}
-        </div>
-      )}
-      {kind === "metric" && (
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <div className="text-sm font-medium">{t("Metric")}</div>
-            <Combobox
-              aria-label={t("Metric")}
-              value={metric}
-              onChange={setMetric}
-              placeholder={t("Choose a metric")}
-              options={catalog.metrics.map((x) => ({
-                value: x.name,
-                label: `${x.label} (${x.unit}, ${x.scope === "vs" ? t("per service") : t("per engine")})`,
-              }))}
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <label className="space-y-1.5 text-sm font-medium">
-              {t("Fires when")}
-              <select
-                aria-label={t("Operator")}
-                className={INPUT}
-                value={op}
-                onChange={(e) => setOp(e.target.value as "gt" | "lt")}
-              >
-                <option value="gt">{t("above")}</option>
-                <option value="lt">{t("below")}</option>
-              </select>
-            </label>
-            <label className="space-y-1.5 text-sm font-medium">
-              {t("Threshold")}
-              {m ? ` (${m.unit})` : ""}
-              <input
-                aria-label={t("Threshold")}
-                type="number"
-                className={INPUT}
-                value={threshold}
-                onChange={(e) => setThreshold(e.target.value)}
-              />
-            </label>
-            <label className="space-y-1.5 text-sm font-medium">
-              {t("For (minutes)")}
-              <input
-                aria-label={t("For minutes")}
-                type="number"
-                min={0}
-                className={INPUT}
-                value={forMin}
-                onChange={(e) => setForMin(e.target.value)}
-              />
-            </label>
-          </div>
-          {errors.spec && (
-            <p role="alert" className="text-xs text-status-down">
-              {errors.spec}
-            </p>
-          )}
-        </div>
-      )}
-      {kind === "cert_expiry" && (
-        <div className="space-y-1.5">
-          <div className="text-sm font-medium">{t("Days before expiry")}</div>
-          <ChipInput
-            label={t("Days before expiry")}
-            value={days}
-            onChange={setDays}
-            freeText={{
-              validate: (x) =>
-                /^\d{1,3}$/.test(x.trim()) && Number(x) > 0 ? null : t("Use a number of days."),
-            }}
-            placeholder="30"
-          />
-          <p className="text-xs text-muted-foreground">
-            {t("You are told at each of these, and again when it is renewed.")}
-          </p>
-        </div>
-      )}
-      <div className="space-y-1.5">
-        <div className="text-sm font-medium">{t("Tell")}</div>
-        <ChipInput
-          label={t("Targets")}
-          value={picked}
-          onChange={setPicked}
-          options={targets.map((x) => ({ value: x.name, label: x.name, hint: x.kind }))}
-          emptyMessage={() => t("Add a target first, on the Targets tab.")}
-          placeholder={t("Add a target")}
-        />
-        {errors.targets && (
-          <p role="alert" className="text-xs text-status-down">
-            {errors.targets}
-          </p>
-        )}
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <Switch aria-label={t("Enabled")} checked={enabled} onCheckedChange={setEnabled} />
-        {t("Enabled")}
-      </label>
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title={t("Delete {name}?", { name: rule?.name ?? "" })}
-        confirmLabel={t("Delete rule")}
-        busy={remove.isPending}
-        onConfirm={() => remove.mutate()}
-      >
-        <p>{t("The rule is removed at once, along with what it was firing. This is audited.")}</p>
-      </ConfirmDialog>
-    </Sheet>
-  );
+  return () => {
+    void qc.invalidateQueries({ queryKey: ["t", tenant, "alert-targets"] });
+    void qc.invalidateQueries({ queryKey: ["t", tenant, "alert-rules"] });
+    void qc.invalidateQueries({ queryKey: ["t", tenant, "alerts"] });
+  };
 }
 
 function TargetSheet({
   tenant,
-  target,
   catalog,
   onClose,
 }: {
   tenant: string;
-  target: Target | null;
-  catalog: Catalog;
+  catalog: Catalog | undefined;
   onClose: () => void;
 }) {
-  const qc = useQueryClient();
-  const editing = target !== null;
-  const c0 = (target?.config ?? {}) as Obj;
-  const [name, setName] = useState(target?.name ?? "");
-  const [kind, setKind] = useState<"webhook" | "chat" | "email">(
-    (target?.kind as "webhook") ?? "webhook",
-  );
-  const [url, setUrl] = useState(str(c0.url));
-  const [format, setFormat] = useState(str(c0.format) || catalog.chat_formats[0] || "slack");
-  const [to, setTo] = useState<string[]>(Array.isArray(c0.to) ? (c0.to as string[]) : []);
-  const [secret, setSecret] = useState(target?.secret_ref ?? "");
-  const [enabled, setEnabled] = useState(target?.enabled ?? true);
-  const [problem, setProblem] = useState<unknown>(null);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [test, setTest] = useState<{ ok: boolean; error?: string | null } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const config: Obj = kind === "email" ? { to } : kind === "chat" ? { url, format } : { url };
-
-  const save = useMutation({
-    mutationFn: async () => {
-      setProblem(null);
-      setErrors({});
-      if (!target)
-        return unwrap(
-          await api.POST("/api/v1/tenants/{t}/alert-targets", {
-            params: { path: { t: tenant } },
-            body: {
-              name,
-              kind,
-              config,
-              enabled,
-              secret_ref: kind === "webhook" && secret ? secret : null,
-            },
-          }),
-        );
-      return unwrap(
-        await api.PATCH("/api/v1/tenants/{t}/alert-targets/{name}", {
-          params: { path: { t: tenant, name: target.name } },
-          body: { config, enabled, secret_ref: kind === "webhook" ? secret || null : null },
-        }),
-      );
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["t", tenant, "alerts"] });
-      onClose();
-    },
-    onError: (e) => {
-      const f = fieldErrors(e);
-      if (Object.keys(f).length) setErrors(f);
-      else setProblem(e);
-    },
-  });
-  const runTest = useMutation({
+  const refresh = useInvalidate(tenant);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<"webhook" | "chat" | "email">("chat");
+  const [url, setUrl] = useState("");
+  const [format, setFormat] = useState("slack");
+  const [to, setTo] = useState("");
+  const [secretRef, setSecretRef] = useState("");
+  const create = useMutation({
     mutationFn: async () =>
       unwrap(
-        await api.POST("/api/v1/tenants/{t}/alert-targets/{name}/test", {
-          params: { path: { t: tenant, name: target!.name } },
-        }),
-      ),
-    onSuccess: (r) => setTest(r),
-    onError: setProblem,
-  });
-  const remove = useMutation({
-    mutationFn: async () =>
-      unwrap(
-        await api.DELETE("/api/v1/tenants/{t}/alert-targets/{name}", {
-          params: { path: { t: tenant, name: target!.name } },
+        await api.POST("/api/v1/tenants/{t}/alert-targets", {
+          params: { path: { t: tenant } },
+          body: {
+            name,
+            kind,
+            config:
+              kind === "email"
+                ? { to: to.split(/[\s,]+/).filter(Boolean) }
+                : kind === "chat"
+                  ? { url, format }
+                  : { url },
+            secret_ref: kind === "webhook" && secretRef ? secretRef : null,
+            enabled: true,
+          },
         }),
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["t", tenant, "alerts"] });
+      refresh();
       onClose();
     },
-    onError: (e) => {
-      setConfirmDelete(false);
-      setProblem(e);
-    },
   });
-  const valid = name !== "" && (kind === "email" ? to.length > 0 : url !== "");
-
   return (
     <Sheet
       open
+      centered
       onOpenChange={(o) => !o && onClose()}
-      title={editing ? t("Edit {name}", { name: target.name }) : t("Add alert target")}
-      badge={<StatusPill status="pending">{t("Live")}</StatusPill>}
+      title={t("Add alert target")}
       footer={
         <>
-          {editing && (
-            <Button variant="ghost" onClick={() => setConfirmDelete(true)}>
-              {t("Delete")}
-            </Button>
-          )}
           <Button variant="ghost" className="ml-auto" onClick={onClose}>
             {t("Cancel")}
           </Button>
-          <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>
-            {editing ? t("Save") : t("Add target")}
+          <Button disabled={!name || create.isPending} onClick={() => create.mutate()}>
+            {t("Add target")}
           </Button>
         </>
       }
     >
-      {problem != null && <ErrorState error={problem} />}
+      {create.error && <ErrorState error={create.error} />}
       <label className="block space-y-1.5 text-sm font-medium">
         {t("Name")}
         <input
           aria-label={t("Name")}
-          className={INPUT}
-          disabled={editing}
+          className={cn(INPUT, "font-mono")}
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
-        <span className="block text-xs font-normal text-muted-foreground">
-          {t("Lowercase letters, digits, - and _.")}
-        </span>
-        {errors.name && (
-          <span role="alert" className="block text-xs font-normal text-status-down">
-            {errors.name}
-          </span>
-        )}
       </label>
-      <fieldset className="space-y-1.5" disabled={editing}>
-        <legend className="text-sm font-medium">{t("Type")}</legend>
-        <div role="radiogroup" className="flex gap-5 text-sm">
-          {(
-            [
-              ["webhook", "Webhook"],
-              ["chat", "Chat (Slack, Teams, Mattermost)"],
-              ["email", "Email"],
-            ] as const
-          ).map(([k, label]) => (
-            <label key={k} className="flex items-center gap-1.5">
-              <input
-                type="radio"
-                name="target-kind"
-                aria-label={label}
-                checked={kind === k}
-                onChange={() => setKind(k)}
-              />
-              {t(label)}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <label className="block space-y-1.5 text-sm font-medium">
+        {t("Kind")}
+        <select
+          aria-label={t("Kind")}
+          className={INPUT}
+          value={kind}
+          onChange={(e) => setKind(e.target.value as typeof kind)}
+        >
+          <option value="chat">{t("Chat (Slack, Teams, Mattermost)")}</option>
+          <option value="webhook">{t("Webhook")}</option>
+          <option value="email" disabled={catalog ? !catalog.email_configured : false}>
+            {t("Email")}
+            {catalog && !catalog.email_configured ? ` (${t("no mail server configured")})` : ""}
+          </option>
+        </select>
+      </label>
       {kind !== "email" && (
         <label className="block space-y-1.5 text-sm font-medium">
           {t("URL")}
           <input
             aria-label={t("URL")}
             className={cn(INPUT, "font-mono")}
-            placeholder="https://"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://"
           />
-          <span className="block text-xs font-normal text-muted-foreground">
-            {t("https only; private addresses are refused.")}
-          </span>
-          {errors.config && (
-            <span role="alert" className="block text-xs font-normal text-status-down">
-              {errors.config}
-            </span>
-          )}
         </label>
       )}
       {kind === "chat" && (
@@ -551,7 +210,7 @@ function TargetSheet({
             value={format}
             onChange={(e) => setFormat(e.target.value)}
           >
-            {catalog.chat_formats.map((f) => (
+            {(catalog?.chat_formats ?? ["slack", "teams", "mattermost"]).map((f) => (
               <option key={f} value={f}>
                 {f}
               </option>
@@ -561,353 +220,499 @@ function TargetSheet({
       )}
       {kind === "webhook" && (
         <label className="block space-y-1.5 text-sm font-medium">
-          {t("Signing secret (optional)")}
+          {t("Signing secret (OpenBao path, optional)")}
           <input
             aria-label={t("Signing secret")}
             className={cn(INPUT, "font-mono")}
-            placeholder="kv/switchyard/…"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
+            value={secretRef}
+            onChange={(e) => setSecretRef(e.target.value)}
+            placeholder="kv/tenants/…/alerts"
           />
-          <span className="block text-xs font-normal text-muted-foreground">
-            {t(
-              "An OpenBao path whose value signs each body (X-Switchyard-Signature: sha256=…). The secret itself is never stored here.",
-            )}
-          </span>
-          {errors.secret_ref && (
-            <span role="alert" className="block text-xs font-normal text-status-down">
-              {errors.secret_ref}
-            </span>
-          )}
         </label>
       )}
       {kind === "email" && (
-        <div className="space-y-1.5">
-          <div className="text-sm font-medium">{t("Recipients")}</div>
-          <ChipInput
-            label={t("Recipients")}
+        <label className="block space-y-1.5 text-sm font-medium">
+          {t("Addresses")}
+          <input
+            aria-label={t("Addresses")}
+            className={INPUT}
             value={to}
-            onChange={setTo}
-            freeText={{
-              validate: (x) =>
-                /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.trim()) ? null : t("Use an email address."),
-            }}
-            placeholder="ops@example.com"
+            onChange={(e) => setTo(e.target.value)}
+            placeholder="ops@example.com, oncall@example.com"
           />
-          {!catalog.email_configured && (
-            <p role="note" className="text-xs text-status-degraded">
-              {t(
-                "This controller has no email server configured, so email targets cannot send yet.",
-              )}
-            </p>
-          )}
-        </div>
+        </label>
       )}
-      <label className="flex items-center gap-2 text-sm">
-        <Switch aria-label={t("Enabled")} checked={enabled} onCheckedChange={setEnabled} />
-        {t("Enabled")}
-      </label>
-      {editing && (
-        <div className="space-y-2">
-          <Button variant="outline" disabled={runTest.isPending} onClick={() => runTest.mutate()}>
-            {t("Send a test message")}
+      <p className="text-xs text-muted-foreground">
+        {t(
+          "Addresses must be public: the controller refuses URLs that name private or local hosts.",
+        )}
+      </p>
+    </Sheet>
+  );
+}
+
+function RuleSheet({
+  tenant,
+  targets,
+  catalog,
+  onClose,
+}: {
+  tenant: string;
+  targets: Target[];
+  catalog: Catalog | undefined;
+  onClose: () => void;
+}) {
+  const refresh = useInvalidate(tenant);
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<"cert_expiry" | "metric" | "event">("cert_expiry");
+  const [days, setDays] = useState("30, 14, 7");
+  const [metric, setMetric] = useState("vs_5xx_ratio");
+  const [op, setOp] = useState("gt");
+  const [threshold, setThreshold] = useState("5");
+  const [forMinutes, setForMinutes] = useState("5");
+  const [scope, setScope] = useState("");
+  const [actions, setActions] = useState<string[]>([]);
+  const [chosen, setChosen] = useState<string[]>(targets[0] ? [targets[0].name] : []);
+  const spec =
+    kind === "cert_expiry"
+      ? {
+          days: days
+            .split(/[\s,]+/)
+            .filter(Boolean)
+            .map(Number),
+        }
+      : kind === "metric"
+        ? {
+            metric,
+            op,
+            threshold: Number(threshold),
+            for_minutes: Number(forMinutes),
+            ...(scope ? { scope } : {}),
+          }
+        : { actions };
+  const create = useMutation({
+    mutationFn: async () =>
+      unwrap(
+        await api.POST("/api/v1/tenants/{t}/alert-rules", {
+          params: { path: { t: tenant } },
+          body: { name, kind, spec, targets: chosen, enabled: true },
+        }),
+      ),
+    onSuccess: () => {
+      refresh();
+      onClose();
+    },
+  });
+  const toggle = (list: string[], v: string) =>
+    list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+  return (
+    <Sheet
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={t("Add alert rule")}
+      footer={
+        <>
+          <Button variant="ghost" className="ml-auto" onClick={onClose}>
+            {t("Cancel")}
           </Button>
-          {test && (
-            <p role="status" className="text-sm">
-              {test.ok ? t("Delivered.") : t("Not delivered: {why}", { why: test.error ?? "" })}
-            </p>
-          )}
+          <Button
+            disabled={!name || chosen.length === 0 || create.isPending}
+            onClick={() => create.mutate()}
+          >
+            {t("Add rule")}
+          </Button>
+        </>
+      }
+    >
+      {create.error && <ErrorState error={create.error} />}
+      <label className="block space-y-1.5 text-sm font-medium">
+        {t("Name")}
+        <input
+          aria-label={t("Name")}
+          className={cn(INPUT, "font-mono")}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </label>
+      <label className="block space-y-1.5 text-sm font-medium">
+        {t("Watch")}
+        <select
+          aria-label={t("Watch")}
+          className={INPUT}
+          value={kind}
+          onChange={(e) => setKind(e.target.value as typeof kind)}
+        >
+          <option value="cert_expiry">{t("Certificate expiry")}</option>
+          <option value="metric">{t("A metric")}</option>
+          <option value="event">{t("Events (audit log)")}</option>
+        </select>
+      </label>
+      {kind === "cert_expiry" && (
+        <label className="block space-y-1.5 text-sm font-medium">
+          {t("Days before expiry")}
+          <input
+            aria-label={t("Days before expiry")}
+            className={INPUT}
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+          />
+        </label>
+      )}
+      {kind === "metric" && (
+        <div className="grid grid-cols-2 gap-3">
+          <label className="col-span-2 block space-y-1.5 text-sm font-medium">
+            {t("Metric")}
+            <select
+              aria-label={t("Metric")}
+              className={INPUT}
+              value={metric}
+              onChange={(e) => setMetric(e.target.value)}
+            >
+              {(catalog?.metrics ?? []).map((m) => (
+                <option key={m.name} value={m.name}>
+                  {m.label} ({m.unit})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("Alert when")}
+            <select
+              aria-label={t("Alert when")}
+              className={INPUT}
+              value={op}
+              onChange={(e) => setOp(e.target.value)}
+            >
+              <option value="gt">{t("above")}</option>
+              <option value="lt">{t("below")}</option>
+            </select>
+          </label>
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("Threshold")}
+            <input
+              aria-label={t("Threshold")}
+              className={INPUT}
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value)}
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("For (minutes)")}
+            <input
+              aria-label={t("For (minutes)")}
+              className={INPUT}
+              value={forMinutes}
+              onChange={(e) => setForMinutes(e.target.value)}
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm font-medium">
+            {t("Only this service or engine")}
+            <input
+              aria-label={t("Only this service or engine")}
+              className={cn(INPUT, "font-mono")}
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+            />
+          </label>
         </div>
       )}
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title={t("Delete {name}?", { name: target?.name ?? "" })}
-        confirmLabel={t("Delete target")}
-        busy={remove.isPending}
-        onConfirm={() => remove.mutate()}
-      >
-        <p>{t("Rules that name it skip it from then on. This is audited.")}</p>
-      </ConfirmDialog>
+      {kind === "event" && (
+        <fieldset className="max-h-48 space-y-1 overflow-auto rounded-md border p-3">
+          <legend className="px-1 text-sm font-medium">{t("Audit actions")}</legend>
+          {(catalog?.event_actions ?? []).map((a) => (
+            <label key={a} className="flex items-center gap-2 font-mono text-xs">
+              <input
+                type="checkbox"
+                checked={actions.includes(a)}
+                onChange={() => setActions(toggle(actions, a))}
+              />
+              {a}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      <fieldset className="space-y-1 rounded-md border p-3">
+        <legend className="px-1 text-sm font-medium">{t("Tell")}</legend>
+        {targets.length === 0 && (
+          <p className="text-sm text-muted-foreground">{t("Add a target first.")}</p>
+        )}
+        {targets.map((x) => (
+          <label key={x.id} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={chosen.includes(x.name)}
+              onChange={() => setChosen(toggle(chosen, x.name))}
+            />
+            {x.name}
+          </label>
+        ))}
+      </fieldset>
     </Sheet>
   );
 }
 
 export function Alerts({ tenant }: { tenant: string }) {
-  const admin = useAdmin(tenant);
+  const can = useCan(tenant);
+  const write = can("write", "infrastructure");
+  const refresh = useInvalidate(tenant);
+  const status = useAlerts(tenant);
+  const targets = useTargets(tenant);
+  const rules = useRules(tenant);
   const catalog = useCatalog();
-  const status = useQuery({
-    queryKey: ["t", tenant, "alerts", "status"],
-    refetchInterval: 15_000,
-    queryFn: async () =>
+  const [adding, setAdding] = useState<"target" | "rule" | null>(null);
+  const [testResult, setTestResult] = useState<Record<string, string>>({});
+
+  const test = useMutation({
+    mutationFn: async (name: string) =>
       unwrap(
-        await api.GET("/api/v1/tenants/{t}/alerts", {
-          params: { path: { t: tenant }, query: { limit: 30 } },
+        await api.POST("/api/v1/tenants/{t}/alert-targets/{name}/test", {
+          params: { path: { t: tenant, name } },
         }),
       ),
+    onSuccess: (r, name) => {
+      setTestResult((p) => ({ ...p, [name]: r.ok ? t("Delivered") : (r.error ?? t("Failed")) }));
+      refresh();
+    },
   });
-  const rules = useQuery({
-    queryKey: ["t", tenant, "alerts", "rules"],
-    queryFn: async () =>
-      unwrap(await api.GET("/api/v1/tenants/{t}/alert-rules", { params: { path: { t: tenant } } })),
-  });
-  const targets = useQuery({
-    queryKey: ["t", tenant, "alerts", "targets"],
-    queryFn: async () =>
+  const toggleTarget = useMutation({
+    mutationFn: async (x: Target) =>
       unwrap(
-        await api.GET("/api/v1/tenants/{t}/alert-targets", { params: { path: { t: tenant } } }),
+        await api.PATCH("/api/v1/tenants/{t}/alert-targets/{name}", {
+          params: { path: { t: tenant, name: x.name } },
+          body: { enabled: !x.enabled },
+        }),
       ),
+    onSuccess: refresh,
   });
-  const [tab, setTab] = useState<"status" | "rules" | "targets">("status");
-  const [sheet, setSheet] = useState<
-    { kind: "rule"; v: Rule | null } | { kind: "target"; v: Target | null } | null
-  >(null);
-  const firing = status.data?.firing ?? [];
-
-  const head = (cols: string[]) => (
-    <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
-      <tr>
-        {cols.map((h) => (
-          <th key={h} className="px-4 py-2.5 font-medium">
-            {t(h)}
-          </th>
-        ))}
-      </tr>
-    </thead>
-  );
+  const toggleRule = useMutation({
+    mutationFn: async (x: Rule) =>
+      unwrap(
+        await api.PATCH("/api/v1/tenants/{t}/alert-rules/{name}", {
+          params: { path: { t: tenant, name: x.name } },
+          body: { enabled: !x.enabled },
+        }),
+      ),
+    onSuccess: refresh,
+  });
+  const remove = useMutation({
+    mutationFn: async (a: { kind: "target" | "rule"; name: string }) =>
+      a.kind === "target"
+        ? unwrap(
+            await api.DELETE("/api/v1/tenants/{t}/alert-targets/{name}", {
+              params: { path: { t: tenant, name: a.name } },
+            }),
+          )
+        : unwrap(
+            await api.DELETE("/api/v1/tenants/{t}/alert-rules/{name}", {
+              params: { path: { t: tenant, name: a.name } },
+            }),
+          ),
+    onSuccess: refresh,
+  });
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{t("Alerts")}</h1>
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "What is firing, what {tenant} watches, and who is told. Changes apply at once and are audited.",
-              { tenant },
-            )}
-          </p>
-        </div>
-        {tab !== "status" && (
-          <Tip label={admin.reason}>
+    <div className="space-y-6 p-6">
+      <header>
+        <h1 className="text-xl font-semibold">{t("Alerts")}</h1>
+        <p className="text-sm text-muted-foreground">
+          {t(
+            "Tell people when a certificate is about to expire, an event happens or a metric is out of range. Changes apply at once.",
+          )}
+        </p>
+      </header>
+
+      <section className={CARD}>
+        <header className="flex items-center gap-3 border-b px-4 py-3">
+          <h2 className="text-base font-semibold">{t("Firing now")}</h2>
+        </header>
+        {status.isPending ? (
+          <TableSkeleton rows={2} cols={4} />
+        ) : status.isError ? (
+          <ErrorState error={status.error} onRetry={() => void status.refetch()} />
+        ) : status.data.firing.length === 0 ? (
+          <EmptyState
+            title={t("Nothing is firing")}
+            body={t("Alerts that are firing or waiting out their duration show here.")}
+          />
+        ) : (
+          <table className="w-full text-[13px]">
+            <tbody className="divide-y">
+              {status.data.firing.map((f) => (
+                <tr key={`${f.rule}/${f.key}`}>
+                  <td className="px-4 py-2.5">
+                    <StatusPill status={f.state === "firing" ? "down" : "degraded"}>
+                      {f.state === "firing" ? t("Firing") : t("Pending")}
+                    </StatusPill>
+                  </td>
+                  <td className="px-4 py-2.5 font-mono">{f.rule}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{f.key}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{shortWhen(f.since)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className={CARD}>
+        <header className="flex items-center gap-3 border-b px-4 py-3">
+          <h2 className="text-base font-semibold">{t("Targets")}</h2>
+          <Tip label={write.reason}>
             <Button
-              disabled={!admin.ok || !catalog.data}
-              onClick={() =>
-                setSheet({ kind: tab === "rules" ? "rule" : "target", v: null } as never)
-              }
+              className="ml-auto"
+              disabled={!write.allowed}
+              onClick={() => setAdding("target")}
             >
-              {tab === "rules" ? t("Add rule") : t("Add target")}
+              {t("Add target")}
             </Button>
           </Tip>
+        </header>
+        {targets.isPending ? (
+          <TableSkeleton rows={2} cols={4} />
+        ) : targets.isError ? (
+          <ErrorState error={targets.error} onRetry={() => void targets.refetch()} />
+        ) : targets.data.length === 0 ? (
+          <EmptyState
+            title={t("No targets")}
+            body={t("Add a Slack, Teams, Mattermost, webhook or email target to receive alerts.")}
+          />
+        ) : (
+          <table className="w-full text-[13px]">
+            <tbody className="divide-y">
+              {targets.data.map((x) => (
+                <tr key={x.id}>
+                  <td className="px-4 py-2.5 font-mono">{x.name}</td>
+                  <td className="px-4 py-2.5">{x.kind}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{targetSummary(x)}</td>
+                  <td className="px-4 py-2.5">
+                    <Switch
+                      aria-label={t("Enabled")}
+                      checked={x.enabled}
+                      disabled={!write.allowed}
+                      onCheckedChange={() => toggleTarget.mutate(x)}
+                    />
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <span className="mr-3 text-xs text-muted-foreground">{testResult[x.name]}</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!write.allowed || test.isPending}
+                      onClick={() => test.mutate(x.name)}
+                    >
+                      {t("Send test")}
+                    </Button>{" "}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!write.allowed}
+                      onClick={() => remove.mutate({ kind: "target", name: x.name })}
+                    >
+                      {t("Delete")}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
-      </div>
-      <div role="tablist" aria-label={t("Alerts")} className="flex gap-1 border-b">
-        {(
-          [
-            ["status", "Status"],
-            ["rules", "Rules"],
-            ["targets", "Targets"],
-          ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            role="tab"
-            aria-selected={tab === k}
-            onClick={() => setTab(k)}
-            className={cn(
-              "border-b-2 px-4 py-2 text-sm",
-              tab === k ? "border-primary font-medium" : "border-transparent text-muted-foreground",
-            )}
-          >
-            {t(label)}
-            {k === "status" && firing.length > 0 && (
-              <span className="ml-1.5">
-                <StatusPill status="down">{firing.length}</StatusPill>
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      </section>
 
-      {tab === "status" && (
-        <div className="space-y-5">
-          <section className="overflow-hidden rounded-lg border bg-card">
-            <header className="border-b px-4 py-3 text-base font-semibold">
-              {t("Firing now")}
-            </header>
-            {status.isPending ? (
-              <TableSkeleton rows={2} cols={4} />
-            ) : status.isError ? (
-              <ErrorState error={status.error} onRetry={() => void status.refetch()} />
-            ) : firing.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">{t("Nothing is firing.")}</p>
-            ) : (
-              <table className="w-full text-[13px]">
-                {head(["Rule", "Watching", "State", "Since"])}
-                <tbody className="divide-y">
-                  {firing.map((f) => (
-                    <tr key={`${f.rule}-${f.key}`}>
-                      <td className="px-4 py-2.5 font-medium">{f.rule}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs break-all">{f.key}</td>
-                      <td className="px-4 py-2.5">
-                        <StatusPill status={f.state === "firing" ? "down" : "degraded"}>
-                          {f.state === "firing" ? t("Firing") : t("Pending")}
-                        </StatusPill>
-                      </td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{shortWhen(f.since)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-          <section className="overflow-hidden rounded-lg border bg-card">
-            <header className="border-b px-4 py-3 text-base font-semibold">
-              {t("Latest deliveries")}
-            </header>
-            {(status.data?.deliveries ?? []).length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">{t("Nothing has been sent yet.")}</p>
-            ) : (
-              <table className="w-full text-[13px]">
-                {head(["When", "Rule", "Target", "Kind", "Result"])}
-                <tbody className="divide-y">
-                  {status.data!.deliveries.map((d, i) => (
-                    <tr key={i}>
-                      <td className="px-4 py-2.5 whitespace-nowrap text-muted-foreground">
-                        {shortWhen(d.at)}
-                      </td>
-                      <td className="px-4 py-2.5">{d.rule ?? "—"}</td>
-                      <td className="px-4 py-2.5">{d.target}</td>
-                      <td className="px-4 py-2.5">{d.kind}</td>
-                      <td className="px-4 py-2.5">
-                        {d.status === "sent" ? (
-                          <StatusPill status="healthy">{t("Sent")}</StatusPill>
-                        ) : (
-                          <>
-                            <StatusPill status="down">{t("Failed")}</StatusPill>
-                            {d.error && (
-                              <span className="block font-mono text-xs break-words text-muted-foreground">
-                                {d.error}
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-        </div>
+      <section className={CARD}>
+        <header className="flex items-center gap-3 border-b px-4 py-3">
+          <h2 className="text-base font-semibold">{t("Rules")}</h2>
+          <Tip label={write.reason}>
+            <Button
+              className="ml-auto"
+              disabled={!write.allowed || (targets.data?.length ?? 0) === 0}
+              onClick={() => setAdding("rule")}
+            >
+              {t("Add rule")}
+            </Button>
+          </Tip>
+        </header>
+        {rules.isPending ? (
+          <TableSkeleton rows={2} cols={4} />
+        ) : rules.isError ? (
+          <ErrorState error={rules.error} onRetry={() => void rules.refetch()} />
+        ) : rules.data.length === 0 ? (
+          <EmptyState
+            title={t("No rules")}
+            body={t("A rule says what to watch and which targets to tell.")}
+          />
+        ) : (
+          <table className="w-full text-[13px]">
+            <tbody className="divide-y">
+              {rules.data.map((x) => (
+                <tr key={x.id}>
+                  <td className="px-4 py-2.5 font-mono">{x.name}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{ruleSummary(x)}</td>
+                  <td className="px-4 py-2.5">{x.targets.join(", ")}</td>
+                  <td className="px-4 py-2.5">
+                    <Switch
+                      aria-label={t("Enabled")}
+                      checked={x.enabled}
+                      disabled={!write.allowed}
+                      onCheckedChange={() => toggleRule.mutate(x)}
+                    />
+                  </td>
+                  <td className="px-4 py-2.5 text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={!write.allowed}
+                      onClick={() => remove.mutate({ kind: "rule", name: x.name })}
+                    >
+                      {t("Delete")}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className={CARD}>
+        <header className="border-b px-4 py-3">
+          <h2 className="text-base font-semibold">{t("Recent deliveries")}</h2>
+        </header>
+        {status.data && status.data.deliveries.length > 0 ? (
+          <table className="w-full text-[13px]">
+            <tbody className="divide-y">
+              {status.data.deliveries.map((d, i) => (
+                <tr key={i}>
+                  <td className="px-4 py-2.5 text-muted-foreground">{shortWhen(d.at)}</td>
+                  <td className="px-4 py-2.5">
+                    <StatusPill status={d.status === "sent" ? "healthy" : "down"}>
+                      {d.status === "sent" ? t("Sent") : t("Failed")}
+                    </StatusPill>
+                  </td>
+                  <td className="px-4 py-2.5">{d.kind}</td>
+                  <td className="px-4 py-2.5 font-mono">{d.target}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{d.key}</td>
+                  <td className="px-4 py-2.5 text-xs text-status-down">{d.error}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyState
+            title={t("Nothing sent yet")}
+            body={t("Each message the controller sends, and whether it arrived, is listed here.")}
+          />
+        )}
+      </section>
+
+      {adding === "target" && (
+        <TargetSheet tenant={tenant} catalog={catalog.data} onClose={() => setAdding(null)} />
       )}
-
-      {tab === "rules" && (
-        <div className="overflow-x-auto rounded-lg border bg-card">
-          {rules.isPending ? (
-            <TableSkeleton cols={5} />
-          ) : rules.isError ? (
-            <ErrorState error={rules.error} onRetry={() => void rules.refetch()} />
-          ) : rules.data.length === 0 ? (
-            <EmptyState
-              title={t("No alert rules yet")}
-              body={t("Watch an audit event, a metric or certificate expiry, and tell a target.")}
-            />
-          ) : (
-            <table className="w-full text-[13px]">
-              {head(["Name", "Watches", "Tells", "Status"])}
-              <tbody className="divide-y">
-                {rules.data.map((r) => (
-                  <tr key={r.id}>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        className="font-medium text-primary hover:underline"
-                        onClick={() => setSheet({ kind: "rule", v: r })}
-                      >
-                        {r.name}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="block text-xs text-muted-foreground">{r.kind}</span>
-                      {ruleSummary(r)}
-                    </td>
-                    <td className="px-4 py-3">{r.targets.join(", ")}</td>
-                    <td className="px-4 py-3">
-                      {r.enabled ? (
-                        <StatusPill status="healthy">{t("Enabled")}</StatusPill>
-                      ) : (
-                        <StatusPill status="neutral">{t("Disabled")}</StatusPill>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {tab === "targets" && (
-        <div className="overflow-x-auto rounded-lg border bg-card">
-          {targets.isPending ? (
-            <TableSkeleton cols={4} />
-          ) : targets.isError ? (
-            <ErrorState error={targets.error} onRetry={() => void targets.refetch()} />
-          ) : targets.data.length === 0 ? (
-            <EmptyState
-              title={t("No alert targets yet")}
-              body={t("Add a webhook, a chat channel or email addresses.")}
-            />
-          ) : (
-            <table className="w-full text-[13px]">
-              {head(["Name", "Type", "Destination", "Status"])}
-              <tbody className="divide-y">
-                {targets.data.map((x) => (
-                  <tr key={x.id}>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        className="font-medium text-primary hover:underline"
-                        onClick={() => setSheet({ kind: "target", v: x })}
-                      >
-                        {x.name}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3">{x.kind}</td>
-                    <td className="px-4 py-3 font-mono text-xs break-all">{targetSummary(x)}</td>
-                    <td className="px-4 py-3">
-                      {x.enabled ? (
-                        <StatusPill status="healthy">{t("Enabled")}</StatusPill>
-                      ) : (
-                        <StatusPill status="neutral">{t("Disabled")}</StatusPill>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-
-      {sheet?.kind === "rule" && catalog.data && (
+      {adding === "rule" && (
         <RuleSheet
-          key={sheet.v?.id ?? "new"}
           tenant={tenant}
-          rule={sheet.v}
-          catalog={catalog.data}
           targets={targets.data ?? []}
-          onClose={() => setSheet(null)}
-        />
-      )}
-      {sheet?.kind === "target" && catalog.data && (
-        <TargetSheet
-          key={sheet.v?.id ?? "new"}
-          tenant={tenant}
-          target={sheet.v}
           catalog={catalog.data}
-          onClose={() => setSheet(null)}
+          onClose={() => setAdding(null)}
         />
       )}
     </div>

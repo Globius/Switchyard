@@ -7349,6 +7349,130 @@
         "title": "GroupResult",
         "type": "object"
       },
+      "GslbDsRead": {
+        "additionalProperties": false,
+        "description": "DNSSEC state of a zone.",
+        "properties": {
+          "dnssec": {
+            "title": "Dnssec",
+            "type": "boolean"
+          },
+          "ds": {
+            "description": "DS records to publish at the zone's parent.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ds",
+            "type": "array"
+          },
+          "zone": {
+            "title": "Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone",
+          "dnssec",
+          "ds"
+        ],
+        "title": "GslbDsRead",
+        "type": "object"
+      },
+      "GslbSyncResult": {
+        "additionalProperties": false,
+        "description": "What a sync did.",
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "written": {
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "written",
+          "failed"
+        ],
+        "title": "GslbSyncResult",
+        "type": "object"
+      },
+      "GslbZoneIn": {
+        "additionalProperties": false,
+        "description": "A zone to host for a tenant.",
+        "properties": {
+          "name": {
+            "description": "The zone, for example `gslb.example.com`.",
+            "title": "Name",
+            "type": "string"
+          },
+          "nameservers": {
+            "description": "Host names of your PowerDNS servers, as they appear in the zone's NS records.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Nameservers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "nameservers"
+        ],
+        "title": "GslbZoneIn",
+        "type": "object"
+      },
+      "GslbZoneRead": {
+        "additionalProperties": false,
+        "description": "A zone.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "dnssec": {
+            "title": "Dnssec",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nameservers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nameservers",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "nameservers",
+          "dnssec",
+          "version",
+          "created_by",
+          "created_at"
+        ],
+        "title": "GslbZoneRead",
+        "type": "object"
+      },
       "HaMode": {
         "description": "How an SE group places its VIPs.",
         "enum": [
@@ -8837,7 +8961,7 @@
         "type": "object"
       },
       "JobKind": {
-        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and\n        Gateways and applies the difference as a `system:k8s` change set.\n    CONTROLLER_TICK: Scheduled check of a controller settings change that waits for\n        confirmation; reverts it when the window runs out.\n    DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
+        "description": "Every kind of background job, for filters and labels.\n\nAttributes:\n    APPLY_CHANGE_SET: Applies a change set (stages lock, render, validate, canary, rollout,\n        commit). Result: `ApplyJobResult`.\n    REAPPLY_SE_GROUP: Pushes the current desired state to one SE group again to repair drift\n        (stages lock, render, validate, canary, rollout; no revision). Result:\n        `{ok, se_group_id, se_group, revision_number, error, details}`.\n    DEPLOY_SE_GROUP: Clones SE VMs on Proxmox for an SE group.\n    RETIRE_ENGINE: Destroys an engine's VM and removes its record.\n    APPLY_SDN: Creates or updates the Proxmox SDN objects of managed networks.\n    ISSUE_CERT: Issues or renews one certificate; result `{change_set_id}` of the\n        `system:certs` change set that records it.\n    RENEW_CERTS: Scheduled sweep that renews certificates due for renewal.\n    SYNC_CLOUDFLARE_IPS: Scheduled refresh of Cloudflare-managed allow lists.\n    POLL_STATUS: Scheduled engine status poll and drift detection.\n    GIT_MIRROR: Pushes a revision to the Git mirror.\n    GC: Scheduled housekeeping.\n    KUBERNETES_SYNC: Scheduled sync of every enabled Kubernetes cluster: reads Services and\n        Gateways and applies the difference as a `system:k8s` change set.\n    CONTROLLER_TICK: Scheduled check of a controller settings change that waits for\n        confirmation; reverts it when the window runs out.\n    DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.\n    SYNC_GSLB: Follows virtual service VIP moves in GSLB records.\n    EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.",
         "enum": [
           "apply_change_set",
           "reapply_se_group",
@@ -8853,7 +8977,8 @@
           "controller_tick",
           "kubernetes_sync",
           "discover_pool_members",
-          "evaluate_alerts"
+          "evaluate_alerts",
+          "sync_gslb"
         ],
         "title": "JobKind",
         "type": "string"
@@ -20476,6 +20601,435 @@
           "weight"
         ],
         "title": "WeightedPool",
+        "type": "object"
+      },
+      "WideIpHealth": {
+        "additionalProperties": false,
+        "description": "How PowerDNS decides whether a member is up (it checks from the DNS servers).",
+        "properties": {
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Host name to ask for (default: the wide IP).",
+            "title": "Host"
+          },
+          "kind": {
+            "default": "tcp",
+            "enum": [
+              "tcp",
+              "http"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "match": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text the response must contain.",
+            "title": "Match"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`http` checks only; starts with `/`.",
+            "title": "Path"
+          },
+          "port": {
+            "default": 443,
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "type": "integer"
+          },
+          "scheme": {
+            "anyOf": [
+              {
+                "enum": [
+                  "http",
+                  "https"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`http` checks only.",
+            "title": "Scheme"
+          },
+          "timeout_ms": {
+            "default": 1000,
+            "description": "How long PowerDNS waits for one check.",
+            "maximum": 5000.0,
+            "minimum": 100.0,
+            "title": "Timeout Ms",
+            "type": "integer"
+          }
+        },
+        "title": "WideIpHealth",
+        "type": "object"
+      },
+      "WideIpIn": {
+        "additionalProperties": false,
+        "description": "A name whose answer follows the health of its members.",
+        "properties": {
+          "algorithm": {
+            "default": "failover",
+            "enum": [
+              "failover",
+              "weighted",
+              "all",
+              "subnet",
+              "geo"
+            ],
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "health": {
+            "$ref": "#/components/schemas/WideIpHealth"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/WideIpMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "description": "`@` (the zone apex) or a name inside the zone, like `shop`.",
+            "title": "Name",
+            "type": "string"
+          },
+          "ttl": {
+            "default": 30,
+            "maximum": 3600.0,
+            "minimum": 5.0,
+            "title": "Ttl",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "members"
+        ],
+        "title": "WideIpIn",
+        "type": "object"
+      },
+      "WideIpMember": {
+        "additionalProperties": false,
+        "description": "One answer a wide IP can give.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An IPv4 or IPv6 address.",
+            "title": "Address"
+          },
+          "priority": {
+            "default": 1,
+            "description": "`failover` only: 1 is tried first.",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Priority",
+            "type": "integer"
+          },
+          "site": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A label for the site (a lab host, a data centre).",
+            "title": "Site"
+          },
+          "subnets": {
+            "description": "`subnet` only: clients in these CIDR blocks get this member.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Subnets",
+            "type": "array"
+          },
+          "virtual_service": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Instead of `address`: a virtual service; its VIP is followed.",
+            "title": "Virtual Service"
+          },
+          "weight": {
+            "default": 1,
+            "description": "`weighted` only.",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "title": "WideIpMember",
+        "type": "object"
+      },
+      "WideIpPatch": {
+        "additionalProperties": false,
+        "description": "Fields of a wide IP that can change; omitted fields stay as they are.",
+        "properties": {
+          "algorithm": {
+            "anyOf": [
+              {
+                "enum": [
+                  "failover",
+                  "weighted",
+                  "all",
+                  "subnet",
+                  "geo"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithm"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WideIpHealth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "members": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WideIpMember"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Members"
+          },
+          "ttl": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttl"
+          }
+        },
+        "title": "WideIpPatch",
+        "type": "object"
+      },
+      "WideIpRead": {
+        "additionalProperties": false,
+        "description": "A wide IP.",
+        "properties": {
+          "algorithm": {
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "applied_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "fqdn": {
+            "title": "Fqdn",
+            "type": "string"
+          },
+          "health": {
+            "$ref": "#/components/schemas/WideIpHealth"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/WideIpMember"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ttl": {
+            "title": "Ttl",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "zone": {
+            "title": "Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "zone",
+          "fqdn",
+          "algorithm",
+          "ttl",
+          "health",
+          "members",
+          "enabled",
+          "version",
+          "applied_at",
+          "last_error",
+          "created_by",
+          "created_at"
+        ],
+        "title": "WideIpRead",
+        "type": "object"
+      },
+      "WideIpState": {
+        "additionalProperties": false,
+        "description": "A wide IP against what PowerDNS holds.",
+        "properties": {
+          "applied_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "fqdn": {
+            "title": "Fqdn",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "state": {
+            "enum": [
+              "in_sync",
+              "drift",
+              "pending",
+              "error",
+              "off",
+              "unknown"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fqdn",
+          "state",
+          "last_error",
+          "applied_at"
+        ],
+        "title": "WideIpState",
         "type": "object"
       },
       "WouldGrant": {
@@ -35027,6 +35581,1246 @@
           "grafana"
         ],
         "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/gslb-zones": {
+      "get": {
+        "description": "DNS zones hosted for this tenant on the controller's PowerDNS. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_gslb_zones_api_v1_tenants__t__gslb_zones_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-10T08:30:00Z",
+                    "created_by": "user:authentik:root",
+                    "dnssec": false,
+                    "id": "0192f3a0-0000-7000-8000-0000000000b1",
+                    "name": "gslb.example.test",
+                    "nameservers": [
+                      "ns1.example.test",
+                      "ns2.example.test"
+                    ],
+                    "version": 1
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GslbZoneRead"
+                  },
+                  "title": "Response List Gslb Zones Api V1 Tenants  T  Gslb Zones Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List GSLB zones",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "viewer"
+      },
+      "post": {
+        "description": "Creates the zone on PowerDNS and assigns it to the tenant. A zone name belongs to one tenant and may not overlap another tenant's zone. Delegate it at its parent to the nameservers you name. Requires `system-admin`.\n\n**Access:** `system-admin` only.",
+        "operationId": "create_gslb_zone_api_v1_tenants__t__gslb_zones_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "gslb.example.test",
+                "nameservers": [
+                  "ns1.example.test"
+                ]
+              },
+              "schema": {
+                "$ref": "#/components/schemas/GslbZoneIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "created_by": "user:authentik:root",
+                  "dnssec": false,
+                  "id": "0192f3a0-0000-7000-8000-0000000000b1",
+                  "name": "gslb.example.test",
+                  "nameservers": [
+                    "ns1.example.test",
+                    "ns2.example.test"
+                  ],
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GslbZoneRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Host a zone for a tenant",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/gslb-zones/{zone}": {
+      "delete": {
+        "description": "Removes the zone from PowerDNS and every wide IP in it. Requires `system-admin`.\n\n**Access:** `system-admin` only.",
+        "operationId": "delete_gslb_zone_api_v1_tenants__t__gslb_zones__zone__delete",
+        "parameters": [
+          {
+            "description": "Zone name, for example `gslb.example.test` (a filter on the list route).",
+            "in": "path",
+            "name": "zone",
+            "required": true,
+            "schema": {
+              "title": "Zone",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove a zone",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/dnssec": {
+      "post": {
+        "description": "Turns DNSSEC on (PowerDNS creates the keys) and returns the DS records to publish at the zone's parent. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "enable_gslb_dnssec_api_v1_tenants__t__gslb_zones__zone__dnssec_post",
+        "parameters": [
+          {
+            "description": "Zone name, for example `gslb.example.test` (a filter on the list route).",
+            "in": "path",
+            "name": "zone",
+            "required": true,
+            "schema": {
+              "title": "Zone",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "dnssec": true,
+                  "ds": [
+                    "gslb.example.test. IN DS 12345 13 2 ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+                  ],
+                  "zone": "gslb.example.test"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GslbDsRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign a zone (DNSSEC)",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/ds": {
+      "get": {
+        "description": "Whether the zone is signed and its DS records. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "gslb_ds_api_v1_tenants__t__gslb_zones__zone__ds_get",
+        "parameters": [
+          {
+            "description": "Zone name, for example `gslb.example.test` (a filter on the list route).",
+            "in": "path",
+            "name": "zone",
+            "required": true,
+            "schema": {
+              "title": "Zone",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "dnssec": true,
+                  "ds": [
+                    "gslb.example.test. IN DS 12345 13 2 ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+                  ],
+                  "zone": "gslb.example.test"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GslbDsRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "DS records of a zone",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/wide-ips": {
+      "post": {
+        "description": "Publishes a name in the zone. `failover` answers with the first priority tier that has a member up; `all` with every member that is up; `weighted` picks among members that are up by weight; `subnet` answers by the client's network; `geo` picks the member closest to the client (the PowerDNS server needs a GeoIP database). A member is an address or a virtual service (its VIP is followed when it moves). PowerDNS checks health itself, from the DNS servers. Applies at once and is audited. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "create_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips_post",
+        "parameters": [
+          {
+            "description": "Zone name, for example `gslb.example.test` (a filter on the list route).",
+            "in": "path",
+            "name": "zone",
+            "required": true,
+            "schema": {
+              "title": "Zone",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "algorithm": "failover",
+                "members": [
+                  {
+                    "address": "192.0.2.10",
+                    "priority": 1,
+                    "site": "pve1"
+                  },
+                  {
+                    "priority": 2,
+                    "site": "pve2",
+                    "virtual_service": "shop"
+                  }
+                ],
+                "name": "shop"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/WideIpIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "algorithm": "failover",
+                  "applied_at": "2026-10-10T08:30:00Z",
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "created_by": "user:authentik:alice",
+                  "enabled": true,
+                  "fqdn": "shop.gslb.example.test",
+                  "health": {
+                    "kind": "tcp",
+                    "port": 443,
+                    "timeout_ms": 1000
+                  },
+                  "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                  "members": [
+                    {
+                      "address": "192.0.2.10",
+                      "priority": 1,
+                      "site": "pve1",
+                      "subnets": [],
+                      "weight": 1
+                    },
+                    {
+                      "priority": 2,
+                      "site": "pve2",
+                      "subnets": [],
+                      "virtual_service": "shop",
+                      "weight": 1
+                    }
+                  ],
+                  "name": "shop",
+                  "ttl": 30,
+                  "version": 1,
+                  "zone": "gslb.example.test"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/WideIpRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Create a wide IP",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}": {
+      "delete": {
+        "description": "Removes the records. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "delete_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__delete",
+        "parameters": [
+          {
+            "description": "Zone name, for example `gslb.example.test` (a filter on the list route).",
+            "in": "path",
+            "name": "zone",
+            "required": true,
+            "schema": {
+              "title": "Zone",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete a wide IP",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "tenant-admin"
+      },
+      "patch": {
+        "description": "Change the algorithm, TTL, health check or members, or switch it off (its records are removed) and on. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "patch_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__patch",
+        "parameters": [
+          {
+            "description": "Zone name, for example `gslb.example.test` (a filter on the list route).",
+            "in": "path",
+            "name": "zone",
+            "required": true,
+            "schema": {
+              "title": "Zone",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "ttl": 60
+              },
+              "schema": {
+                "$ref": "#/components/schemas/WideIpPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "algorithm": "failover",
+                  "applied_at": "2026-10-10T08:30:00Z",
+                  "created_at": "2026-10-10T08:30:00Z",
+                  "created_by": "user:authentik:alice",
+                  "enabled": true,
+                  "fqdn": "shop.gslb.example.test",
+                  "health": {
+                    "kind": "tcp",
+                    "port": 443,
+                    "timeout_ms": 1000
+                  },
+                  "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                  "members": [
+                    {
+                      "address": "192.0.2.10",
+                      "priority": 1,
+                      "site": "pve1",
+                      "subnets": [],
+                      "weight": 1
+                    },
+                    {
+                      "priority": 2,
+                      "site": "pve2",
+                      "subnets": [],
+                      "virtual_service": "shop",
+                      "weight": 1
+                    }
+                  ],
+                  "name": "shop",
+                  "ttl": 30,
+                  "version": 1,
+                  "zone": "gslb.example.test"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/WideIpRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Change a wide IP",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/gslb/status": {
+      "get": {
+        "description": "Compares each wide IP with the records PowerDNS holds: `in_sync`, `drift` (they differ; nothing is changed), `pending`, `error` (the last push failed) or `off`. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "gslb_status_api_v1_tenants__t__gslb_status_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "applied_at": "2026-10-10T08:30:00Z",
+                    "fqdn": "shop.gslb.example.test",
+                    "state": "in_sync"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WideIpState"
+                  },
+                  "title": "Response Gslb Status Api V1 Tenants  T  Gslb Status Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Wide IPs against PowerDNS",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/gslb/sync": {
+      "post": {
+        "description": "Rewrites the records of every enabled wide IP, which also repairs drift. Requires `tenant-admin`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "gslb_sync_api_v1_tenants__t__gslb_sync_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "failed": 0,
+                  "written": 2
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GslbSyncResult"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write every wide IP to PowerDNS again",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "tenant-admin"
       }
     },
     "/api/v1/tenants/{t}/health-monitors": {
@@ -50309,6 +52103,156 @@
         "x-required-role": "viewer"
       }
     },
+    "/api/v1/tenants/{t}/wide-ips": {
+      "get": {
+        "description": "Names whose answer follows the health of their members; `zone` narrows to one zone. Requires any role in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_wide_ips_api_v1_tenants__t__wide_ips_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Zone name, for example `gslb.example.test` (a filter on the list route).",
+            "in": "query",
+            "name": "zone",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "algorithm": "failover",
+                    "applied_at": "2026-10-10T08:30:00Z",
+                    "created_at": "2026-10-10T08:30:00Z",
+                    "created_by": "user:authentik:alice",
+                    "enabled": true,
+                    "fqdn": "shop.gslb.example.test",
+                    "health": {
+                      "kind": "tcp",
+                      "port": 443,
+                      "timeout_ms": 1000
+                    },
+                    "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                    "members": [
+                      {
+                        "address": "192.0.2.10",
+                        "priority": 1,
+                        "site": "pve1",
+                        "subnets": [],
+                        "weight": 1
+                      },
+                      {
+                        "priority": 2,
+                        "site": "pve2",
+                        "subnets": [],
+                        "virtual_service": "shop",
+                        "weight": 1
+                      }
+                    ],
+                    "name": "shop",
+                    "ttl": 30,
+                    "version": 1,
+                    "zone": "gslb.example.test"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WideIpRead"
+                  },
+                  "title": "Response List Wide Ips Api V1 Tenants  T  Wide Ips Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List wide IPs",
+        "tags": [
+          "gslb"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
     "/api/v1/users": {
       "get": {
         "description": "People who have signed in, newest sign-in first. `q` searches name and e-mail.\n\n**Access:** `system-admin` only.",
@@ -51118,6 +53062,10 @@
     {
       "description": "Grafana embedded in the UI: one-time launch links, scoped to a tenant.",
       "name": "grafana"
+    },
+    {
+      "description": "Global server load balancing on PowerDNS: zones and wide IPs.",
+      "name": "gslb"
     },
     {
       "description": "Alert targets (webhook, chat, email), rules on events, metrics and certificate expiry, and what is firing.",

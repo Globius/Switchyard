@@ -2097,6 +2097,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tenants/{t}/gslb-zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List GSLB zones
+         * @description DNS zones hosted for this tenant on the controller's PowerDNS. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_gslb_zones_api_v1_tenants__t__gslb_zones_get"];
+        put?: never;
+        /**
+         * Host a zone for a tenant
+         * @description Creates the zone on PowerDNS and assigns it to the tenant. A zone name belongs to one tenant and may not overlap another tenant's zone. Delegate it at its parent to the nameservers you name. Requires `system-admin`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_gslb_zone_api_v1_tenants__t__gslb_zones_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a zone
+         * @description Removes the zone from PowerDNS and every wide IP in it. Requires `system-admin`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_gslb_zone_api_v1_tenants__t__gslb_zones__zone__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/dnssec": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign a zone (DNSSEC)
+         * @description Turns DNSSEC on (PowerDNS creates the keys) and returns the DS records to publish at the zone's parent. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["enable_gslb_dnssec_api_v1_tenants__t__gslb_zones__zone__dnssec_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/ds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * DS records of a zone
+         * @description Whether the zone is signed and its DS records. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["gslb_ds_api_v1_tenants__t__gslb_zones__zone__ds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/wide-ips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a wide IP
+         * @description Publishes a name in the zone. `failover` answers with the first priority tier that has a member up; `all` with every member that is up; `weighted` picks among members that are up by weight; `subnet` answers by the client's network; `geo` picks the member closest to the client (the PowerDNS server needs a GeoIP database). A member is an address or a virtual service (its VIP is followed when it moves). PowerDNS checks health itself, from the DNS servers. Applies at once and is audited. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb-zones/{zone}/wide-ips/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a wide IP
+         * @description Removes the records. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        delete: operations["delete_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a wide IP
+         * @description Change the algorithm, TTL, health check or members, or switch it off (its records are removed) and on. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        patch: operations["patch_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__patch"];
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Wide IPs against PowerDNS
+         * @description Compares each wide IP with the records PowerDNS holds: `in_sync`, `drift` (they differ; nothing is changed), `pending`, `error` (the last push failed) or `off`. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["gslb_status_api_v1_tenants__t__gslb_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/gslb/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write every wide IP to PowerDNS again
+         * @description Rewrites the records of every enabled wide IP, which also repairs drift. Requires `tenant-admin`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["gslb_sync_api_v1_tenants__t__gslb_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/health-monitors": {
         parameters: {
             query?: never;
@@ -3651,6 +3839,28 @@ export interface paths {
          *     **Access:** Any role in the tenant (`viewer` or higher).
          */
         get: operations["service_engine_rendered_api_v1_tenants__t__virtual_services__service__engines__engine__rendered_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/wide-ips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List wide IPs
+         * @description Names whose answer follows the health of their members; `zone` narrows to one zone. Requires any role in the tenant.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_wide_ips_api_v1_tenants__t__wide_ips_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7179,6 +7389,73 @@ export interface components {
             state: ("pending" | "succeeded" | "failed" | "reverted") | string;
         };
         /**
+         * GslbDsRead
+         * @description DNSSEC state of a zone.
+         */
+        GslbDsRead: {
+            /** Dnssec */
+            dnssec: boolean;
+            /**
+             * Ds
+             * @description DS records to publish at the zone's parent.
+             */
+            ds: string[];
+            /** Zone */
+            zone: string;
+        };
+        /**
+         * GslbSyncResult
+         * @description What a sync did.
+         */
+        GslbSyncResult: {
+            /** Failed */
+            failed: number;
+            /** Written */
+            written: number;
+        };
+        /**
+         * GslbZoneIn
+         * @description A zone to host for a tenant.
+         */
+        GslbZoneIn: {
+            /**
+             * Name
+             * @description The zone, for example `gslb.example.com`.
+             */
+            name: string;
+            /**
+             * Nameservers
+             * @description Host names of your PowerDNS servers, as they appear in the zone's NS records.
+             */
+            nameservers: string[];
+        };
+        /**
+         * GslbZoneRead
+         * @description A zone.
+         */
+        GslbZoneRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Dnssec */
+            dnssec: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Nameservers */
+            nameservers: string[];
+            /** Version */
+            version: number;
+        };
+        /**
          * HaMode
          * @description How an SE group places its VIPs.
          * @enum {string}
@@ -7837,10 +8114,11 @@ export interface components {
          *         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
          *             confirmation; reverts it when the window runs out.
          *         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+         *         SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
          *         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
          * @enum {string}
          */
-        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "evaluate_alerts";
+        JobKind: "apply_change_set" | "reapply_se_group" | "deploy_se_group" | "retire_engine" | "apply_sdn" | "issue_cert" | "renew_certs" | "sync_cloudflare_ips" | "poll_status" | "git_mirror" | "gc" | "controller_tick" | "kubernetes_sync" | "discover_pool_members" | "evaluate_alerts" | "sync_gslb";
         /**
          * JobLog
          * @description The log of a job (the latest 500 lines).
@@ -13134,6 +13412,188 @@ export interface components {
             pool_id: string;
             /** Weight */
             weight: number;
+        };
+        /**
+         * WideIpHealth
+         * @description How PowerDNS decides whether a member is up (it checks from the DNS servers).
+         */
+        WideIpHealth: {
+            /**
+             * Host
+             * @description Host name to ask for (default: the wide IP).
+             */
+            host?: string | null;
+            /**
+             * Kind
+             * @default tcp
+             * @enum {string}
+             */
+            kind: "tcp" | "http";
+            /**
+             * Match
+             * @description Text the response must contain.
+             */
+            match?: string | null;
+            /**
+             * Path
+             * @description `http` checks only; starts with `/`.
+             */
+            path?: string | null;
+            /**
+             * Port
+             * @default 443
+             */
+            port: number;
+            /**
+             * Scheme
+             * @description `http` checks only.
+             */
+            scheme?: ("http" | "https") | null;
+            /**
+             * Timeout Ms
+             * @description How long PowerDNS waits for one check.
+             * @default 1000
+             */
+            timeout_ms: number;
+        };
+        /**
+         * WideIpIn
+         * @description A name whose answer follows the health of its members.
+         */
+        WideIpIn: {
+            /**
+             * Algorithm
+             * @default failover
+             * @enum {string}
+             */
+            algorithm: "failover" | "weighted" | "all" | "subnet" | "geo";
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            health?: components["schemas"]["WideIpHealth"];
+            /** Members */
+            members: components["schemas"]["WideIpMember"][];
+            /**
+             * Name
+             * @description `@` (the zone apex) or a name inside the zone, like `shop`.
+             */
+            name: string;
+            /**
+             * Ttl
+             * @default 30
+             */
+            ttl: number;
+        };
+        /**
+         * WideIpMember
+         * @description One answer a wide IP can give.
+         */
+        WideIpMember: {
+            /**
+             * Address
+             * @description An IPv4 or IPv6 address.
+             */
+            address?: string | null;
+            /**
+             * Priority
+             * @description `failover` only: 1 is tried first.
+             * @default 1
+             */
+            priority: number;
+            /**
+             * Site
+             * @description A label for the site (a lab host, a data centre).
+             */
+            site?: string | null;
+            /**
+             * Subnets
+             * @description `subnet` only: clients in these CIDR blocks get this member.
+             */
+            subnets?: string[];
+            /**
+             * Virtual Service
+             * @description Instead of `address`: a virtual service; its VIP is followed.
+             */
+            virtual_service?: string | null;
+            /**
+             * Weight
+             * @description `weighted` only.
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
+         * WideIpPatch
+         * @description Fields of a wide IP that can change; omitted fields stay as they are.
+         */
+        WideIpPatch: {
+            /** Algorithm */
+            algorithm?: ("failover" | "weighted" | "all" | "subnet" | "geo") | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            health?: components["schemas"]["WideIpHealth"] | null;
+            /** Members */
+            members?: components["schemas"]["WideIpMember"][] | null;
+            /** Ttl */
+            ttl?: number | null;
+        };
+        /**
+         * WideIpRead
+         * @description A wide IP.
+         */
+        WideIpRead: {
+            /** Algorithm */
+            algorithm: string;
+            /** Applied At */
+            applied_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Fqdn */
+            fqdn: string;
+            health: components["schemas"]["WideIpHealth"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Error */
+            last_error: string | null;
+            /** Members */
+            members: components["schemas"]["WideIpMember"][];
+            /** Name */
+            name: string;
+            /** Ttl */
+            ttl: number;
+            /** Version */
+            version: number;
+            /** Zone */
+            zone: string;
+        };
+        /**
+         * WideIpState
+         * @description A wide IP against what PowerDNS holds.
+         */
+        WideIpState: {
+            /** Applied At */
+            applied_at: string | null;
+            /** Fqdn */
+            fqdn: string;
+            /** Last Error */
+            last_error: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "in_sync" | "drift" | "pending" | "error" | "off" | "unknown";
         };
         /**
          * WouldGrant
@@ -22920,6 +23380,883 @@ export interface operations {
             };
         };
     };
+    list_gslb_zones_api_v1_tenants__t__gslb_zones_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-10-10T08:30:00Z",
+                     *         "created_by": "user:authentik:root",
+                     *         "dnssec": false,
+                     *         "id": "0192f3a0-0000-7000-8000-0000000000b1",
+                     *         "name": "gslb.example.test",
+                     *         "nameservers": [
+                     *           "ns1.example.test",
+                     *           "ns2.example.test"
+                     *         ],
+                     *         "version": 1
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["GslbZoneRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_gslb_zone_api_v1_tenants__t__gslb_zones_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "gslb.example.test",
+                 *       "nameservers": [
+                 *         "ns1.example.test"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["GslbZoneIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:root",
+                     *       "dnssec": false,
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000b1",
+                     *       "name": "gslb.example.test",
+                     *       "nameservers": [
+                     *         "ns1.example.test",
+                     *         "ns2.example.test"
+                     *       ],
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GslbZoneRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_gslb_zone_api_v1_tenants__t__gslb_zones__zone__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    enable_gslb_dnssec_api_v1_tenants__t__gslb_zones__zone__dnssec_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "dnssec": true,
+                     *       "ds": [
+                     *         "gslb.example.test. IN DS 12345 13 2 ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+                     *       ],
+                     *       "zone": "gslb.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GslbDsRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    gslb_ds_api_v1_tenants__t__gslb_zones__zone__ds_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "dnssec": true,
+                     *       "ds": [
+                     *         "gslb.example.test. IN DS 12345 13 2 ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+                     *       ],
+                     *       "zone": "gslb.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GslbDsRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "algorithm": "failover",
+                 *       "members": [
+                 *         {
+                 *           "address": "192.0.2.10",
+                 *           "priority": 1,
+                 *           "site": "pve1"
+                 *         },
+                 *         {
+                 *           "priority": 2,
+                 *           "site": "pve2",
+                 *           "virtual_service": "shop"
+                 *         }
+                 *       ],
+                 *       "name": "shop"
+                 *     }
+                 */
+                "application/json": components["schemas"]["WideIpIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "algorithm": "failover",
+                     *       "applied_at": "2026-10-10T08:30:00Z",
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "enabled": true,
+                     *       "fqdn": "shop.gslb.example.test",
+                     *       "health": {
+                     *         "kind": "tcp",
+                     *         "port": 443,
+                     *         "timeout_ms": 1000
+                     *       },
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                     *       "members": [
+                     *         {
+                     *           "address": "192.0.2.10",
+                     *           "priority": 1,
+                     *           "site": "pve1",
+                     *           "subnets": [],
+                     *           "weight": 1
+                     *         },
+                     *         {
+                     *           "priority": 2,
+                     *           "site": "pve2",
+                     *           "subnets": [],
+                     *           "virtual_service": "shop",
+                     *           "weight": 1
+                     *         }
+                     *       ],
+                     *       "name": "shop",
+                     *       "ttl": 30,
+                     *       "version": 1,
+                     *       "zone": "gslb.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["WideIpRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_wide_ip_api_v1_tenants__t__gslb_zones__zone__wide_ips__name__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone: string;
+                /** @description Return only the object with exactly this name. */
+                name: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "ttl": 60
+                 *     }
+                 */
+                "application/json": components["schemas"]["WideIpPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "algorithm": "failover",
+                     *       "applied_at": "2026-10-10T08:30:00Z",
+                     *       "created_at": "2026-10-10T08:30:00Z",
+                     *       "created_by": "user:authentik:alice",
+                     *       "enabled": true,
+                     *       "fqdn": "shop.gslb.example.test",
+                     *       "health": {
+                     *         "kind": "tcp",
+                     *         "port": 443,
+                     *         "timeout_ms": 1000
+                     *       },
+                     *       "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                     *       "members": [
+                     *         {
+                     *           "address": "192.0.2.10",
+                     *           "priority": 1,
+                     *           "site": "pve1",
+                     *           "subnets": [],
+                     *           "weight": 1
+                     *         },
+                     *         {
+                     *           "priority": 2,
+                     *           "site": "pve2",
+                     *           "subnets": [],
+                     *           "virtual_service": "shop",
+                     *           "weight": 1
+                     *         }
+                     *       ],
+                     *       "name": "shop",
+                     *       "ttl": 30,
+                     *       "version": 1,
+                     *       "zone": "gslb.example.test"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["WideIpRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    gslb_status_api_v1_tenants__t__gslb_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "applied_at": "2026-10-10T08:30:00Z",
+                     *         "fqdn": "shop.gslb.example.test",
+                     *         "state": "in_sync"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["WideIpState"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    gslb_sync_api_v1_tenants__t__gslb_sync_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "failed": 0,
+                     *       "written": 2
+                     *     }
+                     */
+                    "application/json": components["schemas"]["GslbSyncResult"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_health_monitors_api_v1_tenants__t__health_monitors_get: {
         parameters: {
             query?: {
@@ -32022,6 +33359,109 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["EngineRenderedRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_wide_ips_api_v1_tenants__t__wide_ips_get: {
+        parameters: {
+            query?: {
+                /** @description Zone name, for example `gslb.example.test` (a filter on the list route). */
+                zone?: string | null;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "algorithm": "failover",
+                     *         "applied_at": "2026-10-10T08:30:00Z",
+                     *         "created_at": "2026-10-10T08:30:00Z",
+                     *         "created_by": "user:authentik:alice",
+                     *         "enabled": true,
+                     *         "fqdn": "shop.gslb.example.test",
+                     *         "health": {
+                     *           "kind": "tcp",
+                     *           "port": 443,
+                     *           "timeout_ms": 1000
+                     *         },
+                     *         "id": "0192f3a0-0000-7000-8000-0000000000b2",
+                     *         "members": [
+                     *           {
+                     *             "address": "192.0.2.10",
+                     *             "priority": 1,
+                     *             "site": "pve1",
+                     *             "subnets": [],
+                     *             "weight": 1
+                     *           },
+                     *           {
+                     *             "priority": 2,
+                     *             "site": "pve2",
+                     *             "subnets": [],
+                     *             "virtual_service": "shop",
+                     *             "weight": 1
+                     *           }
+                     *         ],
+                     *         "name": "shop",
+                     *         "ttl": 30,
+                     *         "version": 1,
+                     *         "zone": "gslb.example.test"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["WideIpRead"][];
                 };
             };
             /** @description Missing, invalid or expired credentials. */

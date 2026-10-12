@@ -771,6 +771,74 @@ ALERT_CATALOG = {
     "email_configured": False,
 }
 
+GSLB_ZONE = {
+    "id": "0192f3a0-0000-7000-8000-0000000000b1",
+    "name": "gslb.example.test",
+    "nameservers": ["ns1.example.test", "ns2.example.test"],
+    "dnssec": False,
+    "version": 1,
+    "created_by": "user:authentik:root",
+    "created_at": WHEN,
+}
+
+GSLB_DS = {
+    "zone": "gslb.example.test",
+    "dnssec": True,
+    "ds": [
+        "gslb.example.test. IN DS 12345 13 2 "
+        "ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789"
+    ],
+}
+
+WIDE_IP = {
+    "id": "0192f3a0-0000-7000-8000-0000000000b2",
+    "name": "shop",
+    "zone": "gslb.example.test",
+    "fqdn": "shop.gslb.example.test",
+    "algorithm": "failover",
+    "ttl": 30,
+    "health": {
+        "kind": "tcp",
+        "port": 443,
+        "scheme": None,
+        "path": None,
+        "match": None,
+        "host": None,
+        "timeout_ms": 1000,
+    },
+    "members": [
+        {
+            "address": "192.0.2.10",
+            "virtual_service": None,
+            "site": "pve1",
+            "weight": 1,
+            "priority": 1,
+            "subnets": [],
+        },
+        {
+            "address": None,
+            "virtual_service": "shop",
+            "site": "pve2",
+            "weight": 1,
+            "priority": 2,
+            "subnets": [],
+        },
+    ],
+    "enabled": True,
+    "version": 1,
+    "applied_at": WHEN,
+    "last_error": None,
+    "created_by": "user:authentik:alice",
+    "created_at": WHEN,
+}
+
+WIDE_IP_STATE = {
+    "fqdn": "shop.gslb.example.test",
+    "state": "in_sync",
+    "last_error": None,
+    "applied_at": WHEN,
+}
+
 METRICS = {
     "available": True,
     "reason": None,

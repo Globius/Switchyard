@@ -9,41 +9,32 @@ import { createQueryClient } from "@/auth/session";
 import { ruleSummary, targetSummary } from "@/features/alerts/Alerts";
 import { ThemeProvider } from "@/lib/theme";
 import { routeTree } from "@/routeTree.gen";
-import { pick } from "./pick";
 
-let role: "tenant-admin" | "operator" = "tenant-admin";
-let body: Record<string, unknown> | null = null;
-let patched: Record<string, unknown> | null = null;
-let removed = false;
-const CATALOG = {
-  chat_formats: ["slack", "teams", "mattermost"],
-  email_configured: false,
-  event_actions: ["change_set.failed", "change_set.apply"],
-  metrics: [{ name: "error_5xx_ratio", label: "5xx ratio", scope: "vs", unit: "%" }],
-};
-const TARGET = (over: Record<string, unknown> = {}) => ({
+let role = "tenant-admin";
+let posted: { path: string; body: unknown }[] = [];
+const T = {
   id: "t1",
-  name: "ops-hook",
-  kind: "webhook",
-  config: { url: "https://hooks.example.test/x" },
+  name: "ops-chat",
+  kind: "chat",
+  config: { url: "https://hooks.example.test/services/T000/B000/SECRET", format: "slack" },
   secret_ref: null,
   enabled: true,
-  created_at: "2026-10-11T10:00:00Z",
-  created_by: "dana",
   version: 1,
-  ...over,
-});
-const RULE = {
-  id: "r1",
-  name: "apply-failed",
-  kind: "event",
-  spec: { actions: ["change_set.failed"] },
-  targets: ["ops-hook"],
-  enabled: true,
-  created_at: "2026-10-11T10:00:00Z",
-  created_by: "dana",
-  version: 1,
+  created_by: "a",
+  created_at: "2026-10-12T08:00:00Z",
 };
+const R = {
+  id: "r1",
+  name: "certs",
+  kind: "cert_expiry",
+  spec: { days: [30, 14, 7] },
+  targets: ["ops-chat"],
+  enabled: true,
+  version: 1,
+  created_by: "a",
+  created_at: "2026-10-12T08:00:00Z",
+};
+
 const server = setupServer(
   http.get("*/api/v1/me", () =>
     HttpResponse.json({
@@ -57,192 +48,161 @@ const server = setupServer(
       principal: "Miguel",
       session: null,
       tenants: [{ id: "t1", name: "acme", role, via: [] }],
-      features: { lxc_guests: false },
     }),
   ),
-  http.get("*/api/v1/permissions", () => HttpResponse.json({ roles: [], permissions: [] })),
+  http.get("*/api/v1/permissions", () =>
+    HttpResponse.json({
+      roles: ["viewer", "operator", "tenant-admin", "system-admin"],
+      permissions: [
+        {
+          verb: "write",
+          object: "infrastructure",
+          min_role: "tenant-admin",
+          description: "Infra.",
+        },
+      ],
+    }),
+  ),
   http.get("*/api/v1/tenants", () => HttpResponse.json([])),
-  http.get("*/api/v1/alert-catalog", () => HttpResponse.json(CATALOG)),
+  http.get("*/api/v1/tenants/acme/change-sets", () =>
+    HttpResponse.json({ items: [], next_cursor: null }),
+  ),
+  http.get("*/api/v1/alert-catalog", () =>
+    HttpResponse.json({
+      metrics: [{ name: "vs_5xx_ratio", label: "Share of 5xx responses", unit: "%", scope: "vs" }],
+      event_actions: ["change_set.failed"],
+      chat_formats: ["slack", "teams", "mattermost"],
+      email_configured: false,
+    }),
+  ),
+  http.get("*/api/v1/tenants/acme/alert-targets", () => HttpResponse.json([T])),
+  http.get("*/api/v1/tenants/acme/alert-rules", () => HttpResponse.json([R])),
   http.get("*/api/v1/tenants/acme/alerts", () =>
     HttpResponse.json({
       firing: [
         {
-          rule: "apply-failed",
-          key: "change_set:1",
+          rule: "certs",
+          key: "cert:shop",
           state: "firing",
-          since: "2026-10-11T09:00:00Z",
+          since: "2026-10-12T08:00:00Z",
           details: {},
         },
       ],
       deliveries: [
         {
-          at: "2026-10-11T09:00:05Z",
-          rule: "apply-failed",
-          target: "ops-hook",
+          rule: "certs",
+          target: "ops-chat",
+          key: "cert:shop",
           kind: "firing",
           status: "failed",
-          key: "k",
-          error: "HTTP 500",
+          error: "the receiver answered HTTP 500",
+          at: "2026-10-12T08:00:00Z",
         },
       ],
     }),
   ),
-  http.get("*/api/v1/tenants/acme/alert-rules", () => HttpResponse.json([RULE])),
-  http.get("*/api/v1/tenants/acme/alert-targets", () => HttpResponse.json([TARGET()])),
-  http.post("*/api/v1/tenants/acme/alert-rules", async ({ request }) => {
-    body = (await request.json()) as Record<string, unknown>;
-    return HttpResponse.json({ ...RULE, name: "new" }, { status: 201 });
-  }),
-  http.patch("*/api/v1/tenants/acme/alert-rules/:name", async ({ request }) => {
-    patched = (await request.json()) as Record<string, unknown>;
-    return HttpResponse.json(RULE);
-  }),
-  http.delete("*/api/v1/tenants/acme/alert-rules/:name", () => {
-    removed = true;
-    return new HttpResponse(null, { status: 204 });
-  }),
   http.post("*/api/v1/tenants/acme/alert-targets", async ({ request }) => {
-    body = (await request.json()) as Record<string, unknown>;
-    return HttpResponse.json(TARGET({ name: "new" }), { status: 201 });
+    posted.push({ path: "target", body: await request.json() });
+    return HttpResponse.json(T, { status: 201 });
   }),
-  http.post("*/api/v1/tenants/acme/alert-targets/:name/test", () =>
-    HttpResponse.json({ ok: false, error: "connection refused" }),
+  http.post("*/api/v1/tenants/acme/alert-targets/ops-chat/test", () =>
+    HttpResponse.json({ ok: false, error: "the receiver answered HTTP 403" }),
   ),
+  http.post("*/api/v1/tenants/acme/alert-rules", async ({ request }) => {
+    posted.push({ path: "rule", body: await request.json() });
+    return HttpResponse.json(R, { status: 201 });
+  }),
 );
 beforeAll(() => server.listen());
 afterEach(() => {
   server.resetHandlers();
   role = "tenant-admin";
-  body = null;
-  patched = null;
-  removed = false;
+  posted = [];
 });
 afterAll(() => server.close());
 
 function renderIt() {
+  const router = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: ["/t/acme/alerts"] }),
+  });
   render(
     <ThemeProvider>
       <QueryClientProvider client={createQueryClient()}>
-        <RouterProvider
-          router={createRouter({
-            routeTree,
-            history: createMemoryHistory({ initialEntries: ["/t/acme/alerts"] }),
-          })}
-        />
+        <RouterProvider router={router} />
       </QueryClientProvider>
     </ThemeProvider>,
   );
 }
 
-describe("summaries", () => {
-  it("describes rules and targets in one line", () => {
-    expect(ruleSummary({ kind: "event", spec: { actions: ["a", "b"] } })).toBe("on a, b");
-    expect(
-      ruleSummary({
-        kind: "metric",
-        spec: { metric: "error_5xx_ratio", op: "gt", threshold: 5, for_minutes: 10 },
-      }),
-    ).toBe("error_5xx_ratio > 5 for 10 min");
-    expect(ruleSummary({ kind: "cert_expiry", spec: { days: [30, 7] } })).toBe(
-      "30, 7 days before expiry",
-    );
+describe("alerts", () => {
+  it("describes targets and rules without showing a chat webhook URL", () => {
+    expect(targetSummary(T)).toBe("slack · hooks.example.test");
     expect(targetSummary({ kind: "email", config: { to: ["a@x.test", "b@x.test"] } })).toBe(
       "a@x.test, b@x.test",
     );
+    expect(ruleSummary(R)).toBe("30, 14, 7 days before expiry");
     expect(
-      targetSummary({ kind: "chat", config: { url: "https://h.test", format: "slack" } }),
-    ).toBe("https://h.test · slack");
-  });
-});
-
-describe("Alerts", () => {
-  it("shows what is firing and the failed delivery with its error", async () => {
-    renderIt();
-    expect(await screen.findByText("change_set:1")).toBeInTheDocument();
-    expect(screen.getByText("Firing")).toBeInTheDocument();
-    expect(screen.getByText("HTTP 500")).toBeInTheDocument();
-  });
-
-  it("adds a metric rule from the catalog and edits or deletes an existing one", async () => {
-    renderIt();
-    await userEvent.click(await screen.findByRole("tab", { name: /Rules/ }));
-    await userEvent.click(await screen.findByRole("button", { name: "Add rule" }));
-    const dlg = within(await screen.findByRole("dialog"));
-    await userEvent.type(dlg.getByLabelText("Name"), "five-xx");
-    await userEvent.click(dlg.getByRole("radio", { name: "A metric" }));
-    await pick(await dlg.findByRole("combobox", { name: "Metric" }), "error_5xx_ratio");
-    await userEvent.type(dlg.getByLabelText("Threshold"), "5");
-    await userEvent.type(dlg.getByRole("combobox", { name: "Targets" }), "ops{enter}");
-    await userEvent.click(dlg.getByRole("button", { name: "Add rule" }));
-    await waitFor(() =>
-      expect(body).toMatchObject({
-        name: "five-xx",
+      ruleSummary({
         kind: "metric",
-        spec: { metric: "error_5xx_ratio", op: "gt", threshold: 5, for_minutes: 5 },
-        targets: ["ops-hook"],
-        enabled: true,
+        spec: { metric: "vs_5xx_ratio", op: "gt", threshold: 5, for_minutes: 5, scope: "web" },
       }),
-    );
+    ).toBe("vs_5xx_ratio > 5 for 5 min · web");
   });
 
-  it("edits a rule's enabled flag and deletes it after a confirm", async () => {
+  it("shows what is firing, the targets, the rules and the failed delivery with its reason", async () => {
     renderIt();
-    await userEvent.click(await screen.findByRole("tab", { name: /Rules/ }));
-    expect(await screen.findByText("on change_set.failed")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "apply-failed" }));
-    const dlg = within(await screen.findByRole("dialog"));
-    await userEvent.click(dlg.getByRole("switch", { name: "Enabled" }));
-    await userEvent.click(dlg.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(patched).toMatchObject({ enabled: false, targets: ["ops-hook"] }));
+    expect((await screen.findAllByText("cert:shop", { selector: "td" })).length).toBe(2);
+    expect((await screen.findAllByText("ops-chat", { selector: "td" })).length).toBeGreaterThan(0);
+    expect(screen.getByText("slack · hooks.example.test")).toBeInTheDocument();
+    expect(screen.queryByText(/SECRET/)).not.toBeInTheDocument();
+    expect(screen.getByText("30, 14, 7 days before expiry")).toBeInTheDocument();
+    expect(await screen.findByText("the receiver answered HTTP 500")).toBeInTheDocument();
   });
 
-  it("deletes a rule", async () => {
+  it("sends a test and shows the outcome", async () => {
     renderIt();
-    await userEvent.click(await screen.findByRole("tab", { name: /Rules/ }));
-    await userEvent.click(await screen.findByRole("button", { name: "apply-failed" }));
-    const dlg = within(await screen.findByRole("dialog"));
-    await userEvent.click(dlg.getByRole("button", { name: "Delete" }));
-    await userEvent.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete rule" }),
-    );
-    await waitFor(() => expect(removed).toBe(true));
+    await userEvent.click(await screen.findByRole("button", { name: "Send test" }));
+    expect(await screen.findByText("the receiver answered HTTP 403")).toBeInTheDocument();
   });
 
-  it("adds a chat target, warns that email cannot send, and reports a failed test message", async () => {
+  it("adds a chat target and a metric rule", async () => {
     renderIt();
-    await userEvent.click(await screen.findByRole("tab", { name: /Targets/ }));
-    expect(await screen.findByText("https://hooks.example.test/x")).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Add target" }));
+    await userEvent.type(screen.getByLabelText("Name"), "pager");
+    await userEvent.type(screen.getByLabelText("URL"), "https://hooks.example.test/x");
     await userEvent.click(screen.getByRole("button", { name: "Add target" }));
-    const dlg = within(await screen.findByRole("dialog"));
-    await userEvent.type(dlg.getByLabelText("Name"), "team-chat");
-    await userEvent.click(dlg.getByRole("radio", { name: /Chat/ }));
-    await userEvent.type(dlg.getByLabelText("URL"), "https://chat.example.test/hook");
-    await userEvent.selectOptions(dlg.getByLabelText("Format"), "teams");
-    await userEvent.click(dlg.getByRole("button", { name: "Add target" }));
-    await waitFor(() =>
-      expect(body).toMatchObject({
-        name: "team-chat",
-        kind: "chat",
-        config: { url: "https://chat.example.test/hook", format: "teams" },
-        secret_ref: null,
-      }),
-    );
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]!.body).toEqual({
+      name: "pager",
+      kind: "chat",
+      config: { url: "https://hooks.example.test/x", format: "slack" },
+      secret_ref: null,
+      enabled: true,
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Add rule" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText("Name"), "errors");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Watch"), "metric");
+    await userEvent.clear(within(dialog).getByLabelText("Threshold"));
+    await userEvent.type(within(dialog).getByLabelText("Threshold"), "2");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Add rule" }));
+    await waitFor(() => expect(posted).toHaveLength(2));
+    expect(posted[1]!.body).toEqual({
+      name: "errors",
+      kind: "metric",
+      spec: { metric: "vs_5xx_ratio", op: "gt", threshold: 2, for_minutes: 5 },
+      targets: ["ops-chat"],
+      enabled: true,
+    });
   });
 
-  it("tests an existing target and shows why it was not delivered", async () => {
+  it("lets a viewer read everything and change nothing", async () => {
+    role = "viewer";
     renderIt();
-    await userEvent.click(await screen.findByRole("tab", { name: /Targets/ }));
-    await userEvent.click(await screen.findByRole("button", { name: "ops-hook" }));
-    const dlg = within(await screen.findByRole("dialog"));
-    await userEvent.click(dlg.getByRole("button", { name: "Send a test message" }));
-    expect(await dlg.findByText(/Not delivered: connection refused/)).toBeInTheDocument();
-  });
-
-  it("is read-only for an operator", async () => {
-    role = "operator";
-    renderIt();
-    await userEvent.click(await screen.findByRole("tab", { name: /Rules/ }));
-    await screen.findByText("apply-failed");
+    expect((await screen.findAllByText("ops-chat", { selector: "td" })).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Add target" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: "Send test" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Add rule" })).toBeDisabled();
   });
 });

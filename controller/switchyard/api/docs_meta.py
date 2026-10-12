@@ -36,6 +36,10 @@ TAGS: list[dict[str, str]] = [
         "description": "Grafana embedded in the UI: one-time launch links, scoped to a tenant.",
     },
     {
+        "name": "gslb",
+        "description": "Global server load balancing on PowerDNS: zones and wide IPs.",
+    },
+    {
         "name": "alerts",
         "description": "Alert targets (webhook, chat, email), rules on events, metrics and certificate expiry, and what is firing.",
     },
@@ -102,6 +106,7 @@ PARAMS: dict[str, str] = {
     "limit": "Page size.",
     "object_id": "Object id.",
     "cluster": "Kubernetes cluster id.",
+    "zone": "Zone name, for example `gslb.example.test` (a filter on the list route).",
     "cs": "Change set id.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
@@ -327,6 +332,15 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("(GET|POST)", r"/tenants/\{t\}/tokens(/\{token\})?", "tenant-admin", False),
     ("DELETE", r"/tenants/\{t\}/tokens/\{token\}", "tenant-admin", False),
     ("POST", r"/tenants/\{t\}/vip-pools/\{pool_id\}/next-free", "viewer", False),
+    ("(POST|DELETE)", r"/tenants/\{t\}/gslb-zones(/\{zone\})?", "system-admin", False),
+    ("POST", r"/tenants/\{t\}/gslb-zones/\{zone\}/dnssec", "tenant-admin", False),
+    (
+        "(POST|PATCH|DELETE)",
+        r"/tenants/\{t\}/gslb-zones/\{zone\}/wide-ips(/\{name\})?",
+        "tenant-admin",
+        False,
+    ),
+    ("POST", r"/tenants/\{t\}/gslb/sync", "tenant-admin", False),
     ("POST", r"/tenants/\{t\}/grafana/launch", "viewer", False),
     (
         "(POST|PATCH|DELETE)",
@@ -402,6 +416,19 @@ def _patch_example(slug: str) -> dict[str, Any] | None:
 
 
 REQUEST_EXAMPLES: dict[str, Any] = {
+    "POST /tenants/{t}/gslb-zones": {
+        "name": "gslb.example.test",
+        "nameservers": ["ns1.example.test"],
+    },
+    "POST /tenants/{t}/gslb-zones/{zone}/wide-ips": {
+        "name": "shop",
+        "algorithm": "failover",
+        "members": [
+            {"address": "192.0.2.10", "site": "pve1", "priority": 1},
+            {"virtual_service": "shop", "site": "pve2", "priority": 2},
+        ],
+    },
+    "PATCH /tenants/{t}/gslb-zones/{zone}/wide-ips/{name}": {"ttl": 60},
     "POST /tenants/{t}/alert-targets": {
         "name": "ops-chat",
         "kind": "chat",

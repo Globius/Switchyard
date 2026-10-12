@@ -30,6 +30,7 @@ from switchyard.adapters.git import GitLabMirror, GitMirror
 from switchyard.adapters.grafana import HttpGrafana
 from switchyard.adapters.notify import HttpNotifier, SmtpSettings
 from switchyard.adapters.pki import OpenBaoPki
+from switchyard.adapters.powerdns import HttpPowerDns
 from switchyard.adapters.proxmox import HttpProxmox
 from switchyard.adapters.sandbox import DockerSandbox
 from switchyard.adapters.secrets import EnvSecrets, OpenBaoSecrets, SecretsReader
@@ -57,6 +58,7 @@ from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.grafana import GrafanaConfig, GrafanaService
+from switchyard.services.gslb import SYNC_GSLB_JOB, GslbService, GslbSync
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
 from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
@@ -258,6 +260,20 @@ def alert_service(db: Databases, secrets: SecretsReader | None = None) -> AlertS
     )
 
 
+def gslb_service(db: Databases) -> GslbService | None:
+    """GSLB on PowerDNS, if ``SWITCHYARD_POWERDNS_URL`` and ``SWITCHYARD_POWERDNS_API_KEY`` are set.
+
+    ``SWITCHYARD_POWERDNS_SERVER_ID`` is the PowerDNS server id (default ``localhost``). The server
+    must run with ``enable-lua-records=yes`` (docs/gslb.md).
+    """
+    url = os.environ.get("SWITCHYARD_POWERDNS_URL", "").strip()
+    key = os.environ.get("SWITCHYARD_POWERDNS_API_KEY", "").strip()
+    if not url or not key:
+        return None
+    server = os.environ.get("SWITCHYARD_POWERDNS_SERVER_ID", "localhost")
+    return GslbService(db, HttpPowerDns(url, key, server_id=server))
+
+
 def git_mirror() -> GitMirror | None:
     """The GitLab mirror, if configured."""
     url = os.environ.get("SWITCHYARD_GITLAB_URL")
@@ -396,6 +412,7 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         MemberService(db, engines),
         discovery,
         AlertEvaluator(db, alert_notifier(), telemetry(), secrets),
+        GslbSync(gslb, db) if (gslb := gslb_service(db)) is not None else None,
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
@@ -407,6 +424,8 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     }
     if discovery is not None:
         schedule[DISCOVER_POOLS_JOB] = timedelta(minutes=1)
+    if gslb_service(db) is not None:
+        schedule[SYNC_GSLB_JOB] = timedelta(minutes=5)
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

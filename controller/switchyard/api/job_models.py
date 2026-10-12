@@ -39,6 +39,7 @@ class JobKind(StrEnum):
         CONTROLLER_TICK: Scheduled check of a controller settings change that waits for
             confirmation; reverts it when the window runs out.
         DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+        SYNC_GSLB: Follows virtual service VIP moves in GSLB records.
         EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
 
@@ -57,6 +58,7 @@ class JobKind(StrEnum):
     KUBERNETES_SYNC = "kubernetes_sync"
     DISCOVER_POOL_MEMBERS = "discover_pool_members"
     EVALUATE_ALERTS = "evaluate_alerts"
+    SYNC_GSLB = "sync_gslb"
 
 
 class JobStage(ApiModel):
