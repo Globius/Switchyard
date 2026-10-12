@@ -68,6 +68,16 @@ Date: YYYY-MM-DD
 | [0077](0077-wait-for-storage-reloads.md) | Wait for the reload a storage call starts | Accepted |
 | [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
+| [0160](0160-gslb-on-powerdns.md) | GSLB on PowerDNS: the controller decides, PowerDNS answers and health-checks | Accepted |
+| [0161](0161-gslb-algorithms-and-record-safety.md) | GSLB algorithms, health checks and keeping tenant input out of Lua | Accepted |
+| [0162](0162-gslb-zones-ownership-and-dnssec.md) | GSLB zones: ownership, DNSSEC, several sites | Accepted |
+| [0165](0165-gslb-latency-selection.md) | GSLB latency-based selection: measured round trips with hysteresis | Accepted |
+| [0164](0164-dnsdist-in-front-of-powerdns.md) | dnsdist in front of PowerDNS: ANY and transfers refused, per-network rate limits | Accepted |
+| [0163](0163-gslb-scope-and-deferred.md) | GSLB: what is built and what is not | Accepted |
+| [0120](0120-alerting-model.md) | Alerting: tenant targets and rules, controller-side evaluator | Accepted |
+| [0121](0121-alert-senders-and-destinations.md) | Alert senders: webhook, chat, email; destination policy and signing | Accepted |
+| [0122](0122-certificate-expiry-notifications.md) | Certificate expiry notifications | Accepted |
+| [0123](0123-tenant-log-api.md) | Tenant-wide request log API | Accepted |
 | [0105](0105-pool-persistence-kinds.md) | Pool persistence: cookie, header and URI | Accepted |
 | [0106](0106-member-options-and-send-proxy.md) | Member backup and maxconn, PROXY protocol to members | Accepted |
 | [0107](0107-backend-client-certificate.md) | Client certificate to pool members (backend mTLS) | Accepted |
@@ -82,6 +92,9 @@ Date: YYYY-MM-DD
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
 | [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
+| [0081](0081-controller-address-settings.md) | Changing the controller's address, VIP and certificate | Accepted |
+| [0082](0082-tls-alpn-01.md) | TLS-ALPN-01 challenges | Accepted |
+| [0150](0150-avi-importer.md) | Avi configuration importer | Accepted |
 | [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
 | [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
@@ -102,3 +115,4 @@ Date: YYYY-MM-DD
 | [0170](0170-bot-and-ddos-protection.md) | Bot and DDoS protection set | Accepted |
 | [0171](0171-javascript-challenge.md) | JavaScript challenge (proof of work) | Accepted |
 | [0172](0172-captcha-gate.md) | CAPTCHA gate with a pluggable provider | Accepted |
+| [0151](0151-kubernetes-connector.md) | Kubernetes connector | Accepted |

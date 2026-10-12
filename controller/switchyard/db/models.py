@@ -34,6 +34,8 @@ from switchyard.db import (
     acme_models,  # noqa: F401  (registers the ACME and DNS provider tables)
     alert_models,  # noqa: F401  (registers the alerting tables)
     auth_models,  # noqa: F401  (registers the login tables)
+    gslb_models,  # noqa: F401  (registers the GSLB tables)
+    k8s_models,  # noqa: F401  (registers the Kubernetes cluster table)
     ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
 )
 from switchyard.db.base import (
@@ -183,7 +185,8 @@ class CertificateRow(TenantOwnedMixin, Base):
         CheckConstraint("renew_before_days BETWEEN 1 AND 365", name="renew_before_days"),
         CheckConstraint("purpose IN ('server', 'client_ca')", name="purpose"),
         CheckConstraint(
-            "challenge IS NULL OR challenge IN ('dns-01', 'http-01')", name="challenge"
+            "challenge IS NULL OR challenge IN ('dns-01', 'http-01', 'tls-alpn-01')",
+            name="challenge",
         ),
         CheckConstraint("version >= 1", name="version"),
     )

@@ -26,6 +26,7 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_CLOUDFLARE_TOKEN` | DNS-01, Origin CA and IP-range sync |
 | `SWITCHYARD_ACME_DIRECTORY`, `_EMAIL`, `_ACCOUNT_KEY_FILE` | The ACME provider of earlier versions; on first use it becomes the provider `default`. Manage providers in the UI instead (`docs/acme.md`) |
 | `SWITCHYARD_ACME_DNS_WAIT` | Seconds to wait after publishing DNS-01 records (default 15) |
+| `SWITCHYARD_K8S_CIDRS` | Private networks that Kubernetes API servers named in cluster registrations may live in (comma-separated); loopback and link-local are never allowed |
 | `SWITCHYARD_DNS_CIDRS` | Private networks that RFC 2136 and PowerDNS servers named in DNS credentials may live in (comma-separated); loopback and link-local are never allowed |
 | `SWITCHYARD_METRICS_TOKEN` | Bearer token that may read `/metrics` and the Prometheus service-discovery list (and nothing else); system administrators can too |
 | `SWITCHYARD_ENGINE_CIDRS`, `SWITCHYARD_ENGINE_POLICY` | Networks hand-registered engines may live in besides their group's `mgmt` networks (comma-separated); `open` turns the engine address policy off (labs). ADR 0072 |
@@ -33,6 +34,9 @@ Run any number of workers; one of them (whoever holds the advisory lock) schedul
 | `SWITCHYARD_TRUST_FORWARDED` | `1` behind a reverse proxy: login throttling uses the last `X-Forwarded-For` entry as the source address |
 | `SWITCHYARD_ALLOW_LXC` | `1` forces container (LXC) guests on (labs and the quickstart); otherwise a system administrator enables them with `PATCH /system/settings` or `syctl setting allow_lxc_guests true`. ADR 0076 |
 | `SWITCHYARD_AUDIT_SYSLOG` | Also send every audit event to syslog as one JSON line (`udp://host[:514]`, `tcp://host[:514]` or `unix:///dev/log`, facility local0) |
+| `SWITCHYARD_POWERDNS_URL`, `SWITCHYARD_POWERDNS_API_KEY`, `SWITCHYARD_POWERDNS_SERVER_ID` (`localhost`) | PowerDNS Authoritative for GSLB (ADR 0160, [gslb.md](gslb.md)); both URL and key turn it on. The server needs `enable-lua-records=yes` |
+| `SWITCHYARD_SMTP_HOST`, `_PORT` (587), `_USER`, `_PASSWORD`, `_FROM`, `_STARTTLS` (`0` turns it off) | Mail server for email alert targets (ADR 0121); without a host email targets cannot send |
+| `SWITCHYARD_ALERT_ALLOW_HTTP`, `SWITCHYARD_ALERT_ALLOW_PRIVATE` | `1` lets alert webhooks use http and name private addresses (labs). Default: https and public destinations only |
 | `SWITCHYARD_GRAFANA_URL` | Grafana base URL (http or https); the UI links to it from `GET /me` `links.grafana` |
 | `SWITCHYARD_GRAFANA_INTERNAL_URL`, `_ADMIN_PASSWORD`, `_ADMIN_USER`, `_DS_SECRET`, `_DS_URL` | Grafana embedded in the UI behind the controller (ADR 0085, [runbooks/telemetry.md](runbooks/telemetry.md)). All of the first, second, fourth and fifth plus `SWITCHYARD_PROMETHEUS_URL` turn it on. `INTERNAL_URL` is Grafana as the controller reaches it (`http://host:3000`, never published to users); `ADMIN_*` is a Grafana server administrator the controller manages organizations with (user default `admin`); `DS_SECRET` (at least 32 random characters, the same on every node) keys the per-tenant data source tokens; `DS_URL` is how *Grafana* reaches this controller's `/internal/ds` (not through the public front) |
 | `SWITCHYARD_PROMETHEUS_URL`, `SWITCHYARD_LOKI_URL` | Metrics (and with Loki: access logs and p95) for the UI; see below |

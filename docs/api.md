@@ -191,6 +191,32 @@ expires. Read it with the certificate, change it with a normal update operation.
 - `GET /tenants/{t}/certificate-renewals` (status per certificate) and
   `GET /tenants/{t}/certificates/{id}/renewals` (history with the CA's error).
 
+## The controller's own address
+
+`GET /system/controller`, `PUT /system/controller/pending`, `POST /system/controller/confirm` and
+`POST /system/controller/revert` (system administrators). A proposal is applied to the `controller`
+service of the management tenant and reverted by the worker unless confirmed on the new FQDN in time;
+see `docs/controller-settings.md` and ADR 0081.
+
+## Kubernetes clusters
+
+`/tenants/{t}/kubernetes-clusters` (tenant-admin to write, viewer to read; see `docs/kubernetes.md`).
+
+| Call | Purpose |
+| --- | --- |
+| `GET` / `POST` | List, register. Body: `name`, `api_url`, `token` (write-only, stored in OpenBao), `ca_pem?`, `se_group`, `vip_pool`, `mode` (`nodeport`/`pods`), `class_name?`, `gateway_class?`, `enabled?` |
+| `GET` / `PATCH` / `DELETE` `/{cluster}` | Read (ETag), change (`If-Match`; `token` replaces the secret), remove |
+| `POST /{cluster}/test` | `{ok, version, nodes, services, gateway_api, permissions, detail}` |
+| `POST /{cluster}/sync` | 202 with `job_id`; a sync opens one change set as `system:k8s` |
+
+A cluster reads back with `last_sync` (`created`, `updated`, `deleted`, `change_set_id`,
+`addresses_written`), `last_sync_ok`, `last_sync_error` and `waiting_for_change_set`. The token is never returned.
+
+## Importing an Avi export
+
+`POST /tenants/{t}/imports/avi` converts an Avi configuration export into a draft change set (dry run by default)
+and lists every decision as a finding; see `docs/import-avi.md` and ADR 0150.
+
 ## Jobs
 
 `kind` is an enum: `apply_change_set`, `deploy_se_group`, `retire_engine`, `apply_sdn`, `issue_cert` (result
@@ -216,6 +242,23 @@ state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 `GET /system/settings` and `PATCH /system/settings` (`system-admin`) read and change controller-wide settings; today `allow_lxc_guests` (default
 `false`) with `allow_lxc_guests_forced` when `SWITCHYARD_ALLOW_LXC=1` forces it on. While it is off, a deploy with `guest_kind: lxc` answers `403`
 with code `lxc_disabled`. `GET /me` returns `features.lxc_guests` for the UI. See ADR 0076.
+
+## GSLB
+
+`GET/POST /tenants/{t}/gslb-zones` (create: `system-admin`), `DELETE .../gslb-zones/{zone}`, `POST .../gslb-zones/{zone}/dnssec`,
+`GET .../gslb-zones/{zone}/ds`; `GET /tenants/{t}/wide-ips`, `POST .../gslb-zones/{zone}/wide-ips`,
+`PATCH/DELETE .../gslb-zones/{zone}/wide-ips/{name}`; `GET /tenants/{t}/gslb/status` and `POST .../gslb/sync`. Reads: any role in
+the tenant; writes: `tenant-admin`; applied at once and audited. See [gslb.md](gslb.md). Not wired: `404`, code `not_enabled`.
+
+## Alerts and the tenant log
+
+`GET/POST /tenants/{t}/alert-targets`, `PATCH/DELETE .../alert-targets/{name}` and `POST .../alert-targets/{name}/test`;
+`GET/POST /tenants/{t}/alert-rules`, `PATCH/DELETE .../alert-rules/{name}`; `GET /tenants/{t}/alerts` (firing and the latest
+deliveries); `GET /alert-catalog` (metrics, audit actions, chat formats, whether email works). Any role in the tenant reads,
+`tenant-admin` writes; writes apply live and are audited. `config` and `spec` depend on `kind` and are validated field by
+field (`errors[].path` is `config.url`, `spec.days`, `targets[0]` ...): see [alerting.md](alerting.md). Alerting not wired on
+a controller answers `404` with code `not_enabled`. `GET /tenants/{t}/logs` is the request log of the whole tenant (or of one
+`service`), with the filters and paging of the per-service log (ADR 0123).
 
 ## Embedded Grafana
 

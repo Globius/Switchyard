@@ -252,6 +252,20 @@ class SystemSettingRow(Base):
     updated_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
 
 
+class ControllerSettingsRow(Base):
+    """``controller_settings``: the confirmed public URL and the change waiting to be confirmed."""
+
+    __tablename__ = "controller_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, server_default=text("1"))
+    public_url: Mapped[str | None] = mapped_column(Text)
+    pending: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    last_result: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    updated_by: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    updated_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+
+
 class BreakGlassSettingRow(Base):
     """``break_glass_setting``: the single row that says whether break-glass was switched on."""
 

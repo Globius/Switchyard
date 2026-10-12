@@ -61,6 +61,8 @@ class FakeHaproxy:
         self.closed = False
         #: Entries added at run time: ``map file -> key -> value``.
         self.map_entries: dict[str, dict[str, str]] = {}
+        #: TLS-ALPN-01 certificates: ``crt-list -> name -> (sni, pem)``.
+        self.challenge_certs: dict[str, dict[str, tuple[str, str]]] = {}
         #: Called after every successful push; lets a test degrade the engine or touch other state.
         self.on_push: Callable[[FakeHaproxy], Awaitable[None]] | None = None
 
@@ -155,6 +157,16 @@ class FakeHaproxy:
     async def remove_map_entry(self, map_file: str, key: str) -> None:
         """Forget the entry."""
         self.map_entries.get(map_file, {}).pop(key, None)
+
+    async def set_challenge_certificate(self, crt_list: str, name: str, pem: str, sni: str) -> None:
+        """Record the challenge certificate; fails when the crt-list is not rendered."""
+        if crt_list not in self.files:
+            raise HaproxyError(f"{self._name}: crt-list {crt_list} is not loaded on this engine")
+        self.challenge_certs.setdefault(crt_list, {})[name] = (sni, pem)
+
+    async def remove_challenge_certificate(self, crt_list: str, name: str) -> None:
+        """Forget the certificate."""
+        self.challenge_certs.get(crt_list, {}).pop(name, None)
 
     async def set_server_state(self, backend: str, server: str, state: ServerAdminState) -> None:
         """Record the new admin state as the server's status."""

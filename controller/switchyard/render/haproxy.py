@@ -793,7 +793,7 @@ class _Renderer:
         if not port.http3:
             return [bind]
         # The same listener again over QUIC (UDP), with ALPN h3 instead of h2 and http/1.1.
-        quic = bind.replace("alpn h2,http/1.1", "alpn h3")
+        quic = bind.replace(",acme-tls/1", "").replace("alpn h2,http/1.1", "alpn h3")
         family = "quic6@" if svc.vip.version == 6 else "quic4@"
         address = f"[{svc.vip}]:{port.port}" if svc.vip.version == 6 else f"{svc.vip}:{port.port}"
         quic = quic.replace(
@@ -818,7 +818,11 @@ class _Renderer:
                     parts.append(f"ciphers {ciphers}")
                 parts.append(f"ciphersuites {suites}")
             if mode == "http":
-                parts.append("alpn h2,http/1.1" if port.http2 else "alpn http/1.1")
+                # acme-tls/1 lets the controller answer TLS-ALPN-01 challenges (ADR 0082); no
+                # browser or API client offers it, so it changes nothing for them.
+                parts.append(
+                    "alpn h2,http/1.1,acme-tls/1" if port.http2 else "alpn http/1.1,acme-tls/1"
+                )
         if port.proxy_protocol:
             parts.append("accept-proxy")
         return " ".join(parts)

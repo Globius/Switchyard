@@ -46,6 +46,10 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Engine host online state | done | `host_online` on `GET /engines` (ADR 0049) | |
 | Proxmox host layout and capacity (Placement) | done | `GET /se-groups/{group}/placement` (ADR 0049) | |
 | Certificates: import, PKCS#12 (ADR 0043), replace (ADR 0044), ACME DNS-01 (incl. step-ca), Origin CA, renew job (M5) | done | | |
+| Kubernetes connector (D2): LoadBalancer Services and Gateway API to pools and services, address write-back | done | ADR 0151, `docs/kubernetes.md` | |
+| Avi importer (D3): export to a draft change set with findings | done | ADR 0150, `docs/import-avi.md` | |
+| TLS-ALPN-01 (RFC 8737) through HAProxy runtime certificates | done | ADR 0082 | Expiry notifications wait for the alerting block (P6) |
+| Controller FQDN, VIP and certificate from the UI, with confirm and automatic revert | done | ADR 0081, `docs/controller-settings.md` | |
 | ACME providers (several CAs, EAB, OAuth), DNS credentials per tenant (Cloudflare, Route 53, Azure, Google, RFC 2136, PowerDNS), HTTP-01, renewal history | done | ADR 0080, `docs/acme.md` | |
 | OCSP stapling, cipher and TLS-version profiles | done | `tls_profile` on ports, `ocsp_stapling` on certificates (ADR 0067) | |
 | mTLS: client certificate verification | done | `client_ca` certificates and `client_ca_id` on ports (ADR 0070) | |
@@ -63,6 +67,9 @@ Never verified live: the `.p12` upload and the conflict view (tests with mocked 
 | Metrics and logs endpoints (A9) | partial | API done and answers `available: false`; the pipeline (HAProxy exporter, Prometheus, Vector, Loki) is not built, `HttpTelemetry` never run against a real stack | Deploy and document the pipeline; test against it |
 | Prometheus HTTP service-discovery endpoint for SEs | done | `GET /discovery/prometheus` (ADR 0061); the SE image must serve the exporters | |
 | Controller own `/metrics` | done | Database-derived, text format (ADR 0061) | |
+| GSLB on PowerDNS (D1): zones, wide IPs with failover, multivalue, weighted, subnet and geo, DNSSEC | done | ADRs 0160 to 0163, `docs/gslb.md`, `deploy/dns/`; checked against a real PowerDNS 5 (not `geo`, which needs a GeoIP database); API only, no UI; no dnsdist | UI screens (no artboard), a second site in the lab |
+| Alerts: webhook, email and chat targets, rules on events, metrics and certificate expiry (B2, C7 notifications) | done | ADRs 0120 to 0122, `docs/alerting.md`; evaluator job `evaluate_alerts`; API only, UI follows | UI screens (no artboard yet) |
+| Request-log view across the tenant (B3) | done | `GET /tenants/{t}/logs` (ADR 0123); UI follows | UI view |
 | Grafana embed or proxy (01, 03) | done | Grafana behind the controller (opened in its own tab), one organization per tenant, every data source query rewritten to the tenant (ADR 0085); off until its settings are present, then `links.grafana_embedded` on `GET /me`; the plain link (`SWITCHYARD_GRAFANA_URL`, ADR 0068) remains. Checked against real Prometheus, Loki and Grafana; not yet on the two-host lab | Lab run; a separate origin for Grafana if the shared one is not acceptable |
 | `waf_policy`, Coraza SPOA | partial | `waf` policy set, SPOE and Coraza files, detect-first, fail mode, golden case, logs source for Loki (ADR 0140 to 0144). The `coraza-spoa` binary and CRS are not yet in the SE image build (Operations) and nothing has run against a real SPOA | Wire the binary and CRS into the image, lab test, UI |
 | Rate limits | done | `rate_limit` policy set (ADR 0110) | |

@@ -2,11 +2,11 @@
 frontend vs_external-sni
     mode http
     bind 192.0.2.20:80
-    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/certs/external-sni.crtlist alpn h2,http/1.1
+    bind 192.0.2.20:443 ssl crt-list /etc/switchyard/certs/external-sni.crtlist alpn h2,http/1.1,acme-tls/1
     bind 192.0.2.20:6789
     bind 192.0.2.20:8075
     bind 192.0.2.20:8682
-    bind 192.0.2.20:8843 ssl crt-list /etc/switchyard/certs/external-sni.crtlist alpn http/1.1
+    bind 192.0.2.20:8843 ssl crt-list /etc/switchyard/certs/external-sni.crtlist alpn http/1.1,acme-tls/1
     bind 192.0.2.20:8880
     option httplog
     option forwardfor
