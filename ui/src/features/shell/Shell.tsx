@@ -32,6 +32,7 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
       { label: "Networks and VIP pools", to: "networks" },
       { label: "SE groups", to: "se-groups" },
       { label: "Routing profiles", to: "routing-profiles" },
+      { label: "Kubernetes", to: "kubernetes" },
     ],
   },
   {
