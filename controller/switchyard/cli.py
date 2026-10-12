@@ -187,6 +187,7 @@ def serve(
         runtime.sessions(db, secrets),
         runtime.telemetry(),
         proxmox=runtime.proxmox_client(),
+        grafana=runtime.grafana(db),
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
     app = create_app(

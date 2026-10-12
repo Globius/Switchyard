@@ -75,6 +75,7 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("engine.remove", "An engine record was removed."),
     _a("engine.retired", "An engine VM was destroyed and its record removed."),
     _a("gc.run", "Housekeeping removed expired records."),
+    _a("grafana.launch", "A user opened the embedded Grafana for a tenant (or for all tenants)."),
     _a("idp.created", "An identity provider was created."),
     _a("idp.group_mapped", "A provider group was mapped to a tenant role."),
     _a("job.cancelled", "A queued job was cancelled."),

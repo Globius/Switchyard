@@ -25,6 +25,7 @@ HOST=$(ENVGET HOST_ADDR); HOSTS=$(ENVGET HOST_ALL); HOSTS=${HOSTS:-$HOST}
 case "$HOST" in *:*) ENVSET HOST_URL "[$HOST]" ; HOSTURL="[$HOST]" ;; *) ENVSET HOST_URL "$HOST"; HOSTURL=$HOST ;; esac
 [ -n "$(ENVGET POSTGRES_PASSWORD)" ] || ENVSET POSTGRES_PASSWORD "$(rand)"
 [ -n "$(ENVGET METRICS_TOKEN)" ] || ENVSET METRICS_TOKEN "$(rand)"
+[ -n "$(ENVGET GRAFANA_DS_SECRET)" ] || ENVSET GRAFANA_DS_SECRET "$(rand)$(rand)"   # keys the per-tenant Grafana data source tokens (ADR 0085)
 [ -n "$(ENVGET BREAK_GLASS)" ] || ENVSET BREAK_GLASS 1
 [ -n "$(ENVGET ALLOW_LXC)" ] || ENVSET ALLOW_LXC 1   # test instance: allow container engines (production: off, docs/production.md)
 IMG=$(ENVGET CONTROLLER_IMAGE); IMG=${IMG:-switchyard-controller:latest}

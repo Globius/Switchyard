@@ -263,3 +263,37 @@ class BreakGlassSettingRow(Base):
     enabled_by: Mapped[str | None] = mapped_column(Text)
     enabled_at: Mapped[datetime | None] = _timestamp()
     reason: Mapped[str | None] = mapped_column(Text)
+
+
+class GrafanaGrantRow(Base):
+    """``grafana_grant``: one embedded-Grafana access, from a single-use ticket to a proxy session.
+
+    The ticket and the proxy session cookie are stored only as SHA-256. ``tenant_id`` is the one
+    tenant the session may see; null means a system administrator's unscoped organization. The
+    grant dies with its tenant and when the browser session that created it ends (ADR 0085).
+    """
+
+    __tablename__ = "grafana_grant"
+    __table_args__ = (
+        UniqueConstraint("ticket_hash"),
+        UniqueConstraint("session_hash"),
+        ForeignKeyConstraint(["scope_tenant_id"], ["tenant.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["user_session_id"], ["user_session.id"], ondelete="CASCADE"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    ticket_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    session_hash: Mapped[str | None] = mapped_column(Text)
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    #: Not named ``tenant_id``: this is a system table (admin role only), not a tenant-owned one.
+    scope_tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    user_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    #: Where to land in Grafana after the redirect (a validated path below ``/grafana/``).
+    landing: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
+    created_at: Mapped[datetime] = _timestamp(nullable=False, default_now=True)
+    ticket_expires_at: Mapped[datetime] = _timestamp(nullable=False)
+    redeemed_at: Mapped[datetime | None] = _timestamp()
+    session_expires_at: Mapped[datetime | None] = _timestamp()
+    grafana_login: Mapped[str | None] = mapped_column(Text)
+    grafana_org_id: Mapped[int | None] = mapped_column(Integer)

@@ -70,4 +70,5 @@ Date: YYYY-MM-DD
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
 | [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
 | [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
