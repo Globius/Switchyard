@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import posixpath
 import re
+from collections.abc import Iterator
 from typing import Any
+
+from mkdocs.exceptions import PluginError
 
 _LINK = re.compile(r"(\]\()(\.\./[^)\s#]+)([^)]*\))")
 
@@ -41,3 +44,31 @@ def on_page_markdown(markdown: str, page: Any, config: Any, files: Any) -> str:
         return m.group(1) + base + target + m.group(3)
 
     return _LINK.sub(fix, markdown)
+
+
+def _titles(nav: Any) -> Iterator[str]:
+    """Every title in a ``nav`` config, at any depth."""
+    for item in nav or []:
+        if isinstance(item, dict):
+            for title, child in item.items():
+                yield str(title)
+                if isinstance(child, list):
+                    yield from _titles(child)
+
+
+def on_config(config: Any) -> Any:
+    """Refuse nav titles with markup: a ``<`` in a title breaks every page of the site.
+
+    Args:
+        config: The MkDocs config.
+
+    Returns:
+        The config, unchanged.
+
+    Raises:
+        PluginError: A nav title contains ``<``.
+    """
+    bad = [title for title in _titles(config["nav"]) if "<" in title]
+    if bad:
+        raise PluginError(f"nav titles must be plain text: {bad}")
+    return config
