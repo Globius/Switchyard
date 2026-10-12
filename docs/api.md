@@ -309,3 +309,6 @@ their SANs and pools their member addresses.
 (`service_forbidden`), on its ports (`port_forbidden`) and on its pools (`pool_forbidden`), the allowed pool
 algorithms and monitor types, and whether pool members need a port, so a form can disable fields. The validator
 reads the same table.
+
+`PATCH` on a policy set or routing profile does not need `kind`: the stored object has one, and the body is checked against it. A `kind` that
+does not match the stored object is refused with 422 (`kind ... does not match the stored object`).

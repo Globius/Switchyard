@@ -16,3 +16,11 @@ Date: 2026-10-12
    that has a WAF policy. A group without one gets no `coraza` files.
 4. An engine built from an image without the sidecar fails the reload of `coraza-spoa`, the agent restores the previous files, and the apply
    stops at the canary. That is the intended guard against attaching a WAF policy to a group that was deployed from an old image.
+5. **Log format.** coraza-spoa v0.9.0 refuses to start without a `log_format`, at the top level and for every application, so the rendered
+   `coraza/config.yaml` sets `log_format: json` next to both `log_file` lines. `se-image/test/coraza-config.yaml` is the rendered file for a
+   one-service block policy (a unit test keeps it equal to the renderer's output) and `se-image/test/check.sh` starts the real binary on it; any
+   exit before the timeout fails the image build.
+6. **Visible when inert.** The agent status carries `waf_expected` (a Coraza configuration is present) and `waf_running` (`coraza-spoa` is active and
+   127.0.0.1:9000 accepts a connection). An engine with `waf_expected` and not `waf_running` loses 25 points of health score with the reason
+   "WAF sidecar not running", so a fail-open WAF that silently inspects nothing shows up in the group's score. Both fields are on the engine's agent
+   status in the API.

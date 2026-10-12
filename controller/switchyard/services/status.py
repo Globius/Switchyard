@@ -322,6 +322,8 @@ def _agent_json(status: AgentStatus) -> dict[str, Any]:
         "haproxy_healthy": status.haproxy_healthy,
         "routes_withdrawn": status.routes_withdrawn,
         "withdrawn_prefixes": list(status.withdrawn_prefixes),
+        "waf_expected": status.waf_expected,
+        "waf_running": status.waf_running,
         "bgp": [{"peer": s.peer, "state": s.state, "remote_asn": s.remote_asn} for s in status.bgp],
         "vrrp": [{"name": v.name, "state": v.state} for v in status.vrrp],
         "ipvs": [dataclasses.asdict(s) for s in status.ipvs],

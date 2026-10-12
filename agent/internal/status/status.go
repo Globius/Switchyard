@@ -4,6 +4,7 @@ package status
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -35,6 +36,10 @@ type Collector struct {
 	Now       func() time.Time
 	// KeepalivedConf is the rendered keepalived.conf; its UDP virtual servers decide whether IPVS is reported.
 	KeepalivedConf string
+	// WafConfig is the Coraza configuration the controller renders; when it exists the WAF sidecar must run.
+	WafConfig string
+	// WafProbe reports whether the sidecar accepts connections (default: dial 127.0.0.1:9000).
+	WafProbe func() bool
 }
 
 type bgpPeers struct {
@@ -113,6 +118,12 @@ func (c *Collector) Collect(ctx context.Context) *pb.Status {
 			st.KeepalivedRunning = aerr == nil
 		}
 	}
+	if c.WafConfig != "" {
+		if _, err := os.Stat(c.WafConfig); err == nil {
+			st.WafExpected = true
+			st.WafRunning = c.wafRunning(ctx)
+		}
+	}
 	if c.Health != nil {
 		st.HaproxyHealthy, st.RoutesWithdrawn = c.Health()
 	}
@@ -120,4 +131,24 @@ func (c *Collector) Collect(ctx context.Context) *pb.Status {
 		st.WithdrawnPrefixes = c.Withdrawn()
 	}
 	return st
+}
+
+// wafRunning is true when the coraza-spoa unit is active and its port answers: the unit can be "active" while the
+// agent still refuses connections (starting, crash-looping with restarts), and HAProxy needs the port.
+func (c *Collector) wafRunning(ctx context.Context) bool {
+	if c.Runner == nil {
+		return false
+	}
+	if _, err := c.Runner.Run(ctx, "systemctl", "is-active", "--quiet", "coraza-spoa"); err != nil {
+		return false
+	}
+	if c.WafProbe != nil {
+		return c.WafProbe()
+	}
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:9000", time.Second)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }

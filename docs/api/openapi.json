@@ -1365,6 +1365,18 @@
             "title": "Vrrp",
             "type": "array"
           },
+          "waf_expected": {
+            "default": false,
+            "description": "A WAF policy is applied: the Coraza sidecar should run.",
+            "title": "Waf Expected",
+            "type": "boolean"
+          },
+          "waf_running": {
+            "default": false,
+            "description": "The Coraza sidecar is active and accepts connections. False while waf_expected is true means the WAF is inert (fail-open policies serve uninspected).",
+            "title": "Waf Running",
+            "type": "boolean"
+          },
           "withdrawn_prefixes": {
             "description": "The BGP prefixes the watchdog has withdrawn, sorted.",
             "items": {
@@ -49215,6 +49227,8 @@
                           "state": "MASTER"
                         }
                       ],
+                      "waf_expected": false,
+                      "waf_running": false,
                       "withdrawn_prefixes": []
                     },
                     "drift": [

@@ -37,6 +37,16 @@ id coraza >/dev/null 2>&1 || fail "user coraza"
 grep -q 'ConditionPathExists=/etc/switchyard/coraza/config.yaml' /etc/systemd/system/coraza-spoa.service || fail "coraza-spoa must wait for its config"
 systemd-analyze verify /etc/systemd/system/coraza-spoa.service 2>&1 | grep -v -E 'not executable|coraza-spoa|ConditionPathExists' || true
 [ ! -x /usr/local/bin/coraza-spoa ] || /usr/local/bin/coraza-spoa --help >/dev/null 2>&1 || fail "coraza-spoa does not run"
+# The configuration the controller renders (coraza-config.yaml, kept equal to the renderer's output by a unit test) must
+# start the sidecar: it runs until the timeout kills it (124); any other exit is a configuration the binary refuses.
+if [ -x /usr/local/bin/coraza-spoa ]; then
+  [ -d /usr/share/coreruleset/4.8.0/rules ] || fail "Core Rule Set 4.8.0 directory (the rendered config includes it)"
+  set +e
+  timeout 4 /usr/local/bin/coraza-spoa -config /opt/se-image/test/coraza-config.yaml >/tmp/coraza.out 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 124 ] || { cat /tmp/coraza.out >&2; fail "coraza-spoa refuses the rendered configuration (exit $rc)"; }
+fi
 if [ -e /usr/share/coreruleset/current ]; then
   [ -f /usr/share/coreruleset/current/crs-setup.conf.example ] && [ -d /usr/share/coreruleset/current/rules ] || fail "Core Rule Set"
 fi

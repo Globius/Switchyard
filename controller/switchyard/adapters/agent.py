@@ -111,6 +111,8 @@ class AgentStatus:
     haproxy_healthy: bool = False
     routes_withdrawn: bool = False
     withdrawn_prefixes: tuple[str, ...] = ()
+    waf_expected: bool = False
+    waf_running: bool = False
     observed_at_unix: int = 0
 
 
@@ -278,6 +280,8 @@ def _status(message: agent_pb2.Status) -> AgentStatus:
         haproxy_healthy=message.haproxy_healthy,
         routes_withdrawn=message.routes_withdrawn,
         withdrawn_prefixes=tuple(message.withdrawn_prefixes),
+        waf_expected=message.waf_expected,
+        waf_running=message.waf_running,
         observed_at_unix=message.observed_at_unix,
     )
 
@@ -405,6 +409,7 @@ class FakeAgent:
         self.healthy = True
         self.withdrawn = False
         self.withdrawn_prefixes: tuple[str, ...] = ()
+        self.waf_running = True
         self.probe_result = ProbeResult(ok=True, latency_ms=1, detail="connected")
         self.probes: list[ProbeRequest] = []
         self.fail_next: str | None = None
@@ -440,6 +445,8 @@ class FakeAgent:
             haproxy_healthy=self.healthy,
             routes_withdrawn=self.withdrawn or bool(self.withdrawn_prefixes),
             withdrawn_prefixes=self.withdrawn_prefixes,
+            waf_expected="coraza/config.yaml" in self.files,
+            waf_running=self.waf_running,
         )
 
     async def probe(self, request: ProbeRequest) -> ProbeResult:
