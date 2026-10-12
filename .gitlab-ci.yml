@@ -84,12 +84,5 @@ se-image:
   script:
     - docker build -q -f se-image/test/Dockerfile -t sy-se-image-test .
 
-# Live checks against a real stack (the quickstart in Docker with OpenBao): the .p12 import and the 412/428 conflict
-# responses, deploy/lab/checks/live.sh. Manual: it needs the stack running and the lab scripts' environment.
-live-checks:
-  stage: check
-  image: docker:27
-  when: manual
-  allow_failure: true
-  script:
-    - echo "see docs/runbooks/lab-hosts.md and deploy/lab/checks/live.sh"
+# The live checks (.p12 import, 412/428 conflict responses: deploy/lab/checks/live.sh) need a running stack and the lab
+# scripts; they are run by hand, see docs/runbooks/lab-hosts.md.
