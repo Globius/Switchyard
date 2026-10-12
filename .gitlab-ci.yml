@@ -4,7 +4,7 @@ workflow:
   rules:
     - when: never
 
-stages: [check]
+stages: [check, deploy]
 
 default:
   image: ghcr.io/astral-sh/uv:python3.12-bookworm
@@ -86,3 +86,23 @@ se-image:
 
 # The live checks (.p12 import, 412/428 conflict responses: deploy/lab/checks/live.sh) need a running stack and the lab
 # scripts; they are run by hand, see docs/runbooks/lab-hosts.md.
+
+# Docs site (ADR 0190): strict MkDocs build with link checking on every pipeline, published to GitLab
+# Pages from main. Same as `make docs` locally.
+docs:
+  stage: check
+  script:
+    - uvx --with-requirements docs/requirements.txt mkdocs build --strict
+  artifacts:
+    paths: [public]
+    expire_in: 1 week
+
+pages:
+  stage: deploy
+  needs: [docs]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - test -f public/index.html
+  artifacts:
+    paths: [public]

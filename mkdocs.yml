@@ -1,0 +1,37 @@
+site_name: Switchyard
+site_description: Multi-tenant load balancer controller for Proxmox; an open-source replacement for NSX ALB (Avi).
+repo_url: https://git.example.com/miguelr/switchyard
+edit_uri: -/edit/main/docs/
+docs_dir: docs
+site_dir: public
+strict: true
+exclude_docs: |
+  requirements.txt
+  prompts/
+  api/openapi.json
+  hooks/
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+theme:
+  name: material
+  features: [navigation.sections, navigation.top, navigation.indexes, search.suggest, content.code.copy]
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: {icon: material/brightness-7, name: Dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: {icon: material/brightness-4, name: Light mode}
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc: {permalink: true}
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.details
+hooks:
+  - docs/hooks/repo_links.py
