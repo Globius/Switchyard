@@ -304,6 +304,11 @@ def _render_ipvs_only(
     return {"keepalived/keepalived.conf": text} | _udp_host_files(servers)
 
 
+def _host_prefix(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    """The host route for a VIP: ``/32`` for IPv4, ``/128`` for IPv6."""
+    return f"{address}/{address.max_prefixlen}"
+
+
 def bgp_router_id(slot: EngineSlot) -> str:
     """The BGP router id (a 32-bit identifier) for an engine.
 
@@ -359,8 +364,8 @@ def render_frr(
             if not _PASSWORD.fullmatch(password):
                 raise RenderError(f"BGP password for {peer.peer_ip} contains unsafe characters")
         peers.append({"ip": str(peer.peer_ip), "asn": peer.remote_asn, "password": password})
-    v4 = [f"{v}/32" for v in vips if v.version == 4]
-    v6 = [f"{v}/128" for v in vips if v.version == 6]
+    v4 = [_host_prefix(v) for v in vips if v.version == 4]
+    v6 = [_host_prefix(v) for v in vips if v.version == 6]
     text = _ENV.get_template("frr.conf.j2").render(
         group=esc.ident(group.name),
         engine=esc.ident(slot.name),
@@ -376,16 +381,16 @@ def render_frr(
         routes=_route_lines(profile.static_routes, "frr"),
     )
     servers = _ipvs_servers(view, group)
-    udp_v4 = sorted({f"{s.vip}/32" for s in servers if s.vip.version == 4})
-    vips_json: dict[str, object] = {"asn": profile.asn, "prefixes": v4}
-    if udp_v4:
+    udp_prefixes = sorted({_host_prefix(s.vip) for s in servers})
+    vips_json: dict[str, object] = {"asn": profile.asn, "prefixes": v4 + v6}
+    if udp_prefixes:
         shared = {
-            f"{svc.vip}/32"
+            _host_prefix(svc.vip)
             for svc in view.virtual_services
             if svc.se_group_id == group.id and svc.enabled and svc.protocol is not dm.Protocol.UDP
         }
-        vips_json["udp_prefixes"] = udp_v4
-        vips_json["udp_only_prefixes"] = [p for p in udp_v4 if p not in shared]
+        vips_json["udp_prefixes"] = udp_prefixes
+        vips_json["udp_only_prefixes"] = [p for p in udp_prefixes if p not in shared]
     watchdog = json.dumps(vips_json, sort_keys=True, indent=2) + "\n"
     files = {"frr/frr.conf": text, "frr/vips.json": watchdog}
     if servers:
