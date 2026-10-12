@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { useNavigate, Link, Outlet } from "@tanstack/react-router";
 import { useState } from "react";
 import { useCan } from "@/auth/session";

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """A catalogue of OWASP Core Rule Set rules for the WAF screen (ADR 0140, 0152).
 
 The catalogue lists the rule *families* of CRS 4.x and the rules tenants most often switch off

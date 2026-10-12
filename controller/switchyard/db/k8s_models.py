@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Kubernetes clusters a tenant connects (D2, ADR 0151).
 
 The row holds how to reach the cluster and what to do with it; the service-account token is in the

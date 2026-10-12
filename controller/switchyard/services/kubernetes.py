@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The Kubernetes connector: clusters a tenant connects, and the sync that keeps objects in step.
 
 A tenant administrator registers a cluster (API URL, CA, service-account token, the SE group and VIP

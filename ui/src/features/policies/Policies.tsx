@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { useQuery } from "@tanstack/react-query";
 import { cidrProblem, isIPv4 } from "@/lib/ip";
 import { ArrowDown, ArrowUp, X } from "lucide-react";

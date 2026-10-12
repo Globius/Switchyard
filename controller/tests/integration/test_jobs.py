@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Job model: stages with timing, list and filters, log, retry and cancel (ticket T5)."""
 
 import uuid

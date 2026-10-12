@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Alert senders: webhook signing, chat formats, address policy at send time (ADR 0121)."""
 
 import hashlib

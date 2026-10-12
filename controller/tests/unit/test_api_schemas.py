@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The OpenAPI document types every response and documents every route (T2, T4)."""
 
 from typing import Any

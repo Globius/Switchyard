@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Shared helpers for run.sh and scenario.sh.
 export MSYS_NO_PATHCONV=1
 PVE=switchyard-pve-lab-pve-1

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Certificate import, issuance, renewal and the Cloudflare IP sync, through real change sets."""
 
 import copy

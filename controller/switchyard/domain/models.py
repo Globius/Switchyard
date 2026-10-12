@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Domain models: the desired-state objects a tenant owns.
 
 Every model is immutable (``frozen``), rejects unknown fields and validates its own invariants.

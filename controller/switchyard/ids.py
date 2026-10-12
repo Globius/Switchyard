@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """UUIDv7 identifiers.
 
 All object ids are UUIDv7 so they sort by creation time (backend design, "Tenancy and edits").

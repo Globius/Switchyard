@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ACME providers and DNS credentials: the API, secrets handling and issuing end to end (ADR 0079)."""
 
 import json

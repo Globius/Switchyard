@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Amazon Route 53: TXT records through the REST API, signed with AWS Signature Version 4.
 
 No AWS SDK: the API is small and the signing is a page of standard-library code. A record set holds

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """HAProxy Data Plane API v3 client.
 
 Talks to the Data Plane API that runs beside HAProxy on each SE (mTLS in production). Behaviour

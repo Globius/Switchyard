@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Builds the SE *VM* template on a Proxmox node (run as root on the node). Usage:
 #   build-template.sh VMID AGENT_BIN DATAPLANE_BIN [STORAGE] [BRIDGE]
 # Imports the Debian 13 cloud image, boots it once with cloud-init user-data that downloads se-image/, sy-agent and

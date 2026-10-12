@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """GSLB against a real PowerDNS 5 (ADR 0160): the records the controller writes answer as designed.
 
 Opt-in (it pulls an image): ``SWITCHYARD_STACK_TESTS=1 pytest tests/integration/test_gslb_stack.py``.

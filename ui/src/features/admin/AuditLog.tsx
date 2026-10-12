@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Admin: the audit log across tenants, newest first, with filters, per-event diff and CSV export. */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight } from "lucide-react";

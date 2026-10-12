@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Sending an alert to a webhook, a chat service or an email address (ADR 0121).
 
 :class:`HttpNotifier` is the real sender and :class:`FakeNotifier` records what it was asked to

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Render the routing side of an SE group: ``keepalived.conf`` (VRRP) or ``frr.conf`` (BGP).
 
 Like the HAProxy renderer these are pure functions of a snapshot (plus, for BGP session passwords,

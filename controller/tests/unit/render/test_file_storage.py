@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Every rendered file must be one the Data Plane API can store (engine push, ``storage_kind``)."""
 
 import pytest

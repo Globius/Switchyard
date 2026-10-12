@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Pool passive checks and slow start.
 
 - ``pool.passive_check`` (JSON, see ``PassiveCheck``) and ``pool.slow_start_s`` (seconds).

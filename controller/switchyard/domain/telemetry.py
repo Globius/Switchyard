@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Metric and access-log shapes of a virtual service (what the UI charts and tails).
 
 Plain data; the adapter in :mod:`switchyard.adapters.telemetry` fills it from Prometheus and Loki.

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The TLS-ALPN-01 challenge certificate (RFC 8737)."""
 
 import hashlib

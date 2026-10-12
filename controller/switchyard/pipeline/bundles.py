@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The signed file set one engine's agent should hold: routing config plus TLS certificates.
 
 The apply pipeline sends it and the status poller compares against it, so both build it here.

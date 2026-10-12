@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { ApiError } from "@/api/client";

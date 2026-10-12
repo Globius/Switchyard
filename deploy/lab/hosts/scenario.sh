@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # The scenarios the Docker-hosted lab cannot run, on two real Proxmox hosts. Sourced from run.sh after the controller,
 # the templates, the tenant and the helper guest exist. Each section prints what it proves; the unprivileged-container
 # section only reports (it is a trial), the others fail the run.

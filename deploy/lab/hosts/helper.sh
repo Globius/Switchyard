@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Creates the lab's helper guest on THIS Proxmox node (run as root on the node). One container with an address on each
 # lab network (.250) that plays: the client that requests the VIPs, the web backend (TCP 8001) and UDP echo (5301)
 # on the backend network, and the upstream BGP router (AS 65000) on the management network.

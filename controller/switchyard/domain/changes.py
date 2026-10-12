@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Change operations: how a draft change set turns the current state into a proposed state.
 
 A change set stores operations, not copies of tables (backend design, "Tenancy and edits"). A

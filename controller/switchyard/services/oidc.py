@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """OpenID Connect authorization-code login with PKCE.
 
 Only what the controller needs: discovery, the authorization URL, the code exchange and ID-token

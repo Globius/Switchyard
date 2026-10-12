@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Admin: ACME providers (system-admin). A provider is a certificate authority and the account the
  * controller uses with it, shared by every tenant. Saved live (no change set) and audited;

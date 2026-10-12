@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ACME authentication against Pebble: External Account Binding, OAuth-fetched EAB, bearer tokens."""
 
 import json

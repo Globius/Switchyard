@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Editors for the security policy kinds: Access (login through the tenant's identity provider,
  * ADR 0130 to 0132), JWT bearer tokens (ADR 0135), client certificate identity (ADR 0136), WAF

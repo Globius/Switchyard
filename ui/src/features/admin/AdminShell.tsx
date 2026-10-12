@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** The system-admin area: its own top bar and nav, outside any tenant. */
 import { Link, Outlet } from "@tanstack/react-router";
 import { Signpost } from "lucide-react";

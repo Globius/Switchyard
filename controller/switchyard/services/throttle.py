@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Login throttling with backoff, kept in the database so every replica shares it.
 
 Failures are counted per *key*. A key is a source address, or an account together with a source

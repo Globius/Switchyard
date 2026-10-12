@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SAML login end to end: AuthnRequest, signed response to the ACS, session, audit, replay."""
 
 import base64

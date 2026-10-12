@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Administration of the break-glass administrator (system administrators; ADR 0032).
 
 The break-glass login (password plus TOTP, see :mod:`switchyard.services.sessions`) is for the day

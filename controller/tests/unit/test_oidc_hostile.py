@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ID-token validation against hostile tokens (docs/security/backend-review.md)."""
 
 import json

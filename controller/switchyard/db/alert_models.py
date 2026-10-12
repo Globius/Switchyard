@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SQLAlchemy models for alerting (ADR 0120): targets, rules, their state and delivery log.
 
 All four tables are tenant-owned with RLS like the rest. Target ``config`` holds addresses and

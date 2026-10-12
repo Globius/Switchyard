@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tenant search (command palette) and the tenant home summary.
 
 Both are read-only views computed from the desired state, the stored engine status and a few

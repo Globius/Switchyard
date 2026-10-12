@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Country and reputation lists (ADR 0147): parsing, the HTTP source, the model and the rules."""
 
 import copy

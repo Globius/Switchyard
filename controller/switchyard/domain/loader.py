@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Build a :class:`Snapshot` from a plain mapping (parsed YAML or JSON).
 
 Hand-written fixtures and the demo data would be unreadable with raw UUIDs everywhere, so this

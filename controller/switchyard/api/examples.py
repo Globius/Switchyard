@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Example response bodies, one per route, published in the OpenAPI document.
 
 Mock servers (MSW) are generated from these, so they are realistic and every one is validated

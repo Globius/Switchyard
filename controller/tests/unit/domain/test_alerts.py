@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Alert targets and rules: validators, address policy, breach rule (ADR 0120, 0121)."""
 
 from typing import Any

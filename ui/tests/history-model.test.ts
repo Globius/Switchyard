@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { describe, expect, it } from "vitest";
 import { buildTimeline, changesInRevision, fieldLines, laneOf } from "@/features/vs/history-model";
 import { stamp } from "@/features/vs/VsHistory";

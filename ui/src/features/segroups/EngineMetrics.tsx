@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Metrics of one engine (design v52, `Metrics` engine state): CPU, memory, HAProxy sessions and
  * traffic in, opened from "Metrics" in the row's More menu on SE groups. Same section as the VS

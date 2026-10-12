@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Pool persistence, member options, backend mTLS and health check presets (ADRs 0105 to 0108)."""
 
 import copy

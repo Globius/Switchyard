@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Build the Switchyard SE template contents on a Debian 13 host (run once as root, from cloud-init at
 # template build or inside a container for tests). Idempotent. Variables:
 #   HAPROXY_SERIES  HAProxy series from haproxy.debian.net (default 3.2)

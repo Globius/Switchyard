@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { expect, test } from "./fixtures";
 
 test("Ctrl+K opens the command palette and Esc closes it", async ({ page }) => {

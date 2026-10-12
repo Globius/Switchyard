@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Prepares a TEST install of the Switchyard chart in one namespace: a single OpenBao node (initialised, unsealed, with
 # the agent PKI, the controller policy and an AppRole) and the Secrets the chart expects. The keys it prints go to
 # standard output only once; keep the output (docs/kubernetes-deploy.md). Production uses its own OpenBao and secret

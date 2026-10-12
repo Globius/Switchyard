@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Lints the chart and renders it with the value sets people use; fails on a render error or when an invariant breaks.
 # Needs helm 3 or 4. Used by CI (job `helm`) and by hand: sh deploy/helm/test.sh
 set -eu

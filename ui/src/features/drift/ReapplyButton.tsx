@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * "Re-apply": pushes the desired state to a drifted SE group again. It runs as a job
  * (`reapply_se_group`), creates no revision and no draft, and needs tenant-admin.

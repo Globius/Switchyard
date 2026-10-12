@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Importing an Avi export into a tenant: dry run, the draft change set, certificates, the API."""
 
 import json

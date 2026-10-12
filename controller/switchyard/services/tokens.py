@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """API tokens: hashed, scoped, expiring machine credentials.
 
 A token looks like ``sy_<22 url-safe characters>``. Only its SHA-256 hash is stored, so a database

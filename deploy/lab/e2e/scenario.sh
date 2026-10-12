@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # The end-to-end scenario, on top of base.sh. Two VRRP engines (data NICs addressed from pools), canary ordering,
 # failover and rejoin, a controller-less reboot, then a BGP group peering with an upstream FRR router.
 set -eu

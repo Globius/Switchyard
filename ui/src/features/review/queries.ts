@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, rawGet, unwrap } from "@/api/client";
 import { diffObject, type FieldChange } from "@/lib/snapshot-diff";

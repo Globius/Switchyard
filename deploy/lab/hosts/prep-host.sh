@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Prepares a Proxmox VE node for the Switchyard lab. Run as root ON the node (once per node):
 #   sh prep-host.sh [--bridge vmbr0] [--sdn "labmgmt:101 labvip:102 labbe:103"] [--token]
 # Checks and fixes what it can, prints OK / WARN / FAIL lines, and exits 1 on any FAIL.

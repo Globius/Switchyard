@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """JWT rules with a ``jwks_url``: the controller keeps their keys in step with the issuer (ADR 0153)."""
 
 import base64

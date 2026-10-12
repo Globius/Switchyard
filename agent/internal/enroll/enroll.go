@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package enroll trades a one-time (or renewal) token for the agent's server certificate.
 //
 // The agent generates its own key, so the private key never leaves the VM. The controller signs a

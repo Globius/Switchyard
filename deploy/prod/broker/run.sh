@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Supervises one Dex per config in $BROKER_DIR/dex/*.yaml (written by `syctl broker render`).
 # A new file starts an instance, a changed file restarts it, a removed file stops it.
 # Runs in the dex image (busybox sh). See docs/runbooks/login-broker.md and ADR 0137.

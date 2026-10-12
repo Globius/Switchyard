@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Wide IPs: validation and the PowerDNS records they render (ADR 0160, 0161)."""
 
 from typing import Any

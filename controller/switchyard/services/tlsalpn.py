@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """TLS-ALPN-01 challenges: make a tenant's engines present the challenge certificate (ADR 0082).
 
 Every HTTP service with a TLS port renders ``alpn h2,http/1.1,acme-tls/1`` on its bind. While a

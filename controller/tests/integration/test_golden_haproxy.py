@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Every golden case must pass ``haproxy -c`` in the haproxy:3.2 image."""
 
 import pytest

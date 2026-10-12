@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Request certificate (operator): ACME provider, names, DNS-01 or HTTP-01, renewal. The request is
  * checked on the server as you type (`issue/check`), then runs as a job whose stages are shown

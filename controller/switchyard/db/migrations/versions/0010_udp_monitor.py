@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """UDP health monitors: the ``udp`` type and its probe details (ADR 0020).
 
 Revision ID: 0010

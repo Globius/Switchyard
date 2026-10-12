@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The login broker's configs run in real Dex, and a local user can sign in end to end (ADR 0137).
 
 Starts ``dexidp/dex`` with each rendered config (listening address widened to the container so the

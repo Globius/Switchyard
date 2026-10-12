@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Build a DNS provider from a stored credential (its settings and its secrets)."""
 
 from collections.abc import Mapping

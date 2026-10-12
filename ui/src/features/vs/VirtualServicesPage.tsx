@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Combobox } from "@/components/ui/combobox";
 import { Plus } from "lucide-react";

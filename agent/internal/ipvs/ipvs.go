@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package ipvs reports the state of the IPVS real servers behind UDP virtual services.
 //
 // Keepalived owns the IPVS table: it adds a real server when its check passes and removes it when

@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Starts Patroni. With RESTORE_TARGET_TIME set (and an empty data directory) the node bootstraps by a
 # pgBackRest point-in-time restore instead of initdb; set RESTORE_TARGET_TIME="" afterwards. See
 # docs/runbooks/restore-database.md.

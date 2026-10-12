@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Objects every controller needs, created when it starts (ADR 0155).
 
 The locked ``management`` tenant (ADR 0051) holds the ``controller`` virtual service and its SE

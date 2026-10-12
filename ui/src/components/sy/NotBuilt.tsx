@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { t } from "@/lib/i18n";
 
 /** Placeholder for screens that arrive in later MRs of the U1 build. */

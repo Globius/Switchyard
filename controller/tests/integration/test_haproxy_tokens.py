@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Real requests: JWT bearer validation (ADR 0135) and client-certificate identity (ADR 0136).
 
 Same lab as ``test_haproxy_policies``: the edge at 192.0.2.20, backend A that echoes what it

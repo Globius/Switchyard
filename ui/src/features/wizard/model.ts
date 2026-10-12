@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * State, validation and ops of the create-virtual-service wizard. Pure, so it is tested without
  * rendering. Everything the wizard creates is sent as one atomic `POST /change-sets/{cs}/ops`.

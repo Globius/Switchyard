@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Session plumbing: `/auth/providers`, `/me`, logout, break-glass login, and a
  * `useCan(tenantId)` hook built on the permission helper. No screens live here.

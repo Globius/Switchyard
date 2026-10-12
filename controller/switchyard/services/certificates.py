@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Certificate lifecycle and the Cloudflare IP allow list, all through normal change sets.
 
 - ``import_pem``: validate an uploaded bundle, keep the key in the secrets backend, return the

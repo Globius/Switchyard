@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Single-series line chart drawn in SVG, so no charting library and no iframe is involved.
  * Missing samples are gaps: the line breaks and a grey band says "no data" (never drawn as 0).

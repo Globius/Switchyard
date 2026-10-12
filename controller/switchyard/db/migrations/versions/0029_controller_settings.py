@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Controller settings (ADR 0081) and the tls-alpn-01 challenge (ADR 0082).
 
 - ``controller_settings``: the public URL and the change waiting for confirmation.

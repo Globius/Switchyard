@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Engines record whether they are a VM or an LXC container.
 
 - ``service_engine.guest_kind``: ``qemu`` or ``lxc`` for engines the controller deployed, NULL for hand-built ones.

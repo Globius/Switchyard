@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Jobs: start time, change set link, per-stage progress, log, and the ``cancelled`` state (ADR 0016).
 
 Revision ID: 0008

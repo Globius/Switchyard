@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SQLAlchemy models for user login: identity providers, sessions and the break-glass admin.
 
 These tables are system-wide (not tenant-owned) and only the admin database role reads and writes

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { describe, expect, it } from "vitest";
 import { cidrProblem, compareIp, hostPort, isIPv4, isIPv6, isIp } from "@/lib/ip";
 

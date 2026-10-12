@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """A throwaway Docker lab: real HAProxy + Data Plane API engines, backends and clients.
 
 Everything lives on one bridge network in the RFC 5737 range 192.0.2.0/24:

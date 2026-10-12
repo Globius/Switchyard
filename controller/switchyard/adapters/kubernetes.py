@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Kubernetes API client for the connector (D2, ADR 0151).
 
 Read-only except for one call: writing the VIP back to ``Service.status.loadBalancer``. The client

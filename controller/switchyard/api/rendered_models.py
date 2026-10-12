@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Response models for rendered configuration: the per-object fragments and the change-set diff."""
 
 from typing import Literal

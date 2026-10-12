@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """``syctl api ...`` against a real server (uvicorn) over HTTP, run in a worker thread."""
 
 import asyncio

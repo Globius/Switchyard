@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Health monitor test: run a monitor once from an engine against one pool member.
 
 The probe runs on the engine, through the agent, because that is where the member is reachable and

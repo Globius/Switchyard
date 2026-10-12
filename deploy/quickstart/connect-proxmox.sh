@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Points the controller at your Proxmox cluster and checks that it can log in. Usage:
 #   sh connect-proxmox.sh --url https://pve1.example:8006 --token-id switchyard@pve!controller --secret SECRET [--ca pve-root-ca.pem]
 # --resolve NAME=ADDR makes NAME resolve to ADDR inside the controller containers (use it when the API address is not

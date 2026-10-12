@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Adopt infrastructure that was built outside the controller (the management tenant bootstrap).
 
 The first controller VMs and the management SE group are built by OpenTofu and cloud-init, before

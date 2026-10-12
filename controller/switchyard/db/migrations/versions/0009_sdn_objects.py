@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Record the Proxmox SDN zones and VNets the controller created, so cleanup is safe (ADR 0017).
 
 Revision ID: 0009

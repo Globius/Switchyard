@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Test data builders. Addresses are RFC 5737 / RFC 1918 examples and hostnames are made up."""
 
 import copy

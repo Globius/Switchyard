@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The CAPTCHA gate against a real HAProxy, with Cloudflare's published always-pass test keys."""
 
 import http.client

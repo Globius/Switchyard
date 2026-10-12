@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Golden cases for the routing renderers: ``tests/golden_routing/<case>/input.yaml``.
 
 ``render:`` names the SE group, the engines and the (fake) secrets; expected files live under

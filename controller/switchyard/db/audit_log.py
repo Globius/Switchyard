@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Audit trail: every write, apply, rollback and drain is an ``audit_event`` row and a log line.
 
 The row is written in the caller's transaction, so an audited action and its record commit or roll

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Searchable single-select for object references (pools, monitors, certificates, SE groups, VIP
  * pools, IdP groups) and any list that can exceed ~10 items. Short fixed enums stay native

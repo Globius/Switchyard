@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Housekeeping: expires abandoned drafts, old jobs and stale credentials; keeps everything else."""
 
 from datetime import UTC, datetime, timedelta

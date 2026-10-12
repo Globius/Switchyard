@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Register the service engines (SE VMs) of an SE group.
 
 M2 registers engines by hand ("a manually built SE pair"); from M4 the Proxmox adapter creates and

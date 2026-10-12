@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Proxmox host state and placement, over a real database and the fake Proxmox."""
 
 import asyncio

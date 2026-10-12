@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Kubernetes objects for the connector tests (JSON as the API server returns it)."""
 
 from typing import Any

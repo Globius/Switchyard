@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SQLAlchemy models for the M1 tables.
 
 Conventions (see ADR 0002):

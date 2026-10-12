@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Country and reputation network lists, fetched from sources the operator configures (ADR 0147).
 
 Tenants name a country code or a feed name; they never supply a URL, so a tenant cannot make the

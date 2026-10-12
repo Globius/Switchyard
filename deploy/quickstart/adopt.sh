@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Creates a tenant with its networks, address pools, routing profile and SE group from a YAML file (see
 # tenant.example.yaml). Usage: sh adopt.sh tenant.yaml
 set -eu

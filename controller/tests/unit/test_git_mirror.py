@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Git mirror: deterministic YAML export and the GitLab commit logic (HTTP mocked)."""
 
 import json

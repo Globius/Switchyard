@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Migration and persistence round-trip tests against a real PostgreSQL 17."""
 
 from alembic.autogenerate import compare_metadata

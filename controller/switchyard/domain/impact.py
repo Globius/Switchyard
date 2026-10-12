@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Which services a change reaches: the "Impact" tab of a change-set review.
 
 Pure functions over two snapshots (before and after); no I/O.

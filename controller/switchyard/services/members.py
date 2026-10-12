@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Enable, disable or drain a pool member at runtime.
 
 From the backend design: ``PUT /pools/{id}/members/{m}/state`` needs no change set and is audited.

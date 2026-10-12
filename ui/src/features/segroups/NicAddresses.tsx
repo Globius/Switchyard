@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * "Network addresses" section of the deploy sheet: one row per VIP or backend network of the SE
  * group, each with a pool picker. Every new engine gets one address on that network from the

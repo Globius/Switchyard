@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Hands a new engine its enrollment material (what cloud-init will do once snippet delivery exists, ADR 0011): the
 # controller address, the one-time token, the controller CA and the Data Plane credentials, then starts enrollment.
 #   sh enroll-engine.sh --kind lxc|qemu --node NODE --vmid ID --token TOKEN [--vector-env FILE]

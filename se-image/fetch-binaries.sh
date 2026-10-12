@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Produces the binaries the SE template needs: sy-agent built from agent/ and the Data Plane API (the version that matches
 # HAProxy) copied out of the haproxytech image, both with Docker, and oauth2-proxy (the auth sidecar slot) downloaded from
 # its release and checked against the pinned checksum (versions.env); coraza-spoa (the WAF slot) is built from its tag and the Core

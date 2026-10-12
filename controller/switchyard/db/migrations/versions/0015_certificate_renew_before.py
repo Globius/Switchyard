@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Certificate renewal window: how many days before expiry an ``auto`` certificate is renewed.
 
 - ``certificate.renew_before_days`` (1 to 365, default 30: the value that was hard-coded).

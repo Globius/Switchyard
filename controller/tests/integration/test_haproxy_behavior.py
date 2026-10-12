@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Send real requests through rendered HAProxy config and check what backends see.
 
 ``haproxy -c`` proves the syntax; this proves the semantics the renderer promises: routing order,

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Internal PKI: signs the agents' server certificates.
 
 The controller never sees an agent's private key. The agent generates its key, sends a CSR, and

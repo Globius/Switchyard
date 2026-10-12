@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # End-to-end lab: controller + OpenBao PKI + PostgreSQL on the host's Docker, a real Proxmox VE (dockur/proxmox) and
 # an SE deployed as an LXC container. Proves: SE template build, deploy job, enrollment over https, renewal,
 # mTLS to the Data Plane API, an applied change set (canary included) and traffic through a VRRP VIP.

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Display names for the principal strings that audit events, change sets and revisions carry.
 
 An ``actor``, ``author`` or ``approver`` is a label such as ``user:3f9a...`` (the provider's subject

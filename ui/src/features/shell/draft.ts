@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Open draft of the caller in a tenant, for the change-set bar and the draft overlay reads. */
 import { useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "@/api/client";

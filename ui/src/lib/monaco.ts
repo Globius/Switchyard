@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Lazy Monaco loader. The editor is only needed on the config screens, so it is imported on first
  * use and kept out of the main bundle. Tests and browsers that cannot run it get `null` and the

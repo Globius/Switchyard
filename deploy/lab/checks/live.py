@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Live checks of two features that were only ever tested with mocked responses (docs/design/06). Runs inside the
 controller container against a real stack: python - <command> < live.py
   p12        import a PKCS#12 with a password, a wrong password, a file without a password, then replace it

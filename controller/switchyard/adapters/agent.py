@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The SE agent adapter: signed bundles for FRR, Keepalived and Coraza, and status.
 
 The controller signs each bundle with an Ed25519 key; the agent only accepts bundles that verify

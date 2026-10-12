@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """TLS profiles on ports and OCSP stapling on certificates.
 
 - ``vs_port.tls_profile``: ``modern``, ``intermediate``, ``legacy`` or null (engine default).

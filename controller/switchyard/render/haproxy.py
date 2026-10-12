@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Render an SE group's desired state to HAProxy configuration files.
 
 :func:`render_haproxy` is a pure function: the same :class:`~switchyard.domain.snapshot.Snapshot`

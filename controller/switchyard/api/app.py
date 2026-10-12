@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The FastAPI application: ``/api/v1``.
 
 Authentication is a bearer API token (see :mod:`switchyard.services.tokens`); OIDC/SAML login will

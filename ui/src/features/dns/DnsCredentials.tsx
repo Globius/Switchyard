@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Tenant DNS credentials (tenant-admin): the tenant's own DNS provider accounts, used for DNS-01
  * validation. One schema-driven sheet: pick a provider, then fill that provider's fields. Secrets

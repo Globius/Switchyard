@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Which service engines serve an SE group, and how to reach them."""
 
 from collections.abc import Callable, Mapping, Sequence

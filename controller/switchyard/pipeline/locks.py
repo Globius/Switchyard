@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """One apply at a time per SE group, using PostgreSQL advisory locks.
 
 Two change sets that touch different SE groups run in parallel; two that touch the same group

@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Starts the controller (api, worker, TLS front) inside the Proxmox container's network namespace, so it can reach
 # the SE containers on the Proxmox bridge (172.30.0.0/24, gateway 172.30.0.1). Run setup.sh and bring up
 # deploy/lab/pve first. Prints nothing secret.

@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Lab drill on the 3-node cluster: failover, then point-in-time restore. Run from deploy/prod:
 #   sh lab-drill.sh            (takes about 5 minutes; leaves the lab running, `down -v` to clean up)
 set -eu

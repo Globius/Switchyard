@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """WAF policy sets: model, attachment rules, SPOE and Coraza files (ADRs 0140 to 0144)."""
 
 import copy

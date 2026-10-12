@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Health score of engines and SE groups, computed from the last observed status.
 
 The score runs from 0 (nothing works) to 100 (nothing to report), with the reason for every

@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Runs the lab driver (deploy/lab/e2e/drive.py, read from stdin) inside the controller's api container. Install it on the
 # machine that runs the quickstart stack as /usr/local/bin/sy-api and point CONTROLLER_EXEC at it (see lib.sh).
 TENANT=lab; [ "${1:-}" = --tenant ] && { TENANT=$2; shift 2; }

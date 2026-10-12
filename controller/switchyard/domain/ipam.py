@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """VIP address allocation (IPAM). Pure functions, no I/O.
 
 A VIP pool lists inclusive ranges on one network. Allocation is deterministic: the lowest usable

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Live status and drift detection.
 
 ``poll_all`` asks every enabled engine (HAProxy statistics and, where there is one, the agent) what

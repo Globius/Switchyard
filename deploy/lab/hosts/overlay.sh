@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Builds the lab's isolated networks as VXLAN bridges between two Proxmox nodes whose own network is IPv6-only (Proxmox
 # SDN cannot make a VXLAN with an IPv6 underlay, so this writes plain ifupdown2 stanzas). Run as root ON each node:
 #   sh overlay.sh --self <this node's underlay address> --peer <the other node's> [--nets "labmgmt:101 labvip:102 labbe:103"]

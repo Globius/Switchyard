@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The controller's own address, VIP and certificate, changed safely from the UI (ADR 0081).
 
 In production the controller is reached through the ``controller`` virtual service of the locked

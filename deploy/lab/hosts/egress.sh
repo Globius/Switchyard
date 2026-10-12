@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Optional internet access for the lab's management networks, from the node that holds their gateway addresses (run as root
 # on it). Engines boot without internet; this is for operators who want to apt-get or curl from a lab guest.
 #   IPv4 network: an HTTP(S) proxy (tinyproxy) on the gateway address. The node may have no IPv4 at all, so a plain NAT is

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package probe runs one health check against a pool member from this engine.
 //
 // It is deliberately narrow: the target must already be a server of the applied HAProxy

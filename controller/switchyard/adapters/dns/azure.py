@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Azure DNS: TXT record sets through Azure Resource Manager, with a service principal.
 
 The token comes from the client-credentials flow. A record set holds every value of a name, so the

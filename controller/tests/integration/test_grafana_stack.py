@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Embedded Grafana against the real Prometheus, Loki and Grafana images (ADR 0085).
 
 Opt-in because it pulls three images: ``SWITCHYARD_STACK_TESTS=1 pytest tests/integration/test_grafana_stack.py``.

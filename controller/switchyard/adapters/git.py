@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Git mirror adapter: every committed revision is written as YAML to a GitLab repository.
 
 PostgreSQL stays the source of truth. The mirror exists for review, audit and disaster recovery, so

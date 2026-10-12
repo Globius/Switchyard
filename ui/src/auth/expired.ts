@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Whether the server has said the session ended (a 401 `session_expired`), for the re-login modal. */
 import { useSyncExternalStore } from "react";
 

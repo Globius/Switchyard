@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The job queue, kept in PostgreSQL (``SELECT ... FOR UPDATE SKIP LOCKED``).
 
 Mechanics from the backend design ("Background jobs"):

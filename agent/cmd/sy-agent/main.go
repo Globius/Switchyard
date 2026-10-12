@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Command sy-agent is the Switchyard SE agent: a small gRPC server (mTLS) that applies signed
 // configuration bundles for FRR, Keepalived and Coraza, reports status, and withdraws BGP routes
 // while the local HAProxy is unhealthy.

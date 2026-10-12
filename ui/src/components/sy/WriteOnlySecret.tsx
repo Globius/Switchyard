@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * A write-only secret field (account keys, EAB keys, DNS provider tokens). The value is never
  * shown again once stored: the field says "Set · stored in OpenBao" with a Replace button;

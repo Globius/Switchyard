@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Editable shape of a virtual service and the patch between two states. */
 import type { components } from "@/api/schema";
 

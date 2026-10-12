@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # One-command setup of a Switchyard test instance on this host (docs/quickstart.md). Idempotent: run it again to
 # bring the stack back up; it keeps the passwords, keys and certificates it already made in .env and secrets/.
 #   sh bootstrap.sh --host ADDRESS[,ADDRESS...] [--port 8443] [--ipv6] [--mtu N] [--rebuild]

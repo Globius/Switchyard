@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Screenshots for the README and the docs site, taken against the mocked API with a demo
  * dataset (`e2e/demo.ts`). Skipped unless SY_SCREENSHOTS is set:

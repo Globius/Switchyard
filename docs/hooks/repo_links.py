@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """MkDocs hook: point links that leave ``docs/`` at the repository instead of the site.
 
 Docs link to code (``../controller/...``) and deployment files. Those resolve on GitLab but not in the

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Who owns a draft. The API stores an author string: `user:<provider>:<subject>` for people,
  * `token:<name>` for API tokens and `user:local:<username>` for the break-glass administrator.

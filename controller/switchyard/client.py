@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """A small client for the Switchyard HTTP API, used by ``syctl api ...``.
 
 It speaks only the documented REST API with a bearer token, so it works against any controller the

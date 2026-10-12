@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Read-only Monaco view for configuration text: HAProxy highlighting for rendered files, diff
  * colouring for change-set diffs, an optional highlighted line range, and a plain fallback while

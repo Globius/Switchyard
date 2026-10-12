@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Changing the controller's FQDN, VIP and certificate with a way back (ADR 0081)."""
 
 import copy

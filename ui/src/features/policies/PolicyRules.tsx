@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Editors for the rule-based policy kinds (ADR 0102, 0103): header and URL rewrite, fixed
  * responses, and custom error pages. Saved into the draft like every other object.

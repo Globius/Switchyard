@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Removes everything run.sh started (controller containers, Proxmox lab, OpenBao PKI objects, e2e database).
 cd "$(dirname "$0")"
 export MSYS_NO_PATHCONV=1

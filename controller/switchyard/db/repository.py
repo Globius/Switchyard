@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Read and write whole snapshots.
 
 M1 only needs two operations: store a set of new objects (used by ``syctl seed`` and tests) and load

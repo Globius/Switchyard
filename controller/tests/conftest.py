@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared pytest fixtures.
 
 Tests under ``tests/integration`` need Docker (PostgreSQL via testcontainers) and are marked

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Regenerate the Python gRPC stubs from proto/ (run from controller/: uv run python tools_gen_proto.py)."""
 
 import re

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Documentation that the OpenAPI document adds to every operation after the routes are collected.
 
 Keeping it in one place has two benefits: the access rules can be read (and reviewed) as a table,

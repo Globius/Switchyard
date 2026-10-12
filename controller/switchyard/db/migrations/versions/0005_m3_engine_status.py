@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """M3: latest status of each engine (polled), with RLS like every tenant table.
 
 Revision ID: 0005

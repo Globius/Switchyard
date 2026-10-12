@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Write the difference between two snapshots to the database, with optimistic locking.
 
 :func:`apply_delta` is how an applied change set reaches the tables: creates are inserted, changed

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Client CAs for mutual TLS.
 
 - ``certificate.purpose`` (``server`` or ``client_ca``) and ``certificate.crl_secret_ref``.

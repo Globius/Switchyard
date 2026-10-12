@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Every route is called with a token of each role; the status must match the permission matrix.
 
 ``ROUTES`` classifies each route of the API as a matrix entry or as open to any signed-in caller.

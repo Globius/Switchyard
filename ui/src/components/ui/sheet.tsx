@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { X } from "lucide-react";
 import { Dialog } from "radix-ui";
 import type { ReactNode } from "react";

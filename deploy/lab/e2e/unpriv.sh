@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Trial of unprivileged containers as engines (lxc only). Reports what works; it does not fail the run, because the
 # answer is information (docs/production.md says unprivileged containers are not supported until this passes).
 set -eu

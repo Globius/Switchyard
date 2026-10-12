@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Proxmox metrics end to end: the lab Proxmox (deploy/lab/pve), prometheus-pve-exporter, Prometheus, Grafana.
 set -eu
 cd "$(dirname "$0")"

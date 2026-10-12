@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { cn } from "@/lib/utils";
 
 /** On/off toggle (role=switch); the label comes from `aria-label`. */

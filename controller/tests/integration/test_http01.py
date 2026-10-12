@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """HTTP-01: the rendered rule, the runtime map entries and the publisher, on a real HAProxy."""
 
 import copy

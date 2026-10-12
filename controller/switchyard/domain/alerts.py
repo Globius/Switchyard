@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Alert targets and rules: what is allowed, and how an alert reads (ADR 0120, 0121).
 
 Pure functions, no I/O. A target says where an alert goes; a rule says what to watch and which

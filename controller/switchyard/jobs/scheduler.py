@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Periodic jobs, scheduled by whichever worker holds a PostgreSQL advisory lock.
 
 No separate cron service is needed (backend design, "Background jobs"). Every worker may run a

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package provider is the OpenTofu and Terraform provider for the Switchyard controller.
 //
 // The resource schemas are generated from the controller's OpenAPI document (see attr.go); the

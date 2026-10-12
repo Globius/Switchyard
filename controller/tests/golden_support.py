@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Load golden cases: ``tests/golden/<case>/input.yaml`` -> files compared with ``expected/``.
 
 ``input.yaml`` is a snapshot mapping (symbolic ids, see :mod:`switchyard.domain.loader`) plus a

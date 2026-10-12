@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package watchdog withdraws BGP prefixes while the service behind them is unhealthy and announces
 // them again when it recovers: the local HAProxy for HTTP and TCP VIPs, keepalived and its IPVS
 // real servers for UDP VIPs. It never waits on the controller: failover is local.

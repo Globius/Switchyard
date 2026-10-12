@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Extra reads of the Overview's side cards: access log and policy sets. */
 import { useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "@/api/client";

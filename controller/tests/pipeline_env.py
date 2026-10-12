@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """A ready-made world for service and pipeline tests: tenant, SE group, services, fake engines."""
 
 import copy

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Change sets: draft, preview, approve, apply and roll back.
 
 This is the only write path for desired state (backend design, "Writes go through a change set").

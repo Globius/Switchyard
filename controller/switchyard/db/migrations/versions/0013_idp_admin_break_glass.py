@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """G1: identity-provider versions and test sign-in, break-glass enrollment and timed enablement.
 
 - ``identity_provider.version`` for ``If-Match``.

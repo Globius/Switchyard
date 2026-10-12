@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """RFC 9457 ``application/problem+json`` errors.
 
 Every error response has ``type``, ``title``, ``status``, ``detail`` and, for validation failures,

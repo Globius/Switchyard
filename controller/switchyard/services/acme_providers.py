@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ACME providers: the certificate authorities the controller may order from (ADR 0079).
 
 A system administrator registers a provider once: a preset (Let's Encrypt, ZeroSSL, Google Trust

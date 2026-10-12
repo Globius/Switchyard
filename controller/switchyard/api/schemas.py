@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Typed request and response models of the HTTP API.
 
 Every 2xx body has a declared model so the OpenAPI document (and the TypeScript client made from
