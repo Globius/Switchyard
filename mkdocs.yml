@@ -109,9 +109,9 @@ nav:
       - Why it works this way: why.md
       - ADR index: adr/README.md
   - Design:
-      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/bf06390f-6cf2-4fa9-9128-b6e8286ecb93: design/01-replacement-plan.md
-      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/3698c8a8-230c-4787-998c-007be6665190: design/02-backend-design.md
-      - <!-- Snapshot exported 2026-10-10 from the online doc - https -//claude.ai/code/artifact/23e2b8ae-c97b-4555-ab71-66d5dfc0485f: design/03-frontend-design.md
+      - Replacement plan: design/01-replacement-plan.md
+      - Backend design: design/02-backend-design.md
+      - Frontend design: design/03-frontend-design.md
       - Switchyard — Frontend Scope and Claude Design Handoff: design/04-frontend-scope.md
       - Backend tickets required by the frontend: design/05-frontend-backend-tickets.md
       - Planned vs built: design/06-planned-vs-built.md
