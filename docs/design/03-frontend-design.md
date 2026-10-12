@@ -91,7 +91,7 @@ The server owns all state; the UI caches it with TanStack Query and patches the 
 | Charts | uPlot for small live charts; Grafana panels embedded for deep dives | Light native sparklines, without rebuilding Grafana |
 | Command palette | `cmdk` | Ctrl/Cmd+K jump to any object by name |
 
-Grafana embedding: Grafana runs behind the controller with `auth.proxy`, so a logged-in user reaches it without a second login. Each tenant gets its own Grafana organization. Its data sources go through `prom-label-proxy` (Prometheus) and an equivalent label enforcer for Loki, which inject `tenant=<id>`. A tenant can't see another tenant's metrics even if a dashboard is edited by hand.
+Grafana behind the controller (built, opened in its own tab, [ADR 0085](../adr/0085-grafana-behind-controller.md)): Grafana runs behind the controller with `auth.proxy`, so a logged-in user reaches it without a second login. The UI asks the controller for a one-time link (`POST /tenants/{t}/grafana/launch`); opening it starts a short proxy session for that tenant. Each tenant gets its own Grafana organization, and its data sources point at the controller, which rewrites every Prometheus and Loki query with `tenant=<id>` (the controller does this itself rather than through `prom-label-proxy`). A tenant can't see another tenant's metrics even if a dashboard is edited by hand, or someone reaches Grafana directly.
 
 ### Data and live updates
 

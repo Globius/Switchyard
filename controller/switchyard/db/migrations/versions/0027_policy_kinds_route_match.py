@@ -6,7 +6,7 @@
   the route's match (host and path keep their columns).
 
 Revision ID: 0027
-Revises: 0023 (set to 0026 when !107 and !109 are merged)
+Revises: 0026
 """
 
 from alembic import op
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0027"
-down_revision = "0023"
+down_revision = "0026"
 branch_labels = None
 depends_on = None
 

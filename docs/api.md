@@ -68,6 +68,7 @@ Policy sets and routing profiles are unions on `kind`:
 | | `rewrite` | `rules[]` (`phase`, `match`, `action`: `set_header`, `add_header`, `remove_header`, `replace_prefix`), ADR 0102 |
 | | `respond` | `rules[]` (`match`, `status`, `content_type`, `body`, `retry_after_s`), ADR 0103 |
 | | `error_pages` | `pages[]` (`status`, `content_type`, `body`), ADR 0103 |
+| | `rate_limit` | `rules[]` (`match`, `key`, `header_name`, `max_requests`, `period_s`, `max_concurrent`, `action`, `deny_status`, `tarpit_s`, `table_size`), ADR 0110 |
 | `routing-profiles` | `vrrp` | `vrid`, `interface`, `advert_interval_s`, `base_priority`, `priority_step`, `static_routes[]` |
 | | `bgp` | `asn`, `bfd`, `peers[]` (`peer_ip`, `remote_asn`, `md5_ref`, `max_prefixes`), `max_prefixes`, `max_paths`, `static_routes[]` |
 
@@ -86,7 +87,7 @@ the change reaches) and `se_groups` with the changed files (`before`, `after`, u
 
 `POST …/apply` takes an optional `message` (up to 2000 characters) that is kept as the revision message: revisions return `message`, and the Git mirror commit body carries it.
 
-Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`. A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type, and `members`, the number of people with a
+Tenant quotas (`quotas` on `POST /tenants` and `PATCH /tenants/{t}`) are keyed by object type name, for example `{"virtual_service": 50}`, plus `stick_table_entries` (total rate-limit table size, ADR 0110). A change that adds objects past a limit fails with problem `quota_exceeded` (path `quota.<type>`); deleting and editing stay possible when a tenant is over a lowered quota. `GET /tenants` and `GET /tenants/{t}` return `usage`, the object count per type, and `members`, the number of people with a
 grant in the tenant.
 
 `POST …/apply` returns `202 {job_id}`. When the tenant has `require_approval` it answers `403` unless the caller is
@@ -195,7 +196,7 @@ expires. Read it with the certificate, change it with a normal update operation.
 `cancelled`.
 
 `GET /permissions` gives every entry a `group` (eight names) for the grouped role matrix; `GET /me` returns
-`links.grafana` (from `SWITCHYARD_GRAFANA_URL`, else `null`). `GET /tenants/{t}/sdn/status` lists each managed network's SDN apply
+`links.grafana` (from `SWITCHYARD_GRAFANA_URL`, else `null`) and `links.grafana_embedded` (the controller embeds Grafana, ADR 0085). `GET /tenants/{t}/sdn/status` lists each managed network's SDN apply
 state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 
 ## Engine views
@@ -212,6 +213,10 @@ state (`queued`, `running`, `succeeded`, `failed`, `never`). See ADR 0068.
 `GET /system/settings` and `PATCH /system/settings` (`system-admin`) read and change controller-wide settings; today `allow_lxc_guests` (default
 `false`) with `allow_lxc_guests_forced` when `SWITCHYARD_ALLOW_LXC=1` forces it on. While it is off, a deploy with `guest_kind: lxc` answers `403`
 with code `lxc_disabled`. `GET /me` returns `features.lxc_guests` for the UI. See ADR 0076.
+
+## Embedded Grafana
+
+`POST /tenants/{t}/grafana/launch` (any role in the tenant) and `POST /grafana/launch` (system administrators, all tenants) return `{url, expires_at, tenant_id}`: a path that works once, for 60 seconds, that starts a Grafana session scoped to that tenant and redirects into Grafana (body `{landing}` picks the page: empty, `/d/<uid>`, `/explore` or `/dashboards`). Not enabled: `404`, code `not_enabled`. The routes `/grafana/**` (Grafana itself, cookie `sy_grafana`) and `/internal/ds/**` (Grafana's data source calls, bearer token, not public) are not part of the API contract. How it is secured: [adr/0085](adr/0085-grafana-behind-controller.md).
 
 ## Controller metrics and discovery
 

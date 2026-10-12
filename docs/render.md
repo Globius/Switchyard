@@ -86,6 +86,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Route with `path_prefix` / `path_exact` | `use_backend pool_<n> if { var(txn.host) -m str <host> } { path_beg <path> }` (host condition only when set) |
 | Route with any other condition (`methods`, `headers`, `query`, `source_cidrs`, `sni`) | the same `use_backend ... if` line with one more `{ ... }` per condition (below); only a route that is a host and nothing else uses the maps |
 | Route `redirect` and policy-set redirect rule | `http-request redirect location <target> code <n> if <conditions>` |
+| Policy set `rate_limit` | per rule a backend `rl_<service>_<set>_<n>` holding `stick-table ... store http_req_rate(<p>s)\|conn_cur`, `http-request track-sc<n> src\|req.hdr(Name) table ... [if <conditions>]`, and `return status ...`, `tarpit` or `silent-drop` `if { sc_http_req_rate(...) gt <max> }` (ADR 0110) |
 | Policy set `respond` | `http-request return status <n> [content-type <t> file <page>] [hdr Retry-After <s>] [if <conditions>]` per rule (ADR 0103) |
 | Policy set `error_pages` | `http-error status <n> content-type <t> file <page>` per page, in the frontend (ADR 0103) |
 | Policy set `rewrite`, request rule | `http-request set-header\|add-header <Name> "<value>"`, `del-header <Name>`, or `replace-path` / `set-path` for a prefix replacement, `if <conditions>` (ADR 0102) |
@@ -115,6 +116,7 @@ Server names come from the member name or `<ip>-<port>` with dots and colons tur
 2. **Header hygiene**: restore the client address (below), delete any client `X-Forwarded-For`, set
    `X-Forwarded-Proto`, store the lower-cased `Host` without port in `txn.host`. `option forwardfor`
    then adds the connection's source address.
+2b. **Rate limits**: `rate_limit` policy-set rules (ADR 0110): `track-sc` and the deny, tarpit or drop line per rule, with a stick-table backend `rl_<service>_<set>_<n>` each.
 3. **Redirects**: HTTP to HTTPS, then `redirect` policy-set rules in attachment order, then redirect routes by
    `order`. First match wins.
 4. **Fixed responses**: `respond` policy-set rules in attachment order. First match answers.

@@ -45,6 +45,35 @@ class ServiceMetrics(Model):
     active_connections: list[MetricPoint]
 
 
+class EngineSummary(Model):
+    """The latest value of each headline metric of one service engine."""
+
+    cpu_percent: float | None = Field(
+        default=None, description="CPU used, as a percentage of all vCPUs (0 to 100)."
+    )
+    vcpus: float | None = Field(default=None, description="Number of vCPUs the engine sees.")
+    memory_used_bytes: float | None = Field(default=None, description="Memory in use.")
+    memory_total_bytes: float | None = Field(default=None, description="Memory the engine has.")
+    haproxy_sessions: float | None = Field(
+        default=None, description="Current HAProxy sessions on this engine."
+    )
+    traffic_in_bps: float | None = Field(
+        default=None, description="Bits per second received by HAProxy on this engine."
+    )
+
+
+class EngineMetrics(Model):
+    """Time series and headline numbers of one service engine."""
+
+    window_s: int
+    step_s: int
+    summary: EngineSummary
+    cpu_percent: list[MetricPoint]
+    memory_used_bytes: list[MetricPoint]
+    haproxy_sessions: list[MetricPoint]
+    traffic_in_bps: list[MetricPoint]
+
+
 class AccessLogEntry(Model):
     """One parsed HAProxy HTTP log line."""
 

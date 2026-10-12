@@ -32,6 +32,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from switchyard.db import (
     acme_models,  # noqa: F401  (registers the ACME and DNS provider tables)
+    alert_models,  # noqa: F401  (registers the alerting tables)
     auth_models,  # noqa: F401  (registers the login tables)
     ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
 )
@@ -247,6 +248,7 @@ class PoolRow(TenantOwnedMixin, Base):
     tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     passive_check: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     slow_start_s: Mapped[int | None] = mapped_column(Integer)
+    discovery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 
 class PoolMemberRow(Base):

@@ -117,6 +117,41 @@ class SdnSubnet:
     gateway: str | None = None
 
 
+@dataclass(frozen=True)
+class GuestInfo:
+    """A VM or container as the cluster lists it.
+
+    Attributes:
+        vmid: Guest id.
+        node: Node it runs on.
+        name: Guest name.
+        status: ``running``, ``stopped`` and so on.
+        kind: ``qemu`` or ``lxc``.
+        tags: Its Proxmox tags, lower-case.
+    """
+
+    vmid: int
+    node: str
+    name: str
+    status: str
+    kind: str
+    tags: tuple[str, ...] = ()
+
+
+def parse_tags(raw: object) -> tuple[str, ...]:
+    """Split the ``tags`` string of a cluster resource (``;`` or ``,`` separated).
+
+    Example:
+        >>> parse_tags("sy-acme.web;Prod")
+        ('sy-acme.web', 'prod')
+        >>> parse_tags(None)
+        ()
+    """
+    if not isinstance(raw, str):
+        return ()
+    return tuple(t.strip().lower() for t in raw.replace(",", ";").split(";") if t.strip())
+
+
 class Proxmox(Protocol):
     """What the controller needs from Proxmox."""
 
@@ -176,6 +211,19 @@ class Proxmox(Protocol):
 
     async def list_storage(self, node: str) -> list[StorageInfo]:
         """Return the storages of one node."""
+        ...
+
+    async def list_guests(self, tag: str | None = None) -> list[GuestInfo]:
+        """Return the cluster's VMs and containers (templates excluded), optionally with ``tag``."""
+        ...
+
+    async def guest_addresses(self, node: str, vmid: int, kind: str) -> tuple[str, ...] | None:
+        """Return the IP addresses a guest reports, or ``None`` when it cannot say.
+
+        QEMU guests answer through the guest agent, containers through their interface list.
+        ``None`` means unknown (agent not running, guest stopped), which is not the same as
+        "no addresses".
+        """
         ...
 
     async def close(self) -> None:
@@ -497,6 +545,51 @@ class HttpProxmox:
             key=lambda s: s.name,
         )
 
+    async def list_guests(self, tag: str | None = None) -> list[GuestInfo]:
+        """Return guests from ``GET /cluster/resources?type=vm``, sorted by id."""
+        data = await self._call("GET", "/cluster/resources?type=vm") or []
+        wanted = tag.lower() if tag else None
+        guests = [
+            GuestInfo(
+                vmid=int(g["vmid"]),
+                node=str(g["node"]),
+                name=str(g.get("name", "")),
+                status=str(g.get("status", "unknown")),
+                kind=str(g.get("type", "qemu")),
+                tags=parse_tags(g.get("tags")),
+            )
+            for g in data
+            if g.get("type") in {"qemu", "lxc"} and not g.get("template")
+        ]
+        return sorted(
+            (g for g in guests if wanted is None or wanted in g.tags), key=lambda g: g.vmid
+        )
+
+    async def guest_addresses(self, node: str, vmid: int, kind: str) -> tuple[str, ...] | None:
+        """Return a guest's addresses, or ``None`` when Proxmox cannot tell (no agent, stopped)."""
+        if kind == "lxc":
+            path = f"/nodes/{node}/lxc/{vmid}/interfaces"
+        else:
+            path = f"/nodes/{node}/qemu/{vmid}/agent/network-get-interfaces"
+        try:
+            data = await self._call("GET", path, ok_missing=True)
+        except ProxmoxError:
+            return None  # "QEMU guest agent is not running" and the like
+        if data is None:
+            return None
+        found: list[str] = []
+        if kind == "lxc":
+            for nic in data:
+                for key in ("inet", "inet6"):
+                    if nic.get(key):
+                        found.append(str(nic[key]).split("/", 1)[0])
+        else:
+            for nic in data.get("result", []):
+                for entry in nic.get("ip-addresses", []):
+                    if entry.get("ip-address"):
+                        found.append(str(entry["ip-address"]))
+        return tuple(found)
+
     async def close(self) -> None:
         """Close the HTTP client."""
         await self._http.aclose()
@@ -523,6 +616,9 @@ class FakeProxmox:
     storages: dict[str, list[StorageInfo]] = field(default_factory=dict)
     #: When set, only these guest ids may be cloned (the real adapter checks the template flag).
     templates: set[int] | None = None
+    guests: list[GuestInfo] = field(default_factory=list)
+    #: ``vmid -> addresses``; a missing id means the guest cannot say (no agent).
+    guest_ips: dict[int, tuple[str, ...]] = field(default_factory=dict)
     _next: int = 100
 
     def _do(self, op: str, arg: str = "") -> None:
@@ -619,6 +715,19 @@ class FakeProxmox:
         """Return the configured storages of ``node``."""
         self._do("list_storage", node)
         return sorted(self.storages.get(node, []), key=lambda s: s.name)
+
+    async def list_guests(self, tag: str | None = None) -> list[GuestInfo]:
+        """Return the configured guests, optionally with ``tag``."""
+        self._do("list_guests", tag or "")
+        wanted = tag.lower() if tag else None
+        return sorted(
+            (g for g in self.guests if wanted is None or wanted in g.tags), key=lambda g: g.vmid
+        )
+
+    async def guest_addresses(self, node: str, vmid: int, kind: str) -> tuple[str, ...] | None:
+        """Return the configured addresses of a guest, or ``None``."""
+        self._do("guest_addresses", str(vmid))
+        return self.guest_ips.get(vmid)
 
     async def get_vm(self, node: str, vmid: int) -> VmInfo | None:
         """Return the VM if it exists."""

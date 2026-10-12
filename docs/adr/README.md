@@ -68,8 +68,12 @@ Date: YYYY-MM-DD
 | [0077](0077-wait-for-storage-reloads.md) | Wait for the reload a storage call starts | Accepted |
 | [0078](0078-ipv6-and-dual-stack.md) | IPv6 and dual-stack: VRRP per family, derived BGP router id | Accepted |
 | [0079](0079-two-host-lab-findings.md) | What the two real Proxmox hosts changed | Accepted |
+| [0145](0145-pool-discovery-by-proxmox-tag.md) | Pool discovery by Proxmox tag | Accepted |
+| [0146](0146-opentofu-provider-from-the-openapi.md) | OpenTofu provider generated from the OpenAPI document | Accepted |
+| [0085](0085-grafana-behind-controller.md) | Grafana behind the controller, scoped per tenant: every data source query rewritten to one tenant | Accepted |
 | [0080](0080-acme-providers-and-dns-credentials.md) | ACME providers, DNS credentials and HTTP-01 | Accepted |
 | [0100](0100-policy-model-and-request-stages.md) | Policy model: one condition type and fixed request stages | Accepted |
 | [0101](0101-route-match-model.md) | Route and rule matches: method, header, query, source network and SNI | Accepted |
 | [0102](0102-header-and-url-rewrite.md) | Header and URL rewrite policy sets | Accepted |
 | [0103](0103-fixed-responses-and-error-pages.md) | Fixed responses and custom error pages | Accepted |
+| [0110](0110-rate-and-concurrency-limits.md) | Rate and concurrency limits | Accepted |

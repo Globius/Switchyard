@@ -34,6 +34,8 @@ class JobKind(StrEnum):
         POLL_STATUS: Scheduled engine status poll and drift detection.
         GIT_MIRROR: Pushes a revision to the Git mirror.
         GC: Scheduled housekeeping.
+        DISCOVER_POOL_MEMBERS: Pool member discovery from Proxmox tags.
+        EVALUATE_ALERTS: Checks every tenant's alert rules and sends notifications.
     """
 
     APPLY_CHANGE_SET = "apply_change_set"
@@ -47,6 +49,8 @@ class JobKind(StrEnum):
     POLL_STATUS = "poll_status"
     GIT_MIRROR = "git_mirror"
     GC = "gc"
+    DISCOVER_POOL_MEMBERS = "discover_pool_members"
+    EVALUATE_ALERTS = "evaluate_alerts"
 
 
 class JobStage(ApiModel):

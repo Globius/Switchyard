@@ -166,6 +166,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                 tls_verify=p.tls_verify,
                 passive_check=p.passive_check.model_dump(mode="json") if p.passive_check else None,
                 slow_start_s=p.slow_start_s,
+                discovery=p.discovery.model_dump(mode="json") if p.discovery else None,
             )
         )
     for s in snapshot.virtual_services:
@@ -414,6 +415,7 @@ def rows_to_snapshot(
                 "tls_verify": p.tls_verify,
                 "passive_check": p.passive_check,
                 "slow_start_s": p.slow_start_s,
+                "discovery": p.discovery,
                 "members": [
                     {
                         "id": mem.id,

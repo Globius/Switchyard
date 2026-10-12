@@ -469,3 +469,39 @@ def validate_body(value: str) -> str:
     if any((ord(c) < 32 and c not in "\t\r\n") or ord(c) == 127 for c in value):
         raise ValueError("body must not contain control characters")
     return value
+
+
+_DISCOVERY_TAG = re.compile(r"^[a-z0-9_][a-z0-9_+.-]{0,63}$")
+
+
+def validate_discovery_tag(value: str) -> str:
+    """Validate a Proxmox tag used for pool discovery.
+
+    Proxmox tags are lower-case and may contain ``a-z``, ``0-9``, ``_``, ``+``, ``.`` and ``-``.
+    Which tags a tenant may use is a cross-object rule (:func:`discovery_tag_prefix`).
+
+    Example:
+        >>> validate_discovery_tag("sy-acme.web")
+        'sy-acme.web'
+        >>> validate_discovery_tag("Web Tier")
+        Traceback (most recent call last):
+            ...
+        ValueError: tag must be 1-64 characters: a-z, 0-9, '_', '+', '.' or '-'
+    """
+    if not _DISCOVERY_TAG.fullmatch(value):
+        raise ValueError("tag must be 1-64 characters: a-z, 0-9, '_', '+', '.' or '-'")
+    return value
+
+
+def discovery_tag_prefix(tenant_name: str) -> str:
+    """The prefix every discovery tag of a tenant must start with.
+
+    Proxmox tags are cluster-wide, so a tenant may only discover guests whose tag begins with
+    ``sy-<tenant>.``. Tenant names never contain a dot, so ``sy-acme.`` cannot be a prefix of the
+    tags of a tenant called ``acme-x`` (ADR 0145).
+
+    Example:
+        >>> discovery_tag_prefix("acme")
+        'sy-acme.'
+    """
+    return f"sy-{tenant_name}."
