@@ -4,16 +4,16 @@
   scoped to, the browser session it came from, and the Grafana login and organization it maps to.
   System-wide table, read and written with the admin role only, like ``user_session``.
 
-Revision ID: 0023
-Revises: 0022
+Revision ID: 0024
+Revises: 0023
 """
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = "0023"
-down_revision = "0022"
+revision = "0024"
+down_revision = "0023"
 branch_labels = None
 depends_on = None
 

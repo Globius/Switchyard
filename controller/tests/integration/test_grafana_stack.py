@@ -10,6 +10,7 @@ Grafana's auth proxy and organizations behave as the controller expects, and a p
 """
 
 import asyncio
+import base64
 import os
 import socket
 import time
@@ -321,6 +322,45 @@ async def test_a_person_inside_grafana_still_sees_only_their_tenant(live: Live) 
         made = await direct.post("/api/admin/users", json={"login": "x", "password": "y" * 20})
         assert made.status_code in {401, 403}
         assert (await direct.get("/api/orgs")).status_code in {401, 403}
+
+
+async def test_forged_identity_and_a_ticket_as_a_bearer_do_not_open_anything(live: Live) -> None:
+    """Headers a browser sends are dropped by the proxy; a ticket is not a Grafana credential."""
+    async with live.open_grafana("acme", "acme") as client:
+        forged = {
+            "X-WEBAUTH-USER": "admin",
+            "X-Grafana-Org-Id": "1",
+            "Authorization": "Basic YWRtaW46" + base64.b64encode(ADMIN_PASSWORD.encode()).decode(),
+        }
+        r = await client.post(
+            "/grafana/api/ds/query",
+            json=prom_query("sum(haproxy_frontend_current_sessions)"),
+            headers=forged,
+        )
+        assert 3 in numbers(r) and 300 not in numbers(
+            r
+        )  # still the tenant's user, in the tenant's org
+        assert (await client.get("/grafana/api/orgs", headers=forged)).status_code == 403
+        assert (await client.get("/grafana/api/admin/users", headers=forged)).status_code == 403
+    # a ticket (or the proxy cookie value) presented to Grafana itself is just an unknown credential
+    ticket = (
+        (
+            await httpx.AsyncClient(base_url=live.api).post(
+                "/api/v1/tenants/acme/grafana/launch",
+                json={},
+                headers={"Authorization": f"Bearer {live.tokens['acme']}"},
+            )
+        )
+        .json()["url"]
+        .split("ticket=")[1]
+    )
+    async with httpx.AsyncClient(base_url=live.stack.grafana) as direct:
+        for secret in (ticket, live.tokens["acme"]):
+            r = await direct.get("/api/org", headers={"Authorization": f"Bearer {secret}"})
+            assert r.status_code == 401
+        assert (
+            await direct.get("/api/org")
+        ).status_code == 401  # no header, no login form, no anonymous
 
 
 async def test_logs_are_scoped_too(live: Live) -> None:
