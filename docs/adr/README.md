@@ -65,3 +65,4 @@ Date: YYYY-MM-DD
 | [0074](0074-agent-bundle-binding.md) | Bundles bound to an engine and a sequence; named callers for the agent | Accepted |
 | [0075](0075-deploy-hardening.md) | Deploy hardening: templates, node names, engine addresses | Accepted |
 | [0076](0076-lxc-guests-setting.md) | A system setting for container (LXC) guests | Accepted |
+| [0077](0077-wait-for-storage-reloads.md) | Wait for the reload a storage call starts | Accepted |

@@ -215,9 +215,13 @@ class TestRealEngineOnly:
             reload_timeout_s=20,
         )
         try:
+            files = render().files
+            # Staging creates the crt-list, and the Data Plane API reloads once for that (a
+            # legitimate new worker). The pid to compare with is the one after it.
+            await engine.validate(files)
             before = await engine.info()
             with pytest.raises(ReloadFailed, match="previous configuration"):
-                await engine.push(render().files)  # binds 192.0.2.20, which this engine lacks
+                await engine.push(files)  # binds 192.0.2.20, which this engine lacks
             assert (await engine.info()).pid == before.pid, "the old worker keeps serving"
 
             def own_address(data: dict[str, Any]) -> None:
@@ -249,3 +253,38 @@ async def test_fake_injected_failures() -> None:
     with pytest.raises(ConfigRejected):
         await fake.validate(render().files)
     assert fake.files == {}
+
+
+@pytest.fixture
+def fresh_se(lab_network: Lab) -> Iterator[Se]:
+    """An engine that has never been pushed to, so the crt-list does not exist yet."""
+    with lab_network.scope():
+        yield lab_network.start_se("se-fresh", "192.0.2.13", certs=(CERT,))
+
+
+async def test_staging_and_pushing_files_leaves_no_stray_reload_behind(fresh_se: Se) -> None:
+    """Creating a crt-list makes the Data Plane API reload after its delay; nothing may land later.
+
+    A stray reload replaces the HAProxy worker a second time, which the canary reads as a crash
+    (the end-to-end test failed about one run in four before the adapter waited for it).
+    """
+    import asyncio
+
+    client = DataPlaneEngine(
+        fresh_se.api_url, name=fresh_se.name, username=API_USER, password=API_PASSWORD
+    )
+    try:
+        files = render().files
+        await client.validate(files)  # stages the files: the crt-list is created here
+        staged = (await client.info()).pid
+        for _ in range(30):  # the Data Plane API's reload delay is one second
+            await asyncio.sleep(0.1)
+            assert (await client.info()).pid == staged, "a reload fired after validate returned"
+        await client.push(files)
+        pushed = (await client.info()).pid
+        assert pushed != staged
+        for _ in range(30):
+            await asyncio.sleep(0.1)
+            assert (await client.info()).pid == pushed, "a reload fired after push returned"
+    finally:
+        await client.close()
