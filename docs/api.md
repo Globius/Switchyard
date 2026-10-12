@@ -195,6 +195,20 @@ expires. Read it with the certificate, change it with a normal update operation.
 service of the management tenant and reverted by the worker unless confirmed on the new FQDN in time;
 see `docs/controller-settings.md` and ADR 0081.
 
+## Kubernetes clusters
+
+`/tenants/{t}/kubernetes-clusters` (tenant-admin to write, viewer to read; see `docs/kubernetes.md`).
+
+| Call | Purpose |
+| --- | --- |
+| `GET` / `POST` | List, register. Body: `name`, `api_url`, `token` (write-only, stored in OpenBao), `ca_pem?`, `se_group`, `vip_pool`, `mode` (`nodeport`/`pods`), `class_name?`, `gateway_class?`, `enabled?` |
+| `GET` / `PATCH` / `DELETE` `/{cluster}` | Read (ETag), change (`If-Match`; `token` replaces the secret), remove |
+| `POST /{cluster}/test` | `{ok, version, nodes, services, gateway_api, permissions, detail}` |
+| `POST /{cluster}/sync` | 202 with `job_id`; a sync opens one change set as `system:k8s` |
+
+A cluster reads back with `last_sync` (`created`, `updated`, `deleted`, `change_set_id`,
+`addresses_written`), `last_sync_ok`, `last_sync_error` and `waiting_for_change_set`. The token is never returned.
+
 ## Importing an Avi export
 
 `POST /tenants/{t}/imports/avi` converts an Avi configuration export into a draft change set (dry run by default)
