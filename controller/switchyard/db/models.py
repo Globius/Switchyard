@@ -263,6 +263,7 @@ class PoolMemberRow(Base):
         enum_check("admin_state", dm.AdminState),
         CheckConstraint("weight BETWEEN 0 AND 256", name="weight"),
         CheckConstraint("maxconn BETWEEN 1 AND 1000000", name="maxconn"),
+        CheckConstraint("drain_timeout_s BETWEEN 1 AND 604800", name="drain_timeout_s"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -276,6 +277,8 @@ class PoolMemberRow(Base):
     admin_state: Mapped[str] = mapped_column(Text, nullable=False)
     backup: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     maxconn: Mapped[int | None] = mapped_column(Integer)
+    drain_timeout_s: Mapped[int | None] = mapped_column(Integer)
+    drain_since: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
 
 
 class VirtualServiceRow(TenantOwnedMixin, Base):

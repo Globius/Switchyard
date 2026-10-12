@@ -95,7 +95,7 @@ The SE image must include `/etc/switchyard/nftables/*.nft` from `/etc/nftables.c
 | Certificate `ocsp_stapling` | `[ocsp-update on]` on the certificate's `crt-list` line |
 | Pool `tls`, `tls_verify` | server options `ssl verify none` or `ssl verify required ca-file /etc/ssl/certs/ca-certificates.crt`, plus `sni` from the Host header on HTTP pools |
 | Member `address`, `port` | `server <name> <ip>[:<port>]`; a member without a port uses the client's port |
-| Member `backup`, `maxconn` | `backup` and `maxconn <n>` on the server line (ADR 0106) |
+| Member `backup`, `maxconn` | `backup` and `maxconn <n>` on the server line (ADR 0106); `drain_timeout_s` is controller-side only (ADR 0109) |
 | Pool `send_proxy` | `send-proxy` (`v1`) or `send-proxy-v2` on every server, and `check-send-proxy` when the pool has a monitor (ADR 0106) |
 | Pool `client_certificate_id` | `crt /etc/switchyard/certs/<name>.pem` after the `ssl` options; the certificate and key travel in the agent bundle like a front-end certificate (ADR 0107) |
 | Member `weight`, `admin_state` | `weight <n>`; `drain` and `disabled` both add the `disabled` keyword (see ADR 0006) |

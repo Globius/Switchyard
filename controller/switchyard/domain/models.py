@@ -594,6 +594,9 @@ class PoolMember(Model):
         name: HAProxy server name; derived from address and port when omitted.
         backup: A backup member takes traffic only when every non-backup member is down.
         maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.
+        drain_timeout_s: With ``admin_state`` ``drain``: seconds after which the controller moves
+            the member to ``disabled`` (a periodic job, ADR 0109). ``None`` drains until an
+            operator acts. Never reaches the engine configuration.
     """
 
     id: UUID
@@ -604,6 +607,7 @@ class PoolMember(Model):
     name: Name | None = None
     backup: bool = False
     maxconn: int | None = Field(default=None, ge=1, le=1_000_000)
+    drain_timeout_s: int | None = Field(default=None, ge=1, le=604_800)
 
     @property
     def server_name(self) -> str:

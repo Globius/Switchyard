@@ -8870,7 +8870,7 @@
       },
       "PoolMember": {
         "additionalProperties": false,
-        "description": "One backend server.\n\nAttributes:\n    id: Stable id, used by the runtime enable/disable/drain endpoint.\n    address: Backend IP address.\n    port: Backend port, or ``None`` to reuse the port the client connected to.\n    weight: 0-256; 0 takes no new connections.\n    admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.\n    name: HAProxy server name; derived from address and port when omitted.\n    backup: A backup member takes traffic only when every non-backup member is down.\n    maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.",
+        "description": "One backend server.\n\nAttributes:\n    id: Stable id, used by the runtime enable/disable/drain endpoint.\n    address: Backend IP address.\n    port: Backend port, or ``None`` to reuse the port the client connected to.\n    weight: 0-256; 0 takes no new connections.\n    admin_state: Operator state; ``disabled`` and ``drain`` take no new connections.\n    name: HAProxy server name; derived from address and port when omitted.\n    backup: A backup member takes traffic only when every non-backup member is down.\n    maxconn: Most concurrent connections HAProxy sends to this member; extra ones queue.\n    drain_timeout_s: With ``admin_state`` ``drain``: seconds after which the controller moves\n        the member to ``disabled`` (a periodic job, ADR 0109). ``None`` drains until an\n        operator acts. Never reaches the engine configuration.",
         "properties": {
           "address": {
             "anyOf": [
@@ -8893,6 +8893,19 @@
             "default": false,
             "title": "Backup",
             "type": "boolean"
+          },
+          "drain_timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 604800.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drain Timeout S"
           },
           "id": {
             "format": "uuid",

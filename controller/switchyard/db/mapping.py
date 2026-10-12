@@ -215,6 +215,7 @@ def snapshot_to_rows(snapshot: Snapshot) -> list[DeclarativeBase]:
                     admin_state=mem.admin_state.value,
                     backup=mem.backup,
                     maxconn=mem.maxconn,
+                    drain_timeout_s=mem.drain_timeout_s,
                 )
             )
     for s in snapshot.virtual_services:
@@ -430,6 +431,7 @@ def rows_to_snapshot(
                         "admin_state": mem.admin_state,
                         "backup": mem.backup,
                         "maxconn": mem.maxconn,
+                        "drain_timeout_s": mem.drain_timeout_s,
                     }
                     for mem in members.get(p.id, [])
                 ],

@@ -35,6 +35,7 @@ from switchyard.services.infra import (
     DeployRequest,
     InfraService,
 )
+from switchyard.services.members import MemberService
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
@@ -42,6 +43,7 @@ GIT_MIRROR_JOB = "git_mirror"
 
 
 POLL_STATUS_JOB = "poll_status"
+EXPIRE_DRAINS_JOB = "expire_drains"
 
 
 def build_handlers(
@@ -52,12 +54,14 @@ def build_handlers(
     infra: InfraService | None = None,
     certs: CertificateService | None = None,
     gc: GarbageCollector | None = None,
+    members: MemberService | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
     Args:
         db: Database handles.
         pipeline: The apply pipeline.
+        members: Timed drain expiry; ``None`` skips the ``expire_drains`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
         certs: Certificate issuance, renewal and the Cloudflare IP sync; ``None`` skips those kinds.
         infra: Proxmox-backed SDN and deploy jobs; when ``None`` those kinds are not handled.
@@ -87,6 +91,12 @@ def build_handlers(
         return report.as_dict()
 
     handlers: dict[str, Handler] = {APPLY_JOB: apply_change_set, REAPPLY_JOB: reapply_se_group}
+    if members is not None:
+
+        async def expire_drains(job: Job) -> dict[str, Any]:
+            return {"disabled": await members.expire_drains()}
+
+        handlers[EXPIRE_DRAINS_JOB] = expire_drains
     if gc is not None:
 
         async def collect_garbage(job: Job) -> dict[str, Any]:

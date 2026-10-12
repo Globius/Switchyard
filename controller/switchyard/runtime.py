@@ -35,7 +35,7 @@ from switchyard.adapters.telemetry import HttpTelemetry, Telemetry
 from switchyard.config import database_url
 from switchyard.db.tenancy import ADMIN_ROLE, APP_ROLE, make_engine
 from switchyard.domain.validators import configure_secret_policy
-from switchyard.jobs.handlers import POLL_STATUS_JOB, build_handlers
+from switchyard.jobs.handlers import EXPIRE_DRAINS_JOB, POLL_STATUS_JOB, build_handlers
 from switchyard.jobs.scheduler import Scheduler
 from switchyard.jobs.worker import Worker
 from switchyard.pipeline.apply import ApplyPipeline
@@ -53,6 +53,7 @@ from switchyard.services.enrollment import EnrollmentService
 from switchyard.services.gc import GC_JOB, GarbageCollector
 from switchyard.services.http01 import EngineHttp01Publisher
 from switchyard.services.infra import InfraService
+from switchyard.services.members import MemberService
 from switchyard.services.oidc import OidcClient
 from switchyard.services.sessions import SessionService
 from switchyard.services.status import StatusService
@@ -293,9 +294,20 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
     status = StatusService(db, engines, secrets)
     certs = certificates(db, secrets)
     handlers = build_handlers(
-        db, pipeline, git_mirror(), status, infra_service(db, secrets), certs, GarbageCollector(db)
+        db,
+        pipeline,
+        git_mirror(),
+        status,
+        infra_service(db, secrets),
+        certs,
+        GarbageCollector(db),
+        MemberService(db, engines),
     )
-    schedule = {POLL_STATUS_JOB: timedelta(seconds=10), GC_JOB: timedelta(hours=1)}
+    schedule = {
+        POLL_STATUS_JOB: timedelta(seconds=10),
+        GC_JOB: timedelta(hours=1),
+        EXPIRE_DRAINS_JOB: timedelta(seconds=30),
+    }
     if certs is not None:
         schedule[RENEW_CERTS_JOB] = timedelta(days=1)
         if os.environ.get("SWITCHYARD_CLOUDFLARE_TOKEN"):

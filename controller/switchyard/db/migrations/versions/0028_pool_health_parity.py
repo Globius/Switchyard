@@ -1,6 +1,8 @@
 """Pool and health parity: member backup and maxconn, PROXY protocol, backend client certificate, check presets.
 
-- ``pool_member.backup`` and ``pool_member.maxconn``.
+- ``pool_member.backup``, ``pool_member.maxconn``, ``pool_member.drain_timeout_s`` and
+  ``pool_member.drain_since`` (when the controller saw the member start draining; runtime state,
+  not part of the snapshot).
 - ``pool.send_proxy`` (``v1`` or ``v2``) and ``pool.client_certificate_id`` (same-tenant certificate).
 - ``health_monitor.preset`` (``redis``, ``smtp``, ``ldap`` or ``mysql``).
 
@@ -26,6 +28,15 @@ def upgrade() -> None:
         sa.Column("backup", sa.Boolean(), server_default=sa.text("false"), nullable=False),
     )
     op.add_column("pool_member", sa.Column("maxconn", sa.Integer(), nullable=True))
+    op.add_column("pool_member", sa.Column("drain_timeout_s", sa.Integer(), nullable=True))
+    op.add_column(
+        "pool_member", sa.Column("drain_since", sa.TIMESTAMP(timezone=True), nullable=True)
+    )
+    op.create_check_constraint(
+        op.f("ck_pool_member_drain_timeout_s"),
+        "pool_member",
+        "drain_timeout_s BETWEEN 1 AND 604800",
+    )
     op.create_check_constraint(
         op.f("ck_pool_member_maxconn"), "pool_member", "maxconn BETWEEN 1 AND 1000000"
     )
@@ -57,5 +68,8 @@ def downgrade() -> None:
     op.drop_constraint(op.f("ck_pool_send_proxy"), "pool", type_="check")
     op.drop_column("pool", "send_proxy")
     op.drop_constraint(op.f("ck_pool_member_maxconn"), "pool_member", type_="check")
+    op.drop_constraint(op.f("ck_pool_member_drain_timeout_s"), "pool_member", type_="check")
+    op.drop_column("pool_member", "drain_since")
+    op.drop_column("pool_member", "drain_timeout_s")
     op.drop_column("pool_member", "maxconn")
     op.drop_column("pool_member", "backup")
