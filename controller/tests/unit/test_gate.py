@@ -373,3 +373,20 @@ def test_configuration_changes_are_picked_up(tmp_path: Path) -> None:
     found = cs.find(PATH + "/callback")
     assert found is not None and found[1] == "/callback"
     assert cs.find(PATH + "x/callback") is None
+
+
+def test_dex_connector_callback_path_is_guarded_too(env: Env) -> None:
+    """Dex calls its connector back on ``/callback/<connector id>``; that path needs a sign-in."""
+    assert env.client.get(f"{PATH}/callback/radius?state=abc").status_code == 302
+    assert not env.seen
+    env.login("alice", "pw", f"{PATH}/callback/radius?state=abc")
+    env.client.get(f"{PATH}/callback/radius?state=abc")
+    assert remote(env).headers["x-remote-user"] == "alice"
+
+
+def test_step_up_may_return_to_a_path_with_a_query(env: Env) -> None:
+    env.login("alice", "pw")
+    r = env.client.get(f"{PATH}/_gate/elevate?level=2&host=app.example.test&path=/admin%3Fa%3D1")
+    assert r.status_code == 303 and r.headers["location"] == f"{PATH}/_gate/login"
+    done = env.step("123456")
+    assert done.headers["location"].endswith("start?rd=%2Fadmin%3Fa%3D1")

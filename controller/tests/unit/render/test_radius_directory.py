@@ -278,9 +278,13 @@ class TestStepUp:
     def test_the_rule_redirects_get_to_the_gate_and_refuses_other_methods(self) -> None:
         lines = [ln for ln in self.config(self.snap()).splitlines() if "sy-factors-2" in ln]
         assert len(lines) == 2
-        assert lines[0].startswith(
-            'http-request redirect location "https://auth.example.test/dex/acme/staff/_gate/'
-            'elevate?level=2&host=%[req.hdr(host),field(1,:),url_enc]&path=%[pathq,url_enc]"'
+        assert (
+            lines[0]
+            .lstrip()
+            .startswith(
+                'http-request redirect location "https://auth.example.test/dex/acme/staff/_gate/'
+                'elevate?level=2&host=%[req.hdr(host),field(1,:),url_enc]&path=%[pathq,url_enc]"'
+            )
         )
         assert "method GET HEAD" in lines[0] and "code 303" in lines[0]
         assert "return status 403" in lines[1] and "method" not in lines[1]

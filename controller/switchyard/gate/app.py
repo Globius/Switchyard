@@ -302,7 +302,7 @@ class Gate:
         if sub.startswith("/_gate/"):
             return PlainTextResponse("not found", 404)
         extra: dict[str, str] = {}
-        if sub == "/callback":
+        if sub == "/callback" or sub.startswith("/callback/"):
             session = self._session(cfg, request)
             if session is None:
                 return self._login_redirect(cfg, request)

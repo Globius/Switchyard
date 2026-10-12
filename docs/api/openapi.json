@@ -503,7 +503,7 @@
       },
       "AccessRule": {
         "additionalProperties": false,
-        "description": "What a request needs before it reaches the origin.\n\nAttributes:\n    match: Requests the rule covers; the first rule that matches decides.\n    mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of\n        at least one of ``groups``) or ``email_domains`` (an address in one of the domains).",
+        "description": "What a request needs before it reaches the origin.\n\nAttributes:\n    match: Requests the rule covers; the first rule that matches decides.\n    mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of\n        at least one of ``groups``) or ``email_domains`` (an address in one of the domains).\n    posture: Device conditions (ADR 0138).\n    min_factors: The person must have passed at least this many factors of the directory's\n        login flow (ADR 0196); a session with fewer is sent to complete the next one.",
         "properties": {
           "email_domains": {
             "default": [],
@@ -531,6 +531,19 @@
               "query": [],
               "source_cidrs": []
             }
+          },
+          "min_factors": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Factors"
           },
           "mode": {
             "default": "login",
@@ -6001,6 +6014,7 @@
               "mapping": {
                 "ldap": "#/components/schemas/LdapConnector",
                 "local": "#/components/schemas/LocalConnector",
+                "radius": "#/components/schemas/RadiusConnector",
                 "saml": "#/components/schemas/SamlConnector"
               },
               "propertyName": "type"
@@ -6014,9 +6028,22 @@
               },
               {
                 "$ref": "#/components/schemas/LocalConnector"
+              },
+              {
+                "$ref": "#/components/schemas/RadiusConnector"
               }
             ],
             "title": "Connector"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoginFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "format": "uuid",
@@ -6062,6 +6089,7 @@
               "mapping": {
                 "ldap": "#/components/schemas/LdapConnector",
                 "local": "#/components/schemas/LocalConnector",
+                "radius": "#/components/schemas/RadiusConnector",
                 "saml": "#/components/schemas/SamlConnector"
               },
               "propertyName": "type"
@@ -6075,9 +6103,22 @@
               },
               {
                 "$ref": "#/components/schemas/LocalConnector"
+              },
+              {
+                "$ref": "#/components/schemas/RadiusConnector"
               }
             ],
             "title": "Connector"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoginFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "kind": {
             "const": "directory",
@@ -6113,10 +6154,23 @@
                 "$ref": "#/components/schemas/LocalConnector"
               },
               {
+                "$ref": "#/components/schemas/RadiusConnector"
+              },
+              {
                 "type": "null"
               }
             ],
             "title": "Connector"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoginFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "kind": {
             "const": "directory",
@@ -6159,6 +6213,7 @@
               "mapping": {
                 "ldap": "#/components/schemas/LdapConnector",
                 "local": "#/components/schemas/LocalConnector",
+                "radius": "#/components/schemas/RadiusConnector",
                 "saml": "#/components/schemas/SamlConnector"
               },
               "propertyName": "type"
@@ -6172,6 +6227,9 @@
               },
               {
                 "$ref": "#/components/schemas/LocalConnector"
+              },
+              {
+                "$ref": "#/components/schemas/RadiusConnector"
               }
             ],
             "title": "Connector"
@@ -6179,6 +6237,16 @@
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
             "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoginFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "format": "uuid",
@@ -7839,6 +7907,110 @@
           "last_checked_at"
         ],
         "title": "FailingMember",
+        "type": "object"
+      },
+      "FlowCondition": {
+        "additionalProperties": false,
+        "description": "When a step applies (ADR 0196); everything given must hold.\n\nAttributes:\n    groups_any: The person has at least one of these groups from the steps already passed.\n    source_in: The client address is inside one of these networks.\n    source_not_in: The client address is outside all of these networks.",
+        "properties": {
+          "groups_any": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Groups Any",
+            "type": "array"
+          },
+          "source_in": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 16,
+            "title": "Source In",
+            "type": "array"
+          },
+          "source_not_in": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 16,
+            "title": "Source Not In",
+            "type": "array"
+          }
+        },
+        "title": "FlowCondition",
+        "type": "object"
+      },
+      "FlowStep": {
+        "additionalProperties": false,
+        "description": "One factor of a login flow (ADR 0196).\n\nAttributes:\n    name: Step name (unique in the flow).\n    kind: ``password`` asks for user name and password; ``code`` asks for one more secret\n        (a one-time code) for the user already named.\n    server: The RADIUS server that checks this step (default: the first one).\n    prompt: Text above the field; plain text.\n    when: Conditions under which the step is asked; the first step is always asked.",
+        "properties": {
+          "kind": {
+            "default": "password",
+            "enum": [
+              "password",
+              "code"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "Password",
+            "pattern": "^[A-Za-z0-9 .,:;!?()'_/-]{1,80}$",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FlowCondition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "FlowStep",
         "type": "object"
       },
       "GrafanaLaunchIn": {
@@ -10857,6 +11029,26 @@
           "message"
         ],
         "title": "LogLine",
+        "type": "object"
+      },
+      "LoginFlow": {
+        "additionalProperties": false,
+        "description": "Ordered factors with conditions, in the manner of Citrix nFactor (ADR 0196).\n\nThe steps run in order; a step whose ``when`` does not hold is skipped. After every passed\nstep the person holds ``sy-factors-<n>`` for n factors so far, so access rules can ask for a\nstronger login with ``min_factors``.",
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/FlowStep"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "title": "LoginFlow",
         "type": "object"
       },
       "Me": {
@@ -15183,6 +15375,108 @@
         ],
         "title": "QueryOp",
         "type": "string"
+      },
+      "RadiusConnector": {
+        "additionalProperties": false,
+        "description": "Sign in against RADIUS servers through the login gate (ADR 0195).\n\nAttributes:\n    servers: Up to four servers (for instance a password server and an OTP server).\n    nas_identifier: Sent as NAS-Identifier.\n    group_attribute: Where the server returns groups: ``filter_id`` or ``class``.\n    email_domain: Users get the address ``<name>@<email_domain>`` (RADIUS has none).\n    signing_secret_ref: OpenBao path of the key that signs the gate's short-lived cookies.\n    login_timeout_s: How long a person has to finish all steps.",
+        "properties": {
+          "email_domain": {
+            "title": "Email Domain",
+            "type": "string"
+          },
+          "group_attribute": {
+            "default": "filter_id",
+            "enum": [
+              "filter_id",
+              "class"
+            ],
+            "title": "Group Attribute",
+            "type": "string"
+          },
+          "login_timeout_s": {
+            "default": 300,
+            "maximum": 1800.0,
+            "minimum": 60.0,
+            "title": "Login Timeout S",
+            "type": "integer"
+          },
+          "nas_identifier": {
+            "default": "switchyard",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$",
+            "title": "Nas Identifier",
+            "type": "string"
+          },
+          "servers": {
+            "items": {
+              "$ref": "#/components/schemas/RadiusServerSpec"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Servers",
+            "type": "array"
+          },
+          "signing_secret_ref": {
+            "title": "Signing Secret Ref",
+            "type": "string"
+          },
+          "type": {
+            "const": "radius",
+            "default": "radius",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "servers",
+          "email_domain",
+          "signing_secret_ref"
+        ],
+        "title": "RadiusConnector",
+        "type": "object"
+      },
+      "RadiusServerSpec": {
+        "additionalProperties": false,
+        "description": "One RADIUS server a ``radius`` directory can ask (ADR 0195).\n\nAttributes:\n    name: Name a flow step uses to pick this server.\n    host / port: Where the server listens (UDP, 1812 by default).\n    secret_ref: OpenBao path of the shared secret (never the secret).\n    timeout_s / retries: Per-attempt wait and number of retransmissions.",
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "port": {
+            "default": 1812,
+            "title": "Port",
+            "type": "integer"
+          },
+          "retries": {
+            "default": 2,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Retries",
+            "type": "integer"
+          },
+          "secret_ref": {
+            "title": "Secret Ref",
+            "type": "string"
+          },
+          "timeout_s": {
+            "default": 3,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Timeout S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "host",
+          "secret_ref"
+        ],
+        "title": "RadiusServerSpec",
+        "type": "object"
       },
       "RateLimitPolicySet": {
         "additionalProperties": false,
