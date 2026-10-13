@@ -1267,6 +1267,10 @@ class MemberStatus(ApiModel):
     last_change_s: int | None = Field(
         default=None, description="Seconds since the member's status last changed."
     )
+    last_check: str | None = Field(
+        default=None,
+        description="HAProxy's description of the last check (`Layer7 wrong status`, ...).",
+    )
 
 
 class BgpSessionStatus(ApiModel):

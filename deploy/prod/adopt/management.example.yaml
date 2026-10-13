@@ -78,11 +78,11 @@ engines:
 # Proxmox host arrives (02, "Interim placement"): outside the management tenant, never the primary.
 # `name` must be the Patroni member name (PATRONI_NAME). `patroni_url` lets the UI show roles and lag.
 controller_members:
-  - {name: ctl-1, address: 10.0.0.11, platform: proxmox, host: pve1, patroni_url: "http://10.0.0.11:8008"}
-  - {name: ctl-2, address: 10.0.0.12, platform: proxmox, host: pve2, patroni_url: "http://10.0.0.12:8008"}
+  - {name: ctl-1, address: 10.0.0.11, platform: proxmox, host: pve1, patroni_url: "https://10.0.0.11:8008"}
+  - {name: ctl-2, address: 10.0.0.12, platform: proxmox, host: pve2, patroni_url: "https://10.0.0.12:8008"}
   - name: ctl-esxi
     address: 10.0.0.13
     platform: esxi            # shown as an external member
     host: esxi-01
     nofailover: true          # PATRONI_NOFAILOVER=true on that node
-    patroni_url: "http://10.0.0.13:8008"
+    patroni_url: "https://10.0.0.13:8008"
