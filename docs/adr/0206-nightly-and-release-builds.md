@@ -26,7 +26,7 @@ install, releases cut when we are ready (`0.1.0`, `1.0.0`, release candidates), 
   looks at, and each wider channel includes the narrower ones. Versions order by semantic-version precedence
   (`0.2.0-nightly.20261014` < `0.2.0-rc1` < `0.2.0` < `0.2.1-nightly.1`), implemented once in `domain/versions.py` and used by the update
   check, the feed, the install path and the bundle plan.
-- **Two signing keys, two trust levels.** The nightly key is not in `PROJECT_KEYS`, so no installation trusts it unless an operator adds its
+- **Three signing keys, three trust levels.** An offline maintainer key (`release-2026`), the key CI signs tagged releases with (`ci-release-2026`) and the nightly key. The first two are in `PROJECT_KEYS`; the nightly key is not, so no installation trusts it unless an operator adds its
   public key to the feed settings. A leaked nightly key harms only opted-in test systems. The release key is in `PROJECT_KEYS`.
   Each key sits in its own protected CI secret, available only to the job that needs it.
 - **Unsigned bundles are never accepted by default.** `syctl release build --unsigned` makes one for development, and `syctl upgrade apply

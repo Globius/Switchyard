@@ -31,9 +31,13 @@ CONFIG_KEY = "release_feed"
 STATE_KEY = "release_feed_state"
 CHECK_RELEASES_JOB = "check_releases"
 MAX_FEED_BYTES = 1024 * 1024
-#: Public keys the project signs feeds with (key id to base64 Ed25519 public key). Empty until the
-#: project publishes its first key; operators can always add their own in the feed settings.
-PROJECT_KEYS: dict[str, str] = {}
+#: Public keys the project signs releases with (key id to base64 Ed25519 public key, 32 raw bytes).
+#: `release-2026` is the maintainers' offline key. Add `ci-release-2026` when it exists (the key
+#: CI signs tagged releases with). The nightly key is deliberately NOT here: operators who want
+#: nightlies trust it themselves.
+PROJECT_KEYS: dict[str, str] = {
+    "release-2026": "Lr/O9yFbtWHxGa/ZO/U1ASnRHuFHFYu/TJka8C/o6do=",
+}
 
 
 @dataclass(frozen=True)
