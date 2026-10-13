@@ -26,6 +26,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from switchyard.config import normalize_database_url
+
 #: Role used by the API and tenant-scoped workers. Subject to RLS.
 APP_ROLE = "switchyard_app"
 #: Role used by system administration, migrations' seed data and cross-tenant jobs. Bypasses RLS.
@@ -57,7 +59,7 @@ def make_engine(url: str, *, role: str | None = None) -> AsyncEngine:
         if not _ROLE.fullmatch(role):
             raise ValueError(f"invalid role name {role!r}")
         connect_args["options"] = f"-c role={role}"
-    return create_async_engine(url, connect_args=connect_args)
+    return create_async_engine(normalize_database_url(url), connect_args=connect_args)
 
 
 def format_tenant_ids(tenant_ids: Iterable[UUID]) -> str:

@@ -136,3 +136,4 @@ nav:
       - Kubernetes connector on a real cluster (2026-10-12): lab/2026-10-12-kubernetes.md
       - Controller on Kubernetes and Compose in LXC (2026-10-12): lab/2026-10-12-kubernetes-install.md
       - Feature pass on two Proxmox hosts (2026-10-13): lab/2026-10-13-feature-pass.md
+      - Production deployment, all methods (2026-10-13): lab/2026-10-13-prod-deploy/index.md

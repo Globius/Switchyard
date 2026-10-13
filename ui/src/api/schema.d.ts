@@ -10572,6 +10572,11 @@ export interface components {
              * @description Seconds since the member's status last changed.
              */
             last_change_s?: number | null;
+            /**
+             * Last Check
+             * @description HAProxy's description of the last check (`Layer7 wrong status`, ...).
+             */
+            last_check?: string | null;
             /** Server */
             server: string;
             /**
