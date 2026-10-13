@@ -4,6 +4,7 @@
 
 """Response models of the upgrade check API (ADR 0205)."""
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import Field
@@ -196,6 +197,27 @@ class RollStartIn(ApiModel):
     target_version: str | None = Field(
         default=None, description="The release this template carries, for the record."
     )
+    window_start: str | None = Field(
+        default=None,
+        pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
+        description="Start the next engine only after this time of day, UTC (`HH:MM`).",
+    )
+    window_end: str | None = Field(
+        default=None,
+        pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
+        description="...and before this time. Earlier than the start means across midnight.",
+    )
+    window_days: list[int] = Field(
+        default_factory=list,
+        max_length=7,
+        description="Weekdays the window applies to, 0 (Monday) to 6; empty for every day.",
+    )
+    start_after: datetime | None = Field(
+        default=None, description="Do not start before this moment (timezone-aware)."
+    )
+    soak_seconds: int = Field(
+        default=0, ge=0, le=86400, description="Wait this long after each engine before the next."
+    )
 
 
 class RollActionIn(ApiModel):
@@ -218,7 +240,13 @@ class RollRead(ApiModel):
     id: str
     se_group_id: str
     status: Literal["running", "paused", "aborted", "done"]
-    reason: str = Field(description="Why it paused, when it did.")
+    reason: str = Field(description="Why it paused or is holding, when it is.")
+    window: str | None = Field(
+        default=None, description="The start window, for example `02:00-05:00 UTC`."
+    )
+    not_before: float | None = Field(default=None, description="Scheduled start, epoch seconds.")
+    soak_seconds: int = 0
+    holding: bool = Field(default=False, description="Waiting for the window, start time or soak.")
     template_vmid: int
     target_version: str | None
     steps: list[RollStepRead]
@@ -227,3 +255,49 @@ class RollRead(ApiModel):
     created_at: str
     updated_at: str
     version: int
+
+
+class BundleNotesRead(ApiModel):
+    """Release notes of a bundle."""
+
+    new: list[str] = Field(default_factory=list)
+    deprecated: list[str] = Field(default_factory=list)
+    breaking: list[str] = Field(default_factory=list)
+    action_required: list[str] = Field(default_factory=list)
+
+
+class BundleFileRead(ApiModel):
+    """A file in a bundle."""
+
+    path: str
+    kind: str
+    sha256: str
+    size_bytes: int
+
+
+class StagedBundleRead(ApiModel):
+    """A verified bundle kept on the controller."""
+
+    name: str
+    version: str
+    size_bytes: int
+    sha256: str
+    schema_head: str
+    key_id: str = Field(description="The trusted key that signed it.")
+    notes: BundleNotesRead
+    files: list[BundleFileRead]
+
+
+class BundlePlanRead(ApiModel):
+    """What applying a staged bundle involves, against the version this controller runs."""
+
+    bundle: StagedBundleRead
+    running_version: str
+    steps: list[str]
+    warnings: list[str] = Field(description="Cautions; none of them blocks anything.")
+
+
+class BundleFetchIn(ApiModel):
+    """Which release to download from the release feed."""
+
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,16})?$")

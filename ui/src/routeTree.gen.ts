@@ -44,6 +44,7 @@ import { Route as TTenantShellPoliciesRouteImport } from './routes/t.$tenant._sh
 import { Route as TTenantShellPoolsRouteImport } from './routes/t.$tenant._shell.pools'
 import { Route as TTenantShellPortalRouteImport } from './routes/t.$tenant._shell.portal'
 import { Route as TTenantShellRevisionsRouteImport } from './routes/t.$tenant._shell.revisions'
+import { Route as TTenantShellRollsRouteImport } from './routes/t.$tenant._shell.rolls'
 import { Route as TTenantShellRoutingProfilesRouteImport } from './routes/t.$tenant._shell.routing-profiles'
 import { Route as TTenantShellSeGroupsRouteImport } from './routes/t.$tenant._shell.se-groups'
 import { Route as TTenantReviewCsRouteImport } from './routes/t.$tenant.review.$cs'
@@ -231,6 +232,11 @@ const TTenantShellRevisionsRoute = TTenantShellRevisionsRouteImport.update({
   path: '/revisions',
   getParentRoute: () => TTenantShellRoute,
 } as any)
+const TTenantShellRollsRoute = TTenantShellRollsRouteImport.update({
+  id: '/rolls',
+  path: '/rolls',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
 const TTenantShellRoutingProfilesRoute =
   TTenantShellRoutingProfilesRouteImport.update({
     id: '/routing-profiles',
@@ -318,6 +324,7 @@ export interface FileRoutesByFullPath {
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
   '/t/$tenant/portal': typeof TTenantShellPortalRoute
   '/t/$tenant/revisions': typeof TTenantShellRevisionsRoute
+  '/t/$tenant/rolls': typeof TTenantShellRollsRoute
   '/t/$tenant/routing-profiles': typeof TTenantShellRoutingProfilesRoute
   '/t/$tenant/se-groups': typeof TTenantShellSeGroupsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
@@ -362,6 +369,7 @@ export interface FileRoutesByTo {
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
   '/t/$tenant/portal': typeof TTenantShellPortalRoute
   '/t/$tenant/revisions': typeof TTenantShellRevisionsRoute
+  '/t/$tenant/rolls': typeof TTenantShellRollsRoute
   '/t/$tenant/routing-profiles': typeof TTenantShellRoutingProfilesRoute
   '/t/$tenant/se-groups': typeof TTenantShellSeGroupsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
@@ -407,6 +415,7 @@ export interface FileRoutesById {
   '/t/$tenant/_shell/pools': typeof TTenantShellPoolsRoute
   '/t/$tenant/_shell/portal': typeof TTenantShellPortalRoute
   '/t/$tenant/_shell/revisions': typeof TTenantShellRevisionsRoute
+  '/t/$tenant/_shell/rolls': typeof TTenantShellRollsRoute
   '/t/$tenant/_shell/routing-profiles': typeof TTenantShellRoutingProfilesRoute
   '/t/$tenant/_shell/se-groups': typeof TTenantShellSeGroupsRoute
   '/t/$tenant/review/$cs': typeof TTenantReviewCsRoute
@@ -454,6 +463,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/pools'
     | '/t/$tenant/portal'
     | '/t/$tenant/revisions'
+    | '/t/$tenant/rolls'
     | '/t/$tenant/routing-profiles'
     | '/t/$tenant/se-groups'
     | '/t/$tenant/review/$cs'
@@ -498,6 +508,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/pools'
     | '/t/$tenant/portal'
     | '/t/$tenant/revisions'
+    | '/t/$tenant/rolls'
     | '/t/$tenant/routing-profiles'
     | '/t/$tenant/se-groups'
     | '/t/$tenant/review/$cs'
@@ -542,6 +553,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/_shell/pools'
     | '/t/$tenant/_shell/portal'
     | '/t/$tenant/_shell/revisions'
+    | '/t/$tenant/_shell/rolls'
     | '/t/$tenant/_shell/routing-profiles'
     | '/t/$tenant/_shell/se-groups'
     | '/t/$tenant/review/$cs'
@@ -808,6 +820,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTenantShellRevisionsRouteImport
       parentRoute: typeof TTenantShellRoute
     }
+    '/t/$tenant/_shell/rolls': {
+      id: '/t/$tenant/_shell/rolls'
+      path: '/rolls'
+      fullPath: '/t/$tenant/rolls'
+      preLoaderRoute: typeof TTenantShellRollsRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
     '/t/$tenant/_shell/routing-profiles': {
       id: '/t/$tenant/_shell/routing-profiles'
       path: '/routing-profiles'
@@ -947,6 +966,7 @@ interface TTenantShellRouteChildren {
   TTenantShellPoolsRoute: typeof TTenantShellPoolsRoute
   TTenantShellPortalRoute: typeof TTenantShellPortalRoute
   TTenantShellRevisionsRoute: typeof TTenantShellRevisionsRoute
+  TTenantShellRollsRoute: typeof TTenantShellRollsRoute
   TTenantShellRoutingProfilesRoute: typeof TTenantShellRoutingProfilesRoute
   TTenantShellSeGroupsRoute: typeof TTenantShellSeGroupsRoute
   TTenantShellIndexRoute: typeof TTenantShellIndexRoute
@@ -971,6 +991,7 @@ const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellPoolsRoute: TTenantShellPoolsRoute,
   TTenantShellPortalRoute: TTenantShellPortalRoute,
   TTenantShellRevisionsRoute: TTenantShellRevisionsRoute,
+  TTenantShellRollsRoute: TTenantShellRollsRoute,
   TTenantShellRoutingProfilesRoute: TTenantShellRoutingProfilesRoute,
   TTenantShellSeGroupsRoute: TTenantShellSeGroupsRoute,
   TTenantShellIndexRoute: TTenantShellIndexRoute,

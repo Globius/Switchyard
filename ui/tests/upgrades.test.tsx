@@ -48,9 +48,21 @@ const CHECK: Check = {
       action_required: ["Back up first"],
     },
     path: ["0.1.5", "0.2.0"],
-    bundle: null,
+    bundle: { url: "https://example.test/b.sybundle", sha256: "0".repeat(64), size_bytes: 2048 },
   },
 };
+
+const STAGED = {
+  name: "switchyard-0.2.0-0123456789ab.sybundle",
+  version: "0.2.0",
+  size_bytes: 2048,
+  sha256: "0".repeat(64),
+  schema_head: "0047",
+  key_id: "release",
+  notes: { new: [], deprecated: [], breaking: ["Dropped the legacy flag"], action_required: [] },
+  files: [],
+};
+let bundles: (typeof STAGED)[] = [];
 
 const calls: Record<string, unknown> = {};
 const server = setupServer(
@@ -125,6 +137,31 @@ const server = setupServer(
       releases: [],
     }),
   ),
+  http.get("*/api/v1/system/bundles", () => HttpResponse.json(bundles)),
+  http.get("*/api/v1/system/bundles/:name", () =>
+    HttpResponse.json({
+      bundle: STAGED,
+      running_version: "0.1.0",
+      steps: ["Back up the configuration (Back up now) and the database (pgBackRest)."],
+      warnings: [
+        "This bundle installs over 0.1.5; you run 0.1.0. Go through the intermediate releases first.",
+      ],
+    }),
+  ),
+  http.put("*/api/v1/system/bundles", async ({ request }) => {
+    calls.upload = (await request.arrayBuffer()).byteLength;
+    calls.uploadType = request.headers.get("content-type");
+    bundles.push(STAGED);
+    return HttpResponse.json(STAGED, { status: 201 });
+  }),
+  http.post("*/api/v1/system/bundles/fetch", async ({ request }) => {
+    calls.fetch = await request.json();
+    return HttpResponse.json(STAGED, { status: 201 });
+  }),
+  http.delete("*/api/v1/system/bundles/:name", ({ params }) => {
+    calls.deleted = params.name;
+    return new HttpResponse(null, { status: 204 });
+  }),
   http.post("*/api/v1/system/releases/check", () => {
     calls.checked = true;
     return HttpResponse.json({});
@@ -133,6 +170,7 @@ const server = setupServer(
 beforeAll(() => server.listen());
 afterEach(() => {
   server.resetHandlers();
+  bundles = [];
   for (const k of Object.keys(calls)) delete calls[k];
 });
 afterAll(() => server.close());
@@ -191,5 +229,45 @@ describe("upgrades page", () => {
       "href",
       "/admin/upgrades",
     );
+  });
+});
+
+describe("upgrade bundles", () => {
+  it("uploads a file as the raw body and lists it as verified", async () => {
+    renderAt("/admin/upgrades");
+    expect(await screen.findByText("No bundles staged.")).toBeInTheDocument();
+    const file = new File([new Uint8Array(2048)], "b.sybundle");
+    await userEvent.upload(await screen.findByLabelText("Bundle file"), file);
+    await waitFor(() => expect(calls.upload).toBe(2048));
+    expect(calls.uploadType).toBe("application/octet-stream");
+    expect(await screen.findByText("Verified")).toBeInTheDocument();
+  });
+
+  it("shows the plan, its cautions and the command for each node", async () => {
+    bundles = [STAGED];
+    renderAt("/admin/upgrades");
+    await userEvent.click(await screen.findByRole("button", { name: "Plan" }));
+    expect(await screen.findByText(/installs over 0.1.5/)).toBeInTheDocument();
+    expect(screen.getByText("Dropped the legacy flag")).toBeInTheDocument();
+    expect(screen.getByText(/syctl upgrade apply switchyard-0.2.0.sybundle/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute(
+      "href",
+      "/api/v1/system/bundles/switchyard-0.2.0-0123456789ab.sybundle/file",
+    );
+  });
+
+  it("fetches the feed's bundle and removes a staged one after confirmation", async () => {
+    renderAt("/admin/upgrades");
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Download 0.2.0 from the feed" }),
+    );
+    await waitFor(() => expect(calls.fetch).toEqual({ version: "0.2.0" }));
+    bundles = [STAGED];
+    renderAt("/admin/upgrades");
+    const remove = await screen.findAllByRole("button", { name: "Remove" });
+    await userEvent.click(remove[0]!);
+    expect(calls.deleted).toBeUndefined();
+    await userEvent.click((await screen.findAllByRole("button", { name: "Remove" })).at(-1)!);
+    await waitFor(() => expect(calls.deleted).toBe("switchyard-0.2.0-0123456789ab.sybundle"));
   });
 });

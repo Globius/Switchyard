@@ -79,6 +79,8 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("quota_request.create", "A tenant asked for a higher quota."),
     _a("quota_request.deny", "A quota request was denied."),
     _a("quota_request.withdraw", "A tenant withdrew its quota request."),
+    _a("bundle.staged", "An upgrade bundle was verified and kept on the controller."),
+    _a("bundle.deleted", "A staged upgrade bundle was removed."),
     _a("backup.created", "A configuration backup was written."),
     _a("backup.restored", "A configuration backup was restored into this controller."),
     _a("release_feed.configured", "The release feed settings were changed."),

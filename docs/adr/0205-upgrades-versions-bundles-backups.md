@@ -1,6 +1,6 @@
 # 0205. Upgrades: versions and compatibility, upgrade bundles, backups, checks, rollback
 
-Status: Proposed
+Status: Accepted (design approved by Miguel, 2026-10-13)
 Date: 2026-10-13
 
 ## Context
@@ -96,3 +96,12 @@ unmodified library dependency, which is compatible with distributing Switchyard 
 keys). Host keys are pinned by SHA-256 fingerprint in the target settings; there is no trust on first use. Tested against an
 in-process asyncssh SFTP server. Miguel confirmed the choice. ADR 0200 has no permitted-licence list, so this is recorded here and in
 [sbom-and-licensing.md](../sbom-and-licensing.md); it appears in the controller's SBOM like any dependency.
+
+## Implementation notes (2026-10-13)
+
+- Built as described, with these decisions made on the way: the controller **stages and verifies** bundles (upload or fetch from the feed) and shows the
+  plan, but never applies one itself; applying stays `syctl upgrade apply` on each node, because a one-click apply would need the Docker socket or a
+  privileged helper next to the component that holds every tenant's configuration. If wanted later it is a separate helper with its own ADR.
+- Engine rolls take a start window, a scheduled start and a soak time. A window only decides when the next engine starts; one in progress finishes.
+- The release signing key is created by a maintainer with `syctl release keygen` and kept offline ([runbooks/release.md](../runbooks/release.md)); the
+  repository holds only the public key, in `PROJECT_KEYS`.

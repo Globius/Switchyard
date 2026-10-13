@@ -14,6 +14,7 @@ FROM python:3.12-slim-bookworm
 RUN useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin switchyard
 COPY --from=build /app/.venv /app/.venv
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1
+RUN mkdir -p /var/lib/switchyard/staging /var/lib/switchyard/backups && chown -R 10001 /var/lib/switchyard
 USER 10001
 EXPOSE 8000
 HEALTHCHECK --interval=10s --timeout=3s --retries=6 \

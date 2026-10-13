@@ -1130,6 +1130,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/bundles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Upgrade bundles kept on the controller
+         * @description Verified bundles, newest version first. Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_bundles_api_v1_system_bundles_get"];
+        /**
+         * Upload an upgrade bundle
+         * @description Send the file as the raw request body (`application/octet-stream`).
+         *
+         *     The controller checks the signature against the project keys and your trusted keys, and
+         *     every file's SHA-256, before it keeps anything; a bundle that does not verify is refused
+         *     with `409` and discarded. It is never applied by the controller: use the plan, then
+         *     `syctl upgrade apply` on each node. Size limit: `SWITCHYARD_MAX_BUNDLE_BYTES` (4 GiB).
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["upload_bundle_api_v1_system_bundles_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/bundles/fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download a release's bundle from the release feed
+         * @description Download the bundle the verified feed lists for `version`.
+         *
+         *     It must match the feed's SHA-256 and then verify as a bundle. `404` when the feed lists
+         *     no bundle for that version.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["fetch_bundle_api_v1_system_bundles_fetch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/bundles/{bundle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What applying a staged bundle involves
+         * @description The steps and cautions against the version this controller runs.
+         *
+         *     A bundle that does not list your version as one it installs over gets a warning, never
+         *     a refusal. Changes nothing.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["bundle_plan_api_v1_system_bundles__bundle__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a staged bundle
+         * @description Frees the space. The release feed can fetch it again.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_bundle_api_v1_system_bundles__bundle__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/bundles/{bundle}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a staged bundle
+         * @description The verified file, to take to another node or site for `syctl upgrade apply`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["bundle_file_api_v1_system_bundles__bundle__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/controller": {
         parameters: {
             query?: never;
@@ -6844,6 +6955,58 @@ export interface components {
              * @description How long it stays on: 1 to 1440, default 240.
              */
             ttl_minutes?: number | null;
+        };
+        /**
+         * BundleFetchIn
+         * @description Which release to download from the release feed.
+         */
+        BundleFetchIn: {
+            /** Version */
+            version: string;
+        };
+        /**
+         * BundleFileRead
+         * @description A file in a bundle.
+         */
+        BundleFileRead: {
+            /** Kind */
+            kind: string;
+            /** Path */
+            path: string;
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /**
+         * BundleNotesRead
+         * @description Release notes of a bundle.
+         */
+        BundleNotesRead: {
+            /** Action Required */
+            action_required?: string[];
+            /** Breaking */
+            breaking?: string[];
+            /** Deprecated */
+            deprecated?: string[];
+            /** New */
+            new?: string[];
+        };
+        /**
+         * BundlePlanRead
+         * @description What applying a staged bundle involves, against the version this controller runs.
+         */
+        BundlePlanRead: {
+            bundle: components["schemas"]["StagedBundleRead"];
+            /** Running Version */
+            running_version: string;
+            /** Steps */
+            steps: string[];
+            /**
+             * Warnings
+             * @description Cautions; none of them blocks anything.
+             */
+            warnings: string[];
         };
         /**
          * BundleRead
@@ -14291,17 +14454,33 @@ export interface components {
             created_at: string;
             /** Created By */
             created_by: string;
+            /**
+             * Holding
+             * @description Waiting for the window, start time or soak.
+             * @default false
+             */
+            holding: boolean;
             /** Id */
             id: string;
             /** Log */
             log: string[];
             /**
+             * Not Before
+             * @description Scheduled start, epoch seconds.
+             */
+            not_before?: number | null;
+            /**
              * Reason
-             * @description Why it paused, when it did.
+             * @description Why it paused or is holding, when it is.
              */
             reason: string;
             /** Se Group Id */
             se_group_id: string;
+            /**
+             * Soak Seconds
+             * @default 0
+             */
+            soak_seconds: number;
             /**
              * Status
              * @enum {string}
@@ -14317,12 +14496,28 @@ export interface components {
             updated_at: string;
             /** Version */
             version: number;
+            /**
+             * Window
+             * @description The start window, for example `02:00-05:00 UTC`.
+             */
+            window?: string | null;
         };
         /**
          * RollStartIn
          * @description Replace every enabled engine of an SE group with one cloned from a new template.
          */
         RollStartIn: {
+            /**
+             * Soak Seconds
+             * @description Wait this long after each engine before the next.
+             * @default 0
+             */
+            soak_seconds: number;
+            /**
+             * Start After
+             * @description Do not start before this moment (timezone-aware).
+             */
+            start_after?: string | null;
             /**
              * Target Version
              * @description The release this template carries, for the record.
@@ -14333,6 +14528,21 @@ export interface components {
              * @description The Proxmox template to clone.
              */
             template_vmid: number;
+            /**
+             * Window Days
+             * @description Weekdays the window applies to, 0 (Monday) to 6; empty for every day.
+             */
+            window_days?: number[];
+            /**
+             * Window End
+             * @description ...and before this time. Earlier than the start means across midnight.
+             */
+            window_end?: string | null;
+            /**
+             * Window Start
+             * @description Start the next engine only after this time of day, UTC (`HH:MM`).
+             */
+            window_start?: string | null;
         };
         /**
          * RollStepRead
@@ -15156,6 +15366,30 @@ export interface components {
          * @enum {string}
          */
         StageState: "pending" | "running" | "succeeded" | "failed" | "skipped";
+        /**
+         * StagedBundleRead
+         * @description A verified bundle kept on the controller.
+         */
+        StagedBundleRead: {
+            /** Files */
+            files: components["schemas"]["BundleFileRead"][];
+            /**
+             * Key Id
+             * @description The trusted key that signed it.
+             */
+            key_id: string;
+            /** Name */
+            name: string;
+            notes: components["schemas"]["BundleNotesRead"];
+            /** Schema Head */
+            schema_head: string;
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Version */
+            version: string;
+        };
         /**
          * StaleConflict
          * @description Extension member of a `412` caused by an operation's `expected_version`.
@@ -21665,6 +21899,494 @@ export interface operations {
                 };
             };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_bundles_api_v1_system_bundles_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "files": [
+                     *           {
+                     *             "kind": "controller-image",
+                     *             "path": "files/controller-image/controller.tar",
+                     *             "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                     *             "size_bytes": 300000000
+                     *           }
+                     *         ],
+                     *         "key_id": "release",
+                     *         "name": "switchyard-0.2.0-0123456789ab.sybundle",
+                     *         "notes": {
+                     *           "action_required": [],
+                     *           "breaking": [],
+                     *           "deprecated": [],
+                     *           "new": [
+                     *             "Upgrade checks"
+                     *           ]
+                     *         },
+                     *         "schema_head": "0047",
+                     *         "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                     *         "size_bytes": 412345678,
+                     *         "version": "0.2.0"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["StagedBundleRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    upload_bundle_api_v1_system_bundles_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /** @example (the bytes of a .sybundle file) */
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "files": [
+                     *         {
+                     *           "kind": "controller-image",
+                     *           "path": "files/controller-image/controller.tar",
+                     *           "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                     *           "size_bytes": 300000000
+                     *         }
+                     *       ],
+                     *       "key_id": "release",
+                     *       "name": "switchyard-0.2.0-0123456789ab.sybundle",
+                     *       "notes": {
+                     *         "action_required": [],
+                     *         "breaking": [],
+                     *         "deprecated": [],
+                     *         "new": [
+                     *           "Upgrade checks"
+                     *         ]
+                     *       },
+                     *       "schema_head": "0047",
+                     *       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                     *       "size_bytes": 412345678,
+                     *       "version": "0.2.0"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["StagedBundleRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    fetch_bundle_api_v1_system_bundles_fetch_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "version": "0.2.0"
+                 *     }
+                 */
+                "application/json": components["schemas"]["BundleFetchIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "files": [
+                     *         {
+                     *           "kind": "controller-image",
+                     *           "path": "files/controller-image/controller.tar",
+                     *           "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                     *           "size_bytes": 300000000
+                     *         }
+                     *       ],
+                     *       "key_id": "release",
+                     *       "name": "switchyard-0.2.0-0123456789ab.sybundle",
+                     *       "notes": {
+                     *         "action_required": [],
+                     *         "breaking": [],
+                     *         "deprecated": [],
+                     *         "new": [
+                     *           "Upgrade checks"
+                     *         ]
+                     *       },
+                     *       "schema_head": "0047",
+                     *       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                     *       "size_bytes": 412345678,
+                     *       "version": "0.2.0"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["StagedBundleRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    bundle_plan_api_v1_system_bundles__bundle__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Name of a staged upgrade bundle, for example `switchyard-0.2.0-0123456789ab.sybundle`. */
+                bundle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "bundle": {
+                     *         "files": [
+                     *           {
+                     *             "kind": "controller-image",
+                     *             "path": "files/controller-image/controller.tar",
+                     *             "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                     *             "size_bytes": 300000000
+                     *           }
+                     *         ],
+                     *         "key_id": "release",
+                     *         "name": "switchyard-0.2.0-0123456789ab.sybundle",
+                     *         "notes": {
+                     *           "action_required": [],
+                     *           "breaking": [],
+                     *           "deprecated": [],
+                     *           "new": [
+                     *             "Upgrade checks"
+                     *           ]
+                     *         },
+                     *         "schema_head": "0047",
+                     *         "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                     *         "size_bytes": 412345678,
+                     *         "version": "0.2.0"
+                     *       },
+                     *       "running_version": "0.1.0",
+                     *       "steps": [
+                     *         "Back up the configuration (Back up now) and the database (pgBackRest)."
+                     *       ],
+                     *       "warnings": []
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BundlePlanRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_bundle_api_v1_system_bundles__bundle__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Name of a staged upgrade bundle, for example `switchyard-0.2.0-0123456789ab.sybundle`. */
+                bundle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    bundle_file_api_v1_system_bundles__bundle__file_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Name of a staged upgrade bundle, for example `switchyard-0.2.0-0123456789ab.sybundle`. */
+                bundle: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bundle file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -37201,8 +37923,11 @@ export interface operations {
             content: {
                 /**
                  * @example {
+                 *       "soak_seconds": 600,
                  *       "target_version": "0.2.0",
-                 *       "template_vmid": 9770
+                 *       "template_vmid": 9770,
+                 *       "window_end": "05:00",
+                 *       "window_start": "02:00"
                  *     }
                  */
                 "application/json": components["schemas"]["RollStartIn"];

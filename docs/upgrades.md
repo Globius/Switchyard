@@ -116,6 +116,28 @@ rollback. Not yet run on a real node: rehearse it in the lab first. Helm sites u
 ([deploy-kubernetes.md](deploy-kubernetes.md)); the migration Job and `wait-schema` init container do the same ordering.
 
 
+
+### Keeping a bundle on the controller (upload, check, download)
+
+Admin > Upgrades > **Upgrade bundles** (system administrators) takes a bundle you upload, or downloads the one the release feed lists, and keeps it
+**only after** its signature and every file's SHA-256 verify (against the project keys and the `trusted_keys` of the feed settings). It then shows
+what applying it involves for the version this controller runs (steps, cautions, release notes) and the `syctl upgrade apply` command to run on each
+controller node, and lets you download the verified file to take to another node or site. API: `PUT /system/bundles` (raw body),
+`POST /system/bundles/fetch`, `GET /system/bundles`, `GET /system/bundles/{bundle}` (the plan), `.../file`, `DELETE`.
+
+- **The controller does not apply bundles.** Replacing the container that runs the API needs the Docker socket or a privileged helper, which the
+  component that holds every tenant's configuration should not have. Apply is `syctl upgrade apply` on each node, one at a time.
+- **Where the file lives.** `SWITCHYARD_STAGING_DIR` (default `/var/lib/switchyard/staging`) on the node or pod that received the upload. The Compose
+  file mounts a volume there; on Kubernetes set `storage.existingClaim` to a ReadWriteMany claim, otherwise each API pod has its own temporary copy.
+  With several controller nodes, upload to the node you will apply from, or download the file and use it on each.
+- **Large files.** The proxy in front allows uploads of up to 4 GiB on this one path (`SWITCHYARD_MAX_BUNDLE_BYTES` sets the controller's own limit).
+  An Ingress needs the same: for ingress-nginx, `nginx.ingress.kubernetes.io/proxy-body-size: 4g` and `proxy-request-buffering: "off"` on the Ingress.
+- Refused bundles (unknown key, changed byte, extra file, a link inside the archive) are answered `409` and leave nothing behind.
+
+### Release feed: where the signature comes from
+
+Maintainers sign releases with the project key ([runbooks/release.md](runbooks/release.md)): `syctl release keygen`, `build`, `feed`. Controllers trust the
+keys in `PROJECT_KEYS` (and any `trusted_keys` an operator adds); until the project key is published, set your own.
 ## Engine roll (built, with fake actions only; lab run pending)
 
 `POST /tenants/{t}/se-groups/{group}/rolls {"template_vmid": 9770}` replaces every enabled engine of the group with one cloned from a new
@@ -129,6 +151,10 @@ score again, then the next engine.
 - One roll per SE group at a time. Needs the group's `autoscale.deploy` and `autoscale.enroll` settings (autoscaling itself may be off) because that
   is how replacements are created and enrolled; the replacement must be a QEMU guest. LXC engines still use `deploy/lab/hosts/upgrade.sh`
   ([runbooks/rolling-upgrade.md](runbooks/rolling-upgrade.md)).
+- **Schedule.** `window_start` / `window_end` (UTC `HH:MM`, across midnight when the end is earlier) and optional `window_days` (0 = Monday) let a new engine
+  start only inside the window; `start_after` holds the whole roll until a moment; `soak_seconds` waits after each engine before the next. An engine already in
+  progress is never interrupted when the window closes, so a window should be long enough for one engine (deploy, enroll, apply, health, retire). While it waits,
+  the roll is `running` with `holding: true` and says why.
 - Everything is audited (`roll.started`, `roll.pause`, `roll.resume`, `roll.abort`, `roll.paused`, `roll.done`).
 - State is stored in the database and advanced every ten seconds by whichever worker runs the job, so a restart of the controller does not lose it.
 
@@ -137,8 +163,8 @@ score again, then the next engine.
 Admin > Upgrades (system administrators) shows the controller, database and engine versions, a one-line verdict ("Up to date", "Version X is available.
 Upgrading is recommended.", or "Something needs fixing before an upgrade"), every finding with what to do about it, the release notes and install order when
 the feed found a newer release, the recent backups with **Back up now**, and the feed settings with **Check now**. It advises and never blocks.
-Engine rolls are started and watched through the API for now (`GET /tenants/{t}/rolls`); a roll view in the UI is not built yet.
+Engine rolls have their own page in each tenant (Infrastructure > Engine rolls): start one with a template, a window and a soak time, and pause, resume or abort it.
 
 ## Planned (ADR 0205)
 
-Scheduled windows, a soak time between engines, and a roll view in the UI.
+One-click apply of a controller upgrade from the UI (needs an upgrade helper on each node and its own ADR), and a scheduled recurring check-and-notify.

@@ -119,3 +119,20 @@ export async function rawGet<T>(path: string): Promise<T> {
   if (!r.ok) throw new ApiError(r.status, body as Problem | undefined);
   return body as T;
 }
+
+/** PUT a file as the raw request body (`application/octet-stream`), for example an upgrade bundle. */
+export async function rawUpload<T = unknown>(path: string, file: Blob): Promise<T> {
+  const r = await fetch(path, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    },
+    body: file,
+  });
+  const text = await r.text();
+  const parsed = text ? (JSON.parse(text) as unknown) : undefined;
+  if (!r.ok) throw new ApiError(r.status, parsed as Problem | undefined);
+  return parsed as T;
+}
