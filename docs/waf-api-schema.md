@@ -54,6 +54,8 @@ requests you want refused, set `api.mode: block`. Then:
 | `size` | 413 | `Content-Length` over the limit |
 | `ctype` | 415 | body media type not in `content_types` |
 
+A path parameter of the wrong type (`/pets/abc` for an integer `id`) matches no operation, so it is a `path` 404, not a `param` 400.
+
 ## Details
 
 - Path parameters: `integer`, `number`, `boolean`, `uuid`, `enum`, or the default (any segment without `/`, up to `max_length`).

@@ -1362,6 +1362,17 @@
             "title": "Ipvs",
             "type": "array"
           },
+          "load": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EngineLoadRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Connections against the limit, when the Data Plane API reported them (what the autoscaler reads)."
+          },
           "routes_withdrawn": {
             "description": "True while any BGP prefix is withdrawn.",
             "title": "Routes Withdrawn",
@@ -8394,6 +8405,28 @@
         "title": "EngineIn",
         "type": "object"
       },
+      "EngineLoadRead": {
+        "additionalProperties": false,
+        "description": "The connections an engine holds against its limit (from the Data Plane API).",
+        "properties": {
+          "conns": {
+            "description": "Open connections now.",
+            "title": "Conns",
+            "type": "integer"
+          },
+          "max_conn": {
+            "description": "The engine's connection limit (HAProxy `maxconn`).",
+            "title": "Max Conn",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conns",
+          "max_conn"
+        ],
+        "title": "EngineLoadRead",
+        "type": "object"
+      },
       "EngineMetrics": {
         "additionalProperties": false,
         "description": "Time series and headline numbers of one service engine.",
@@ -12069,6 +12102,55 @@
         "title": "KubernetesClusterRead",
         "type": "object"
       },
+      "KubernetesLastChangeRead": {
+        "additionalProperties": false,
+        "description": "The counts and change set of the last sync that changed something.",
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "change_set_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Set Id"
+          },
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "updated",
+          "deleted"
+        ],
+        "title": "KubernetesLastChangeRead",
+        "type": "object"
+      },
       "KubernetesSyncRead": {
         "additionalProperties": false,
         "description": "The result of the last sync.",
@@ -12117,6 +12199,17 @@
               }
             ],
             "title": "Deleted"
+          },
+          "last_change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KubernetesLastChangeRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last sync that created, updated or deleted something; a later sync with nothing to do keeps it."
           },
           "notes": {
             "anyOf": [
@@ -17633,7 +17726,7 @@
       },
       "RadiusServerSpec": {
         "additionalProperties": false,
-        "description": "One RADIUS server a ``radius`` directory can ask (ADR 0195).\n\nAttributes:\n    name: Name a flow step uses to pick this server.\n    host / port: Where the server listens (UDP, 1812 by default).\n    secret_ref: OpenBao path of the shared secret (never the secret).\n    timeout_s / retries: Per-attempt wait and number of retransmissions.\n    require_message_authenticator: Refuse answers without a Message-Authenticator (the\n        protection against BlastRADIUS, CVE-2024-3596). Turn it off only for a legacy server\n        that cannot send one.",
+        "description": "One RADIUS server a ``radius`` directory can ask (ADR 0195).\n\nAttributes:\n    name: Name a flow step uses to pick this server.\n    host / port: Where the server listens (UDP, 1812 by default); a host name or a routable\n        IP address.\n    secret_ref: OpenBao path of the shared secret (never the secret).\n    timeout_s / retries: Per-attempt wait and number of retransmissions.\n    require_message_authenticator: Refuse answers without a Message-Authenticator (the\n        protection against BlastRADIUS, CVE-2024-3596). Turn it off only for a legacy server\n        that cannot send one.",
         "properties": {
           "host": {
             "title": "Host",

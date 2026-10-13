@@ -1305,6 +1305,13 @@ class IpvsRealServerStatus(ApiModel):
     out_bytes: int
 
 
+class EngineLoadRead(ApiModel):
+    """The connections an engine holds against its limit (from the Data Plane API)."""
+
+    conns: int = Field(description="Open connections now.")
+    max_conn: int = Field(description="The engine's connection limit (HAProxy `maxconn`).")
+
+
 class AgentStatusRead(ApiModel):
     """What the engine's agent reports."""
 
@@ -1329,6 +1336,11 @@ class AgentStatusRead(ApiModel):
         default_factory=list, description="UDP real servers; empty without UDP services."
     )
     file_hashes: dict[str, str]
+    load: EngineLoadRead | None = Field(
+        default=None,
+        description="Connections against the limit, when the Data Plane API reported them "
+        "(what the autoscaler reads).",
+    )
 
 
 class VirtualServiceState(StrEnum):
@@ -2512,6 +2524,16 @@ class KubernetesClusterPatch(ApiModel):
     enabled: bool | None = None
 
 
+class KubernetesLastChangeRead(ApiModel):
+    """The counts and change set of the last sync that changed something."""
+
+    at: datetime | None = None
+    created: int
+    updated: int
+    deleted: int
+    change_set_id: UUID | None = None
+
+
 class KubernetesSyncRead(ApiModel):
     """The result of the last sync."""
 
@@ -2524,6 +2546,11 @@ class KubernetesSyncRead(ApiModel):
     addresses_written: int | None = None
     skipped: str | None = None
     notes: list[str] | None = None
+    last_change: KubernetesLastChangeRead | None = Field(
+        default=None,
+        description="The last sync that created, updated or deleted something; a later sync with "
+        "nothing to do keeps it.",
+    )
 
 
 class KubernetesClusterRead(ApiModel):
