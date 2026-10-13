@@ -64,8 +64,8 @@ def _check_config(body: dict[str, Any]) -> FeedConfig:
     if url and (parts.scheme != "https" or not parts.hostname or parts.username or parts.password):
         errors.add("url", "invalid", "must be an https URL without credentials")
     channel = body.get("channel", "stable")
-    if channel not in ("stable", "candidate"):
-        errors.add("channel", "invalid", "must be stable or candidate")
+    if channel not in ("stable", "candidate", "nightly"):
+        errors.add("channel", "invalid", "must be stable, candidate or nightly")
     keys = body.get("trusted_keys") or {}
     if not isinstance(keys, dict) or len(keys) > 10:
         errors.add("trusted_keys", "invalid", "must be an object of at most 10 key ids")

@@ -52,7 +52,7 @@ class ReleaseRead(ApiModel):
     """One release from the verified feed."""
 
     version: str
-    channel: Literal["stable", "candidate"] = "stable"
+    channel: Literal["stable", "candidate", "nightly"] = "stable"
     date: str
     notes_url: str | None = None
     notes: ReleaseNotesRead = Field(default_factory=ReleaseNotesRead)
@@ -170,7 +170,7 @@ class ReleaseFeedIn(ApiModel):
     """Where to look for newer releases. Off until `enabled` is true."""
 
     url: str = Field(default="", description="An https URL of the signed `releases.json`.")
-    channel: Literal["stable", "candidate"] = "stable"
+    channel: Literal["stable", "candidate", "nightly"] = "stable"
     enabled: bool = False
     trusted_keys: dict[str, str] = Field(
         default_factory=dict,
@@ -300,4 +300,4 @@ class BundlePlanRead(ApiModel):
 class BundleFetchIn(ApiModel):
     """Which release to download from the release feed."""
 
-    version: str = Field(pattern=r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,16})?$")
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,32})?$")

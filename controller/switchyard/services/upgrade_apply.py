@@ -110,6 +110,7 @@ async def apply_compose(
     run: Runner,
     health_attempts: int = 60,
     health_delay_s: float = 2.0,
+    allow_unsigned: bool = False,
 ) -> tuple[Manifest, ApplyReport]:
     """Upgrade this node to the bundle's release.
 
@@ -123,12 +124,13 @@ async def apply_compose(
         run: Command runner.
         health_attempts: How many times to ask ``healthy`` before giving up.
         health_delay_s: Seconds between attempts.
+        allow_unsigned: Accept a bundle without a verified signature (hashes are still checked).
 
     Raises:
         BundleError: The bundle does not verify; nothing was touched.
         ApplyError: A step failed; ``rolled_back`` tells whether the old images run again.
     """
-    manifest = unpack(bundle, workdir, trusted)
+    manifest = unpack(bundle, workdir, trusted, allow_unsigned=allow_unsigned)
     report = ApplyReport(manifest.version)
     report.steps.append("bundle verified and unpacked")
     previous_text = env_file.read_text() if env_file.exists() else ""

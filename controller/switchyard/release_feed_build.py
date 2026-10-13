@@ -26,7 +26,7 @@ from switchyard.domain.releases import (
     sign_feed,
     verify_feed,
 )
-from switchyard.domain.versions import parse_version
+from switchyard.domain.versions import UNKNOWN, version_key
 from switchyard.services.release_bundle import verify
 
 
@@ -86,9 +86,7 @@ def build_feed(
         releases[manifest.version] = release_entry(manifest, path, url, channel, notes_url)
     payload = {
         "schema": 1,
-        "releases": sorted(
-            releases.values(), key=lambda r: parse_version(r["version"]) or (0, 0, 0)
-        ),
+        "releases": sorted(releases.values(), key=lambda r: version_key(r["version"]) or UNKNOWN),
     }
     ReleaseFeed.model_validate(payload)  # never sign something controllers would reject
     return sign_feed(payload, key, key_id)

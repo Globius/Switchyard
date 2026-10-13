@@ -75,7 +75,13 @@ def build_cmd(
     out: Annotated[
         Path, typer.Argument(help="The bundle to write, for example switchyard-0.2.0.sybundle.")
     ],
-    key: Annotated[Path, typer.Option(help="Signing key from `syctl release keygen`.")],
+    key: Annotated[
+        Path | None, typer.Option(help="Signing key from `syctl release keygen`.")
+    ] = None,
+    unsigned: Annotated[
+        bool,
+        typer.Option("--unsigned", help="Write a bundle without a signature (development only)."),
+    ] = False,
     key_id: Annotated[str, typer.Option(help="The key's id.")] = "release",
     version: Annotated[str, typer.Option(help="Release version.")] = __version__,
     controller_image: Annotated[list[Path], typer.Option(help="`docker save` tarball.")] = [],  # noqa: B006
@@ -111,9 +117,16 @@ def build_cmd(
         typer.echo("error: give at least one file to include", err=True)
         raise typer.Exit(1)
     head = ScriptDirectory.from_config(alembic_config("postgresql+psycopg://x")).get_current_head()
+    if (key is None) == (not unsigned):
+        typer.echo("error: give --key (signed) or --unsigned, not both or neither", err=True)
+        raise typer.Exit(1)
     try:
-        private = serialization.load_pem_private_key(key.read_bytes(), password=None)
-        if not isinstance(private, Ed25519PrivateKey):
+        private = (
+            None
+            if key is None
+            else serialization.load_pem_private_key(key.read_bytes(), password=None)
+        )
+        if private is not None and not isinstance(private, Ed25519PrivateKey):
             raise BundleError("the key is not an Ed25519 key")
         manifest = build(
             out,
@@ -144,7 +157,7 @@ def feed_cmd(
         list[str], typer.Option(help="PATH=URL of a bundle and where it will be published.")
     ],
     key_id: Annotated[str, typer.Option(help="The key's id.")] = "release",
-    channel: Annotated[str, typer.Option(help="stable or candidate.")] = "stable",
+    channel: Annotated[str, typer.Option(help="stable, candidate or nightly.")] = "stable",
     notes_url: Annotated[str | None, typer.Option(help="Release notes page (https).")] = None,
     previous: Annotated[
         Path | None, typer.Option(help="An earlier releases.json to add to (must verify).")
@@ -154,8 +167,8 @@ def feed_cmd(
     from switchyard.domain.releases import FeedError
     from switchyard.release_feed_build import build_feed, load_previous
 
-    if channel not in ("stable", "candidate"):
-        typer.echo("error: channel is stable or candidate", err=True)
+    if channel not in ("stable", "candidate", "nightly"):
+        typer.echo("error: channel is stable, candidate or nightly", err=True)
         raise typer.Exit(1)
     pairs: list[tuple[Path, str]] = []
     for item in bundle:
@@ -245,10 +258,16 @@ def backup(
 
 
 @upgrade_app.command("plan")
-def plan(bundle: Path, trust: Trust = []) -> None:  # noqa: B006
+def plan(
+    bundle: Path,
+    trust: Trust = [],  # noqa: B006
+    allow_unsigned: Annotated[
+        bool, typer.Option("--allow-unsigned", help="Plan for a bundle that has no signature.")
+    ] = False,
+) -> None:
     """Dry run: verify a bundle and say what applying it would involve. Changes nothing."""
     try:
-        manifest = verify(bundle, _trusted(trust))
+        manifest = verify(bundle, _trusted(trust), allow_unsigned=allow_unsigned)
     except BundleError as exc:
         typer.echo(f"REFUSED: {exc}", err=True)
         raise typer.Exit(1) from exc
@@ -301,6 +320,17 @@ def apply_cmd(
         bool, typer.Option(help="Upgrade without a configuration backup.")
     ] = False,
     yes: Annotated[bool, typer.Option("--yes", help="Do not ask for confirmation.")] = False,
+    allow_unsigned: Annotated[
+        bool,
+        typer.Option(
+            "--allow-unsigned",
+            help="Install a bundle without a verified signature. File hashes are still checked.",
+        ),
+    ] = False,
+    confirm_unsigned: Annotated[
+        str | None,
+        typer.Option(help="With --allow-unsigned: type the bundle version to confirm it."),
+    ] = None,
     trust: Trust = [],  # noqa: B006
 ) -> None:
     """Upgrade THIS Docker Compose controller node. Run it on one node at a time.
@@ -319,10 +349,21 @@ def apply_cmd(
         typer.echo("error: give --backup-target NAME, or --no-backup to go without", err=True)
         raise typer.Exit(1)
     try:
-        manifest = verify(bundle, _trusted(trust))
+        manifest = verify(bundle, _trusted(trust), allow_unsigned=allow_unsigned)
     except BundleError as exc:
         typer.echo(f"REFUSED: {exc}", err=True)
         raise typer.Exit(1) from exc
+    if allow_unsigned:
+        typer.echo(
+            "WARNING: this bundle is NOT verified by a signature; only its file hashes were "
+            "checked, which proves the files match the manifest and nothing about who made them.",
+            err=True,
+        )
+        if confirm_unsigned != manifest.version:
+            typer.echo(
+                f"error: to install it anyway, add --confirm-unsigned {manifest.version}", err=True
+            )
+            raise typer.Exit(1)
     typer.echo(f"upgrading this node to switchyard {manifest.version}")
     for line in manifest.notes.breaking + manifest.notes.action_required:
         typer.echo(f"  note: {line}")
@@ -351,6 +392,7 @@ def apply_cmd(
                 workdir=workdir,
                 healthy=healthy,
                 run=APPLY_RUNNER or SubprocessRunner(),
+                allow_unsigned=allow_unsigned,
             )
         )
     except (ApplyError, BundleError) as exc:

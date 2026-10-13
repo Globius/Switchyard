@@ -27,8 +27,8 @@ from switchyard.domain.versions import (
     Finding,
     check_agent,
     check_backup,
-    parse_version,
     schema_state,
+    version_key,
 )
 from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
@@ -131,7 +131,7 @@ class UpgradeService:
         feed = await self._feed.feed() if self._feed is not None else None
         if feed is not None and self._feed is not None:
             top = latest_release(feed, (await self._feed.config()).channel)
-            running, newest = parse_version(__version__), parse_version(top.version if top else "")
+            running, newest = version_key(__version__), version_key(top.version if top else "")
             if top is not None and running and newest and newest > running:
                 latest = top.version
                 update = {

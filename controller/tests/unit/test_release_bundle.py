@@ -138,3 +138,36 @@ def test_unsafe_names_are_refused_at_build_time(tmp_path: Path) -> None:
             key=KEY,
             key_id="k1",
         )
+
+
+def test_an_unsigned_bundle_is_refused_unless_explicitly_allowed(tmp_path: Path) -> None:
+    src = tmp_path / "compose.yaml"
+    src.write_text("services: {}\n")
+    out = tmp_path / "dev.sybundle"
+    build(
+        out,
+        version="0.2.0-nightly.20261014",
+        schema_head="0047",
+        created_at="2026-10-14T03:00:00Z",
+        inputs=[Input("compose", src, "compose.yaml")],
+        key=None,
+    )
+    with pytest.raises(BundleError, match=r"signature file|missing"):
+        verify(out, TRUSTED)
+    manifest = verify(out, TRUSTED, allow_unsigned=True)
+    assert manifest.version == "0.2.0-nightly.20261014"
+    unpack(out, tmp_path / "x", TRUSTED, allow_unsigned=True)
+    # allowing it does not turn off the hash check
+    bad = tmp_path / "bad.sybundle"
+    rewrite(out, bad, {"files/compose/compose.yaml": b"services: {evil: {}}\n"}, {})
+    with pytest.raises(BundleError, match="does not match the manifest"):
+        verify(bad, TRUSTED, allow_unsigned=True)
+
+
+def test_allow_unsigned_does_not_skip_a_present_but_wrong_signature_check_elsewhere(
+    tmp_path: Path,
+) -> None:
+    # The default stays strict: a signed bundle whose key is unknown is still refused.
+    out = make(tmp_path)
+    with pytest.raises(BundleError, match="not trusted"):
+        verify(out, {})

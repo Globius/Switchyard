@@ -28,10 +28,10 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from switchyard.domain.versions import parse_version
+from switchyard.domain.versions import UNKNOWN, VersionKey, version_key
 
-Channel = Literal["stable", "candidate"]
-_VERSION = r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,16})?$"
+Channel = Literal["stable", "candidate", "nightly"]
+_VERSION = r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,32})?$"
 
 
 class FeedError(Exception):
@@ -138,7 +138,7 @@ def verify_feed(doc: object, trusted: dict[str, str]) -> ReleaseFeed:
 
 
 def latest(feed: ReleaseFeed, channel: Channel = "stable") -> Release | None:
-    """The highest version on ``channel`` (``candidate`` also considers stable releases).
+    """The highest version on `channel`; `candidate` also looks at stable, `nightly` at all three.
 
     Example:
         >>> feed = ReleaseFeed.model_validate({"schema": 1, "releases": [
@@ -147,14 +147,15 @@ def latest(feed: ReleaseFeed, channel: Channel = "stable") -> Release | None:
         >>> latest(feed).version, latest(feed, "candidate").version
         ('0.2.0', '0.3.0-rc1')
     """
-    allowed = {"stable"} if channel == "stable" else {"stable", "candidate"}
+    allowed = {"stable": {"stable"}, "candidate": {"stable", "candidate"}}.get(
+        channel, {"stable", "candidate", "nightly"}
+    )
     best: Release | None = None
-    best_key: tuple[int, int, int, int] | None = None
+    best_key: VersionKey | None = None
     for r in feed.releases:
-        v = parse_version(r.version)
-        if v is None or r.channel not in allowed:
+        key = version_key(r.version)
+        if key is None or r.channel not in allowed:
             continue
-        key = (*v, 0 if "-" in r.version else 1)
         if best_key is None or key > best_key:
             best, best_key = r, key
     return best
@@ -176,7 +177,7 @@ def upgrade_path(feed: ReleaseFeed, current: str, target: str) -> list[str]:
         >>> upgrade_path(feed, "0.1.0", "0.3.0")
         ['0.2.0', '0.3.0']
     """
-    cur, tgt = parse_version(current), parse_version(target)
+    cur, tgt = version_key(current), version_key(target)
     if cur is None or tgt is None or cur >= tgt:
         return []
     by_version = {r.version: r for r in feed.releases}
@@ -188,8 +189,8 @@ def upgrade_path(feed: ReleaseFeed, current: str, target: str) -> list[str]:
             return path
         # the highest listed predecessor that is itself newer than the current version
         steps = sorted(
-            (v for v in release.upgrade_from if (p := parse_version(v)) and p > cur),
-            key=lambda v: parse_version(v) or (0, 0, 0),
+            (v for v in release.upgrade_from if (p := version_key(v)) and p > cur),
+            key=lambda v: version_key(v) or UNKNOWN,
             reverse=True,
         )
         nxt = next((v for v in steps if v not in seen), None)
