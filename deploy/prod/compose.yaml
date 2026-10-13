@@ -61,11 +61,17 @@ x-controller: &controller
     SWITCHYARD_OPENBAO_SECRET_ID: ${OPENBAO_SECRET_ID:-}
     SWITCHYARD_PVE_URL: ${PVE_URL:-}
     SWITCHYARD_PVE_TOKEN_ID: ${PVE_TOKEN_ID:-}
+    # The token secret is read from OpenBao (kv/proxmox/token). PVE_CA_FILE is a path inside the container: put the
+    # Proxmox root CA (/etc/pve/pve-root-ca.pem) next to the mTLS files, for example /run/switchyard/mtls/pve-ca.pem.
+    SWITCHYARD_PVE_CA: ${PVE_CA_FILE:-}
     SWITCHYARD_BUNDLE_KEY_FILE: /run/switchyard/bundle.key
     # mTLS to agents and Data Plane APIs. The controller refuses to start with a bundle key but no CA.
     SWITCHYARD_DATAPLANE_CA: /run/switchyard/mtls/ca.crt
     SWITCHYARD_DATAPLANE_CERT: /run/switchyard/mtls/client.crt
     SWITCHYARD_DATAPLANE_KEY: /run/switchyard/mtls/client.key
+  # Lets the controller reach Proxmox by the name in its certificate when that name does not resolve from the container
+  # (PVE_NAME=pve01 PVE_ADDR=10.0.0.1); harmless when unset.
+  extra_hosts: ["${PVE_NAME:-pve}:${PVE_ADDR:-127.0.0.1}"]
   volumes:
     - ${BUNDLE_KEY_FILE:-./secrets/bundle.key}:/run/switchyard/bundle.key:ro
     - ${MTLS_DIR:-./secrets/mtls}:/run/switchyard/mtls:ro

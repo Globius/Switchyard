@@ -12811,6 +12811,18 @@
             "description": "Seconds since the member's status last changed.",
             "title": "Last Change S"
           },
+          "last_check": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HAProxy's description of the last check (`Layer7 wrong status`, ...).",
+            "title": "Last Check"
+          },
           "server": {
             "title": "Server",
             "type": "string"
