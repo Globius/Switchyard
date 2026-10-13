@@ -1,61 +1,88 @@
-# Cut a release: bundle, signed feed, project key
+# Nightly builds and releases
 
-Who: a maintainer with the release signing key. Result: a signed upgrade bundle, a signed `releases.json` that controllers read, and
-release notes. Design: [ADR 0205](../adr/0205-upgrades-versions-bundles-backups.md), operator side: [upgrades.md](../upgrades.md).
+Who: maintainers. What: how a change becomes a nightly build, how we cut `0.1.0`, `1.0.0` or a release candidate, and how the signing keys
+are made and protected. Design: [ADR 0206](../adr/0206-nightly-and-release-builds.md) (and [0205](../adr/0205-upgrades-versions-bundles-backups.md)
+for the bundles and feeds). Operator side: [upgrades.md](../upgrades.md).
 
-## Once: the project signing key
+## How it works
 
-Do this on a machine you trust, **not** in CI and not on a controller. The private key signs every release; anyone who holds it can make
-controllers recommend (and operators install) their code.
-
-```sh
-syctl release keygen release.pem --key-id release-2026
-# private key written to release.pem
-# trust it with:  --trust release-2026=<base64 public key>
+```text
+merge to main ──► nightly job (03:00 UTC, if something changed) ──► 0.2.0-nightly.20261014, signed with the NIGHTLY key
+                                                                  └─► nightly.json (newest 14), channel "nightly"
+tag v0.2.0 ──────► release job ──► 0.2.0, signed with the RELEASE key ──► bundle + releases.json + SBOMs, channel "stable"
+tag v0.2.0-rc1 ──► the same, channel "candidate"
 ```
 
-1. Store `release.pem` offline (a hardware token, or a password manager entry with restricted access). Back it up in a second place.
-2. Put the printed **public** key in `PROJECT_KEYS` in `controller/switchyard/services/release_feed.py` (key id to base64 public key) and
-   merge that change. Every controller of that version then trusts feeds and bundles signed with it, with no setting needed.
-3. Publish the public key where operators can read it (the release notes and the project README), for sites that pin it themselves with
-   `trusted_keys` or `--trust`.
+- `VERSION` (repo root) is the version **under development**. Nightlies are `<VERSION>-nightly.<date>`. A release tag must name `VERSION`
+  (`v0.2.0` needs `VERSION` = `0.2.0`), or the job refuses before building.
+- Both GitLab and GitHub run the same scripts (`tools/release/`). Only one host publishes: the CI variable `RELEASE_HOST` (`gitlab` by default,
+  `github` to switch). The other host still runs every check.
 
-Rotating: generate a new key, add it to `PROJECT_KEYS` **next to** the old one, release, and drop the old one after the last version
-that trusts only it is out of support. A leaked key is removed in the next release and announced; operators who pinned it must change their pin.
+## Cut a release
 
-## Each release
+1. Make sure `main` is green on the host that publishes and `VERSION` is what you are releasing.
+2. Write `docs/release-notes/<version>.json` ([README](../release-notes/README.md)): `breaking` and `action_required` are shown to operators before
+   they confirm. Set `COMPAT.recommended_min_agent` / `min_agent` in `controller/switchyard/services/upgrade.py` if this release makes older
+   agents second-class. Merge.
+3. Tag and push: `git tag v0.2.0 && git push origin v0.2.0` (a release candidate: `v0.2.0-rc1`). Tags are protected, so only maintainers can.
+4. The pipeline builds the images, chart, agent and bundle, signs, publishes, extends `releases.json` and creates the release. On GitHub the
+   `release` environment needs a reviewer's approval first.
+5. Check from a controller: Admin > Upgrades > Check now shows the version, its notes and the install path.
+6. Set `VERSION` to the next development version in a commit on `main` (`0.2.1` or `0.3.0`) and run `python3 tools/release/version.py stamp <it>`
+   locally only if you want your checkout to match; CI stamps its own copy.
 
-1. Version: set `__version__` (`controller/switchyard/__init__.py`), the agent `Version`, the chart `appVersion`, and raise
-   `COMPAT.recommended_min_agent` / `min_agent` in `controller/switchyard/services/upgrade.py` if this release makes older agents second-class.
-2. Build the artifacts: the controller and proxy images (`docker save`), `helm package deploy/helm/switchyard`, the Compose files, the `sy-agent`
-   binary and the SE template ([build-se-template.md](build-se-template.md)).
-3. Write `notes.json` (`new`, `deprecated`, `breaking`, `action_required`). **Breaking** and **action_required** are shown to the operator before
-   they confirm an upgrade, so say what they must do.
-4. Build and check the bundle:
+`UPGRADE_FROM` (a CI variable, space separated) lists the versions a release may be installed over; leave it empty for "from any". A site further
+behind then gets the chain of releases to go through.
+
+## Nightlies
+
+They run from a pipeline schedule (GitLab: CI/CD > Schedules, daily, branch `main`, variable `NIGHTLY=1`) or the cron in `release.yml` (GitHub).
+Run one by hand with `FORCE_NIGHTLY=1` (GitLab) or the "force nightly" input (GitHub) when nothing changed. They are signed with the nightly key and are
+only seen by installations that chose the `nightly` channel **and** trust that key.
+
+## Setting it up once
+
+1. **Keys.** On a trusted machine (not CI, not a controller):
 
    ```sh
-   syctl release build switchyard-0.2.0.sybundle --key release.pem --key-id release-2026 --version 0.2.0 \
-     --controller-image controller.tar --proxy-image proxy.tar --helm-chart switchyard-0.2.0.tgz \
-     --compose compose.yaml --agent sy-agent --se-template se-template.tar \
-     --upgrade-from 0.1.0 --min-agent 0.1.0 --recommended-min-agent 0.2.0 --notes notes.json
-   syctl release verify switchyard-0.2.0.sybundle --trust release-2026=<public key>
+   syctl release keygen release.pem --key-id release-2026
+   syctl release keygen nightly.pem --key-id nightly-2026
    ```
 
-   `--upgrade-from` lists the versions this release can be installed over. A site further behind gets the chain of releases to go through.
-5. Publish the bundle (a GitLab or GitHub release asset, or any HTTPS location), then build the feed from the published URL. Keep the earlier
-   feed and extend it so older releases stay listed:
+   Each prints a `--trust id=<public key>` line.
+2. Put the **release** public key in `PROJECT_KEYS` (`controller/switchyard/services/release_feed.py`) and merge. Publish both public keys in the
+   release notes so sites that pin keys can. **Never** put the nightly key in `PROJECT_KEYS`.
+3. Store the private keys in CI as base64 on one line (`base64 -w0 release.pem`), then keep the originals offline (a second copy elsewhere):
+   - GitLab (Settings > CI/CD > Variables, **Protected**, and **Masked** since they are one line): `RELEASE_SIGNING_KEY_B64`, `RELEASE_KEY_ID`,
+     `NIGHTLY_SIGNING_KEY_B64`, `NIGHTLY_KEY_ID`. Protect the `v*` tag pattern (Settings > Repository > Protected tags, maintainers only).
+   - GitHub: environments `release` (required reviewers; deployment tag rule `v*`) with `RELEASE_SIGNING_KEY_B64`, `RELEASE_KEY_ID`, and
+     `nightly` with `NIGHTLY_SIGNING_KEY_B64`, `NIGHTLY_KEY_ID`. Repository variable `RELEASE_HOST` = `github` only if GitHub publishes.
+4. The project (or at least its package registry and releases) must be readable without a login, because controllers fetch the feed and bundles
+   anonymously. Feeds: GitLab `https://<gitlab>/api/v4/projects/<id>/packages/generic/switchyard-feed/latest/releases.json` (and `nightly.json`);
+   GitHub `https://github.com/<org>/<repo>/releases/download/feed/releases.json`.
+5. On the first run, check the GitLab feed upload: re-uploading a file with the same name to a generic package must return the newest file when
+   downloaded. If your GitLab keeps the oldest, enable "Do not allow duplicates" off or publish the feed as a Pages file instead.
 
-   ```sh
-   syctl release feed releases.json --key release.pem --key-id release-2026 --channel stable \
-     --previous releases.json --bundle switchyard-0.2.0.sybundle=https://example.com/switchyard-0.2.0.sybundle
-   ```
+## Rotating or losing a key
 
-   It refuses a bundle signed with another key, a plain `http://` URL, and an earlier feed it cannot verify. Publish `releases.json` at the
-   address operators put in Admin > Upgrades (a stable "latest release asset" URL works well). Use `--channel candidate` for a release candidate.
-6. Check from a controller: Admin > Upgrades > Check now should show the new version, its notes and the install path.
+Generate a new key, add its public half to `PROJECT_KEYS` **next to** the old one, release, and drop the old one after the last version that trusts
+only it is out of support. For a leaked key: remove it from `PROJECT_KEYS` in the next release, say so in the notes, and tell operators who pinned
+it. A leaked **nightly** key only affects installations that trust it: remove its secret, make a new one, and tell testers to replace the key.
 
 ## Do not
 
-- Do not sign a feed or bundle on a shared CI runner. If you want CI to build the artifacts, let it stop at the unsigned files and sign on your machine.
-- Do not edit `releases.json` by hand; the signature covers it and a controller will refuse the file.
-- Do not reuse a version number. Controllers and the install-path logic key on it.
+- Do not sign on a shared runner or print the key. The scripts write it to a 0600 temporary file and remove it on exit.
+- Do not edit `releases.json` by hand; the signature covers it and controllers refuse the file.
+- Do not reuse a version number or move a release tag.
+- Do not accept unsigned bundles for production. `syctl release build --unsigned` and `syctl upgrade apply --allow-unsigned --confirm-unsigned
+  <version>` exist for development; the file hashes are still checked but nobody vouches for the bundle.
+
+## By hand (without CI)
+
+```sh
+python3 tools/release/version.py compute nightly            # or: compute release --tag v0.2.0
+sh tools/release/build-artifacts.sh 0.2.0-nightly.20261014 dist   # needs docker, helm, go; stamps the working copy
+RELEASE_SIGNING_KEY="$(cat nightly.pem)" RELEASE_KEY_ID=nightly-2026 sh tools/release/bundle.sh 0.2.0-nightly.20261014 dist
+RELEASE_SIGNING_KEY="$(cat nightly.pem)" RELEASE_KEY_ID=nightly-2026 \
+  sh tools/release/feed.sh dist/switchyard-0.2.0-nightly.20261014.sybundle https://example.com/b.sybundle dist/nightly.json
+```

@@ -1,0 +1,237 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# The same checks as .gitlab-ci.yml, job for job (ADR 0206). The project lives on both hosts; a change that
+# passes one must pass the other. When you change a check, change both files. Releases are in release.yml.
+name: ci
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  schedule:
+    - cron: "41 2 * * *" # the full test run, every night (GitLab: scheduled pipeline)
+  workflow_dispatch:
+    inputs:
+      full_tests:
+        description: Run the full test suite
+        type: boolean
+        default: false
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+
+env:
+  UV_CACHE_DIR: ${{ github.workspace }}/.cache/uv
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      helm: ${{ steps.f.outputs.helm }}
+      se_image: ${{ steps.f.outputs.se_image }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: f
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            helm: ["deploy/helm/**"]
+            se_image: ["se-image/**", "agent/**"]
+
+  lint:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: controller}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: controller}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run mypy
+
+  # Every push and pull request: the tests that need no Docker.
+  test:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: controller}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run pytest -m "not docker"
+
+  # Pull requests: a small container smoke set. Main, tags, the nightly run and manual runs get test-full instead.
+  test-smoke:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: controller}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run python -m tests.ci_pull_images
+      - run: >-
+          uv run pytest -p no:cacheprovider
+          tests/integration/test_rls.py tests/integration/test_apply_pipeline.py
+          "tests/integration/test_golden_haproxy.py::test_haproxy_accepts_rendered_config[01-minimal-http]"
+
+  test-full:
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.full_tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults: {run: {working-directory: controller}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run python -m tests.ci_pull_images
+      - run: uv run pytest --cov --cov-report=term-missing --cov-report=xml
+      - run: uv run coverage report --include="switchyard/domain/*,switchyard/render/*,switchyard/pipeline/*" --fail-under=85
+      - uses: actions/upload-artifact@v4
+        with: {name: coverage, path: controller/coverage.xml}
+
+  openapi-breaking:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: controller}}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: |
+          git show "origin/${{ github.base_ref }}:docs/api/openapi.json" > /tmp/old-openapi.json || exit 0
+          uv run python -m switchyard.api.openapi_check /tmp/old-openapi.json ../docs/api/openapi.json
+
+  # The web UI: lint, format, types, tests, build, and "the generated client matches the spec" (new on both hosts).
+  ui:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: ui}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {package_json_file: ui/package.json}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm, cache-dependency-path: ui/pnpm-lock.yaml}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm gen:api:check
+
+  agent:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: agent}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version-file: agent/go.mod}
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+
+  posture-agent:
+    runs-on: ubuntu-latest
+    defaults: {run: {working-directory: posture-agent}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version-file: posture-agent/go.mod}
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+      - run: GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/sy-posture
+      - run: GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/sy-posture
+      - run: GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/sy-posture
+
+  # Known-vulnerability scans warn instead of failing, like GitLab's allow_failure.
+  audit-python:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: |
+          cd controller
+          uv export --no-dev --no-hashes --frozen -o /tmp/requirements.txt > /dev/null
+          uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip
+
+  audit-go:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version-file: agent/go.mod}
+      - run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+          for d in agent posture-agent provider; do (cd $d && "$(go env GOPATH)/bin/govulncheck" ./...); done
+
+  audit-ui:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {package_json_file: ui/package.json}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22}
+      - run: cd ui && pnpm audit --prod
+
+  se-image:
+    needs: changes
+    if: needs.changes.outputs.se_image == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -q -f se-image/test/Dockerfile -t sy-se-image-test .
+
+  helm:
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with: {version: v3.18.6}
+      - run: sh deploy/helm/test.sh
+
+  reuse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fsfe/reuse-action@v5
+
+  # SBOMs in SPDX JSON on main and on tags (GitLab: the .sbom jobs).
+  sbom:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - {name: switchyard-controller, path: controller}
+          - {name: switchyard-ui, path: ui}
+          - {name: sy-agent, path: agent}
+          - {name: switchyard-provider, path: provider}
+          - {name: switchyard-helm-chart, path: deploy/helm}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anchore/sbom-action@v0
+        with:
+          path: ${{ matrix.path }}
+          format: spdx-json
+          output-file: ${{ matrix.name }}.spdx.json
+          artifact-name: sbom-${{ matrix.name }}

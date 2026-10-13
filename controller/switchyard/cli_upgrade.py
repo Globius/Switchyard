@@ -159,6 +159,9 @@ def feed_cmd(
     key_id: Annotated[str, typer.Option(help="The key's id.")] = "release",
     channel: Annotated[str, typer.Option(help="stable, candidate or nightly.")] = "stable",
     notes_url: Annotated[str | None, typer.Option(help="Release notes page (https).")] = None,
+    keep: Annotated[
+        int | None, typer.Option(help="Keep only the newest N releases of this channel.")
+    ] = None,
     previous: Annotated[
         Path | None, typer.Option(help="An earlier releases.json to add to (must verify).")
     ] = None,
@@ -187,6 +190,7 @@ def feed_cmd(
             pairs,
             channel=channel,  # type: ignore[arg-type]
             notes_url=notes_url,
+            keep=keep,
             previous=load_previous(previous) if previous else None,
         )
     except (BundleError, FeedError, OSError, ValueError) as exc:

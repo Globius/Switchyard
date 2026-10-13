@@ -66,6 +66,7 @@ def build_feed(
     channel: Channel = "stable",
     notes_url: str | None = None,
     previous: dict[str, Any] | None = None,
+    keep: int | None = None,
 ) -> dict[str, Any]:
     """A signed feed document with the ``bundles`` (path and published URL) added to ``previous``.
 
@@ -84,10 +85,12 @@ def build_feed(
     for path, url in bundles:
         manifest = verify(path, trusted)
         releases[manifest.version] = release_entry(manifest, path, url, channel, notes_url)
-    payload = {
+    payload: dict[str, Any] = {
         "schema": 1,
         "releases": sorted(releases.values(), key=lambda r: version_key(r["version"]) or UNKNOWN),
     }
+    if keep is not None:
+        payload["releases"] = _keep_newest(payload["releases"], channel, keep)
     ReleaseFeed.model_validate(payload)  # never sign something controllers would reject
     return sign_feed(payload, key, key_id)
 
@@ -104,3 +107,15 @@ def load_previous(path: Path) -> dict[str, Any]:
 
 
 __all__ = ["BundleError", "FeedError", "build_feed", "load_previous", "release_entry"]
+
+
+def _keep_newest(releases: list[dict[str, Any]], channel: str, keep: int) -> list[dict[str, Any]]:
+    """Drop all but the newest ``keep`` releases of ``channel``; other channels are untouched."""
+    mine = [r for r in releases if r.get("channel", "stable") == channel]
+    newest = sorted(mine, key=lambda r: version_key(r["version"]) or UNKNOWN, reverse=True)[:keep]
+    keep_versions = {r["version"] for r in newest}
+    return [
+        r
+        for r in releases
+        if r.get("channel", "stable") != channel or r["version"] in keep_versions
+    ]
