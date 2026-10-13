@@ -18,6 +18,7 @@ from collections.abc import AsyncIterator, Callable
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import parse_qs, urlencode
 from uuid import UUID
@@ -195,11 +196,27 @@ from switchyard.api.schemas import (
     VirtualServiceStatusRead,
 )
 from switchyard.api.stream_models import EVENTS
+from switchyard.api.upgrade_models import (
+    BackupRestoreIn,
+    BackupRestoreRead,
+    BackupRunIn,
+    BackupRunRead,
+    BackupTargetTestRead,
+    BackupVerifyIn,
+    BackupVerifyRead,
+    ReleaseFeedIn,
+    ReleaseFeedRead,
+    RollActionIn,
+    RollRead,
+    RollStartIn,
+    UpgradeCheckRead,
+)
 from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import crs, permissions
+from switchyard.domain.backup import BackupTargetConfig
 from switchyard.domain.changes import (
     COLLECTION,
     Action,
@@ -221,6 +238,7 @@ from switchyard.services import principals
 from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.alerts import EVENT_ACTIONS, AlertService
 from switchyard.services.autoscale import Autoscaler
+from switchyard.services.backup import BackupService
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
 from switchyard.services.captures import PacketCaptures
 from switchyard.services.cert_requests import CertificateRequests, IssueRequest
@@ -257,7 +275,9 @@ from switchyard.services.kubernetes import KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.probes import MonitorTestService
 from switchyard.services.quota_requests import QuotaRequests
+from switchyard.services.release_feed import ReleaseFeedService
 from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
+from switchyard.services.roll import RollService
 from switchyard.services.sessions import (
     LoginError,
     LoginResult,
@@ -275,6 +295,7 @@ from switchyard.services.status import (
 from switchyard.services.tenants import TenantRecord, TenantService
 from switchyard.services.throttle import source_rule
 from switchyard.services.tokens import TokenService
+from switchyard.services.upgrade import UpgradeService
 from switchyard.services.users import UserRecord, UserService
 
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -318,6 +339,10 @@ class ApiServices:
     devices: DeviceService | None = None
     quota_requests: QuotaRequests = None  # type: ignore[assignment]
     controller_members: ControllerMembers = None  # type: ignore[assignment]
+    upgrade: UpgradeService = None  # type: ignore[assignment]
+    release_feed: ReleaseFeedService = None  # type: ignore[assignment]
+    rolls: RollService = None  # type: ignore[assignment]
+    backup: BackupService = None  # type: ignore[assignment]
     dns_records: DnsRecordSync | None = None
     autoscaler: Autoscaler | None = None
     captures: PacketCaptures = None  # type: ignore[assignment]
@@ -364,6 +389,10 @@ def build_services(
         )
     engines = EngineService(db)
     dns_providers = DnsProviders(db, secrets) if writer is not None else None
+    release_feed = ReleaseFeedService(db)
+    backup = BackupService(
+        db, secrets, Path(os.environ.get("SWITCHYARD_BACKUP_DIR", "/var/lib/switchyard/backups"))
+    )
     return ApiServices(
         db=db,
         tenants=TenantService(db),
@@ -404,6 +433,10 @@ def build_services(
         devices=devices,
         quota_requests=QuotaRequests(db),
         controller_members=ControllerMembers(db),
+        upgrade=UpgradeService(db, backup=backup, feed=release_feed),
+        release_feed=release_feed,
+        rolls=RollService(db),
+        backup=backup,
     )
 
 
@@ -3280,6 +3313,65 @@ def create_app(
         return {"job_id": str(job)}
 
     @router.post(
+        "/tenants/{t}/se-groups/{group}/rolls",
+        status_code=201,
+        tags=["se-groups"],
+        summary="Replace every engine of an SE group with one from a new template",
+        response_model=RollRead,
+        responses=_ok(ex.ROLL, 201) | VALIDATION_RESPONSE,
+    )
+    async def start_roll(
+        group: UUID, body: RollStartIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Roll the group's enabled engines to the template, one at a time.
+
+        For each engine: deploy a replacement, enroll it, reapply the group, wait for the group
+        health score (80 or more) and a smoke check, retire the old engine, wait again. A step
+        that fails or takes too long **pauses** the roll with both engines in place; resume it
+        or abort it. Needs the group's autoscale `deploy` and `enroll` settings (autoscaling
+        itself may be off). `404` when the group has no enabled engines, `409` when it already
+        has a roll in progress. Requires `tenant-admin`.
+        """
+        view = await svc.rolls.start(
+            who,
+            tenant.id,
+            group,
+            template_vmid=body.template_vmid,
+            target_version=body.target_version,
+            request_id=_rid(),
+        )
+        return _roll_json(view)
+
+    @router.get(
+        "/tenants/{t}/rolls",
+        tags=["se-groups"],
+        summary="Engine rolls, newest first",
+        response_model=list[RollRead],
+        responses=_ok([ex.ROLL]),
+    )
+    async def list_rolls(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Running, paused and finished rolls with each engine's phase and the log."""
+        return [_roll_json(r) for r in await svc.rolls.list(who, tenant.id)]
+
+    @router.post(
+        "/tenants/{t}/rolls/{roll}",
+        tags=["se-groups"],
+        summary="Pause, resume or abort a roll",
+        response_model=RollRead,
+        responses=_ok(ex.ROLL) | VALIDATION_RESPONSE,
+    )
+    async def control_roll(
+        roll: UUID, body: RollActionIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Abort ends the roll: replaced engines stay replaced and the old one keeps serving.
+
+        Resuming a paused roll repeats the step that failed. `409` for a finished roll.
+        Requires `tenant-admin`.
+        """
+        view = await svc.rolls.control(who, tenant.id, roll, body.action, request_id=_rid())
+        return _roll_json(view)
+
+    @router.post(
         "/tenants/{t}/change-sets/{cs}/discard",
         tags=["change-sets"],
         summary="Discard a draft",
@@ -4434,6 +4526,184 @@ def create_app(
             reached_at=f"{proto}://{host}" if host else None,
         )
         return asdict(view)
+
+    @router.get(
+        "/system/backup-targets",
+        tags=["system"],
+        summary="Where configuration backups are written",
+        response_model=list[BackupTargetConfig],
+        responses=_ok([ex.BACKUP_TARGET]),
+    )
+    async def list_backup_targets(who: Who, svc: Services) -> list[BackupTargetConfig]:
+        """Destinations: local disk, S3-compatible storage or FTP/FTPS.
+
+        Credentials are
+        `secret_ref`s into the secrets backend, never values. Requires a system administrator.
+        """
+        return await svc.backup.list_targets(who)
+
+    @router.post(
+        "/system/backup-targets",
+        status_code=201,
+        tags=["system"],
+        summary="Add a backup destination",
+        response_model=BackupTargetConfig,
+        responses=_ok(ex.BACKUP_TARGET, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_backup_target(
+        body: BackupTargetConfig, who: Who, svc: Services
+    ) -> BackupTargetConfig:
+        """Add a destination.
+
+        Archives are encrypted with the secret at `passphrase_ref` before they leave the
+        controller. `keep` is how many archives to retain; older ones are deleted after each
+        backup. Keep the passphrase somewhere other than the backup: without it an archive
+        cannot be opened.
+        """
+        return await svc.backup.create_target(who, body.model_dump(), request_id=_rid())
+
+    @router.delete(
+        "/system/backup-targets/{name}",
+        status_code=204,
+        tags=["system"],
+        summary="Remove a backup destination",
+        responses=VALIDATION_RESPONSE,
+    )
+    async def delete_backup_target(name: str, who: Who, svc: Services) -> Response:
+        """Archives already written stay where they are."""
+        await svc.backup.delete_target(who, name, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.post(
+        "/system/backup-targets/{name}/test",
+        tags=["system"],
+        summary="Check that a destination works",
+        response_model=BackupTargetTestRead,
+        responses=_ok({"archives": ["switchyard-0.1.0-20261013T040000Z.syb"]}),
+    )
+    async def test_backup_target(name: str, who: Who, svc: Services) -> dict[str, Any]:
+        """Connects with the stored credentials and lists the archives. Writes nothing."""
+        return {"archives": await svc.backup.test_target(who, name)}
+
+    @router.get(
+        "/system/backups",
+        tags=["system"],
+        summary="Backup attempts, newest first",
+        response_model=list[BackupRunRead],
+        responses=_ok([ex.BACKUP_RUN]),
+    )
+    async def list_backups(who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Successful and failed runs, including the `pre-upgrade` ones."""
+        return [_backup_json(r) for r in await svc.backup.list_runs(who)]
+
+    @router.post(
+        "/system/backups",
+        status_code=201,
+        tags=["system"],
+        summary="Back up the configuration now",
+        response_model=BackupRunRead,
+        responses=_ok(ex.BACKUP_RUN, 201) | VALIDATION_RESPONSE,
+    )
+    async def run_backup(body: BackupRunIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Write the desired state of every tenant, encrypted, to the named destination.
+
+        This is not a database backup: users, tokens and the audit log come back from
+        pgBackRest. `409` when the destination or the passphrase cannot be used.
+        """
+        return _backup_json(
+            await svc.backup.run(who, body.target, reason=body.reason, request_id=_rid())
+        )
+
+    @router.post(
+        "/system/backups/verify",
+        tags=["system"],
+        summary="Open an archive and report what it holds",
+        response_model=BackupVerifyRead,
+        responses=_ok(ex.BACKUP_VERIFY),
+    )
+    async def verify_backup(body: BackupVerifyIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Downloads, decrypts and counts the objects. Changes nothing."""
+        return await svc.backup.verify(who, body.target, body.archive)
+
+    @router.post(
+        "/system/backups/restore",
+        tags=["system"],
+        summary="Restore tenants from a backup into this controller",
+        response_model=BackupRestoreRead,
+        responses=_ok(ex.BACKUP_RESTORE) | VALIDATION_RESPONSE,
+    )
+    async def restore_backup(body: BackupRestoreIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Load every tenant of the archive. Meant for a fresh controller.
+
+        Desired state only: users, tokens and the audit log are not in a backup. `409` when a
+        tenant with the same id or name already exists (nothing is written), or when the
+        archive cannot be opened. Use `dry_run` first. Restored tenants have no engines.
+        """
+        return await svc.backup.restore(
+            who, body.target, body.archive, dry_run=body.dry_run, request_id=_rid()
+        )
+
+    @router.get(
+        "/system/releases",
+        tags=["system"],
+        summary="The release feed settings and the releases it lists",
+        response_model=ReleaseFeedRead,
+        responses=_ok(ex.RELEASE_FEED),
+    )
+    async def get_release_feed(who: Who, svc: Services) -> dict[str, Any]:
+        """Shows whether newer versions are looked for, where, and what the last check found.
+
+        Requires a system administrator.
+        """
+        return await _release_feed_json(svc, who)
+
+    @router.put(
+        "/system/releases",
+        tags=["system"],
+        summary="Set where to look for newer releases",
+        response_model=ReleaseFeedRead,
+        responses=_ok(ex.RELEASE_FEED) | VALIDATION_RESPONSE,
+    )
+    async def put_release_feed(body: ReleaseFeedIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Turn the update check on or off.
+
+        Off by default. The controller makes one HTTPS GET per day to the URL, with nothing
+        about this installation in the request, and uses the answer only if its Ed25519
+        signature verifies against the project's keys or the `trusted_keys` given here.
+        """
+        await svc.release_feed.set_config(who, body.model_dump(), request_id=_rid())
+        return await _release_feed_json(svc, who)
+
+    @router.post(
+        "/system/releases/check",
+        tags=["system"],
+        summary="Look for newer releases now",
+        response_model=ReleaseFeedRead,
+        responses=_ok(ex.RELEASE_FEED),
+    )
+    async def check_releases_now(who: Who, svc: Services) -> dict[str, Any]:
+        """Fetch and verify the feed immediately.
+
+        A failure is reported in `error`; the
+        previous verified releases stay available.
+        """
+        await svc.release_feed.refresh(who)
+        return await _release_feed_json(svc, who)
+
+    @router.get(
+        "/system/upgrade/check",
+        tags=["system"],
+        summary="Versions of the controller, database and engines, with advice",
+        response_model=UpgradeCheckRead,
+        responses=_ok(ex.UPGRADE_CHECK),
+    )
+    async def upgrade_check(who: Who, svc: Services) -> dict[str, Any]:
+        """Compare this controller, its schema and every engine's agent with the newest release.
+
+        It only advises: an engine on an old agent keeps receiving configuration. Findings with
+        severity `warning` or `error` carry the action to take. Requires a system administrator.
+        """
+        return (await svc.upgrade.check(who)).as_dict()
 
     @router.get(
         "/system/controller/members",
@@ -6019,3 +6289,23 @@ def create_app(
     app.include_router(router)
     app.openapi = lambda: _problem_json_openapi(app)  # type: ignore[method-assign]
     return app
+
+
+def _backup_json(r: Any) -> dict[str, Any]:
+    out = asdict(r)
+    out["id"], out["created_at"] = str(r.id), r.created_at.isoformat()
+    return out
+
+
+async def _release_feed_json(svc: ApiServices, who: Any) -> dict[str, Any]:
+    cfg, state = await svc.release_feed.config(who), await svc.release_feed.state()
+    return {**asdict(cfg), **asdict(state)}
+
+
+def _roll_json(view: Any) -> dict[str, Any]:
+    out = asdict(view)
+    out["id"], out["se_group_id"] = str(view.id), str(view.se_group_id)
+    out["created_at"], out["updated_at"] = view.created_at.isoformat(), view.updated_at.isoformat()
+    out.pop("tenant_id", None)
+    out["steps"] = [{k: s[k] for k in ("old", "new", "phase")} for s in view.steps]
+    return out

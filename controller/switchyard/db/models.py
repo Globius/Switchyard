@@ -38,11 +38,13 @@ from switchyard.db import (
     acme_models,  # noqa: F401  (registers the ACME and DNS provider tables)
     alert_models,  # noqa: F401  (registers the alerting tables)
     auth_models,  # noqa: F401  (registers the login tables)
+    backup_models,  # noqa: F401  (registers the backup tables)
     controller_models,  # noqa: F401  (registers the controller member table)
     gslb_models,  # noqa: F401  (registers the GSLB tables)
     k8s_models,  # noqa: F401  (registers the Kubernetes cluster table)
     ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
     portal_models,  # noqa: F401  (registers the quota request table)
+    roll_models,  # noqa: F401  (registers the engine roll table)
 )
 from switchyard.db.base import (
     Base,

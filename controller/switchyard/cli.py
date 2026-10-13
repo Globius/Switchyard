@@ -35,6 +35,10 @@ from switchyard.services.seed import seed_example
 app = typer.Typer(help="Switchyard command-line client.", no_args_is_help=True)
 db_app = typer.Typer(help="Database maintenance.", no_args_is_help=True)
 app.add_typer(db_app, name="db")
+from switchyard.cli_upgrade import release_app, upgrade_app  # noqa: E402
+
+app.add_typer(release_app, name="release")
+app.add_typer(upgrade_app, name="upgrade")
 
 DatabaseUrl = Annotated[
     str,

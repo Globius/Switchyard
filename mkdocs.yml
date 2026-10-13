@@ -42,6 +42,7 @@ nav:
   - Guides:
       - Quickstart - a test instance on its own machine: quickstart.md
       - Production guide: production.md
+      - Upgrades: upgrades.md
       - Run on Kubernetes: deploy-kubernetes.md
       - Running and operating the controller: operating.md
       - The controller's own address, VIP and certificate: controller-settings.md

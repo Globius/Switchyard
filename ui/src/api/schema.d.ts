@@ -886,6 +886,165 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/backup-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where configuration backups are written
+         * @description Destinations: local disk, S3-compatible storage or FTP/FTPS.
+         *
+         *     Credentials are
+         *     `secret_ref`s into the secrets backend, never values. Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_backup_targets_api_v1_system_backup_targets_get"];
+        put?: never;
+        /**
+         * Add a backup destination
+         * @description Add a destination.
+         *
+         *     Archives are encrypted with the secret at `passphrase_ref` before they leave the
+         *     controller. `keep` is how many archives to retain; older ones are deleted after each
+         *     backup. Keep the passphrase somewhere other than the backup: without it an archive
+         *     cannot be opened.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_backup_target_api_v1_system_backup_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/backup-targets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a backup destination
+         * @description Archives already written stay where they are.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_backup_target_api_v1_system_backup_targets__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/backup-targets/{name}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check that a destination works
+         * @description Connects with the stored credentials and lists the archives. Writes nothing.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["test_backup_target_api_v1_system_backup_targets__name__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Backup attempts, newest first
+         * @description Successful and failed runs, including the `pre-upgrade` ones.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_backups_api_v1_system_backups_get"];
+        put?: never;
+        /**
+         * Back up the configuration now
+         * @description Write the desired state of every tenant, encrypted, to the named destination.
+         *
+         *     This is not a database backup: users, tokens and the audit log come back from
+         *     pgBackRest. `409` when the destination or the passphrase cannot be used.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["run_backup_api_v1_system_backups_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/backups/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore tenants from a backup into this controller
+         * @description Load every tenant of the archive. Meant for a fresh controller.
+         *
+         *     Desired state only: users, tokens and the audit log are not in a backup. `409` when a
+         *     tenant with the same id or name already exists (nothing is written), or when the
+         *     archive cannot be opened. Use `dry_run` first. Restored tenants have no engines.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["restore_backup_api_v1_system_backups_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/backups/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open an archive and report what it holds
+         * @description Downloads, decrypts and counts the objects. Changes nothing.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["verify_backup_api_v1_system_backups_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/break-glass": {
         parameters: {
             query?: never;
@@ -1133,6 +1292,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The release feed settings and the releases it lists
+         * @description Shows whether newer versions are looked for, where, and what the last check found.
+         *
+         *     Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["get_release_feed_api_v1_system_releases_get"];
+        /**
+         * Set where to look for newer releases
+         * @description Turn the update check on or off.
+         *
+         *     Off by default. The controller makes one HTTPS GET per day to the URL, with nothing
+         *     about this installation in the request, and uses the answer only if its Ed25519
+         *     signature verifies against the project's keys or the `trusted_keys` given here.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        put: operations["put_release_feed_api_v1_system_releases_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/releases/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Look for newer releases now
+         * @description Fetch and verify the feed immediately.
+         *
+         *     A failure is reported in `error`; the
+         *     previous verified releases stay available.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["check_releases_now_api_v1_system_releases_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/settings": {
         parameters: {
             query?: never;
@@ -1209,6 +1427,31 @@ export interface paths {
          *     **Access:** `system-admin` only.
          */
         delete: operations["revoke_system_token_api_v1_system_tokens__token__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/upgrade/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Versions of the controller, database and engines, with advice
+         * @description Compare this controller, its schema and every engine's agent with the newest release.
+         *
+         *     It only advises: an engine on an old agent keeps receiving configuration. Findings with
+         *     severity `warning` or `error` carry the action to take. Requires a system administrator.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["upgrade_check_api_v1_system_upgrade_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3586,6 +3829,53 @@ export interface paths {
         patch: operations["patch_tenant_role_mapping_api_v1_tenants__t__role_mappings__mapping__patch"];
         trace?: never;
     };
+    "/api/v1/tenants/{t}/rolls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Engine rolls, newest first
+         * @description Running, paused and finished rolls with each engine's phase and the log.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_rolls_api_v1_tenants__t__rolls_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/rolls/{roll}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause, resume or abort a roll
+         * @description Abort ends the roll: replaced engines stay replaced and the old one keeps serving.
+         *
+         *     Resuming a paused roll repeats the step that failed. `409` for a finished roll.
+         *     Requires `tenant-admin`.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["control_roll_api_v1_tenants__t__rolls__roll__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tenants/{t}/routing-profiles": {
         parameters: {
             query?: never;
@@ -3792,6 +4082,35 @@ export interface paths {
          *     **Access:** `operator` or higher in the tenant.
          */
         post: operations["reapply_group_api_v1_tenants__t__se_groups__group__reapply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/se-groups/{group}/rolls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace every engine of an SE group with one from a new template
+         * @description Roll the group's enabled engines to the template, one at a time.
+         *
+         *     For each engine: deploy a replacement, enroll it, reapply the group, wait for the group
+         *     health score (80 or more) and a smoke check, retire the old engine, wait again. A step
+         *     that fails or takes too long **pauses** the roll with both engines in place; resume it
+         *     or abort it. Needs the group's autoscale `deploy` and `enroll` settings (autoscaling
+         *     itself may be off). `404` when the group has no enabled engines, `409` when it already
+         *     has a roll in progress. Requires `tenant-admin`.
+         *
+         *     **Access:** `operator` or higher in the tenant.
+         */
+        post: operations["start_roll_api_v1_tenants__t__se_groups__group__rolls_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6067,6 +6386,158 @@ export interface components {
             services: string[];
         };
         /**
+         * BackupRestoreIn
+         * @description Which archive to load.
+         */
+        BackupRestoreIn: {
+            /** Archive */
+            archive: string;
+            /**
+             * Dry Run
+             * @description Report what would be restored; write nothing.
+             * @default false
+             */
+            dry_run: boolean;
+            /** Target */
+            target: string;
+        };
+        /**
+         * BackupRestoreRead
+         * @description What the archive holds, and whether it was restored.
+         */
+        BackupRestoreRead: {
+            /** Controller Version */
+            controller_version: string;
+            /** Created At */
+            created_at: string;
+            /** Restored */
+            restored: boolean;
+            /** Schema Revision */
+            schema_revision: string | null;
+            /** Tenants */
+            tenants: components["schemas"]["BackupTenantSummary"][];
+        };
+        /**
+         * BackupRunIn
+         * @description Which destination to back up to.
+         */
+        BackupRunIn: {
+            /**
+             * Reason
+             * @default manual
+             * @enum {string}
+             */
+            reason: "manual" | "pre-upgrade" | "scheduled";
+            /**
+             * Target
+             * @description The name of a backup target.
+             */
+            target: string;
+        };
+        /**
+         * BackupRunRead
+         * @description One backup attempt. A failed run keeps the reason but never any credential.
+         */
+        BackupRunRead: {
+            /** Actor */
+            actor: string;
+            /** Archive */
+            archive: string | null;
+            /** Controller Version */
+            controller_version: string;
+            /** Created At */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** Id */
+            id: string;
+            /** Reason */
+            reason: string;
+            /** Schema Revision */
+            schema_revision: string | null;
+            /** Sha256 */
+            sha256: string | null;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "failed";
+            /** Target */
+            target: string;
+            /** Tenants */
+            tenants: number;
+        };
+        /**
+         * BackupTargetConfig
+         * @description A named backup destination plus the secret that encrypts archives sent to it.
+         */
+        BackupTargetConfig: {
+            /**
+             * Keep
+             * @default 14
+             */
+            keep: number;
+            /** Name */
+            name: string;
+            /** Passphrase Ref */
+            passphrase_ref: string;
+            /** Target */
+            target: components["schemas"]["LocalTarget"] | components["schemas"]["S3Target"] | components["schemas"]["FtpTarget"] | components["schemas"]["SftpTarget"];
+        };
+        /**
+         * BackupTargetTestRead
+         * @description The archives found at a destination.
+         */
+        BackupTargetTestRead: {
+            /** Archives */
+            archives: string[];
+        };
+        /**
+         * BackupTenantSummary
+         * @description Object counts of one tenant inside an archive.
+         */
+        BackupTenantSummary: {
+            /** Certificates */
+            certificates: number;
+            /** Name */
+            name: string;
+            /** Pools */
+            pools: number;
+            /** Se Groups */
+            se_groups: number;
+            /** Virtual Services */
+            virtual_services: number;
+        };
+        /**
+         * BackupVerifyIn
+         * @description Which archive to open.
+         */
+        BackupVerifyIn: {
+            /**
+             * Archive
+             * @description An archive name as listed by the target, `.syb`.
+             */
+            archive: string;
+            /** Target */
+            target: string;
+        };
+        /**
+         * BackupVerifyRead
+         * @description What a decrypted archive holds. Counts only; no object content is returned.
+         */
+        BackupVerifyRead: {
+            /** Controller Version */
+            controller_version: string;
+            /** Created At */
+            created_at: string;
+            /** Schema Revision */
+            schema_revision: string | null;
+            /** Tenants */
+            tenants: components["schemas"]["BackupTenantSummary"][];
+        };
+        /**
          * BgpPeer
          * @description An upstream BGP neighbour (for example a tenant's FortiGate VDOM).
          *
@@ -6373,6 +6844,18 @@ export interface components {
              * @description How long it stays on: 1 to 1440, default 240.
              */
             ttl_minutes?: number | null;
+        };
+        /**
+         * BundleRead
+         * @description An upgrade bundle to download and what it must hash to.
+         */
+        BundleRead: {
+            /** Sha256 */
+            sha256: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Url */
+            url: string;
         };
         /**
          * CaImportIn
@@ -8689,6 +9172,23 @@ export interface components {
             vcpus?: number | null;
         };
         /**
+         * EngineVersionRead
+         * @description An engine and the agent version it last reported.
+         */
+        EngineVersionRead: {
+            /**
+             * Agent Version
+             * @description `null` until the agent has reported.
+             */
+            agent_version: string | null;
+            /** Engine Id */
+            engine_id: string;
+            /** Name */
+            name: string;
+            /** Tenant Id */
+            tenant_id: string;
+        };
+        /**
          * EnrollIn
          * @description Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential).
          */
@@ -8909,6 +9409,34 @@ export interface components {
             status: string;
         };
         /**
+         * FindingRead
+         * @description One finding of the upgrade check.
+         */
+        FindingRead: {
+            /**
+             * Action
+             * @description What to do about it; empty when nothing is needed.
+             */
+            action: string;
+            /**
+             * Code
+             * @description Stable code, for example `agent_behind`.
+             */
+            code: string;
+            /** Message */
+            message: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "error";
+            /**
+             * Subject
+             * @description What it is about: an engine name or `database`.
+             */
+            subject: string;
+        };
+        /**
          * FlowCondition
          * @description When a step applies (ADR 0195); everything given must hold.
          *
@@ -8963,6 +9491,38 @@ export interface components {
             /** Server */
             server?: string | null;
             when?: components["schemas"]["FlowCondition"] | null;
+        };
+        /**
+         * FtpTarget
+         * @description An FTP server. ``tls`` uses explicit FTPS; plain FTP sends the password in clear.
+         */
+        FtpTarget: {
+            /**
+             * Directory
+             * @default
+             */
+            directory: string;
+            /** Host */
+            host: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "ftp";
+            /** Password Ref */
+            password_ref: string;
+            /**
+             * Port
+             * @default 21
+             */
+            port: number;
+            /**
+             * Tls
+             * @default true
+             */
+            tls: boolean;
+            /** Username */
+            username: string;
         };
         /**
          * GrafanaLaunchIn
@@ -10375,6 +10935,22 @@ export interface components {
             type: "local";
             /** Users */
             users: components["schemas"]["LocalUser"][];
+        };
+        /**
+         * LocalTarget
+         * @description A directory on the controller's disk. ``path`` is under the configured backup root.
+         */
+        LocalTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "local";
+            /**
+             * Path
+             * @default
+             */
+            path: string;
         };
         /**
          * LocalUser
@@ -13009,6 +13585,134 @@ export interface components {
             redirect: components["schemas"]["RedirectAction"];
         };
         /**
+         * ReleaseFeedIn
+         * @description Where to look for newer releases. Off until `enabled` is true.
+         */
+        ReleaseFeedIn: {
+            /**
+             * Channel
+             * @default stable
+             * @enum {string}
+             */
+            channel: "stable" | "candidate";
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Trusted Keys
+             * @description Extra trusted signing keys: key id to base64 Ed25519 public key (32 bytes).
+             */
+            trusted_keys?: {
+                [key: string]: string;
+            };
+            /**
+             * Url
+             * @description An https URL of the signed `releases.json`.
+             * @default
+             */
+            url: string;
+        };
+        /**
+         * ReleaseFeedRead
+         * @description The feed settings and what the last fetch found.
+         */
+        ReleaseFeedRead: {
+            /**
+             * Channel
+             * @default stable
+             * @enum {string}
+             */
+            channel: "stable" | "candidate";
+            /**
+             * Checked At
+             * @description When the feed was last fetched.
+             */
+            checked_at?: string | null;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Error
+             * @description Why the last fetch failed, if it did.
+             */
+            error?: string | null;
+            /** Latest Version */
+            latest_version?: string | null;
+            /**
+             * Ok
+             * @description Whether a verified feed is stored.
+             */
+            ok?: boolean | null;
+            /**
+             * Releases
+             * @description Verified releases, with notes and upgrade paths.
+             */
+            releases?: components["schemas"]["ReleaseRead"][];
+            /**
+             * Trusted Keys
+             * @description Extra trusted signing keys: key id to base64 Ed25519 public key (32 bytes).
+             */
+            trusted_keys?: {
+                [key: string]: string;
+            };
+            /**
+             * Url
+             * @description An https URL of the signed `releases.json`.
+             * @default
+             */
+            url: string;
+        };
+        /**
+         * ReleaseNotesRead
+         * @description What a release changes, in the groups an operator reads before confirming.
+         */
+        ReleaseNotesRead: {
+            /** Action Required */
+            action_required?: string[];
+            /** Breaking */
+            breaking?: string[];
+            /** Deprecated */
+            deprecated?: string[];
+            /** New */
+            new?: string[];
+        };
+        /**
+         * ReleaseRead
+         * @description One release from the verified feed.
+         */
+        ReleaseRead: {
+            bundle?: components["schemas"]["BundleRead"] | null;
+            /**
+             * Channel
+             * @default stable
+             * @enum {string}
+             */
+            channel: "stable" | "candidate";
+            /** Date */
+            date: string;
+            /**
+             * Min Agent
+             * @default 0.0.0
+             */
+            min_agent: string;
+            notes?: components["schemas"]["ReleaseNotesRead"];
+            /** Notes Url */
+            notes_url?: string | null;
+            /**
+             * Recommended Min Agent
+             * @default 0.0.0
+             */
+            recommended_min_agent: string;
+            /** Upgrade From */
+            upgrade_from?: string[];
+            /** Version */
+            version: string;
+        };
+        /**
          * RemoveHeader
          * @description Remove every value of a header.
          */
@@ -13568,6 +14272,81 @@ export interface components {
             version: number;
         };
         /**
+         * RollActionIn
+         * @description What to do with a roll.
+         */
+        RollActionIn: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "pause" | "resume" | "abort";
+        };
+        /**
+         * RollRead
+         * @description A roll and where it is.
+         */
+        RollRead: {
+            /** Created At */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Id */
+            id: string;
+            /** Log */
+            log: string[];
+            /**
+             * Reason
+             * @description Why it paused, when it did.
+             */
+            reason: string;
+            /** Se Group Id */
+            se_group_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "paused" | "aborted" | "done";
+            /** Steps */
+            steps: components["schemas"]["RollStepRead"][];
+            /** Target Version */
+            target_version: string | null;
+            /** Template Vmid */
+            template_vmid: number;
+            /** Updated At */
+            updated_at: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * RollStartIn
+         * @description Replace every enabled engine of an SE group with one cloned from a new template.
+         */
+        RollStartIn: {
+            /**
+             * Target Version
+             * @description The release this template carries, for the record.
+             */
+            target_version?: string | null;
+            /**
+             * Template Vmid
+             * @description The Proxmox template to clone.
+             */
+            template_vmid: number;
+        };
+        /**
+         * RollStepRead
+         * @description One engine of a roll.
+         */
+        RollStepRead: {
+            /** New */
+            new: string | null;
+            /** Old */
+            old: string;
+            /** Phase */
+            phase: string;
+        };
+        /**
          * RouteMatch
          * @description Request match shared by routes and policy rules; every condition given must hold (AND).
          *
@@ -13709,6 +14488,35 @@ export interface components {
              * @description The stamps are equal and the text is the same as the desired file, so a hand edit that kept the stamp shows as `false`.
              */
             matches_desired: boolean;
+        };
+        /**
+         * S3Target
+         * @description An S3-compatible bucket (AWS, MinIO, Ceph, Backblaze B2, ...). Path-style addressing.
+         */
+        S3Target: {
+            /** Access Key Ref */
+            access_key_ref: string;
+            /** Bucket */
+            bucket: string;
+            /** Endpoint */
+            endpoint: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "s3";
+            /**
+             * Prefix
+             * @default
+             */
+            prefix: string;
+            /**
+             * Region
+             * @default us-east-1
+             */
+            region: string;
+            /** Secret Key Ref */
+            secret_key_ref: string;
         };
         /**
          * SamlConnector
@@ -14246,6 +15054,35 @@ export interface components {
             variable?: components["schemas"]["HeaderVariable"] | null;
         };
         /**
+         * SftpTarget
+         * @description A server reached over SSH (SFTP). The host key is pinned; there is no trust on first use.
+         */
+        SftpTarget: {
+            /**
+             * Directory
+             * @default
+             */
+            directory: string;
+            /** Host */
+            host: string;
+            /** Host Key Sha256 */
+            host_key_sha256: string;
+            /** Key Ref */
+            key_ref: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "sftp";
+            /**
+             * Port
+             * @default 22
+             */
+            port: number;
+            /** Username */
+            username: string;
+        };
+        /**
          * Snapshot
          * @description All desired-state objects visible to a render or a validation run.
          *
@@ -14682,6 +15519,53 @@ export interface components {
              * Format: uuid
              */
             se_group_id: string;
+        };
+        /**
+         * UpdateRead
+         * @description The newer release the feed found and how to get there.
+         */
+        UpdateRead: {
+            bundle: components["schemas"]["BundleRead"] | null;
+            /** Date */
+            date: string;
+            notes: components["schemas"]["ReleaseNotesRead"];
+            /** Notes Url */
+            notes_url: string | null;
+            /**
+             * Path
+             * @description Versions to install in order; one element is a direct step.
+             */
+            path: string[];
+            /** Version */
+            version: string;
+        };
+        /**
+         * UpgradeCheckRead
+         * @description Versions found and what to do about them. Nothing here blocks an engine or a request.
+         */
+        UpgradeCheckRead: {
+            /** Controller Version */
+            controller_version: string;
+            /** Engines */
+            engines: components["schemas"]["EngineVersionRead"][];
+            /** Findings */
+            findings: components["schemas"]["FindingRead"][];
+            /**
+             * Latest Version
+             * @description The newest known release (this controller until a feed says otherwise).
+             */
+            latest_version: string;
+            /** Schema Current */
+            schema_current: string | null;
+            /** Schema Head */
+            schema_head: string;
+            /**
+             * Schema State
+             * @enum {string}
+             */
+            schema_state: "current" | "pending" | "newer";
+            /** @description The newer release the feed found: version, notes, upgrade path and bundle. */
+            update?: components["schemas"]["UpdateRead"] | null;
         };
         /**
          * UserDetail
@@ -19795,6 +20679,639 @@ export interface operations {
             };
         };
     };
+    list_backup_targets_api_v1_system_backup_targets_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "keep": 14,
+                     *         "name": "nightly",
+                     *         "passphrase_ref": "secret/backup/passphrase",
+                     *         "target": {
+                     *           "access_key_ref": "secret/backup/access-key",
+                     *           "bucket": "sy-backups",
+                     *           "endpoint": "https://s3.example.test",
+                     *           "kind": "s3",
+                     *           "prefix": "controller",
+                     *           "region": "us-east-1",
+                     *           "secret_key_ref": "secret/backup/secret-key"
+                     *         }
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["BackupTargetConfig"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_backup_target_api_v1_system_backup_targets_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "keep": 14,
+                 *       "name": "nightly",
+                 *       "passphrase_ref": "secret/backup/passphrase",
+                 *       "target": {
+                 *         "access_key_ref": "secret/backup/access-key",
+                 *         "bucket": "sy-backups",
+                 *         "endpoint": "https://s3.example.test",
+                 *         "kind": "s3",
+                 *         "secret_key_ref": "secret/backup/secret-key"
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["BackupTargetConfig"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "keep": 14,
+                     *       "name": "nightly",
+                     *       "passphrase_ref": "secret/backup/passphrase",
+                     *       "target": {
+                     *         "access_key_ref": "secret/backup/access-key",
+                     *         "bucket": "sy-backups",
+                     *         "endpoint": "https://s3.example.test",
+                     *         "kind": "s3",
+                     *         "prefix": "controller",
+                     *         "region": "us-east-1",
+                     *         "secret_key_ref": "secret/backup/secret-key"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BackupTargetConfig"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_backup_target_api_v1_system_backup_targets__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Return only the object with exactly this name. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    test_backup_target_api_v1_system_backup_targets__name__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Return only the object with exactly this name. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "archives": [
+                     *         "switchyard-0.1.0-20261013T040000Z.syb"
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BackupTargetTestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_backups_api_v1_system_backups_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "actor": "user:admin",
+                     *         "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                     *         "controller_version": "0.1.0",
+                     *         "created_at": "2026-10-13T04:00:00+00:00",
+                     *         "id": "0190a5f2-0000-7000-8000-000000000010",
+                     *         "reason": "pre-upgrade",
+                     *         "schema_revision": "0046",
+                     *         "sha256": "9f2c0e5c1d6b8a7e3f4a5b6c7d8e9f00112233445566778899aabbccddeeff00",
+                     *         "size_bytes": 48211,
+                     *         "status": "ok",
+                     *         "target": "nightly",
+                     *         "tenants": 3
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["BackupRunRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    run_backup_api_v1_system_backups_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "reason": "pre-upgrade",
+                 *       "target": "nightly"
+                 *     }
+                 */
+                "application/json": components["schemas"]["BackupRunIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "actor": "user:admin",
+                     *       "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                     *       "controller_version": "0.1.0",
+                     *       "created_at": "2026-10-13T04:00:00+00:00",
+                     *       "id": "0190a5f2-0000-7000-8000-000000000010",
+                     *       "reason": "pre-upgrade",
+                     *       "schema_revision": "0046",
+                     *       "sha256": "9f2c0e5c1d6b8a7e3f4a5b6c7d8e9f00112233445566778899aabbccddeeff00",
+                     *       "size_bytes": 48211,
+                     *       "status": "ok",
+                     *       "target": "nightly",
+                     *       "tenants": 3
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BackupRunRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    restore_backup_api_v1_system_backups_restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                 *       "dry_run": true,
+                 *       "target": "nightly"
+                 *     }
+                 */
+                "application/json": components["schemas"]["BackupRestoreIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "controller_version": "0.1.0",
+                     *       "created_at": "2026-10-13T04:00:00+00:00",
+                     *       "restored": true,
+                     *       "schema_revision": "0046",
+                     *       "tenants": [
+                     *         {
+                     *           "certificates": 5,
+                     *           "name": "acme",
+                     *           "pools": 14,
+                     *           "se_groups": 2,
+                     *           "virtual_services": 12
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BackupRestoreRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    verify_backup_api_v1_system_backups_verify_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                 *       "target": "nightly"
+                 *     }
+                 */
+                "application/json": components["schemas"]["BackupVerifyIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "controller_version": "0.1.0",
+                     *       "created_at": "2026-10-13T04:00:00+00:00",
+                     *       "schema_revision": "0046",
+                     *       "tenants": [
+                     *         {
+                     *           "certificates": 5,
+                     *           "name": "acme",
+                     *           "pools": 14,
+                     *           "se_groups": 2,
+                     *           "virtual_services": 12
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["BackupVerifyRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_break_glass_api_v1_system_break_glass_get: {
         parameters: {
             query?: never;
@@ -21054,6 +22571,281 @@ export interface operations {
             };
         };
     };
+    get_release_feed_api_v1_system_releases_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "channel": "stable",
+                     *       "checked_at": "2026-10-13T04:00:00+00:00",
+                     *       "enabled": true,
+                     *       "latest_version": "0.2.0",
+                     *       "ok": true,
+                     *       "releases": [
+                     *         {
+                     *           "channel": "stable",
+                     *           "date": "2026-10-20",
+                     *           "notes": {
+                     *             "action_required": [
+                     *               "Back up first"
+                     *             ],
+                     *             "new": [
+                     *               "Upgrade checks"
+                     *             ]
+                     *           },
+                     *           "upgrade_from": [
+                     *             "0.1.0"
+                     *           ],
+                     *           "version": "0.2.0"
+                     *         }
+                     *       ],
+                     *       "trusted_keys": {},
+                     *       "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ReleaseFeedRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    put_release_feed_api_v1_system_releases_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "channel": "stable",
+                 *       "enabled": true,
+                 *       "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ReleaseFeedIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "channel": "stable",
+                     *       "checked_at": "2026-10-13T04:00:00+00:00",
+                     *       "enabled": true,
+                     *       "latest_version": "0.2.0",
+                     *       "ok": true,
+                     *       "releases": [
+                     *         {
+                     *           "channel": "stable",
+                     *           "date": "2026-10-20",
+                     *           "notes": {
+                     *             "action_required": [
+                     *               "Back up first"
+                     *             ],
+                     *             "new": [
+                     *               "Upgrade checks"
+                     *             ]
+                     *           },
+                     *           "upgrade_from": [
+                     *             "0.1.0"
+                     *           ],
+                     *           "version": "0.2.0"
+                     *         }
+                     *       ],
+                     *       "trusted_keys": {},
+                     *       "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ReleaseFeedRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    check_releases_now_api_v1_system_releases_check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "channel": "stable",
+                     *       "checked_at": "2026-10-13T04:00:00+00:00",
+                     *       "enabled": true,
+                     *       "latest_version": "0.2.0",
+                     *       "ok": true,
+                     *       "releases": [
+                     *         {
+                     *           "channel": "stable",
+                     *           "date": "2026-10-20",
+                     *           "notes": {
+                     *             "action_required": [
+                     *               "Back up first"
+                     *             ],
+                     *             "new": [
+                     *               "Upgrade checks"
+                     *             ]
+                     *           },
+                     *           "upgrade_from": [
+                     *             "0.1.0"
+                     *           ],
+                     *           "version": "0.2.0"
+                     *         }
+                     *       ],
+                     *       "trusted_keys": {},
+                     *       "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ReleaseFeedRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     get_system_settings_api_v1_system_settings_get: {
         parameters: {
             query?: never;
@@ -21383,6 +23175,91 @@ export interface operations {
                 };
             };
             /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    upgrade_check_api_v1_system_upgrade_check_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "controller_version": "0.1.0",
+                     *       "engines": [
+                     *         {
+                     *           "agent_version": "0.0.9",
+                     *           "engine_id": "0190a5f2-0000-7000-8000-000000000001",
+                     *           "name": "se-1",
+                     *           "tenant_id": "0190a5f2-0000-7000-8000-000000000002"
+                     *         }
+                     *       ],
+                     *       "findings": [
+                     *         {
+                     *           "action": "Upgrade the engine to the latest template (runbooks/rolling-upgrade.md).",
+                     *           "code": "agent_behind",
+                     *           "message": "Agent 0.0.9 is behind 0.1.0.",
+                     *           "severity": "warning",
+                     *           "subject": "se-1"
+                     *         }
+                     *       ],
+                     *       "latest_version": "0.1.0",
+                     *       "schema_current": "0041",
+                     *       "schema_head": "0041",
+                     *       "schema_state": "current"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["UpgradeCheckRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -33819,6 +35696,210 @@ export interface operations {
             };
         };
     };
+    list_rolls_api_v1_tenants__t__rolls_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "created_at": "2026-10-13T04:00:00+00:00",
+                     *         "created_by": "user:admin",
+                     *         "id": "0190a5f2-0000-7000-8000-000000000020",
+                     *         "log": [
+                     *           "se-1: deploying replacement",
+                     *           "se-1b: deployed"
+                     *         ],
+                     *         "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                     *         "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                     *         "status": "paused",
+                     *         "steps": [
+                     *           {
+                     *             "new": "se-1b",
+                     *             "old": "se-1",
+                     *             "phase": "awaiting_enrollment"
+                     *           },
+                     *           {
+                     *             "old": "se-2",
+                     *             "phase": "pending"
+                     *           }
+                     *         ],
+                     *         "target_version": "0.2.0",
+                     *         "template_vmid": 9770,
+                     *         "updated_at": "2026-10-13T05:00:00+00:00",
+                     *         "version": 3
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["RollRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    control_roll_api_v1_tenants__t__rolls__roll__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Engine roll id. */
+                roll: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "action": "pause"
+                 *     }
+                 */
+                "application/json": components["schemas"]["RollActionIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-13T04:00:00+00:00",
+                     *       "created_by": "user:admin",
+                     *       "id": "0190a5f2-0000-7000-8000-000000000020",
+                     *       "log": [
+                     *         "se-1: deploying replacement",
+                     *         "se-1b: deployed"
+                     *       ],
+                     *       "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                     *       "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                     *       "status": "paused",
+                     *       "steps": [
+                     *         {
+                     *           "new": "se-1b",
+                     *           "old": "se-1",
+                     *           "phase": "awaiting_enrollment"
+                     *         },
+                     *         {
+                     *           "old": "se-2",
+                     *           "phase": "pending"
+                     *         }
+                     *       ],
+                     *       "target_version": "0.2.0",
+                     *       "template_vmid": 9770,
+                     *       "updated_at": "2026-10-13T05:00:00+00:00",
+                     *       "version": 3
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RollRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_routing_profiles_api_v1_tenants__t__routing_profiles_get: {
         parameters: {
             query?: {
@@ -35091,6 +37172,118 @@ export interface operations {
                 };
             };
             /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    start_roll_api_v1_tenants__t__se_groups__group__rolls_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description SE group id. */
+                group: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "target_version": "0.2.0",
+                 *       "template_vmid": 9770
+                 *     }
+                 */
+                "application/json": components["schemas"]["RollStartIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "created_at": "2026-10-13T04:00:00+00:00",
+                     *       "created_by": "user:admin",
+                     *       "id": "0190a5f2-0000-7000-8000-000000000020",
+                     *       "log": [
+                     *         "se-1: deploying replacement",
+                     *         "se-1b: deployed"
+                     *       ],
+                     *       "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                     *       "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                     *       "status": "paused",
+                     *       "steps": [
+                     *         {
+                     *           "new": "se-1b",
+                     *           "old": "se-1",
+                     *           "phase": "awaiting_enrollment"
+                     *         },
+                     *         {
+                     *           "old": "se-2",
+                     *           "phase": "pending"
+                     *         }
+                     *       ],
+                     *       "target_version": "0.2.0",
+                     *       "template_vmid": 9770,
+                     *       "updated_at": "2026-10-13T05:00:00+00:00",
+                     *       "version": 3
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RollRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
                 headers: {
                     [name: string]: unknown;

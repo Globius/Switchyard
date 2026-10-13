@@ -3244,6 +3244,380 @@
         "title": "AviVipRead",
         "type": "object"
       },
+      "BackupRestoreIn": {
+        "additionalProperties": false,
+        "description": "Which archive to load.",
+        "properties": {
+          "archive": {
+            "title": "Archive",
+            "type": "string"
+          },
+          "dry_run": {
+            "default": false,
+            "description": "Report what would be restored; write nothing.",
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "archive"
+        ],
+        "title": "BackupRestoreIn",
+        "type": "object"
+      },
+      "BackupRestoreRead": {
+        "additionalProperties": false,
+        "description": "What the archive holds, and whether it was restored.",
+        "properties": {
+          "controller_version": {
+            "title": "Controller Version",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "restored": {
+            "title": "Restored",
+            "type": "boolean"
+          },
+          "schema_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Revision"
+          },
+          "tenants": {
+            "items": {
+              "$ref": "#/components/schemas/BackupTenantSummary"
+            },
+            "title": "Tenants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "controller_version",
+          "schema_revision",
+          "created_at",
+          "tenants",
+          "restored"
+        ],
+        "title": "BackupRestoreRead",
+        "type": "object"
+      },
+      "BackupRunIn": {
+        "additionalProperties": false,
+        "description": "Which destination to back up to.",
+        "properties": {
+          "reason": {
+            "default": "manual",
+            "enum": [
+              "manual",
+              "pre-upgrade",
+              "scheduled"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "target": {
+            "description": "The name of a backup target.",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target"
+        ],
+        "title": "BackupRunIn",
+        "type": "object"
+      },
+      "BackupRunRead": {
+        "additionalProperties": false,
+        "description": "One backup attempt. A failed run keeps the reason but never any credential.",
+        "properties": {
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "archive": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archive"
+          },
+          "controller_version": {
+            "title": "Controller Version",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "schema_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Revision"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "tenants": {
+            "title": "Tenants",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "target",
+          "archive",
+          "status",
+          "error",
+          "size_bytes",
+          "sha256",
+          "controller_version",
+          "schema_revision",
+          "tenants",
+          "reason",
+          "actor",
+          "created_at"
+        ],
+        "title": "BackupRunRead",
+        "type": "object"
+      },
+      "BackupTargetConfig": {
+        "additionalProperties": false,
+        "description": "A named backup destination plus the secret that encrypts archives sent to it.",
+        "properties": {
+          "keep": {
+            "default": 14,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Keep",
+            "type": "integer"
+          },
+          "name": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "passphrase_ref": {
+            "pattern": "^[A-Za-z0-9._/:-]{1,200}$",
+            "title": "Passphrase Ref",
+            "type": "string"
+          },
+          "target": {
+            "discriminator": {
+              "mapping": {
+                "ftp": "#/components/schemas/FtpTarget",
+                "local": "#/components/schemas/LocalTarget",
+                "s3": "#/components/schemas/S3Target",
+                "sftp": "#/components/schemas/SftpTarget"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LocalTarget"
+              },
+              {
+                "$ref": "#/components/schemas/S3Target"
+              },
+              {
+                "$ref": "#/components/schemas/FtpTarget"
+              },
+              {
+                "$ref": "#/components/schemas/SftpTarget"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "name",
+          "target",
+          "passphrase_ref"
+        ],
+        "title": "BackupTargetConfig",
+        "type": "object"
+      },
+      "BackupTargetTestRead": {
+        "additionalProperties": false,
+        "description": "The archives found at a destination.",
+        "properties": {
+          "archives": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Archives",
+            "type": "array"
+          }
+        },
+        "required": [
+          "archives"
+        ],
+        "title": "BackupTargetTestRead",
+        "type": "object"
+      },
+      "BackupTenantSummary": {
+        "additionalProperties": false,
+        "description": "Object counts of one tenant inside an archive.",
+        "properties": {
+          "certificates": {
+            "title": "Certificates",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pools": {
+            "title": "Pools",
+            "type": "integer"
+          },
+          "se_groups": {
+            "title": "Se Groups",
+            "type": "integer"
+          },
+          "virtual_services": {
+            "title": "Virtual Services",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "virtual_services",
+          "pools",
+          "se_groups",
+          "certificates"
+        ],
+        "title": "BackupTenantSummary",
+        "type": "object"
+      },
+      "BackupVerifyIn": {
+        "additionalProperties": false,
+        "description": "Which archive to open.",
+        "properties": {
+          "archive": {
+            "description": "An archive name as listed by the target, `.syb`.",
+            "title": "Archive",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "archive"
+        ],
+        "title": "BackupVerifyIn",
+        "type": "object"
+      },
+      "BackupVerifyRead": {
+        "additionalProperties": false,
+        "description": "What a decrypted archive holds. Counts only; no object content is returned.",
+        "properties": {
+          "controller_version": {
+            "title": "Controller Version",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "schema_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Revision"
+          },
+          "tenants": {
+            "items": {
+              "$ref": "#/components/schemas/BackupTenantSummary"
+            },
+            "title": "Tenants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "controller_version",
+          "schema_revision",
+          "created_at",
+          "tenants"
+        ],
+        "title": "BackupVerifyRead",
+        "type": "object"
+      },
       "BgpPeer": {
         "additionalProperties": false,
         "description": "An upstream BGP neighbour (for example a tenant's FortiGate VDOM).\n\nAttributes:\n    peer_ip: Neighbour address.\n    remote_asn: Neighbour AS number.\n    md5_ref: OpenBao reference of the session password; the password itself is never stored.\n    max_prefixes: Prefix limit for this neighbour; overrides the profile's ``max_prefixes``.",
@@ -3930,6 +4304,31 @@
           "enabled"
         ],
         "title": "BreakGlassSwitchIn",
+        "type": "object"
+      },
+      "BundleRead": {
+        "additionalProperties": false,
+        "description": "An upgrade bundle to download and what it must hash to.",
+        "properties": {
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "sha256",
+          "size_bytes"
+        ],
+        "title": "BundleRead",
         "type": "object"
       },
       "CaImportIn": {
@@ -8890,6 +9289,44 @@
         "title": "EngineSummary",
         "type": "object"
       },
+      "EngineVersionRead": {
+        "additionalProperties": false,
+        "description": "An engine and the agent version it last reported.",
+        "properties": {
+          "agent_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`null` until the agent has reported.",
+            "title": "Agent Version"
+          },
+          "engine_id": {
+            "title": "Engine Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "engine_id",
+          "name",
+          "tenant_id",
+          "agent_version"
+        ],
+        "title": "EngineVersionRead",
+        "type": "object"
+      },
       "EnrollIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential).",
@@ -9311,6 +9748,49 @@
         "title": "FailingMember",
         "type": "object"
       },
+      "FindingRead": {
+        "additionalProperties": false,
+        "description": "One finding of the upgrade check.",
+        "properties": {
+          "action": {
+            "description": "What to do about it; empty when nothing is needed.",
+            "title": "Action",
+            "type": "string"
+          },
+          "code": {
+            "description": "Stable code, for example `agent_behind`.",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "subject": {
+            "description": "What it is about: an engine name or `database`.",
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "subject",
+          "message",
+          "action"
+        ],
+        "title": "FindingRead",
+        "type": "object"
+      },
       "FlowCondition": {
         "additionalProperties": false,
         "description": "When a step applies (ADR 0195); everything given must hold.\n\nAttributes:\n    groups_any: The person has at least one of these groups from the steps already passed.\n    source_in: The client address is inside one of these networks.\n    source_not_in: The client address is outside all of these networks.",
@@ -9413,6 +9893,58 @@
           "name"
         ],
         "title": "FlowStep",
+        "type": "object"
+      },
+      "FtpTarget": {
+        "additionalProperties": false,
+        "description": "An FTP server. ``tls`` uses explicit FTPS; plain FTP sends the password in clear.",
+        "properties": {
+          "directory": {
+            "default": "",
+            "pattern": "^[A-Za-z0-9._/-]{0,200}$",
+            "title": "Directory",
+            "type": "string"
+          },
+          "host": {
+            "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$",
+            "title": "Host",
+            "type": "string"
+          },
+          "kind": {
+            "const": "ftp",
+            "default": "ftp",
+            "title": "Kind",
+            "type": "string"
+          },
+          "password_ref": {
+            "pattern": "^[A-Za-z0-9._/:-]{1,200}$",
+            "title": "Password Ref",
+            "type": "string"
+          },
+          "port": {
+            "default": 21,
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "type": "integer"
+          },
+          "tls": {
+            "default": true,
+            "title": "Tls",
+            "type": "boolean"
+          },
+          "username": {
+            "pattern": "^[A-Za-z0-9._@-]{1,64}$",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "username",
+          "password_ref"
+        ],
+        "title": "FtpTarget",
         "type": "object"
       },
       "GrafanaLaunchIn": {
@@ -12449,6 +12981,26 @@
           "users"
         ],
         "title": "LocalConnector",
+        "type": "object"
+      },
+      "LocalTarget": {
+        "additionalProperties": false,
+        "description": "A directory on the controller's disk. ``path`` is under the configured backup root.",
+        "properties": {
+          "kind": {
+            "const": "local",
+            "default": "local",
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "pattern": "^[A-Za-z0-9._/-]{0,200}$",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "title": "LocalTarget",
         "type": "object"
       },
       "LocalUser": {
@@ -18240,6 +18792,239 @@
         "title": "RedirectRule",
         "type": "object"
       },
+      "ReleaseFeedIn": {
+        "additionalProperties": false,
+        "description": "Where to look for newer releases. Off until `enabled` is true.",
+        "properties": {
+          "channel": {
+            "default": "stable",
+            "enum": [
+              "stable",
+              "candidate"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "trusted_keys": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Extra trusted signing keys: key id to base64 Ed25519 public key (32 bytes).",
+            "title": "Trusted Keys",
+            "type": "object"
+          },
+          "url": {
+            "default": "",
+            "description": "An https URL of the signed `releases.json`.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "title": "ReleaseFeedIn",
+        "type": "object"
+      },
+      "ReleaseFeedRead": {
+        "additionalProperties": false,
+        "description": "The feed settings and what the last fetch found.",
+        "properties": {
+          "channel": {
+            "default": "stable",
+            "enum": [
+              "stable",
+              "candidate"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the feed was last fetched.",
+            "title": "Checked At"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last fetch failed, if it did.",
+            "title": "Error"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether a verified feed is stored.",
+            "title": "Ok"
+          },
+          "releases": {
+            "description": "Verified releases, with notes and upgrade paths.",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseRead"
+            },
+            "title": "Releases",
+            "type": "array"
+          },
+          "trusted_keys": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Extra trusted signing keys: key id to base64 Ed25519 public key (32 bytes).",
+            "title": "Trusted Keys",
+            "type": "object"
+          },
+          "url": {
+            "default": "",
+            "description": "An https URL of the signed `releases.json`.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "title": "ReleaseFeedRead",
+        "type": "object"
+      },
+      "ReleaseNotesRead": {
+        "additionalProperties": false,
+        "description": "What a release changes, in the groups an operator reads before confirming.",
+        "properties": {
+          "action_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Action Required",
+            "type": "array"
+          },
+          "breaking": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Breaking",
+            "type": "array"
+          },
+          "deprecated": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Deprecated",
+            "type": "array"
+          },
+          "new": {
+            "items": {
+              "type": "string"
+            },
+            "title": "New",
+            "type": "array"
+          }
+        },
+        "title": "ReleaseNotesRead",
+        "type": "object"
+      },
+      "ReleaseRead": {
+        "additionalProperties": false,
+        "description": "One release from the verified feed.",
+        "properties": {
+          "bundle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channel": {
+            "default": "stable",
+            "enum": [
+              "stable",
+              "candidate"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "min_agent": {
+            "default": "0.0.0",
+            "title": "Min Agent",
+            "type": "string"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/ReleaseNotesRead"
+          },
+          "notes_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes Url"
+          },
+          "recommended_min_agent": {
+            "default": "0.0.0",
+            "title": "Recommended Min Agent",
+            "type": "string"
+          },
+          "upgrade_from": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Upgrade From",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "date"
+        ],
+        "title": "ReleaseRead",
+        "type": "object"
+      },
       "RemoveHeader": {
         "additionalProperties": false,
         "description": "Remove every value of a header.",
@@ -19390,6 +20175,177 @@
         "title": "RoleMappingRead",
         "type": "object"
       },
+      "RollActionIn": {
+        "additionalProperties": false,
+        "description": "What to do with a roll.",
+        "properties": {
+          "action": {
+            "enum": [
+              "pause",
+              "resume",
+              "abort"
+            ],
+            "title": "Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "RollActionIn",
+        "type": "object"
+      },
+      "RollRead": {
+        "additionalProperties": false,
+        "description": "A roll and where it is.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "log": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Log",
+            "type": "array"
+          },
+          "reason": {
+            "description": "Why it paused, when it did.",
+            "title": "Reason",
+            "type": "string"
+          },
+          "se_group_id": {
+            "title": "Se Group Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "paused",
+              "aborted",
+              "done"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/RollStepRead"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "target_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Version"
+          },
+          "template_vmid": {
+            "title": "Template Vmid",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "se_group_id",
+          "status",
+          "reason",
+          "template_vmid",
+          "target_version",
+          "steps",
+          "log",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "RollRead",
+        "type": "object"
+      },
+      "RollStartIn": {
+        "additionalProperties": false,
+        "description": "Replace every enabled engine of an SE group with one cloned from a new template.",
+        "properties": {
+          "target_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The release this template carries, for the record.",
+            "title": "Target Version"
+          },
+          "template_vmid": {
+            "description": "The Proxmox template to clone.",
+            "minimum": 100.0,
+            "title": "Template Vmid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "template_vmid"
+        ],
+        "title": "RollStartIn",
+        "type": "object"
+      },
+      "RollStepRead": {
+        "additionalProperties": false,
+        "description": "One engine of a roll.",
+        "properties": {
+          "new": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New"
+          },
+          "old": {
+            "title": "Old",
+            "type": "string"
+          },
+          "phase": {
+            "title": "Phase",
+            "type": "string"
+          }
+        },
+        "required": [
+          "old",
+          "new",
+          "phase"
+        ],
+        "title": "RollStepRead",
+        "type": "object"
+      },
       "RouteMatch": {
         "additionalProperties": false,
         "description": "Request match shared by routes and policy rules; every condition given must hold (AND).\n\nAttributes:\n    host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).\n    path_prefix: Path starts with this.\n    path_exact: Path equals this. Not together with ``path_prefix``.\n    methods: Request method is one of these.\n    headers: Request header conditions, all of which must hold.\n    query: Query-string parameter conditions, all of which must hold.\n    source_cidrs: Client address is inside one of these networks (after client-IP restoration).\n    sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a\n        port without TLS.\n\nExample:\n    >>> RouteMatch(methods=[\"GET\"], path_prefix=\"/api\").is_empty\n    False\n    >>> RouteMatch().is_empty\n    True",
@@ -19695,6 +20651,58 @@
           "matches_desired"
         ],
         "title": "RunningHaproxyRead",
+        "type": "object"
+      },
+      "S3Target": {
+        "additionalProperties": false,
+        "description": "An S3-compatible bucket (AWS, MinIO, Ceph, Backblaze B2, ...). Path-style addressing.",
+        "properties": {
+          "access_key_ref": {
+            "pattern": "^[A-Za-z0-9._/:-]{1,200}$",
+            "title": "Access Key Ref",
+            "type": "string"
+          },
+          "bucket": {
+            "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$",
+            "title": "Bucket",
+            "type": "string"
+          },
+          "endpoint": {
+            "pattern": "^https://[A-Za-z0-9.-]+(:\\d{1,5})?$",
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "kind": {
+            "const": "s3",
+            "default": "s3",
+            "title": "Kind",
+            "type": "string"
+          },
+          "prefix": {
+            "default": "",
+            "pattern": "^[A-Za-z0-9._/-]{0,200}$",
+            "title": "Prefix",
+            "type": "string"
+          },
+          "region": {
+            "default": "us-east-1",
+            "pattern": "^[a-z0-9-]{1,32}$",
+            "title": "Region",
+            "type": "string"
+          },
+          "secret_key_ref": {
+            "pattern": "^[A-Za-z0-9._/:-]{1,200}$",
+            "title": "Secret Key Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint",
+          "bucket",
+          "access_key_ref",
+          "secret_key_ref"
+        ],
+        "title": "S3Target",
         "type": "object"
       },
       "SamlConnector": {
@@ -21014,6 +22022,59 @@
         "title": "SetHeader",
         "type": "object"
       },
+      "SftpTarget": {
+        "additionalProperties": false,
+        "description": "A server reached over SSH (SFTP). The host key is pinned; there is no trust on first use.",
+        "properties": {
+          "directory": {
+            "default": "",
+            "pattern": "^[A-Za-z0-9._/-]{0,200}$",
+            "title": "Directory",
+            "type": "string"
+          },
+          "host": {
+            "pattern": "^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$",
+            "title": "Host",
+            "type": "string"
+          },
+          "host_key_sha256": {
+            "pattern": "^SHA256:[A-Za-z0-9+/]{43}$",
+            "title": "Host Key Sha256",
+            "type": "string"
+          },
+          "key_ref": {
+            "pattern": "^[A-Za-z0-9._/:-]{1,200}$",
+            "title": "Key Ref",
+            "type": "string"
+          },
+          "kind": {
+            "const": "sftp",
+            "default": "sftp",
+            "title": "Kind",
+            "type": "string"
+          },
+          "port": {
+            "default": 22,
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port",
+            "type": "integer"
+          },
+          "username": {
+            "pattern": "^[A-Za-z0-9._-]{1,64}$",
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "username",
+          "host_key_sha256",
+          "key_ref"
+        ],
+        "title": "SftpTarget",
+        "type": "object"
+      },
       "Snapshot": {
         "additionalProperties": false,
         "description": "All desired-state objects visible to a render or a validation run.\n\nAttributes:\n    tenants: Tenants that own the objects below.\n    networks: Networks.\n    vip_pools: VIP pools.\n    se_groups: SE groups.\n    virtual_services: Virtual services.\n    pools: Pools.\n    health_monitors: Health monitors.\n    certificates: Certificate metadata.\n    policy_sets: Redirect and allow-list policy sets.\n    routing_profiles: VRRP and BGP profiles of SE groups.",
@@ -21888,6 +22949,137 @@
           "observed_at"
         ],
         "title": "UnreachableEngine",
+        "type": "object"
+      },
+      "UpdateRead": {
+        "additionalProperties": false,
+        "description": "The newer release the feed found and how to get there.",
+        "properties": {
+          "bundle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/ReleaseNotesRead"
+          },
+          "notes_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes Url"
+          },
+          "path": {
+            "description": "Versions to install in order; one element is a direct step.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "date",
+          "notes_url",
+          "notes",
+          "path",
+          "bundle"
+        ],
+        "title": "UpdateRead",
+        "type": "object"
+      },
+      "UpgradeCheckRead": {
+        "additionalProperties": false,
+        "description": "Versions found and what to do about them. Nothing here blocks an engine or a request.",
+        "properties": {
+          "controller_version": {
+            "title": "Controller Version",
+            "type": "string"
+          },
+          "engines": {
+            "items": {
+              "$ref": "#/components/schemas/EngineVersionRead"
+            },
+            "title": "Engines",
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingRead"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "latest_version": {
+            "description": "The newest known release (this controller until a feed says otherwise).",
+            "title": "Latest Version",
+            "type": "string"
+          },
+          "schema_current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Current"
+          },
+          "schema_head": {
+            "title": "Schema Head",
+            "type": "string"
+          },
+          "schema_state": {
+            "enum": [
+              "current",
+              "pending",
+              "newer"
+            ],
+            "title": "Schema State",
+            "type": "string"
+          },
+          "update": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdateRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newer release the feed found: version, notes, upgrade path and bundle."
+          }
+        },
+        "required": [
+          "controller_version",
+          "latest_version",
+          "schema_current",
+          "schema_head",
+          "schema_state",
+          "engines",
+          "findings"
+        ],
+        "title": "UpgradeCheckRead",
         "type": "object"
       },
       "UserDetail": {
@@ -30371,6 +31563,838 @@
         "x-required-role": "authenticated"
       }
     },
+    "/api/v1/system/backup-targets": {
+      "get": {
+        "description": "Destinations: local disk, S3-compatible storage or FTP/FTPS.\n\nCredentials are\n`secret_ref`s into the secrets backend, never values. Requires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "list_backup_targets_api_v1_system_backup_targets_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "keep": 14,
+                    "name": "nightly",
+                    "passphrase_ref": "secret/backup/passphrase",
+                    "target": {
+                      "access_key_ref": "secret/backup/access-key",
+                      "bucket": "sy-backups",
+                      "endpoint": "https://s3.example.test",
+                      "kind": "s3",
+                      "prefix": "controller",
+                      "region": "us-east-1",
+                      "secret_key_ref": "secret/backup/secret-key"
+                    }
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BackupTargetConfig"
+                  },
+                  "title": "Response List Backup Targets Api V1 System Backup Targets Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Where configuration backups are written",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "post": {
+        "description": "Add a destination.\n\nArchives are encrypted with the secret at `passphrase_ref` before they leave the\ncontroller. `keep` is how many archives to retain; older ones are deleted after each\nbackup. Keep the passphrase somewhere other than the backup: without it an archive\ncannot be opened.\n\n**Access:** `system-admin` only.",
+        "operationId": "create_backup_target_api_v1_system_backup_targets_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "keep": 14,
+                "name": "nightly",
+                "passphrase_ref": "secret/backup/passphrase",
+                "target": {
+                  "access_key_ref": "secret/backup/access-key",
+                  "bucket": "sy-backups",
+                  "endpoint": "https://s3.example.test",
+                  "kind": "s3",
+                  "secret_key_ref": "secret/backup/secret-key"
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/BackupTargetConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "keep": 14,
+                  "name": "nightly",
+                  "passphrase_ref": "secret/backup/passphrase",
+                  "target": {
+                    "access_key_ref": "secret/backup/access-key",
+                    "bucket": "sy-backups",
+                    "endpoint": "https://s3.example.test",
+                    "kind": "s3",
+                    "prefix": "controller",
+                    "region": "us-east-1",
+                    "secret_key_ref": "secret/backup/secret-key"
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BackupTargetConfig"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Add a backup destination",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/backup-targets/{name}": {
+      "delete": {
+        "description": "Archives already written stay where they are.\n\n**Access:** `system-admin` only.",
+        "operationId": "delete_backup_target_api_v1_system_backup_targets__name__delete",
+        "parameters": [
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Remove a backup destination",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/backup-targets/{name}/test": {
+      "post": {
+        "description": "Connects with the stored credentials and lists the archives. Writes nothing.\n\n**Access:** `system-admin` only.",
+        "operationId": "test_backup_target_api_v1_system_backup_targets__name__test_post",
+        "parameters": [
+          {
+            "description": "Return only the object with exactly this name.",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "archives": [
+                    "switchyard-0.1.0-20261013T040000Z.syb"
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BackupTargetTestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check that a destination works",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/backups": {
+      "get": {
+        "description": "Successful and failed runs, including the `pre-upgrade` ones.\n\n**Access:** `system-admin` only.",
+        "operationId": "list_backups_api_v1_system_backups_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "actor": "user:admin",
+                    "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                    "controller_version": "0.1.0",
+                    "created_at": "2026-10-13T04:00:00+00:00",
+                    "id": "0190a5f2-0000-7000-8000-000000000010",
+                    "reason": "pre-upgrade",
+                    "schema_revision": "0046",
+                    "sha256": "9f2c0e5c1d6b8a7e3f4a5b6c7d8e9f00112233445566778899aabbccddeeff00",
+                    "size_bytes": 48211,
+                    "status": "ok",
+                    "target": "nightly",
+                    "tenants": 3
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BackupRunRead"
+                  },
+                  "title": "Response List Backups Api V1 System Backups Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Backup attempts, newest first",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "post": {
+        "description": "Write the desired state of every tenant, encrypted, to the named destination.\n\nThis is not a database backup: users, tokens and the audit log come back from\npgBackRest. `409` when the destination or the passphrase cannot be used.\n\n**Access:** `system-admin` only.",
+        "operationId": "run_backup_api_v1_system_backups_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "reason": "pre-upgrade",
+                "target": "nightly"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/BackupRunIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "actor": "user:admin",
+                  "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                  "controller_version": "0.1.0",
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "id": "0190a5f2-0000-7000-8000-000000000010",
+                  "reason": "pre-upgrade",
+                  "schema_revision": "0046",
+                  "sha256": "9f2c0e5c1d6b8a7e3f4a5b6c7d8e9f00112233445566778899aabbccddeeff00",
+                  "size_bytes": 48211,
+                  "status": "ok",
+                  "target": "nightly",
+                  "tenants": 3
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BackupRunRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Back up the configuration now",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/backups/restore": {
+      "post": {
+        "description": "Load every tenant of the archive. Meant for a fresh controller.\n\nDesired state only: users, tokens and the audit log are not in a backup. `409` when a\ntenant with the same id or name already exists (nothing is written), or when the\narchive cannot be opened. Use `dry_run` first. Restored tenants have no engines.\n\n**Access:** `system-admin` only.",
+        "operationId": "restore_backup_api_v1_system_backups_restore_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                "dry_run": true,
+                "target": "nightly"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/BackupRestoreIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "controller_version": "0.1.0",
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "restored": true,
+                  "schema_revision": "0046",
+                  "tenants": [
+                    {
+                      "certificates": 5,
+                      "name": "acme",
+                      "pools": 14,
+                      "se_groups": 2,
+                      "virtual_services": 12
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BackupRestoreRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Restore tenants from a backup into this controller",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/backups/verify": {
+      "post": {
+        "description": "Downloads, decrypts and counts the objects. Changes nothing.\n\n**Access:** `system-admin` only.",
+        "operationId": "verify_backup_api_v1_system_backups_verify_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                "target": "nightly"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/BackupVerifyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "controller_version": "0.1.0",
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "schema_revision": "0046",
+                  "tenants": [
+                    {
+                      "certificates": 5,
+                      "name": "acme",
+                      "pools": 14,
+                      "se_groups": 2,
+                      "virtual_services": 12
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BackupVerifyRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Open an archive and report what it holds",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
     "/api/v1/system/break-glass": {
       "get": {
         "description": "Whether the break-glass login is on, why, until when, and whether an administrator is enrolled.\n\n**Access:** `system-admin` only.",
@@ -31975,6 +33999,346 @@
         "x-required-role": "system-admin"
       }
     },
+    "/api/v1/system/releases": {
+      "get": {
+        "description": "Shows whether newer versions are looked for, where, and what the last check found.\n\nRequires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "get_release_feed_api_v1_system_releases_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "channel": "stable",
+                  "checked_at": "2026-10-13T04:00:00+00:00",
+                  "enabled": true,
+                  "latest_version": "0.2.0",
+                  "ok": true,
+                  "releases": [
+                    {
+                      "channel": "stable",
+                      "date": "2026-10-20",
+                      "notes": {
+                        "action_required": [
+                          "Back up first"
+                        ],
+                        "new": [
+                          "Upgrade checks"
+                        ]
+                      },
+                      "upgrade_from": [
+                        "0.1.0"
+                      ],
+                      "version": "0.2.0"
+                    }
+                  ],
+                  "trusted_keys": {},
+                  "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFeedRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The release feed settings and the releases it lists",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "put": {
+        "description": "Turn the update check on or off.\n\nOff by default. The controller makes one HTTPS GET per day to the URL, with nothing\nabout this installation in the request, and uses the answer only if its Ed25519\nsignature verifies against the project's keys or the `trusted_keys` given here.\n\n**Access:** `system-admin` only.",
+        "operationId": "put_release_feed_api_v1_system_releases_put",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "channel": "stable",
+                "enabled": true,
+                "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseFeedIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "channel": "stable",
+                  "checked_at": "2026-10-13T04:00:00+00:00",
+                  "enabled": true,
+                  "latest_version": "0.2.0",
+                  "ok": true,
+                  "releases": [
+                    {
+                      "channel": "stable",
+                      "date": "2026-10-20",
+                      "notes": {
+                        "action_required": [
+                          "Back up first"
+                        ],
+                        "new": [
+                          "Upgrade checks"
+                        ]
+                      },
+                      "upgrade_from": [
+                        "0.1.0"
+                      ],
+                      "version": "0.2.0"
+                    }
+                  ],
+                  "trusted_keys": {},
+                  "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFeedRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Set where to look for newer releases",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/releases/check": {
+      "post": {
+        "description": "Fetch and verify the feed immediately.\n\nA failure is reported in `error`; the\nprevious verified releases stay available.\n\n**Access:** `system-admin` only.",
+        "operationId": "check_releases_now_api_v1_system_releases_check_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "channel": "stable",
+                  "checked_at": "2026-10-13T04:00:00+00:00",
+                  "enabled": true,
+                  "latest_version": "0.2.0",
+                  "ok": true,
+                  "releases": [
+                    {
+                      "channel": "stable",
+                      "date": "2026-10-20",
+                      "notes": {
+                        "action_required": [
+                          "Back up first"
+                        ],
+                        "new": [
+                          "Upgrade checks"
+                        ]
+                      },
+                      "upgrade_from": [
+                        "0.1.0"
+                      ],
+                      "version": "0.2.0"
+                    }
+                  ],
+                  "trusted_keys": {},
+                  "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFeedRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Look for newer releases now",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
     "/api/v1/system/settings": {
       "get": {
         "description": "The settings in effect: today `allow_lxc_guests` (default off) and whether the deployment forces it on (`SWITCHYARD_ALLOW_LXC=1`). Requires `system-admin`; every signed-in user can read what they need from `GET /me` `features`.\n\n**Access:** `system-admin` only.",
@@ -32437,6 +34801,112 @@
         "summary": "Revoke a system API token",
         "tags": [
           "tokens"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/upgrade/check": {
+      "get": {
+        "description": "Compare this controller, its schema and every engine's agent with the newest release.\n\nIt only advises: an engine on an old agent keeps receiving configuration. Findings with\nseverity `warning` or `error` carry the action to take. Requires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "upgrade_check_api_v1_system_upgrade_check_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "controller_version": "0.1.0",
+                  "engines": [
+                    {
+                      "agent_version": "0.0.9",
+                      "engine_id": "0190a5f2-0000-7000-8000-000000000001",
+                      "name": "se-1",
+                      "tenant_id": "0190a5f2-0000-7000-8000-000000000002"
+                    }
+                  ],
+                  "findings": [
+                    {
+                      "action": "Upgrade the engine to the latest template (runbooks/rolling-upgrade.md).",
+                      "code": "agent_behind",
+                      "message": "Agent 0.0.9 is behind 0.1.0.",
+                      "severity": "warning",
+                      "subject": "se-1"
+                    }
+                  ],
+                  "latest_version": "0.1.0",
+                  "schema_current": "0041",
+                  "schema_head": "0041",
+                  "schema_state": "current"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeCheckRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Versions of the controller, database and engines, with advice",
+        "tags": [
+          "system"
         ],
         "x-required-role": "system-admin"
       }
@@ -51837,6 +54307,284 @@
         "x-required-role": "tenant-admin"
       }
     },
+    "/api/v1/tenants/{t}/rolls": {
+      "get": {
+        "description": "Running, paused and finished rolls with each engine's phase and the log.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_rolls_api_v1_tenants__t__rolls_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-13T04:00:00+00:00",
+                    "created_by": "user:admin",
+                    "id": "0190a5f2-0000-7000-8000-000000000020",
+                    "log": [
+                      "se-1: deploying replacement",
+                      "se-1b: deployed"
+                    ],
+                    "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                    "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                    "status": "paused",
+                    "steps": [
+                      {
+                        "new": "se-1b",
+                        "old": "se-1",
+                        "phase": "awaiting_enrollment"
+                      },
+                      {
+                        "old": "se-2",
+                        "phase": "pending"
+                      }
+                    ],
+                    "target_version": "0.2.0",
+                    "template_vmid": 9770,
+                    "updated_at": "2026-10-13T05:00:00+00:00",
+                    "version": 3
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RollRead"
+                  },
+                  "title": "Response List Rolls Api V1 Tenants  T  Rolls Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Engine rolls, newest first",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/rolls/{roll}": {
+      "post": {
+        "description": "Abort ends the roll: replaced engines stay replaced and the old one keeps serving.\n\nResuming a paused roll repeats the step that failed. `409` for a finished roll.\nRequires `tenant-admin`.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "control_roll_api_v1_tenants__t__rolls__roll__post",
+        "parameters": [
+          {
+            "description": "Engine roll id.",
+            "in": "path",
+            "name": "roll",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Roll",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "action": "pause"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RollActionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "created_by": "user:admin",
+                  "id": "0190a5f2-0000-7000-8000-000000000020",
+                  "log": [
+                    "se-1: deploying replacement",
+                    "se-1b: deployed"
+                  ],
+                  "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                  "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                  "status": "paused",
+                  "steps": [
+                    {
+                      "new": "se-1b",
+                      "old": "se-1",
+                      "phase": "awaiting_enrollment"
+                    },
+                    {
+                      "old": "se-2",
+                      "phase": "pending"
+                    }
+                  ],
+                  "target_version": "0.2.0",
+                  "template_vmid": 9770,
+                  "updated_at": "2026-10-13T05:00:00+00:00",
+                  "version": 3
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RollRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Pause, resume or abort a roll",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "operator"
+      }
+    },
     "/api/v1/tenants/{t}/routing-profiles": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
@@ -54012,6 +56760,160 @@
           }
         },
         "summary": "Re-apply the desired state to an SE group (drift repair)",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/se-groups/{group}/rolls": {
+      "post": {
+        "description": "Roll the group's enabled engines to the template, one at a time.\n\nFor each engine: deploy a replacement, enroll it, reapply the group, wait for the group\nhealth score (80 or more) and a smoke check, retire the old engine, wait again. A step\nthat fails or takes too long **pauses** the roll with both engines in place; resume it\nor abort it. Needs the group's autoscale `deploy` and `enroll` settings (autoscaling\nitself may be off). `404` when the group has no enabled engines, `409` when it already\nhas a roll in progress. Requires `tenant-admin`.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "start_roll_api_v1_tenants__t__se_groups__group__rolls_post",
+        "parameters": [
+          {
+            "description": "SE group id.",
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Group",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "target_version": "0.2.0",
+                "template_vmid": 9770
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RollStartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "created_by": "user:admin",
+                  "id": "0190a5f2-0000-7000-8000-000000000020",
+                  "log": [
+                    "se-1: deploying replacement",
+                    "se-1b: deployed"
+                  ],
+                  "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                  "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                  "status": "paused",
+                  "steps": [
+                    {
+                      "new": "se-1b",
+                      "old": "se-1",
+                      "phase": "awaiting_enrollment"
+                    },
+                    {
+                      "old": "se-2",
+                      "phase": "pending"
+                    }
+                  ],
+                  "target_version": "0.2.0",
+                  "template_vmid": 9770,
+                  "updated_at": "2026-10-13T05:00:00+00:00",
+                  "version": 3
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RollRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Replace every engine of an SE group with one from a new template",
         "tags": [
           "se-groups"
         ],

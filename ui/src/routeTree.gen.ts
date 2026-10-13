@@ -22,6 +22,7 @@ import { Route as AdminRoleMappingsRouteImport } from './routes/admin.role-mappi
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminTenantsRouteImport } from './routes/admin.tenants'
 import { Route as AdminTokensRouteImport } from './routes/admin.tokens'
+import { Route as AdminUpgradesRouteImport } from './routes/admin.upgrades'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as TTenantRouteImport } from './routes/t.$tenant'
 import { Route as TTenantShellRouteImport } from './routes/t.$tenant._shell'
@@ -116,6 +117,11 @@ const AdminTenantsRoute = AdminTenantsRouteImport.update({
 const AdminTokensRoute = AdminTokensRouteImport.update({
   id: '/tokens',
   path: '/tokens',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUpgradesRoute = AdminUpgradesRouteImport.update({
+  id: '/upgrades',
+  path: '/upgrades',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
@@ -291,6 +297,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
   '/admin/tokens': typeof AdminTokensRoute
+  '/admin/upgrades': typeof AdminUpgradesRoute
   '/admin/users': typeof AdminUsersRoute
   '/t/$tenant': typeof TTenantRouteWithChildren
   '/admin/': typeof AdminIndexRoute
@@ -334,6 +341,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
   '/admin/tokens': typeof AdminTokensRoute
+  '/admin/upgrades': typeof AdminUpgradesRoute
   '/admin/users': typeof AdminUsersRoute
   '/t/$tenant': typeof TTenantShellIndexRoute
   '/admin': typeof AdminIndexRoute
@@ -377,6 +385,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
   '/admin/tokens': typeof AdminTokensRoute
+  '/admin/upgrades': typeof AdminUpgradesRoute
   '/admin/users': typeof AdminUsersRoute
   '/t/$tenant': typeof TTenantRouteWithChildren
   '/admin/': typeof AdminIndexRoute
@@ -424,6 +433,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/tenants'
     | '/admin/tokens'
+    | '/admin/upgrades'
     | '/admin/users'
     | '/t/$tenant'
     | '/admin/'
@@ -467,6 +477,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/tenants'
     | '/admin/tokens'
+    | '/admin/upgrades'
     | '/admin/users'
     | '/t/$tenant'
     | '/admin'
@@ -509,6 +520,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/tenants'
     | '/admin/tokens'
+    | '/admin/upgrades'
     | '/admin/users'
     | '/t/$tenant'
     | '/admin/'
@@ -640,6 +652,13 @@ declare module '@tanstack/react-router' {
       path: '/tokens'
       fullPath: '/admin/tokens'
       preLoaderRoute: typeof AdminTokensRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/upgrades': {
+      id: '/admin/upgrades'
+      path: '/upgrades'
+      fullPath: '/admin/upgrades'
+      preLoaderRoute: typeof AdminUpgradesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/users': {
@@ -865,6 +884,7 @@ interface AdminRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTenantsRoute: typeof AdminTenantsRoute
   AdminTokensRoute: typeof AdminTokensRoute
+  AdminUpgradesRoute: typeof AdminUpgradesRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
@@ -879,6 +899,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTenantsRoute: AdminTenantsRoute,
   AdminTokensRoute: AdminTokensRoute,
+  AdminUpgradesRoute: AdminUpgradesRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
 }

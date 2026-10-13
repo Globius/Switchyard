@@ -1452,3 +1452,110 @@ CRS_RULES = {
         }
     ],
 }
+
+
+UPGRADE_CHECK = {
+    "controller_version": "0.1.0",
+    "latest_version": "0.1.0",
+    "schema_current": "0041",
+    "schema_head": "0041",
+    "schema_state": "current",
+    "engines": [
+        {
+            "engine_id": "0190a5f2-0000-7000-8000-000000000001",
+            "name": "se-1",
+            "tenant_id": "0190a5f2-0000-7000-8000-000000000002",
+            "agent_version": "0.0.9",
+        }
+    ],
+    "findings": [
+        {
+            "code": "agent_behind",
+            "severity": "warning",
+            "subject": "se-1",
+            "message": "Agent 0.0.9 is behind 0.1.0.",
+            "action": "Upgrade the engine to the latest template (runbooks/rolling-upgrade.md).",
+        }
+    ],
+}
+
+
+BACKUP_TARGET = {
+    "name": "nightly",
+    "target": {
+        "kind": "s3",
+        "endpoint": "https://s3.example.test",
+        "region": "us-east-1",
+        "bucket": "sy-backups",
+        "prefix": "controller",
+        "access_key_ref": "secret/backup/access-key",
+        "secret_key_ref": "secret/backup/secret-key",
+    },
+    "passphrase_ref": "secret/backup/passphrase",
+    "keep": 14,
+}
+
+BACKUP_RUN = {
+    "id": "0190a5f2-0000-7000-8000-000000000010",
+    "target": "nightly",
+    "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+    "status": "ok",
+    "error": None,
+    "size_bytes": 48211,
+    "sha256": "9f2c0e5c1d6b8a7e3f4a5b6c7d8e9f00112233445566778899aabbccddeeff00",
+    "controller_version": "0.1.0",
+    "schema_revision": "0046",
+    "tenants": 3,
+    "reason": "pre-upgrade",
+    "actor": "user:admin",
+    "created_at": "2026-10-13T04:00:00+00:00",
+}
+
+BACKUP_VERIFY = {
+    "controller_version": "0.1.0",
+    "schema_revision": "0046",
+    "created_at": "2026-10-13T04:00:00+00:00",
+    "tenants": [
+        {"name": "acme", "virtual_services": 12, "pools": 14, "se_groups": 2, "certificates": 5}
+    ],
+}
+
+BACKUP_RESTORE = {**BACKUP_VERIFY, "restored": True}
+
+RELEASE_FEED = {
+    "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",
+    "channel": "stable",
+    "enabled": True,
+    "trusted_keys": {},
+    "checked_at": "2026-10-13T04:00:00+00:00",
+    "ok": True,
+    "error": None,
+    "latest_version": "0.2.0",
+    "releases": [
+        {
+            "version": "0.2.0",
+            "channel": "stable",
+            "date": "2026-10-20",
+            "notes": {"new": ["Upgrade checks"], "action_required": ["Back up first"]},
+            "upgrade_from": ["0.1.0"],
+        }
+    ],
+}
+
+ROLL = {
+    "id": "0190a5f2-0000-7000-8000-000000000020",
+    "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+    "status": "paused",
+    "reason": "se-1: awaiting_enrollment took longer than 3600s",
+    "template_vmid": 9770,
+    "target_version": "0.2.0",
+    "steps": [
+        {"old": "se-1", "new": "se-1b", "phase": "awaiting_enrollment"},
+        {"old": "se-2", "new": None, "phase": "pending"},
+    ],
+    "log": ["se-1: deploying replacement", "se-1b: deployed"],
+    "created_by": "user:admin",
+    "created_at": "2026-10-13T04:00:00+00:00",
+    "updated_at": "2026-10-13T05:00:00+00:00",
+    "version": 3,
+}

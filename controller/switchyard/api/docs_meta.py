@@ -124,6 +124,7 @@ PARAMS: dict[str, str] = {
     "request": "Quota request id.",
     "controller_member": "Controller cluster member id.",
     "cs": "Change set id.",
+    "roll": "Engine roll id.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
     "job_id": "Job id.",
@@ -557,6 +558,35 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     },
     "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
     "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
+    "POST /tenants/{t}/se-groups/{group}/rolls": {"template_vmid": 9770, "target_version": "0.2.0"},
+    "POST /tenants/{t}/rolls/{roll}": {"action": "pause"},
+    "PUT /system/releases": {
+        "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",
+        "channel": "stable",
+        "enabled": True,
+    },
+    "POST /system/backups/restore": {
+        "target": "nightly",
+        "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+        "dry_run": True,
+    },
+    "POST /system/backup-targets": {
+        "name": "nightly",
+        "passphrase_ref": "secret/backup/passphrase",
+        "target": {
+            "kind": "s3",
+            "endpoint": "https://s3.example.test",
+            "bucket": "sy-backups",
+            "access_key_ref": "secret/backup/access-key",
+            "secret_key_ref": "secret/backup/secret-key",
+        },
+        "keep": 14,
+    },
+    "POST /system/backups": {"target": "nightly", "reason": "pre-upgrade"},
+    "POST /system/backups/verify": {
+        "target": "nightly",
+        "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+    },
     "POST /system/controller/members": {
         "name": "ctl-esxi",
         "address": "10.0.0.13",

@@ -78,6 +78,9 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("GET", "/tenants/{t}/engines/{engine}/running-config"): READ,
     ("POST", "/tenants/{t}/certificates/import-ca"): ("manage", "certificate"),
     ("POST", "/tenants/{t}/se-groups/{group}/reapply"): ("rollback", "revision"),
+    ("POST", "/tenants/{t}/se-groups/{group}/rolls"): ("deploy", "se_group"),
+    ("POST", "/tenants/{t}/rolls/{roll}"): ("deploy", "se_group"),
+    ("GET", "/tenants/{t}/rolls"): READ,
     ("GET", "/tenants/{t}/sdn/status"): READ,
     ("GET", "/tenants/{t}/audit-events/export"): READ,
     ("GET", "/tenants/{t}/change-sets"): READ,
@@ -253,6 +256,18 @@ for _path in (
 ):
     ROUTES[("GET", _path)] = READ
 ROUTES[("GET", "/system/controller")] = ("manage", "controller")
+ROUTES[("GET", "/system/upgrade/check")] = ("manage", "controller")
+ROUTES[("POST", "/system/releases/check")] = ("manage", "controller")
+ROUTES[("PUT", "/system/releases")] = ("manage", "controller")
+ROUTES[("GET", "/system/releases")] = ("manage", "controller")
+ROUTES[("POST", "/system/backups/verify")] = ("manage", "controller")
+ROUTES[("POST", "/system/backups/restore")] = ("manage", "controller")
+ROUTES[("POST", "/system/backups")] = ("manage", "controller")
+ROUTES[("GET", "/system/backups")] = ("manage", "controller")
+ROUTES[("POST", "/system/backup-targets/{name}/test")] = ("manage", "controller")
+ROUTES[("DELETE", "/system/backup-targets/{name}")] = ("manage", "controller")
+ROUTES[("POST", "/system/backup-targets")] = ("manage", "controller")
+ROUTES[("GET", "/system/backup-targets")] = ("manage", "controller")
 for _method, _path in (
     ("GET", "/system/controller/members"),
     ("POST", "/system/controller/members"),
@@ -336,6 +351,17 @@ BODIES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
+    ("POST", "/system/backup-targets"): {
+        "name": "bk",
+        "passphrase_ref": "r/p",
+        "target": {"kind": "local"},
+    },
+    ("POST", "/system/backups"): {"target": "bk"},
+    ("POST", "/tenants/{t}/se-groups/{group}/rolls"): {"template_vmid": 9770},
+    ("POST", "/tenants/{t}/rolls/{roll}"): {"action": "pause"},
+    ("PUT", "/system/releases"): {"enabled": False},
+    ("POST", "/system/backups/verify"): {"target": "bk", "archive": "x.syb"},
+    ("POST", "/system/backups/restore"): {"target": "bk", "archive": "x.syb", "dry_run": True},
     ("POST", "/system/controller/members"): {
         "name": "ctl-x",
         "address": "10.0.0.13",
@@ -465,6 +491,7 @@ def fill(path: str) -> str:
         "idp",
         "cluster",
         "controller_member",
+        "roll",
         "request",
         "test_id",
         "capture",

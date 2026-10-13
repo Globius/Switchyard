@@ -54,6 +54,7 @@ def sign(
     service: str,
     now: dt.datetime,
     region: str = REGION,
+    s3: bool = False,
 ) -> dict[str, str]:
     """AWS Signature Version 4 headers for one request.
 
@@ -70,6 +71,8 @@ def sign(
     day = amz_date[:8]
     payload_hash = hashlib.sha256(body).hexdigest()
     headers = {"host": host, "x-amz-date": amz_date}
+    if s3:
+        headers["x-amz-content-sha256"] = payload_hash
     if credentials.session_token:
         headers["x-amz-security-token"] = credentials.session_token
     signed = ";".join(sorted(headers))
@@ -102,6 +105,8 @@ def sign(
             f"SignedHeaders={signed}, Signature={signature}"
         ),
     }
+    if s3:
+        out["x-amz-content-sha256"] = payload_hash
     if credentials.session_token:
         out["x-amz-security-token"] = credentials.session_token
     return out
