@@ -558,7 +558,13 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     },
     "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
     "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
-    "POST /tenants/{t}/se-groups/{group}/rolls": {"template_vmid": 9770, "target_version": "0.2.0"},
+    "POST /tenants/{t}/se-groups/{group}/rolls": {
+        "template_vmid": 9770,
+        "target_version": "0.2.0",
+        "window_start": "02:00",
+        "window_end": "05:00",
+        "soak_seconds": 600,
+    },
     "POST /tenants/{t}/rolls/{roll}": {"action": "pause"},
     "PUT /system/releases": {
         "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",

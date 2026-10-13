@@ -3332,12 +3332,16 @@ def create_app(
         itself may be off). `404` when the group has no enabled engines, `409` when it already
         has a roll in progress. Requires `tenant-admin`.
         """
+        window = _roll_window(body)
         view = await svc.rolls.start(
             who,
             tenant.id,
             group,
             template_vmid=body.template_vmid,
             target_version=body.target_version,
+            window=window,
+            not_before=body.start_after.timestamp() if body.start_after else None,
+            soak_s=float(body.soak_seconds),
             request_id=_rid(),
         )
         return _roll_json(view)
@@ -6309,3 +6313,27 @@ def _roll_json(view: Any) -> dict[str, Any]:
     out.pop("tenant_id", None)
     out["steps"] = [{k: s[k] for k in ("old", "new", "phase")} for s in view.steps]
     return out
+
+
+def _roll_window(body: RollStartIn) -> Any:
+    """The start window of a roll request, or ``None``. Both ends are needed together."""
+    from switchyard.domain.roll import Window
+
+    if body.window_start is None and body.window_end is None:
+        if body.window_days:
+            raise ApiError(422, "window_days needs window_start and window_end")
+        return None
+    if body.window_start is None or body.window_end is None:
+        raise ApiError(422, "give both window_start and window_end, or neither")
+    if any(d < 0 or d > 6 for d in body.window_days):
+        raise ApiError(422, "window_days are 0 (Monday) to 6 (Sunday)")
+    if body.window_start == body.window_end:
+        raise ApiError(422, "window_start and window_end must differ")
+
+    def minutes(text: str) -> int:
+        h, m = text.split(":")
+        return int(h) * 60 + int(m)
+
+    return Window(
+        minutes(body.window_start), minutes(body.window_end), tuple(sorted(set(body.window_days)))
+    )

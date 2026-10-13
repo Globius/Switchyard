@@ -20207,6 +20207,12 @@
             "title": "Created By",
             "type": "string"
           },
+          "holding": {
+            "default": false,
+            "description": "Waiting for the window, start time or soak.",
+            "title": "Holding",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -20218,14 +20224,31 @@
             "title": "Log",
             "type": "array"
           },
+          "not_before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scheduled start, epoch seconds.",
+            "title": "Not Before"
+          },
           "reason": {
-            "description": "Why it paused, when it did.",
+            "description": "Why it paused or is holding, when it is.",
             "title": "Reason",
             "type": "string"
           },
           "se_group_id": {
             "title": "Se Group Id",
             "type": "string"
+          },
+          "soak_seconds": {
+            "default": 0,
+            "title": "Soak Seconds",
+            "type": "integer"
           },
           "status": {
             "enum": [
@@ -20266,6 +20289,18 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The start window, for example `02:00-05:00 UTC`.",
+            "title": "Window"
           }
         },
         "required": [
@@ -20289,6 +20324,27 @@
         "additionalProperties": false,
         "description": "Replace every enabled engine of an SE group with one cloned from a new template.",
         "properties": {
+          "soak_seconds": {
+            "default": 0,
+            "description": "Wait this long after each engine before the next.",
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Soak Seconds",
+            "type": "integer"
+          },
+          "start_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Do not start before this moment (timezone-aware).",
+            "title": "Start After"
+          },
           "target_version": {
             "anyOf": [
               {
@@ -20306,6 +20362,41 @@
             "minimum": 100.0,
             "title": "Template Vmid",
             "type": "integer"
+          },
+          "window_days": {
+            "description": "Weekdays the window applies to, 0 (Monday) to 6; empty for every day.",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "title": "Window Days",
+            "type": "array"
+          },
+          "window_end": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "...and before this time. Earlier than the start means across midnight.",
+            "title": "Window End"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Start the next engine only after this time of day, UTC (`HH:MM`).",
+            "title": "Window Start"
           }
         },
         "required": [
@@ -56814,8 +56905,11 @@
           "content": {
             "application/json": {
               "example": {
+                "soak_seconds": 600,
                 "target_version": "0.2.0",
-                "template_vmid": 9770
+                "template_vmid": 9770,
+                "window_end": "05:00",
+                "window_start": "02:00"
               },
               "schema": {
                 "$ref": "#/components/schemas/RollStartIn"

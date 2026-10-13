@@ -205,3 +205,42 @@ async def test_operators_cannot_start_a_roll(rig: Rig) -> None:
         url(f"/se-groups/{GROUP}/rolls"), json={"template_vmid": 9770}, headers=op
     )
     assert res.status_code == 403
+
+
+async def test_a_roll_can_be_scheduled_and_holds_until_then(rig: Rig) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    admin = await rig.token(Role.TENANT_ADMIN)
+    later = datetime.now(UTC) + timedelta(days=1)
+    res = await rig.client.post(
+        url(f"/se-groups/{GROUP}/rolls"),
+        json={"template_vmid": 9770, "start_after": later.isoformat(), "soak_seconds": 300},
+        headers=admin,
+    )
+    assert res.status_code == 201, res.text
+    assert res.json()["soak_seconds"] == 300
+    await rig.run_ticks(3)
+    roll = (await rig.client.get(url("/rolls"), headers=admin)).json()[0]
+    assert roll["holding"] is True and "scheduled start" in roll["reason"]
+    assert roll["status"] == "running" and rig.actions.executed == []
+
+
+async def test_a_window_needs_both_ends(rig: Rig) -> None:
+    admin = await rig.token(Role.TENANT_ADMIN)
+    for bad in (
+        {"window_start": "02:00"},
+        {"window_days": [1]},
+        {"window_start": "02:00", "window_end": "02:00"},
+        {"window_start": "02:00", "window_end": "05:00", "window_days": [7]},
+        {"window_start": "25:00", "window_end": "05:00"},
+    ):
+        res = await rig.client.post(
+            url(f"/se-groups/{GROUP}/rolls"), json={"template_vmid": 9770, **bad}, headers=admin
+        )
+        assert res.status_code == 422, bad
+    ok = await rig.client.post(
+        url(f"/se-groups/{GROUP}/rolls"),
+        json={"template_vmid": 9770, "window_start": "22:00", "window_end": "04:00"},
+        headers=admin,
+    )
+    assert ok.status_code == 201 and ok.json()["window"] == "22:00-04:00 UTC"
