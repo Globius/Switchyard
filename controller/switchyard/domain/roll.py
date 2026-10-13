@@ -7,9 +7,10 @@
 Pure state machine, no I/O. One engine at a time, and for each: deploy a replacement, wait for it to
 enroll (the one step that needs an operator or the guest cloud-init; ADR 0083), reapply the group so
 the replacement gets the current configuration, wait for the group's health score and a smoke
-check, retire the old engine, and wait for the score again. A step that fails or times out
-**pauses** the roll with both engines still in place, which is the canary and the rollback point:
-an operator resumes, or aborts, and the old engine keeps serving.
+check, retire the old engine, reapply the group again (the retirement changed it) and wait for the
+score again. A step that fails or times out **pauses** the roll with both engines still in place,
+which is the canary and the rollback point: an operator resumes, or aborts, and the old engine
+keeps serving.
 
 Example:
     >>> roll = Roll.start(["se-1", "se-2"])
@@ -30,6 +31,7 @@ TIMEOUTS: dict[str, float] = {
     "reapplying": 600.0,
     "settling": 600.0,
     "retiring": 600.0,
+    "reapplying_after": 600.0,
     "settling_after": 600.0,
 }
 
@@ -43,6 +45,7 @@ class Phase(StrEnum):
     REAPPLYING = "reapplying"
     SETTLING = "settling"
     RETIRING = "retiring"
+    REAPPLYING_AFTER = "reapplying_after"
     SETTLING_AFTER = "settling_after"
     DONE = "done"
 
@@ -226,7 +229,13 @@ def advance(roll: Roll, facts: Facts) -> tuple[Roll, Command | None]:
                 return send(roll, roll.current or step, Retire(step.old))
         case Phase.RETIRING:
             if facts.retired:
-                return _enter(roll, step, Phase.SETTLING_AFTER, now, f"{step.old}: retired"), None
+                # The retirement changed the group's desired state (a VRRP peer list): the engines
+                # left would show drift forever, so apply it before waiting for the score.
+                roll = _enter(roll, step, Phase.REAPPLYING_AFTER, now, f"{step.old}: retired")
+                return send(roll, roll.current or step, Reapply())
+        case Phase.REAPPLYING_AFTER:
+            if facts.reapplied:
+                return _enter(roll, step, Phase.SETTLING_AFTER, now, "configuration applied"), None
         case Phase.SETTLING_AFTER:
             if _settled(facts):
                 roll = _enter(roll, step, Phase.DONE, now, f"{step.old}: replaced by {step.new}")
@@ -253,7 +262,7 @@ def _command_for(step: EngineStep) -> Command | None:
             return Deploy(step.old)
         case Phase.AWAITING_ENROLLMENT if step.new:
             return IssueToken(step.new)
-        case Phase.REAPPLYING:
+        case Phase.REAPPLYING | Phase.REAPPLYING_AFTER:
             return Reapply()
         case Phase.RETIRING:
             return Retire(step.old)
