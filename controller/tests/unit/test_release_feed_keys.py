@@ -12,7 +12,7 @@ from switchyard.services.release_feed import PROJECT_KEYS
 
 
 def test_every_project_key_is_a_raw_ed25519_public_key() -> None:
-    assert "release-2026" in PROJECT_KEYS
+    assert {"release-2026", "ci-release-2026"} <= set(PROJECT_KEYS)
     for key_id, value in PROJECT_KEYS.items():
         raw = base64.b64decode(value, validate=True)
         assert len(raw) == 32, key_id

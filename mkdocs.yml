@@ -112,6 +112,7 @@ nav:
       - Restore the database (pgBackRest + Patroni): runbooks/restore-database.md
       - Roll an SE group to a new template, or scale it out: runbooks/rolling-upgrade.md
       - Nightly builds and releases: runbooks/release.md
+      - Signing keys: keys.md
       - Release notes files: release-notes/README.md
       - Rotate the certificate authority: runbooks/rotate-ca.md
       - Telemetry stack (Prometheus, Loki, Grafana): runbooks/telemetry.md

@@ -149,7 +149,7 @@ newer nightly replaces an older one.
 To follow the nightlies on a test system:
 
 1. Set the feed address to the nightly feed (`nightly.json`; for GitLab/GitHub see [runbooks/release.md](runbooks/release.md)) and the channel to **nightly**.
-2. Add the nightly key under **Extra trusted signing keys** (`id=public key`, published with the releases). The nightly key is separate from the
+2. Add the nightly key under **Extra trusted signing keys** (`id=public key`; the current one is on [keys.md](keys.md)). The nightly key is separate from the
    release key and not trusted by default, so a leaked nightly key cannot affect production sites.
 3. Check now. Bundles install the same way as releases, with the same checks.
 

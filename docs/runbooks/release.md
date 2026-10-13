@@ -58,9 +58,9 @@ only seen by installations that chose the `nightly` channel **and** trust that k
    | `ci-release-2026` | `ci-release-2026.pem` | the CI release secret, then deleted from your disk | tagged releases | every controller (`PROJECT_KEYS`) |
    | `nightly-2026` | `nightly-2026.pem` | the CI nightly secret, then deleted from your disk | nightlies | only installations that add it themselves |
 
-   Splitting them means a CI compromise can be undone: drop `ci-release-2026` from `PROJECT_KEYS` in the next release (signed with the offline
+   The three public keys are listed in [keys.md](../keys.md). Splitting them means a CI compromise can be undone: drop `ci-release-2026` from `PROJECT_KEYS` in the next release (signed with the offline
    key) and new installs stop trusting it, while the offline key never touched CI.
-2. Put the public halves of `release-2026` and `ci-release-2026` in `PROJECT_KEYS` (`controller/switchyard/services/release_feed.py`; the value is
+2. (Done for `release-2026` and `ci-release-2026`.) Put public halves in `PROJECT_KEYS` (`controller/switchyard/services/release_feed.py`; the value is
    the 32 raw bytes in base64, which is the last 32 bytes of the DER from `-pubout`) and merge. Publish all three public keys in the release notes
    so sites that pin keys can. **Never** put the nightly key in `PROJECT_KEYS`.
 3. Store the two CI private keys on **the host that publishes** (the other host needs no signing key), as base64 on one line, then delete the files.
