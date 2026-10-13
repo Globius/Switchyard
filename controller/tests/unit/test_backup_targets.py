@@ -16,6 +16,7 @@ from switchyard.adapters.backup_targets import (
     LocalStore,
     MemoryStore,
     S3Store,
+    SftpStore,
     build_store,
 )
 from switchyard.adapters.dns.route53 import AwsCredentials
@@ -149,5 +150,67 @@ async def test_build_store_reads_credentials_from_secrets(tmp_path: Path) -> Non
             },
         }
     )
-    with pytest.raises(BackupTargetError, match="not available"):
-        await build_store(sftp, secrets, tmp_path)
+    assert isinstance(await build_store(sftp, MemorySecrets({"r/k": "pem"}), tmp_path), SftpStore)
+
+
+async def test_sftp_against_a_real_server_with_a_pinned_host_key(tmp_path: Path) -> None:
+    import asyncssh
+
+    from switchyard.domain.backup import SftpTarget
+
+    host_key = asyncssh.generate_private_key("ssh-ed25519")
+    client_key = asyncssh.generate_private_key("ssh-ed25519")
+    authorized = tmp_path / "authorized_keys"
+    authorized.write_bytes(client_key.export_public_key())
+    root = tmp_path / "srv"
+    root.mkdir()
+
+    class Server(asyncssh.SSHServer):
+        def begin_auth(self, username: str) -> bool:
+            return True
+
+        def public_key_auth_supported(self) -> bool:
+            return True
+
+        def validate_public_key(self, username: str, key: asyncssh.SSHKey) -> bool:
+            return bool(key.export_public_key() == client_key.export_public_key())
+
+    acceptor = await asyncssh.listen(
+        "127.0.0.1",
+        0,
+        server_factory=Server,
+        server_host_keys=[host_key],
+        sftp_factory=lambda chan: asyncssh.SFTPServer(chan, chroot=str(root).encode()),
+    )
+    port = acceptor.get_port()
+    pem = client_key.export_private_key().decode()
+
+    def target(fingerprint: str) -> SftpTarget:
+        return SftpTarget(
+            host="127.0.0.1",
+            port=port,
+            username="bk",
+            host_key_sha256=fingerprint,
+            key_ref="r/k",
+            directory="backups",
+        )
+
+    try:
+        store = SftpStore(target(host_key.get_fingerprint("sha256")), pem)
+        assert await store.list() == []
+        await store.put(B, b"two")
+        await store.put(A, b"one")
+        assert await store.list() == [A, B]
+        assert await store.get(A) == b"one"
+        await store.delete(A)
+        await store.delete(A)
+        assert await store.list() == [B]
+        with pytest.raises(BackupTargetError):
+            await store.get(A)
+        wrong = SftpStore(target("SHA256:" + "A" * 43), pem)
+        with pytest.raises(BackupTargetError) as refused:
+            await wrong.list()  # an unpinned host key is refused before login
+        assert "host key" in str(refused.value).lower()
+    finally:
+        acceptor.close()
+        await acceptor.wait_closed()

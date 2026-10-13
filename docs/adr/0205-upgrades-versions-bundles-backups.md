@@ -87,3 +87,12 @@ SSH and similar; upgrade checks in the UI; rollback is nice to have, and one-at-
 - The additive-schema rule costs a release of delay on every destructive schema change.
 - The feed needs a project signing key and a published `releases.json` (a GitLab or GitHub release asset or raw file).
 - Not decided here: automatic upgrade scheduling, and in-place package upgrade of engines (rejected: engines are disposable).
+
+## Decision record: SSH library (2026-10-13)
+
+SFTP backup targets use **asyncssh** (dual-licensed EPL-2.0 or GPL-2.0-or-later; Switchyard uses it under EPL-2.0 as an
+unmodified library dependency, which is compatible with distributing Switchyard under Apache-2.0). Chosen over paramiko
+(LGPL-2.1) for its asyncio API and over shelling out to `sftp` (no Python dependency, but harder to test and to pin host
+keys). Host keys are pinned by SHA-256 fingerprint in the target settings; there is no trust on first use. Tested against an
+in-process asyncssh SFTP server. Miguel confirmed the choice. ADR 0200 has no permitted-licence list, so this is recorded here and in
+[sbom-and-licensing.md](../sbom-and-licensing.md); it appears in the controller's SBOM like any dependency.

@@ -17,7 +17,7 @@ Findings carry a `severity` (`info`, `warning`, `error`), a stable `code` (`agen
 `agent_version_unknown`, `schema_pending`, `schema_newer_than_code`), the subject and the action.
 
 
-## Configuration backups (built, SFTP pending)
+## Configuration backups (built)
 
 A backup is the desired state of every tenant (virtual services, pools, SE groups, certificates and so on, with `secret_ref`
 values and never secret values), compressed and encrypted with AES-256-GCM. The key comes from a passphrase read from your secrets
@@ -34,7 +34,7 @@ Destinations (`POST /system/backup-targets`), all with credentials as `secret_re
 | `local` | A directory under `SWITCHYARD_BACKUP_DIR` (default `/var/lib/switchyard/backups`). Mount a volume there; a copy on the controller's own disk does not survive losing the controller. |
 | `s3` | Any S3-compatible service (AWS, MinIO, Ceph, Backblaze B2), HTTPS only, path-style. |
 | `ftp` | FTPS by default (certificate verified). Plain FTP is possible and sends the password in clear. |
-| `sftp` | Accepted in settings, **not yet usable** (waiting on the choice of SSH library, ADR 0205). |
+| `sftp` | SSH key login with the host key pinned by SHA-256 fingerprint (`ssh-keygen -lf` or `ssh-keyscan`); no trust on first use. The private key is a `secret_ref`. |
 
 `keep` archives are retained per target; older ones are deleted after each successful backup. Only files named
 `switchyard-<version>-<UTC time>.syb` are ever listed or deleted.

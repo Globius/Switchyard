@@ -52,3 +52,12 @@ Where to get them:
 Limits: Syft has no Helm cataloger, so the chart document lists the chart's files only and does not expand the
 images it references. The SE image document is made from the CI test image, which carries the same binaries as the
 template but is not the template itself.
+
+## Dependencies under other licences
+
+Everything Switchyard ships is Apache-2.0 except unmodified third-party libraries under their own licences, which appear in the SBOM.
+Deliberate exceptions are recorded here:
+
+| Dependency | Licence | Used for | Decision |
+| --- | --- | --- | --- |
+| asyncssh | EPL-2.0 (or GPL-2.0-or-later) | SFTP backup targets | [ADR 0205](adr/0205-upgrades-versions-bundles-backups.md); unmodified, used under EPL-2.0 |

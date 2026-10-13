@@ -16,10 +16,11 @@ import ftplib
 import io
 import ssl
 import xml.etree.ElementTree as ET
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path, PurePosixPath
-from typing import Protocol
+from typing import Protocol, cast
 
+import asyncssh
 import httpx
 
 from switchyard.adapters.dns.route53 import AwsCredentials, sign
@@ -302,13 +303,126 @@ class FtpStore:
             raise BackupTargetError(f"FTP failed: {type(exc).__name__}: {exc}") from exc
 
 
+class _PinnedKeyClient(asyncssh.SSHClient):
+    """Accepts exactly one server host key, identified by its SHA-256 fingerprint."""
+
+    def __init__(self, fingerprint: str) -> None:
+        self._fingerprint = fingerprint
+
+    def validate_host_public_key(
+        self, host: str, addr: str, port: int, key: asyncssh.SSHKey
+    ) -> bool:
+        """True only for the pinned key; there is no trust on first use."""
+        return bool(key.get_fingerprint("sha256") == self._fingerprint)
+
+
+class SftpStore:
+    """SFTP over SSH with a pinned host key and public-key login (asyncssh)."""
+
+    def __init__(self, target: SftpTarget, private_key_pem: str, timeout: float = 30.0) -> None:
+        """Create the store; nothing connects until the first call."""
+        self._t, self._key_pem, self._timeout = target, private_key_pem, timeout
+
+    async def _session(self) -> tuple[asyncssh.SSHClientConnection, asyncssh.SFTPClient]:
+        t = self._t
+        try:
+            key = asyncssh.import_private_key(self._key_pem)
+            conn, _ = await asyncio.wait_for(
+                asyncssh.create_connection(
+                    lambda: _PinnedKeyClient(t.host_key_sha256),
+                    t.host,
+                    t.port,
+                    username=t.username,
+                    client_keys=[key],
+                    known_hosts=(),
+                    password=None,
+                    agent_path=None,
+                ),
+                self._timeout,
+            )
+            return conn, await conn.start_sftp_client()
+        except (asyncssh.Error, OSError, TimeoutError) as exc:
+            raise BackupTargetError(f"SFTP failed: {type(exc).__name__}: {exc}") from exc
+
+    def _path(self, name: str = "") -> str:
+        base = self._t.directory.strip("/")
+        return f"{base}/{name}" if base and name else (base or name or ".")
+
+    async def _do[T](self, op: Callable[[asyncssh.SFTPClient], Awaitable[T]]) -> T:
+        conn, sftp = await self._session()
+        try:
+            return await op(sftp)
+        except asyncssh.SFTPNoSuchFile as exc:
+            raise BackupTargetError("not found") from exc
+        except (asyncssh.Error, OSError) as exc:
+            raise BackupTargetError(f"SFTP failed: {type(exc).__name__}: {exc}") from exc
+        finally:
+            conn.close()
+
+    async def put(self, name: str, data: bytes) -> None:
+        """Upload via a temporary name, then rename."""
+        _checked(name)
+
+        async def op(sftp: asyncssh.SFTPClient) -> None:
+            if self._t.directory:
+                await sftp.makedirs(self._path(), exist_ok=True)
+            tmp = self._path(f"{name}.part")
+            async with sftp.open(tmp, "wb") as fh:
+                await fh.write(data)
+            await sftp.posix_rename(tmp, self._path(name))
+
+        await self._do(op)
+
+    async def get(self, name: str) -> bytes:
+        """Download the archive."""
+        _checked(name)
+
+        async def op(sftp: asyncssh.SFTPClient) -> bytes:
+            async with sftp.open(self._path(name), "rb") as fh:
+                return cast("bytes", await fh.read())
+
+        try:
+            return await self._do(op)
+        except BackupTargetError as exc:
+            if str(exc) == "not found":
+                raise BackupTargetError(f"{name} not found") from exc
+            raise
+
+    async def list(self) -> list[str]:
+        """Archive names, oldest first; a missing directory is an empty list."""
+
+        async def op(sftp: asyncssh.SFTPClient) -> list[str]:
+            return [str(n) for n in await sftp.listdir(self._path())]
+
+        try:
+            names = await self._do(op)
+        except BackupTargetError as exc:
+            if str(exc) == "not found":
+                return []
+            raise
+        return sorted((n for n in names if is_archive_name(n)), key=lambda n: n[-17:])
+
+    async def delete(self, name: str) -> None:
+        """Remove the archive; missing is not an error."""
+        _checked(name)
+
+        async def op(sftp: asyncssh.SFTPClient) -> None:
+            await sftp.remove(self._path(name))
+
+        try:
+            await self._do(op)
+        except BackupTargetError as exc:
+            if str(exc) != "not found":
+                raise
+
+
 async def build_store(
     config: BackupTargetConfig, secrets: SecretsReader, local_root: Path
 ) -> BackupStore:
     """Open the store for ``config``, reading its credentials from ``secrets``.
 
     Raises:
-        BackupTargetError: The target kind is not available (SFTP: see ADR 0205).
+        BackupTargetError: Never; opening is lazy (errors surface on first use).
     """
     t = config.target
     if isinstance(t, LocalTarget):
@@ -321,5 +435,5 @@ async def build_store(
     if isinstance(t, FtpTarget):
         return FtpStore(t, await secrets.get(t.password_ref))
     if isinstance(t, SftpTarget):
-        raise BackupTargetError("SFTP targets are not available in this build")
+        return SftpStore(t, await secrets.get(t.key_ref))
     raise BackupTargetError("unknown target kind")  # pragma: no cover
