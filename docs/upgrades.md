@@ -132,6 +132,13 @@ score again, then the next engine.
 - Everything is audited (`roll.started`, `roll.pause`, `roll.resume`, `roll.abort`, `roll.paused`, `roll.done`).
 - State is stored in the database and advanced every ten seconds by whichever worker runs the job, so a restart of the controller does not lose it.
 
+## The Upgrades page
+
+Admin > Upgrades (system administrators) shows the controller, database and engine versions, a one-line verdict ("Up to date", "Version X is available.
+Upgrading is recommended.", or "Something needs fixing before an upgrade"), every finding with what to do about it, the release notes and install order when
+the feed found a newer release, the recent backups with **Back up now**, and the feed settings with **Check now**. It advises and never blocks.
+Engine rolls are started and watched through the API for now (`GET /tenants/{t}/rolls`); a roll view in the UI is not built yet.
+
 ## Planned (ADR 0205)
 
-Scheduled windows, a soak time between engines, and the Upgrades page in the UI.
+Scheduled windows, a soak time between engines, and a roll view in the UI.

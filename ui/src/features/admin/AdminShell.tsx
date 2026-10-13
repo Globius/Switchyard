@@ -20,6 +20,7 @@ const NAV = [
   { label: "System tokens", to: "/admin/tokens" },
   { label: "ACME providers", to: "/admin/acme-providers" },
   { label: "Controller", to: "/admin/controller" },
+  { label: "Upgrades", to: "/admin/upgrades" },
   { label: "System settings", to: "/admin/settings" },
   { label: "Audit log", to: "/admin/audit-log" },
 ] as const;
