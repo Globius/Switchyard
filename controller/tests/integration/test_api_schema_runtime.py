@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """API schema rules against a real HAProxy: what is let through, what is refused and with what status.
 
 The backends do not exist, so a request that passes every rule ends as ``503`` (no server), and the

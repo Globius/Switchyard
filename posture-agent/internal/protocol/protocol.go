@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package protocol is the device agent's side of the posture API (ADR 0196): the facts it reports,
 // the signature that authenticates a report, and the two calls (enroll, report).
 //

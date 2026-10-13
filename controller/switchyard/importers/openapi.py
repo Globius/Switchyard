@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Turn an OpenAPI document into a WAF API schema (ADR 0197).
 
 Only what the schema can enforce is read: the paths and methods, the types of path and query

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package state keeps the device agent's identity and credentials in one directory.
 //
 // identity.json holds the controller address, the device id and the Ed25519 seed that signs

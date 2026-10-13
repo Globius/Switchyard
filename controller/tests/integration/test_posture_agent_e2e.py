@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The real device agent against the real controller and a real HAProxy (ADR 0196).
 
 ``sy-posture`` (Go) enrolls with a one-time token and reports its facts to an API served by

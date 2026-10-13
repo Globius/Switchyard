@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Device enrollment, posture reports and short-lived device certificates (ADR 0196).
 
 Flow: a tenant administrator creates an enrollment token for a ``posture`` policy set. The device

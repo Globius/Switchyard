@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Command sy-posture is the Switchyard device posture agent (ADR 0196).
 //
 //	sy-posture enroll --controller URL --token T --name laptop-ana

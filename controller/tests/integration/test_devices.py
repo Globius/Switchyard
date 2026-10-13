@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Device posture: enrollment, signed reports, certificates, revocation and isolation (ADR 0196)."""
 
 import base64

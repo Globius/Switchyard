@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The login gate: flow engine, cookies and the HTTP behaviour against a fake RADIUS and fake Dex."""
 
 import json

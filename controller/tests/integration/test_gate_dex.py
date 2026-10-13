@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The login gate in front of real Dex: a RADIUS user signs in through the OIDC code flow (ADR 0195).
 
 Dex runs the rendered ``authproxy`` configuration in a container; the gate (ASGI app, in process)

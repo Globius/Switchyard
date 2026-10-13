@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """``policy_set.kind`` accepts ``posture`` (ADR 0196); its settings are JSON in ``config``.
 
 Revision ID: 0037
