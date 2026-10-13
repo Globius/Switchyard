@@ -14,6 +14,7 @@ VMware NSX Advanced Load Balancer (Avi).
   [decision records](adr/README.md).
 - **Using the API:** [API conventions](api.md); the live reference is at `/api/v1/docs` on a running controller.
 - **What has been proven:** the [lab results](lab/2026-10-12-full-pass.md).
+- **Contributing:** [how to send a change](contributing.md), including the sign-off and what happens to a pull request.
 
 ## Screenshots
 

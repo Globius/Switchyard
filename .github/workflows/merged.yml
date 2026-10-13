@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# When a forwarded pull request is merged on GitLab, the push mirror brings `main` here. If the merge kept the
+# contributor's commits, GitHub already shows the pull request as Merged. After a squash or rebase it cannot tell,
+# so this closes the pull request with a pointer to where it landed (ADR 0208).
+name: merged
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  close-out:
+    if: github.event.before != '0000000000000000000000000000000000000000'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - run: |
+          numbers=$(python3 tools/bridge/bridge.py merged --range "${{ github.event.before }}..${{ github.sha }}" | jq -r '.merged[]')
+          for n in $numbers; do
+            state=$(gh pr view "$n" --repo "$GITHUB_REPOSITORY" --json state -q .state || echo MISSING)
+            if [ "$state" = OPEN ]; then
+              gh pr comment "$n" --repo "$GITHUB_REPOSITORY" --body "Merged on GitLab and mirrored here in ${GITHUB_SHA::7}. Thank you!"
+              gh pr close "$n" --repo "$GITHUB_REPOSITORY"
+            fi
+          done

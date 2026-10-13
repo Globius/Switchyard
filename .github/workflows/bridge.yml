@@ -1,0 +1,68 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# The contribution bridge (ADR 0208, docs/runbooks/github-front-door.md). Code is merged on GitLab; GitHub is where
+# the community opens pull requests. A maintainer reviews a pull request and adds the label `ready-for-gitlab`;
+# this workflow then pushes its commits, unchanged, to GitLab as `github/pr-<n>` and opens a merge request.
+#
+# SECURITY: pull_request_target runs with secrets, so this workflow never builds, installs or executes anything from
+# the pull request. It checks out the BASE branch, fetches the pull request's commits as data, and pushes them.
+# Only people with triage access or more can add the label. Needs, per repository:
+#   variables GITLAB_URL (https://gitlab.example), GITLAB_PROJECT (numeric id), GITLAB_PROJECT_PATH (group/project)
+#   secret    GITLAB_TOKEN (a project access token with api + write_repository; Developer role)
+name: bridge
+on:
+  pull_request_target:
+    types: [labeled, synchronize, reopened, closed]
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: bridge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  forward:
+    if: >-
+      vars.GITLAB_URL != '' && github.event.pull_request.state == 'open' &&
+      contains(github.event.pull_request.labels.*.name, 'ready-for-gitlab')
+    runs-on: ubuntu-latest
+    env:
+      GITLAB_URL: ${{ vars.GITLAB_URL }}
+      GITLAB_PROJECT: ${{ vars.GITLAB_PROJECT }}
+      GITLAB_PROJECT_PATH: ${{ vars.GITLAB_PROJECT_PATH }}
+      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4 # the base branch, on purpose
+        with: {fetch-depth: 0}
+      - id: sync
+        run: |
+          set +e
+          python3 tools/bridge/bridge.py sync --event "$GITHUB_EVENT_PATH" | tee result.json
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+      - name: Say what happened
+        run: |
+          action=$(jq -r .action result.json); url=$(jq -r '.mr_url // ""' result.json); msg=$(jq -r '.message // ""' result.json)
+          case "$action" in
+            created) body="A maintainer has forwarded this to GitLab for merging: $url. Your commits are kept as they are." ;;
+            updated) body="Updated the GitLab merge request with your new commits: $url" ;;
+            error)   body="Forwarding to GitLab failed: $msg. A maintainer will take a look." ;;
+            *)       body="" ;;
+          esac
+          [ -z "$body" ] || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+          [ "$action" != error ] || exit 1
+
+  retract:
+    if: >-
+      vars.GITLAB_URL != '' && github.event.action == 'closed' && github.event.pull_request.merged == false
+    runs-on: ubuntu-latest
+    env:
+      GITLAB_URL: ${{ vars.GITLAB_URL }}
+      GITLAB_PROJECT: ${{ vars.GITLAB_PROJECT }}
+      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/bridge/bridge.py close --event "$GITHUB_EVENT_PATH"

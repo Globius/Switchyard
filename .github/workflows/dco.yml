@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Developer Certificate of Origin (ADR 0208): every commit of a pull request needs a Signed-off-by line.
+# Runs on the pull_request event, in GitHub's sandbox, with no secrets.
+name: dco
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  signoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - run: |
+          python3 tools/bridge/dco.py --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}" | tee -a "$GITHUB_STEP_SUMMARY"

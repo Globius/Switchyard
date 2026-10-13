@@ -1,0 +1,14 @@
+name: Feature request
+description: Something Switchyard should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What are you trying to do?
+      description: The problem first; a proposed solution second. If you use Avi today, say which feature this replaces.
+    validations: {required: true}
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to see?
