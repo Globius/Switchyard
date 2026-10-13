@@ -260,6 +260,29 @@ function Backups() {
   );
 }
 
+/** `id=base64key` per line to the object the API takes; the first bad line as an error. */
+export function parseKeys(text: string): { keys: Record<string, string> } | { error: string } {
+  const keys: Record<string, string> = {};
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const at = line.indexOf("=");
+    const id = at < 0 ? "" : line.slice(0, at).trim();
+    const key = at < 0 ? "" : line.slice(at + 1).trim();
+    if (!/^[A-Za-z0-9._-]{1,64}$/.test(id) || key.length !== 44)
+      return { error: t("Use one key per line: id=public key (44 characters of base64).") };
+    keys[id] = key;
+  }
+  return { keys };
+}
+
+/** The reverse, for showing the saved keys. */
+export function formatKeys(keys: Record<string, string> | undefined): string {
+  return Object.entries(keys ?? {})
+    .map(([id, key]) => `${id}=${key}`)
+    .join("\n");
+}
+
 function Feed() {
   const qc = useQueryClient();
   const q = useQuery({
@@ -267,15 +290,28 @@ function Feed() {
     queryFn: async () => unwrap(await api.GET("/api/v1/system/releases")),
   });
   const [url, setUrl] = useState<string | null>(null);
+  const [keys, setKeys] = useState<string | null>(null);
+  const [keysProblem, setKeysProblem] = useState("");
   const save = useMutation({
-    mutationFn: async (v: { enabled: boolean; url: string; channel: "stable" | "candidate" }) =>
+    mutationFn: async (v: {
+      enabled: boolean;
+      url: string;
+      channel: "stable" | "candidate" | "nightly";
+      keys?: Record<string, string>;
+    }) =>
       unwrap(
         await api.PUT("/api/v1/system/releases", {
-          body: { ...v, trusted_keys: q.data?.trusted_keys ?? {} },
+          body: {
+            enabled: v.enabled,
+            url: v.url,
+            channel: v.channel,
+            trusted_keys: v.keys ?? q.data?.trusted_keys ?? {},
+          },
         }),
       ),
     onSuccess: () => {
       setUrl(null);
+      setKeys(null);
       void qc.invalidateQueries({ queryKey: ["admin", "releases"] });
     },
   });
@@ -337,14 +373,55 @@ function Feed() {
               save.mutate({
                 enabled: f.enabled,
                 url: shown,
-                channel: e.target.value as "stable" | "candidate",
+                channel: e.target.value as "stable" | "candidate" | "nightly",
               })
             }
           >
             <option value="stable">stable</option>
             <option value="candidate">candidate</option>
+            <option value="nightly">nightly</option>
           </select>
         </label>
+        {f.channel === "nightly" && (
+          <p role="note" className="rounded-md bg-status-degraded-bg p-3 text-status-degraded">
+            {t(
+              "Nightly builds are not releases. They are signed with a separate nightly key, which you must trust below, and they can break things. Use them on test systems.",
+            )}
+          </p>
+        )}
+        <label className="block space-y-1">
+          <span className="font-medium">{t("Extra trusted signing keys")}</span>
+          <textarea
+            className={INPUT + " h-20 py-2 font-mono text-xs"}
+            value={keys ?? formatKeys(f.trusted_keys)}
+            placeholder="nightly=BASE64PUBLICKEY="
+            onChange={(e) => {
+              setKeys(e.target.value);
+              setKeysProblem("");
+            }}
+          />
+          <span className="text-xs text-muted-foreground">
+            {t("One per line: id=public key. The project's own keys are always trusted.")}
+          </span>
+        </label>
+        {keysProblem && (
+          <p role="alert" className="text-status-down">
+            {keysProblem}
+          </p>
+        )}
+        {keys !== null && keys !== formatKeys(f.trusted_keys) && (
+          <Button
+            size="sm"
+            disabled={save.isPending}
+            onClick={() => {
+              const r = parseKeys(keys);
+              if ("error" in r) return setKeysProblem(r.error);
+              save.mutate({ enabled: f.enabled, url: shown, channel: f.channel, keys: r.keys });
+            }}
+          >
+            {t("Save keys")}
+          </Button>
+        )}
         {url !== null && url !== f.url && (
           <Button
             size="sm"

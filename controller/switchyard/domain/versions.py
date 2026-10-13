@@ -43,6 +43,38 @@ def parse_version(text: str) -> tuple[int, int, int] | None:
     return (int(m[1]), int(m[2]), int(m[3])) if m else None
 
 
+#: A version that sorts by semantic-version precedence: numbers first, then release before
+#: pre-release, then the pre-release identifiers.
+VersionKey = tuple[int, int, int, int, tuple[tuple[int, int, str], ...]]
+#: What an unreadable version sorts as: before everything.
+UNKNOWN: VersionKey = (0, 0, 0, 0, ())
+
+_FULL = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
+
+
+def version_key(text: str) -> VersionKey | None:
+    """Sort key following semantic-version precedence, or ``None`` when the text is not a version.
+
+    A release is newer than a pre-release of the same numbers (`1.0.0` > `1.0.0-rc1`); pre-release
+    identifiers compare one by one, numbers as numbers and below text (`nightly.9` < `nightly.10`);
+    build metadata (`+abc`) is ignored.
+
+    Example:
+        >>> a, b = version_key("0.2.0-nightly.20261013"), version_key("0.2.0-nightly.20261014")
+        >>> a < b < version_key("0.2.0") < version_key("0.2.1-nightly.1")
+        True
+        >>> version_key("dev") is None
+        True
+    """
+    m = _FULL.match(text.strip())
+    if not m:
+        return None
+    pre = tuple(
+        (0, int(p), "") if p.isdigit() else (1, 0, p) for p in (m[4].split(".") if m[4] else [])
+    )
+    return (int(m[1]), int(m[2]), int(m[3]), 0 if m[4] else 1, pre)
+
+
 @dataclass(frozen=True)
 class Compat:
     """What this controller release supports.
@@ -79,7 +111,7 @@ def check_agent(
         compat: This controller's compatibility table.
         subject: Engine name, for the finding.
     """
-    have = parse_version(agent_version)
+    have = version_key(agent_version)
     if have is None:
         return [
             Finding(
@@ -91,9 +123,9 @@ def check_agent(
             )
         ]
     out: list[Finding] = []
-    minimum = parse_version(compat.min_agent)
-    recommended = parse_version(compat.recommended_min_agent)
-    newest = parse_version(latest)
+    minimum = version_key(compat.min_agent)
+    recommended = version_key(compat.recommended_min_agent)
+    newest = version_key(latest)
     if minimum and have < minimum:
         out.append(
             Finding(

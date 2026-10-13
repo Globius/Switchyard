@@ -1,0 +1,111 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# Nightly builds and releases (ADR 0206, docs/runbooks/release.md). The logic is in tools/release/*.sh, which
+# .gitlab-ci.yml calls too; this file only supplies the runner and the publishing.
+#
+# Only ONE host publishes. This workflow does nothing unless the repository variable RELEASE_HOST is "github".
+# Secrets (environment "release" for tags, "nightly" for the schedule; give the first required reviewers):
+#   RELEASE_SIGNING_KEY_B64, RELEASE_KEY_ID     the release key       base64 -w0 release.pem
+#   NIGHTLY_SIGNING_KEY_B64, NIGHTLY_KEY_ID     the nightly key
+# Feeds are read from the rolling release "feed" (assets releases.json and nightly.json); nightly bundles are
+# assets of the rolling release "nightly" (the newest 14 are kept).
+name: release
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-rc*"]
+  workflow_dispatch:
+    inputs:
+      force_nightly:
+        description: Build a nightly even if nothing changed
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    if: vars.RELEASE_HOST == 'github'
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.v.outputs.mode }}
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+      skip: ${{ steps.v.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 100}
+      - id: v
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            mode=release
+            version=$(python3 tools/release/version.py compute release --tag "$GITHUB_REF_NAME")
+          else
+            mode=nightly
+            version=$(python3 tools/release/version.py compute nightly)
+          fi
+          channel=$(python3 tools/release/version.py channel "$version")
+          skip=0
+          if [ "$mode" = nightly ] && [ "${{ inputs.force_nightly }}" != true ] \
+             && [ -z "$(git log --since='25 hours ago' --format=%h -1)" ]; then
+            skip=1
+          fi
+          { echo "mode=$mode"; echo "version=$version"; echo "channel=$channel"; echo "skip=$skip"; } | tee -a "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    if: needs.version.outputs.skip != '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ needs.version.outputs.mode == 'release' && 'release' || 'nightly' }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      MODE: ${{ needs.version.outputs.mode }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-go@v5
+        with: {go-version-file: agent/go.mod}
+      - uses: azure/setup-helm@v4
+        with: {version: v3.18.6}
+      - name: Build the artifacts
+        run: sh tools/release/build-artifacts.sh "$VERSION" dist
+      - name: Bundle and feed
+        env:
+          RELEASE_SIGNING_KEY_B64: ${{ needs.version.outputs.mode == 'release' && secrets.RELEASE_SIGNING_KEY_B64 || secrets.NIGHTLY_SIGNING_KEY_B64 }}
+          RELEASE_KEY_ID: ${{ needs.version.outputs.mode == 'release' && secrets.RELEASE_KEY_ID || secrets.NIGHTLY_KEY_ID }}
+          UPGRADE_FROM: ${{ vars.UPGRADE_FROM }}
+        run: |
+          if [ "$MODE" = nightly ]; then FEED=nightly.json; ASSETS="https://github.com/$REPO/releases/download/nightly"
+          else FEED=releases.json; ASSETS="https://github.com/$REPO/releases/download/$GITHUB_REF_NAME"; fi
+          sh tools/release/bundle.sh "$VERSION" dist
+          sh tools/release/feed.sh "dist/switchyard-$VERSION.sybundle" "$ASSETS/switchyard-$VERSION.sybundle" "dist/$FEED" \
+            "https://github.com/$REPO/releases/download/feed/$FEED"
+      - name: Publish a nightly
+        if: needs.version.outputs.mode == 'nightly'
+        run: |
+          gh release view nightly >/dev/null 2>&1 || gh release create nightly --prerelease --target "$GITHUB_SHA" \
+            --title "Nightly builds" --notes "Signed nightly upgrade bundles (the nightly channel). Not for production."
+          gh release upload nightly "dist/switchyard-$VERSION.sybundle" --clobber
+          # keep the newest 14 bundles (names sort by date)
+          gh release view nightly --json assets --jq '.assets[].name | select(endswith(".sybundle"))' | sort | head -n -14 \
+            | while read -r name; do gh release delete-asset nightly "$name" -y; done
+      - name: Publish a release
+        if: needs.version.outputs.mode == 'release'
+        run: |
+          flags=""; [ "${{ needs.version.outputs.channel }}" = candidate ] && flags="--prerelease"
+          gh release create "$GITHUB_REF_NAME" $flags --verify-tag --generate-notes \
+            "dist/switchyard-$VERSION.sybundle" dist/releases.json
+      - name: Publish the feed
+        run: |
+          gh release view feed >/dev/null 2>&1 || gh release create feed --target "$GITHUB_SHA" \
+            --title "Release feeds" --notes "The signed feeds controllers read: releases.json and nightly.json. Replaced by each release."
+          gh release upload feed dist/*.json --clobber

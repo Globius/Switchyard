@@ -28,6 +28,7 @@ from switchyard.domain.bundle import (
     Manifest,
     check_member_path,
     manifest_bytes,
+    parse_manifest,
     sign_manifest,
     verify_manifest,
 )
@@ -62,14 +63,14 @@ def build(
     schema_head: str,
     created_at: str,
     inputs: list[Input],
-    key: Ed25519PrivateKey,
-    key_id: str,
+    key: Ed25519PrivateKey | None,
+    key_id: str = "",
     upgrade_from: list[str] | None = None,
     min_agent: str = "0.0.0",
     recommended_min_agent: str = "0.0.0",
     notes: ReleaseNotes | None = None,
 ) -> Manifest:
-    """Write a signed bundle to ``out`` and return its manifest.
+    """Write a bundle to ``out`` and return its manifest; signed unless ``key`` is ``None``.
 
     Raises:
         BundleError: A name is unsafe or used twice.
@@ -93,7 +94,10 @@ def build(
         raise BundleError("two files have the same name in the bundle")
     raw = manifest_bytes(manifest)
     with tarfile.open(out, "w", format=tarfile.PAX_FORMAT) as tar:
-        for name, data in ((MANIFEST, raw), (SIGNATURE, sign_manifest(raw, key, key_id))):
+        members = [(MANIFEST, raw)]
+        if key is not None:
+            members.append((SIGNATURE, sign_manifest(raw, key, key_id)))
+        for name, data in members:
             info = tarfile.TarInfo(name)
             info.size, info.mode, info.mtime = len(data), 0o644, 0
             tar.addfile(info, io.BytesIO(data))
@@ -118,16 +122,22 @@ def _read_small(tar: tarfile.TarFile, name: str) -> bytes:
     return fh.read()
 
 
-def verify(path: Path, trusted: dict[str, str]) -> Manifest:
+def verify(path: Path, trusted: dict[str, str], *, allow_unsigned: bool = False) -> Manifest:
     """Check the signature, the member list and every file's size and SHA-256.
+
+    `allow_unsigned` skips the signature check only (the hashes are still checked); it exists for
+    `syctl upgrade apply --allow-unsigned` and nothing else.
 
     Raises:
         BundleError: Anything wrong; nothing is extracted either way.
     """
     try:
         with tarfile.open(path, "r") as tar:
-            manifest = verify_manifest(
-                _read_small(tar, MANIFEST), _read_small(tar, SIGNATURE), trusted
+            raw = _read_small(tar, MANIFEST)
+            manifest = (
+                parse_manifest(raw)
+                if allow_unsigned
+                else verify_manifest(raw, _read_small(tar, SIGNATURE), trusted)
             )
             listed = {f.path: f for f in manifest.files}
             seen: set[str] = set()
@@ -154,13 +164,15 @@ def verify(path: Path, trusted: dict[str, str]) -> Manifest:
         raise BundleError("the file is not a readable bundle") from exc
 
 
-def unpack(path: Path, dest: Path, trusted: dict[str, str]) -> Manifest:
+def unpack(
+    path: Path, dest: Path, trusted: dict[str, str], *, allow_unsigned: bool = False
+) -> Manifest:
     """Verify ``path`` and write its files under ``dest`` (created if needed).
 
     Returns the manifest. Files land at ``dest/<manifest path>``; ``dest`` must not already
     hold files of the same name, so an old unpack is never mixed with a new one.
     """
-    manifest = verify(path, trusted)
+    manifest = verify(path, trusted, allow_unsigned=allow_unsigned)
     root = dest.resolve()
     with tarfile.open(path, "r") as tar:
         for entry in manifest.files:
