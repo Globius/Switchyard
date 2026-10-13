@@ -37,6 +37,8 @@ tar -C "$WEB" -czf "$WEB/build.tar.gz" se-image sy-agent dataplaneapi $EXTRA
 (cd "$WEB" && python3 -m http.server "$PORT" --bind "${BIND:-0.0.0.0}" >/dev/null 2>&1) &
 WEBPID=$!
 trap 'kill $WEBPID 2>/dev/null' EXIT
+sleep 1
+kill -0 "$WEBPID" 2>/dev/null || { echo "the build web server did not start: port $PORT is probably in use (set PORT)" >&2; exit 1; }   # else the VM waits 25 minutes for a download that never comes
 
 cat > /var/lib/vz/snippets/sy-se-template-build.yaml <<YAML
 #cloud-config
