@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from switchyard.domain.releases import ReleaseNotes
-from switchyard.domain.versions import parse_version
+from switchyard.domain.versions import version_key
 
 FORMAT: Literal[1] = 1
 MANIFEST = "manifest.json"
@@ -60,7 +60,7 @@ class Manifest(_Strict):
     """What a bundle is: the release, its schema, what it can be installed over, and its files."""
 
     format: Literal[1] = FORMAT
-    version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,16})?$")]
+    version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,32})?$")]
     schema_head: Annotated[str, Field(pattern=r"^[0-9a-z_]{1,40}$")]
     created_at: str
     upgrade_from: list[str] = Field(default_factory=list, max_length=100)
@@ -114,6 +114,18 @@ def verify_manifest(raw: bytes, sig: bytes, trusted: dict[str, str]) -> Manifest
         )
     except (InvalidSignature, ValueError) as exc:
         raise BundleError("the manifest signature does not verify") from exc
+    return parse_manifest(raw)
+
+
+def parse_manifest(raw: bytes) -> Manifest:
+    """Parse and check a manifest without looking at any signature.
+
+    Used on its own only for an explicitly unsigned bundle (`--allow-unsigned`); every other caller
+    goes through :func:`verify_manifest`. Checks the schema, every path, and duplicates.
+
+    Raises:
+        BundleError: The manifest is not valid.
+    """
     try:
         manifest = Manifest.model_validate_json(raw)
     except ValidationError as exc:
@@ -124,6 +136,7 @@ def verify_manifest(raw: bytes, sig: bytes, trusted: dict[str, str]) -> Manifest
         if f.path in seen:
             raise BundleError(f"{f.path} is listed twice")
         seen.add(f.path)
+    return manifest
     return manifest
 
 
@@ -152,7 +165,7 @@ def plan(manifest: Manifest, running: str) -> Plan:
         True
     """
     warnings: list[str] = []
-    have, want = parse_version(running), parse_version(manifest.version)
+    have, want = version_key(running), version_key(manifest.version)
     if have is not None and want is not None and have >= want:
         warnings.append(
             f"This controller already runs {running}, which is not older than the bundle."

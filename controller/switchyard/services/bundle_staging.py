@@ -29,7 +29,7 @@ from switchyard.db import audit_log
 from switchyard.db.tenancy import admin_session
 from switchyard.domain import bundle as domain
 from switchyard.domain.bundle import BundleError, Manifest
-from switchyard.domain.versions import parse_version
+from switchyard.domain.versions import UNKNOWN, version_key
 from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 from switchyard.services.errors import ConflictError, NotFoundError
@@ -37,7 +37,7 @@ from switchyard.services.release_bundle import verify
 from switchyard.services.release_feed import PROJECT_KEYS, ReleaseFeedService
 
 MAX_BYTES = int(os.environ.get("SWITCHYARD_MAX_BUNDLE_BYTES", str(4 * 1024**3)))
-_NAME = re.compile(r"^switchyard-\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,16})?-[0-9a-f]{12}\.sybundle$")
+_NAME = re.compile(r"^switchyard-\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,32})?-[0-9a-f]{12}\.sybundle$")
 _CHUNK = 1024 * 1024
 
 
@@ -198,7 +198,7 @@ class BundleStaging:
                 continue
         return sorted(
             out,
-            key=lambda b: (parse_version(b.version) or (0, 0, 0), b.name),
+            key=lambda b: (version_key(b.version) or UNKNOWN, b.name),
             reverse=True,
         )
 

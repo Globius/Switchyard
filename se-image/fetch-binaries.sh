@@ -15,7 +15,7 @@ export MSYS_NO_PATHCONV=1
 ROOT=$(pwd -W 2>/dev/null || pwd)
 mkdir -p se-image/dist
 docker run --rm -e CGO_ENABLED=0 -v "$ROOT/agent:/src:ro" -v "$ROOT/se-image/dist:/out" -w /src "$GO_IMAGE" \
-  go build -trimpath -o /out/sy-agent ./cmd/sy-agent
+  go build -trimpath -ldflags "-X switchyard/agent/internal/status.Version=${SY_VERSION:-dev}" -o /out/sy-agent ./cmd/sy-agent
 cid=$(docker create "$DATAPLANE_IMAGE")
 docker cp "$cid:/usr/local/bin/dataplaneapi" se-image/dist/dataplaneapi
 docker rm "$cid" >/dev/null

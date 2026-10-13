@@ -81,3 +81,42 @@ async def test_apply_on_a_node(
     assert code == 0, out
     assert "ok: node healthy" in out
     assert "switchyard-controller:0.2.0" in env.read_text()
+
+
+async def test_an_unsigned_bundle_needs_two_explicit_flags(
+    server: Server, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from switchyard import cli_upgrade
+    from switchyard.services.release_bundle import Input, build
+    from tests.unit.test_upgrade_apply import Fake
+
+    monkeypatch.setattr(cli_upgrade, "APPLY_RUNNER", Fake())
+    (tmp_path / "controller.tar").write_bytes(b"c")
+    bundle = tmp_path / "nightly.sybundle"
+    build(
+        bundle,
+        version="0.2.0-nightly.20261014",
+        schema_head="0047",
+        created_at="2026-10-14T03:00:00Z",
+        inputs=[Input("controller-image", tmp_path / "controller.tar", "controller.tar")],
+        key=None,
+    )
+    env = tmp_path / "node.env"
+    env.write_text("CONTROLLER_IMAGE=switchyard-controller:0.1.0\n")
+    base = [
+        "upgrade", "apply", str(bundle), "--compose-file", str(tmp_path / "c.yaml"),
+        "--env-file", str(env), "--health-url", server.url, "--no-backup", "--yes",
+        "--workdir", str(tmp_path / "w1"),
+    ]  # fmt: skip
+
+    code, out = await run(server, *base)
+    assert code == 1 and "REFUSED" in out  # the default stays strict
+    code, out = await run(server, *base, "--allow-unsigned")
+    assert code == 1 and "NOT verified by a signature" in out
+    assert "--confirm-unsigned 0.2.0-nightly.20261014" in out
+    assert "0.1.0" in env.read_text()  # nothing was touched
+    code, out = await run(
+        server, *base, "--allow-unsigned", "--confirm-unsigned", "0.2.0-nightly.20261014"
+    )
+    assert code == 0, out
+    assert "ok: node healthy" in out and "0.2.0" in env.read_text()

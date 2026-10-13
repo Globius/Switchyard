@@ -139,3 +139,35 @@ def test_feed_refuses_other_keys_plain_http_and_foreign_earlier_feeds(tmp_path: 
         ],
     )
     assert res.exit_code == 1  # an earlier feed from another signer is never re-signed
+
+
+def test_feed_keeps_only_the_newest_of_a_channel(tmp_path: Path) -> None:
+    import json
+
+    from switchyard.domain.releases import verify_feed
+
+    key = tmp_path / "k.pem"
+    res = runner.invoke(app, ["release", "keygen", str(key), "--key-id", "ci"])
+    trust = re.search(r"--trust ci=(\S+)", res.output).group(1)  # type: ignore[union-attr]
+    feed = tmp_path / "f.json"
+    stable = _bundle(tmp_path, key, "0.2.0", "s")
+    runner.invoke(
+        app,
+        ["release", "feed", str(feed), "--key", str(key), "--key-id", "ci",
+         "--bundle", f"{stable}=https://x.test/s"],
+    )  # fmt: skip
+    for day in ("20261012", "20261013", "20261014"):
+        nightly = _bundle(tmp_path, key, f"0.3.0-nightly.{day}", day)
+        res = runner.invoke(
+            app,
+            ["release", "feed", str(feed), "--key", str(key), "--key-id", "ci", "--channel",
+             "nightly", "--previous", str(feed), "--keep", "2",
+             "--bundle", f"{nightly}=https://x.test/{day}"],
+        )  # fmt: skip
+        assert res.exit_code == 0, res.output
+    parsed = verify_feed(json.loads(feed.read_text()), {"ci": trust})
+    assert [r.version for r in parsed.releases] == [
+        "0.2.0",
+        "0.3.0-nightly.20261013",
+        "0.3.0-nightly.20261014",
+    ]  # the stable release stays; the oldest nightly is gone
