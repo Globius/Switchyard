@@ -55,7 +55,33 @@ warns when there is no backup or the latest is more than seven days old.
 refuses with `409` and writes nothing if a tenant with the same id or name exists. Restored tenants have no engines: redeploy or re-enroll
 them. Users, tokens, identity providers and the audit log come from the database restore.
 
+
+## Looking for newer releases (built)
+
+Off by default. A system administrator points the controller at a **release feed**, a signed `releases.json` that lists versions,
+release notes, which versions each can be installed over, and bundle download links with their SHA-256. It can be a GitLab or GitHub
+release asset or raw file, any HTTPS URL, or a mirror inside your network.
+
+```sh
+curl -X PUT $URL/api/v1/system/releases -d '{"url":"https://git.example.com/switchyard/-/releases/permalink/latest/downloads/releases.json",
+  "channel":"stable","enabled":true,"trusted_keys":{"mykey":"<base64 Ed25519 public key>"}}'
+curl -X POST $URL/api/v1/system/releases/check     # look now; otherwise once a day
+```
+
+- One HTTPS GET, no redirects, no cookies, nothing about your installation in the request. Responses over 1 MiB are refused.
+- The feed is used **only if its Ed25519 signature verifies** against the project's keys or a key you list in `trusted_keys`. A hijacked repository or
+  mirror cannot make the controller recommend a malicious release. A bad or missing signature, a failed fetch or an invalid document is
+  shown as `error`; the last good feed stays in use and the controller is not affected.
+- When a newer release is listed on your channel (`stable`, or `candidate` as well), `GET /system/upgrade/check` returns an `update_available` finding
+  (a warning, never a block), the release notes (new, deprecated, breaking, action required) and the install path. If you are more than one
+  release behind, the path lists each version to go through, from each release's `upgrade_from`.
+- The feed never causes a download or an upgrade by itself.
+
+**Release process.** Each release publishes `releases.json` signed with the project key (`switchyard.domain.releases.sign_feed`): the
+signature is Ed25519 over the canonical JSON of `payload`. The project's public key goes into `PROJECT_KEYS`
+(`controller/switchyard/services/release_feed.py`) once it exists; until then operators add the key themselves.
+
 ## Planned (ADR 0205)
 
-Release feed and update check, signed upgrade bundles, a dry-run plan, the
+Signed upgrade bundles, a dry-run plan, the
 engine roll as a job with a health gate and pause, and the Upgrades page in the UI.

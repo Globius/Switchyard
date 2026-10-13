@@ -204,6 +204,8 @@ from switchyard.api.upgrade_models import (
     BackupTargetTestRead,
     BackupVerifyIn,
     BackupVerifyRead,
+    ReleaseFeedIn,
+    ReleaseFeedRead,
     UpgradeCheckRead,
 )
 from switchyard.config import broker_url
@@ -270,6 +272,7 @@ from switchyard.services.kubernetes import KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.probes import MonitorTestService
 from switchyard.services.quota_requests import QuotaRequests
+from switchyard.services.release_feed import ReleaseFeedService
 from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
 from switchyard.services.sessions import (
     LoginError,
@@ -333,6 +336,7 @@ class ApiServices:
     quota_requests: QuotaRequests = None  # type: ignore[assignment]
     controller_members: ControllerMembers = None  # type: ignore[assignment]
     upgrade: UpgradeService = None  # type: ignore[assignment]
+    release_feed: ReleaseFeedService = None  # type: ignore[assignment]
     backup: BackupService = None  # type: ignore[assignment]
     dns_records: DnsRecordSync | None = None
     autoscaler: Autoscaler | None = None
@@ -380,6 +384,7 @@ def build_services(
         )
     engines = EngineService(db)
     dns_providers = DnsProviders(db, secrets) if writer is not None else None
+    release_feed = ReleaseFeedService(db)
     backup = BackupService(
         db, secrets, Path(os.environ.get("SWITCHYARD_BACKUP_DIR", "/var/lib/switchyard/backups"))
     )
@@ -423,7 +428,8 @@ def build_services(
         devices=devices,
         quota_requests=QuotaRequests(db),
         controller_members=ControllerMembers(db),
-        upgrade=UpgradeService(db, backup=backup),
+        upgrade=UpgradeService(db, backup=backup, feed=release_feed),
+        release_feed=release_feed,
         backup=backup,
     )
 
@@ -4573,6 +4579,53 @@ def create_app(
         )
 
     @router.get(
+        "/system/releases",
+        tags=["system"],
+        summary="The release feed settings and the releases it lists",
+        response_model=ReleaseFeedRead,
+        responses=_ok(ex.RELEASE_FEED),
+    )
+    async def get_release_feed(who: Who, svc: Services) -> dict[str, Any]:
+        """Shows whether newer versions are looked for, where, and what the last check found.
+
+        Requires a system administrator.
+        """
+        return await _release_feed_json(svc, who)
+
+    @router.put(
+        "/system/releases",
+        tags=["system"],
+        summary="Set where to look for newer releases",
+        response_model=ReleaseFeedRead,
+        responses=_ok(ex.RELEASE_FEED) | VALIDATION_RESPONSE,
+    )
+    async def put_release_feed(body: ReleaseFeedIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Turn the update check on or off.
+
+        Off by default. The controller makes one HTTPS GET per day to the URL, with nothing
+        about this installation in the request, and uses the answer only if its Ed25519
+        signature verifies against the project's keys or the `trusted_keys` given here.
+        """
+        await svc.release_feed.set_config(who, body.model_dump(), request_id=_rid())
+        return await _release_feed_json(svc, who)
+
+    @router.post(
+        "/system/releases/check",
+        tags=["system"],
+        summary="Look for newer releases now",
+        response_model=ReleaseFeedRead,
+        responses=_ok(ex.RELEASE_FEED),
+    )
+    async def check_releases_now(who: Who, svc: Services) -> dict[str, Any]:
+        """Fetch and verify the feed immediately.
+
+        A failure is reported in `error`; the
+        previous verified releases stay available.
+        """
+        await svc.release_feed.refresh(who)
+        return await _release_feed_json(svc, who)
+
+    @router.get(
         "/system/upgrade/check",
         tags=["system"],
         summary="Versions of the controller, database and engines, with advice",
@@ -6177,3 +6230,8 @@ def _backup_json(r: Any) -> dict[str, Any]:
     out = asdict(r)
     out["id"], out["created_at"] = str(r.id), r.created_at.isoformat()
     return out
+
+
+async def _release_feed_json(svc: ApiServices, who: Any) -> dict[str, Any]:
+    cfg, state = await svc.release_feed.config(who), await svc.release_feed.state()
+    return {**asdict(cfg), **asdict(state)}

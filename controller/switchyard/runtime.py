@@ -82,6 +82,7 @@ from switchyard.services.jwks_sync import SYNC_JWKS_JOB, JwksSync
 from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.oidc import OidcClient
+from switchyard.services.release_feed import CHECK_RELEASES_JOB, ReleaseFeedService
 from switchyard.services.sessions import SessionService
 from switchyard.services.status import StatusService
 from switchyard.services.tlsalpn import EngineTlsAlpnPublisher
@@ -506,10 +507,12 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
         dns_record_sync(db, secrets),
         scaler := autoscaler(db, engines, secrets),
         PacketCaptures(db, engines),
+        release_feed=ReleaseFeedService(db),
     )
     schedule = {
         POLL_STATUS_JOB: timedelta(seconds=10),
         GC_JOB: timedelta(hours=1),
+        CHECK_RELEASES_JOB: timedelta(hours=24),
         CONTROLLER_TICK_JOB: timedelta(seconds=10),
         KUBERNETES_SYNC_JOB: timedelta(seconds=30),
         EXPIRE_DRAINS_JOB: timedelta(seconds=30),

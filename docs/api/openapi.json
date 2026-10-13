@@ -4306,6 +4306,31 @@
         "title": "BreakGlassSwitchIn",
         "type": "object"
       },
+      "BundleRead": {
+        "additionalProperties": false,
+        "description": "An upgrade bundle to download and what it must hash to.",
+        "properties": {
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "sha256",
+          "size_bytes"
+        ],
+        "title": "BundleRead",
+        "type": "object"
+      },
       "CaImportIn": {
         "additionalProperties": false,
         "description": "Body of `POST /certificates/import-ca`: a client CA bundle for mutual TLS.",
@@ -18767,6 +18792,239 @@
         "title": "RedirectRule",
         "type": "object"
       },
+      "ReleaseFeedIn": {
+        "additionalProperties": false,
+        "description": "Where to look for newer releases. Off until `enabled` is true.",
+        "properties": {
+          "channel": {
+            "default": "stable",
+            "enum": [
+              "stable",
+              "candidate"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "trusted_keys": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Extra trusted signing keys: key id to base64 Ed25519 public key (32 bytes).",
+            "title": "Trusted Keys",
+            "type": "object"
+          },
+          "url": {
+            "default": "",
+            "description": "An https URL of the signed `releases.json`.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "title": "ReleaseFeedIn",
+        "type": "object"
+      },
+      "ReleaseFeedRead": {
+        "additionalProperties": false,
+        "description": "The feed settings and what the last fetch found.",
+        "properties": {
+          "channel": {
+            "default": "stable",
+            "enum": [
+              "stable",
+              "candidate"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the feed was last fetched.",
+            "title": "Checked At"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the last fetch failed, if it did.",
+            "title": "Error"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether a verified feed is stored.",
+            "title": "Ok"
+          },
+          "releases": {
+            "description": "Verified releases, with notes and upgrade paths.",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseRead"
+            },
+            "title": "Releases",
+            "type": "array"
+          },
+          "trusted_keys": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Extra trusted signing keys: key id to base64 Ed25519 public key (32 bytes).",
+            "title": "Trusted Keys",
+            "type": "object"
+          },
+          "url": {
+            "default": "",
+            "description": "An https URL of the signed `releases.json`.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "title": "ReleaseFeedRead",
+        "type": "object"
+      },
+      "ReleaseNotesRead": {
+        "additionalProperties": false,
+        "description": "What a release changes, in the groups an operator reads before confirming.",
+        "properties": {
+          "action_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Action Required",
+            "type": "array"
+          },
+          "breaking": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Breaking",
+            "type": "array"
+          },
+          "deprecated": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Deprecated",
+            "type": "array"
+          },
+          "new": {
+            "items": {
+              "type": "string"
+            },
+            "title": "New",
+            "type": "array"
+          }
+        },
+        "title": "ReleaseNotesRead",
+        "type": "object"
+      },
+      "ReleaseRead": {
+        "additionalProperties": false,
+        "description": "One release from the verified feed.",
+        "properties": {
+          "bundle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channel": {
+            "default": "stable",
+            "enum": [
+              "stable",
+              "candidate"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "min_agent": {
+            "default": "0.0.0",
+            "title": "Min Agent",
+            "type": "string"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/ReleaseNotesRead"
+          },
+          "notes_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes Url"
+          },
+          "recommended_min_agent": {
+            "default": "0.0.0",
+            "title": "Recommended Min Agent",
+            "type": "string"
+          },
+          "upgrade_from": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Upgrade From",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "date"
+        ],
+        "title": "ReleaseRead",
+        "type": "object"
+      },
       "RemoveHeader": {
         "additionalProperties": false,
         "description": "Remove every value of a header.",
@@ -22522,6 +22780,62 @@
         "title": "UnreachableEngine",
         "type": "object"
       },
+      "UpdateRead": {
+        "additionalProperties": false,
+        "description": "The newer release the feed found and how to get there.",
+        "properties": {
+          "bundle": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BundleRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/ReleaseNotesRead"
+          },
+          "notes_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes Url"
+          },
+          "path": {
+            "description": "Versions to install in order; one element is a direct step.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Path",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "date",
+          "notes_url",
+          "notes",
+          "path",
+          "bundle"
+        ],
+        "title": "UpdateRead",
+        "type": "object"
+      },
       "UpgradeCheckRead": {
         "additionalProperties": false,
         "description": "Versions found and what to do about them. Nothing here blocks an engine or a request.",
@@ -22572,6 +22886,17 @@
             ],
             "title": "Schema State",
             "type": "string"
+          },
+          "update": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UpdateRead"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newer release the feed found: version, notes, upgrade path and bundle."
           }
         },
         "required": [
@@ -33497,6 +33822,346 @@
           }
         },
         "summary": "Revert the pending controller change now",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/releases": {
+      "get": {
+        "description": "Shows whether newer versions are looked for, where, and what the last check found.\n\nRequires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "get_release_feed_api_v1_system_releases_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "channel": "stable",
+                  "checked_at": "2026-10-13T04:00:00+00:00",
+                  "enabled": true,
+                  "latest_version": "0.2.0",
+                  "ok": true,
+                  "releases": [
+                    {
+                      "channel": "stable",
+                      "date": "2026-10-20",
+                      "notes": {
+                        "action_required": [
+                          "Back up first"
+                        ],
+                        "new": [
+                          "Upgrade checks"
+                        ]
+                      },
+                      "upgrade_from": [
+                        "0.1.0"
+                      ],
+                      "version": "0.2.0"
+                    }
+                  ],
+                  "trusted_keys": {},
+                  "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFeedRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The release feed settings and the releases it lists",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "put": {
+        "description": "Turn the update check on or off.\n\nOff by default. The controller makes one HTTPS GET per day to the URL, with nothing\nabout this installation in the request, and uses the answer only if its Ed25519\nsignature verifies against the project's keys or the `trusted_keys` given here.\n\n**Access:** `system-admin` only.",
+        "operationId": "put_release_feed_api_v1_system_releases_put",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "channel": "stable",
+                "enabled": true,
+                "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseFeedIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "channel": "stable",
+                  "checked_at": "2026-10-13T04:00:00+00:00",
+                  "enabled": true,
+                  "latest_version": "0.2.0",
+                  "ok": true,
+                  "releases": [
+                    {
+                      "channel": "stable",
+                      "date": "2026-10-20",
+                      "notes": {
+                        "action_required": [
+                          "Back up first"
+                        ],
+                        "new": [
+                          "Upgrade checks"
+                        ]
+                      },
+                      "upgrade_from": [
+                        "0.1.0"
+                      ],
+                      "version": "0.2.0"
+                    }
+                  ],
+                  "trusted_keys": {},
+                  "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFeedRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Set where to look for newer releases",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/releases/check": {
+      "post": {
+        "description": "Fetch and verify the feed immediately.\n\nA failure is reported in `error`; the\nprevious verified releases stay available.\n\n**Access:** `system-admin` only.",
+        "operationId": "check_releases_now_api_v1_system_releases_check_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "channel": "stable",
+                  "checked_at": "2026-10-13T04:00:00+00:00",
+                  "enabled": true,
+                  "latest_version": "0.2.0",
+                  "ok": true,
+                  "releases": [
+                    {
+                      "channel": "stable",
+                      "date": "2026-10-20",
+                      "notes": {
+                        "action_required": [
+                          "Back up first"
+                        ],
+                        "new": [
+                          "Upgrade checks"
+                        ]
+                      },
+                      "upgrade_from": [
+                        "0.1.0"
+                      ],
+                      "version": "0.2.0"
+                    }
+                  ],
+                  "trusted_keys": {},
+                  "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseFeedRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Look for newer releases now",
         "tags": [
           "system"
         ],

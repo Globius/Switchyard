@@ -20,12 +20,22 @@ from switchyard import __version__
 from switchyard.db.migrate import alembic_config
 from switchyard.db.ops_models import EngineStatusRow
 from switchyard.db.tenancy import admin_session
-from switchyard.domain.versions import Compat, Finding, check_agent, check_backup, schema_state
+from switchyard.domain.releases import latest as latest_release
+from switchyard.domain.releases import upgrade_path
+from switchyard.domain.versions import (
+    Compat,
+    Finding,
+    check_agent,
+    check_backup,
+    parse_version,
+    schema_state,
+)
 from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
 
 if TYPE_CHECKING:
     from switchyard.services.backup import BackupService
+    from switchyard.services.release_feed import ReleaseFeedService
 
 #: What this release supports. Raise ``recommended_min_agent`` when a release makes older agents
 #: second-class; raise ``min_agent`` only when a bundle format is dropped (ADR 0205 section 2).
@@ -53,6 +63,7 @@ class UpgradeCheck:
     schema_state: str
     engines: list[EngineVersion] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
+    update: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """JSON-ready form."""
@@ -67,11 +78,13 @@ class UpgradeService:
         db: Databases,
         latest_version: str | None = None,
         backup: "BackupService | None" = None,
+        feed: "ReleaseFeedService | None" = None,
     ) -> None:
-        """`latest_version` overrides the newest known release; `backup` adds backup-age advice."""
+        """`latest_version` overrides the newest known release; `backup` and `feed` add advice."""
         self._db = db
         self._latest = latest_version
         self._backup = backup
+        self._feed = feed
 
     async def check(self, principal: Principal) -> UpgradeCheck:
         """Compare the controller, its schema and every engine's agent with the newest release.
@@ -114,11 +127,35 @@ class UpgradeService:
                     "Back up, then run `syctl db upgrade`.",
                 )
             )
+        update: dict[str, Any] | None = None
+        feed = await self._feed.feed() if self._feed is not None else None
+        if feed is not None and self._feed is not None:
+            top = latest_release(feed, (await self._feed.config()).channel)
+            running, newest = parse_version(__version__), parse_version(top.version if top else "")
+            if top is not None and running and newest and newest > running:
+                latest = top.version
+                update = {
+                    "version": top.version,
+                    "date": top.date,
+                    "notes_url": top.notes_url,
+                    "notes": top.notes.model_dump(),
+                    "path": upgrade_path(feed, __version__, top.version),
+                    "bundle": top.bundle.model_dump() if top.bundle else None,
+                }
+                findings.append(
+                    Finding(
+                        "update_available",
+                        "warning",
+                        "controller",
+                        f"Version {top.version} is available; this controller runs {__version__}.",
+                        "Back up, read the release notes, then upgrade (docs/upgrades.md).",
+                    )
+                )
         for e in engines:
             findings.extend(check_agent(e.agent_version or "", latest, COMPAT, e.name))
         if self._backup is not None:
             findings.extend(check_backup(await self._backup.last_ok(), datetime.now(UTC)))
-        return UpgradeCheck(__version__, latest, current, head, state, engines, findings)
+        return UpgradeCheck(__version__, latest, current, head, state, engines, findings, update)
 
 
 def _engine_query() -> Any:

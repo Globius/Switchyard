@@ -30,6 +30,50 @@ class FindingRead(ApiModel):
     action: str = Field(description="What to do about it; empty when nothing is needed.")
 
 
+class ReleaseNotesRead(ApiModel):
+    """What a release changes, in the groups an operator reads before confirming."""
+
+    new: list[str] = Field(default_factory=list)
+    deprecated: list[str] = Field(default_factory=list)
+    breaking: list[str] = Field(default_factory=list)
+    action_required: list[str] = Field(default_factory=list)
+
+
+class BundleRead(ApiModel):
+    """An upgrade bundle to download and what it must hash to."""
+
+    url: str
+    sha256: str
+    size_bytes: int
+
+
+class ReleaseRead(ApiModel):
+    """One release from the verified feed."""
+
+    version: str
+    channel: Literal["stable", "candidate"] = "stable"
+    date: str
+    notes_url: str | None = None
+    notes: ReleaseNotesRead = Field(default_factory=ReleaseNotesRead)
+    upgrade_from: list[str] = Field(default_factory=list)
+    min_agent: str = "0.0.0"
+    recommended_min_agent: str = "0.0.0"
+    bundle: BundleRead | None = None
+
+
+class UpdateRead(ApiModel):
+    """The newer release the feed found and how to get there."""
+
+    version: str
+    date: str
+    notes_url: str | None
+    notes: ReleaseNotesRead
+    path: list[str] = Field(
+        description="Versions to install in order; one element is a direct step."
+    )
+    bundle: BundleRead | None
+
+
 class UpgradeCheckRead(ApiModel):
     """Versions found and what to do about them. Nothing here blocks an engine or a request."""
 
@@ -42,6 +86,10 @@ class UpgradeCheckRead(ApiModel):
     schema_state: Literal["current", "pending", "newer"]
     engines: list[EngineVersionRead]
     findings: list[FindingRead]
+    update: UpdateRead | None = Field(
+        default=None,
+        description="The newer release the feed found: version, notes, upgrade path and bundle.",
+    )
 
 
 class BackupRunRead(ApiModel):
@@ -115,3 +163,27 @@ class BackupRestoreRead(BackupVerifyRead):
     """What the archive holds, and whether it was restored."""
 
     restored: bool
+
+
+class ReleaseFeedIn(ApiModel):
+    """Where to look for newer releases. Off until `enabled` is true."""
+
+    url: str = Field(default="", description="An https URL of the signed `releases.json`.")
+    channel: Literal["stable", "candidate"] = "stable"
+    enabled: bool = False
+    trusted_keys: dict[str, str] = Field(
+        default_factory=dict,
+        description="Extra trusted signing keys: key id to base64 Ed25519 public key (32 bytes).",
+    )
+
+
+class ReleaseFeedRead(ReleaseFeedIn):
+    """The feed settings and what the last fetch found."""
+
+    checked_at: str | None = Field(default=None, description="When the feed was last fetched.")
+    ok: bool | None = Field(default=None, description="Whether a verified feed is stored.")
+    error: str | None = Field(default=None, description="Why the last fetch failed, if it did.")
+    latest_version: str | None = None
+    releases: list[ReleaseRead] = Field(
+        default_factory=list, description="Verified releases, with notes and upgrade paths."
+    )

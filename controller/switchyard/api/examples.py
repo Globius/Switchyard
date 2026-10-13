@@ -1521,3 +1521,23 @@ BACKUP_VERIFY = {
 }
 
 BACKUP_RESTORE = {**BACKUP_VERIFY, "restored": True}
+
+RELEASE_FEED = {
+    "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",
+    "channel": "stable",
+    "enabled": True,
+    "trusted_keys": {},
+    "checked_at": "2026-10-13T04:00:00+00:00",
+    "ok": True,
+    "error": None,
+    "latest_version": "0.2.0",
+    "releases": [
+        {
+            "version": "0.2.0",
+            "channel": "stable",
+            "date": "2026-10-20",
+            "notes": {"new": ["Upgrade checks"], "action_required": ["Back up first"]},
+            "upgrade_from": ["0.1.0"],
+        }
+    ],
+}

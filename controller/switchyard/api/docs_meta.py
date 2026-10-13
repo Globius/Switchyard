@@ -557,6 +557,11 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     },
     "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
     "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
+    "PUT /system/releases": {
+        "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",
+        "channel": "stable",
+        "enabled": True,
+    },
     "POST /system/backups/restore": {
         "target": "nightly",
         "archive": "switchyard-0.1.0-20261013T040000Z.syb",
