@@ -8,6 +8,7 @@ const PAGES = [
   ["virtual service overview with metrics", "/t/acme/virtual-services/v1"],
   ["virtual service settings", "/t/acme/virtual-services/v1/settings"],
   ["virtual service rendered config", "/t/acme/virtual-services/v1/rendered"],
+  ["usage and requests", "/t/acme/portal"],
   ["jobs", "/t/acme/jobs"],
   ["revisions", "/t/acme/revisions"],
 ] as const;

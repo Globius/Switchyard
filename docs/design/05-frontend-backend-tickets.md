@@ -209,7 +209,7 @@ Still missing for a UI build, one ticket each (status is updated in this table a
 | A4 | Tenant search for the command palette | `GET …/search?q&types` over all object names | done |
 | A5 | Tenant home needs one call, not eight | `GET …/summary` (service states, failing members, drifted engines, expiring certificates, running jobs, open drafts, latest revision) | done |
 | A6 | Engines: only per-group list, thin read model | `GET …/engines`, `GET …/engines/{id}` with `mgmt_ip`, `agent_url`, `se_group_id`, enrollment state, VM placement | done (host online state not exposed) |
-| A7 | List filters and sort: `?se_group=`, `?protocol=`, `?enabled=`, `?sort=` | on virtual services, pools, engines. **`?label=` is dropped: objects have no labels** (decision recorded in 04) | done |
+| A7 | List filters and sort: `?se_group=`, `?protocol=`, `?enabled=`, `?sort=` | on virtual services, pools, engines. `?label=` was dropped (objects had no labels) and built later: labels on virtual services and pools, ADR 0198 | done |
 | A8 | Change-set conflicts and impact (G8) | Stale `expected_version` returns `412` with `conflict{object_type, object_id, expected_version, current_version}` (client holds base, `GET` gives theirs); diff gains `impact` (services, VIPs, SE groups, hostnames) | done |
 | A9 | Metrics and logs (G4) | `Telemetry` adapter (Prometheus, Loki) behind `GET …/virtual-services/{id}/metrics` and `…/logs`; both answer `available: false` when not configured | done (API; the telemetry pipeline is not built) |
 | A10 | Finer live events (G5) | SSE `job_progress`, `vs_state`, `revision_applied` next to `status`; catalog under `x-sse-events` in OpenAPI (`member_status` and `bgp_session` are covered by `status`) | done |

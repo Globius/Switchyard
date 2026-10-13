@@ -5697,6 +5697,321 @@
         "title": "ControllerListenRead",
         "type": "object"
       },
+      "ControllerMemberIn": {
+        "additionalProperties": false,
+        "description": "A controller VM to list.",
+        "properties": {
+          "address": {
+            "description": "The VM's IP address or host name.",
+            "title": "Address",
+            "type": "string"
+          },
+          "external": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Not managed by this platform. Default: true unless `platform` is `proxmox`.",
+            "title": "External"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A label for the hypervisor host, for example `esxi-01`.",
+            "title": "Host"
+          },
+          "name": {
+            "description": "The Patroni member name (`PATRONI_NAME`). Status is matched on it.",
+            "title": "Name",
+            "type": "string"
+          },
+          "nofailover": {
+            "default": false,
+            "description": "The member never becomes the primary (Patroni tag `nofailover`). Patroni's own report wins when it is reachable.",
+            "title": "Nofailover",
+            "type": "boolean"
+          },
+          "patroni_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Patroni's REST API, for example `http://10.0.0.13:8008`. Status is read from the first listed member that answers.",
+            "title": "Patroni Url"
+          },
+          "platform": {
+            "description": "What the VM runs on.",
+            "enum": [
+              "proxmox",
+              "esxi",
+              "other"
+            ],
+            "title": "Platform",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "address",
+          "platform"
+        ],
+        "title": "ControllerMemberIn",
+        "type": "object"
+      },
+      "ControllerMemberPatch": {
+        "additionalProperties": false,
+        "description": "Fields to change; `name` is fixed. Send the `ETag` in `If-Match`.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "external": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "nofailover": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nofailover"
+          },
+          "patroni_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patroni Url"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "enum": [
+                  "proxmox",
+                  "esxi",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          }
+        },
+        "title": "ControllerMemberPatch",
+        "type": "object"
+      },
+      "ControllerMemberRead": {
+        "additionalProperties": false,
+        "description": "A controller cluster member.",
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "external": {
+            "description": "Not managed by the platform (for example on ESXi).",
+            "title": "External",
+            "type": "boolean"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "in_cluster": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether Patroni lists it; null when no cluster view could be read.",
+            "title": "In Cluster"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nofailover": {
+            "title": "Nofailover",
+            "type": "boolean"
+          },
+          "patroni_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patroni Url"
+          },
+          "platform": {
+            "enum": [
+              "proxmox",
+              "esxi",
+              "other"
+            ],
+            "title": "Platform",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MemberStatusRead"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "address",
+          "platform",
+          "host",
+          "external",
+          "nofailover",
+          "patroni_url",
+          "created_by",
+          "created_at",
+          "version",
+          "status",
+          "in_cluster"
+        ],
+        "title": "ControllerMemberRead",
+        "type": "object"
+      },
+      "ControllerMembersRead": {
+        "additionalProperties": false,
+        "description": "The members and the cluster view they were matched with.",
+        "properties": {
+          "cluster_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why no Patroni answered.",
+            "title": "Cluster Error"
+          },
+          "cluster_reachable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether a Patroni answered; null when no member has a `patroni_url`.",
+            "title": "Cluster Reachable"
+          },
+          "leader": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The member that holds the primary role.",
+            "title": "Leader"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/ControllerMemberRead"
+            },
+            "title": "Members",
+            "type": "array"
+          }
+        },
+        "required": [
+          "members",
+          "cluster_reachable",
+          "cluster_error",
+          "leader"
+        ],
+        "title": "ControllerMembersRead",
+        "type": "object"
+      },
       "ControllerPortRead": {
         "additionalProperties": false,
         "description": "A port of the `controller` service.",
@@ -11731,6 +12046,80 @@
         "title": "MemberStatus",
         "type": "object"
       },
+      "MemberStatusRead": {
+        "additionalProperties": false,
+        "description": "What Patroni reports; every field is null when it could not be read.",
+        "properties": {
+          "database_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`leader`, `standby_leader`, `sync_standby` or `replica`.",
+            "title": "Database Role"
+          },
+          "database_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For example `running` or `streaming`.",
+            "title": "Database State"
+          },
+          "lag_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replication lag; null for the leader or unknown.",
+            "title": "Lag Bytes"
+          },
+          "nofailover": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Patroni's `nofailover` tag.",
+            "title": "Nofailover"
+          },
+          "timeline": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeline"
+          }
+        },
+        "required": [
+          "database_role",
+          "database_state",
+          "lag_bytes",
+          "timeline",
+          "nofailover"
+        ],
+        "title": "MemberStatusRead",
+        "type": "object"
+      },
       "MetricPoint": {
         "additionalProperties": false,
         "description": "One sample of a series.",
@@ -13635,6 +14024,7 @@
               "kubernetes_cluster",
               "member",
               "quota",
+              "quota_request",
               "require_approval",
               "revision",
               "role_mapping",
@@ -13659,6 +14049,7 @@
               "cancel",
               "change",
               "create",
+              "decide",
               "deploy",
               "disable",
               "edit",
@@ -13667,6 +14058,7 @@
               "manage",
               "read",
               "reject",
+              "request",
               "request_approval",
               "retry",
               "rollback",
@@ -13888,7 +14280,7 @@
       },
       "Pool": {
         "additionalProperties": false,
-        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,\n        ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,\n        needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).\n    tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2\n        stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``\n        keeps the default of one hour.\n    send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.\n    client_certificate_id: Server certificate HAProxy presents to members (backend\n        mutual TLS). Needs ``tls``.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.",
+        "description": "A group of backend servers.\n\nAttributes:\n    algorithm: Load-balancing algorithm.\n    persistence: Optional persistence profile.\n    health_monitor_id: Optional shared health monitor.\n    tls: Connect to members over TLS.\n    tls_verify: Verify the member certificate against the system CA store. Off by default to\n        match Avi behaviour for internal backends with private certificates.\n    passive_check: Also judge members by their live traffic. Needs a health monitor.\n    slow_start_s: Seconds over which a member that comes back up ramps from zero to its full\n        weight (HAProxy ``slowstart``). Needs a health monitor.\n    backend_protocol: How HAProxy speaks to the members (``http`` pools only): ``http1``,\n        ``h2`` (HTTP/2 negotiated over TLS, needs ``tls``) or ``h2c`` (HTTP/2 without TLS,\n        needs no ``tls``). gRPC backends need one of the HTTP/2 kinds (ADR 0116).\n    tunnel_timeout_s: Idle time of an upgraded connection (WebSocket) or a long HTTP/2\n        stream (gRPC) before HAProxy closes it (``timeout tunnel``; ADR 0116). ``None``\n        keeps the default of one hour.\n    send_proxy: Send the PROXY protocol header (``v1`` or ``v2``) to every member.\n    client_certificate_id: Server certificate HAProxy presents to members (backend\n        mutual TLS). Needs ``tls``.\n    discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.\n    members: Backend servers, unique by name. With ``discovery`` the job owns this list.\n    labels: Free key/value tags for finding the pool (``?label=``; ADR 0198). Never rendered.",
         "properties": {
           "algorithm": {
             "$ref": "#/components/schemas/Algorithm",
@@ -13942,6 +14334,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "members": {
             "default": [],
@@ -14119,6 +14518,13 @@
               }
             ],
             "title": "Health Monitor Id"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "members": {
             "default": [],
@@ -14437,6 +14843,20 @@
             ],
             "title": "Health Monitor Id"
           },
+          "labels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels"
+          },
           "members": {
             "anyOf": [
               {
@@ -14636,6 +15056,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "members": {
             "default": [],
@@ -15751,6 +16178,202 @@
           "equals"
         ],
         "title": "QueryOp",
+        "type": "string"
+      },
+      "QuotaDecisionIn": {
+        "additionalProperties": false,
+        "description": "The decision on a quota request.",
+        "properties": {
+          "granted_limit": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Approve only: the new limit, between the current limit and the requested one. Default: the requested limit.",
+            "title": "Granted Limit"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Shown to the tenant. Required when the request is denied.",
+            "title": "Note"
+          }
+        },
+        "title": "QuotaDecisionIn",
+        "type": "object"
+      },
+      "QuotaRequestIn": {
+        "additionalProperties": false,
+        "description": "A request for a higher limit.",
+        "properties": {
+          "reason": {
+            "description": "Why the tenant needs it.",
+            "maxLength": 500,
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_limit": {
+            "description": "The limit the tenant wants. It must be higher than the current one.",
+            "minimum": 1.0,
+            "title": "Requested Limit",
+            "type": "integer"
+          },
+          "resource": {
+            "description": "The quota key, an object type such as `virtual_service`, or `stick_table_entries`. The tenant must already have a limit for it.",
+            "title": "Resource",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "requested_limit",
+          "reason"
+        ],
+        "title": "QuotaRequestIn",
+        "type": "object"
+      },
+      "QuotaRequestRead": {
+        "additionalProperties": false,
+        "description": "A quota request.",
+        "properties": {
+          "current_limit": {
+            "description": "The tenant's limit when the request was filed.",
+            "title": "Current Limit",
+            "type": "integer"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The decider, or the requester who withdrew it.",
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "granted_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the request was approved.",
+            "title": "Granted Limit"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "requested_by": {
+            "title": "Requested By",
+            "type": "string"
+          },
+          "requested_limit": {
+            "title": "Requested Limit",
+            "type": "integer"
+          },
+          "resource": {
+            "title": "Resource",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "approved",
+              "denied",
+              "withdrawn"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "tenant": {
+            "title": "Tenant",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "tenant",
+          "resource",
+          "current_limit",
+          "requested_limit",
+          "reason",
+          "state",
+          "requested_by",
+          "requested_at",
+          "granted_limit",
+          "decided_by",
+          "decided_at",
+          "decision_note"
+        ],
+        "title": "QuotaRequestRead",
+        "type": "object"
+      },
+      "QuotaRequestState": {
+        "description": "Where a quota request stands.",
+        "enum": [
+          "pending",
+          "approved",
+          "denied",
+          "withdrawn"
+        ],
+        "title": "QuotaRequestState",
         "type": "string"
       },
       "RateLimitPolicySet": {
@@ -20413,7 +21036,7 @@
       },
       "VirtualService": {
         "additionalProperties": false,
-        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).\n    forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or\n        ``tunnel`` (ADR 0192). The last two need every member on the service port.\n    dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).",
+        "description": "A VIP, its ports and how traffic reaches pools.\n\nAttributes:\n    se_group_id: The SE group that serves it.\n    protocol: ``http`` (L7 with host/path routing), ``tcp`` (L4) or ``udp`` (IPVS).\n    enabled: Disabled services are not rendered.\n    vip: The bind address. ``vip_pool_id`` records which pool it was allocated from.\n    ports: Listening ports (at least one, unique).\n    routes: L7 routes (``http`` only).\n    default_pool_id: Fallback pool for ``http``; the only pool for ``tcp``/``udp``.\n    certificate_ids: Certificates for TLS ports. The first is the default for unknown SNI.\n    policy_set_ids: Redirect, rewrite, respond and error-page policy sets, in attachment order.\n    allow_list_id: Allow-list policy set (for example the Cloudflare ranges).\n    enforce_allow_list: Reject connections from sources outside the allow list.\n    deny_list_id: Allow-list policy set whose networks are refused (for example a country or\n        reputation list, ADR 0147). Applies to the client address after restoration.\n    restore_client_ip_header: Header (for example ``CF-Connecting-IP``) that carries the real\n        client address; honoured only when the connection source is in the allow list.\n    compression: Response compression (``http`` only; ADR 0117).\n    cache: Response cache (``http`` only; ADR 0117).\n    labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.\n    forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or\n        ``tunnel`` (ADR 0192). The last two need every member on the service port.\n    dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).",
         "properties": {
           "allow_list_id": {
             "anyOf": [
@@ -20508,6 +21131,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "name": {
             "title": "Name",
@@ -20697,6 +21327,13 @@
           "forward_mode": {
             "$ref": "#/components/schemas/IpvsForward",
             "default": "nat"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "name": {
             "title": "Name",
@@ -21013,6 +21650,20 @@
               }
             ]
           },
+          "labels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Labels"
+          },
           "name": {
             "anyOf": [
               {
@@ -21241,6 +21892,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "object"
           },
           "name": {
             "title": "Name",
@@ -27060,6 +27718,376 @@
         "x-required-role": "viewer"
       }
     },
+    "/api/v1/quota-requests": {
+      "get": {
+        "description": "The queue a system administrator works, oldest first.\n\n**Access:** `system-admin` only.",
+        "operationId": "list_quota_requests_api_v1_quota_requests_get",
+        "parameters": [
+          {
+            "description": "Only requests in this state; default `pending`.",
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/QuotaRequestState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "pending",
+              "description": "Only requests in this state; default `pending`.",
+              "title": "State"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "current_limit": 20,
+                    "id": "0192f1a2-0000-7000-8000-00000000d701",
+                    "reason": "Two product teams move onto the platform in November.",
+                    "requested_at": "2026-10-12T09:00:00Z",
+                    "requested_by": "user:miguel@example.test",
+                    "requested_limit": 50,
+                    "resource": "virtual_service",
+                    "state": "pending",
+                    "tenant": "acme",
+                    "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QuotaRequestRead"
+                  },
+                  "title": "Response List Quota Requests Api V1 Quota Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List quota requests of every tenant",
+        "tags": [
+          "quota requests"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/quota-requests/{request}/approve": {
+      "post": {
+        "description": "Raise the tenant's quota to the requested limit, or to `granted_limit` if lower.\n\n**Access:** `system-admin` only.",
+        "operationId": "approve_quota_request_api_v1_quota_requests__request__approve_post",
+        "parameters": [
+          {
+            "description": "Quota request id.",
+            "in": "path",
+            "name": "request",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "granted_limit": 40,
+                "note": "40 for now."
+              },
+              "schema": {
+                "$ref": "#/components/schemas/QuotaDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "current_limit": 20,
+                  "granted_limit": 40,
+                  "id": "0192f1a2-0000-7000-8000-00000000d701",
+                  "reason": "Two product teams move onto the platform in November.",
+                  "requested_at": "2026-10-12T09:00:00Z",
+                  "requested_by": "user:miguel@example.test",
+                  "requested_limit": 50,
+                  "resource": "virtual_service",
+                  "state": "approved",
+                  "tenant": "acme",
+                  "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaRequestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Approve a quota request",
+        "tags": [
+          "quota requests"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/quota-requests/{request}/deny": {
+      "post": {
+        "description": "Refuse it; `note` is required and is shown to the tenant.\n\n**Access:** `system-admin` only.",
+        "operationId": "deny_quota_request_api_v1_quota_requests__request__deny_post",
+        "parameters": [
+          {
+            "description": "Quota request id.",
+            "in": "path",
+            "name": "request",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "note": "Delete unused services first."
+              },
+              "schema": {
+                "$ref": "#/components/schemas/QuotaDecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "current_limit": 20,
+                  "id": "0192f1a2-0000-7000-8000-00000000d701",
+                  "reason": "Two product teams move onto the platform in November.",
+                  "requested_at": "2026-10-12T09:00:00Z",
+                  "requested_by": "user:miguel@example.test",
+                  "requested_limit": 50,
+                  "resource": "virtual_service",
+                  "state": "denied",
+                  "tenant": "acme",
+                  "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaRequestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Deny a quota request",
+        "tags": [
+          "quota requests"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
     "/api/v1/role-mappings": {
       "get": {
         "description": "Every mapping, optionally filtered by provider (id or name), tenant or group.\n\n**Access:** `system-admin` only.",
@@ -28562,6 +29590,527 @@
           }
         },
         "summary": "Keep the new controller settings",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/controller/members": {
+      "get": {
+        "description": "The controller VMs, including the external one on ESXi, with what Patroni reports.\n\nThe state comes from the first member whose `patroni_url` answers. A member Patroni does\nnot list has `in_cluster: false`.\n\n**Access:** `system-admin` only.",
+        "operationId": "list_controller_members_api_v1_system_controller_members_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "cluster_reachable": true,
+                  "leader": "ctl-1",
+                  "members": [
+                    {
+                      "address": "10.0.0.13",
+                      "created_at": "2026-10-12T09:00:00Z",
+                      "created_by": "user:miguel@example.test",
+                      "external": true,
+                      "host": "esxi-01",
+                      "id": "0192f1a2-0000-7000-8000-00000000e701",
+                      "in_cluster": true,
+                      "name": "ctl-esxi",
+                      "nofailover": true,
+                      "patroni_url": "http://10.0.0.13:8008",
+                      "platform": "esxi",
+                      "status": {
+                        "database_role": "replica",
+                        "database_state": "streaming",
+                        "lag_bytes": 0,
+                        "nofailover": true,
+                        "timeline": 4
+                      },
+                      "version": 1
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerMembersRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "The controller's cluster members",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "post": {
+        "description": "Record a controller VM. This only describes it; nothing is deployed or joined.\n\n**Access:** `system-admin` only.",
+        "operationId": "create_controller_member_api_v1_system_controller_members_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "address": "10.0.0.13",
+                "host": "esxi-01",
+                "name": "ctl-esxi",
+                "nofailover": true,
+                "patroni_url": "http://10.0.0.13:8008",
+                "platform": "esxi"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ControllerMemberIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "address": "10.0.0.13",
+                  "created_at": "2026-10-12T09:00:00Z",
+                  "created_by": "user:miguel@example.test",
+                  "external": true,
+                  "host": "esxi-01",
+                  "id": "0192f1a2-0000-7000-8000-00000000e701",
+                  "in_cluster": true,
+                  "name": "ctl-esxi",
+                  "nofailover": true,
+                  "patroni_url": "http://10.0.0.13:8008",
+                  "platform": "esxi",
+                  "status": {
+                    "database_role": "replica",
+                    "database_state": "streaming",
+                    "lag_bytes": 0,
+                    "nofailover": true,
+                    "timeline": 4
+                  },
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerMemberRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "List a controller cluster member",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/controller/members/{controller_member}": {
+      "delete": {
+        "description": "Remove it from the list. The VM, etcd and Patroni are not touched.\n\n**Access:** `system-admin` only.",
+        "operationId": "delete_controller_member_api_v1_system_controller_members__controller_member__delete",
+        "parameters": [
+          {
+            "description": "Controller cluster member id.",
+            "in": "path",
+            "name": "controller_member",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Controller Member",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The object's version as a quoted integer (the `ETag` of a read), for example `\"3\"`.",
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Forget a controller cluster member",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "patch": {
+        "description": "Change the listed fields; omitted ones stay.\n\n**Access:** `system-admin` only.",
+        "operationId": "patch_controller_member_api_v1_system_controller_members__controller_member__patch",
+        "parameters": [
+          {
+            "description": "Controller cluster member id.",
+            "in": "path",
+            "name": "controller_member",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Controller Member",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The object's version as a quoted integer (the `ETag` of a read), for example `\"3\"`.",
+            "in": "header",
+            "name": "if-match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "host": "esxi-02"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/ControllerMemberPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "address": "10.0.0.13",
+                  "created_at": "2026-10-12T09:00:00Z",
+                  "created_by": "user:miguel@example.test",
+                  "external": true,
+                  "host": "esxi-01",
+                  "id": "0192f1a2-0000-7000-8000-00000000e701",
+                  "in_cluster": true,
+                  "name": "ctl-esxi",
+                  "nofailover": true,
+                  "patroni_url": "http://10.0.0.13:8008",
+                  "platform": "esxi",
+                  "status": {
+                    "database_role": "replica",
+                    "database_state": "streaming",
+                    "lag_bytes": 0,
+                    "nofailover": true,
+                    "timeline": 4
+                  },
+                  "version": 1
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ControllerMemberRead"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "ETag": {
+                "description": "The object's version as a quoted integer, for example `\"3\"`. Send it back as `If-Match` on PATCH and DELETE.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` does not match the object's current version (stale write)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "`If-Match` is required for this request."
+          }
+        },
+        "summary": "Change a controller cluster member",
         "tags": [
           "system"
         ],
@@ -45476,6 +47025,27 @@
             }
           },
           {
+            "description": "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels.",
+            "in": "query",
+            "name": "label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels.",
+              "title": "Label"
+            }
+          },
+          {
             "description": "Checked by this monitor.",
             "in": "query",
             "name": "health_monitor",
@@ -46724,6 +48294,399 @@
           "audit"
         ],
         "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/quota-requests": {
+      "get": {
+        "description": "Newest first. Anyone who can read the tenant can read its requests.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_tenant_quota_requests_api_v1_tenants__t__quota_requests_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only requests in this state.",
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/QuotaRequestState"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only requests in this state.",
+              "title": "State"
+            }
+          },
+          {
+            "description": "Page size.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "current_limit": 20,
+                    "id": "0192f1a2-0000-7000-8000-00000000d701",
+                    "reason": "Two product teams move onto the platform in November.",
+                    "requested_at": "2026-10-12T09:00:00Z",
+                    "requested_by": "user:miguel@example.test",
+                    "requested_limit": 50,
+                    "resource": "virtual_service",
+                    "state": "pending",
+                    "tenant": "acme",
+                    "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QuotaRequestRead"
+                  },
+                  "title": "Response List Tenant Quota Requests Api V1 Tenants  T  Quota Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List the tenant's quota requests",
+        "tags": [
+          "quota requests"
+        ],
+        "x-required-role": "viewer"
+      },
+      "post": {
+        "description": "File a request for a higher limit on one resource (tenant administrators).\n\nThe tenant must already have a limit for the resource, the new limit must be higher, and\nonly one request per resource can be pending. A system administrator decides it.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "create_quota_request_api_v1_tenants__t__quota_requests_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "reason": "Two product teams move onto the platform in November.",
+                "requested_limit": 50,
+                "resource": "virtual_service"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/QuotaRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "current_limit": 20,
+                  "id": "0192f1a2-0000-7000-8000-00000000d701",
+                  "reason": "Two product teams move onto the platform in November.",
+                  "requested_at": "2026-10-12T09:00:00Z",
+                  "requested_by": "user:miguel@example.test",
+                  "requested_limit": 50,
+                  "resource": "virtual_service",
+                  "state": "pending",
+                  "tenant": "acme",
+                  "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaRequestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Ask for a higher quota",
+        "tags": [
+          "quota requests"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/quota-requests/{request}/withdraw": {
+      "post": {
+        "description": "Take back a pending request. A request that was already decided answers `409`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "withdraw_quota_request_api_v1_tenants__t__quota_requests__request__withdraw_post",
+        "parameters": [
+          {
+            "description": "Quota request id.",
+            "in": "path",
+            "name": "request",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "current_limit": 20,
+                  "id": "0192f1a2-0000-7000-8000-00000000d701",
+                  "reason": "Two product teams move onto the platform in November.",
+                  "requested_at": "2026-10-12T09:00:00Z",
+                  "requested_by": "user:miguel@example.test",
+                  "requested_limit": 50,
+                  "resource": "virtual_service",
+                  "state": "withdrawn",
+                  "tenant": "acme",
+                  "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaRequestRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw a quota request",
+        "tags": [
+          "quota requests"
+        ],
+        "x-required-role": "tenant-admin"
       }
     },
     "/api/v1/tenants/{t}/revisions": {
@@ -53322,6 +55285,27 @@
             }
           },
           {
+            "description": "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels.",
+            "in": "query",
+            "name": "label",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels.",
+              "title": "Label"
+            }
+          },
+          {
             "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
             "in": "header",
             "name": "authorization",
@@ -56105,6 +58089,10 @@
     {
       "description": "Kubernetes clusters whose Services and Gateways become virtual services.",
       "name": "kubernetes"
+    },
+    {
+      "description": "A tenant asks for a higher quota; a system administrator decides.",
+      "name": "quota requests"
     },
     {
       "description": "Convert another vendor's configuration into a draft change set.",

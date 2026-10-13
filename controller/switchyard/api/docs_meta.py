@@ -79,6 +79,10 @@ TAGS: list[dict[str, str]] = [
         "description": "Kubernetes clusters whose Services and Gateways become virtual services.",
     },
     {
+        "name": "quota requests",
+        "description": "A tenant asks for a higher quota; a system administrator decides.",
+    },
+    {
         "name": "imports",
         "description": "Convert another vendor's configuration into a draft change set.",
     },
@@ -108,6 +112,8 @@ PARAMS: dict[str, str] = {
     "capture": "Id of a packet capture (`id` in the capture list).",
     "zone": "Zone name, for example `gslb.example.test` (a filter on the list route).",
     "cluster": "Kubernetes cluster id.",
+    "request": "Quota request id.",
+    "controller_member": "Controller cluster member id.",
     "cs": "Change set id.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
@@ -303,6 +309,8 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("(POST|PATCH|DELETE)", r"/acme-providers(/.*)?", "system-admin", False),
     ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/dns-providers(/.*)?", "tenant-admin", False),
     ("(POST|PATCH|DELETE)", r"/tenants/\{t\}/kubernetes-clusters(/.*)?", "tenant-admin", False),
+    ("POST", r"/tenants/\{t\}/quota-requests(/.*)?", "tenant-admin", False),
+    ("(GET|POST)", r"/quota-requests(/.*)?", "system-admin", False),
     (
         "(GET|POST|PATCH|PUT|DELETE)",
         r"/(identity-providers|role-mappings|system|users)(/.*)?",
@@ -504,6 +512,22 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "mode": "nodeport",
     },
     "PATCH /tenants/{t}/kubernetes-clusters/{cluster}": {"mode": "pods"},
+    "POST /tenants/{t}/quota-requests": {
+        "resource": "virtual_service",
+        "requested_limit": 50,
+        "reason": "Two product teams move onto the platform in November.",
+    },
+    "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
+    "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
+    "POST /system/controller/members": {
+        "name": "ctl-esxi",
+        "address": "10.0.0.13",
+        "platform": "esxi",
+        "host": "esxi-01",
+        "nofailover": True,
+        "patroni_url": "http://10.0.0.13:8008",
+    },
+    "PATCH /system/controller/members/{controller_member}": {"host": "esxi-02"},
     "POST /tenants/{t}/imports/avi": {
         "export": {"VirtualService": [], "Pool": []},
         "se_group": "edge",

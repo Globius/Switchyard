@@ -141,3 +141,5 @@ Date: YYYY-MM-DD
 | [0191](0191-kubernetes-deployment.md) | Kubernetes is a supported place to run the controller (Helm chart) | Accepted |
 | [0192](0192-ipvs-direct-return-and-tunnel.md) | IPVS direct-return and tunnel forwarding for UDP services | Accepted |
 | [0194](0194-autoscale-and-packet-capture.md) | Automatic scale-out of SE groups, and packet capture on engines | Accepted |
+| [0198](0198-object-labels.md) | Object labels on virtual services and pools, and the `?label=` filter | Accepted |
+| [0199](0199-tenant-portal-and-quota-requests.md) | Tenant portal: usage, limits and quota requests | Accepted |

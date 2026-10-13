@@ -20,6 +20,7 @@ export const EDITABLE = [
   "restore_client_ip_header",
   "compression",
   "cache",
+  "labels",
 ] as const satisfies readonly (keyof VsRead & keyof VsPatch)[];
 
 export type Editable = Pick<VsRead, (typeof EDITABLE)[number]>;

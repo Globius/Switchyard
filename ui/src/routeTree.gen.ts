@@ -17,6 +17,7 @@ import { Route as AdminAcmeProvidersRouteImport } from './routes/admin.acme-prov
 import { Route as AdminAuditLogRouteImport } from './routes/admin.audit-log'
 import { Route as AdminControllerRouteImport } from './routes/admin.controller'
 import { Route as AdminIdentityProvidersRouteImport } from './routes/admin.identity-providers'
+import { Route as AdminQuotaRequestsRouteImport } from './routes/admin.quota-requests'
 import { Route as AdminRoleMappingsRouteImport } from './routes/admin.role-mappings'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminTenantsRouteImport } from './routes/admin.tenants'
@@ -40,6 +41,7 @@ import { Route as TTenantShellLogsRouteImport } from './routes/t.$tenant._shell.
 import { Route as TTenantShellNetworksRouteImport } from './routes/t.$tenant._shell.networks'
 import { Route as TTenantShellPoliciesRouteImport } from './routes/t.$tenant._shell.policies'
 import { Route as TTenantShellPoolsRouteImport } from './routes/t.$tenant._shell.pools'
+import { Route as TTenantShellPortalRouteImport } from './routes/t.$tenant._shell.portal'
 import { Route as TTenantShellRevisionsRouteImport } from './routes/t.$tenant._shell.revisions'
 import { Route as TTenantShellRoutingProfilesRouteImport } from './routes/t.$tenant._shell.routing-profiles'
 import { Route as TTenantShellSeGroupsRouteImport } from './routes/t.$tenant._shell.se-groups'
@@ -89,6 +91,11 @@ const AdminControllerRoute = AdminControllerRouteImport.update({
 const AdminIdentityProvidersRoute = AdminIdentityProvidersRouteImport.update({
   id: '/identity-providers',
   path: '/identity-providers',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminQuotaRequestsRoute = AdminQuotaRequestsRouteImport.update({
+  id: '/quota-requests',
+  path: '/quota-requests',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminRoleMappingsRoute = AdminRoleMappingsRouteImport.update({
@@ -208,6 +215,11 @@ const TTenantShellPoolsRoute = TTenantShellPoolsRouteImport.update({
   path: '/pools',
   getParentRoute: () => TTenantShellRoute,
 } as any)
+const TTenantShellPortalRoute = TTenantShellPortalRouteImport.update({
+  id: '/portal',
+  path: '/portal',
+  getParentRoute: () => TTenantShellRoute,
+} as any)
 const TTenantShellRevisionsRoute = TTenantShellRevisionsRouteImport.update({
   id: '/revisions',
   path: '/revisions',
@@ -274,6 +286,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/quota-requests': typeof AdminQuotaRequestsRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
@@ -296,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/t/$tenant/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
+  '/t/$tenant/portal': typeof TTenantShellPortalRoute
   '/t/$tenant/revisions': typeof TTenantShellRevisionsRoute
   '/t/$tenant/routing-profiles': typeof TTenantShellRoutingProfilesRoute
   '/t/$tenant/se-groups': typeof TTenantShellSeGroupsRoute
@@ -315,6 +329,7 @@ export interface FileRoutesByTo {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/quota-requests': typeof AdminQuotaRequestsRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
@@ -337,6 +352,7 @@ export interface FileRoutesByTo {
   '/t/$tenant/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/pools': typeof TTenantShellPoolsRoute
+  '/t/$tenant/portal': typeof TTenantShellPortalRoute
   '/t/$tenant/revisions': typeof TTenantShellRevisionsRoute
   '/t/$tenant/routing-profiles': typeof TTenantShellRoutingProfilesRoute
   '/t/$tenant/se-groups': typeof TTenantShellSeGroupsRoute
@@ -356,6 +372,7 @@ export interface FileRoutesById {
   '/admin/audit-log': typeof AdminAuditLogRoute
   '/admin/controller': typeof AdminControllerRoute
   '/admin/identity-providers': typeof AdminIdentityProvidersRoute
+  '/admin/quota-requests': typeof AdminQuotaRequestsRoute
   '/admin/role-mappings': typeof AdminRoleMappingsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/tenants': typeof AdminTenantsRoute
@@ -379,6 +396,7 @@ export interface FileRoutesById {
   '/t/$tenant/_shell/networks': typeof TTenantShellNetworksRoute
   '/t/$tenant/_shell/policies': typeof TTenantShellPoliciesRoute
   '/t/$tenant/_shell/pools': typeof TTenantShellPoolsRoute
+  '/t/$tenant/_shell/portal': typeof TTenantShellPortalRoute
   '/t/$tenant/_shell/revisions': typeof TTenantShellRevisionsRoute
   '/t/$tenant/_shell/routing-profiles': typeof TTenantShellRoutingProfilesRoute
   '/t/$tenant/_shell/se-groups': typeof TTenantShellSeGroupsRoute
@@ -401,6 +419,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/controller'
     | '/admin/identity-providers'
+    | '/admin/quota-requests'
     | '/admin/role-mappings'
     | '/admin/settings'
     | '/admin/tenants'
@@ -423,6 +442,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/networks'
     | '/t/$tenant/policies'
     | '/t/$tenant/pools'
+    | '/t/$tenant/portal'
     | '/t/$tenant/revisions'
     | '/t/$tenant/routing-profiles'
     | '/t/$tenant/se-groups'
@@ -442,6 +462,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/controller'
     | '/admin/identity-providers'
+    | '/admin/quota-requests'
     | '/admin/role-mappings'
     | '/admin/settings'
     | '/admin/tenants'
@@ -464,6 +485,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/networks'
     | '/t/$tenant/policies'
     | '/t/$tenant/pools'
+    | '/t/$tenant/portal'
     | '/t/$tenant/revisions'
     | '/t/$tenant/routing-profiles'
     | '/t/$tenant/se-groups'
@@ -482,6 +504,7 @@ export interface FileRouteTypes {
     | '/admin/audit-log'
     | '/admin/controller'
     | '/admin/identity-providers'
+    | '/admin/quota-requests'
     | '/admin/role-mappings'
     | '/admin/settings'
     | '/admin/tenants'
@@ -505,6 +528,7 @@ export interface FileRouteTypes {
     | '/t/$tenant/_shell/networks'
     | '/t/$tenant/_shell/policies'
     | '/t/$tenant/_shell/pools'
+    | '/t/$tenant/_shell/portal'
     | '/t/$tenant/_shell/revisions'
     | '/t/$tenant/_shell/routing-profiles'
     | '/t/$tenant/_shell/se-groups'
@@ -581,6 +605,13 @@ declare module '@tanstack/react-router' {
       path: '/identity-providers'
       fullPath: '/admin/identity-providers'
       preLoaderRoute: typeof AdminIdentityProvidersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/quota-requests': {
+      id: '/admin/quota-requests'
+      path: '/quota-requests'
+      fullPath: '/admin/quota-requests'
+      preLoaderRoute: typeof AdminQuotaRequestsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/role-mappings': {
@@ -744,6 +775,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TTenantShellPoolsRouteImport
       parentRoute: typeof TTenantShellRoute
     }
+    '/t/$tenant/_shell/portal': {
+      id: '/t/$tenant/_shell/portal'
+      path: '/portal'
+      fullPath: '/t/$tenant/portal'
+      preLoaderRoute: typeof TTenantShellPortalRouteImport
+      parentRoute: typeof TTenantShellRoute
+    }
     '/t/$tenant/_shell/revisions': {
       id: '/t/$tenant/_shell/revisions'
       path: '/revisions'
@@ -822,6 +860,7 @@ interface AdminRouteChildren {
   AdminAuditLogRoute: typeof AdminAuditLogRoute
   AdminControllerRoute: typeof AdminControllerRoute
   AdminIdentityProvidersRoute: typeof AdminIdentityProvidersRoute
+  AdminQuotaRequestsRoute: typeof AdminQuotaRequestsRoute
   AdminRoleMappingsRoute: typeof AdminRoleMappingsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminTenantsRoute: typeof AdminTenantsRoute
@@ -835,6 +874,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditLogRoute: AdminAuditLogRoute,
   AdminControllerRoute: AdminControllerRoute,
   AdminIdentityProvidersRoute: AdminIdentityProvidersRoute,
+  AdminQuotaRequestsRoute: AdminQuotaRequestsRoute,
   AdminRoleMappingsRoute: AdminRoleMappingsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminTenantsRoute: AdminTenantsRoute,
@@ -884,6 +924,7 @@ interface TTenantShellRouteChildren {
   TTenantShellNetworksRoute: typeof TTenantShellNetworksRoute
   TTenantShellPoliciesRoute: typeof TTenantShellPoliciesRoute
   TTenantShellPoolsRoute: typeof TTenantShellPoolsRoute
+  TTenantShellPortalRoute: typeof TTenantShellPortalRoute
   TTenantShellRevisionsRoute: typeof TTenantShellRevisionsRoute
   TTenantShellRoutingProfilesRoute: typeof TTenantShellRoutingProfilesRoute
   TTenantShellSeGroupsRoute: typeof TTenantShellSeGroupsRoute
@@ -907,6 +948,7 @@ const TTenantShellRouteChildren: TTenantShellRouteChildren = {
   TTenantShellNetworksRoute: TTenantShellNetworksRoute,
   TTenantShellPoliciesRoute: TTenantShellPoliciesRoute,
   TTenantShellPoolsRoute: TTenantShellPoolsRoute,
+  TTenantShellPortalRoute: TTenantShellPortalRoute,
   TTenantShellRevisionsRoute: TTenantShellRevisionsRoute,
   TTenantShellRoutingProfilesRoute: TTenantShellRoutingProfilesRoute,
   TTenantShellSeGroupsRoute: TTenantShellSeGroupsRoute,
