@@ -36,6 +36,7 @@ IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 Name = Annotated[str, AfterValidator(v.validate_name)]
 Hostname = Annotated[str, AfterValidator(v.validate_hostname)]
+ServerAddress = Annotated[str, AfterValidator(v.validate_server_address)]
 HostPattern = Annotated[str, AfterValidator(v.validate_host_pattern)]
 Port = Annotated[int, AfterValidator(v.validate_port)]
 UrlPath = Annotated[str, AfterValidator(v.validate_path)]
@@ -2367,7 +2368,8 @@ class RadiusServerSpec(Model):
 
     Attributes:
         name: Name a flow step uses to pick this server.
-        host / port: Where the server listens (UDP, 1812 by default).
+        host / port: Where the server listens (UDP, 1812 by default); a host name or a routable
+            IP address.
         secret_ref: OpenBao path of the shared secret (never the secret).
         timeout_s / retries: Per-attempt wait and number of retransmissions.
         require_message_authenticator: Refuse answers without a Message-Authenticator (the
@@ -2376,7 +2378,7 @@ class RadiusServerSpec(Model):
     """
 
     name: Name
-    host: Hostname
+    host: ServerAddress
     port: Port = 1812
     secret_ref: SecretRef
     timeout_s: int = Field(default=3, ge=1, le=10)

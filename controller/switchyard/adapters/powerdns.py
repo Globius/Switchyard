@@ -115,6 +115,10 @@ class HttpPowerDns:
         found = await self._call("GET", f"/zones/{self._zone(zone)}", ok=(404,))
         if found.status_code != 404:
             return
+        # Without an SOA of our own PowerDNS fills in its `default-soa-name`, which is the invalid
+        # name `a.misconfigured.dns.server.invalid.` unless the operator set it (found in the lab).
+        primary = fqdn(nameservers[0]) if nameservers else f"ns1.{fqdn(zone)}"
+        soa = f"{primary} hostmaster.{fqdn(zone)} 1 10800 3600 604800 3600"
         await self._call(
             "POST",
             "/zones",
@@ -122,6 +126,14 @@ class HttpPowerDns:
                 "name": fqdn(zone),
                 "kind": "Native",
                 "nameservers": [fqdn(n) for n in nameservers],
+                "rrsets": [
+                    {
+                        "name": fqdn(zone),
+                        "type": "SOA",
+                        "ttl": 3600,
+                        "records": [{"content": soa, "disabled": False}],
+                    }
+                ],
             },
             ok=(409,),
         )

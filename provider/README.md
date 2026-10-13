@@ -51,6 +51,7 @@ provider_installation {
 - Object ids are chosen by the provider (UUIDv7) so dependent resources can refer to them.
 - Attributes you leave out take the controller default and show as known after apply.
 - A pool with `discovery` owns its `members` (ADR 0145): leave `members` out of the configuration.
+- Members you list yourself need an `id` (a fixed UUID, for example from `uuidv7` or a constant): `members = [{ id = "0198d3f0-1111-7aaa-8bbb-000000000001", address = "10.0.0.5", port = 8080 }]`. Do not use `uuid()`: it changes on every plan.
 
 ## Developing
 

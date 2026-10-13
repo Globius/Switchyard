@@ -84,6 +84,19 @@ async def test_a_zone_is_created_once_with_dotted_names() -> None:
         "name": "z.example.test.",
         "kind": "Native",
         "nameservers": ["ns1.example.test."],
+        "rrsets": [
+            {
+                "name": "z.example.test.",
+                "type": "SOA",
+                "ttl": 3600,
+                "records": [
+                    {
+                        "content": "ns1.example.test. hostmaster.z.example.test. 1 10800 3600 604800 3600",
+                        "disabled": False,
+                    }
+                ],
+            }
+        ],
     }
 
 
