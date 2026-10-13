@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package runner is the only way the agent starts processes. It runs a fixed allowlist of
 // binaries without a shell, so there is no way to execute arbitrary commands through it.
 package runner

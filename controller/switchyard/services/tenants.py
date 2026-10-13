@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tenants: created and changed by system administrators (outside change sets).
 
 Tenants are the root of ownership and are not part of any tenant's own state, so they are managed

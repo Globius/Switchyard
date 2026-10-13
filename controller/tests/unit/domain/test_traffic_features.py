@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SNI passthrough, HTTP/3, compression, backend HTTP/2 and tunnel timeout (ADRs 0115 to 0117)."""
 
 import copy

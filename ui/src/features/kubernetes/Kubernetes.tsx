@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Kubernetes clusters (tenant-admin): Services of type LoadBalancer and Gateways of a connected
  * cluster become virtual services through a `system:k8s` change set (ADR 0146 and the Kubernetes

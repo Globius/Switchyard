@@ -146,3 +146,4 @@ Date: YYYY-MM-DD
 | [0197](0197-waf-api-schema-protection.md) | API schema protection in the WAF policy | Accepted |
 | [0198](0198-object-labels.md) | Object labels on virtual services and pools, and the `?label=` filter | Accepted |
 | [0199](0199-tenant-portal-and-quota-requests.md) | Tenant portal: usage, limits and quota requests | Accepted |
+| [0200](0200-sbom-and-reuse-licensing.md) | SBOMs (Syft, SPDX) in CI and REUSE licensing, Apache-2.0 default | Accepted |

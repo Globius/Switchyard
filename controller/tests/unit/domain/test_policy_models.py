@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Match model, rewrite, respond and error-page policy sets: model rules and snapshot checks."""
 
 from typing import Any

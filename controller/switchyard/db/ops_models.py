@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SQLAlchemy models for change sets, revisions, deployments, audit, jobs, engines and tokens.
 
 These tables belong to milestone M2. They follow the conventions of :mod:`switchyard.db.models`

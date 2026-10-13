@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { useState } from "react";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Field-level diff of two desired-state snapshots (revisions) or of live and drafted objects.
  * Compared in the browser, so secrets never appear: objects carry only `secret_ref`s.

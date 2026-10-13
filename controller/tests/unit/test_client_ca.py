@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Client CAs for mutual TLS (ADR 0070): the bundle check and the model rules."""
 
 import copy

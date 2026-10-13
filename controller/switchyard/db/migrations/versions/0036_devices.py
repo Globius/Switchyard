@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Devices and device enrollment tokens (ADR 0196): agent-based device posture.
 
 - ``device_enrollment``: one-time tokens (hashed) that let a device agent enroll against a

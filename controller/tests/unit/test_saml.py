@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SAML response validation: signed responses pass, every kind of wrong one is refused."""
 
 import base64

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Validator findings of the open draft that concern one virtual service. */
 import { ApiError } from "@/api/client";
 import type { Finding } from "@/components/sy/Findings";

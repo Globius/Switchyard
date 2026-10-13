@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """API schema (ADR 0197): models, the regular expressions and the rules that use them."""
 
 import re

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Hourly housekeeping (backend design, "Background jobs"): expire what nobody will use again.
 
 Never touches desired state, revisions or the audit log. What it removes: abandoned drafts, old

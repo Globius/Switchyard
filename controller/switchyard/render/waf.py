@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Render the WAF side of an SE group: the SPOE files for HAProxy and the Coraza SPOA configuration.
 
 Like the other renderers these are pure functions of a snapshot (ADR 0140 to 0144). Per group:

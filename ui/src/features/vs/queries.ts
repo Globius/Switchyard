@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Queries behind the virtual services list. Keys mirror API paths so an apply invalidates by prefix. */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "@/api/client";

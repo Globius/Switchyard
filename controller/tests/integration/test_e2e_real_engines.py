@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The whole stack against two real service engines (HAProxy + Data Plane API in Docker).
 
 PostgreSQL holds the state, the real apply pipeline renders, validates with the engines' own

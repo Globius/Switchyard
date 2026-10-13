@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Assertions on a provisioned SE filesystem (run inside the test image).
 set -eu
 fail() { echo "FAIL: $*" >&2; exit 1; }

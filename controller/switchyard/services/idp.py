@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Administration of identity providers and their group-to-role mappings (system administrators).
 
 Used by ``syctl idp ...``. The API for this arrives with the admin screens; until then providers are

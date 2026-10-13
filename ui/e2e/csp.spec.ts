@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Run against the production proxy (deploy/proxy), not the Vite dev server:
  *   PW_BASE_URL=http://localhost:18080 PW_CHANNEL=chrome pnpm e2e csp

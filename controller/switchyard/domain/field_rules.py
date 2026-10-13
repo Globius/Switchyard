@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Which fields a virtual service, its ports and its pools may use, by protocol.
 
 The snapshot validator enforces these rules (``domain.snapshot``) and the API publishes them

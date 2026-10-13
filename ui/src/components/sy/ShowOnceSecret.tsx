@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * A secret the server shows only once (API token, enrollment token, break-glass password and
  * authenticator secret). Each value has a Copy button, the authenticator setup can show a QR code,

@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Rolling upgrade of an SE group to a new template, or scale-out when run with --add. One engine at a time, health-gated:
 # the group never drops below what it had. Works through the controller API and the lab helpers (lib.sh, hosts.env).
 #   sh upgrade.sh GROUP KIND "NODE=TEMPLATE_ID NODE=TEMPLATE_ID ..."   replace every engine with one cloned from the new template

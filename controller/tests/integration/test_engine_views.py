@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Engines of a service, rendered config per engine, and the running config of an engine."""
 
 import uuid

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The permission matrix: which role may do what (ADR 0030; design doc 02, "Auth and RBAC").
 
 Roles nest: each one can do everything the weaker ones can. A permission is therefore a

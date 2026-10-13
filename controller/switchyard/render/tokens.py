@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Files for JWT validation: the public keys HAProxy verifies bearer tokens with (ADR 0135).
 
 HAProxy's ``jwt_verify`` reads a key from a file, so each key of a ``jwt`` policy set becomes

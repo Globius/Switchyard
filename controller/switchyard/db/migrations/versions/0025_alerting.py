@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Alerting (ADR 0120): targets, rules, state and delivery log, all tenant-owned with RLS.
 
 Revision ID: 0025

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Kubernetes clusters for the connector (ADR 0151).
 
 Revision ID: 0030

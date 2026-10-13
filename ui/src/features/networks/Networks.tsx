@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Networks and VIP pools: the subnets engines attach to, the ranges VIPs come from, and who holds each address. */
 import { compareIp } from "@/lib/ip";
 import { Combobox } from "@/components/ui/combobox";

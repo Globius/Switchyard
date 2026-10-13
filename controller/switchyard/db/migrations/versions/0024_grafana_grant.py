@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Embedded Grafana: single-use tickets and the proxy sessions they turn into (ADR 0085).
 
 - ``grafana_grant``: SHA-256 of the ticket and of the proxy cookie, the tenant the session is

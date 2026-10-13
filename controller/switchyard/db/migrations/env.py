@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Alembic environment: synchronous psycopg connection, metadata from the ORM models."""
 
 from alembic import context

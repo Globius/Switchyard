@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Field-level findings from the API (`errors[]` of a 422, or the validator's `problems`):
  * a summary that links each one to its field, and the "your draft is invalid" card.

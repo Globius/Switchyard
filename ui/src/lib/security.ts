@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Security headers for the dev and preview servers, so a CSP breakage shows up while developing.
  * Production serving (a reverse proxy) should send the same policy; see docs/security/ui-review.md.

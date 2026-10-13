@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The PostgreSQL job queue and the worker loop, against a real database."""
 
 import asyncio

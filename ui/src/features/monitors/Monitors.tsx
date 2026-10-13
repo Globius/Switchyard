@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { hostPort } from "@/lib/ip";
 import { Plus } from "lucide-react";

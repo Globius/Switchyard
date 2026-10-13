@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """RADIUS client: packet codec, authenticity checks and a full exchange against a fake server."""
 
 import asyncio

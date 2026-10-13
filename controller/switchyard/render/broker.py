@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Render the login broker: one Dex instance per directory policy set (ADR 0137).
 
 A *directory* (LDAP, SAML or local users) is not an OIDC provider, so a central broker presents it

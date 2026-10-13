@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Monarch syntax definitions for the config views: HAProxy configuration, and the unified diffs
  * the change-set diff endpoint returns. They are plain data so they can be tested without Monaco.

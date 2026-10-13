@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Jobs end to end: API-style apply, worker, apply pipeline, Git mirror; plus engines and members."""
 
 import uuid

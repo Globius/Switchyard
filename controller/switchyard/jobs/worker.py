@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The worker loop: claim a job, run its handler with heartbeats, record the outcome."""
 
 import asyncio

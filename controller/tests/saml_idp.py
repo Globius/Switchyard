@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """A tiny SAML identity provider for tests: makes a key and certificate and signs responses."""
 
 import base64

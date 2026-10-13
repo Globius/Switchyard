@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared types for the service layer: who is acting, and which databases they use."""
 
 from collections.abc import Callable

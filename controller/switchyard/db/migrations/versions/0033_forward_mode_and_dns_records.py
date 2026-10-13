@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """UDP forwarding method and DNS records published from virtual services (ADR 0192, 0193).
 
 Adds ``virtual_service.forward_mode`` (``nat``, ``dr`` or ``tunnel``), ``virtual_service.dns``

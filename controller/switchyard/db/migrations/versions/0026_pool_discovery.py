@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Pool discovery by Proxmox tag; managed geo and reputation IP lists.
 
 - ``pool.discovery`` (JSON, see ``PoolDiscovery``).

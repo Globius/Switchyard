@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """G1-3, G1-4, G1-7: identity-provider API, test sign-in, SAML metadata/signing, break-glass, tokens."""
 
 import base64

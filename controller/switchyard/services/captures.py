@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Packet captures on service engines (ADR 0194).
 
 A tenant administrator asks for a capture on one engine: an interface (or ``any``), an optional

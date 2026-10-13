@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * GSLB: wide IPs answered by PowerDNS (ADR 0160 to 0165). Zones are handed to a tenant by a system
  * administrator; tenant admins manage wide IPs, DNSSEC and the sync. All changes are live and audited.

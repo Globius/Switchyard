@@ -84,4 +84,4 @@ Notes:
 
 ## License
 
-TBD.
+Apache-2.0 (see `LICENSE` and `LICENSES/`). Third-party notices and SBOMs: `docs/sbom-and-licensing.md`.

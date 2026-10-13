@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Quota requests: how a tenant asks the platform for a higher limit (ADR 0199).
 
 Only system administrators change quotas (``change quota``). A tenant administrator who runs into

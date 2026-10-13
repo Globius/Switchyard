@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Demo dataset for the docs screenshots, layered over the test mock in `fixtures.ts`: a tenant with
  * a handful of services, pools, engines, certificates and change sets, so screens are not empty.

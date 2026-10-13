@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Quota requests: a tenant asks for a higher limit, a system administrator decides (ADR 0199).
 
 Revision ID: 0040

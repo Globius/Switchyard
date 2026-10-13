@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Shared helpers for run.sh and scenario.sh of the hosts lab. Sourced after hosts.env.
 fail() { echo "HOSTS LAB FAIL: $*" >&2; exit 1; }
 step() { echo "== $*"; }

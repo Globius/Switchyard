@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Users: everyone who has signed in, what they can do now, and ending their access.
 
 ``user_account`` rows are written at sign-in (see :mod:`switchyard.services.sessions`). This module

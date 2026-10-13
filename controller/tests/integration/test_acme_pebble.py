@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ACME DNS-01 issuance against a real ACME server (Pebble) with a fake DNS provider."""
 
 import time

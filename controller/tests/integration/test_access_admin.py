@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """G1: role refresh, users, role mappings, token limits and the 401/403 `code` members."""
 
 from datetime import timedelta

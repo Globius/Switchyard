@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The Kubernetes connector: clusters, sync into change sets, address write-back, the API (ADR 0151)."""
 
 from collections.abc import AsyncIterator

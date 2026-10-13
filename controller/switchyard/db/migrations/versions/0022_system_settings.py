@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """System settings: controller-wide switches a system administrator controls.
 
 - ``system_setting`` (key, JSON value): today ``allow_lxc_guests`` (default off, ADR 0076).

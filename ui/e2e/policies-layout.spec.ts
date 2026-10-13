@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { expect, test } from "./fixtures";
 
 for (const width of [1024, 1280, 1440])

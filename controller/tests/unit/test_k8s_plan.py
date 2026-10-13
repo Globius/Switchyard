@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The Kubernetes planner: which Services and Gateways become which objects."""
 
 from switchyard.connectors.kubernetes import ClusterSpec, object_name, plan, usable_nodes

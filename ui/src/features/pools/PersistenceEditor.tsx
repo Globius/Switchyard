@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Pool persistence: how a client sticks to one member. Source IP, an HTTP cookie, a request
  * header, or the URI (path or a query parameter). The HTTP kinds are refused on tcp and udp

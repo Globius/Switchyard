@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tables for certificate authorities (ACME) and DNS credentials (ADR 0079).
 
 ``acme_provider`` is system-wide (a system administrator manages it; it has no tenant).

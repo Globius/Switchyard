@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Global server load balancing on PowerDNS: wide IPs and their records (ADR 0160, 0161).
 
 A *wide IP* is a DNS name in a zone the tenant owns whose answer depends on which of its members are

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """WAF and protection policy sets: ``policy_set.kind`` accepts ``waf`` and ``protection``.
 
 The settings of a WAF policy are stored as the single element of ``policy_set.rules``, like the

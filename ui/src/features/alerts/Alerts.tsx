@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Alerts (ADR 0120): where a tenant's alerts go, what they watch, what is firing and what was sent.
  *

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The Metrics section (design v52): four single-series panels drawn in the UI from the
  * tenant-scoped metrics API (never a Grafana iframe, which would let a viewer change the tenant

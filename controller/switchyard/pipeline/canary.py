@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The canary check: is the engine healthy after taking a new configuration?
 
 From the backend design: for a configurable time (30 s by default), confirm the HAProxy process is

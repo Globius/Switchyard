@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Throw-away certificates for tests (self-signed, ECDSA, generated on the fly)."""
 
 from datetime import UTC, datetime, timedelta

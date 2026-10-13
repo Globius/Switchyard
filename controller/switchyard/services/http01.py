@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """HTTP-01 challenges: make a tenant's engines answer ``/.well-known/acme-challenge/<token>``.
 
 The rendered HAProxy configuration of every HTTP service with a port-80 listener has one rule at

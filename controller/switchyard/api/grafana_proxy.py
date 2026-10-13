@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Reverse proxies for the embedded Grafana (ADR 0085).
 
 Two proxies live here:

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Routing profiles: how an SE group announces its VIPs, BGP peering or VRRP. Edited through the draft. */
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";

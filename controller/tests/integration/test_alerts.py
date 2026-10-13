@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Alert targets, rules and the evaluator over a real database (ADR 0120 to 0123)."""
 
 from collections.abc import AsyncIterator

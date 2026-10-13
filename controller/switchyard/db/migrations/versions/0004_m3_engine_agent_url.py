@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """M3: where each engine's sy-agent listens (host:port, gRPC over mTLS); routing profiles in ops.
 
 Revision ID: 0004

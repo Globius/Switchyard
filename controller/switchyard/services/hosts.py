@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Proxmox hosts: online state, load and where an SE group's engines run.
 
 The API reads the cluster through the :class:`~switchyard.adapters.proxmox.Proxmox` adapter (read

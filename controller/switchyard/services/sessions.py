@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Browser login: identity providers, sessions, role mapping and the break-glass administrator.
 
 After a successful OIDC login (or break-glass login) the controller issues its own session and the

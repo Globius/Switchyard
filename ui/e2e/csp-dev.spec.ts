@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { expect, test } from "./fixtures";
 
 test("the app runs under its CSP: header present, no violations, Monaco still loads", async ({

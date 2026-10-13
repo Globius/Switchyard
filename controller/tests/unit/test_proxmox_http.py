@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The Proxmox REST client against a mocked API."""
 
 from urllib.parse import parse_qs

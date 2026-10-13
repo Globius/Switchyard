@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Automatic scale-out of an SE group (ADR 0194): decide, deploy, enroll, join."""
 
 import copy

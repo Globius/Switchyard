@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """TLS profiles on ports and OCSP stapling on certificates (ADR 0067)."""
 
 import datetime

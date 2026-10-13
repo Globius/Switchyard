@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """A RADIUS client for password logins (RFC 2865, RFC 2869 Message-Authenticator).
 
 Only what a login needs: Access-Request with a PAP ``User-Password``, the three answers

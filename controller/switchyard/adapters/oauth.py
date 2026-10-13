@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """OAuth 2.0 client-credentials tokens, cached until shortly before they expire.
 
 Used for ACME providers that sit behind an identity provider (for example Keyfactor): the controller

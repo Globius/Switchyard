@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Proxmox VE adapter: SDN objects and SE virtual machines.
 
 Only workers use it (backend design, "Adapters"). The API token comes from the secrets backend and

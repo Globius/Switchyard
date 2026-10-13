@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** The labels of an object as small chips; with `onPick`, a chip filters the list by that label. */
 import { labelChips } from "@/lib/labels";
 import { t } from "@/lib/i18n";

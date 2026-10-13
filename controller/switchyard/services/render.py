@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Render the files of one SE group from the database."""
 
 from sqlalchemy.ext.asyncio import AsyncEngine

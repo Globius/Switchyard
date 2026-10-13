@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Certificates: parsing and checking PEM material, generating keys and CSRs, importing.
 
 Private keys are generated in the worker, written to the secrets backend and never returned,

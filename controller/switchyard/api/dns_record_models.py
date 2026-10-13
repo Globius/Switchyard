@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Response models of the DNS address record API (ADR 0193)."""
 
 from datetime import datetime

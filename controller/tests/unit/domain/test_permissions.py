@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The permission matrix in code, in the design document and in the API must say the same."""
 
 from pathlib import Path

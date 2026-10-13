@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Embedded Grafana: launch tickets, proxy sessions and per-tenant Grafana organizations (ADR 0085).
 
 The flow, in one place:

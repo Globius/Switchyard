@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Cloudflare adapter: DNS-01 TXT records, Origin CA certificates and the published IP ranges.
 
 Tokens are scoped per zone (DNS:Edit, plus SSL and Certificates:Edit for Origin CA) and come from

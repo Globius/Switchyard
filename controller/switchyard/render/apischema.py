@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Render an API schema (ADR 0197) as HAProxy request rules: a positive security model.
 
 The rules run in the service's frontend before the WAF. Every value that reaches the

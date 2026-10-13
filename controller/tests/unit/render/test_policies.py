@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Renderer behaviour for the match model, rewrite, respond and error-page policy sets."""
 
 import uuid

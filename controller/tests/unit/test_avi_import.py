@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The Avi export converter: what becomes what, and what is reported (ADR 0150)."""
 
 from typing import Any

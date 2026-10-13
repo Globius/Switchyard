@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Builds the SE *container* template on a Proxmox node (run as root on the node). Usage:
 #   [BUILD_BRIDGE=vmbr0] [BUILD_NET_IP="ip=dhcp"|"ip=manual,ip6=auto" for an IPv6-only network] build-template.sh VMID AGENT_BIN DATAPLANE_BIN [STORAGE]
 # Optional: SIDECAR_DIR=se-image/dist installs the sidecars found there (oauth2-proxy, coraza-spoa, coreruleset.tar.gz; ADR 0083).

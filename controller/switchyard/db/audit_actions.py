@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The catalog of audit event actions.
 
 Every ``audit_event.action`` the controller writes is listed here with a category and a sentence the

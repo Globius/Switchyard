@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Metrics (Prometheus) and access logs (Loki) of virtual services.
 
 The contract with the telemetry pipeline (documented in ``docs/operating.md``):

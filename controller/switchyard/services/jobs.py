@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Reading and managing background jobs, scoped to a tenant.
 
 Reads go through the RLS-protected application role. Retry and cancel change jobs, which the

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The standard states every screen shows (handoff `States` artboard): loading skeleton rows,
  * empty, error from a problem+json body, and "unavailable backend" with the API's reason.

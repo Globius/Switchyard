@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The HAProxy adapter interface: what the pipeline needs from a Service Engine's HAProxy.
 
 The pipeline and API never talk to the Data Plane API directly. They hold a :class:`HaproxyEngine`,

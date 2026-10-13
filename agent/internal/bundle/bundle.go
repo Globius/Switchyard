@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package bundle verifies and applies signed configuration bundles.
 //
 // A bundle is the complete set of files the controller wants under the managed directories. The

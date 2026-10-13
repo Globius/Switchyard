@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Payloads of the server-sent events of ``GET /tenants/{t}/status/stream``.
 
 The stream is documented here because OpenAPI cannot type an event stream: each event name maps

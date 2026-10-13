@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 r"""Escaping and strict token checks for values that reach ``haproxy.cfg``.
 
 Domain validators already restrict every user value to a safe character set. These functions are the

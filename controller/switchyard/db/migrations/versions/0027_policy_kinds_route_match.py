@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Policy-set kinds rewrite, respond and error_pages; extra route match conditions.
 
 - ``policy_set.kind`` accepts the new kinds (rewrite, respond, error_pages, rate_limit, access);

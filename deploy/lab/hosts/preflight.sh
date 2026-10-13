@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Read-only checks of the hosts lab from this machine, before the scenario runs. Usage: sh preflight.sh [hosts.env]
 set -u
 cd "$(dirname "$0")"

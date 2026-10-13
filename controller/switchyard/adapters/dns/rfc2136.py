@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """RFC 2136 dynamic updates signed with a TSIG key (BIND, Knot, PowerDNS and others).
 
 An update that adds a value leaves the other values of the name alone, and one that removes a value

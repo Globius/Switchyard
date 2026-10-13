@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Request match shared by routes and policy rules (every condition given must hold):
  * host, path, methods, header rows, query rows, source networks and TLS server name.

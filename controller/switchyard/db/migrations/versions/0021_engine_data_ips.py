@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Engines remember the addresses the deploy job gave their data NICs.
 
 - ``service_engine.data_ips``: a list of ``{"network_id": ..., "address": ...}``, one entry per addressed

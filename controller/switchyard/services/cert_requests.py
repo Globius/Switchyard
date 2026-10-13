@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Checking a certificate request, and the renewal history of certificates (ADR 0079).
 
 ``check`` answers what the request sheet needs before anything is queued: is the ACME provider

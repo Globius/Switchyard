@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Role mappings: which provider group grants which role (system-wide or in one tenant).
 
 A mapping says "members of ``group_name`` at ``provider`` get ``role`` in ``tenant``"

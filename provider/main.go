@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Command terraform-provider-switchyard serves the Switchyard provider to OpenTofu and Terraform.
 package main
 

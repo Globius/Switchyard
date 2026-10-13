@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Smoke test: real controller image (with /metrics and discovery) + the telemetry stack.
 # Needs the dev PostgreSQL (deploy/dev) and a built controller image:
 #   docker build -f deploy/controller/Dockerfile -t switchyard-controller:dev .

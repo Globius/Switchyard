@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The login gate application (ADR 0195): an ASGI reverse proxy in front of Dex.
 
 For each ``radius`` directory the broker runs a Dex instance with an ``authproxy`` connector: Dex

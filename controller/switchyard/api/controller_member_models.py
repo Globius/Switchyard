@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Request and response models of the controller cluster members API (ADR 0051)."""
 
 from datetime import datetime

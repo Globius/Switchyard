@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Object labels (ADR 0198): `key` or `key=value` chips, and the `?label=` selectors the API takes. */
 
 /** One label as the chip shown on screen: `key=value`, or just `key` when the value is empty. */

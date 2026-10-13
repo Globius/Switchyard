@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Revision message: free text given when a change set is applied.
 
 - ``change_set.message`` is set by ``POST .../apply``; the pipeline copies it to

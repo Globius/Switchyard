@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Persistence for change sets, their operations, revisions and deployments.
 
 Plain functions over an ``AsyncSession`` whose transaction and tenant scope the caller controls.

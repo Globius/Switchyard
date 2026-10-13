@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Admin > Controller (system-admin): where the controller answers (FQDN, VIP) and which certificate
  * it shows. A change applies at once, then waits two minutes for a confirmation from the NEW

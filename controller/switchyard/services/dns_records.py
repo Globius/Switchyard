@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Publish a virtual service's VIP as DNS address records (ADR 0193).
 
 A virtual service with a ``dns`` block lists host names. :class:`DnsRecordSync` makes each name

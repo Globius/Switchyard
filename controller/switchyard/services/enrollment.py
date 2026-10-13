@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Agent enrollment: trade a one-time token for a short-lived server certificate.
 
 Flow (backend design, "Agent"): an administrator creates a token for an engine; cloud-init hands it

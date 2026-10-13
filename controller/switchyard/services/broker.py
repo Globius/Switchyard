@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Write the login broker's files (ADR 0137): one Dex config per directory in use.
 
 The broker host runs ``syctl broker render`` in a loop (or once per deployment step); a supervisor

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Pool discovery: keep a pool's members in step with the Proxmox guests that carry its tag.
 
 ``discover_pool_members`` runs every minute. For each pool with a ``discovery`` block it lists the

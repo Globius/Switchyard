@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The CRS rule catalogue behind ``GET /waf/crs-rules`` (ADR 0152)."""
 
 from switchyard.domain import crs

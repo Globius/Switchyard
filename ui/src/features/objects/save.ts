@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Save create, update and delete ops of one object into the caller's draft (opened on first use).
  * Every object screen saves this way; nothing goes live until the change set is applied.

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Per-job stage and log recording.
 
 A long job (the apply pipeline) reports named stages so the UI and ``syctl`` can show where it is

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** "View running config": what an engine runs right now, next to what the controller wants. */
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Tenant home: what needs attention now, from one `GET /summary` call plus three short lists. */
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";

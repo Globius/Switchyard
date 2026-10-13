@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """dnsdist in front of PowerDNS with the shipped configuration (ADR 0164).
 
 Opt-in: ``SWITCHYARD_STACK_TESTS=1 pytest tests/integration/test_dnsdist_stack.py``. PowerDNS listens on

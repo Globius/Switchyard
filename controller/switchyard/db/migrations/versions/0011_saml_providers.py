@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SAML identity providers: protocol settings, request id on login state, assertion replay cache.
 
 Revision ID: 0011

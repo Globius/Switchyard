@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """virtual_service_states: UDP is served by IPVS since M6."""
 
 from datetime import UTC, datetime

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """DNS credentials: where a tenant's DNS-01 records are published, and with which login (ADR 0079).
 
 A tenant administrator adds a credential for a provider type (Cloudflare, Route 53, Azure DNS,

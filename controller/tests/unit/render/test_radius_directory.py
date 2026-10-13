@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """RADIUS directories and login flows: models, state checks and the broker files (ADR 0195, 0196)."""
 
 import json

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Response models for the job endpoints (ticket T5, ADR 0016)."""
 
 __all__ = ["Job", "JobKind", "JobLog", "JobStage", "LogLine", "Page"]

@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Delivers enrollment material to every deployed container that has a token in the deploy output (what cloud-init
 # does for a VM): controller URL and CN, Data Plane credentials, the one-time token and the controller CA, then runs
 # the enrollment unit. Usage: enroll.sh deploy-output.json

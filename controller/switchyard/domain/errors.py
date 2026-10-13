@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Errors and problem reports raised by the domain layer."""
 
 from dataclasses import dataclass

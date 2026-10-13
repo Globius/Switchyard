@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Managed IP lists: keep country and reputation allow-list policy sets in step with their sources.
 
 ``sync_ip_lists`` runs every six hours. For each allow-list policy set with ``managed_by: geo`` or

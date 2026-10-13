@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Automatic SE scale-out: ``se_group.autoscale`` and ``autoscale_state`` (ADR 0194).
 
 Revision ID: 0034

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** SE groups: engines with live state and actions, Proxmox deploy, and the group's settings. */
 import { Combobox } from "@/components/ui/combobox";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

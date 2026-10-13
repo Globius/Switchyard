@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Plan Switchyard objects from the state of a Kubernetes cluster (D2, ADR 0151).
 
 A pure function over the JSON the API server returns. It reads:

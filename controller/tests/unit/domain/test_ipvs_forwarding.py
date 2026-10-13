@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """IPVS direct-return and tunnel rules (ADR 0192): port, adjacency and protocol checks."""
 
 import copy

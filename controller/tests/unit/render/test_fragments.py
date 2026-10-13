@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Rendered fragments per object: golden files, and agreement with the change-set diff."""
 
 from pathlib import Path

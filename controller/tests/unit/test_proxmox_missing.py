@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Proxmox reports a missing object as HTTP 500 with a message, not 404 (seen on a real PVE 9)."""
 
 import httpx

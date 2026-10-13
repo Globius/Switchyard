@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Login: identity providers, role mappings, login state, user sessions, break-glass admin.
 
 These are system-wide tables used by the authentication layer before a tenant is known, so they are

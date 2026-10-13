@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Convert an NSX ALB (Avi) configuration export into Switchyard objects (ADR 0150).
 
 The converter is a pure function over the export's JSON: no network, no database, no secrets

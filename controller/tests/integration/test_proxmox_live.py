@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """HttpProxmox against a real Proxmox VE API (deploy/lab/pve: github.com/dockur/proxmox).
 
 Skipped unless ``SWITCHYARD_TEST_PVE_URL``, ``SWITCHYARD_TEST_PVE_TOKEN_ID`` and

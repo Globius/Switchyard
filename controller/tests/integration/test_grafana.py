@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Embedded Grafana: tickets, the proxy session, tenant scoping of data source queries (ADR 0085)."""
 
 import uuid

@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Rehearses docs/runbooks/rotate-ca.md against a dev OpenBao (container sy-openbao, token devroot).
 # It uses its own mounts (pki-drill-old, pki-drill-new) and removes them at the end.
 set -eu

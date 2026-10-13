@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """G1: user accounts, session grants refresh, role-mapping metadata, drop ``tenant.oidc_group``.
 
 ``tenant.oidc_group`` was never read by login and duplicates the role mappings (ADR 0030). Each

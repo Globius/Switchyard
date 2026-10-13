@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Grafana administration for the embedded dashboards (ADR 0085).
 
 The controller keeps one Grafana organization per tenant, with the tenant's own data sources (which

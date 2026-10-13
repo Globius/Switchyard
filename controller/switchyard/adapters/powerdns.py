@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """PowerDNS Authoritative Server HTTP API, for GSLB zones and wide IP records (ADR 0160).
 
 :class:`HttpPowerDns` is the real client; :class:`FakePowerDns` keeps zones in memory for tests. The

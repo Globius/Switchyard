@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Agent enrollment: one-time tokens, certificates from the internal CA, renewal."""
 
 import ipaddress

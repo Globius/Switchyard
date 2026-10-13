@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Alerting: per-tenant targets and rules, and the evaluator that tells people (ADR 0120 to 0122).
 
 :class:`AlertService` is the tenant-facing CRUD (RLS applies; tenant administrators write, anyone

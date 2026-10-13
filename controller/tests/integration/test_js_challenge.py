@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The JavaScript challenge against a real HAProxy: solve it the way the page does (ADR 0171)."""
 
 import hashlib

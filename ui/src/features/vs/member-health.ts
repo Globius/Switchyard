@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Per-member health from engine status: the worst state across engines, and how recent the check is. */
 import type { components } from "@/api/schema";
 

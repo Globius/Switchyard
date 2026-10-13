@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Turn a JSON Web Key Set into the ``keys`` of a ``jwt`` policy set (ADR 0135).
 
 HAProxy verifies tokens with a PEM public key, while identity providers publish JWKS. This module

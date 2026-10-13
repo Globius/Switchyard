@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The CAPTCHA gate of a protection set: a Lua service that checks the provider's answer (ADR 0172).
 
 Per protected service the renderer writes two files under ``haproxy/lists/`` (the Data Plane API

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Strict validators for every user-supplied value that can reach a config file.
 
 These are the first of two guards (the renderer escapes again). Each ``validate_*`` function either

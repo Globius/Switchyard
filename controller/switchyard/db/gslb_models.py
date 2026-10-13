@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """SQLAlchemy models for GSLB: zones and wide IPs (ADR 0160).
 
 Both tables are tenant-owned with RLS. A zone is created by a system administrator for one tenant

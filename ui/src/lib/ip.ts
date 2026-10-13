@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * IPv4 and IPv6 helpers for forms and tables: validation, `host:port` formatting (IPv6 gets
  * brackets), and a numeric ordering that works across both families.

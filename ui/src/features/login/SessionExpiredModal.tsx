@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Shown over the page when the session ends. The page underneath stays mounted, so unsaved form
  * input survives; signing in again (another tab, or break-glass here) refreshes the data and closes it.

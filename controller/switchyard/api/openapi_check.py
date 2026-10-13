@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Detect breaking changes between two OpenAPI documents (CI gate).
 
 Breaking: a removed path or method, a removed documented response code, a request parameter that

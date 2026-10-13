@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tenant scoping of PromQL, LogQL and the data source APIs (ADR 0085)."""
 
 from uuid import UUID

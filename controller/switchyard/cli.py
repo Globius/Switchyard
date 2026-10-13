@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """``syctl``: the Switchyard command-line client.
 
 In milestone M1 the commands that touch state talk to PostgreSQL directly (set

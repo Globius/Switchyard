@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The real Go agent (cross-compiled, running in a container) against the Python adapter over mTLS."""
 
 import datetime

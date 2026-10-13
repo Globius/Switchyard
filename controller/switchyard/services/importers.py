@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Importing another vendor's configuration into a tenant (ADR 0150).
 
 ``AviImportService.run`` takes an Avi configuration export and the choices a migration needs (the SE

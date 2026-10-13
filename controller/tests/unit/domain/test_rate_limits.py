@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Rate-limit policy sets: model rules, snapshot limits, the stick-table quota and rendering."""
 
 import uuid

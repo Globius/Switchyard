@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Request logs: the tenant's HAProxy access log lines, newest first, from the controller's
  * tenant-scoped log API (never straight from the log store). Filter by service, status class,

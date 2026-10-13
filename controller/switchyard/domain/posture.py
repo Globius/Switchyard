@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Device posture: the facts a device agent reports and the check against a policy (ADR 0196).
 
 Pure functions and models; the agent, the signing and the certificates are elsewhere. A report is

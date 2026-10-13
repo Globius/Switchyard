@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # The two-host lab, start to finish (docs/runbooks/lab-hosts.md). Usage: sh deploy/lab/hosts/run.sh [hosts.env]
 # Needs: the hosts prepared (prep-host.sh), hosts.env filled in, Docker and ssh on this machine. Not run on real
 # hardware yet: expect to adjust the first time. Re-running is safe up to the scenario; teardown is manual (the runbook).

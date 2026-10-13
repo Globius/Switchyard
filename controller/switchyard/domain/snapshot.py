@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """A point-in-time view of desired state, and the cross-object rules that validate it.
 
 A :class:`Snapshot` holds every object the renderer needs. :func:`validate_snapshot` runs the checks

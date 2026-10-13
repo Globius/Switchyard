@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package tunnel carries a local TCP connection to a service behind a Switchyard engine over TLS
 // with the device's client certificate. It is the "ZTNA for non-HTTP applications" part of
 // ADR 0196: SSH, RDP or a database client connects to 127.0.0.1, and the engine's TCP service

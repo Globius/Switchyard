@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """ACME client (Let's Encrypt, ZeroSSL, step-ca, Keyfactor ...) with pluggable challenge solvers.
 
 A certificate is issued once and then distributed to every SE, never per SE (backend design). The

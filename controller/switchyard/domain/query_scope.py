@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Tenant scoping of Prometheus and Loki requests (ADR 0085).
 
 Grafana runs queries as itself, so the tenant boundary cannot live in Grafana. Every request a

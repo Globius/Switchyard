@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Pool discovery by Proxmox tag (ADR 0145): the rule, the member computation and the REST calls."""
 
 import copy

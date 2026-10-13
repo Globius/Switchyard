@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 // Package facts measures the device: operating system version, disk encryption, firewall, screen
 // lock and the age of the last update.
 //

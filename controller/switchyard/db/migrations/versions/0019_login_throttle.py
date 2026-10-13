@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Login throttling and TOTP replay protection.
 
 - ``login_throttle``: failures and the end of the current block, per key (source address, or

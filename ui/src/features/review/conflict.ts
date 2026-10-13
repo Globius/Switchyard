@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Three-way conflict on apply (`412` with `conflict: {object_type, object_id, expected_version,
  * current_version}`). The API sends versions only, so the UI reads the base revision's snapshot

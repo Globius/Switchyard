@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * The tenant portal: what the tenant may use, how much it has used, and a way to ask the platform
  * for more (ADR 0199). Everything else a tenant can do for itself already lives in its own pages;

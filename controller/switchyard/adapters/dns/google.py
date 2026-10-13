@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Google Cloud DNS: TXT record sets through the REST API, with a service-account key.
 
 The access token comes from a self-signed JWT exchanged at Google's token endpoint. A record set

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * ChipInput: pick several items from a list (certificates, policy sets) or type free text where
  * the field allows it (SANs, groups).

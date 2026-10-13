@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """API steps of the end-to-end lab. Runs inside the controller container: python - <command> [args] < drive.py
 
 Commands:

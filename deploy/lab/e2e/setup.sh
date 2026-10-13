@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Prepares everything the end-to-end lab needs besides the Proxmox container: a database, an OpenBao PKI and
 # AppRole for the controller, certificates, a bundle signing key and the work files. Idempotent enough to rerun
 # after `teardown.sh`. Needs the dev PostgreSQL (deploy/dev) and the dev OpenBao (container sy-openbao).

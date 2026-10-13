@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Real requests through the rendered match model, rewrite policies and fixed responses.
 
 The golden cases prove syntax (``haproxy -c``); this proves what the rules do to traffic. Same lab

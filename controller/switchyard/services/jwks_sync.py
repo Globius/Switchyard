@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Keep the keys of JWT rules that name a ``jwks_url`` in step with the issuer (ADR 0153).
 
 ``sync_jwks`` runs every five minutes. For each ``jwt`` policy set rule with a ``jwks_url`` it

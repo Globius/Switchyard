@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """OpenBao policy for the controller, matching the secret namespaces the code allows.
 
 The controller checks secret references in code (``domain.validators.check_secret_ref_scope``);

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 import { AlertDialog } from "radix-ui";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";

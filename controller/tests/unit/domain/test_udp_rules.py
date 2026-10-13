@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """UDP field rules (ticket T7, ADR 0020): one test per rejected field, checking its path."""
 
 import copy

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """``/metrics`` and the Prometheus service-discovery list, over a real database."""
 
 import json

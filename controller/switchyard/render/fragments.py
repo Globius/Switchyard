@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Cut the rendered HAProxy files of an SE group into the fragments one object produced.
 
 The UI shows a *Rendered config* tab on every object page. This module answers "which part of the

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** The "Label" filter box of the object lists: selectors, comma separated, kept in the URL. */
 import { useState } from "react";
 import { t } from "@/lib/i18n";

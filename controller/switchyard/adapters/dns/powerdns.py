@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """PowerDNS Authoritative Server HTTP API: TXT record sets.
 
 A record set holds every value of a name, so adding or removing one value reads the set and

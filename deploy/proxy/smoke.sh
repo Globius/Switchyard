@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Builds the proxy, runs it in front of the controller image and checks headers, routing and rate limiting.
 # Needs the dev PostgreSQL and: docker build -f deploy/controller/Dockerfile -t switchyard-controller:dev .
 set -eu

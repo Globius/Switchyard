@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """DNS providers for ACME DNS-01: the interface, the catalogue of provider types and their forms.
 
 Every provider publishes and removes TXT records. A name can carry several TXT values at once

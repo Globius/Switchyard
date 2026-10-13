@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Adds the IPv6 side to the lab's helper guest (run as root on the node that holds it; after helper.sh). IPv6 addresses
 # ::fa on the three lab networks (fd30:0:0:1..3::/64), the web backend on [fd30:0:0:3::fa]:8001, a UDP echo on port 5301
 # and IPv6 multipath in the BGP upstream (AS 65000). Engines are added as neighbors by the scenario, as for IPv4.
