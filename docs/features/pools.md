@@ -25,6 +25,15 @@ members:
   `disabled` reaches every engine through the HAProxy Runtime API. See [health checks and drain](health-checks.md).
 - A pool can be filled automatically from [Proxmox tags](pool-discovery.md) or a [Kubernetes cluster](kubernetes.md).
 
+### Labels
+
+Virtual services and pools carry up to 20 free labels (`env: prod`, `team: payments`; keys and values are
+`a-z`, `0-9`, `-`, `_`, `.`, at most 63 characters, a value may be empty). They are for finding objects: they never reach
+a configuration file, so changing one does not touch the engines. Filter a list with `?label=env=prod`; repeat the
+parameter to require all of them, and use `key`, `!key` or `key!=value` for has, has not and is not. An update replaces the
+whole map. In the UI the Label box above the virtual services and pools lists takes the same selectors, comma
+separated, and clicking a chip on a row adds it. Decision: [0198](../adr/0198-object-labels.md).
+
 **Limits.** A pool used by a UDP service takes no TLS, persistence (other than the `source` algorithm), PROXY protocol, backup
 members or `maxconn`, and no `random`: IPVS has no equivalent.
 

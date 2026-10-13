@@ -5,6 +5,7 @@
 /** Queries behind the virtual services list. Keys mirror API paths so an apply invalidates by prefix. */
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "@/api/client";
+import { parseSelectors } from "@/lib/labels";
 
 export interface VsFilters {
   q?: string;
@@ -12,6 +13,8 @@ export interface VsFilters {
   se_group?: string;
   protocol?: "http" | "tcp" | "udp";
   enabled?: boolean;
+  /** Label selectors, comma separated: `env=prod, team` (all must match). */
+  label?: string;
 }
 
 /** Cursor-paged list; `changeSet` overlays the open draft (`?change_set=`). */
@@ -23,7 +26,13 @@ export function useVirtualServices(tenant: string, filters: VsFilters, changeSet
         await api.GET("/api/v1/tenants/{t}/virtual-services", {
           params: {
             path: { t: tenant },
-            query: { ...filters, change_set: changeSet, cursor: pageParam, limit: 50 },
+            query: {
+              ...filters,
+              label: parseSelectors(filters.label),
+              change_set: changeSet,
+              cursor: pageParam,
+              limit: 50,
+            },
           },
         }),
       ),

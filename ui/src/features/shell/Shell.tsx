@@ -58,6 +58,7 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
   {
     heading: "Tenant",
     items: [
+      { label: "Usage and requests", to: "portal" },
       { label: "Access and settings", to: "access" },
       { label: "DNS credentials", to: "dns-credentials" },
     ],

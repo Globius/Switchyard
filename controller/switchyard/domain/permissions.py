@@ -164,7 +164,9 @@ MATRIX: tuple[Permission, ...] = (
     ),
     _p(14, "enable", "require_approval", T, "Turn the tenant's require-approval setting on."),
     _p(15, "disable", "require_approval", S, "Turn the tenant's require-approval setting off."),
+    _p(14, "request", "quota_request", T, "Ask the platform for a higher quota for your tenant."),
     _p(15, "change", "quota", S, "Change a tenant's quotas."),
+    _p(15, "decide", "quota_request", S, "Approve or deny a tenant's request for a higher quota."),
     _p(
         16,
         "manage",

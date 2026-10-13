@@ -142,7 +142,7 @@ Replace). Tokens, enrollment tokens and the break-glass password/TOTP are shown 
 
 **Not backed (designed as unavailable):** metrics and logs answer `available: false` with a `reason`; show the
 unavailable state with that reason, and "—" (never 0) for missing numbers. Proxmox host online state: "Host state not
-reported". Label filters: disabled control, tooltip "Labels aren't supported yet".
+reported". Label filters: built later (ADR 0198); the handoff drew a disabled control.
 
 **Standard states on every screen** (see `States`): loading skeleton, empty with primary action (text only for
 read-only users), error with problem `title`/`detail` and Retry (field errors on the input via `errors[].path`),

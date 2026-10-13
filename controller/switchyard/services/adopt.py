@@ -10,7 +10,9 @@ objects, so they show up in the UI like any other tenant, and records the engine
 node and VM id they run on) without deploying anything.
 
 The file is a snapshot mapping like ``switchyard/examples/demo.yaml`` plus an optional ``engines``
-list. Ids may be symbolic; they are replaced with fresh UUIDv7 values.
+list and an optional ``controller_members`` list: the controller VMs, including the external one on
+ESXi (ADR 0051), which sit outside the tenant's objects. Ids may be symbolic; they are replaced with
+fresh UUIDv7 values.
 
 Example:
     ``tenants: [{id: mgmt, name: management}]``, networks, a VIP pool, an SE group and a virtual
@@ -26,10 +28,12 @@ import yaml
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from switchyard.db.controller_models import ControllerMemberRow
 from switchyard.db.models import NetworkRow, SeGroupRow, TenantRow, VirtualServiceRow
 from switchyard.db.ops_models import ServiceEngineRow
 from switchyard.db.repository import add_snapshot, find_tenant_id
 from switchyard.db.tenancy import admin_session
+from switchyard.domain.controller_members import check_member, is_external
 from switchyard.domain.loader import reassign_ids, snapshot_from_mapping
 from switchyard.domain.management import MANAGEMENT_TENANT
 from switchyard.domain.snapshot import Snapshot, ensure_valid
@@ -49,6 +53,7 @@ def load_adoption(text: str) -> tuple[Snapshot, list[dict[str, Any]]]:
     if not isinstance(data, dict):
         raise ValueError("the adoption file must be a YAML mapping")
     engines = list(data.pop("engines", None) or [])
+    data.pop("controller_members", None)  # read by load_controller_members
     snapshot = reassign_ids(snapshot_from_mapping(data), uuid7)
     ensure_valid(snapshot)
     groups = {g.name for g in snapshot.se_groups}
@@ -57,6 +62,37 @@ def load_adoption(text: str) -> tuple[Snapshot, list[dict[str, Any]]]:
             raise ValueError(f"engine {engine.get('name')!r} names an unknown SE group")
         validate_dataplane_url(engine["dataplane_url"])
     return snapshot, engines
+
+
+def load_controller_members(text: str) -> list[dict[str, Any]]:
+    """The ``controller_members`` of an adoption file, validated.
+
+    Each entry takes ``name``, ``address``, ``platform`` and optionally ``host``, ``external``,
+    ``nofailover`` and ``patroni_url`` (the fields of ``POST /system/controller/members``).
+
+    Raises:
+        ValueError: If an entry is not valid or two entries share a name.
+    """
+    data = yaml.safe_load(text)
+    members = list((data or {}).get("controller_members") or []) if isinstance(data, dict) else []
+    names: set[str] = set()
+    for member in members:
+        if not isinstance(member, dict):
+            raise ValueError("controller_members entries must be mappings")
+        name = str(member.get("name"))
+        problems = check_member(
+            name,
+            str(member.get("address")),
+            str(member.get("platform")),
+            member.get("patroni_url"),
+            member.get("host"),
+        )
+        if problems:
+            raise ValueError(f"controller member {name!r}: {problems[0][0]}: {problems[0][1]}")
+        if name in names:
+            raise ValueError(f"controller member {name!r} is listed twice")
+        names.add(name)
+    return members
 
 
 async def _is_bootstrap_shell(session: AsyncSession, tenant_id: UUID, name: str) -> bool:
@@ -76,7 +112,9 @@ async def adopt(admin: AsyncEngine, path: Path) -> tuple[Snapshot, int]:
     Raises:
         AlreadyExistsError: If a tenant with the same name exists (adopt never merges).
     """
-    snapshot, engines = load_adoption(path.read_text("utf-8"))
+    text = path.read_text("utf-8")
+    snapshot, engines = load_adoption(text)
+    members = load_controller_members(text)
     tenant = snapshot.tenants[0]
     group_ids = {g.name: g.id for g in snapshot.se_groups}
     async with admin_session(admin) as session:
@@ -101,6 +139,26 @@ async def adopt(admin: AsyncEngine, path: Path) -> tuple[Snapshot, int]:
                     credentials_ref=engine.get("credentials_ref"),
                     pve_node=engine.get("pve_node"),
                     vmid=engine.get("vmid"),
+                )
+            )
+        for member in members:
+            if (
+                await session.execute(
+                    select(ControllerMemberRow.id).where(ControllerMemberRow.name == member["name"])
+                )
+            ).first():
+                raise AlreadyExistsError(f"controller member {member['name']!r} already exists")
+            session.add(
+                ControllerMemberRow(
+                    id=uuid7(),
+                    name=member["name"],
+                    address=member["address"],
+                    platform=member["platform"],
+                    host=member.get("host"),
+                    external=member.get("external", is_external(member["platform"])),
+                    nofailover=bool(member.get("nofailover", False)),
+                    patroni_url=(member.get("patroni_url") or "").rstrip("/") or None,
+                    created_by="syctl adopt",
                 )
             )
         await session.flush()

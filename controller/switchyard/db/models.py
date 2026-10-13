@@ -38,9 +38,11 @@ from switchyard.db import (
     acme_models,  # noqa: F401  (registers the ACME and DNS provider tables)
     alert_models,  # noqa: F401  (registers the alerting tables)
     auth_models,  # noqa: F401  (registers the login tables)
+    controller_models,  # noqa: F401  (registers the controller member table)
     gslb_models,  # noqa: F401  (registers the GSLB tables)
     k8s_models,  # noqa: F401  (registers the Kubernetes cluster table)
     ops_models,  # noqa: F401  (registers the M2 tables on the metadata)
+    portal_models,  # noqa: F401  (registers the quota request table)
 )
 from switchyard.db.base import (
     Base,
@@ -280,6 +282,9 @@ class PoolRow(TenantOwnedMixin, Base):
     )
     client_certificate_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     discovery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    labels: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
 
 
 class PoolMemberRow(Base):
@@ -343,6 +348,9 @@ class VirtualServiceRow(TenantOwnedMixin, Base):
     restore_client_ip_header: Mapped[str | None] = mapped_column(Text)
     compression: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     cache: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    labels: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
     dns: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
 

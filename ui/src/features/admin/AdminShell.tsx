@@ -7,11 +7,13 @@ import { Link, Outlet } from "@tanstack/react-router";
 import { Signpost } from "lucide-react";
 import { useMe } from "@/auth/session";
 import { Badge } from "@/components/ui/badge";
+import { usePendingCount } from "@/features/portal/QuotaQueue";
 import { UserMenu } from "@/features/shell/UserMenu";
 import { t } from "@/lib/i18n";
 
 const NAV = [
   { label: "Tenants", to: "/admin/tenants" },
+  { label: "Quota requests", to: "/admin/quota-requests" },
   { label: "Users", to: "/admin/users" },
   { label: "Identity providers", to: "/admin/identity-providers" },
   { label: "Role mappings", to: "/admin/role-mappings" },
@@ -21,6 +23,16 @@ const NAV = [
   { label: "System settings", to: "/admin/settings" },
   { label: "Audit log", to: "/admin/audit-log" },
 ] as const;
+
+/** The waiting count next to "Quota requests", so a request does not sit unseen. */
+function WaitingBadge() {
+  const n = usePendingCount();
+  return n > 0 ? (
+    <Badge tone="pending" className="ml-2" aria-label={t("{n} waiting", { n })}>
+      {n}
+    </Badge>
+  ) : null;
+}
 
 export function AdminShell() {
   const { data: me, isPending } = useMe();
@@ -64,6 +76,7 @@ export function AdminShell() {
               activeProps={{ className: "bg-sidebar-accent font-medium" }}
             >
               {t(i.label)}
+              {i.to === "/admin/quota-requests" && me?.is_system && <WaitingBadge />}
             </Link>
           ))}
         </nav>

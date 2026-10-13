@@ -55,6 +55,33 @@ syctl controller revert      # revert a waiting change; the worker applies it
 The break-glass login (`docs/auth.md`) and the lab runbooks still apply. A change set of the
 management tenant can also be rolled back like any other (`POST /tenants/management/revisions/{n}/rollback`).
 
+## Cluster members, including the one on ESXi
+
+The controller runs on three VMs, each with the API, a worker, etcd and a Patroni-managed PostgreSQL (`docs/production.md`).
+In the interim placement two are on Proxmox hosts and the third is on vSphere/ESXi until a third Proxmox host arrives. That
+VM is outside the `management` tenant and tagged `nofailover`: it votes and replicates but never becomes the primary. The
+platform does not manage it, so it is listed as an **external member**.
+
+**Admin > Controller > Cluster members** lists the VMs with where each runs, its address, the role Patroni reports (Primary,
+Sync standby, Replica, or "Not in the cluster"), its state, replication lag and whether it can take over. External members carry
+an *External* badge. The roles come from Patroni's `GET /cluster` on the first listed member that answers, matched on the
+member name, so `name` must be the Patroni member name (`PATRONI_NAME`). Without any `patroni_url` the list shows the VMs and no
+roles.
+
+```yaml
+# in the adoption file (deploy/prod/adopt/management.example.yaml), or POST /system/controller/members
+controller_members:
+  - {name: ctl-1, address: 10.0.0.11, platform: proxmox, host: pve1, patroni_url: "http://10.0.0.11:8008"}
+  - {name: ctl-esxi, address: 10.0.0.13, platform: esxi, host: esxi-01, nofailover: true, patroni_url: "http://10.0.0.13:8008"}
+```
+
+- The list only describes the VMs. Adding or removing an entry never touches a VM, etcd or Patroni; to retire a member, run
+  `etcdctl member remove` and `patronictl remove` first (02, "Interim placement"), then remove the entry.
+- System administrators only. Patroni's REST port has no authentication, so keep it on the controllers' private network; the
+  controller refuses loopback, link-local and multicast targets.
+- API: `GET`/`POST /system/controller/members`, `PATCH`/`DELETE /system/controller/members/{id}` (`If-Match`).
+  Audit: `controller_member.created`, `.updated`, `.deleted`. Decision: [0051](adr/0051-management-tenant-lock-and-adopt.md).
+
 ## Without a management tenant
 
 In a quick start or development setup there is no `management` tenant. `GET /system/controller` then says

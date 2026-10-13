@@ -147,6 +147,8 @@ def full_data() -> dict:  # type: ignore[type-arg]
     vs["ports"][0]["tls_profile"] = "modern"
     vs["ports"][0]["http3"] = True
     vs["cache"] = {"size_mb": 8, "max_object_kb": 128, "max_age_s": 20}
+    vs["labels"] = {"env": "prod", "team": "payments"}
+    data["pools"][0]["labels"] = {"env": "prod", "tier": ""}
     vs["compression"] = {"algorithms": ["gzip", "deflate"], "content_types": ["text/html"]}
     vs.update(
         policy_set_ids=["ps-redir", "ps-waf", "ps-protect"],

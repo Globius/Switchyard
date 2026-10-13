@@ -65,13 +65,13 @@ export function useObjectRevisions(tenant: string, objectId: string) {
 }
 
 /** All pools, to resolve route targets and show members. */
-export function usePools(tenant: string, changeSet?: string) {
+export function usePools(tenant: string, changeSet?: string, label?: string[]) {
   return useQuery({
-    queryKey: ["t", tenant, "pools", { changeSet }],
+    queryKey: ["t", tenant, "pools", { changeSet, label }],
     queryFn: async () =>
       unwrap(
         await api.GET("/api/v1/tenants/{t}/pools", {
-          params: { path: { t: tenant }, query: { limit: 200, change_set: changeSet } },
+          params: { path: { t: tenant }, query: { limit: 200, change_set: changeSet, label } },
         }),
       ),
   });

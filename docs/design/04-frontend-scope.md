@@ -40,7 +40,7 @@ OpenAPI has a typed request and response, an example, its error responses and it
 | SE group deploy, engine retire, network SDN apply | ✅ |
 | Health monitor "test against one member" | ✅ `POST health-monitors/{id}/test` (runs on an engine through the agent; needs an upgraded agent and a member already applied) |
 | Per-prefix BGP withdrawal list | ✅ `agent.withdrawn_prefixes[]` (ADR 0041) |
-| `?label=` filters | ❌ dropped: objects have no labels |
+| `?label=` filters | ✅ virtual services and pools carry labels (ADR 0198) |
 
 **Rules that came out of the audit** (details in ADR 0040): a VIP is held by the service that carries it; apply on a
 tenant that requires approval is `403` for everyone but a system administrator with a reason; *Retire* destroys the
@@ -97,7 +97,7 @@ Each screen lists entities and fields (names are API field names), states beyond
 
 ### 3.4 Virtual services list
 - **Columns:** `name`, `vip`, `ports[].port`, `protocol`, `se_group_id` (resolve to name), `enabled`, `draft_status`, **health** (`status/virtual-services`: `health`, `members_up/members_total`), **RPS, 5xx** (`metrics/virtual-services`; ⚠️ `available: false` until telemetry exists, show "no data source"), cert expiry (derive from `certificate_ids` → `not_after`). p95 is on the detail page only.
-- **Interactions:** filter by `q`, `se_group`, `protocol`, `enabled`, `pool`, `certificate`; sort `name|-name`; enable/disable (PATCH `enabled` → draft op); create (wizard); delete. No label filter (dropped).
+- **Interactions:** filter by `q`, `se_group`, `protocol`, `enabled`, `pool`, `certificate`; sort `name|-name`; enable/disable (PATCH `enabled` → draft op); create (wizard); delete. Label filter `label=` (repeatable; ADR 0198).
 - **States:** standard; plus "N unsaved changes" in draft mode and deleted-in-draft rows.
 - **Endpoints:** `GET virtual-services?q&se_group&protocol&enabled&sort&change_set&cursor&limit` ✅, `PATCH virtual-services/{id}` ✅ (`If-Match`), `DELETE` ✅.
 
@@ -341,7 +341,7 @@ Errors are `application/problem+json` (`type`, `title`, `status`, `detail`, `err
 | break-glass | `POST /system/break-glass/admin/confirm` | system-admin | Confirm the authenticator |
 
 **Not backed by an API yet:** host online state of
-Proxmox nodes, a telemetry pipeline behind metrics and logs, label filters (dropped).
+Proxmox nodes, a telemetry pipeline behind metrics and logs, label filters (built later, ADR 0198).
 
 ---
 

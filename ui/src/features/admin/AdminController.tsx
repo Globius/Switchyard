@@ -18,6 +18,7 @@ import { ExpiryPill, expiryStatus } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
+import { ControllerMembers } from "./ControllerMembers";
 import { t } from "@/lib/i18n";
 import { isIp } from "@/lib/ip";
 import { shortWhen } from "@/lib/format";
@@ -488,6 +489,8 @@ export function AdminController() {
         {t("Only system-admins see this page. Every apply, confirm and revert is audited.")}{" "}
         {d.break_glass}
       </p>
+
+      <ControllerMembers />
 
       <ConfirmDialog
         open={confirmApply}

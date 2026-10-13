@@ -23,6 +23,9 @@ import { api, unwrap } from "@/api/client";
 import { useSaveOp } from "@/features/objects/save";
 import { useChangeSetRead } from "@/features/review/queries";
 import { useDraft } from "@/features/shell/draft";
+import { LabelFilter } from "@/components/sy/LabelFilter";
+import { LabelChips } from "@/components/sy/LabelChips";
+import { parseSelectors } from "@/lib/labels";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -155,11 +158,7 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
           <option value="true">{t("Enabled")}</option>
           <option value="false">{t("Disabled")}</option>
         </select>
-        <Tip label={t("Labels aren't supported yet")}>
-          <Button variant="outline" size="sm" disabled>
-            {t("Label")}
-          </Button>
-        </Tip>
+        <LabelFilter value={filters.label} onChange={(label) => setFilter({ label })} />
       </div>
 
       <p className="text-xs text-muted-foreground">
@@ -245,6 +244,14 @@ export function VirtualServicesPage({ tenant, filters }: { tenant: string; filte
                           {v.name}
                         </Link>
                       </span>
+                      <LabelChips
+                        labels={v.labels}
+                        onPick={(chip) =>
+                          setFilter({
+                            label: [...new Set([...parseSelectors(filters.label), chip])].join(","),
+                          })
+                        }
+                      />
                     </td>
                     <td className="px-4 py-3 font-mono">
                       {v.vip ?? (
