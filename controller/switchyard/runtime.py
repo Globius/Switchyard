@@ -139,7 +139,10 @@ def enrollment(db: Databases, secrets: SecretsReader | None = None) -> Enrollmen
         mount=os.environ.get("SWITCHYARD_PKI_MOUNT", "pki"),
         role=os.environ.get("SWITCHYARD_PKI_ROLE", "agents"),
     )
-    return EnrollmentService(db, pki, signer.public_b64())
+    reserved = os.environ.get("SWITCHYARD_CONTROLLER_CN", "").split(",")
+    return EnrollmentService(
+        db, pki, signer.public_b64(), reserved_names=[n for n in reserved if n]
+    )
 
 
 def devices(db: Databases, secrets: SecretsReader | None = None) -> DeviceService:
@@ -524,3 +527,28 @@ def worker(db: Databases, worker_id: str) -> tuple[Worker, Scheduler]:
             schedule[SYNC_CLOUDFLARE_IPS_JOB] = timedelta(days=1)
     scheduler = Scheduler(db.admin, schedule)
     return Worker(db.admin, handlers, worker_id=worker_id), scheduler
+
+
+#: Values copied from the example environment files that must never be a live credential.
+PLACEHOLDER_SECRETS = frozenset({"change-me", "changeme", "password", "secret", "token"})
+
+
+def metrics_token() -> str | None:
+    """``SWITCHYARD_METRICS_TOKEN``, or ``None`` when unset; a placeholder or short one is refused.
+
+    The token opens ``/metrics`` and the service-discovery list, which name every management
+    address. ``deploy/prod/node.env.example`` ships ``change-me`` as a reminder to set it.
+
+    Raises:
+        RuntimeError: If the token is a placeholder from an example file, or shorter than 16
+            characters.
+    """
+    token = os.environ.get("SWITCHYARD_METRICS_TOKEN", "").strip()
+    if not token:
+        return None
+    if token.lower() in PLACEHOLDER_SECRETS or len(token) < 16:
+        raise RuntimeError(
+            "SWITCHYARD_METRICS_TOKEN is a placeholder or shorter than 16 characters; "
+            "set a random value (openssl rand -hex 32)"
+        )
+    return token

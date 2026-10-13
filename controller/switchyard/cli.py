@@ -202,7 +202,7 @@ def serve(
     app = create_app(
         services,
         public_url=public_url,
-        metrics_token=os.environ.get("SWITCHYARD_METRICS_TOKEN"),
+        metrics_token=runtime.metrics_token(),
         grafana_url=runtime.grafana_url(),
     )
     config = uvicorn.Config(app, host=host, port=port)

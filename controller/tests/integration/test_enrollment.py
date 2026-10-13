@@ -297,3 +297,16 @@ async def test_the_real_go_agent_enrolls_against_the_real_endpoint(
         finally:
             server.should_exit = True
             await task
+
+
+async def test_an_engine_named_like_the_controller_gets_no_certificate(pg_url: str) -> None:
+    """Agents accept the controller's name as caller: no tenant-named engine may hold it."""
+    async with world(pg_url) as w:
+        for name, extra in [("switchyard-controller", ()), ("ops-ctl", ("ops-ctl",))]:
+            custom = EnrollmentService(
+                w.db, LocalCa(), BundleSigner.generate().public_b64(), reserved_names=extra
+            )
+            engine_id = await register(w, name=name, ip="10.30.0.12" if extra else "10.30.0.11")
+            token, _ = await custom.create_token(principal(), TENANT, engine_id)
+            with pytest.raises(EnrollmentError):
+                await custom.redeem(token, csr())

@@ -560,6 +560,22 @@ def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
             )
 
 
+def pki_role_owner(role: str, tenant_names: Iterable[str]) -> str | None:
+    """The tenant a PKI role belongs to: the longest tenant name the role starts with, plus a dash.
+
+    Tenant names may contain dashes, so ``acme-corp-devices`` starts with ``acme-`` as well as
+    ``acme-corp-``. The longest match is the owner; a shorter tenant must not use the role.
+
+    Example:
+        >>> pki_role_owner("acme-corp-devices", ["acme", "acme-corp"])
+        'acme-corp'
+        >>> pki_role_owner("shared", ["acme"]) is None
+        True
+    """
+    owners = [n for n in tenant_names if role.startswith(f"{n}-")]
+    return max(owners, key=len, default=None)
+
+
 def _check_posture_roles(snapshot: Snapshot, problems: list[Problem]) -> None:
     """A posture set's PKI role starts with its tenant's name and a dash (``pki_role_not_allowed``).
 
@@ -570,7 +586,10 @@ def _check_posture_roles(snapshot: Snapshot, problems: list[Problem]) -> None:
     for ps in snapshot.policy_sets:
         if isinstance(ps, PosturePolicySet) and ps.tenant_id in names:
             prefix = f"{names[ps.tenant_id]}-"
-            if not ps.pki_role.startswith(prefix):
+            if (
+                not ps.pki_role.startswith(prefix)
+                or pki_role_owner(ps.pki_role, names.values()) != names[ps.tenant_id]
+            ):
                 problems.append(
                     Problem(
                         f"policy_sets.{ps.name}.pki_role",

@@ -344,5 +344,7 @@ def check_endpoint(host: str, what: str, *, env: str = "SWITCHYARD_DNS_CIDRS") -
             or address.is_unspecified
             or address.is_reserved
         )
-        if blocked or (address.is_private and not any(address in net for net in allow)):
+        # `not is_global` also covers shared address space (100.64.0.0/10, which holds some
+        # clouds' metadata address), not only the RFC 1918 ranges that `is_private` names.
+        if blocked or (not address.is_global and not any(address in net for net in allow)):
             raise ValueError(f"{what}: {address} is not an address the controller may contact")

@@ -131,6 +131,7 @@ nav:
       - FIPS 140-3 assessment: research/fips-assessment.md
       - Backend security review: security/backend-review.md
       - UI security review: security/ui-review.md
+      - Security review 2026-10-13: security/2026-10-13-review.md
   - Lab results:
       - Lab pass on two real Proxmox hosts, 2026-10-12: lab/2026-10-12-full-pass.md
       - Kubernetes connector on a real cluster (2026-10-12): lab/2026-10-12-kubernetes.md
