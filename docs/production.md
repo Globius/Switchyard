@@ -79,6 +79,38 @@ pilot items.
 Do not confuse this with the [Kubernetes connector](kubernetes.md), which publishes Services of an existing cluster through
 Switchyard engines and works with any deployment option.
 
+### Securing the database tier
+
+The three controller nodes talk to each other on etcd (2379 clients, 2380 peers), Patroni's REST API (8008) and PostgreSQL
+(5432). `deploy/prod/compose.yaml` ships these hardened, and a fresh install needs these steps first (they are why
+`node.env` has `NODE_IPS`, `PKI_DIR`, `PATRONI_API_PASSWORD` and `DOCKER_SUBNET`):
+
+1. **A certificate per node** from the OpenBao PKI role `internal` (server and client use, IP SANs allowed):
+   `NODE_NAME=ctl-1 NODE_IP=10.0.0.11 sh deploy/prod/issue-node-cert.sh` writes `secrets/pki/{ca.crt,node.crt,node.key}`; copy the
+   directory to the node (`node.key` must be readable by uid 999, the `postgres` user in the Patroni image; the script does it).
+2. **etcd** listens on https only and demands a client certificate from the CA for clients and peers
+   (`--client-cert-auth`, `--peer-client-cert-auth`); Patroni reaches it with the node certificate.
+3. **Patroni's REST API** is https, listens on the node address only, and changes (switchover, restart, reload) need the
+   password `PATRONI_API_PASSWORD`. `GET /cluster`, which the controller reads for Admin, Controller, stays open to anyone who
+   reaches the port, so the firewall below matters; the controller verifies the certificate with `SWITCHYARD_PATRONI_CA`
+   (set in `compose.yaml`) and the members' `patroni_url` is `https://`.
+4. **PostgreSQL** has `ssl=on`, listens on the node address and loopback, and `pg_hba` admits only `hostssl` connections from
+   the three node addresses and from the stack's own Docker network (`DOCKER_SUBNET`, fixed so it can be named), everything
+   else is rejected. The controller connects with `sslmode=verify-full` against the same CA.
+5. **A host firewall** (`sh deploy/prod/firewall.sh --persist`, nftables) lets only `NODE_IPS` and the Docker network reach
+   2379, 2380, 8008 and 5432. It adds its own table and leaves other rules alone.
+
+What this does not do: the certificates are not rotated for you (the script issues one year; re-run it and restart etcd and
+Patroni one node at a time before they expire), and any holder of a certificate from that CA can reach etcd, so keep the PKI
+role for nodes separate from the one for tenants if you share the OpenBao.
+
+Proof, on the three-node lab with this configuration (3 LXC containers over two Proxmox hosts): a probe from a machine that is
+not a node was refused on all four ports and reached the proxy on 8080; etcd answered a request with the node certificate and not
+without; Patroni's REST API refused plain http and a switchover without the password (401); `pg_stat_ssl` shows the replicas
+streaming over TLS. Stopping the leader's Patroni promoted the sync standby in under 5 seconds while the controller VIP kept
+answering `/healthz`; the stopped node rejoined as a replica. A manual `patronictl switchover` worked, and
+the node tagged `nofailover` was not promoted when the leader was stopped.
+
 ### Gotchas seen in the lab
 
 - A proxy configured for the Docker **client** (`~/.docker/config.json` `proxies`) is injected into every container and breaks
@@ -142,6 +174,8 @@ The security reviews are in [security/backend-review.md](security/backend-review
       scope it to a resource pool, and review it.
 - [ ] Networks: management is its own network, engines' data and VIP networks are separate, and nothing in the request path
       depends on the controller. There is no SSH from the controller to engines and none is needed.
+- [ ] The database tier is hardened as in [Securing the database tier](#securing-the-database-tier): etcd and Patroni over
+      TLS with a password on Patroni's REST API, `hostssl` for the three nodes only, and the host firewall loaded on every node.
 - [ ] No secrets in PostgreSQL, logs or Git: only `secret_ref`s that point into OpenBao.
 
 ## 6. OpenBao

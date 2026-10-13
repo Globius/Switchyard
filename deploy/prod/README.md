@@ -3,6 +3,9 @@
 1. Build or pull `switchyard-controller` (`docker build -f deploy/controller/Dockerfile -t switchyard-controller .`).
 2. Copy `node.env.example` to `node.env` and set the node's name and IP; put the Ed25519 bundle key at `secrets/bundle.key` and the mTLS files (`ca.crt`, `client.crt`, `client.key`) in `secrets/mtls/`.
    The controller will not start with a bundle key but no CA (`SWITCHYARD_DATAPLANE_CA`).
+   Also issue a certificate per node (`issue-node-cert.sh`, into `secrets/pki/`), set `NODE_IPS`, `PATRONI_API_PASSWORD` and
+   `DOCKER_SUBNET`, and load the host firewall (`sh firewall.sh --persist`): etcd, Patroni and PostgreSQL run over TLS and
+   answer only the three nodes (docs/production.md, "Securing the database tier").
 3. `docker compose --env-file node.env up -d --build` on each of the three VMs. Start the first node with
    `ETCD_CLUSTER_STATE=new` on all three at once; later joins use `existing`.
 4. `docker compose exec patroni patronictl -c /etc/patroni.yml list` shows leader, sync standby and replica.
