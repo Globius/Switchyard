@@ -85,7 +85,7 @@ Layers depend downward only: `api → services → domain`. `domain` and `render
 - The developer works on Windows (PowerShell 7). Anything that needs Linux binaries (HAProxy, FRR, Keepalived,
   PostgreSQL) runs in Docker/testcontainers, so tests behave the same on Windows, WSL2 and CI.
 - Line endings are LF (`.gitattributes` enforces this).
-- Git remote: self-hosted GitLab (`git.example.com`). Commit as the `Codex` service account, not as the user.
+- Git remote: self-hosted GitLab (the merge point; GitHub at github.com/globius/switchyard is the public front door). Commit as the `Codex` service account, not as the user.
 - Don't commit the Avi controller backup or anything derived from it that contains IPs, certs or keys.
 
 ## Things not to do

@@ -1,6 +1,6 @@
 site_name: Switchyard
 site_description: Multi-tenant load balancer controller for Proxmox; an open-source replacement for NSX ALB (Avi).
-repo_url: https://git.example.com/globius-oss/switchyard
+repo_url: https://github.com/globius/switchyard
 edit_uri: -/edit/main/docs/
 docs_dir: docs
 site_dir: public

@@ -52,5 +52,5 @@ Short answers to "why did you…?", each pointing at the decision record that se
 | Why does the controller evaluate alerts instead of Alertmanager? | Rules use what only the controller knows, scoped per tenant | [0120](adr/0120-alerting-model.md) |
 | Why GSLB on PowerDNS LUA records? | No daemon of ours in the answer path; DNS keeps working without the controller | [0160](adr/0160-gslb-on-powerdns.md) |
 | Why is the Kubernetes connector a poller, not an in-cluster controller? | Nothing to install in the cluster; read-only token | [0151](adr/0151-kubernetes-connector.md) |
-| Why OpenTofu and OpenBao, not Terraform and Vault? | Avoid BSL-licensed tools | [0146](adr/0146-opentofu-provider-from-the-openapi.md), [CLAUDE.md rules](https://git.example.com/globius-oss/switchyard/-/blob/main/CLAUDE.md) |
+| Why OpenTofu and OpenBao, not Terraform and Vault? | Avoid BSL-licensed tools | [0146](adr/0146-opentofu-provider-from-the-openapi.md), [CLAUDE.md rules](https://github.com/globius/switchyard/-/blob/main/CLAUDE.md) |
 | Why MkDocs for this site? | Plain Markdown, static output for GitLab and GitHub Pages | [0190](adr/0190-docs-site-mkdocs-material.md) |
