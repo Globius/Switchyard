@@ -237,7 +237,12 @@ APPLY_RUNNER: Any = None
 @upgrade_app.command("apply")
 def apply_cmd(
     bundle: Path,
-    compose_file: Annotated[Path, typer.Option(help="This node's Compose file.")],
+    compose_file: Annotated[
+        list[Path],
+        typer.Option(
+            help="This node's Compose file; repeat it for an override file (compose.override.yaml)."
+        ),
+    ],
     env_file: Annotated[
         Path, typer.Option(help="This node's env file (CONTROLLER_IMAGE, PROXY_IMAGE).")
     ],

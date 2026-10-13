@@ -114,3 +114,21 @@ async def test_a_bad_bundle_touches_nothing(node: dict[str, Path]) -> None:
 
 def test_env_editing_keeps_other_lines() -> None:
     assert set_env("A=1\n# note\nB=2\n", {"B": "9", "C": "3"}) == "A=1\n# note\nB=9\nC=3\n"
+
+
+async def test_an_override_file_is_passed_to_every_compose_call(node: dict[str, Path]) -> None:
+    fake = Fake()
+    override = node["root"] / "compose.override.yaml"
+    override.write_text("services: {}\n")
+
+    async def ok() -> bool:
+        return True
+
+    await apply_compose(
+        node["bundle"], TRUSTED, compose_file=[node["compose"], override], env_file=node["env"],
+        workdir=node["root"] / "work", healthy=ok, run=fake, health_attempts=1, health_delay_s=0,
+    )  # fmt: skip
+    compose_calls = [c for c in fake.calls if c[:2] == ["docker", "compose"]]
+    assert compose_calls
+    for call in compose_calls:
+        assert call.count("-f") == 2 and str(override) in call
