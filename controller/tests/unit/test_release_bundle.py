@@ -50,7 +50,7 @@ def rewrite(src: Path, dst: Path, edit: dict[str, bytes | None], extra: dict[str
             if member.name in edit:
                 if edit[member.name] is None:
                     continue
-                data = edit[member.name]  # type: ignore[assignment]
+                data = edit[member.name]
             info = tarfile.TarInfo(member.name)
             info.size = len(data)
             tout.addfile(info, io.BytesIO(data))
