@@ -1452,3 +1452,29 @@ CRS_RULES = {
         }
     ],
 }
+
+
+UPGRADE_CHECK = {
+    "controller_version": "0.1.0",
+    "latest_version": "0.1.0",
+    "schema_current": "0041",
+    "schema_head": "0041",
+    "schema_state": "current",
+    "engines": [
+        {
+            "engine_id": "0190a5f2-0000-7000-8000-000000000001",
+            "name": "se-1",
+            "tenant_id": "0190a5f2-0000-7000-8000-000000000002",
+            "agent_version": "0.0.9",
+        }
+    ],
+    "findings": [
+        {
+            "code": "agent_behind",
+            "severity": "warning",
+            "subject": "se-1",
+            "message": "Agent 0.0.9 is behind 0.1.0.",
+            "action": "Upgrade the engine to the latest template (runbooks/rolling-upgrade.md).",
+        }
+    ],
+}

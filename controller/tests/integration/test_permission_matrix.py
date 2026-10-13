@@ -253,6 +253,7 @@ for _path in (
 ):
     ROUTES[("GET", _path)] = READ
 ROUTES[("GET", "/system/controller")] = ("manage", "controller")
+ROUTES[("GET", "/system/upgrade/check")] = ("manage", "controller")
 for _method, _path in (
     ("GET", "/system/controller/members"),
     ("POST", "/system/controller/members"),

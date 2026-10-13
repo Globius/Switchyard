@@ -8857,6 +8857,44 @@
         "title": "EngineSummary",
         "type": "object"
       },
+      "EngineVersionRead": {
+        "additionalProperties": false,
+        "description": "An engine and the agent version it last reported.",
+        "properties": {
+          "agent_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`null` until the agent has reported.",
+            "title": "Agent Version"
+          },
+          "engine_id": {
+            "title": "Engine Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "engine_id",
+          "name",
+          "tenant_id",
+          "agent_version"
+        ],
+        "title": "EngineVersionRead",
+        "type": "object"
+      },
       "EnrollIn": {
         "additionalProperties": false,
         "description": "Body of ``POST /enroll`` (no bearer token: the enrollment token is the credential).",
@@ -9276,6 +9314,49 @@
           "last_checked_at"
         ],
         "title": "FailingMember",
+        "type": "object"
+      },
+      "FindingRead": {
+        "additionalProperties": false,
+        "description": "One finding of the upgrade check.",
+        "properties": {
+          "action": {
+            "description": "What to do about it; empty when nothing is needed.",
+            "title": "Action",
+            "type": "string"
+          },
+          "code": {
+            "description": "Stable code, for example `agent_behind`.",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "subject": {
+            "description": "What it is about: an engine name or `database`.",
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "subject",
+          "message",
+          "action"
+        ],
+        "title": "FindingRead",
         "type": "object"
       },
       "FlowCondition": {
@@ -21785,6 +21866,70 @@
         "title": "UnreachableEngine",
         "type": "object"
       },
+      "UpgradeCheckRead": {
+        "additionalProperties": false,
+        "description": "Versions found and what to do about them. Nothing here blocks an engine or a request.",
+        "properties": {
+          "controller_version": {
+            "title": "Controller Version",
+            "type": "string"
+          },
+          "engines": {
+            "items": {
+              "$ref": "#/components/schemas/EngineVersionRead"
+            },
+            "title": "Engines",
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingRead"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "latest_version": {
+            "description": "The newest known release (this controller until a feed says otherwise).",
+            "title": "Latest Version",
+            "type": "string"
+          },
+          "schema_current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Current"
+          },
+          "schema_head": {
+            "title": "Schema Head",
+            "type": "string"
+          },
+          "schema_state": {
+            "enum": [
+              "current",
+              "pending",
+              "newer"
+            ],
+            "title": "Schema State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "controller_version",
+          "latest_version",
+          "schema_current",
+          "schema_head",
+          "schema_state",
+          "engines",
+          "findings"
+        ],
+        "title": "UpgradeCheckRead",
+        "type": "object"
+      },
       "UserDetail": {
         "additionalProperties": false,
         "description": "A user with the number of live sessions.",
@@ -32332,6 +32477,112 @@
         "summary": "Revoke a system API token",
         "tags": [
           "tokens"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/upgrade/check": {
+      "get": {
+        "description": "Compare this controller, its schema and every engine's agent with the newest release.\n\nIt only advises: an engine on an old agent keeps receiving configuration. Findings with\nseverity `warning` or `error` carry the action to take. Requires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "upgrade_check_api_v1_system_upgrade_check_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "controller_version": "0.1.0",
+                  "engines": [
+                    {
+                      "agent_version": "0.0.9",
+                      "engine_id": "0190a5f2-0000-7000-8000-000000000001",
+                      "name": "se-1",
+                      "tenant_id": "0190a5f2-0000-7000-8000-000000000002"
+                    }
+                  ],
+                  "findings": [
+                    {
+                      "action": "Upgrade the engine to the latest template (runbooks/rolling-upgrade.md).",
+                      "code": "agent_behind",
+                      "message": "Agent 0.0.9 is behind 0.1.0.",
+                      "severity": "warning",
+                      "subject": "se-1"
+                    }
+                  ],
+                  "latest_version": "0.1.0",
+                  "schema_current": "0041",
+                  "schema_head": "0041",
+                  "schema_state": "current"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeCheckRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Versions of the controller, database and engines, with advice",
+        "tags": [
+          "system"
         ],
         "x-required-role": "system-admin"
       }

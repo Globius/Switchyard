@@ -195,6 +195,7 @@ from switchyard.api.schemas import (
     VirtualServiceStatusRead,
 )
 from switchyard.api.stream_models import EVENTS
+from switchyard.api.upgrade_models import UpgradeCheckRead
 from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db.audit_actions import CATALOG
@@ -275,6 +276,7 @@ from switchyard.services.status import (
 from switchyard.services.tenants import TenantRecord, TenantService
 from switchyard.services.throttle import source_rule
 from switchyard.services.tokens import TokenService
+from switchyard.services.upgrade import UpgradeService
 from switchyard.services.users import UserRecord, UserService
 
 request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
@@ -318,6 +320,7 @@ class ApiServices:
     devices: DeviceService | None = None
     quota_requests: QuotaRequests = None  # type: ignore[assignment]
     controller_members: ControllerMembers = None  # type: ignore[assignment]
+    upgrade: UpgradeService = None  # type: ignore[assignment]
     dns_records: DnsRecordSync | None = None
     autoscaler: Autoscaler | None = None
     captures: PacketCaptures = None  # type: ignore[assignment]
@@ -404,6 +407,7 @@ def build_services(
         devices=devices,
         quota_requests=QuotaRequests(db),
         controller_members=ControllerMembers(db),
+        upgrade=UpgradeService(db),
     )
 
 
@@ -4434,6 +4438,21 @@ def create_app(
             reached_at=f"{proto}://{host}" if host else None,
         )
         return asdict(view)
+
+    @router.get(
+        "/system/upgrade/check",
+        tags=["system"],
+        summary="Versions of the controller, database and engines, with advice",
+        response_model=UpgradeCheckRead,
+        responses=_ok(ex.UPGRADE_CHECK),
+    )
+    async def upgrade_check(who: Who, svc: Services) -> dict[str, Any]:
+        """Compare this controller, its schema and every engine's agent with the newest release.
+
+        It only advises: an engine on an old agent keeps receiving configuration. Findings with
+        severity `warning` or `error` carry the action to take. Requires a system administrator.
+        """
+        return (await svc.upgrade.check(who)).as_dict()
 
     @router.get(
         "/system/controller/members",
