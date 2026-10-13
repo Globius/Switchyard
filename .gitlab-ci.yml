@@ -216,6 +216,7 @@ gitleaks:
     entrypoint: [""]
   variables:
     GIT_DEPTH: "0"
+    GIT_STRATEGY: clone   # a reused checkout can still hold refs from before the history rewrite
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - gitleaks detect --source . --config .gitleaks.toml --redact --no-banner -v
@@ -376,7 +377,8 @@ release-version:
     reports:
       dotenv: release.env
 
-# Builds the artifacts, packs and signs the bundle, adds it to the signed feed and publishes both to the Package
+# Builds the artifacts, packs and signs the bundle, adds it to the signed feed and publishes both: to GitHub Releases when
+# GITHUB_REPO is set (public, readable without a login), otherwise to the Package
 # Registry. The images are too big for job artifacts, so everything happens in this one job.
 release-build:
   extends: .publisher
@@ -397,7 +399,7 @@ release-build:
     PYTHON: python3
   script:
     - '[ "$SKIP" != 1 ] || { echo "nothing changed since the last nightly"; exit 0; }'
-    - apk add --no-cache python3 py3-pip curl git go helm
+    - apk add --no-cache python3 py3-pip curl git go helm github-cli
     - pip install --break-system-packages --quiet "uv>=0.12,<0.13"
     - for i in $(seq 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
     # The Dockerfiles name Docker Hub images; fetch them through the dependency proxy and tag them as named.
@@ -415,12 +417,41 @@ release-build:
         PACKAGE=switchyard; FEED=releases.json
       fi
       API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic"
-      FEED_URL="$API/switchyard-feed/latest/$FEED"   # the one place controllers read the feed from
       upload() { curl --fail --silent --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$1" "$2"; }
+      BUNDLE="dist/switchyard-$VERSION.sybundle"
       sh tools/release/bundle.sh "$VERSION" dist
-      sh tools/release/feed.sh "dist/switchyard-$VERSION.sybundle" "$API/$PACKAGE/$VERSION/switchyard-$VERSION.sybundle" "dist/$FEED" "$FEED_URL"
-      upload "dist/switchyard-$VERSION.sybundle" "$API/$PACKAGE/$VERSION/switchyard-$VERSION.sybundle"
-      upload "dist/$FEED" "$FEED_URL"
+      if [ -n "${GITHUB_REPO:-}" ]; then
+        # Public home: GitHub Releases (rolling "nightly" and "feed" releases, one release per tag), so controllers
+        # can read the feed without a login. The bundle is built and signed here, then copied over.
+        [ -n "${GITHUB_RELEASE_TOKEN:-}" ] || { echo "GITHUB_RELEASE_TOKEN is not set"; exit 1; }
+        export GH_TOKEN="$GITHUB_RELEASE_TOKEN" GH_REPO="$GITHUB_REPO"
+        if [ "$MODE" = nightly ]; then TAG=nightly; else TAG="$CI_COMMIT_TAG"; fi
+        BASE="https://github.com/$GITHUB_REPO/releases/download"
+        FEED_URL="$BASE/feed/$FEED"
+        sh tools/release/feed.sh "$BUNDLE" "$BASE/$TAG/switchyard-$VERSION.sybundle" "dist/$FEED" "$FEED_URL"
+        if [ "$MODE" = nightly ]; then
+          gh release view nightly >/dev/null 2>&1 || gh release create nightly --prerelease --target main \
+            --title "Nightly builds" --notes "Signed nightly upgrade bundles (the nightly channel). Not for production."
+          gh release upload nightly "$BUNDLE" --clobber
+          gh release view nightly --json assets --jq '.assets[].name | select(endswith(".sybundle"))' | sort | head -n -14 \
+            | while read -r name; do gh release delete-asset nightly "$name" -y; done
+        else
+          # the tag reaches GitHub through the push mirror; wait for it
+          for i in $(seq 30); do gh api "repos/$GITHUB_REPO/git/ref/tags/$TAG" >/dev/null 2>&1 && break; sleep 10; done
+          flags=""; [ "$CHANNEL" = candidate ] && flags="--prerelease"
+          gh release create "$TAG" $flags --verify-tag --generate-notes "$BUNDLE" "dist/$FEED"
+        fi
+        gh release view feed >/dev/null 2>&1 || gh release create feed --target main \
+          --title "Release feeds" --notes "The signed feeds controllers read: releases.json and nightly.json. Replaced by each release."
+        gh release upload feed "dist/$FEED" --clobber
+        # GitLab keeps a private copy of the bundle (the GitLab release links to it)
+        upload "$BUNDLE" "$API/$PACKAGE/$VERSION/switchyard-$VERSION.sybundle"
+      else
+        FEED_URL="$API/switchyard-feed/latest/$FEED"   # the one place controllers read the feed from
+        sh tools/release/feed.sh "$BUNDLE" "$API/$PACKAGE/$VERSION/switchyard-$VERSION.sybundle" "dist/$FEED" "$FEED_URL"
+        upload "$BUNDLE" "$API/$PACKAGE/$VERSION/switchyard-$VERSION.sybundle"
+        upload "dist/$FEED" "$FEED_URL"
+      fi
       # a copy next to the bundle, which the GitLab release links to
       [ "$MODE" = nightly ] || upload "dist/$FEED" "$API/$PACKAGE/$VERSION/$FEED"
   artifacts:

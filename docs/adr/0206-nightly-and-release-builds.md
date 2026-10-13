@@ -37,7 +37,8 @@ install, releases cut when we are ready (`0.1.0`, `1.0.0`, release candidates), 
   `.gitlab-ci.yml` job for job (and the UI check is new on both).
 - **One host publishes.** The CI variable `RELEASE_HOST` (`gitlab` by default, or `github`) decides; the other host still runs the checks.
   Otherwise a tag would produce two different signed bundles. Feeds live in one fixed place per host (GitLab: Package Registry
-  `switchyard-feed/latest/`; GitHub: the rolling release `feed`).
+  `switchyard-feed/latest/`; GitHub: the rolling release `feed`). GitLab can also build and sign, then copy the bundle and feed to GitHub
+  Releases when `GITHUB_REPO` and `GITHUB_RELEASE_TOKEN` are set, which is how a private GitLab serves a public feed (release runbook).
 
 ## Consequences
 

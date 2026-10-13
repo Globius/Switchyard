@@ -11,6 +11,7 @@ Tests under ``tests/integration`` need Docker (PostgreSQL via testcontainers) an
 import asyncio
 import sys
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -38,6 +39,17 @@ def _open_engine_policy(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     configure_secret_policy((), open=True)
     yield
     configure_secret_policy((), open=True)  # never back to strict: module fixtures render too
+
+
+@pytest.fixture(autouse=True)
+def _scratch_system_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Backups and staged bundles go to a temporary directory, not /var/lib/switchyard.
+
+    The API tests reach the backup and bundle routes. As a normal user (GitHub's runners) the default
+    directory cannot be created; as root (GitLab's containers) it silently could.
+    """
+    monkeypatch.setenv("SWITCHYARD_BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setenv("SWITCHYARD_STAGING_DIR", str(tmp_path / "staging"))
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
