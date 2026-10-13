@@ -54,9 +54,26 @@ SSH and similar; upgrade checks in the UI; rollback is nice to have, and one-at-
    delivered into the guest, so the first slice keeps that step explicit for LXC/VM and investigates cloud-init
    delivery for VMs.
 
+9. **Release feed and update check.** A feed is a small signed `releases.json` (versions, channel, date, notes URL,
+   download URLs and digests, upgrade-from versions, `COMPAT`). The controller reads one or more feeds, each a system
+   setting: a GitLab or GitHub release or raw-file URL, any HTTPS URL, or a local file imported at an air-gapped site. It is
+   **off by default** and the first-run wizard asks. The worker fetches on a schedule (daily) through the configured
+   proxy and verifies the ed25519 signature against the project key plus any operator-added keys. The UI shows the latest
+   version, a banner when behind and the release notes; "Download" stages the bundle and verifies its digest. A failed fetch
+   or bad signature is a finding, never an error for the controller. Nothing about the installation is sent; the request
+   is a plain GET. Channels: `stable` (default) and `candidate`.
+10. **Plan, path, windows, smoke test, notes, history.** `syctl upgrade plan` lists every step and changes nothing. A
+    release declares the versions it can be upgraded from; a larger gap yields the list of hops as a warning, not a block.
+    Rolls can be scheduled, paused, resumed and aborted, with the `management` tenant's engines last. A smoke test (login,
+    a read-only API call, the VIP answers, no new drift) runs after each step and pauses the roll on failure. The
+    manifest's release notes (new, deprecated, breaking, operator action) show before confirming. Every plan, backup, step
+    and result is an audit event with a history view, and start, pause, failure and finish go to the existing alert
+    destinations. After an upgrade the UI compares render fingerprints before and after and lists engines whose output
+    changed.
+
 ## Slices (one merge request, built in this order)
 
-1. Version table, `GET /system/upgrade/check`, agent version on the engine status, schema-newer-than-code guard,
+1. Version table, release feed and update check, `GET /system/upgrade/check`, agent version on the engine status, schema-newer-than-code guard,
    additive-schema CI test. Migration `0045` (backup targets, upgrade run records).
 2. Backup targets and the backup job (local, S3, SFTP, FTP), restore command.
 3. Release bundle build/verify and `syctl upgrade apply` for Compose and Helm.
@@ -68,4 +85,5 @@ SSH and similar; upgrade checks in the UI; rollback is nice to have, and one-at-
 - A release process is now part of the product: version bump, `COMPAT` update, release notes.
 - Old engines keep working across a controller upgrade for at least one release, so operators can stage the engine roll.
 - The additive-schema rule costs a release of delay on every destructive schema change.
+- The feed needs a project signing key and a published `releases.json` (a GitLab or GitHub release asset or raw file).
 - Not decided here: automatic upgrade scheduling, and in-place package upgrade of engines (rejected: engines are disposable).
