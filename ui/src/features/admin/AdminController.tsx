@@ -172,9 +172,11 @@ export function AdminController() {
     onError: setProblem,
   });
 
-  const names = (certs.data?.items ?? []).filter((c) => !f || coversName(c.sans, f));
+  // Certificates record DNS names only, so an IP address as the FQDN cannot be matched: list them all and say so.
+  const fqdnIsIp = isIp(f);
+  const names = (certs.data?.items ?? []).filter((c) => !f || fqdnIsIp || coversName(c.sans, f));
   const selected = (certs.data?.items ?? []).find((c) => c.name === certName);
-  const certCovers = !s?.managed || !selected || coversName(selected.sans, f);
+  const certCovers = !s?.managed || !selected || fqdnIsIp || coversName(selected.sans, f);
   const vipBad = v !== "" && !isIp(v);
   const fqdnChanged = f !== (s?.fqdn ?? "") && f !== "";
   const missing = fqdnChanged ? (s?.redirect_urls ?? []) : [];
@@ -446,6 +448,13 @@ export function AdminController() {
                 "Lists the management tenant's certificates that cover the FQDN. Upload one, or request one from an ACME provider in advance, under Certificates in the management tenant, so the switch doesn't wait for the CA. It goes live only with the rest of this change.",
               )}
             </p>
+            {fqdnIsIp && (
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "The FQDN is an IP address: the list cannot check it, so make sure the certificate has that address as an IP SAN.",
+                )}
+              </p>
+            )}
             {!certCovers && (
               <p role="alert" className="text-xs text-status-down">
                 {t("This certificate does not cover {name}.", { name: f })}
