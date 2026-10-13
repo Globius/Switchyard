@@ -140,7 +140,7 @@ def check_schema(current: str | None, head: str) -> list[Finding]:
 def schema_state(
     current: str | None, head: str, known: frozenset[str]
 ) -> Literal["current", "pending", "newer"]:
-    """`newer` when the database is at a revision this code does not know..
+    """`newer` when the database is at a revision this code does not know.
 
     Example:
         >>> schema_state("0044", "0041", frozenset({"0040", "0041"}))
