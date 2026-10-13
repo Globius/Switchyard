@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The controller's own cluster members (ADR 0051, update of 2026-10-12).
 
 Not tenant data: the table is system-wide and only the admin role touches it.

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The controller's own cluster members, including the external one (ADR 0051, 2026-10-12).
 
 The controller runs on three VMs, each with the API, a worker, etcd and a Patroni-managed

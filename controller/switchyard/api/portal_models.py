@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Request and response models of the tenant portal API: quota requests (ADR 0199)."""
 
 from datetime import datetime

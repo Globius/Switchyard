@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Admin > Controller > Cluster: the controller's own VMs and what Patroni says about each one
  * (ADR 0051). In the interim placement the third VM runs on ESXi: the platform does not manage it,

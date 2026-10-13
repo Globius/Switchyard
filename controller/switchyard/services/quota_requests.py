@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Quota requests: a tenant asks for a higher limit and a system administrator decides (ADR 0199).
 
 The tenant's side (file, list, withdraw) runs under the application role, so row-level security

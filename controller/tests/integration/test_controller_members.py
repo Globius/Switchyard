@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Controller cluster members, with the external ESXi one: API, Patroni status, adopt (ADR 0051)."""
 
 import uuid

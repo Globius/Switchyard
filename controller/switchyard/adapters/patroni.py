@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """Patroni's REST API: the cluster view the controller shows for its own members (ADR 0051).
 
 Only ``GET /cluster`` is used, and only to read. Patroni answers it without authentication on its

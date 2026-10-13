@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 The Switchyard contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
 /** Names and thresholds for the quota views (tenant portal and the admin queue; ADR 0199). */
 import type { components } from "@/api/schema";
 

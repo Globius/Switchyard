@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 The Switchyard contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
 """The controller's own cluster members: who they are, where they run, what Patroni says.
 
 A member is a controller VM. Members on Proxmox are normally built by OpenTofu and adopted; the
