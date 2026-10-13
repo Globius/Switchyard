@@ -32,8 +32,8 @@ runs changes.
 
 | Option | What exists on main | Status |
 | --- | --- | --- |
-| [Docker Compose](#docker-compose) | `deploy/prod/compose.yaml`: etcd, Patroni (PostgreSQL 17), `migrate`, `api`, `worker`, `proxy`, one copy per node | supported; rehearsed on a three-node lab on one host |
-| [VMs or LXC containers on Proxmox](#vms-or-lxc-containers-on-proxmox) | the Compose option inside three Proxmox guests, adopted into the `management` tenant | VMs: the reference shape (ADR 0048). Privileged LXC: proven, including a reboot |
+| [Docker Compose](#docker-compose) | `deploy/prod/compose.yaml`: etcd, Patroni (PostgreSQL 17), `migrate`, `api`, `worker`, `proxy`, one copy per node | supported; run as three nodes over two Proxmox hosts with the controller VIP on its own SE group ([lab/2026-10-13-prod-deploy](lab/2026-10-13-prod-deploy/index.md)) |
+| [VMs or LXC containers on Proxmox](#vms-or-lxc-containers-on-proxmox) | the Compose option inside three Proxmox guests, adopted into the `management` tenant | VMs: the reference shape (ADR 0048), one VM run. Privileged LXC: three nodes, failover and a reboot proven |
 | [Kubernetes](#kubernetes) | a Helm chart with CloudNativePG (ADR 0191, !132) | proven on a lab k3s; see the limits below |
 
 ### Docker Compose
@@ -72,9 +72,9 @@ Install steps, values and secrets: [Deploying on Kubernetes](deploy-kubernetes.m
 [ADR 0191](adr/0191-kubernetes-deployment.md); lab run: [Kubernetes install results](lab/2026-10-12-kubernetes-install.md).
 
 Proven on a lab k3s: install with two replicas each, the controller deploying and enrolling an LXC engine, a virtual
-service answering 200, and sign-in and the UI. **Not proven yet:** CloudNativePG failover, exposure through a
-LoadBalancer or Ingress, behaviour during an OpenBao outage, and an upgrade that includes a schema migration. Treat those as
-pilot items.
+service answering 200, sign-in and the UI, exposure through a `LoadBalancer` (k3s `servicelb`) and a CloudNativePG failover
+(about 30 s to a new primary). **Not proven yet:** exposure through an Ingress, behaviour during an OpenBao outage, and an
+upgrade that includes a schema migration. Treat those as pilot items.
 
 Do not confuse this with the [Kubernetes connector](kubernetes.md), which publishes Services of an existing cluster through
 Switchyard engines and works with any deployment option.
@@ -112,6 +112,18 @@ answering `/healthz`; the stopped node rejoined as a replica. A manual `patronic
 the node tagged `nofailover` was not promoted when the leader was stopped.
 
 ### Gotchas seen in the lab
+
+The full list from the fresh three-node install, with timings and screenshots, is in
+[lab/2026-10-13-prod-deploy](lab/2026-10-13-prod-deploy/index.md). The ones that bite first:
+
+- The nodes may not be able to build images: build once and `docker load` (set `CONTROLLER_IMAGE`, `PROXY_IMAGE`).
+- On an overlay or tunnel with an MTU below 1500 set `DOCKER_MTU` in `node.env`, or the controller cannot reach the engines.
+- pgBackRest speaks only TLS to S3: use a store with TLS (`BACKUP_S3_VERIFY_TLS=n` for a self-signed lab one). Starting a new
+  cluster against an old repository needs a new `BACKUP_REPO_PATH`.
+- `syctl adopt` creates no revision: the first apply in the locked `management` tenant is a draft change set with a
+  break-glass reason. Break-glass is off in production until a system administrator enables it.
+- Give engines addresses nothing else uses; re-enrolling an engine needs `tls.crt`, `tls.key` and `renew.token` removed and
+  `dataplaneapi` restarted.
 
 - A proxy configured for the Docker **client** (`~/.docker/config.json` `proxies`) is injected into every container and breaks
   the API's calls to OpenBao. Remove it, or add the OpenBao address to `noProxy`.

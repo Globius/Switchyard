@@ -9,6 +9,9 @@
 # docs/runbooks/restore-database.md.
 set -eu
 mkdir -p /data/pgdata && chmod 700 /data/pgdata
+# pgBackRest treats an empty PGBACKREST_* variable as a value (and refuses an empty repo1-s3-bucket on a posix repository):
+# drop the ones the Compose file passed empty (the S3 settings when BACKUP_REPO_TYPE is posix).
+for v in $(env | sed -n 's/^\(PGBACKREST_[A-Z0-9_]*\)=$/\1/p'); do unset "$v"; done
 CONFIG=/etc/patroni.yml
 # The runtime configuration is /etc/patroni.yml plus the nofailover tag and, when SY_NODE_IPS is set, the PostgreSQL TLS parameters and a pg_hba
 # that admits only the controller nodes (hostssl) and this stack's Docker network; and, with RESTORE_TARGET_TIME, the

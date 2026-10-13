@@ -134,7 +134,9 @@ services:
   migrate:
     <<: *controller
     restart: "no"
-    command: ["db", "upgrade"]   # reads SWITCHYARD_DATABASE_URL
+    # Reads SWITCHYARD_DATABASE_URL. On a first start the three databases are still electing a primary, so retry for up
+    # to five minutes instead of failing the whole `docker compose up`.
+    entrypoint: ["sh", "-c", "n=0; until syctl db upgrade; do n=$$((n+1)); [ $$n -lt 60 ] || exit 1; echo 'database not ready, retrying'; sleep 5; done"]
   api:
     <<: *controller
     # Direct access for recovery only (loopback by default); users and Prometheus go through the proxy.

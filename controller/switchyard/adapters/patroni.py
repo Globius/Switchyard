@@ -5,8 +5,8 @@
 """Patroni's REST API: the cluster view the controller shows for its own members (ADR 0051).
 
 Only ``GET /cluster`` is used, and only to read. Patroni answers it without authentication on its
-REST port, which is why the port is limited to the controller nodes (and https with a private CA on a
-hardened install).
+REST port, which is why the port is limited to the controller nodes (and is https with a private CA
+on a hardened install).
 :class:`FakePatroni` is an in-memory answer for tests.
 """
 
