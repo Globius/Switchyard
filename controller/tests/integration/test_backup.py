@@ -175,3 +175,33 @@ async def test_restore_refuses_a_live_controller_and_loads_a_fresh_one(
     # A second backup now contains what the first one did.
     again = await rig.client.post(f"{V1}/system/backups/verify", json=body, headers=root)
     assert again.json()["tenants"] == done.json()["tenants"]
+
+
+async def test_restore_fills_the_empty_tenant_of_a_fresh_install(
+    rig: Rig, owner_engine: AsyncEngine
+) -> None:
+    """A new controller already has an empty tenant of the backed-up name (management); restore uses it."""
+    from sqlalchemy import text
+
+    root = await rig.token(Role.SYSTEM_ADMIN)
+    await rig.client.post(f"{V1}/system/backup-targets", json=TARGET, headers=root)
+    made = (
+        await rig.client.post(f"{V1}/system/backups", json={"target": "nightly"}, headers=root)
+    ).json()
+    body = {"target": "nightly", "archive": made["archive"]}
+    async with owner_engine.begin() as conn:
+        name = (await conn.execute(text("SELECT name FROM tenant LIMIT 1"))).scalar_one()
+        await conn.execute(text("TRUNCATE tenant CASCADE"))
+        await conn.execute(
+            text("INSERT INTO tenant (id, name) VALUES (:i, :n)"), {"i": uuid.uuid4(), "n": name}
+        )
+    root = await rig.token(Role.SYSTEM_ADMIN)
+    done = await rig.client.post(f"{V1}/system/backups/restore", json=body, headers=root)
+    assert done.status_code == 200, done.text
+    async with owner_engine.begin() as conn:
+        tenants = (await conn.execute(text("SELECT count(*) FROM tenant"))).scalar_one()
+        pools = (await conn.execute(text("SELECT count(*) FROM pool"))).scalar_one()
+    assert tenants == 1 and pools >= 1
+    # Now the tenant holds configuration, so a second restore is refused.
+    again = await rig.client.post(f"{V1}/system/backups/restore", json=body, headers=root)
+    assert again.status_code == 409

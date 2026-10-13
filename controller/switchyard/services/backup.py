@@ -25,6 +25,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy import delete, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from switchyard import __version__
 from switchyard.adapters.backup_targets import BackupStore, BackupTargetError, build_store
@@ -345,8 +346,11 @@ class BackupService:
         """Load the tenants of ``archive`` into this controller, which must hold none of them.
 
         Restores desired state only (see the module note). A tenant whose id or name already
-        exists is a :class:`ConflictError` and nothing is written: restore into a fresh controller,
-        not over a live one. Restored tenants have no engines; redeploy or re-enroll afterwards.
+        exists and holds configuration is a :class:`ConflictError` and nothing is written: restore
+        into a fresh controller, not over a live one. A tenant of the same name that holds nothing
+        (the empty ``management`` tenant every new controller starts with) is filled in place: the
+        restored objects take its id and its quotas are replaced. Restored tenants have no
+        engines; redeploy or re-enroll afterwards.
 
         Args:
             principal: A system administrator.
@@ -365,17 +369,33 @@ class BackupService:
             raise ConflictError(str(exc)) from exc
         snapshots = [Snapshot.model_validate(t) for t in json.loads(plain)["tenants"]]
         async with admin_session(self._db.admin) as session:
-            rows = (await session.execute(select(TenantRow.id, TenantRow.name))).all()
-            ids, names = {i for i, _ in rows}, {n for _, n in rows}
-            clashes = sorted(
-                t.name for s in snapshots for t in s.tenants if t.id in ids or t.name in names
-            )
+            existing = (await session.execute(select(TenantRow))).scalars().all()
+            holding = await _tenants_with_configuration(session)
+            by_name = {row.name: row for row in existing}
+            ids = {row.id for row in existing}
+            reuse: dict[str, TenantRow] = {}  # backed-up tenant id -> the empty tenant of that name
+            clashes: list[str] = []
+            for snapshot in snapshots:
+                for tenant in snapshot.tenants:
+                    row = by_name.get(tenant.name)
+                    if row is not None and row.id not in holding:
+                        reuse[str(tenant.id)] = row  # a fresh install's empty tenant (management)
+                    elif row is not None or tenant.id in ids:
+                        clashes.append(tenant.name)
             if clashes:
-                raise ConflictError(f"tenants already exist here: {', '.join(clashes)}")
+                raise ConflictError(f"tenants already exist here: {', '.join(sorted(clashes))}")
             if dry_run:
                 return {**summary, "restored": False}
             for snapshot in snapshots:
-                await add_snapshot(session, snapshot)
+                await add_snapshot(session, _into_empty_tenants(snapshot, reuse))
+            for tenant_id, row in reuse.items():
+                for snapshot in snapshots:
+                    for tenant in snapshot.tenants:
+                        if str(tenant.id) == tenant_id:
+                            row.quotas, row.require_approval = (
+                                tenant.quotas,
+                                tenant.require_approval,
+                            )
             await audit_log.record(
                 session,
                 tenant_id=None,
@@ -386,3 +406,30 @@ class BackupService:
                 request_id=request_id,
             )
         return {**summary, "restored": True}
+
+
+async def _tenants_with_configuration(session: AsyncSession) -> set[Any]:
+    """Ids of tenants that own at least one configuration object (anything but the tenant row)."""
+    snapshot = await load_snapshot(session)
+    owners: set[Any] = set()
+    for name in type(snapshot).model_fields:
+        if name == "tenants":
+            continue
+        for item in getattr(snapshot, name):
+            tenant_id = getattr(item, "tenant_id", None)
+            if tenant_id is not None:
+                owners.add(tenant_id)
+    return owners
+
+
+def _into_empty_tenants(snapshot: Snapshot, reuse: dict[str, TenantRow]) -> Snapshot:
+    """Give a reused tenant's objects its existing id; its row is already there, so leave it out."""
+    if not reuse:
+        return snapshot
+    blob = snapshot.model_dump_json()
+    for old, row in reuse.items():
+        blob = blob.replace(old, str(row.id))
+    data = json.loads(blob)
+    kept = {str(row.id) for row in reuse.values()}
+    data["tenants"] = [t for t in data["tenants"] if str(t["id"]) not in kept]
+    return Snapshot.model_validate(data)
