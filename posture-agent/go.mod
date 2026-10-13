@@ -1,3 +1,3 @@
 module switchyard/posture-agent
 
-go 1.26.5
+go 1.26.9
