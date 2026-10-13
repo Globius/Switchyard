@@ -8,6 +8,7 @@
 verify one. ``upgrade`` talks to a running controller: the check, a backup, the feed and a plan.
 """
 
+import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -133,6 +134,54 @@ def build_cmd(
     typer.echo(
         f"{out}: {manifest.version}, schema {manifest.schema_head}, {len(manifest.files)} files"
     )
+
+
+@release_app.command("feed")
+def feed_cmd(
+    out: Annotated[Path, typer.Argument(help="Where to write releases.json.")],
+    key: Annotated[Path, typer.Option(help="The signing key from `syctl release keygen`.")],
+    bundle: Annotated[
+        list[str], typer.Option(help="PATH=URL of a bundle and where it will be published.")
+    ],
+    key_id: Annotated[str, typer.Option(help="The key's id.")] = "release",
+    channel: Annotated[str, typer.Option(help="stable or candidate.")] = "stable",
+    notes_url: Annotated[str | None, typer.Option(help="Release notes page (https).")] = None,
+    previous: Annotated[
+        Path | None, typer.Option(help="An earlier releases.json to add to (must verify).")
+    ] = None,
+) -> None:
+    """Write the signed releases.json that controllers read, from published bundles."""
+    from switchyard.domain.releases import FeedError
+    from switchyard.release_feed_build import build_feed, load_previous
+
+    if channel not in ("stable", "candidate"):
+        typer.echo("error: channel is stable or candidate", err=True)
+        raise typer.Exit(1)
+    pairs: list[tuple[Path, str]] = []
+    for item in bundle:
+        path, _, url = item.partition("=")
+        if not url.startswith("https://"):
+            typer.echo(f"error: {item!r} needs PATH=https://URL", err=True)
+            raise typer.Exit(1)
+        pairs.append((Path(path), url))
+    try:
+        private = serialization.load_pem_private_key(key.read_bytes(), password=None)
+        if not isinstance(private, Ed25519PrivateKey):
+            raise BundleError("the key is not an Ed25519 key")
+        doc = build_feed(
+            private,
+            key_id,
+            pairs,
+            channel=channel,  # type: ignore[arg-type]
+            notes_url=notes_url,
+            previous=load_previous(previous) if previous else None,
+        )
+    except (BundleError, FeedError, OSError, ValueError) as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    out.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+    versions = [r["version"] for r in doc["payload"]["releases"]]
+    typer.echo(f"{out}: {len(versions)} releases ({', '.join(versions)}), signed with {key_id}")
 
 
 @release_app.command("verify")

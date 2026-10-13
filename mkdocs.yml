@@ -111,6 +111,7 @@ nav:
       - Replace a service engine: runbooks/replace-se.md
       - Restore the database (pgBackRest + Patroni): runbooks/restore-database.md
       - Roll an SE group to a new template, or scale it out: runbooks/rolling-upgrade.md
+      - Cut a release (bundle, signed feed, project key): runbooks/release.md
       - Rotate the certificate authority: runbooks/rotate-ca.md
       - Telemetry stack (Prometheus, Loki, Grafana): runbooks/telemetry.md
   - Decisions:
