@@ -218,7 +218,8 @@ sbom-se-image:
     - docker build -q --build-arg REGISTRY="$CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/" -f se-image/test/Dockerfile -t sy-se-image-test .
     - docker pull -q ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/anchore/syft:v1.19.0
     - mkdir -p sbom
-    - docker save sy-se-image-test | docker run -i --rm ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/anchore/syft:v1.19.0 scan - --source-name switchyard-se-image -o spdx-json > sbom/switchyard-se-image.spdx.json
+    # Syft in a container on the dind daemon (host network: the daemon listens on 127.0.0.1:2375 there) reads the image from it.
+    - docker run --rm --network host -e DOCKER_HOST=tcp://127.0.0.1:2375 ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/anchore/syft:v1.19.0 scan docker:sy-se-image-test --source-name switchyard-se-image -o spdx-json > sbom/switchyard-se-image.spdx.json
 
 # On a v* tag: the SBOMs go to the Package Registry and onto the GitLab release.
 release:
