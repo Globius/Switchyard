@@ -32,9 +32,9 @@ Destinations (`POST /system/backup-targets`), all with credentials as `secret_re
 | Kind | Notes |
 | --- | --- |
 | `local` | A directory under `SWITCHYARD_BACKUP_DIR` (default `/var/lib/switchyard/backups`). Mount a volume there; a copy on the controller's own disk does not survive losing the controller. |
-| `s3` | Any S3-compatible service (AWS, MinIO, Ceph, Backblaze B2), HTTPS only, path-style. |
+| `s3` | Any S3-compatible service (AWS, Ceph, SeaweedFS, Backblaze B2), HTTPS only, path-style. The certificate is checked against the controller's system store; for a private CA mount a bundle and set `SSL_CERT_FILE` on `api` and `worker`. |
 | `ftp` | FTPS by default (certificate verified). Plain FTP is possible and sends the password in clear. |
-| `sftp` | SSH key login with the host key pinned by SHA-256 fingerprint (`ssh-keygen -lf` or `ssh-keyscan`); no trust on first use. The private key is a `secret_ref`. |
+| `sftp` | SSH key login with the host key pinned by SHA-256 fingerprint (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`, any of the server's host key types); no trust on first use. The private key is a `secret_ref`. |
 
 `keep` archives are retained per target; older ones are deleted after each successful backup. Only files named
 `switchyard-<version>-<UTC time>.syb` are ever listed or deleted.
@@ -48,12 +48,16 @@ curl -X POST $URL/api/v1/system/backups -d '{"target":"nightly","reason":"pre-up
 curl -X POST $URL/api/v1/system/backups/verify -d '{"target":"nightly","archive":"switchyard-0.1.0-20261013T040000Z.syb"}'
 ```
 
+The controller's OpenBao policy must name each `secret_ref` of a target as a platform secret (`syctl openbao-policy --platform kv/backup/passphrase ...`,
+[production.md](production.md#6-openbao)).
+
 Every run, successful or failed, is recorded (`GET /system/backups`) and audited (`backup.created`, `backup.failed`). The upgrade check
 warns when there is no backup or the latest is more than seven days old.
 
 **Restore** (`POST /system/backups/restore`, with `dry_run` to check first) loads every tenant of an archive into a controller that holds none of them; it
-refuses with `409` and writes nothing if a tenant with the same id or name exists. Restored tenants have no engines: redeploy or re-enroll
-them. Users, tokens, identity providers and the audit log come from the database restore.
+refuses with `409` and writes nothing if a tenant with the same id or name exists and holds configuration. A tenant of the same name with no
+configuration, such as the empty `management` tenant a new controller starts with, is filled in place and its quotas replaced. Restored tenants have
+no engines: redeploy or re-enroll them. Users, tokens, identity providers and the audit log come from the database restore.
 
 
 ## Looking for newer releases (built)
@@ -82,7 +86,7 @@ signature is Ed25519 over the canonical JSON of `payload`. The project's public 
 (`controller/switchyard/services/release_feed.py`) once it exists; until then operators add the key themselves.
 
 
-## Upgrade bundles (built; apply is new and not yet lab-tested)
+## Upgrade bundles (built; apply lab-tested on a three-node Compose install)
 
 A bundle is one tar file holding a signed manifest and the release's files: controller and proxy images (`docker save`), the Helm chart, the
 Compose files, the `sy-agent` binary and the SE template. The manifest lists every file with its SHA-256; one Ed25519 signature covers
@@ -112,11 +116,12 @@ needs `--no-backup`), loads the images, points `CONTROLLER_IMAGE` and `PROXY_IMA
 `api`, `worker` and `proxy`, and waits for `/api/v1/healthz`. If the node does not come back healthy, the env file gets its old image names back and
 the services are recreated on the old images, so a node is never left half-way. A failed migration changes nothing: migrations are additive by
 rule (ADR 0205), so the old code keeps working on whatever the migration did. If a node is bad, leave the others on the old version, which is the
-rollback. Not yet run on a real node: rehearse it in the lab first. Helm sites use `helm upgrade` with the chart from the bundle
+rollback. Lab result: one minute per node on the three-node install, the controller VIP answered throughout, three nodes in a row.
+Helm sites use `helm upgrade` with the chart from the bundle
 ([deploy-kubernetes.md](deploy-kubernetes.md)); the migration Job and `wait-schema` init container do the same ordering.
 
 
-## Engine roll (built, with fake actions only; lab run pending)
+## Engine roll (built; lab-tested with two QEMU engines)
 
 `POST /tenants/{t}/se-groups/{group}/rolls {"template_vmid": 9770}` replaces every enabled engine of the group with one cloned from a new
 template, **one engine at a time**. For each engine: deploy a staged replacement, enroll it (the guest agent writes the enrollment files), enable it,
@@ -130,7 +135,15 @@ score again, then the next engine.
   is how replacements are created and enrolled; the replacement must be a QEMU guest. LXC engines still use `deploy/lab/hosts/upgrade.sh`
   ([runbooks/rolling-upgrade.md](runbooks/rolling-upgrade.md)).
 - Everything is audited (`roll.started`, `roll.pause`, `roll.resume`, `roll.abort`, `roll.paused`, `roll.done`).
+- After each old engine is retired the group is applied again (phase `reapplying_after`), because the retirement changes the group's
+  desired state (a VRRP peer list); without it the remaining engines show drift and the score stays below 80.
+- The controller's Proxmox role needs `VM.GuestAgent.Unrestricted` as well as the file-write privilege, or enrollment of the replacement
+  never completes ([production.md](production.md#proxmox-privileges-of-the-controller-role)).
+- Lab result: two engines replaced in about six minutes, the VIP lost one request. A deploy job lost to a database stall stays failed:
+  resume or abort the roll, and remove the half-created guest by hand.
 - State is stored in the database and advanced every ten seconds by whichever worker runs the job, so a restart of the controller does not lose it.
+
+Lab runs, with screenshots and the problems found: [upgrades, backups, restore and engine roll on the production-style lab](lab/2026-10-13-upgrade-lab/index.md).
 
 ## The Upgrades page
 

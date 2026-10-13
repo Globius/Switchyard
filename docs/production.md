@@ -199,7 +199,10 @@ The quickstart runs a single OpenBao node with its unseal key on disk. For produ
 - KV v2 at `kv`. Layout the controller expects: `kv/tenants/<tenant>/...` (certificates, per tenant), `kv/se/...` (shared Data
   Plane credentials), `kv/break-glass/...` (the break-glass TOTP secret), plus the PKI mount used for agent certificates.
 - The controller authenticates with AppRole and the policy from `syctl openbao-policy`
-  (`--shared kv/se/ --platform kv/proxmox/token` as needed). Rotate the AppRole secret id on a schedule.
+  (`--shared kv/se/` and one `--platform` per secret the controller itself reads: `kv/proxmox/token`, and the passphrase and
+  credentials of each configuration backup target, for example `--platform kv/backup/passphrase --platform kv/backup/s3-access`).
+  The policy includes the PKI signing path for agent certificates (`pki/sign/agents`); an older policy without it makes engine
+  enrollment fail with HTTP 403. Rotate the AppRole secret id on a schedule.
 - Back up OpenBao itself (raft snapshots) and test the restore. This repository does not yet script that.
 
 ## 7. Certificates and the CA
@@ -236,6 +239,24 @@ them were not tried, so they are not supported yet. Deploying LXC guests is a sy
 `SWITCHYARD_ALLOW_LXC=1` forces it on for a deployment (read-only in the API, as `allow_lxc_guests_forced`), which the lab and
 the quickstart use. Enable it only where you accept the shared kernel.
 
+### Proxmox privileges of the controller role
+
+A role that deployed, enrolled and rolled QEMU engines in the lab (create it with `pveum role add SwitchyardController --privs "..."`,
+give it to the API token on `/` or on the pool the engines live in; both the user and the token need it unless the token has
+privilege separation off):
+
+```text
+Datastore.AllocateSpace Datastore.Audit Pool.Audit Sys.Audit
+SDN.Allocate SDN.Audit SDN.Use
+VM.Allocate VM.Audit VM.Clone VM.PowerMgmt
+VM.Config.CPU VM.Config.Cloudinit VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options
+VM.GuestAgent.Audit VM.GuestAgent.FileWrite VM.GuestAgent.Unrestricted
+```
+
+`VM.GuestAgent.Unrestricted` is needed for the `chmod` the controller runs in the guest after writing each enrollment file; without it
+an engine roll or autoscale deploy waits in `awaiting_enrollment` and writes only the first file. Containers need the corresponding
+container privileges as well; the lab used a broader role for those.
+
 ## 10. Monitoring
 
 Prometheus, Loki and Grafana from `deploy/telemetry/` ([adr/0052](adr/0052-telemetry-pipeline.md),
@@ -246,6 +267,9 @@ rules (stale status poll, failed change sets, a down exporter). Grafana can be s
 
 ## 11. Upgrades
 
+- With an upgrade bundle, `syctl upgrade apply` does the node steps below for a Compose node (verify, back up, load images, migrate,
+  recreate, health check, roll back on failure); see [upgrades.md](upgrades.md) and the
+  [lab run](lab/2026-10-13-upgrade-lab/index.md) for its prerequisites. Engines are rolled with the roll API.
 - The `migrate` step runs `syctl db upgrade` and is idempotent; migrations are forward-only, so back up first.
 - Upgrade the controller nodes one at a time (stop the node's worker, upgrade, check `GET /api/v1/healthz`). The proxy
   re-resolves the API address, so a recreated API container needs no proxy restart.
@@ -261,13 +285,20 @@ rules (stale status poll, failed change sets, a down exporter). Grafana can be s
 Proven in the Docker-hosted lab on a real Proxmox ([adr/0056](adr/0056-end-to-end-lab.md)): deploying engines through the
 controller, enrollment and renewal, mTLS, a canary-first apply with per-engine bundles, VRRP failover and fail-back, a
 controller-less reboot, a BGP session with BFD to an upstream, route announcement and withdrawal, and data-NIC addressing.
-The three-node database restore and failover are rehearsed on a one-host lab.
+The three-node database restore and failover are rehearsed on a one-host lab, and on three VMs over two Proxmox hosts
+([lab/2026-10-13-upgrade-lab](lab/2026-10-13-upgrade-lab/index.md)).
 
 Proven on two real Proxmox hosts in a cluster ([runbooks/lab-hosts.md](runbooks/lab-hosts.md), section 7,
 [adr/0079](adr/0079-two-host-lab-findings.md)): KVM VM engines with cloud-init on both hosts; VRRP failover between hosts in
 4 to 5 seconds; UDP services through IPVS; an unprivileged container serving a VIP (VRRP only); ECMP over three BGP engines
 spread over both hosts; the telemetry stack with real engines (Prometheus targets, all four dashboards, Loki logs); and the
 whole set again with IPv6 only ([ipv6.md](ipv6.md)). Pilot items that remain: BGP or IPVS in unprivileged containers,
-reboot recovery of every engine kind across hosts, a real switch with VLAN trunks and IGMP snooping (the lab used a VXLAN
-overlay), and the
-multi-node production Compose end to end across hosts.
+reboot recovery of every engine kind across hosts, and a real switch with VLAN trunks and IGMP snooping (the lab used a VXLAN
+overlay).
+
+Proven on the same hosts on 2026-10-13 ([prod deployment](lab/2026-10-13-prod-deploy/index.md),
+[upgrades](lab/2026-10-13-upgrade-lab/index.md)): the three-node production Compose (hardened database tier, the controller VIP on
+its own SE group, failover, backups to S3, restore from S3 into empty nodes) in LXC containers and in VMs; the Helm install with a
+CloudNativePG failover; bundle upgrades of the nodes one at a time; configuration backups to S3 and SFTP and a restore into an
+empty controller; a Helm upgrade with a schema migration; and an engine roll of QEMU engines. Not yet run: a roll of LXC engines
+by the roll API, SAML and the other items listed in those pages.

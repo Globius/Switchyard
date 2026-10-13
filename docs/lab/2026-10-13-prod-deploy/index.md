@@ -229,10 +229,11 @@ be pushed to a registry or imported on every node (the nodes here have no access
 - The two Compose variants were run with the lab's own OpenBao (plain http on a private network). A production OpenBao should
   have TLS; nothing in the Compose files prevents it (`OPENBAO_ADDR=https://...`, and its CA in the controller's trust).
 - Engines were deployed through the controller's Proxmox integration before the clear-out (the feature pass), not again afterwards.
-- A restore of the database from S3 into an empty node (the replica builds read from the repository, and the restore
-  procedure has its own drill, `deploy/prod/lab-drill.sh`).
 - Telemetry on the new controller (`deploy/telemetry/`).
-- A three-VM Compose cluster (one VM only), a multi-host database on Kubernetes beyond the two nodes available.
+- A multi-host database on Kubernetes beyond the two nodes available.
+
+The three-VM Compose cluster and the restore of the database from S3 into empty nodes were run afterwards:
+[upgrades and restore lab run](../2026-10-13-upgrade-lab/index.md).
 
 ## Related
 

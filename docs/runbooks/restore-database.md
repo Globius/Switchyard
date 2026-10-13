@@ -10,8 +10,10 @@ If only one node is broken and the others are healthy, do **not** restore: use `
 
 1. Stop the API and workers on all three nodes so nothing writes: `docker compose stop api worker`.
 2. Stop Patroni on all three nodes: `docker compose stop patroni` (leave etcd running).
-3. Clear the cluster state from etcd, from any node: `etcdctl del /switchyard/switchyard/ --prefix` (the
-   Patroni `namespace` + `scope` key from `patroni.yml`).
+3. Clear the cluster state from etcd, from any node. etcd answers only clients with a certificate, so run it in the etcd container,
+   which has them mounted: `docker compose exec etcd etcdctl --endpoints=https://<node ip>:2379 --cacert /pki/ca.crt
+   --cert /pki/node.crt --key /pki/node.key del /switchyard/switchyard/ --prefix` (the Patroni `namespace` + `scope` key from
+   `patroni.yml`; it prints the number of keys deleted).
 4. Give every database node an **empty** data volume (a fresh VM, or remove the Patroni data volume after
    you snapshot it). Patroni will not restore over existing data.
 5. On one node, start Patroni with the target in its environment:
@@ -26,6 +28,11 @@ If only one node is broken and the others are healthy, do **not** restore: use `
    streams from the leader. A node that kept old data must be rebuilt with
    `patronictl -c /etc/patroni.yml reinit switchyard <member> --force` (after the new backup exists).
 8. Start the API and workers: `docker compose up -d api worker`. The `migrate` step is idempotent.
+
+Rehearsed on three VMs with S3 as the repository ([lab run](../lab/2026-10-13-upgrade-lab/index.md)): about six minutes from
+stopping the cluster to a healthy API, with a tenant created after the last backup recovered from the archived WAL. A replica whose
+volume was removed rebuilt itself from the S3 backup in 20 seconds (`replica has been created using pgbackrest`). At the very first
+start of a cluster no backup exists yet and replicas come by `basebackup`; that is expected.
 
 **Confirm.** `GET /api/v1/healthz` answers, the UI lists the tenants, and `syctl render` for one SE group matches
 what the running SE reports (no drift). Changes made after the target time are gone: tell the users.
