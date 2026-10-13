@@ -15,6 +15,7 @@ import { StatusPill } from "@/components/sy/StatusPill";
 import { ErrorState, TableSkeleton } from "@/components/sy/states";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Bundles } from "@/features/admin/Bundles";
 import { shortWhen } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
@@ -365,6 +366,8 @@ function Feed() {
 }
 
 export function Upgrades() {
+  const check = useCheck();
+  const latest = check.data?.update?.bundle ? check.data.update.version : null;
   return (
     <div className="space-y-5">
       <div>
@@ -374,6 +377,7 @@ export function Upgrades() {
         </p>
       </div>
       <Status />
+      <Bundles latest={latest} />
       <Backups />
       <Feed />
     </div>

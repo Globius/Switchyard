@@ -4306,6 +4306,124 @@
         "title": "BreakGlassSwitchIn",
         "type": "object"
       },
+      "BundleFetchIn": {
+        "additionalProperties": false,
+        "description": "Which release to download from the release feed.",
+        "properties": {
+          "version": {
+            "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]{1,16})?$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "BundleFetchIn",
+        "type": "object"
+      },
+      "BundleFileRead": {
+        "additionalProperties": false,
+        "description": "A file in a bundle.",
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "kind",
+          "sha256",
+          "size_bytes"
+        ],
+        "title": "BundleFileRead",
+        "type": "object"
+      },
+      "BundleNotesRead": {
+        "additionalProperties": false,
+        "description": "Release notes of a bundle.",
+        "properties": {
+          "action_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Action Required",
+            "type": "array"
+          },
+          "breaking": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Breaking",
+            "type": "array"
+          },
+          "deprecated": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Deprecated",
+            "type": "array"
+          },
+          "new": {
+            "items": {
+              "type": "string"
+            },
+            "title": "New",
+            "type": "array"
+          }
+        },
+        "title": "BundleNotesRead",
+        "type": "object"
+      },
+      "BundlePlanRead": {
+        "additionalProperties": false,
+        "description": "What applying a staged bundle involves, against the version this controller runs.",
+        "properties": {
+          "bundle": {
+            "$ref": "#/components/schemas/StagedBundleRead"
+          },
+          "running_version": {
+            "title": "Running Version",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "warnings": {
+            "description": "Cautions; none of them blocks anything.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bundle",
+          "running_version",
+          "steps",
+          "warnings"
+        ],
+        "title": "BundlePlanRead",
+        "type": "object"
+      },
       "BundleRead": {
         "additionalProperties": false,
         "description": "An upgrade bundle to download and what it must hash to.",
@@ -20207,6 +20325,12 @@
             "title": "Created By",
             "type": "string"
           },
+          "holding": {
+            "default": false,
+            "description": "Waiting for the window, start time or soak.",
+            "title": "Holding",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -20218,14 +20342,31 @@
             "title": "Log",
             "type": "array"
           },
+          "not_before": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scheduled start, epoch seconds.",
+            "title": "Not Before"
+          },
           "reason": {
-            "description": "Why it paused, when it did.",
+            "description": "Why it paused or is holding, when it is.",
             "title": "Reason",
             "type": "string"
           },
           "se_group_id": {
             "title": "Se Group Id",
             "type": "string"
+          },
+          "soak_seconds": {
+            "default": 0,
+            "title": "Soak Seconds",
+            "type": "integer"
           },
           "status": {
             "enum": [
@@ -20266,6 +20407,18 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The start window, for example `02:00-05:00 UTC`.",
+            "title": "Window"
           }
         },
         "required": [
@@ -20289,6 +20442,27 @@
         "additionalProperties": false,
         "description": "Replace every enabled engine of an SE group with one cloned from a new template.",
         "properties": {
+          "soak_seconds": {
+            "default": 0,
+            "description": "Wait this long after each engine before the next.",
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Soak Seconds",
+            "type": "integer"
+          },
+          "start_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Do not start before this moment (timezone-aware).",
+            "title": "Start After"
+          },
           "target_version": {
             "anyOf": [
               {
@@ -20306,6 +20480,41 @@
             "minimum": 100.0,
             "title": "Template Vmid",
             "type": "integer"
+          },
+          "window_days": {
+            "description": "Weekdays the window applies to, 0 (Monday) to 6; empty for every day.",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 7,
+            "title": "Window Days",
+            "type": "array"
+          },
+          "window_end": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "...and before this time. Earlier than the start means across midnight.",
+            "title": "Window End"
+          },
+          "window_start": {
+            "anyOf": [
+              {
+                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Start the next engine only after this time of day, UTC (`HH:MM`).",
+            "title": "Window Start"
           }
         },
         "required": [
@@ -22246,6 +22455,59 @@
         ],
         "title": "StageState",
         "type": "string"
+      },
+      "StagedBundleRead": {
+        "additionalProperties": false,
+        "description": "A verified bundle kept on the controller.",
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/BundleFileRead"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "key_id": {
+            "description": "The trusted key that signed it.",
+            "title": "Key Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/BundleNotesRead"
+          },
+          "schema_head": {
+            "title": "Schema Head",
+            "type": "string"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "size_bytes",
+          "sha256",
+          "schema_head",
+          "key_id",
+          "notes",
+          "files"
+        ],
+        "title": "StagedBundleRead",
+        "type": "object"
       },
       "StaleConflict": {
         "additionalProperties": false,
@@ -32870,6 +33132,647 @@
         "summary": "Confirm the authenticator",
         "tags": [
           "break-glass"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/bundles": {
+      "get": {
+        "description": "Verified bundles, newest version first. Requires a system administrator.\n\n**Access:** `system-admin` only.",
+        "operationId": "list_bundles_api_v1_system_bundles_get",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "files": [
+                      {
+                        "kind": "controller-image",
+                        "path": "files/controller-image/controller.tar",
+                        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                        "size_bytes": 300000000
+                      }
+                    ],
+                    "key_id": "release",
+                    "name": "switchyard-0.2.0-0123456789ab.sybundle",
+                    "notes": {
+                      "action_required": [],
+                      "breaking": [],
+                      "deprecated": [],
+                      "new": [
+                        "Upgrade checks"
+                      ]
+                    },
+                    "schema_head": "0047",
+                    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    "size_bytes": 412345678,
+                    "version": "0.2.0"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StagedBundleRead"
+                  },
+                  "title": "Response List Bundles Api V1 System Bundles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upgrade bundles kept on the controller",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "put": {
+        "description": "Send the file as the raw request body (`application/octet-stream`).\n\nThe controller checks the signature against the project keys and your trusted keys, and\nevery file's SHA-256, before it keeps anything; a bundle that does not verify is refused\nwith `409` and discarded. It is never applied by the controller: use the plan, then\n`syctl upgrade apply` on each node. Size limit: `SWITCHYARD_MAX_BUNDLE_BYTES` (4 GiB).\n\n**Access:** `system-admin` only.",
+        "operationId": "upload_bundle_api_v1_system_bundles_put",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "example": "(the bytes of a .sybundle file)",
+              "schema": {
+                "format": "binary",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "files": [
+                    {
+                      "kind": "controller-image",
+                      "path": "files/controller-image/controller.tar",
+                      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "size_bytes": 300000000
+                    }
+                  ],
+                  "key_id": "release",
+                  "name": "switchyard-0.2.0-0123456789ab.sybundle",
+                  "notes": {
+                    "action_required": [],
+                    "breaking": [],
+                    "deprecated": [],
+                    "new": [
+                      "Upgrade checks"
+                    ]
+                  },
+                  "schema_head": "0047",
+                  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                  "size_bytes": 412345678,
+                  "version": "0.2.0"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/StagedBundleRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Upload an upgrade bundle",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/bundles/fetch": {
+      "post": {
+        "description": "Download the bundle the verified feed lists for `version`.\n\nIt must match the feed's SHA-256 and then verify as a bundle. `404` when the feed lists\nno bundle for that version.\n\n**Access:** `system-admin` only.",
+        "operationId": "fetch_bundle_api_v1_system_bundles_fetch_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "version": "0.2.0"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/BundleFetchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "files": [
+                    {
+                      "kind": "controller-image",
+                      "path": "files/controller-image/controller.tar",
+                      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                      "size_bytes": 300000000
+                    }
+                  ],
+                  "key_id": "release",
+                  "name": "switchyard-0.2.0-0123456789ab.sybundle",
+                  "notes": {
+                    "action_required": [],
+                    "breaking": [],
+                    "deprecated": [],
+                    "new": [
+                      "Upgrade checks"
+                    ]
+                  },
+                  "schema_head": "0047",
+                  "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                  "size_bytes": 412345678,
+                  "version": "0.2.0"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/StagedBundleRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Download a release's bundle from the release feed",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/bundles/{bundle}": {
+      "delete": {
+        "description": "Frees the space. The release feed can fetch it again.\n\n**Access:** `system-admin` only.",
+        "operationId": "delete_bundle_api_v1_system_bundles__bundle__delete",
+        "parameters": [
+          {
+            "description": "Name of a staged upgrade bundle, for example `switchyard-0.2.0-0123456789ab.sybundle`.",
+            "in": "path",
+            "name": "bundle",
+            "required": true,
+            "schema": {
+              "title": "Bundle",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove a staged bundle",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      },
+      "get": {
+        "description": "The steps and cautions against the version this controller runs.\n\nA bundle that does not list your version as one it installs over gets a warning, never\na refusal. Changes nothing.\n\n**Access:** `system-admin` only.",
+        "operationId": "bundle_plan_api_v1_system_bundles__bundle__get",
+        "parameters": [
+          {
+            "description": "Name of a staged upgrade bundle, for example `switchyard-0.2.0-0123456789ab.sybundle`.",
+            "in": "path",
+            "name": "bundle",
+            "required": true,
+            "schema": {
+              "title": "Bundle",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "bundle": {
+                    "files": [
+                      {
+                        "kind": "controller-image",
+                        "path": "files/controller-image/controller.tar",
+                        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                        "size_bytes": 300000000
+                      }
+                    ],
+                    "key_id": "release",
+                    "name": "switchyard-0.2.0-0123456789ab.sybundle",
+                    "notes": {
+                      "action_required": [],
+                      "breaking": [],
+                      "deprecated": [],
+                      "new": [
+                        "Upgrade checks"
+                      ]
+                    },
+                    "schema_head": "0047",
+                    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    "size_bytes": 412345678,
+                    "version": "0.2.0"
+                  },
+                  "running_version": "0.1.0",
+                  "steps": [
+                    "Back up the configuration (Back up now) and the database (pgBackRest)."
+                  ],
+                  "warnings": []
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BundlePlanRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "What applying a staged bundle involves",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/bundles/{bundle}/file": {
+      "get": {
+        "description": "The verified file, to take to another node or site for `syctl upgrade apply`.\n\n**Access:** `system-admin` only.",
+        "operationId": "bundle_file_api_v1_system_bundles__bundle__file_get",
+        "parameters": [
+          {
+            "description": "Name of a staged upgrade bundle, for example `switchyard-0.2.0-0123456789ab.sybundle`.",
+            "in": "path",
+            "name": "bundle",
+            "required": true,
+            "schema": {
+              "title": "Bundle",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {}
+            },
+            "description": "The bundle file."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download a staged bundle",
+        "tags": [
+          "system"
         ],
         "x-required-role": "system-admin"
       }
@@ -56814,8 +57717,11 @@
           "content": {
             "application/json": {
               "example": {
+                "soak_seconds": 600,
                 "target_version": "0.2.0",
-                "template_vmid": 9770
+                "template_vmid": 9770,
+                "window_end": "05:00",
+                "window_start": "02:00"
               },
               "schema": {
                 "$ref": "#/components/schemas/RollStartIn"

@@ -125,6 +125,7 @@ PARAMS: dict[str, str] = {
     "controller_member": "Controller cluster member id.",
     "cs": "Change set id.",
     "roll": "Engine roll id.",
+    "bundle": "Name of a staged upgrade bundle, for example `switchyard-0.2.0-0123456789ab.sybundle`.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
     "job_id": "Job id.",
@@ -558,7 +559,13 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     },
     "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
     "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
-    "POST /tenants/{t}/se-groups/{group}/rolls": {"template_vmid": 9770, "target_version": "0.2.0"},
+    "POST /tenants/{t}/se-groups/{group}/rolls": {
+        "template_vmid": 9770,
+        "target_version": "0.2.0",
+        "window_start": "02:00",
+        "window_end": "05:00",
+        "soak_seconds": 600,
+    },
     "POST /tenants/{t}/rolls/{roll}": {"action": "pause"},
     "PUT /system/releases": {
         "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",
@@ -583,6 +590,7 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "keep": 14,
     },
     "POST /system/backups": {"target": "nightly", "reason": "pre-upgrade"},
+    "POST /system/bundles/fetch": {"version": "0.2.0"},
     "POST /system/backups/verify": {
         "target": "nightly",
         "archive": "switchyard-0.1.0-20261013T040000Z.syb",

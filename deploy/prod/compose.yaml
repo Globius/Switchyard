@@ -96,6 +96,9 @@ x-controller: &controller
     - ${BUNDLE_KEY_FILE:-./secrets/bundle.key}:/run/switchyard/bundle.key:ro
     - ${MTLS_DIR:-./secrets/mtls}:/run/switchyard/mtls:ro
     - ${PKI_DIR:-./secrets/pki}:/run/switchyard/pki:ro
+    # Staged upgrade bundles and local configuration backups (per node; use a network volume to share them).
+    - sy-staging:/var/lib/switchyard/staging
+    - sy-backups:/var/lib/switchyard/backups
 services:
   etcd:
     image: quay.io/coreos/etcd:v3.5.17
@@ -157,7 +160,7 @@ services:
     healthcheck: {disable: true}   # the image's HTTP health check is for the API
     command: ["worker", "--name", "${NODE_NAME}"]
     depends_on: {migrate: {condition: service_completed_successfully}}
-volumes: {etcd-data: {}, pgdata: {}, pgbackrest-repo: {}, pgbackrest-log: {}}
+volumes: {etcd-data: {}, pgdata: {}, pgbackrest-repo: {}, pgbackrest-log: {}, sy-staging: {}, sy-backups: {}}
 # MTU of the stack's Docker network. Docker's default 1500 breaks TLS where the host's NIC or underlay is smaller (a Proxmox
 # VXLAN overlay, WireGuard, some clouds): the controller then cannot reach the engines' agents (mTLS handshakes are dropped
 # and the engines show "unreachable"). Set DOCKER_MTU in node.env to the host NIC's MTU or less.

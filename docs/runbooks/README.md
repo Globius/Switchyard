@@ -10,6 +10,7 @@
 | [lab-hosts.md](lab-hosts.md) | Two Proxmox hosts must be prepared for the lab scenarios (KVM, IPVS, cross-host, ECMP) |
 | [build-se-template.md](build-se-template.md) | New HAProxy, FRR, Keepalived or agent versions must reach new SEs |
 | [rolling-upgrade.md](rolling-upgrade.md) | A whole SE group must move to a new template, or a group needs more engines |
+| [release.md](release.md) | A maintainer cuts a release: signed bundle, signed `releases.json`, the project key |
 | [login-broker.md](login-broker.md) | An access set uses an LDAP, SAML or local-user directory (the Dex broker) |
 | [gslb-lab.md](gslb-lab.md) | GSLB is tried on the two-host lab, one site per host |
 

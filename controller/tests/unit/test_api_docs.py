@@ -29,6 +29,7 @@ NO_JSON_EXAMPLE = {
     "GET /tenants/{t}/status/stream",
     "GET /auth/saml/{provider}/metadata",
     "GET /tenants/{t}/captures/{capture}/pcap",
+    "GET /system/bundles/{bundle}/file",
 }
 #: Form posts and operations without a request body example for a documented reason.
 NO_BODY_EXAMPLE = {"POST /auth/callback/{provider}"}

@@ -1559,3 +1559,28 @@ ROLL = {
     "updated_at": "2026-10-13T05:00:00+00:00",
     "version": 3,
 }
+
+STAGED_BUNDLE = {
+    "name": "switchyard-0.2.0-0123456789ab.sybundle",
+    "version": "0.2.0",
+    "size_bytes": 412345678,
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "schema_head": "0047",
+    "key_id": "release",
+    "notes": {"new": ["Upgrade checks"], "deprecated": [], "breaking": [], "action_required": []},
+    "files": [
+        {
+            "path": "files/controller-image/controller.tar",
+            "kind": "controller-image",
+            "sha256": "0" * 64,
+            "size_bytes": 300000000,
+        }
+    ],
+}
+
+BUNDLE_PLAN = {
+    "bundle": STAGED_BUNDLE,
+    "running_version": "0.1.0",
+    "steps": ["Back up the configuration (Back up now) and the database (pgBackRest)."],
+    "warnings": [],
+}

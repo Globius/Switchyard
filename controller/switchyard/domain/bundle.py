@@ -20,6 +20,7 @@ Example:
 import base64
 import json
 import re
+from dataclasses import dataclass
 from typing import Annotated, Literal
 
 from cryptography.exceptions import InvalidSignature
@@ -27,6 +28,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from switchyard.domain.releases import ReleaseNotes
+from switchyard.domain.versions import parse_version
 
 FORMAT: Literal[1] = 1
 MANIFEST = "manifest.json"
@@ -123,3 +125,54 @@ def verify_manifest(raw: bytes, sig: bytes, trusted: dict[str, str]) -> Manifest
             raise BundleError(f"{f.path} is listed twice")
         seen.add(f.path)
     return manifest
+
+
+@dataclass(frozen=True)
+class Plan:
+    """What applying a bundle involves, for the operator to read before doing it."""
+
+    steps: list[str]
+    warnings: list[str]
+
+
+def plan(manifest: Manifest, running: str) -> Plan:
+    """The steps and cautions for installing ``manifest`` over the version ``running``.
+
+    Never refuses: a bundle that does not list ``running`` in ``upgrade_from`` gets a warning,
+    not a block.
+
+    Example:
+        >>> m = Manifest(version="0.2.0", schema_head="0046", created_at="x",
+        ...              upgrade_from=["0.1.0"],
+        ...              files=[BundleFile(path="files/compose/c.yaml", kind="compose",
+        ...                                sha256="0" * 64, size_bytes=1)])
+        >>> plan(m, "0.1.0").warnings
+        []
+        >>> plan(m, "0.0.5").warnings[0].startswith("This bundle installs over 0.1.0")
+        True
+    """
+    warnings: list[str] = []
+    have, want = parse_version(running), parse_version(manifest.version)
+    if have is not None and want is not None and have >= want:
+        warnings.append(
+            f"This controller already runs {running}, which is not older than the bundle."
+        )
+    if manifest.upgrade_from and running not in manifest.upgrade_from:
+        warnings.append(
+            f"This bundle installs over {', '.join(manifest.upgrade_from)}; you run {running}. "
+            "Go through the intermediate releases first."
+        )
+    kinds = {f.kind for f in manifest.files}
+    steps = [
+        "Back up the configuration (Back up now) and the database (pgBackRest).",
+        "Load the controller and proxy images on each controller node.",
+        "Run the schema migration once; migrations are additive, so the old code keeps working.",
+        "Upgrade controller nodes one at a time (syctl upgrade apply), checking health after each.",
+    ]
+    if "helm-chart" in kinds:
+        steps.append(
+            "On Kubernetes use helm upgrade with the bundled chart instead of the steps above."
+        )
+    if "se-template" in kinds or "agent" in kinds:
+        steps.append("Roll each SE group to the new template, one engine at a time (Engine rolls).")
+    return Plan(steps, warnings)

@@ -20,7 +20,9 @@ Example:
 """
 
 from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 
 #: Health score a group must reach before the roll moves on (ADR 0083).
 MIN_SCORE = 80
@@ -116,6 +118,47 @@ class Facts:
 
 
 @dataclass(frozen=True)
+class Window:
+    """When a new engine may be started: minutes after 00:00 UTC, on the listed weekdays.
+
+    ``start_min`` after ``end_min`` means a window that crosses midnight. ``days`` are
+    0 (Monday) to 6 (Sunday); empty means every day. A step already in progress is never
+    interrupted by the window closing: it only decides when the *next* engine starts.
+    """
+
+    start_min: int
+    end_min: int
+    days: tuple[int, ...] = ()
+
+    def label(self) -> str:
+        """Human text, for example ``02:00-05:00 UTC``."""
+        a, b = self.start_min, self.end_min
+        return f"{a // 60:02d}:{a % 60:02d}-{b // 60:02d}:{b % 60:02d} UTC"
+
+
+def in_window(window: Window | None, epoch: float) -> bool:
+    """Whether ``epoch`` (seconds) falls inside ``window``; no window means always.
+
+    Example:
+        >>> night = Window(120, 300)  # 02:00-05:00 UTC
+        >>> in_window(night, 3 * 3600), in_window(night, 12 * 3600)
+        (True, False)
+    """
+    if window is None:
+        return True
+    now = datetime.fromtimestamp(epoch, UTC)
+    minute = now.hour * 60 + now.minute
+    a, b = window.start_min, window.end_min
+    if a <= b:
+        inside, day = a <= minute < b, now.weekday()
+    elif minute >= a:
+        inside, day = True, now.weekday()
+    else:
+        inside, day = minute < b, (now.weekday() - 1) % 7  # after midnight: the day it began
+    return inside and (not window.days or day in window.days)
+
+
+@dataclass(frozen=True)
 class EngineStep:
     """One engine to replace."""
 
@@ -134,11 +177,27 @@ class Roll:
     status: Status = Status.RUNNING
     reason: str = ""
     log: tuple[str, ...] = field(default=())
+    window: Window | None = None
+    not_before: float | None = None
+    soak_s: float = 0.0
+    holding: bool = False
 
     @classmethod
-    def start(cls, engines: list[str]) -> "Roll":
+    def start(
+        cls,
+        engines: list[str],
+        *,
+        window: Window | None = None,
+        not_before: float | None = None,
+        soak_s: float = 0.0,
+    ) -> "Roll":
         """A new roll over ``engines``, in the order given (a VRRP master goes at its turn)."""
-        return cls(tuple(EngineStep(e) for e in engines))
+        return cls(
+            tuple(EngineStep(e) for e in engines),
+            window=window,
+            not_before=not_before,
+            soak_s=soak_s,
+        )
 
     @property
     def current(self) -> EngineStep | None:
@@ -199,6 +258,13 @@ def advance(roll: Roll, facts: Facts) -> tuple[Roll, Command | None]:
 
     match step.phase:
         case Phase.PENDING:
+            hold = _hold_reason(roll, now)
+            if hold:
+                if roll.reason != hold:
+                    roll = replace(roll, holding=True, reason=hold, log=(*roll.log, hold))
+                return roll, None
+            if roll.holding:
+                roll = replace(roll, holding=False, reason="")
             roll = _enter(roll, step, Phase.DEPLOYING, now, f"{step.old}: deploying replacement")
             return send(roll, roll.current or step, Deploy(step.old))
         case Phase.DEPLOYING:
@@ -269,7 +335,7 @@ def _command_for(step: EngineStep) -> Command | None:
     return None
 
 
-def to_json(roll: Roll) -> dict[str, object]:
+def to_json(roll: Roll) -> dict[str, Any]:
     """Plain JSON form of a roll, for the database.
 
     Example:
@@ -280,6 +346,16 @@ def to_json(roll: Roll) -> dict[str, object]:
         "status": roll.status.value,
         "reason": roll.reason,
         "log": list(roll.log),
+        "window": None
+        if roll.window is None
+        else {
+            "start_min": roll.window.start_min,
+            "end_min": roll.window.end_min,
+            "days": list(roll.window.days),
+        },
+        "not_before": roll.not_before,
+        "soak_s": roll.soak_s,
+        "holding": roll.holding,
         "steps": [
             {
                 "old": s.old,
@@ -293,7 +369,7 @@ def to_json(roll: Roll) -> dict[str, object]:
     }
 
 
-def from_json(data: dict[str, object]) -> Roll:
+def from_json(data: dict[str, Any]) -> Roll:
     """Inverse of :func:`to_json`."""
     steps = tuple(
         EngineStep(
@@ -303,11 +379,32 @@ def from_json(data: dict[str, object]) -> Roll:
             entered_at=float(s["entered_at"]),
             command_sent=bool(s["command_sent"]),
         )
-        for s in data["steps"]  # type: ignore[attr-defined]
+        for s in data["steps"]
     )
+    w = data.get("window")
+    nb = data.get("not_before")
     return Roll(
         steps,
         Status(str(data["status"])),
         str(data["reason"]),
-        tuple(str(x) for x in data["log"]),  # type: ignore[attr-defined]
+        tuple(str(x) for x in data["log"]),
+        window=None
+        if w is None
+        else Window(int(w["start_min"]), int(w["end_min"]), tuple(int(d) for d in w["days"])),
+        not_before=None if nb is None else float(nb),
+        soak_s=float(data.get("soak_s", 0.0)),
+        holding=bool(data.get("holding", False)),
     )
+
+
+def _hold_reason(roll: Roll, now: float) -> str:
+    """Why the next engine may not start yet, or an empty string."""
+    if roll.not_before is not None and now < roll.not_before:
+        return "waiting for the scheduled start"
+    done = [s.entered_at for s in roll.steps if s.phase is Phase.DONE]
+    if done and roll.soak_s > 0 and now < max(done) + roll.soak_s:
+        return f"soaking {roll.soak_s:.0f}s before the next engine"
+    if not in_window(roll.window, now):
+        label = roll.window.label() if roll.window else ""
+        return f"waiting for the window {label}"
+    return ""

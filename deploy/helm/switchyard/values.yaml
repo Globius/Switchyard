@@ -60,6 +60,11 @@ controller:
     caKey: pve-ca.pem            # key in secrets.existingSecret holding the Proxmox CA certificate
   extraEnv: []                   # extra container env entries (name/value or valueFrom)
 
+# Staged upgrade bundles and local configuration backups (/var/lib/switchyard in the API pods). Empty means an emptyDir per pod:
+# lost on restart and not shared between the two pods. For real use give an existing ReadWriteMany claim.
+storage:
+  existingClaim: ""
+
 api:
   replicas: 2
   resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {memory: 1Gi}}

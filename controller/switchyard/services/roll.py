@@ -80,14 +80,23 @@ class RollView:
     created_at: datetime
     updated_at: datetime
     version: int
+    window: str | None = None
+    not_before: float | None = None
+    soak_seconds: int = 0
+    holding: bool = False
 
 
 def _view(row: EngineRollRow) -> RollView:
     state = row.state
+    window = machine.from_json(state).window
+    window_label = None if window is None else window.label()
     return RollView(
         row.id, row.tenant_id, row.se_group_id, row.status, state.get("reason", ""),
         row.template_vmid, row.target_version, list(state["steps"]), list(state["log"]),
         row.created_by, row.created_at, row.updated_at, row.version,
+        window=window_label,
+        not_before=state.get("not_before"), soak_seconds=int(state.get("soak_s", 0)),
+        holding=bool(state.get("holding", False)),
     )  # fmt: skip
 
 
@@ -112,6 +121,9 @@ class RollService:
         *,
         template_vmid: int,
         target_version: str | None = None,
+        window: machine.Window | None = None,
+        not_before: float | None = None,
+        soak_s: float = 0.0,
         request_id: str | None = None,
     ) -> RollView:
         """Begin replacing every enabled engine of the group, in name order.
@@ -146,7 +158,7 @@ class RollService:
             ).first()
             if active:
                 raise ConflictError("this SE group already has a roll in progress")
-            state = machine.Roll.start(engines)
+            state = machine.Roll.start(engines, window=window, not_before=not_before, soak_s=soak_s)
             row = EngineRollRow(
                 id=uuid7(),
                 tenant_id=tenant_id,
