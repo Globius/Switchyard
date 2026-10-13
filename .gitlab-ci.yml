@@ -338,6 +338,7 @@ release-version:
   extends: .publisher
   stage: deploy
   interruptible: false
+  needs: []   # start at once; do not wait for the whole check stage
   variables:
     GIT_DEPTH: "100"
   script:
@@ -365,7 +366,8 @@ release-build:
   extends: .publisher
   stage: deploy
   interruptible: false
-  needs: [release-version]
+  # Publish only a main (or tag) that passes the quick checks; test-full still runs beside it.
+  needs: [release-version, lint, typecheck, test, ui]
   timeout: 1h
   image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27
   services:

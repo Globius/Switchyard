@@ -149,4 +149,5 @@ Date: YYYY-MM-DD
 | [0200](0200-sbom-and-reuse-licensing.md) | SBOMs (Syft, SPDX) in CI and REUSE licensing, Apache-2.0 default | Accepted |
 | [0205](0205-upgrades-versions-bundles-backups.md) | Upgrades: version compatibility, upgrade bundles, backups, checks, canary rollout | Accepted |
 | [0206](0206-nightly-and-release-builds.md) | Nightly builds, releases and CI on GitLab and GitHub | Accepted |
+| [0208](0208-github-front-door.md) | GitHub as the front door, GitLab as the merge point: pull request bridge, DCO | Accepted |
 | [0210](0210-security-review-2026-10-13.md) | Fixes from the 2026-10-13 security review | Accepted |

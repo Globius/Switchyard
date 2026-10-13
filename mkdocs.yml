@@ -42,6 +42,7 @@ nav:
   - Guides:
       - Quickstart - a test instance on its own machine: quickstart.md
       - Production guide: production.md
+      - Contributing: contributing.md
       - Upgrades: upgrades.md
       - Run on Kubernetes: deploy-kubernetes.md
       - Running and operating the controller: operating.md
@@ -111,6 +112,7 @@ nav:
       - Replace a service engine: runbooks/replace-se.md
       - Restore the database (pgBackRest + Patroni): runbooks/restore-database.md
       - Roll an SE group to a new template, or scale it out: runbooks/rolling-upgrade.md
+      - GitHub as the front door (mirror, pull request bridge): runbooks/github-front-door.md
       - Nightly builds and releases: runbooks/release.md
       - Signing keys: keys.md
       - Release notes files: release-notes/README.md

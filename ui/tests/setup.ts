@@ -5,8 +5,9 @@
 import "@testing-library/jest-dom/vitest";
 import { configure } from "@testing-library/react";
 
-// Full-route renders are slow when the whole suite runs in parallel.
-configure({ asyncUtilTimeout: 5000 });
+// Full-route renders are slow when the whole suite runs in parallel, and slower still on the small shared CI
+// runners (one test was caught at 5 s there with no real failure).
+configure({ asyncUtilTimeout: process.env.CI ? 20000 : 5000 });
 
 // jsdom lacks these; cmdk and Radix use them.
 globalThis.ResizeObserver ??= class {
