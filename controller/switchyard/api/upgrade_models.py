@@ -255,3 +255,49 @@ class RollRead(ApiModel):
     created_at: str
     updated_at: str
     version: int
+
+
+class BundleNotesRead(ApiModel):
+    """Release notes of a bundle."""
+
+    new: list[str] = Field(default_factory=list)
+    deprecated: list[str] = Field(default_factory=list)
+    breaking: list[str] = Field(default_factory=list)
+    action_required: list[str] = Field(default_factory=list)
+
+
+class BundleFileRead(ApiModel):
+    """A file in a bundle."""
+
+    path: str
+    kind: str
+    sha256: str
+    size_bytes: int
+
+
+class StagedBundleRead(ApiModel):
+    """A verified bundle kept on the controller."""
+
+    name: str
+    version: str
+    size_bytes: int
+    sha256: str
+    schema_head: str
+    key_id: str = Field(description="The trusted key that signed it.")
+    notes: BundleNotesRead
+    files: list[BundleFileRead]
+
+
+class BundlePlanRead(ApiModel):
+    """What applying a staged bundle involves, against the version this controller runs."""
+
+    bundle: StagedBundleRead
+    running_version: str
+    steps: list[str]
+    warnings: list[str] = Field(description="Cautions; none of them blocks anything.")
+
+
+class BundleFetchIn(ApiModel):
+    """Which release to download from the release feed."""
+
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]{1,16})?$")

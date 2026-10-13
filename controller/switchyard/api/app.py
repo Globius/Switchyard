@@ -25,7 +25,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from switchyard.adapters.agent import AgentError, CaptureSpec
 from switchyard.adapters.pki import PkiError
@@ -204,11 +204,14 @@ from switchyard.api.upgrade_models import (
     BackupTargetTestRead,
     BackupVerifyIn,
     BackupVerifyRead,
+    BundleFetchIn,
+    BundlePlanRead,
     ReleaseFeedIn,
     ReleaseFeedRead,
     RollActionIn,
     RollRead,
     RollStartIn,
+    StagedBundleRead,
     UpgradeCheckRead,
 )
 from switchyard.config import broker_url
@@ -240,6 +243,7 @@ from switchyard.services.alerts import EVENT_ACTIONS, AlertService
 from switchyard.services.autoscale import Autoscaler
 from switchyard.services.backup import BackupService
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
+from switchyard.services.bundle_staging import BundleStaging
 from switchyard.services.captures import PacketCaptures
 from switchyard.services.cert_requests import CertificateRequests, IssueRequest
 from switchyard.services.certificates import CertificateJobs, CertificateService
@@ -342,6 +346,7 @@ class ApiServices:
     upgrade: UpgradeService = None  # type: ignore[assignment]
     release_feed: ReleaseFeedService = None  # type: ignore[assignment]
     rolls: RollService = None  # type: ignore[assignment]
+    bundles: BundleStaging = None  # type: ignore[assignment]
     backup: BackupService = None  # type: ignore[assignment]
     dns_records: DnsRecordSync | None = None
     autoscaler: Autoscaler | None = None
@@ -436,6 +441,11 @@ def build_services(
         upgrade=UpgradeService(db, backup=backup, feed=release_feed),
         release_feed=release_feed,
         rolls=RollService(db),
+        bundles=BundleStaging(
+            db,
+            release_feed,
+            Path(os.environ.get("SWITCHYARD_STAGING_DIR", "/var/lib/switchyard/staging")),
+        ),
         backup=backup,
     )
 
@@ -4693,6 +4703,103 @@ def create_app(
         """
         await svc.release_feed.refresh(who)
         return await _release_feed_json(svc, who)
+
+    @router.get(
+        "/system/bundles",
+        tags=["system"],
+        summary="Upgrade bundles kept on the controller",
+        response_model=list[StagedBundleRead],
+        responses=_ok([ex.STAGED_BUNDLE]),
+    )
+    async def list_bundles(who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Verified bundles, newest version first. Requires a system administrator."""
+        return [asdict(b) for b in await svc.bundles.list(who)]
+
+    @router.put(
+        "/system/bundles",
+        status_code=201,
+        tags=["system"],
+        summary="Upload an upgrade bundle",
+        response_model=StagedBundleRead,
+        responses=_ok(ex.STAGED_BUNDLE, 201) | VALIDATION_RESPONSE,
+        openapi_extra={
+            "requestBody": {
+                "required": True,
+                "content": {
+                    "application/octet-stream": {
+                        "schema": {"type": "string", "format": "binary"},
+                        "example": "(the bytes of a .sybundle file)",
+                    }
+                },
+            }
+        },
+    )
+    async def upload_bundle(request: Request, who: Who, svc: Services) -> dict[str, Any]:
+        """Send the file as the raw request body (`application/octet-stream`).
+
+        The controller checks the signature against the project keys and your trusted keys, and
+        every file's SHA-256, before it keeps anything; a bundle that does not verify is refused
+        with `409` and discarded. It is never applied by the controller: use the plan, then
+        `syctl upgrade apply` on each node. Size limit: `SWITCHYARD_MAX_BUNDLE_BYTES` (4 GiB).
+        """
+        staged = await svc.bundles.upload(who, request.stream(), request_id=_rid())
+        return asdict(staged)
+
+    @router.post(
+        "/system/bundles/fetch",
+        status_code=201,
+        tags=["system"],
+        summary="Download a release's bundle from the release feed",
+        response_model=StagedBundleRead,
+        responses=_ok(ex.STAGED_BUNDLE, 201) | VALIDATION_RESPONSE,
+    )
+    async def fetch_bundle(body: BundleFetchIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Download the bundle the verified feed lists for `version`.
+
+        It must match the feed's SHA-256 and then verify as a bundle. `404` when the feed lists
+        no bundle for that version.
+        """
+        return asdict(await svc.bundles.fetch(who, body.version, request_id=_rid()))
+
+    @router.get(
+        "/system/bundles/{bundle}",
+        tags=["system"],
+        summary="What applying a staged bundle involves",
+        response_model=BundlePlanRead,
+        responses=_ok(ex.BUNDLE_PLAN),
+    )
+    async def bundle_plan(bundle: str, who: Who, svc: Services) -> dict[str, Any]:
+        """The steps and cautions against the version this controller runs.
+
+        A bundle that does not list your version as one it installs over gets a warning, never
+        a refusal. Changes nothing.
+        """
+        return asdict(await svc.bundles.plan(who, bundle))
+
+    @router.get(
+        "/system/bundles/{bundle}/file",
+        tags=["system"],
+        summary="Download a staged bundle",
+        response_class=FileResponse,
+        responses={
+            200: {"description": "The bundle file.", "content": {"application/octet-stream": {}}}
+        },
+    )
+    async def bundle_file(bundle: str, who: Who, svc: Services) -> FileResponse:
+        """The verified file, to take to another node or site for `syctl upgrade apply`."""
+        await svc.bundles.get(who, bundle)
+        return FileResponse(svc.bundles.file_path(bundle), media_type="application/octet-stream")
+
+    @router.delete(
+        "/system/bundles/{bundle}",
+        status_code=204,
+        tags=["system"],
+        summary="Remove a staged bundle",
+    )
+    async def delete_bundle(bundle: str, who: Who, svc: Services) -> Response:
+        """Frees the space. The release feed can fetch it again."""
+        await svc.bundles.delete(who, bundle, request_id=_rid())
+        return Response(status_code=204)
 
     @router.get(
         "/system/upgrade/check",

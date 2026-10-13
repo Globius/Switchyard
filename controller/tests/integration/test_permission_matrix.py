@@ -257,6 +257,12 @@ for _path in (
     ROUTES[("GET", _path)] = READ
 ROUTES[("GET", "/system/controller")] = ("manage", "controller")
 ROUTES[("GET", "/system/upgrade/check")] = ("manage", "controller")
+ROUTES[("DELETE", "/system/bundles/{bundle}")] = ("manage", "controller")
+ROUTES[("GET", "/system/bundles/{bundle}/file")] = ("manage", "controller")
+ROUTES[("GET", "/system/bundles/{bundle}")] = ("manage", "controller")
+ROUTES[("POST", "/system/bundles/fetch")] = ("manage", "controller")
+ROUTES[("PUT", "/system/bundles")] = ("manage", "controller")
+ROUTES[("GET", "/system/bundles")] = ("manage", "controller")
 ROUTES[("POST", "/system/releases/check")] = ("manage", "controller")
 ROUTES[("PUT", "/system/releases")] = ("manage", "controller")
 ROUTES[("GET", "/system/releases")] = ("manage", "controller")
@@ -357,6 +363,7 @@ BODIES: dict[tuple[str, str], Any] = {
         "target": {"kind": "local"},
     },
     ("POST", "/system/backups"): {"target": "bk"},
+    ("POST", "/system/bundles/fetch"): {"version": "9.9.9"},
     ("POST", "/tenants/{t}/se-groups/{group}/rolls"): {"template_vmid": 9770},
     ("POST", "/tenants/{t}/rolls/{roll}"): {"action": "pause"},
     ("PUT", "/system/releases"): {"enabled": False},
@@ -492,6 +499,7 @@ def fill(path: str) -> str:
         "cluster",
         "controller_member",
         "roll",
+        "bundle",
         "request",
         "test_id",
         "capture",

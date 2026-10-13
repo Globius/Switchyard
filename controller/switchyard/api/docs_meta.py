@@ -125,6 +125,7 @@ PARAMS: dict[str, str] = {
     "controller_member": "Controller cluster member id.",
     "cs": "Change set id.",
     "roll": "Engine roll id.",
+    "bundle": "Name of a staged upgrade bundle, for example `switchyard-0.2.0-0123456789ab.sybundle`.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
     "job_id": "Job id.",
@@ -589,6 +590,7 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "keep": 14,
     },
     "POST /system/backups": {"target": "nightly", "reason": "pre-upgrade"},
+    "POST /system/bundles/fetch": {"version": "0.2.0"},
     "POST /system/backups/verify": {
         "target": "nightly",
         "archive": "switchyard-0.1.0-20261013T040000Z.syb",
