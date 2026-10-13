@@ -35,6 +35,7 @@ export const NAV: { heading?: string; items: { label: string; to: string }[] }[]
     items: [
       { label: "Networks and VIP pools", to: "networks" },
       { label: "SE groups", to: "se-groups" },
+      { label: "Engine rolls", to: "rolls" },
       { label: "Routing profiles", to: "routing-profiles" },
       { label: "Kubernetes", to: "kubernetes" },
       { label: "GSLB", to: "gslb" },

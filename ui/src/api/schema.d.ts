@@ -14291,17 +14291,33 @@ export interface components {
             created_at: string;
             /** Created By */
             created_by: string;
+            /**
+             * Holding
+             * @description Waiting for the window, start time or soak.
+             * @default false
+             */
+            holding: boolean;
             /** Id */
             id: string;
             /** Log */
             log: string[];
             /**
+             * Not Before
+             * @description Scheduled start, epoch seconds.
+             */
+            not_before?: number | null;
+            /**
              * Reason
-             * @description Why it paused, when it did.
+             * @description Why it paused or is holding, when it is.
              */
             reason: string;
             /** Se Group Id */
             se_group_id: string;
+            /**
+             * Soak Seconds
+             * @default 0
+             */
+            soak_seconds: number;
             /**
              * Status
              * @enum {string}
@@ -14317,12 +14333,28 @@ export interface components {
             updated_at: string;
             /** Version */
             version: number;
+            /**
+             * Window
+             * @description The start window, for example `02:00-05:00 UTC`.
+             */
+            window?: string | null;
         };
         /**
          * RollStartIn
          * @description Replace every enabled engine of an SE group with one cloned from a new template.
          */
         RollStartIn: {
+            /**
+             * Soak Seconds
+             * @description Wait this long after each engine before the next.
+             * @default 0
+             */
+            soak_seconds: number;
+            /**
+             * Start After
+             * @description Do not start before this moment (timezone-aware).
+             */
+            start_after?: string | null;
             /**
              * Target Version
              * @description The release this template carries, for the record.
@@ -14333,6 +14365,21 @@ export interface components {
              * @description The Proxmox template to clone.
              */
             template_vmid: number;
+            /**
+             * Window Days
+             * @description Weekdays the window applies to, 0 (Monday) to 6; empty for every day.
+             */
+            window_days?: number[];
+            /**
+             * Window End
+             * @description ...and before this time. Earlier than the start means across midnight.
+             */
+            window_end?: string | null;
+            /**
+             * Window Start
+             * @description Start the next engine only after this time of day, UTC (`HH:MM`).
+             */
+            window_start?: string | null;
         };
         /**
          * RollStepRead
@@ -37201,8 +37248,11 @@ export interface operations {
             content: {
                 /**
                  * @example {
+                 *       "soak_seconds": 600,
                  *       "target_version": "0.2.0",
-                 *       "template_vmid": 9770
+                 *       "template_vmid": 9770,
+                 *       "window_end": "05:00",
+                 *       "window_start": "02:00"
                  *     }
                  */
                 "application/json": components["schemas"]["RollStartIn"];
