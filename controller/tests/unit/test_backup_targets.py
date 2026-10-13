@@ -214,3 +214,53 @@ async def test_sftp_against_a_real_server_with_a_pinned_host_key(tmp_path: Path)
     finally:
         acceptor.close()
         await acceptor.wait_closed()
+
+
+@pytest.mark.parametrize("key_type", ["ssh-rsa", "ecdsa-sha2-nistp256", "ssh-ed25519"])
+async def test_sftp_pins_a_host_key_of_any_type_the_server_offers(
+    tmp_path: Path, key_type: str
+) -> None:
+    """A server with several host keys: pinning any one of them works, not just the first it offers."""
+    import asyncssh
+
+    from switchyard.domain.backup import SftpTarget
+
+    keys = {
+        "ssh-rsa": asyncssh.generate_private_key("ssh-rsa", key_size=2048),
+        "ecdsa-sha2-nistp256": asyncssh.generate_private_key("ecdsa-sha2-nistp256"),
+        "ssh-ed25519": asyncssh.generate_private_key("ssh-ed25519"),
+    }
+    client_key = asyncssh.generate_private_key("ssh-ed25519")
+    root = tmp_path / "srv"
+    root.mkdir()
+
+    class Server(asyncssh.SSHServer):
+        def begin_auth(self, username: str) -> bool:
+            return True
+
+        def public_key_auth_supported(self) -> bool:
+            return True
+
+        def validate_public_key(self, username: str, key: asyncssh.SSHKey) -> bool:
+            return bool(key.export_public_key() == client_key.export_public_key())
+
+    acceptor = await asyncssh.listen(
+        "127.0.0.1",
+        0,
+        server_factory=Server,
+        server_host_keys=[keys["ssh-rsa"], keys["ecdsa-sha2-nistp256"], keys["ssh-ed25519"]],
+        sftp_factory=lambda chan: asyncssh.SFTPServer(chan, chroot=str(root).encode()),
+    )
+    try:
+        target = SftpTarget(
+            host="127.0.0.1",
+            port=acceptor.get_port(),
+            username="bk",
+            host_key_sha256=keys[key_type].get_fingerprint("sha256"),
+            key_ref="r/k",
+        )
+        store = SftpStore(target, client_key.export_private_key().decode())
+        assert await store.list() == []
+    finally:
+        acceptor.close()
+        await acceptor.wait_closed()

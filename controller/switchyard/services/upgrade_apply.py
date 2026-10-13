@@ -17,7 +17,7 @@ Commands go through :class:`Runner`, so tests use a fake; real use is
 
 import asyncio
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -103,7 +103,7 @@ async def apply_compose(
     bundle: Path,
     trusted: dict[str, str],
     *,
-    compose_file: Path,
+    compose_file: Path | Sequence[Path],
     env_file: Path,
     workdir: Path,
     healthy: Callable[[], Awaitable[bool]],
@@ -117,7 +117,7 @@ async def apply_compose(
     Args:
         bundle: The ``.sybundle`` file.
         trusted: Trusted public keys (id to base64).
-        compose_file: The node's Compose file.
+        compose_file: The node's Compose file, or several (a base file and its overrides).
         env_file: The node's env file (holds ``CONTROLLER_IMAGE`` and ``PROXY_IMAGE``).
         workdir: A directory to unpack the bundle into (must not hold an earlier unpack).
         healthy: Returns whether this node's API answers ``/api/v1/healthz``.
@@ -150,7 +150,11 @@ async def apply_compose(
         raise ApplyError("the bundle holds no controller or proxy image")
     report.images = dict(new_images)
 
-    base = ["docker", "compose", "-f", str(compose_file), "--env-file", str(env_file)]
+    files = [compose_file] if isinstance(compose_file, Path) else list(compose_file)
+    base = ["docker", "compose"]
+    for f in files:
+        base += ["-f", str(f)]
+    base += ["--env-file", str(env_file)]
     services = ["api", "worker", "proxy"]
 
     async def recreate() -> bool:

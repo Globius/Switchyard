@@ -42,12 +42,13 @@ def test_one_engine_goes_through_every_phase_and_the_next_follows() -> None:
         Facts(6, group_score=60),  # not healthy enough yet
         Facts(7, group_score=95),
         Facts(8, retired=True),
-        Facts(9, group_score=95),
+        Facts(9, reapplied=True),  # the retirement changed the group: applied again
+        Facts(10, group_score=95),
     )
-    assert cmds == [Deploy("se-1"), IssueToken("se-1b"), Reapply(), Retire("se-1")]
+    assert cmds == [Deploy("se-1"), IssueToken("se-1b"), Reapply(), Retire("se-1"), Reapply()]
     assert roll.steps[0].phase is Phase.DONE and roll.steps[0].new == "se-1b"
     assert roll.current is not None and roll.current.old == "se-2"
-    roll, cmds = drive(roll, Facts(10))
+    roll, cmds = drive(roll, Facts(11))
     assert cmds == [Deploy("se-2")]
 
 
@@ -160,10 +161,11 @@ def test_a_step_in_progress_is_not_interrupted_when_the_window_closes() -> None:
         Facts(_at(0, 5, 11), reapplied=True),
         Facts(_at(0, 5, 12), group_score=95),
         Facts(_at(0, 5, 13), retired=True),
-        Facts(_at(0, 5, 14), group_score=95),
+        Facts(_at(0, 5, 14), reapplied=True),
+        Facts(_at(0, 5, 15), group_score=95),
     )
     assert roll.steps[0].phase is Phase.DONE
-    roll, cmd = advance(roll, Facts(_at(0, 5, 15)))
+    roll, cmd = advance(roll, Facts(_at(0, 5, 16)))
     assert cmd is None and "window" in roll.reason  # b waits for tomorrow night
 
 
@@ -177,11 +179,12 @@ def test_soak_time_separates_engines() -> None:
         Facts(3, reapplied=True),
         Facts(4, group_score=95),
         Facts(5, retired=True),
-        Facts(6, group_score=95),  # a is done at t=6
+        Facts(6, reapplied=True),
+        Facts(7, group_score=95),  # a is done at t=7
     )
     roll, cmd = advance(roll, Facts(300))
     assert cmd is None and "soaking" in roll.reason
-    roll, cmd = advance(roll, Facts(607))
+    roll, cmd = advance(roll, Facts(608))
     assert cmd == Deploy("b")
 
 

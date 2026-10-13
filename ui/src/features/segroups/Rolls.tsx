@@ -32,6 +32,7 @@ const PHASE_LABEL: Record<string, string> = {
   reapplying: "Applying configuration",
   settling: "Checking health",
   retiring: "Retiring old engine",
+  reapplying_after: "Applying configuration again",
   settling_after: "Checking health again",
   done: "Replaced",
 };

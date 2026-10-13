@@ -149,7 +149,7 @@ class AutoscaleRollActions:
                 return machine.Facts(now, deployed=str(created[-1]))
             case machine.Phase.AWAITING_ENROLLMENT:
                 return await self._enrollment(ctx, step, jobs, now)
-            case machine.Phase.REAPPLYING:
+            case machine.Phase.REAPPLYING | machine.Phase.REAPPLYING_AFTER:
                 job = await self._job(jobs.get("reapply_job"))
                 done = job is not None and job.state == JobState.SUCCEEDED.value
                 return machine.Facts(now, reapplied=done)

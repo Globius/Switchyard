@@ -154,6 +154,14 @@ describe("Admin > Controller", () => {
     expect(await screen.findByText("No matches")).toBeInTheDocument();
   });
 
+  it("does not warn about the certificate when the FQDN is an IP address", async () => {
+    state = { ...BASE, fqdn: "10.40.0.10", public_url: "https://10.40.0.10" };
+    renderIt();
+    await screen.findByText("https://10.40.0.10");
+    expect(screen.queryByText(/does not cover/)).not.toBeInTheDocument();
+    expect(screen.getByText(/The FQDN is an IP address/)).toBeInTheDocument();
+  });
+
   it("shows the countdown and the old-address confirmation link, and reverts now", async () => {
     state = {
       ...BASE,

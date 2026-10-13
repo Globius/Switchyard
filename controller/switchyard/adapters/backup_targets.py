@@ -323,24 +323,41 @@ class SftpStore:
         """Create the store; nothing connects until the first call."""
         self._t, self._key_pem, self._timeout = target, private_key_pem, timeout
 
+    #: Host key algorithm families, tried in turn. The server presents the first family it shares
+    #: with us, so a fingerprint of another key type than that one would never match; each family
+    #: is tried until the pinned key is the one offered.
+    _HOST_KEY_FAMILIES: tuple[tuple[str, ...], ...] = (
+        ("ssh-ed25519",),
+        ("ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521"),
+        ("rsa-sha2-512", "rsa-sha2-256", "ssh-rsa"),
+    )
+
     async def _session(self) -> tuple[asyncssh.SSHClientConnection, asyncssh.SFTPClient]:
         t = self._t
         try:
             key = asyncssh.import_private_key(self._key_pem)
-            conn, _ = await asyncio.wait_for(
-                asyncssh.create_connection(
-                    lambda: _PinnedKeyClient(t.host_key_sha256),
-                    t.host,
-                    t.port,
-                    username=t.username,
-                    client_keys=[key],
-                    known_hosts=(),
-                    password=None,
-                    agent_path=None,
-                ),
-                self._timeout,
-            )
-            return conn, await conn.start_sftp_client()
+            refused: asyncssh.Error | None = None
+            for family in self._HOST_KEY_FAMILIES:
+                try:
+                    conn, _ = await asyncio.wait_for(
+                        asyncssh.create_connection(
+                            lambda: _PinnedKeyClient(t.host_key_sha256),
+                            t.host,
+                            t.port,
+                            username=t.username,
+                            client_keys=[key],
+                            known_hosts=(),
+                            password=None,
+                            agent_path=None,
+                            server_host_key_algs=list(family),
+                        ),
+                        self._timeout,
+                    )
+                except (asyncssh.HostKeyNotVerifiable, asyncssh.KeyExchangeFailed) as exc:
+                    refused = exc  # not this key type; try the next family
+                    continue
+                return conn, await conn.start_sftp_client()
+            raise refused or asyncssh.HostKeyNotVerifiable("no host key family matched")
         except (asyncssh.Error, OSError, TimeoutError) as exc:
             raise BackupTargetError(f"SFTP failed: {type(exc).__name__}: {exc}") from exc
 

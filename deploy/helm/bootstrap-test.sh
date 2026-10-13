@@ -54,7 +54,6 @@ if ! BAO secrets list 2>/dev/null | grep -q '^pki/'; then
     max_ttl=168h ttl=24h >/dev/null
   $K -n "$NS" run policy --rm -i --restart=Never --quiet --image="$IMG" --image-pull-policy=IfNotPresent \
     --command -- syctl openbao-policy --shared kv/se/ > "$T/policy.hcl"
-  printf '\npath "pki/sign/agents" { capabilities = ["update"] }\n' >> "$T/policy.hcl"
   kn exec -i openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN="$ROOT" bao policy write switchyard-controller - < "$T/policy.hcl" >/dev/null
   BAO auth enable approle >/dev/null 2>&1 || true
   BAO write auth/approle/role/switchyard-controller token_policies=switchyard-controller >/dev/null

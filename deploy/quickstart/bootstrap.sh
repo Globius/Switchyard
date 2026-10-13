@@ -74,7 +74,6 @@ if [ ! -s secrets/ca.pem ]; then
     max_ttl=168h ttl=24h >/dev/null
 fi
 docker run --rm --entrypoint syctl "$IMG" openbao-policy --shared kv/se/ > secrets/policy.hcl
-printf '\npath "pki/sign/agents" { capabilities = ["update"] }\n' >> secrets/policy.hcl
 BAO policy write switchyard-controller - < secrets/policy.hcl >/dev/null
 BAO auth enable approle >/dev/null 2>&1 || true
 BAO write auth/approle/role/switchyard-controller token_policies=switchyard-controller >/dev/null
