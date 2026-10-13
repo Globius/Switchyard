@@ -48,3 +48,14 @@ def test_schema() -> None:
     assert schema_state("0041", "0041", known) == "current"
     assert schema_state("0040", "0041", known) == "pending"
     assert schema_state("0044", "0041", known) == "newer"
+
+
+def test_backup_age() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from switchyard.domain.versions import check_backup
+
+    now = datetime(2026, 10, 13, tzinfo=UTC)
+    assert [f.code for f in check_backup(None, now)] == ["backup_missing"]
+    assert [f.code for f in check_backup(now - timedelta(days=9), now)] == ["backup_stale"]
+    assert check_backup(now - timedelta(days=2), now) == []

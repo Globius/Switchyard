@@ -254,6 +254,13 @@ for _path in (
     ROUTES[("GET", _path)] = READ
 ROUTES[("GET", "/system/controller")] = ("manage", "controller")
 ROUTES[("GET", "/system/upgrade/check")] = ("manage", "controller")
+ROUTES[("POST", "/system/backups/verify")] = ("manage", "controller")
+ROUTES[("POST", "/system/backups")] = ("manage", "controller")
+ROUTES[("GET", "/system/backups")] = ("manage", "controller")
+ROUTES[("POST", "/system/backup-targets/{name}/test")] = ("manage", "controller")
+ROUTES[("DELETE", "/system/backup-targets/{name}")] = ("manage", "controller")
+ROUTES[("POST", "/system/backup-targets")] = ("manage", "controller")
+ROUTES[("GET", "/system/backup-targets")] = ("manage", "controller")
 for _method, _path in (
     ("GET", "/system/controller/members"),
     ("POST", "/system/controller/members"),
@@ -337,6 +344,13 @@ BODIES: dict[tuple[str, str], Any] = {
     ("POST", "/tenants/{t}/certificates/import"): {"name": "c1", "pem": "x"},
     ("POST", "/tenants/{t}/certificates/import-ca"): {"name": "ca1", "pem": "x"},
     ("PATCH", "/system/settings"): {"allow_lxc_guests": False},
+    ("POST", "/system/backup-targets"): {
+        "name": "bk",
+        "passphrase_ref": "r/p",
+        "target": {"kind": "local"},
+    },
+    ("POST", "/system/backups"): {"target": "bk"},
+    ("POST", "/system/backups/verify"): {"target": "bk", "archive": "x.syb"},
     ("POST", "/system/controller/members"): {
         "name": "ctl-x",
         "address": "10.0.0.13",

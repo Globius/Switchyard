@@ -1478,3 +1478,35 @@ UPGRADE_CHECK = {
         }
     ],
 }
+
+
+BACKUP_TARGET = {
+    "name": "nightly",
+    "target": {
+        "kind": "s3",
+        "endpoint": "https://s3.example.test",
+        "region": "us-east-1",
+        "bucket": "sy-backups",
+        "prefix": "controller",
+        "access_key_ref": "secret/backup/access-key",
+        "secret_key_ref": "secret/backup/secret-key",
+    },
+    "passphrase_ref": "secret/backup/passphrase",
+    "keep": 14,
+}
+
+BACKUP_RUN = {
+    "id": "0190a5f2-0000-7000-8000-000000000010",
+    "target": "nightly",
+    "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+    "status": "ok",
+    "error": None,
+    "size_bytes": 48211,
+    "sha256": "9f2c0e5c1d6b8a7e3f4a5b6c7d8e9f00112233445566778899aabbccddeeff00",
+    "controller_version": "0.1.0",
+    "schema_revision": "0046",
+    "tenants": 3,
+    "reason": "pre-upgrade",
+    "actor": "user:admin",
+    "created_at": "2026-10-13T04:00:00+00:00",
+}

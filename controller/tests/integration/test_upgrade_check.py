@@ -91,7 +91,8 @@ async def test_a_database_from_a_newer_release_is_an_error(
     root = await rig.token(Role.SYSTEM_ADMIN)
     body = (await rig.client.get(f"{V1}/system/upgrade/check", headers=root)).json()
     assert body["schema_state"] == "newer"
-    assert [f["code"] for f in body["findings"]] == ["schema_newer_than_code"]
+    codes = [f["code"] for f in body["findings"]]
+    assert "schema_newer_than_code" in codes and "backup_missing" in codes
 
 
 async def test_only_system_administrators_may_check(rig: Rig) -> None:

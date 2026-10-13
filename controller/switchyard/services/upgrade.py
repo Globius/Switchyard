@@ -10,7 +10,8 @@ only (permission ``manage controller``).
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from alembic.script import ScriptDirectory
 from sqlalchemy import text
@@ -19,9 +20,12 @@ from switchyard import __version__
 from switchyard.db.migrate import alembic_config
 from switchyard.db.ops_models import EngineStatusRow
 from switchyard.db.tenancy import admin_session
-from switchyard.domain.versions import Compat, Finding, check_agent, schema_state
+from switchyard.domain.versions import Compat, Finding, check_agent, check_backup, schema_state
 from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
+
+if TYPE_CHECKING:
+    from switchyard.services.backup import BackupService
 
 #: What this release supports. Raise ``recommended_min_agent`` when a release makes older agents
 #: second-class; raise ``min_agent`` only when a bundle format is dropped (ADR 0205 section 2).
@@ -58,10 +62,16 @@ class UpgradeCheck:
 class UpgradeService:
     """Builds the upgrade check from the database and the stored engine status."""
 
-    def __init__(self, db: Databases, latest_version: str | None = None) -> None:
-        """``latest_version`` overrides the newest known release (the release feed supplies it)."""
+    def __init__(
+        self,
+        db: Databases,
+        latest_version: str | None = None,
+        backup: "BackupService | None" = None,
+    ) -> None:
+        """`latest_version` overrides the newest known release; `backup` adds backup-age advice."""
         self._db = db
         self._latest = latest_version
+        self._backup = backup
 
     async def check(self, principal: Principal) -> UpgradeCheck:
         """Compare the controller, its schema and every engine's agent with the newest release.
@@ -106,6 +116,8 @@ class UpgradeService:
             )
         for e in engines:
             findings.extend(check_agent(e.agent_version or "", latest, COMPAT, e.name))
+        if self._backup is not None:
+            findings.extend(check_backup(await self._backup.last_ok(), datetime.now(UTC)))
         return UpgradeCheck(__version__, latest, current, head, state, engines, findings)
 
 

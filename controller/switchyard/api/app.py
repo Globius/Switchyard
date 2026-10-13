@@ -18,6 +18,7 @@ from collections.abc import AsyncIterator, Callable
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import parse_qs, urlencode
 from uuid import UUID
@@ -195,12 +196,19 @@ from switchyard.api.schemas import (
     VirtualServiceStatusRead,
 )
 from switchyard.api.stream_models import EVENTS
-from switchyard.api.upgrade_models import UpgradeCheckRead
+from switchyard.api.upgrade_models import (
+    BackupRunIn,
+    BackupRunRead,
+    BackupTargetTestRead,
+    BackupVerifyIn,
+    UpgradeCheckRead,
+)
 from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain import crs, permissions
+from switchyard.domain.backup import BackupTargetConfig
 from switchyard.domain.changes import (
     COLLECTION,
     Action,
@@ -222,6 +230,7 @@ from switchyard.services import principals
 from switchyard.services.acme_providers import AcmeProviders
 from switchyard.services.alerts import EVENT_ACTIONS, AlertService
 from switchyard.services.autoscale import Autoscaler
+from switchyard.services.backup import BackupService
 from switchyard.services.break_glass import BreakGlassService, BreakGlassStatus
 from switchyard.services.captures import PacketCaptures
 from switchyard.services.cert_requests import CertificateRequests, IssueRequest
@@ -321,6 +330,7 @@ class ApiServices:
     quota_requests: QuotaRequests = None  # type: ignore[assignment]
     controller_members: ControllerMembers = None  # type: ignore[assignment]
     upgrade: UpgradeService = None  # type: ignore[assignment]
+    backup: BackupService = None  # type: ignore[assignment]
     dns_records: DnsRecordSync | None = None
     autoscaler: Autoscaler | None = None
     captures: PacketCaptures = None  # type: ignore[assignment]
@@ -367,6 +377,9 @@ def build_services(
         )
     engines = EngineService(db)
     dns_providers = DnsProviders(db, secrets) if writer is not None else None
+    backup = BackupService(
+        db, secrets, Path(os.environ.get("SWITCHYARD_BACKUP_DIR", "/var/lib/switchyard/backups"))
+    )
     return ApiServices(
         db=db,
         tenants=TenantService(db),
@@ -407,7 +420,8 @@ def build_services(
         devices=devices,
         quota_requests=QuotaRequests(db),
         controller_members=ControllerMembers(db),
-        upgrade=UpgradeService(db),
+        upgrade=UpgradeService(db, backup=backup),
+        backup=backup,
     )
 
 
@@ -4440,6 +4454,103 @@ def create_app(
         return asdict(view)
 
     @router.get(
+        "/system/backup-targets",
+        tags=["system"],
+        summary="Where configuration backups are written",
+        response_model=list[BackupTargetConfig],
+        responses=_ok([ex.BACKUP_TARGET]),
+    )
+    async def list_backup_targets(who: Who, svc: Services) -> list[BackupTargetConfig]:
+        """Destinations: local disk, S3-compatible storage or FTP/FTPS.
+
+        Credentials are
+        `secret_ref`s into the secrets backend, never values. Requires a system administrator.
+        """
+        return await svc.backup.list_targets(who)
+
+    @router.post(
+        "/system/backup-targets",
+        status_code=201,
+        tags=["system"],
+        summary="Add a backup destination",
+        response_model=BackupTargetConfig,
+        responses=_ok(ex.BACKUP_TARGET, 201) | VALIDATION_RESPONSE,
+    )
+    async def create_backup_target(
+        body: BackupTargetConfig, who: Who, svc: Services
+    ) -> BackupTargetConfig:
+        """Add a destination.
+
+        Archives are encrypted with the secret at `passphrase_ref` before they leave the
+        controller. `keep` is how many archives to retain; older ones are deleted after each
+        backup. Keep the passphrase somewhere other than the backup: without it an archive
+        cannot be opened.
+        """
+        return await svc.backup.create_target(who, body.model_dump(), request_id=_rid())
+
+    @router.delete(
+        "/system/backup-targets/{name}",
+        status_code=204,
+        tags=["system"],
+        summary="Remove a backup destination",
+        responses=VALIDATION_RESPONSE,
+    )
+    async def delete_backup_target(name: str, who: Who, svc: Services) -> Response:
+        """Archives already written stay where they are."""
+        await svc.backup.delete_target(who, name, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.post(
+        "/system/backup-targets/{name}/test",
+        tags=["system"],
+        summary="Check that a destination works",
+        response_model=BackupTargetTestRead,
+        responses=_ok({"archives": ["switchyard-0.1.0-20261013T040000Z.syb"]}),
+    )
+    async def test_backup_target(name: str, who: Who, svc: Services) -> dict[str, Any]:
+        """Connects with the stored credentials and lists the archives. Writes nothing."""
+        return {"archives": await svc.backup.test_target(who, name)}
+
+    @router.get(
+        "/system/backups",
+        tags=["system"],
+        summary="Backup attempts, newest first",
+        response_model=list[BackupRunRead],
+        responses=_ok([ex.BACKUP_RUN]),
+    )
+    async def list_backups(who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Successful and failed runs, including the `pre-upgrade` ones."""
+        return [_backup_json(r) for r in await svc.backup.list_runs(who)]
+
+    @router.post(
+        "/system/backups",
+        status_code=201,
+        tags=["system"],
+        summary="Back up the configuration now",
+        response_model=BackupRunRead,
+        responses=_ok(ex.BACKUP_RUN, 201) | VALIDATION_RESPONSE,
+    )
+    async def run_backup(body: BackupRunIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Write the desired state of every tenant, encrypted, to the named destination.
+
+        This is not a database backup: users, tokens and the audit log come back from
+        pgBackRest. `409` when the destination or the passphrase cannot be used.
+        """
+        return _backup_json(
+            await svc.backup.run(who, body.target, reason=body.reason, request_id=_rid())
+        )
+
+    @router.post(
+        "/system/backups/verify",
+        tags=["system"],
+        summary="Open an archive and report what it holds",
+        responses=_ok({"controller_version": "0.1.0", "tenants": []}),
+    )
+    async def verify_backup(body: BackupVerifyIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Downloads, decrypts and counts the objects. Changes nothing."""
+        return await svc.backup.verify(who, body.target, body.archive)
+
+    @router.get(
         "/system/upgrade/check",
         tags=["system"],
         summary="Versions of the controller, database and engines, with advice",
@@ -6038,3 +6149,9 @@ def create_app(
     app.include_router(router)
     app.openapi = lambda: _problem_json_openapi(app)  # type: ignore[method-assign]
     return app
+
+
+def _backup_json(r: Any) -> dict[str, Any]:
+    out = asdict(r)
+    out["id"], out["created_at"] = str(r.id), r.created_at.isoformat()
+    return out

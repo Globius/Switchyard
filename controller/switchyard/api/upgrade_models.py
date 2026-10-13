@@ -42,3 +42,41 @@ class UpgradeCheckRead(ApiModel):
     schema_state: Literal["current", "pending", "newer"]
     engines: list[EngineVersionRead]
     findings: list[FindingRead]
+
+
+class BackupRunRead(ApiModel):
+    """One backup attempt. A failed run keeps the reason but never any credential."""
+
+    id: str
+    target: str
+    archive: str | None
+    status: Literal["ok", "failed"]
+    error: str | None
+    size_bytes: int
+    sha256: str | None
+    controller_version: str
+    schema_revision: str | None
+    tenants: int
+    reason: str
+    actor: str
+    created_at: str
+
+
+class BackupRunIn(ApiModel):
+    """Which destination to back up to."""
+
+    target: str = Field(description="The name of a backup target.")
+    reason: Literal["manual", "pre-upgrade", "scheduled"] = "manual"
+
+
+class BackupVerifyIn(ApiModel):
+    """Which archive to open."""
+
+    target: str
+    archive: str = Field(description="An archive name as listed by the target, `.syb`.")
+
+
+class BackupTargetTestRead(ApiModel):
+    """The archives found at a destination."""
+
+    archives: list[str]

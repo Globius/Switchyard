@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Literal
 
 Severity = Literal["info", "warning", "error"]
@@ -151,3 +152,34 @@ def schema_state(
     if current is not None and current not in known:
         return "newer"
     return "pending"
+
+
+def check_backup(last_ok: datetime | None, now: datetime, max_age_days: int = 7) -> list[Finding]:
+    """Advise a backup before upgrading when there is none or the latest is old.
+
+    Example:
+        >>> from datetime import UTC, timedelta
+        >>> now = datetime(2026, 10, 13, tzinfo=UTC)
+        >>> [f.code for f in check_backup(None, now)]
+        ['backup_missing']
+        >>> check_backup(now - timedelta(days=1), now)
+        []
+    """
+    if last_ok is None:
+        return [
+            Finding(
+                "backup_missing", "warning", "backup",
+                "No configuration backup has been taken.",
+                "Add a backup target and run a backup before upgrading.",
+            )
+        ]  # fmt: skip
+    age = now - last_ok
+    if age > timedelta(days=max_age_days):
+        return [
+            Finding(
+                "backup_stale", "warning", "backup",
+                f"The latest backup is {age.days} days old.",
+                "Run a backup before upgrading.",
+            )
+        ]  # fmt: skip
+    return []
