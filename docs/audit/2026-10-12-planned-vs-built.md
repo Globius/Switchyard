@@ -303,3 +303,16 @@ tests only.
 | `docs/design/08-...` and `09-...` | "Planning only" | Almost all blocks merged | Left alone; 09's wave table is history |
 | `docs/design/ui-handoff/` | Only a README in Git | `design-source/` and screenshots live outside Git | Noted; the v53 handoff cannot be compared from the repo |
 | `docs/design/07-...` Summary | "Screens that match: 9 … differ 18" | Superseded by its own "Status after the build threads" and later sections | Left alone |
+
+## Update: four "missing" items built (same day)
+
+After this audit four items of the Missing table were built in one merge request. By this document's own words they are **built, not
+lab-tested**: their tests use real Dex, HAProxy and PostgreSQL containers (and, for the agent, the real Go binary), but there is no
+lab report with real engines, a real RADIUS server or real Windows and macOS laptops yet.
+
+| Item | Now | Where |
+| --- | --- | --- |
+| RADIUS login provider | built, not lab-tested | ADR 0195; `adapters/radius.py`, `gate/`, `render/broker.py`; `test_radius.py`, `test_gate.py`, `test_gate_dex.py` |
+| Step-up / conditional flows (nFactor style) | built, not lab-tested | ADR 0195; `domain/models.py` (`LoginFlow`, `min_factors`), `render/haproxy.py`; golden/26-step-up |
+| ZTNA gateway, agent-based device posture | built, not lab-tested | ADR 0196; `posture-agent/`, `services/devices.py`; `test_devices.py`, `test_posture_agent_e2e.py` |
+| WAF API-schema protection | built, not lab-tested | ADR 0197; `render/apischema.py`, `importers/openapi.py`; golden/27; `test_api_schema_runtime.py` |

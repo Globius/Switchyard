@@ -106,6 +106,12 @@ from switchyard.api.schemas import (
     ControllerRead,
     CrsCatalogueRead,
     DeployIn,
+    DeviceEnrolledOut,
+    DeviceEnrollIn,
+    DeviceEnrollmentIn,
+    DeviceRead,
+    DeviceReportIn,
+    DeviceReportOut,
     DiscoveryGroup,
     DnsNameMatchRead,
     DnsProviderIn,
@@ -189,6 +195,7 @@ from switchyard.api.schemas import (
     VirtualServiceStatusRead,
 )
 from switchyard.api.stream_models import EVENTS
+from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db.audit_actions import CATALOG
 from switchyard.db.tenancy import admin_session, tenant_session
@@ -227,6 +234,11 @@ from switchyard.services.changesets import (
 from switchyard.services.context import Databases, Principal
 from switchyard.services.controller_members import ControllerMembers
 from switchyard.services.controller_settings import ControllerSettings
+from switchyard.services.devices import (
+    DeviceAuthError,
+    DeviceRequestError,
+    DeviceService,
+)
 from switchyard.services.dns_providers import DnsProviders
 from switchyard.services.dns_records import DnsRecordSync
 from switchyard.services.engines import EngineDetail, EngineService
@@ -303,6 +315,7 @@ class ApiServices:
     controller: ControllerSettings = None  # type: ignore[assignment]
     avi_import: AviImportService = None  # type: ignore[assignment]
     kubernetes: KubernetesClusters | None = None
+    devices: DeviceService | None = None
     quota_requests: QuotaRequests = None  # type: ignore[assignment]
     controller_members: ControllerMembers = None  # type: ignore[assignment]
     dns_records: DnsRecordSync | None = None
@@ -326,6 +339,7 @@ def build_services(
     alerts: AlertService | None = None,
     email_configured: bool = False,
     gslb: GslbService | None = None,
+    devices: DeviceService | None = None,
     autoscaler: Autoscaler | None = None,
 ) -> ApiServices:
     """Wire the services over one set of database handles.
@@ -387,6 +401,7 @@ def build_services(
         kubernetes=KubernetesClusters(db, secrets, ChangeSetService(db))
         if writer is not None
         else None,
+        devices=devices,
         quota_requests=QuotaRequests(db),
         controller_members=ControllerMembers(db),
     )
@@ -1315,7 +1330,7 @@ def _rendered_route(router: APIRouter, slug: str, object_type: ObjectType) -> No
         if not any(o.id == object_id for o in getattr(snapshot, COLLECTION[object_type])):
             raise ApiError(404, f"{slug} {object_id} not found")
         try:
-            fragments = rendered_fragments(snapshot, object_type, object_id)
+            fragments = rendered_fragments(snapshot, object_type, object_id, broker_url())
         except RenderError as exc:
             raise ApiError(422, f"cannot render: {exc}") from exc
         return RenderedConfig(items=[RenderedFragment(**f.__dict__) for f in fragments])
@@ -5028,6 +5043,171 @@ def create_app(
             "bundle_public_key": result.bundle_public_key,
             "renewal_token": result.renewal_token,
             "not_after": result.not_after,
+        }
+
+    # device posture (ADR 0196)
+    def device_json(row: Any) -> dict[str, Any]:
+        return {
+            "id": str(row.id),
+            "name": row.name,
+            "owner": row.owner,
+            "policy_id": str(row.policy_id),
+            "status": row.status,
+            "compliant": row.compliant,
+            "failures": list(row.failures or []),
+            "facts": row.facts,
+            "last_report_at": row.last_report_at,
+            "cert_serial": row.cert_serial,
+            "cert_not_after": row.cert_not_after,
+            "enrolled_at": row.enrolled_at,
+            "revoked_at": row.revoked_at,
+        }
+
+    def device_service(svc: ApiServices) -> DeviceService:
+        if svc.devices is None:
+            raise ApiError(503, "device enrollment is not configured on this controller")
+        return svc.devices
+
+    @router.post(
+        "/tenants/{t}/device-enrollments",
+        status_code=201,
+        tags=["devices"],
+        summary="Create a device enrollment token",
+        response_model=EnrollmentToken,
+        responses=_ok(ex.DEVICE_ENROLLMENT, 201) | VALIDATION_RESPONSE,
+    )
+    async def device_enrollment(
+        body: DeviceEnrollmentIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Create a one-time token (shown once, valid 24 hours) for `sy-posture enroll`."""
+        token, expires = await device_service(svc).create_enrollment(
+            who, tenant.id, body.policy_id, body.label, request_id=_rid()
+        )
+        return {"token": token, "expires_at": expires}
+
+    @router.get(
+        "/tenants/{t}/devices",
+        tags=["devices"],
+        summary="List enrolled devices",
+        response_model=list[DeviceRead],
+        responses=_ok(ex.DEVICES["items"]),
+    )
+    async def list_devices(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Every device of the tenant with its latest posture verdict."""
+        return [device_json(r) for r in await device_service(svc).list_devices(who, tenant.id)]
+
+    @router.get(
+        "/tenants/{t}/devices/{device}",
+        tags=["devices"],
+        summary="Get a device",
+        response_model=DeviceRead,
+        responses=_ok(ex.DEVICE),
+    )
+    async def get_device(device: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, Any]:
+        """One device, including the facts of its last report. `404` if it is not in the tenant."""
+        return device_json(await device_service(svc).get_device(who, tenant.id, device))
+
+    @router.post(
+        "/tenants/{t}/devices/{device}/revoke",
+        tags=["devices"],
+        summary="Revoke a device",
+        response_model=DeviceRead,
+        responses=_ok(ex.DEVICE) | VALIDATION_RESPONSE,
+    )
+    async def revoke_device(
+        device: UUID, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Stop issuing certificates to the device. The one it holds works until it expires."""
+        service = device_service(svc)
+        await service.revoke(who, tenant.id, device, request_id=_rid())
+        return device_json(await service.get_device(who, tenant.id, device))
+
+    @router.delete(
+        "/tenants/{t}/devices/{device}",
+        status_code=204,
+        tags=["devices"],
+        summary="Remove a device",
+        responses=VALIDATION_RESPONSE,
+    )
+    async def delete_device(device: UUID, tenant: Tenant, who: Who, svc: Services) -> Response:
+        """Forget the device so its name can be reused (revoke it first to stop certificates)."""
+        await device_service(svc).revoke(who, tenant.id, device, remove=True, request_id=_rid())
+        return Response(status_code=204)
+
+    @router.post(
+        "/device/enroll",
+        tags=["devices"],
+        summary="Trade an enrollment token and public key for a device identity",
+        response_model=DeviceEnrolledOut,
+        responses=_ok(ex.DEVICE_ENROLLED, problems=False),
+    )
+    async def device_enroll(body: DeviceEnrollIn, svc: Services) -> dict[str, Any]:
+        """Called by `sy-posture enroll`; the one-time token is the credential."""
+        try:
+            result = await device_service(svc).enroll(
+                body.token, body.name, body.public_key, body.owner
+            )
+        except DeviceAuthError as exc:
+            raise ApiError(401, str(exc), headers={"WWW-Authenticate": "Bearer"}) from exc
+        except DeviceRequestError as exc:
+            raise ApiError(422, str(exc)) from exc
+        return {
+            "device_id": str(result.device_id),
+            "tenant": result.tenant,
+            "name": result.name,
+            "policy": result.policy,
+            "cert_ttl_h": result.cert_ttl_h,
+        }
+
+    @router.post(
+        "/device/report",
+        tags=["devices"],
+        summary="Report a device's posture and get a certificate",
+        response_model=DeviceReportOut,
+        responses=_ok(ex.DEVICE_REPORT_OUT, problems=False),
+    )
+    async def device_report(
+        body: DeviceReportIn,
+        request: Request,
+        svc: Services,
+        x_device_id: Annotated[UUID, Header(description="The device id from enrollment.")],
+        x_device_timestamp: Annotated[
+            int, Header(description="Milliseconds since the epoch; must rise with every report.")
+        ],
+        x_device_signature: Annotated[
+            str,
+            Header(
+                description="Base64 Ed25519 signature over method, path, timestamp and the "
+                "SHA-256 of the body (see ADR 0196)."
+            ),
+        ],
+    ) -> dict[str, Any]:
+        """Called by the device agent on a schedule; the signature is the credential.
+
+        The body is parsed for the documentation above and checked again by the service from
+        the exact bytes that were signed.
+        """
+        del body
+        try:
+            result = await device_service(svc).report(
+                x_device_id,
+                timestamp_ms=x_device_timestamp,
+                signature=x_device_signature,
+                method=request.method,
+                path=request.url.path,
+                body=await request.body(),
+            )
+        except DeviceAuthError as exc:
+            raise ApiError(401, str(exc), headers={"WWW-Authenticate": "Bearer"}) from exc
+        except (DeviceRequestError, PkiError) as exc:
+            raise ApiError(422, str(exc)) from exc
+        return {
+            "compliant": result.compliant,
+            "failures": result.failures,
+            "certificate": result.certificate,
+            "ca": result.ca,
+            "not_after": result.not_after,
+            "next_report_s": result.next_report_s,
         }
 
     # certificates

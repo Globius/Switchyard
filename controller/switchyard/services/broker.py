@@ -49,7 +49,7 @@ async def build_broker_files(
 
 
 def write_broker_files(files: dict[str, str], out: Path) -> list[str]:
-    """Write ``files`` under ``out`` (owner-only), drop stale ``dex/`` files, return the changes.
+    """Write ``files`` under ``out`` (owner-only), drop stale ``dex/``/``gate/`` files.
 
     Example:
         >>> import tempfile
@@ -71,11 +71,12 @@ def write_broker_files(files: dict[str, str], out: Path) -> list[str]:
             handle.write(content)
         tmp.replace(target)
         changed.append(rel)
-    directory = out / "dex"
-    if directory.is_dir():
-        for stale in sorted(directory.iterdir()):
-            rel = f"dex/{stale.name}"
-            if stale.is_file() and not stale.name.startswith(".") and rel not in files:
-                stale.unlink()
-                changed.append(rel)
+    for sub in ("dex", "gate"):
+        directory = out / sub
+        if directory.is_dir():
+            for stale in sorted(directory.iterdir()):
+                rel = f"{sub}/{stale.name}"
+                if stale.is_file() and not stale.name.startswith(".") and rel not in files:
+                    stale.unlink()
+                    changed.append(rel)
     return changed

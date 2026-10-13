@@ -113,6 +113,19 @@ agent:
     - go vet ./...
     - go test ./...
 
+# The device posture agent (ADR 0196): standard library only, builds for the three desktop systems.
+posture-agent:
+  stage: check
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26
+  script:
+    - cd posture-agent
+    - test -z "$(gofmt -l .)"
+    - go vet ./...
+    - go test ./...
+    - GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/sy-posture
+    - GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/sy-posture
+    - GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/sy-posture
+
 se-image:
   stage: check
   image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27

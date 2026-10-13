@@ -40,6 +40,7 @@ from pydantic import (
 
 from switchyard.domain import models as dm
 from switchyard.domain.changes import Action, DraftStatus, ObjectType
+from switchyard.domain.posture import PostureFacts
 from switchyard.domain.snapshot import Snapshot
 from switchyard.domain.telemetry import (
     AccessLogEntry,
@@ -309,6 +310,7 @@ OBJECT_MODELS: dict[ObjectType, tuple[type[BaseModel], ...]] = {
         dm.JwtPolicySet,
         dm.ClientCertPolicySet,
         dm.DirectoryPolicySet,
+        dm.PosturePolicySet,
     ),
     ObjectType.ROUTING_PROFILE: (dm.VrrpProfile, dm.BgpProfile),
 }
@@ -597,6 +599,7 @@ PermissionObject = Literal[
     "certificate",
     "change_set",
     "controller",
+    "device",
     "dns_provider",
     "draft",
     "engine",
@@ -1686,6 +1689,74 @@ class EnrollIn(ApiModel):
 
     token: str = Field(max_length=200)
     csr: str = Field(max_length=16384, description="PEM certificate request made by the agent.")
+
+
+class DeviceEnrollmentIn(ApiModel):
+    """Body of ``POST /tenants/{t}/device-enrollments``."""
+
+    policy_id: UUID = Field(
+        description="The `posture` policy set the device will be checked against."
+    )
+    label: str = Field(default="", max_length=80, description="Who or what the token is for.")
+
+
+class DeviceEnrollIn(ApiModel):
+    """Body of ``POST /device/enroll`` (no bearer token: the enrollment token is the credential)."""
+
+    token: str = Field(max_length=200)
+    name: str = Field(max_length=63, description="Device name, unique in the tenant.")
+    public_key: str = Field(
+        max_length=64, description="Base64 of the device's 32-byte Ed25519 public key."
+    )
+    owner: str = Field(default="", max_length=120, description="The person the device belongs to.")
+
+
+class DeviceEnrolledOut(ApiModel):
+    """The identity a device agent keeps after enrolling."""
+
+    device_id: UUID
+    tenant: str
+    name: str
+    policy: str
+    cert_ttl_h: int = Field(description="Lifetime of the certificates the device will receive.")
+
+
+class DeviceReportIn(ApiModel):
+    """Body of ``POST /device/report``: the measured facts and an optional certificate request."""
+
+    facts: PostureFacts = Field(description="What the agent measured. Unknown fields are refused.")
+    csr: str | None = Field(
+        default=None, max_length=16384, description="PEM request for a client certificate."
+    )
+
+
+class DeviceReportOut(ApiModel):
+    """The verdict on a posture report and, if it passed, the new certificate."""
+
+    compliant: bool
+    failures: list[str] = Field(description="Codes of the requirements that failed.")
+    certificate: str | None = Field(description="Client certificate (PEM) when issued.")
+    ca: str | None = Field(description="The CA that signed it.")
+    not_after: datetime | None
+    next_report_s: int = Field(description="When to report next, in seconds.")
+
+
+class DeviceRead(ApiModel):
+    """An enrolled device."""
+
+    id: UUID
+    name: str
+    owner: str
+    policy_id: UUID
+    status: Literal["active", "revoked"]
+    compliant: bool | None = Field(description="`null` until the first report.")
+    failures: list[str]
+    facts: PostureFacts | None
+    last_report_at: datetime | None
+    cert_serial: str | None
+    cert_not_after: datetime | None
+    enrolled_at: datetime
+    revoked_at: datetime | None
 
 
 class CertMaterialIn(ApiModel):

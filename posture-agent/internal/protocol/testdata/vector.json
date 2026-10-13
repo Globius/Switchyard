@@ -1,0 +1,10 @@
+{
+  "seed_b64": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+  "public_key_b64": "ebVWLo/mVPlAeLES6KmLp5AfhTrmlb7X4OORC60ElmQ=",
+  "method": "POST",
+  "path": "/api/v1/device/report",
+  "timestamp_ms": 1760000000123,
+  "body": "{\"facts\":{\"os\":\"linux\",\"os_version\":\"6.8.0\",\"disk_encrypted\":true,\"firewall_enabled\":true}}",
+  "canonical": "POST\n/api/v1/device/report\n1760000000123\n7ba2a1c961ea6db2ae7b07a1bc3ff307987d894bfc6ae90bec9a6d6349aa617f",
+  "signature_b64": "8Fk253Es3Qf6xet2fNmujGspXXuV4RrDe/ZkvM23OabnQ+A01NJCDAys9t4H+OsXUr0z/ve5jVywPIh0TxWnDA=="
+}

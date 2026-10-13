@@ -25,6 +25,7 @@ from sqlalchemy import delete, func, select
 from switchyard.adapters.agent import AgentEngine, AgentError, AgentStatus, IpvsRealServer
 from switchyard.adapters.haproxy import HaproxyEngine, HaproxyError, ServerStatus
 from switchyard.adapters.secrets import SecretsReader
+from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db.models import TenantRow
 from switchyard.db.ops_models import EngineStatusRow, ServiceEngineRow
@@ -359,7 +360,7 @@ class StatusService:
             return out
         group_id = records[0].se_group_id
         try:
-            rendered = render_haproxy(snapshot, group_id)
+            rendered = render_haproxy(snapshot, group_id, broker_url())
         except (KeyError, RenderError, ValueError):
             return out
         if "frontend vs_" in rendered.files["haproxy/haproxy.cfg"]:
@@ -570,7 +571,7 @@ class StatusService:
             raise NotFoundError(f"engine {engine_id} does not serve this service")
         record = engines[index]
         group = next(g for g in snapshot.se_groups if g.id == service.se_group_id)
-        rendered = render_haproxy(snapshot, group.id)
+        rendered = render_haproxy(snapshot, group.id, broker_url())
         files = dict(rendered.files)
         if group.routing_profile_id is not None:
             slot = EngineSlot(record.name, index, record.mgmt_ip or "0.0.0.0")  # noqa: S104
@@ -589,7 +590,7 @@ class StatusService:
             auth_secret_refs(snapshot.for_se_group(group.id), group.id), "REDACTEDREDACTED"
         )
         with contextlib.suppress(RenderError):
-            files |= render_auth_files(snapshot, group.id, placeholders)
+            files |= render_auth_files(snapshot, group.id, placeholders, broker_url())
         with contextlib.suppress(RenderError):
             files |= jwt_key_files(snapshot, group.id)
         return record, rendered.fingerprint, files

@@ -503,7 +503,7 @@
       },
       "AccessRule": {
         "additionalProperties": false,
-        "description": "What a request needs before it reaches the origin.\n\nAttributes:\n    match: Requests the rule covers; the first rule that matches decides.\n    mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of\n        at least one of ``groups``) or ``email_domains`` (an address in one of the domains).",
+        "description": "What a request needs before it reaches the origin.\n\nAttributes:\n    match: Requests the rule covers; the first rule that matches decides.\n    mode: ``public`` (no login), ``login`` (any authenticated user), ``groups`` (a member of\n        at least one of ``groups``) or ``email_domains`` (an address in one of the domains).\n    posture: Device conditions (ADR 0138).\n    min_factors: The person must have passed at least this many factors of the directory's\n        login flow (ADR 0195); a session with fewer is sent to complete the next one.",
         "properties": {
           "email_domains": {
             "default": [],
@@ -531,6 +531,19 @@
               "query": [],
               "source_cidrs": []
             }
+          },
+          "min_factors": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Factors"
           },
           "mode": {
             "default": "login",
@@ -2329,6 +2342,179 @@
           "changed_fields"
         ],
         "title": "AllowListPolicySetRead",
+        "type": "object"
+      },
+      "ApiOperation": {
+        "additionalProperties": false,
+        "description": "One request the API accepts: a method and a path template (ADR 0197).\n\nAttributes:\n    method: HTTP method.\n    path: Path template such as ``/pets/{id}``; each ``{name}`` is a path parameter.\n    path_params: Types of the ``{name}`` parts (default: any non-empty segment without ``/``).\n    query: The query parameters the operation accepts; any other one is a violation unless the\n        schema allows unknown ones.\n    content_types: Media types a request body may have (empty: no check).\n    max_body_bytes: Largest ``Content-Length``; a chunked body is refused when this is set\n        (empty: the schema default).",
+        "properties": {
+          "content_types": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Content Types",
+            "type": "array"
+          },
+          "max_body_bytes": {
+            "anyOf": [
+              {
+                "maximum": 1073741824.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Body Bytes"
+          },
+          "method": {
+            "enum": [
+              "GET",
+              "HEAD",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE",
+              "OPTIONS"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "path": {
+            "pattern": "^(/([A-Za-z0-9._~-]{1,64}|\\{[A-Za-z_][A-Za-z0-9_]{0,31}\\})){1,16}$",
+            "title": "Path",
+            "type": "string"
+          },
+          "path_params": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ApiParam"
+            },
+            "maxItems": 16,
+            "title": "Path Params",
+            "type": "array"
+          },
+          "query": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ApiParam"
+            },
+            "maxItems": 32,
+            "title": "Query",
+            "type": "array"
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ],
+        "title": "ApiOperation",
+        "type": "object"
+      },
+      "ApiParam": {
+        "additionalProperties": false,
+        "description": "A parameter of an API operation: a query parameter, or a ``{name}`` of the path (ADR 0197).\n\nAttributes:\n    name: Parameter name.\n    kind: ``string`` (up to ``max_length`` characters), ``integer``, ``number``, ``boolean``,\n        ``uuid`` or ``enum`` (one of ``values``).\n    required: Query parameters only: the request must carry it (path parameters always do).\n    values: The allowed values of an ``enum``.\n    max_length: Longest accepted ``string`` value.",
+        "properties": {
+          "kind": {
+            "default": "string",
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean",
+              "uuid",
+              "enum"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_length": {
+            "default": 256,
+            "maximum": 2048.0,
+            "minimum": 1.0,
+            "title": "Max Length",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "values": {
+            "default": [],
+            "items": {
+              "pattern": "^[A-Za-z0-9._~-]{1,64}$",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ApiParam",
+        "type": "object"
+      },
+      "ApiSchema": {
+        "additionalProperties": false,
+        "description": "The requests an API accepts, as a positive security model for the WAF (ADR 0197).\n\nA request is checked in HAProxy before the WAF sees it: its method and path must match an\noperation, its query string may contain only that operation's parameters with values of the\nright type, its body type and size must fit. Everything else is a violation.\n\nAttributes:\n    mode: ``detect`` records the violation in the access log and lets the request through;\n        ``block`` refuses it (404 unknown path, 405 wrong method, 400 bad parameters, 411 or\n        413 body size, 415 body type).\n    operations: The accepted operations (at most 500).\n    base_path: Prefix of every operation (for example ``/v1``); requests outside it are\n        unknown operations.\n    allow_unknown_query: Accept query parameters the operation does not list.\n    max_body_bytes: Default largest body for operations that set none.",
+        "properties": {
+          "allow_unknown_query": {
+            "default": false,
+            "title": "Allow Unknown Query",
+            "type": "boolean"
+          },
+          "base_path": {
+            "default": "",
+            "pattern": "^(/[A-Za-z0-9._~-]{1,64}){0,4}$",
+            "title": "Base Path",
+            "type": "string"
+          },
+          "max_body_bytes": {
+            "anyOf": [
+              {
+                "maximum": 1073741824.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Body Bytes"
+          },
+          "mode": {
+            "default": "detect",
+            "enum": [
+              "detect",
+              "block"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "$ref": "#/components/schemas/ApiOperation"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "operations"
+        ],
+        "title": "ApiSchema",
         "type": "object"
       },
       "ApplyIn": {
@@ -6485,6 +6671,331 @@
         "title": "DeployIn",
         "type": "object"
       },
+      "DeviceEnrollIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /device/enroll`` (no bearer token: the enrollment token is the credential).",
+        "properties": {
+          "name": {
+            "description": "Device name, unique in the tenant.",
+            "maxLength": 63,
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "default": "",
+            "description": "The person the device belongs to.",
+            "maxLength": 120,
+            "title": "Owner",
+            "type": "string"
+          },
+          "public_key": {
+            "description": "Base64 of the device's 32-byte Ed25519 public key.",
+            "maxLength": 64,
+            "title": "Public Key",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 200,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "name",
+          "public_key"
+        ],
+        "title": "DeviceEnrollIn",
+        "type": "object"
+      },
+      "DeviceEnrolledOut": {
+        "additionalProperties": false,
+        "description": "The identity a device agent keeps after enrolling.",
+        "properties": {
+          "cert_ttl_h": {
+            "description": "Lifetime of the certificates the device will receive.",
+            "title": "Cert Ttl H",
+            "type": "integer"
+          },
+          "device_id": {
+            "format": "uuid",
+            "title": "Device Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "policy": {
+            "title": "Policy",
+            "type": "string"
+          },
+          "tenant": {
+            "title": "Tenant",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "tenant",
+          "name",
+          "policy",
+          "cert_ttl_h"
+        ],
+        "title": "DeviceEnrolledOut",
+        "type": "object"
+      },
+      "DeviceEnrollmentIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /tenants/{t}/device-enrollments``.",
+        "properties": {
+          "label": {
+            "default": "",
+            "description": "Who or what the token is for.",
+            "maxLength": 80,
+            "title": "Label",
+            "type": "string"
+          },
+          "policy_id": {
+            "description": "The `posture` policy set the device will be checked against.",
+            "format": "uuid",
+            "title": "Policy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy_id"
+        ],
+        "title": "DeviceEnrollmentIn",
+        "type": "object"
+      },
+      "DeviceRead": {
+        "additionalProperties": false,
+        "description": "An enrolled device.",
+        "properties": {
+          "cert_not_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Not After"
+          },
+          "cert_serial": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Serial"
+          },
+          "compliant": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`null` until the first report.",
+            "title": "Compliant"
+          },
+          "enrolled_at": {
+            "format": "date-time",
+            "title": "Enrolled At",
+            "type": "string"
+          },
+          "facts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostureFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "failures": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_report_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Report At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "policy_id": {
+            "format": "uuid",
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "revoked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "policy_id",
+          "status",
+          "compliant",
+          "failures",
+          "facts",
+          "last_report_at",
+          "cert_serial",
+          "cert_not_after",
+          "enrolled_at",
+          "revoked_at"
+        ],
+        "title": "DeviceRead",
+        "type": "object"
+      },
+      "DeviceReportIn": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /device/report``: the measured facts and an optional certificate request.",
+        "properties": {
+          "csr": {
+            "anyOf": [
+              {
+                "maxLength": 16384,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "PEM request for a client certificate.",
+            "title": "Csr"
+          },
+          "facts": {
+            "$ref": "#/components/schemas/PostureFacts",
+            "description": "What the agent measured. Unknown fields are refused."
+          }
+        },
+        "required": [
+          "facts"
+        ],
+        "title": "DeviceReportIn",
+        "type": "object"
+      },
+      "DeviceReportOut": {
+        "additionalProperties": false,
+        "description": "The verdict on a posture report and, if it passed, the new certificate.",
+        "properties": {
+          "ca": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The CA that signed it.",
+            "title": "Ca"
+          },
+          "certificate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Client certificate (PEM) when issued.",
+            "title": "Certificate"
+          },
+          "compliant": {
+            "title": "Compliant",
+            "type": "boolean"
+          },
+          "failures": {
+            "description": "Codes of the requirements that failed.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "next_report_s": {
+            "description": "When to report next, in seconds.",
+            "title": "Next Report S",
+            "type": "integer"
+          },
+          "not_after": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not After"
+          }
+        },
+        "required": [
+          "compliant",
+          "failures",
+          "certificate",
+          "ca",
+          "not_after",
+          "next_report_s"
+        ],
+        "title": "DeviceReportOut",
+        "type": "object"
+      },
       "DiffFile": {
         "additionalProperties": false,
         "description": "One rendered file that changes.",
@@ -6725,6 +7236,7 @@
               "mapping": {
                 "ldap": "#/components/schemas/LdapConnector",
                 "local": "#/components/schemas/LocalConnector",
+                "radius": "#/components/schemas/RadiusConnector",
                 "saml": "#/components/schemas/SamlConnector"
               },
               "propertyName": "type"
@@ -6738,9 +7250,22 @@
               },
               {
                 "$ref": "#/components/schemas/LocalConnector"
+              },
+              {
+                "$ref": "#/components/schemas/RadiusConnector"
               }
             ],
             "title": "Connector"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoginFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "format": "uuid",
@@ -6786,6 +7311,7 @@
               "mapping": {
                 "ldap": "#/components/schemas/LdapConnector",
                 "local": "#/components/schemas/LocalConnector",
+                "radius": "#/components/schemas/RadiusConnector",
                 "saml": "#/components/schemas/SamlConnector"
               },
               "propertyName": "type"
@@ -6799,9 +7325,22 @@
               },
               {
                 "$ref": "#/components/schemas/LocalConnector"
+              },
+              {
+                "$ref": "#/components/schemas/RadiusConnector"
               }
             ],
             "title": "Connector"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoginFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "kind": {
             "const": "directory",
@@ -6837,10 +7376,23 @@
                 "$ref": "#/components/schemas/LocalConnector"
               },
               {
+                "$ref": "#/components/schemas/RadiusConnector"
+              },
+              {
                 "type": "null"
               }
             ],
             "title": "Connector"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoginFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "kind": {
             "const": "directory",
@@ -6883,6 +7435,7 @@
               "mapping": {
                 "ldap": "#/components/schemas/LdapConnector",
                 "local": "#/components/schemas/LocalConnector",
+                "radius": "#/components/schemas/RadiusConnector",
                 "saml": "#/components/schemas/SamlConnector"
               },
               "propertyName": "type"
@@ -6896,6 +7449,9 @@
               },
               {
                 "$ref": "#/components/schemas/LocalConnector"
+              },
+              {
+                "$ref": "#/components/schemas/RadiusConnector"
               }
             ],
             "title": "Connector"
@@ -6903,6 +7459,16 @@
           "draft_status": {
             "$ref": "#/components/schemas/DraftStatus",
             "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LoginFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "format": "uuid",
@@ -8710,6 +9276,110 @@
           "last_checked_at"
         ],
         "title": "FailingMember",
+        "type": "object"
+      },
+      "FlowCondition": {
+        "additionalProperties": false,
+        "description": "When a step applies (ADR 0195); everything given must hold.\n\nAttributes:\n    groups_any: The person has at least one of these groups from the steps already passed.\n    source_in: The client address is inside one of these networks.\n    source_not_in: The client address is outside all of these networks.",
+        "properties": {
+          "groups_any": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Groups Any",
+            "type": "array"
+          },
+          "source_in": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 16,
+            "title": "Source In",
+            "type": "array"
+          },
+          "source_not_in": {
+            "default": [],
+            "items": {
+              "anyOf": [
+                {
+                  "format": "ipv4network",
+                  "type": "string"
+                },
+                {
+                  "format": "ipv6network",
+                  "type": "string"
+                }
+              ]
+            },
+            "maxItems": 16,
+            "title": "Source Not In",
+            "type": "array"
+          }
+        },
+        "title": "FlowCondition",
+        "type": "object"
+      },
+      "FlowStep": {
+        "additionalProperties": false,
+        "description": "One factor of a login flow (ADR 0195).\n\nAttributes:\n    name: Step name (unique in the flow).\n    kind: ``password`` asks for user name and password; ``code`` asks for one more secret\n        (a one-time code) for the user already named.\n    server: The RADIUS server that checks this step (default: the first one).\n    prompt: Text above the field; plain text.\n    when: Conditions under which the step is asked; the first step is always asked.",
+        "properties": {
+          "kind": {
+            "default": "password",
+            "enum": [
+              "password",
+              "code"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "Password",
+            "pattern": "^[A-Za-z0-9 .,:;!?()'_/-]{1,80}$",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FlowCondition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "FlowStep",
         "type": "object"
       },
       "GrafanaLaunchIn": {
@@ -11743,6 +12413,26 @@
         "title": "LogLine",
         "type": "object"
       },
+      "LoginFlow": {
+        "additionalProperties": false,
+        "description": "Ordered factors with conditions, in the manner of Citrix nFactor (ADR 0195).\n\nThe steps run in order; a step whose ``when`` does not hold is skipped. After every passed\nstep the person holds ``sy-factors-<n>`` for n factors so far, so access rules can ask for a\nstronger login with ``min_factors``.",
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/FlowStep"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "title": "LoginFlow",
+        "type": "object"
+      },
       "Me": {
         "additionalProperties": false,
         "description": "The authenticated caller.",
@@ -13397,7 +14087,33 @@
         "title": "OpsIn",
         "type": "object"
       },
-      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
+      "OsMinimum": {
+        "additionalProperties": false,
+        "description": "The oldest version of one operating system that is accepted.",
+        "properties": {
+          "os": {
+            "enum": [
+              "windows",
+              "macos",
+              "linux"
+            ],
+            "title": "Os",
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^[0-9]{1,6}(\\.[0-9]{1,6}){0,3}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "os",
+          "version"
+        ],
+        "title": "OsMinimum",
+        "type": "object"
+      },
+      "Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
         "additionalProperties": false,
         "properties": {
           "items": {
@@ -13410,6 +14126,7 @@
                   "directory": "#/components/schemas/DirectoryPolicySetRead",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                   "jwt": "#/components/schemas/JwtPolicySetRead",
+                  "posture": "#/components/schemas/PosturePolicySetRead",
                   "protection": "#/components/schemas/ProtectionPolicySetRead",
                   "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                   "redirect": "#/components/schemas/RedirectPolicySetRead",
@@ -13455,6 +14172,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/DirectoryPolicySetRead"
+                },
+                {
+                  "$ref": "#/components/schemas/PosturePolicySetRead"
                 }
               ]
             },
@@ -13477,7 +14197,7 @@
         "required": [
           "items"
         ],
-        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
+        "title": "Page[Annotated[Union[RedirectPolicySetRead, AllowListPolicySetRead, RewritePolicySetRead, RespondPolicySetRead, ErrorPagesPolicySetRead, RateLimitPolicySetRead, WafPolicySetRead, ProtectionPolicySetRead, AccessPolicySetRead, JwtPolicySetRead, ClientCertPolicySetRead, DirectoryPolicySetRead, PosturePolicySetRead], FieldInfo(annotation=NoneType, required=True, discriminator='kind')]]",
         "type": "object"
       },
       "Page_Annotated_Union_VrrpProfileRead__BgpProfileRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____": {
@@ -14013,6 +14733,7 @@
               "certificate",
               "change_set",
               "controller",
+              "device",
               "dns_provider",
               "draft",
               "engine",
@@ -15214,6 +15935,401 @@
         "title": "Posture",
         "type": "object"
       },
+      "PostureFacts": {
+        "additionalProperties": false,
+        "description": "What the device agent measured. Unknown fields are refused, so the format is explicit.\n\nAttributes:\n    os / os_version: Operating system and its dotted numeric version.\n    disk_encrypted: Full-disk encryption is on for the system volume.\n    firewall_enabled: The host firewall is on.\n    screen_lock: A screen lock is configured; ``None`` when the agent cannot tell.\n    days_since_update: Days since the last update was installed; ``None`` when unknown.\n    agent_version: Version of the agent that reported.\n    hostname: Informational; never used for a decision.",
+        "properties": {
+          "agent_version": {
+            "default": "0",
+            "pattern": "^[A-Za-z0-9._+-]{1,32}$",
+            "title": "Agent Version",
+            "type": "string"
+          },
+          "days_since_update": {
+            "anyOf": [
+              {
+                "maximum": 36500.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Since Update"
+          },
+          "disk_encrypted": {
+            "title": "Disk Encrypted",
+            "type": "boolean"
+          },
+          "firewall_enabled": {
+            "title": "Firewall Enabled",
+            "type": "boolean"
+          },
+          "hostname": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9._-]{1,253}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hostname"
+          },
+          "os": {
+            "enum": [
+              "windows",
+              "macos",
+              "linux"
+            ],
+            "title": "Os",
+            "type": "string"
+          },
+          "os_version": {
+            "pattern": "^[0-9]{1,6}(\\.[0-9]{1,6}){0,3}$",
+            "title": "Os Version",
+            "type": "string"
+          },
+          "screen_lock": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen Lock"
+          }
+        },
+        "required": [
+          "os",
+          "os_version",
+          "disk_encrypted",
+          "firewall_enabled"
+        ],
+        "title": "PostureFacts",
+        "type": "object"
+      },
+      "PosturePolicySet": {
+        "additionalProperties": false,
+        "description": "What a device must show to get a short-lived client certificate (ADR 0196).\n\nThe device agent (``sy-posture``) reports facts about its machine; the controller checks them\nagainst ``requirements`` and, when they hold, signs the agent's certificate request through\nthe PKI role ``pki_role`` for ``cert_ttl_h`` hours. A port with ``client_ca_id`` set to the\nrole's CA and an access rule with ``posture.device_certificate`` then let only such devices\nin. Posture sets are not attached to services.\n\nAttributes:\n    requirements: The conditions on the reported facts.\n    pki_role: OpenBao PKI role that signs the certificates. It must start with the tenant's\n        name and a dash, so that one tenant's devices are not trusted by another tenant's CA.\n    cert_ttl_h: Lifetime of the certificates, 1 to 72 hours. It is also how long a device that\n        stops being compliant (or is revoked) keeps working.",
+        "properties": {
+          "cert_ttl_h": {
+            "default": 12,
+            "maximum": 72.0,
+            "minimum": 1.0,
+            "title": "Cert Ttl H",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "posture",
+            "default": "posture",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pki_role": {
+            "title": "Pki Role",
+            "type": "string"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/PostureRequirements",
+            "default": {
+              "allowed_os": [
+                "windows",
+                "macos",
+                "linux"
+              ],
+              "max_patch_age_days": 45,
+              "minimums": [],
+              "require_disk_encryption": true,
+              "require_firewall": true,
+              "require_screen_lock": false
+            }
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "pki_role"
+        ],
+        "title": "PosturePolicySet",
+        "type": "object"
+      },
+      "PosturePolicySetCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "cert_ttl_h": {
+            "default": 12,
+            "maximum": 72.0,
+            "minimum": 1.0,
+            "title": "Cert Ttl H",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "posture",
+            "description": "Which kind of object this is.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pki_role": {
+            "title": "Pki Role",
+            "type": "string"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/PostureRequirements",
+            "default": {
+              "allowed_os": [
+                "windows",
+                "macos",
+                "linux"
+              ],
+              "max_patch_age_days": 45,
+              "minimums": [],
+              "require_disk_encryption": true,
+              "require_firewall": true,
+              "require_screen_lock": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "pki_role"
+        ],
+        "title": "PosturePolicySetCreate",
+        "type": "object"
+      },
+      "PosturePolicySetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "cert_ttl_h": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cert Ttl H"
+          },
+          "kind": {
+            "const": "posture",
+            "description": "Must equal the object's kind.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "pki_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pki Role"
+          },
+          "requirements": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostureRequirements"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "PosturePolicySetPatch",
+        "type": "object"
+      },
+      "PosturePolicySetRead": {
+        "additionalProperties": false,
+        "description": "PosturePolicySet as returned by the API.",
+        "properties": {
+          "cert_ttl_h": {
+            "default": 12,
+            "maximum": 72.0,
+            "minimum": 1.0,
+            "title": "Cert Ttl H",
+            "type": "integer"
+          },
+          "changed_fields": {
+            "description": "Fields a draft changed; empty outside a draft.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Fields",
+            "type": "array"
+          },
+          "draft_status": {
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "Whether a draft (`?change_set=`) created, changed or deleted it."
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "posture",
+            "default": "posture",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pki_role": {
+            "title": "Pki Role",
+            "type": "string"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/PostureRequirements",
+            "default": {
+              "allowed_os": [
+                "windows",
+                "macos",
+                "linux"
+              ],
+              "max_patch_age_days": 45,
+              "minimums": [],
+              "require_disk_encryption": true,
+              "require_firewall": true,
+              "require_screen_lock": false
+            }
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "version": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "pki_role",
+          "draft_status",
+          "changed_fields"
+        ],
+        "title": "PosturePolicySetRead",
+        "type": "object"
+      },
+      "PostureRequirements": {
+        "additionalProperties": false,
+        "description": "What a device must show to get a certificate.\n\nAttributes:\n    allowed_os: Operating systems that may enroll.\n    minimums: Oldest accepted version per operating system (none: no check).\n    require_disk_encryption: BitLocker, FileVault or LUKS on the system volume.\n    require_firewall: The host firewall is on.\n    require_screen_lock: A screen lock is configured (macOS and Windows; Linux reports it\n        when the desktop exposes it, otherwise the check fails).\n    max_patch_age_days: Days since the last operating system update was installed\n        (none: no check).",
+        "properties": {
+          "allowed_os": {
+            "default": [
+              "windows",
+              "macos",
+              "linux"
+            ],
+            "items": {
+              "enum": [
+                "windows",
+                "macos",
+                "linux"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Allowed Os",
+            "type": "array"
+          },
+          "max_patch_age_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 45,
+            "title": "Max Patch Age Days"
+          },
+          "minimums": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OsMinimum"
+            },
+            "maxItems": 3,
+            "title": "Minimums",
+            "type": "array"
+          },
+          "require_disk_encryption": {
+            "default": true,
+            "title": "Require Disk Encryption",
+            "type": "boolean"
+          },
+          "require_firewall": {
+            "default": true,
+            "title": "Require Firewall",
+            "type": "boolean"
+          },
+          "require_screen_lock": {
+            "default": false,
+            "title": "Require Screen Lock",
+            "type": "boolean"
+          }
+        },
+        "title": "PostureRequirements",
+        "type": "object"
+      },
       "PrincipalNameRead": {
         "additionalProperties": false,
         "description": "A principal label (`actor`, `author`, `approver`) with a name for people.",
@@ -16375,6 +17491,113 @@
         ],
         "title": "QuotaRequestState",
         "type": "string"
+      },
+      "RadiusConnector": {
+        "additionalProperties": false,
+        "description": "Sign in against RADIUS servers through the login gate (ADR 0195).\n\nAttributes:\n    servers: Up to four servers (for instance a password server and an OTP server).\n    nas_identifier: Sent as NAS-Identifier.\n    group_attribute: Where the server returns groups: ``filter_id`` or ``class``.\n    email_domain: Users get the address ``<name>@<email_domain>`` (RADIUS has none).\n    signing_secret_ref: OpenBao path of the key that signs the gate's short-lived cookies.\n    login_timeout_s: How long a person has to finish all steps.",
+        "properties": {
+          "email_domain": {
+            "title": "Email Domain",
+            "type": "string"
+          },
+          "group_attribute": {
+            "default": "filter_id",
+            "enum": [
+              "filter_id",
+              "class"
+            ],
+            "title": "Group Attribute",
+            "type": "string"
+          },
+          "login_timeout_s": {
+            "default": 300,
+            "maximum": 1800.0,
+            "minimum": 60.0,
+            "title": "Login Timeout S",
+            "type": "integer"
+          },
+          "nas_identifier": {
+            "default": "switchyard",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$",
+            "title": "Nas Identifier",
+            "type": "string"
+          },
+          "servers": {
+            "items": {
+              "$ref": "#/components/schemas/RadiusServerSpec"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Servers",
+            "type": "array"
+          },
+          "signing_secret_ref": {
+            "title": "Signing Secret Ref",
+            "type": "string"
+          },
+          "type": {
+            "const": "radius",
+            "default": "radius",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "servers",
+          "email_domain",
+          "signing_secret_ref"
+        ],
+        "title": "RadiusConnector",
+        "type": "object"
+      },
+      "RadiusServerSpec": {
+        "additionalProperties": false,
+        "description": "One RADIUS server a ``radius`` directory can ask (ADR 0195).\n\nAttributes:\n    name: Name a flow step uses to pick this server.\n    host / port: Where the server listens (UDP, 1812 by default).\n    secret_ref: OpenBao path of the shared secret (never the secret).\n    timeout_s / retries: Per-attempt wait and number of retransmissions.\n    require_message_authenticator: Refuse answers without a Message-Authenticator (the\n        protection against BlastRADIUS, CVE-2024-3596). Turn it off only for a legacy server\n        that cannot send one.",
+        "properties": {
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "port": {
+            "default": 1812,
+            "title": "Port",
+            "type": "integer"
+          },
+          "require_message_authenticator": {
+            "default": true,
+            "title": "Require Message Authenticator",
+            "type": "boolean"
+          },
+          "retries": {
+            "default": 2,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Retries",
+            "type": "integer"
+          },
+          "secret_ref": {
+            "title": "Secret Ref",
+            "type": "string"
+          },
+          "timeout_s": {
+            "default": 3,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Timeout S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "host",
+          "secret_ref"
+        ],
+        "title": "RadiusServerSpec",
+        "type": "object"
       },
       "RateLimitPolicySet": {
         "additionalProperties": false,
@@ -19725,6 +20948,7 @@
                   "directory": "#/components/schemas/DirectoryPolicySet",
                   "error_pages": "#/components/schemas/ErrorPagesPolicySet",
                   "jwt": "#/components/schemas/JwtPolicySet",
+                  "posture": "#/components/schemas/PosturePolicySet",
                   "protection": "#/components/schemas/ProtectionPolicySet",
                   "rate_limit": "#/components/schemas/RateLimitPolicySet",
                   "redirect": "#/components/schemas/RedirectPolicySet",
@@ -19770,6 +20994,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/DirectoryPolicySet"
+                },
+                {
+                  "$ref": "#/components/schemas/PosturePolicySet"
                 }
               ]
             },
@@ -22561,8 +23788,18 @@
       },
       "WafPolicySet": {
         "additionalProperties": false,
-        "description": "Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).\n\nNew policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,\nso a tenant can read the logs before turning blocking on. A service can carry one WAF policy.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.\n    crs_version: CRS release to use; must be one the SE image ships.\n    paranoia_level: CRS paranoia level 1 (fewest rules) to 4.\n    inbound_threshold: Anomaly score at which a request counts as an attack.\n    outbound_threshold: Anomaly score at which a response counts as a leak.\n    disabled_rule_ids: CRS rules to switch off (for false positives).\n    excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.\n    inspect_body: Send the request body (up to the engine buffer size) to the WAF too.\n    fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503 (ADR 0142).\n    timeout_ms: How long HAProxy waits for the WAF's verdict.\n\nExample:\n    >>> WafPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"w\"}\n    ... ).mode\n    'detect'",
+        "description": "Web application firewall for a service: Coraza with the OWASP Core Rule Set (ADR 0140).\n\nNew policies start in ``detect`` mode: requests are inspected and logged, nothing is blocked,\nso a tenant can read the logs before turning blocking on. A service can carry one WAF policy.\n\nAttributes:\n    mode: ``detect`` logs only; ``block`` refuses requests above the anomaly threshold.\n    crs_version: CRS release to use; must be one the SE image ships.\n    paranoia_level: CRS paranoia level 1 (fewest rules) to 4.\n    inbound_threshold: Anomaly score at which a request counts as an attack.\n    outbound_threshold: Anomaly score at which a response counts as a leak.\n    disabled_rule_ids: CRS rules to switch off (for false positives).\n    excluded_paths: Paths that skip inspection (``path_beg`` match), such as upload endpoints.\n    inspect_body: Send the request body (up to the engine buffer size) to the WAF too.\n    fail_mode: What to do when the WAF does not answer in ``timeout_ms``: ``open`` lets the\n        request through, ``closed`` refuses it with 503 (ADR 0142).\n    timeout_ms: How long HAProxy waits for the WAF's verdict.\n    api: An API schema (ADR 0197): requests that are not among its operations are violations.\n\nExample:\n    >>> WafPolicySet.model_validate(\n    ...     {\"id\": \"00000000-0000-0000-0000-000000000001\",\n    ...      \"tenant_id\": \"00000000-0000-0000-0000-000000000002\", \"name\": \"w\"}\n    ... ).mode\n    'detect'",
         "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crs_version": {
             "const": "4.8.0",
             "default": "4.8.0",
@@ -22676,6 +23913,16 @@
       "WafPolicySetCreate": {
         "additionalProperties": false,
         "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crs_version": {
             "const": "4.8.0",
             "default": "4.8.0",
@@ -22772,6 +24019,16 @@
       "WafPolicySetPatch": {
         "additionalProperties": false,
         "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "crs_version": {
             "anyOf": [
               {
@@ -22925,6 +24182,16 @@
         "additionalProperties": false,
         "description": "WafPolicySet as returned by the API.",
         "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiSchema"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "changed_fields": {
             "description": "Fields a draft changed; empty outside a draft.",
             "items": {
@@ -25854,6 +27121,182 @@
         "summary": "SAML service-provider metadata",
         "tags": [
           "auth"
+        ],
+        "x-required-role": "public"
+      }
+    },
+    "/api/v1/device/enroll": {
+      "post": {
+        "description": "Called by `sy-posture enroll`; the one-time token is the credential.\n\n**Access:** Public: no credentials needed.",
+        "operationId": "device_enroll_api_v1_device_enroll_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "laptop-ana",
+                "owner": "ana@example.test",
+                "public_key": "q0y0uUa3C5Qc4q2Ew2n7Fq0vXH1nDhI0zvY1m9eF8bA=",
+                "token": "sydev_0123456789"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/DeviceEnrollIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "cert_ttl_h": 12,
+                  "device_id": "0198b7c0-0000-7000-8000-000000000042",
+                  "name": "laptop-ana",
+                  "policy": "managed-laptops",
+                  "tenant": "acme"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceEnrolledOut"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Device enrollment is not configured."
+          }
+        },
+        "security": [],
+        "summary": "Trade an enrollment token and public key for a device identity",
+        "tags": [
+          "devices"
+        ],
+        "x-required-role": "public"
+      }
+    },
+    "/api/v1/device/report": {
+      "post": {
+        "description": "Called by the device agent on a schedule; the signature is the credential.\n\nThe body is parsed for the documentation above and checked again by the service from\nthe exact bytes that were signed.\n\n**Access:** Public: no credentials needed.",
+        "operationId": "device_report_api_v1_device_report_post",
+        "parameters": [
+          {
+            "description": "The device id from enrollment.",
+            "in": "header",
+            "name": "x-device-id",
+            "required": true,
+            "schema": {
+              "description": "The device id from enrollment.",
+              "format": "uuid",
+              "title": "X-Device-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Milliseconds since the epoch; must rise with every report.",
+            "in": "header",
+            "name": "x-device-timestamp",
+            "required": true,
+            "schema": {
+              "description": "Milliseconds since the epoch; must rise with every report.",
+              "title": "X-Device-Timestamp",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Base64 Ed25519 signature over method, path, timestamp and the SHA-256 of the body (see ADR 0196).",
+            "in": "header",
+            "name": "x-device-signature",
+            "required": true,
+            "schema": {
+              "description": "Base64 Ed25519 signature over method, path, timestamp and the SHA-256 of the body (see ADR 0196).",
+              "title": "X-Device-Signature",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIB...\n-----END CERTIFICATE REQUEST-----\n",
+                "facts": {
+                  "agent_version": "1.0.0",
+                  "days_since_update": 6,
+                  "disk_encrypted": true,
+                  "firewall_enabled": true,
+                  "os": "windows",
+                  "os_version": "10.0.22631"
+                }
+              },
+              "schema": {
+                "$ref": "#/components/schemas/DeviceReportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "ca": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+                  "certificate": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+                  "compliant": true,
+                  "failures": [],
+                  "next_report_s": 14400,
+                  "not_after": "2026-10-10T21:30:00Z"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceReportOut"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Device enrollment is not configured."
+          }
+        },
+        "security": [],
+        "summary": "Report a device's posture and get a certificate",
+        "tags": [
+          "devices"
         ],
         "x-required-role": "public"
       }
@@ -37345,6 +38788,614 @@
         "x-required-role": "operator"
       }
     },
+    "/api/v1/tenants/{t}/device-enrollments": {
+      "post": {
+        "description": "Create a one-time token (shown once, valid 24 hours) for `sy-posture enroll`.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "device_enrollment_api_v1_tenants__t__device_enrollments_post",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "label": "Ana's laptop",
+                "policy_id": "0198b7c0-0000-7000-8000-000000000007"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/DeviceEnrollmentIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "expires_at": "2026-10-11T09:30:00Z",
+                  "token": "sydev_0123456789"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentToken"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Device enrollment is not configured."
+          }
+        },
+        "summary": "Create a device enrollment token",
+        "tags": [
+          "devices"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
+    "/api/v1/tenants/{t}/devices": {
+      "get": {
+        "description": "Every device of the tenant with its latest posture verdict.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_devices_api_v1_tenants__t__devices_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "cert_not_after": "2026-10-10T21:30:00Z",
+                    "cert_serial": "5f3a",
+                    "compliant": true,
+                    "enrolled_at": "2026-10-01T08:00:00Z",
+                    "facts": {
+                      "days_since_update": 6,
+                      "disk_encrypted": true,
+                      "firewall_enabled": true,
+                      "os": "windows",
+                      "os_version": "10.0.22631"
+                    },
+                    "failures": [],
+                    "id": "0198b7c0-0000-7000-8000-000000000042",
+                    "last_report_at": "2026-10-10T09:30:00Z",
+                    "name": "laptop-ana",
+                    "owner": "ana@example.test",
+                    "policy_id": "0198b7c0-0000-7000-8000-000000000007",
+                    "status": "active"
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceRead"
+                  },
+                  "title": "Response List Devices Api V1 Tenants  T  Devices Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List enrolled devices",
+        "tags": [
+          "devices"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/devices/{device}": {
+      "delete": {
+        "description": "Forget the device so its name can be reused (revoke it first to stop certificates).\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "delete_device_api_v1_tenants__t__devices__device__delete",
+        "parameters": [
+          {
+            "description": "Device id.",
+            "in": "path",
+            "name": "device",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Device",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant, object or provider does not exist (or the caller cannot see it)."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Remove a device",
+        "tags": [
+          "devices"
+        ],
+        "x-required-role": "tenant-admin"
+      },
+      "get": {
+        "description": "One device, including the facts of its last report. `404` if it is not in the tenant.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "get_device_api_v1_tenants__t__devices__device__get",
+        "parameters": [
+          {
+            "description": "Device id.",
+            "in": "path",
+            "name": "device",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Device",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "cert_not_after": "2026-10-10T21:30:00Z",
+                  "cert_serial": "5f3a",
+                  "compliant": true,
+                  "enrolled_at": "2026-10-01T08:00:00Z",
+                  "facts": {
+                    "days_since_update": 6,
+                    "disk_encrypted": true,
+                    "firewall_enabled": true,
+                    "os": "windows",
+                    "os_version": "10.0.22631"
+                  },
+                  "failures": [],
+                  "id": "0198b7c0-0000-7000-8000-000000000042",
+                  "last_report_at": "2026-10-10T09:30:00Z",
+                  "name": "laptop-ana",
+                  "owner": "ana@example.test",
+                  "policy_id": "0198b7c0-0000-7000-8000-000000000007",
+                  "status": "active"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get a device",
+        "tags": [
+          "devices"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/devices/{device}/revoke": {
+      "post": {
+        "description": "Stop issuing certificates to the device. The one it holds works until it expires.\n\n**Access:** `tenant-admin` or higher in the tenant.",
+        "operationId": "revoke_device_api_v1_tenants__t__devices__device__revoke_post",
+        "parameters": [
+          {
+            "description": "Device id.",
+            "in": "path",
+            "name": "device",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Device",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "cert_not_after": "2026-10-10T21:30:00Z",
+                  "cert_serial": "5f3a",
+                  "compliant": true,
+                  "enrolled_at": "2026-10-01T08:00:00Z",
+                  "facts": {
+                    "days_since_update": 6,
+                    "disk_encrypted": true,
+                    "firewall_enabled": true,
+                    "os": "windows",
+                    "os_version": "10.0.22631"
+                  },
+                  "failures": [],
+                  "id": "0198b7c0-0000-7000-8000-000000000042",
+                  "last_report_at": "2026-10-10T09:30:00Z",
+                  "name": "laptop-ana",
+                  "owner": "ana@example.test",
+                  "policy_id": "0198b7c0-0000-7000-8000-000000000007",
+                  "status": "active"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Revoke a device",
+        "tags": [
+          "devices"
+        ],
+        "x-required-role": "tenant-admin"
+      }
+    },
     "/api/v1/tenants/{t}/dns-providers": {
       "get": {
         "description": "The credentials DNS-01 can use, by name. Secrets are never returned.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
@@ -45835,7 +47886,7 @@
                   ]
                 },
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
+                  "$ref": "#/components/schemas/Page_Annotated_Union_RedirectPolicySetRead__AllowListPolicySetRead__RewritePolicySetRead__RespondPolicySetRead__ErrorPagesPolicySetRead__RateLimitPolicySetRead__WafPolicySetRead__ProtectionPolicySetRead__AccessPolicySetRead__JwtPolicySetRead__ClientCertPolicySetRead__DirectoryPolicySetRead__PosturePolicySetRead___FieldInfo_annotation_NoneType__required_True__discriminator__kind____"
                 }
               }
             },
@@ -46006,6 +48057,7 @@
                     "directory": "#/components/schemas/DirectoryPolicySetCreate",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetCreate",
                     "jwt": "#/components/schemas/JwtPolicySetCreate",
+                    "posture": "#/components/schemas/PosturePolicySetCreate",
                     "protection": "#/components/schemas/ProtectionPolicySetCreate",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetCreate",
                     "redirect": "#/components/schemas/RedirectPolicySetCreate",
@@ -46051,6 +48103,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DirectoryPolicySetCreate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PosturePolicySetCreate"
                   }
                 ],
                 "title": "Body"
@@ -46410,6 +48465,7 @@
                       "directory": "#/components/schemas/DirectoryPolicySetRead",
                       "error_pages": "#/components/schemas/ErrorPagesPolicySetRead",
                       "jwt": "#/components/schemas/JwtPolicySetRead",
+                      "posture": "#/components/schemas/PosturePolicySetRead",
                       "protection": "#/components/schemas/ProtectionPolicySetRead",
                       "rate_limit": "#/components/schemas/RateLimitPolicySetRead",
                       "redirect": "#/components/schemas/RedirectPolicySetRead",
@@ -46455,6 +48511,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/DirectoryPolicySetRead"
+                    },
+                    {
+                      "$ref": "#/components/schemas/PosturePolicySetRead"
                     }
                   ],
                   "title": "Response Get Policy Sets Api V1 Tenants  T  Policy Sets  Object Id  Get"
@@ -46625,6 +48684,7 @@
                     "directory": "#/components/schemas/DirectoryPolicySetPatch",
                     "error_pages": "#/components/schemas/ErrorPagesPolicySetPatch",
                     "jwt": "#/components/schemas/JwtPolicySetPatch",
+                    "posture": "#/components/schemas/PosturePolicySetPatch",
                     "protection": "#/components/schemas/ProtectionPolicySetPatch",
                     "rate_limit": "#/components/schemas/RateLimitPolicySetPatch",
                     "redirect": "#/components/schemas/RedirectPolicySetPatch",
@@ -46670,6 +48730,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/DirectoryPolicySetPatch"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PosturePolicySetPatch"
                   }
                 ],
                 "title": "Body"
@@ -58017,6 +60080,10 @@
     {
       "description": "Alert targets (webhook, chat, email), rules on events, metrics and certificate expiry, and what is firing.",
       "name": "alerts"
+    },
+    {
+      "description": "Device posture: enrollment tokens, enrolled devices and the signed reports of the device agent that turn into short-lived client certificates.",
+      "name": "devices"
     },
     {
       "description": "Backend pools and members; runtime member state.",

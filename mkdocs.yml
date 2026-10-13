@@ -47,6 +47,8 @@ nav:
       - The controller's own address, VIP and certificate: controller-settings.md
       - Signing in, roles and access: auth.md
       - Login in front of a service (access policy sets): access.md
+      - API schema protection (WAF): waf-api-schema.md
+      - Device posture and device certificates: device-posture.md
       - Certificates from ACME providers: acme.md
       - Alerting: alerting.md
       - GSLB - wide IPs on PowerDNS: gslb.md
@@ -126,6 +128,7 @@ nav:
       - Parity work blocks: design/09-parity-work-blocks.md
       - UI handoff: design/ui-handoff/README.md
       - UI: ui/README.md
+      - FIPS 140-3 assessment: research/fips-assessment.md
       - Backend security review: security/backend-review.md
       - UI security review: security/ui-review.md
   - Lab results:

@@ -57,7 +57,7 @@ from switchyard.domain.snapshot import (
     protection_set,
     rate_limit_rules,
 )
-from switchyard.render import captcha, waf
+from switchyard.render import apischema, captcha, waf
 from switchyard.render import escape as esc
 from switchyard.render.auth import AuthInstance, auth_instances
 from switchyard.render.escape import RenderError
@@ -163,7 +163,9 @@ class RenderResult:
         return value
 
 
-def render_haproxy(snapshot: Snapshot, se_group_id: UUID) -> RenderResult:
+def render_haproxy(
+    snapshot: Snapshot, se_group_id: UUID, broker_url: str | None = None
+) -> RenderResult:
     """Render the HAProxy files of one SE group.
 
     The snapshot is reduced to what the group references and validated first, so a render never
@@ -172,6 +174,9 @@ def render_haproxy(snapshot: Snapshot, se_group_id: UUID) -> RenderResult:
     Args:
         snapshot: Desired state; may contain other SE groups and tenants.
         se_group_id: The group to render.
+        broker_url: Public base URL of the login broker (``SWITCHYARD_AUTH_BROKER_URL``); only
+            needed by access rules with ``min_factors``, which redirect to the login gate
+            (ADR 0195).
 
     Returns:
         The files and any warnings.
@@ -205,7 +210,7 @@ def render_haproxy(snapshot: Snapshot, se_group_id: UUID) -> RenderResult:
     except KeyError:
         raise RenderError(f"unknown SE group {se_group_id}") from None
     ensure_valid(view)
-    return _Renderer(view).render()
+    return _Renderer(view, broker_url).render()
 
 
 _PLACEHOLDER = "0" * 64
@@ -405,8 +410,9 @@ def _acme_rule() -> str:
 
 
 class _Renderer:
-    def __init__(self, snapshot: Snapshot) -> None:
+    def __init__(self, snapshot: Snapshot, broker_url: str | None = None) -> None:
         self.snap = snapshot
+        self.broker_url = broker_url
         self.group = snapshot.se_groups[0]
         self.pools = {p.id: p for p in snapshot.pools}
         self.monitors = {m.id: m for m in snapshot.health_monitors}
@@ -579,6 +585,8 @@ class _Renderer:
             routing_rules = self._routing_rules(svc, name)
             policy = waf.waf_policy(svc, self.policies)
             if policy is not None:
+                if policy.api is not None:
+                    request_rules += apischema.request_lines(policy.api)
                 waf_options, waf_rules = waf.frontend_lines(svc, policy)
                 options += waf_options
                 request_rules += waf_rules
@@ -1244,6 +1252,7 @@ class _Renderer:
             here = f"{LOOP_ON} {{ var(txn.sy_ad) -m int {k + 2} }}"
             rules.append(f"http-request return status 403 if {here} {test}")
         rules += self._posture_rules(policy)
+        rules += self._step_up_rules(inst)
         ours = policy.identity_headers
         for name, source in (
             (ours.user, "X-Forwarded-User"),
@@ -1286,6 +1295,32 @@ class _Renderer:
             f"if {LOOP_ON} {{ req.hdr(cookie) -m found }}",
             f"http-request del-header Cookie if {LOOP_ON} {{ req.fhdr(cookie) -m len 0 }}",
         ]
+
+    def _step_up_rules(self, inst: AuthInstance) -> list[str]:
+        """Rules that ask for more factors (``min_factors``) on the second hop.
+
+        A session that lacks ``sy-factors-<n>`` is sent to the login gate's ``elevate`` address
+        (the broker's public URL, deployment configuration) with the host and path to come back
+        to; a request that cannot be redirected gets 403.
+        """
+        rules: list[str] = []
+        for k, rule in enumerate(inst.policy.rules):
+            if not rule.min_factors:
+                continue
+            n = int(rule.min_factors)
+            here = f"{LOOP_ON} {{ var(txn.sy_ad) -m int {k + 2} }}"
+            short = f"!{{ req.fhdr(X-Forwarded-Groups) -m reg '(^|,)sy-factors-{n}(,|$)' }}"
+            gate = f"{inst.issuer(self.broker_url)}/_gate/elevate"
+            target = (
+                f'"{esc.arg(gate)}?level={n}&host=%[req.hdr(host),field(1,:),url_enc]'
+                '&path=%[pathq,url_enc]"'
+            )
+            rules += [
+                f"http-request redirect location {target} code 303 "
+                f"if {here} {short} {{ method GET HEAD }}",
+                f"http-request return status 403 if {here} {short}",
+            ]
+        return rules
 
     @staticmethod
     def _posture_rules(policy: dm.AccessPolicySet) -> list[str]:

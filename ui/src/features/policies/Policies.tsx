@@ -32,7 +32,8 @@ type Policy =
   | components["schemas"]["AllowListPolicySetRead"]
   | RulePolicy
   | SecurityPolicy
-  | components["schemas"]["DirectoryPolicySetRead"];
+  | components["schemas"]["DirectoryPolicySetRead"]
+  | components["schemas"]["PosturePolicySetRead"];
 type Kind = "redirect" | "allow_list" | RuleKind | SecurityKind;
 const SECURITY_KINDS: SecurityKind[] = ["access", "jwt", "client_cert", "waf", "protection"];
 type Rule = components["schemas"]["RedirectRule"];
@@ -699,9 +700,11 @@ export function Policies({ tenant }: { tenant: string }) {
                               ? t(SECURITY_LABEL[p.kind])
                               : p.kind === "directory"
                                 ? t("Directory login · {c}", { c: p.connector.type })
-                                : p.managed_by
-                                  ? t("Allow list · managed")
-                                  : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
+                                : p.kind === "posture"
+                                  ? t("Device posture · {r}", { r: p.pki_role })
+                                  : p.managed_by
+                                    ? t("Allow list · managed")
+                                    : t("Allow list · {n} CIDRs", { n: p.cidrs.length });
                 return (
                   <li key={p.id}>
                     <button

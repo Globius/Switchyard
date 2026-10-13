@@ -12,6 +12,16 @@ BROKER_URL_ENV = "SWITCHYARD_AUTH_BROKER_URL"
 DEFAULT_DATABASE_URL = "postgresql+psycopg://postgres:postgres@127.0.0.1:5432/switchyard"
 
 
+def broker_url() -> str | None:
+    """Return the login broker's public base URL (``SWITCHYARD_AUTH_BROKER_URL``) or ``None``.
+
+    Example:
+        >>> broker_url() is None or broker_url().startswith("http")
+        True
+    """
+    return os.environ.get(BROKER_URL_ENV) or None
+
+
 def database_url() -> str:
     """Return the SQLAlchemy URL from ``SWITCHYARD_DATABASE_URL`` or the dev default.
 

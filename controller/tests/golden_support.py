@@ -31,8 +31,9 @@ def case_names() -> list[str]:
 def render_case(name: str) -> RenderResult:
     """Render one golden case."""
     data: dict[str, Any] = yaml.safe_load((GOLDEN_DIR / name / "input.yaml").read_text("utf-8"))
-    group = UUID(symbolic_uuid(data.pop("render")["se_group"]))
-    return render_haproxy(snapshot_from_mapping(data), group)
+    options = data.pop("render")
+    group = UUID(symbolic_uuid(options["se_group"]))
+    return render_haproxy(snapshot_from_mapping(data), group, options.get("broker_url"))
 
 
 def expected_files(name: str) -> dict[str, str]:
