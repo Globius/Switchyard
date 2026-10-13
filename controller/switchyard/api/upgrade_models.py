@@ -99,3 +99,19 @@ class BackupVerifyRead(ApiModel):
     schema_revision: str | None
     created_at: str
     tenants: list[BackupTenantSummary]
+
+
+class BackupRestoreIn(ApiModel):
+    """Which archive to load."""
+
+    target: str
+    archive: str
+    dry_run: bool = Field(
+        default=False, description="Report what would be restored; write nothing."
+    )
+
+
+class BackupRestoreRead(BackupVerifyRead):
+    """What the archive holds, and whether it was restored."""
+
+    restored: bool

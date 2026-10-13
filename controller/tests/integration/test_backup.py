@@ -14,6 +14,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from switchyard.adapters.backup_targets import BackupStore, MemoryStore
 from switchyard.adapters.secrets import MemorySecrets
@@ -143,3 +144,34 @@ async def test_only_system_administrators_may_back_up(rig: Rig) -> None:
     admin = await rig.token(Role.TENANT_ADMIN)
     res = await rig.client.post(f"{V1}/system/backups", json={"target": "nightly"}, headers=admin)
     assert res.status_code == 403
+
+
+async def test_restore_refuses_a_live_controller_and_loads_a_fresh_one(
+    rig: Rig, owner_engine: AsyncEngine
+) -> None:
+    from sqlalchemy import text
+
+    root = await rig.token(Role.SYSTEM_ADMIN)
+    await rig.client.post(f"{V1}/system/backup-targets", json=TARGET, headers=root)
+    made = (
+        await rig.client.post(f"{V1}/system/backups", json={"target": "nightly"}, headers=root)
+    ).json()
+    body = {"target": "nightly", "archive": made["archive"]}
+
+    live = await rig.client.post(f"{V1}/system/backups/restore", json=body, headers=root)
+    assert live.status_code == 409 and "already exist" in live.json()["detail"]
+
+    # Empty the controller of tenants (the cascade removes their objects), as a fresh install is.
+    async with owner_engine.begin() as conn:
+        await conn.execute(text("TRUNCATE tenant CASCADE"))
+    root = await rig.token(Role.SYSTEM_ADMIN)  # the cascade took the old tokens too
+    dry = await rig.client.post(
+        f"{V1}/system/backups/restore", json={**body, "dry_run": True}, headers=root
+    )
+    assert dry.status_code == 200 and dry.json()["restored"] is False
+    done = await rig.client.post(f"{V1}/system/backups/restore", json=body, headers=root)
+    assert done.status_code == 200, done.text
+    assert done.json()["restored"] is True and done.json()["tenants"]
+    # A second backup now contains what the first one did.
+    again = await rig.client.post(f"{V1}/system/backups/verify", json=body, headers=root)
+    assert again.json()["tenants"] == done.json()["tenants"]

@@ -1519,3 +1519,5 @@ BACKUP_VERIFY = {
         {"name": "acme", "virtual_services": 12, "pools": 14, "se_groups": 2, "certificates": 5}
     ],
 }
+
+BACKUP_RESTORE = {**BACKUP_VERIFY, "restored": True}

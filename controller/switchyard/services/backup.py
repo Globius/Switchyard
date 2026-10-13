@@ -32,7 +32,7 @@ from switchyard.adapters.secrets import SecretNotFoundError, SecretsReader
 from switchyard.db import audit_log
 from switchyard.db.backup_models import BackupRunRow, BackupTargetRow
 from switchyard.db.models import TenantRow
-from switchyard.db.repository import load_snapshot
+from switchyard.db.repository import add_snapshot, load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain.backup import (
     BackupError,
@@ -42,6 +42,7 @@ from switchyard.domain.backup import (
     encrypt,
     prune,
 )
+from switchyard.domain.snapshot import Snapshot
 from switchyard.ids import uuid7
 from switchyard.services.changesets import require
 from switchyard.services.context import Databases, Principal
@@ -331,3 +332,57 @@ class BackupService:
             return summarize(decrypt(blob, await self._passphrase(config)))
         except (BackupTargetError, BackupError) as exc:
             raise ConflictError(str(exc)) from exc
+
+    async def restore(
+        self,
+        principal: Principal,
+        target: str,
+        archive: str,
+        *,
+        dry_run: bool = False,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Load the tenants of ``archive`` into this controller, which must hold none of them.
+
+        Restores desired state only (see the module note). A tenant whose id or name already
+        exists is a :class:`ConflictError` and nothing is written: restore into a fresh controller,
+        not over a live one. Restored tenants have no engines; redeploy or re-enroll afterwards.
+
+        Args:
+            principal: A system administrator.
+            target: The backup target holding the archive.
+            archive: The archive name.
+            dry_run: Check and report what would be restored without writing.
+            request_id: For the audit event.
+        """
+        require(principal, "manage", "controller")
+        config = await self._target(target)
+        try:
+            blob = await (await self._store(config)).get(archive)
+            plain = decrypt(blob, await self._passphrase(config))
+            summary = summarize(plain)
+        except (BackupTargetError, BackupError) as exc:
+            raise ConflictError(str(exc)) from exc
+        snapshots = [Snapshot.model_validate(t) for t in json.loads(plain)["tenants"]]
+        async with admin_session(self._db.admin) as session:
+            rows = (await session.execute(select(TenantRow.id, TenantRow.name))).all()
+            ids, names = {i for i, _ in rows}, {n for _, n in rows}
+            clashes = sorted(
+                t.name for s in snapshots for t in s.tenants if t.id in ids or t.name in names
+            )
+            if clashes:
+                raise ConflictError(f"tenants already exist here: {', '.join(clashes)}")
+            if dry_run:
+                return {**summary, "restored": False}
+            for snapshot in snapshots:
+                await add_snapshot(session, snapshot)
+            await audit_log.record(
+                session,
+                tenant_id=None,
+                actor=principal.actor,
+                action="backup.restored",
+                object_ref=f"backup_target:{target}",
+                diff={"archive": archive, "tenants": len(snapshots)},
+                request_id=request_id,
+            )
+        return {**summary, "restored": True}

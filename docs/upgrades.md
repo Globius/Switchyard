@@ -49,9 +49,13 @@ curl -X POST $URL/api/v1/system/backups/verify -d '{"target":"nightly","archive"
 ```
 
 Every run, successful or failed, is recorded (`GET /system/backups`) and audited (`backup.created`, `backup.failed`). The upgrade check
-warns when there is no backup or the latest is more than seven days old. Restore into an empty controller is next.
+warns when there is no backup or the latest is more than seven days old.
+
+**Restore** (`POST /system/backups/restore`, with `dry_run` to check first) loads every tenant of an archive into a controller that holds none of them; it
+refuses with `409` and writes nothing if a tenant with the same id or name exists. Restored tenants have no engines: redeploy or re-enroll
+them. Users, tokens, identity providers and the audit log come from the database restore.
 
 ## Planned (ADR 0205)
 
-Release feed and update check, signed upgrade bundles, restore from a backup, SFTP, a dry-run plan, the
+Release feed and update check, signed upgrade bundles, a dry-run plan, the
 engine roll as a job with a health gate and pause, and the Upgrades page in the UI.

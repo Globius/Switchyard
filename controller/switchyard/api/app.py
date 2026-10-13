@@ -197,6 +197,8 @@ from switchyard.api.schemas import (
 )
 from switchyard.api.stream_models import EVENTS
 from switchyard.api.upgrade_models import (
+    BackupRestoreIn,
+    BackupRestoreRead,
     BackupRunIn,
     BackupRunRead,
     BackupTargetTestRead,
@@ -4551,6 +4553,24 @@ def create_app(
     async def verify_backup(body: BackupVerifyIn, who: Who, svc: Services) -> dict[str, Any]:
         """Downloads, decrypts and counts the objects. Changes nothing."""
         return await svc.backup.verify(who, body.target, body.archive)
+
+    @router.post(
+        "/system/backups/restore",
+        tags=["system"],
+        summary="Restore tenants from a backup into this controller",
+        response_model=BackupRestoreRead,
+        responses=_ok(ex.BACKUP_RESTORE) | VALIDATION_RESPONSE,
+    )
+    async def restore_backup(body: BackupRestoreIn, who: Who, svc: Services) -> dict[str, Any]:
+        """Load every tenant of the archive. Meant for a fresh controller.
+
+        Desired state only: users, tokens and the audit log are not in a backup. `409` when a
+        tenant with the same id or name already exists (nothing is written), or when the
+        archive cannot be opened. Use `dry_run` first. Restored tenants have no engines.
+        """
+        return await svc.backup.restore(
+            who, body.target, body.archive, dry_run=body.dry_run, request_id=_rid()
+        )
 
     @router.get(
         "/system/upgrade/check",

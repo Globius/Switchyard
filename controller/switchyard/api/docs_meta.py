@@ -557,6 +557,11 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     },
     "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
     "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
+    "POST /system/backups/restore": {
+        "target": "nightly",
+        "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+        "dry_run": True,
+    },
     "POST /system/backup-targets": {
         "name": "nightly",
         "passphrase_ref": "secret/backup/passphrase",

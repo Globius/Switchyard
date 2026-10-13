@@ -3244,6 +3244,77 @@
         "title": "AviVipRead",
         "type": "object"
       },
+      "BackupRestoreIn": {
+        "additionalProperties": false,
+        "description": "Which archive to load.",
+        "properties": {
+          "archive": {
+            "title": "Archive",
+            "type": "string"
+          },
+          "dry_run": {
+            "default": false,
+            "description": "Report what would be restored; write nothing.",
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "archive"
+        ],
+        "title": "BackupRestoreIn",
+        "type": "object"
+      },
+      "BackupRestoreRead": {
+        "additionalProperties": false,
+        "description": "What the archive holds, and whether it was restored.",
+        "properties": {
+          "controller_version": {
+            "title": "Controller Version",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "restored": {
+            "title": "Restored",
+            "type": "boolean"
+          },
+          "schema_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Revision"
+          },
+          "tenants": {
+            "items": {
+              "$ref": "#/components/schemas/BackupTenantSummary"
+            },
+            "title": "Tenants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "controller_version",
+          "schema_revision",
+          "created_at",
+          "tenants",
+          "restored"
+        ],
+        "title": "BackupRestoreRead",
+        "type": "object"
+      },
       "BackupRunIn": {
         "additionalProperties": false,
         "description": "Which destination to back up to.",
@@ -31600,6 +31671,118 @@
           }
         },
         "summary": "Back up the configuration now",
+        "tags": [
+          "system"
+        ],
+        "x-required-role": "system-admin"
+      }
+    },
+    "/api/v1/system/backups/restore": {
+      "post": {
+        "description": "Load every tenant of the archive. Meant for a fresh controller.\n\nDesired state only: users, tokens and the audit log are not in a backup. `409` when a\ntenant with the same id or name already exists (nothing is written), or when the\narchive cannot be opened. Use `dry_run` first. Restored tenants have no engines.\n\n**Access:** `system-admin` only.",
+        "operationId": "restore_backup_api_v1_system_backups_restore_post",
+        "parameters": [
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                "dry_run": true,
+                "target": "nightly"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/BackupRestoreIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "controller_version": "0.1.0",
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "restored": true,
+                  "schema_revision": "0046",
+                  "tenants": [
+                    {
+                      "certificates": 5,
+                      "name": "acme",
+                      "pools": 14,
+                      "se_groups": 2,
+                      "virtual_services": 12
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/BackupRestoreRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Restore tenants from a backup into this controller",
         "tags": [
           "system"
         ],

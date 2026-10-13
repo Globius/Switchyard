@@ -80,6 +80,7 @@ CATALOG: tuple[AuditAction, ...] = (
     _a("quota_request.deny", "A quota request was denied."),
     _a("quota_request.withdraw", "A tenant withdrew its quota request."),
     _a("backup.created", "A configuration backup was written."),
+    _a("backup.restored", "A configuration backup was restored into this controller."),
     _a("backup.failed", "A configuration backup could not be written."),
     _a("backup_target.created", "A backup destination was added."),
     _a("backup_target.deleted", "A backup destination was removed."),

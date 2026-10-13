@@ -255,6 +255,7 @@ for _path in (
 ROUTES[("GET", "/system/controller")] = ("manage", "controller")
 ROUTES[("GET", "/system/upgrade/check")] = ("manage", "controller")
 ROUTES[("POST", "/system/backups/verify")] = ("manage", "controller")
+ROUTES[("POST", "/system/backups/restore")] = ("manage", "controller")
 ROUTES[("POST", "/system/backups")] = ("manage", "controller")
 ROUTES[("GET", "/system/backups")] = ("manage", "controller")
 ROUTES[("POST", "/system/backup-targets/{name}/test")] = ("manage", "controller")
@@ -351,6 +352,7 @@ BODIES: dict[tuple[str, str], Any] = {
     },
     ("POST", "/system/backups"): {"target": "bk"},
     ("POST", "/system/backups/verify"): {"target": "bk", "archive": "x.syb"},
+    ("POST", "/system/backups/restore"): {"target": "bk", "archive": "x.syb", "dry_run": True},
     ("POST", "/system/controller/members"): {
         "name": "ctl-x",
         "address": "10.0.0.13",
