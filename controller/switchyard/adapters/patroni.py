@@ -5,12 +5,14 @@
 """Patroni's REST API: the cluster view the controller shows for its own members (ADR 0051).
 
 Only ``GET /cluster`` is used, and only to read. Patroni answers it without authentication on its
-REST port, which is why the port must stay on the controllers' private network.
+REST port, which is why the port is limited to the controller nodes (and https with a private CA on a
+hardened install).
 :class:`FakePatroni` is an in-memory answer for tests.
 """
 
 import asyncio
 import ipaddress
+import os
 import socket
 from typing import Any, Protocol
 from urllib.parse import urlsplit
@@ -60,17 +62,24 @@ def check_target(base_url: str) -> None:
 
 
 class HttpPatroni:
-    """The real client."""
+    """The real client.
 
-    def __init__(self, timeout_s: float = TIMEOUT_S) -> None:
-        """Create a client with a per-call timeout."""
+    Patroni's REST API on a hardened install (``deploy/prod``) is https with a private CA: set
+    ``SWITCHYARD_PATRONI_CA`` to that CA file, or pass ``ca_file``.
+    """
+
+    def __init__(self, timeout_s: float = TIMEOUT_S, ca_file: str | None = None) -> None:
+        """Create a client with a per-call timeout and an optional CA file for https members."""
         self._timeout = timeout_s
+        self._verify: str | bool = ca_file or os.environ.get("SWITCHYARD_PATRONI_CA") or True
 
     async def cluster(self, base_url: str) -> dict[str, Any]:
         """Ask one member for the cluster view."""
         await asyncio.to_thread(check_target, base_url)
         try:
-            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=False) as client:
+            async with httpx.AsyncClient(
+                timeout=self._timeout, follow_redirects=False, verify=self._verify
+            ) as client:
                 response = await client.get(base_url.rstrip("/") + "/cluster")
             response.raise_for_status()
             payload = response.json()

@@ -71,8 +71,8 @@ roles.
 ```yaml
 # in the adoption file (deploy/prod/adopt/management.example.yaml), or POST /system/controller/members
 controller_members:
-  - {name: ctl-1, address: 10.0.0.11, platform: proxmox, host: pve1, patroni_url: "http://10.0.0.11:8008"}
-  - {name: ctl-esxi, address: 10.0.0.13, platform: esxi, host: esxi-01, nofailover: true, patroni_url: "http://10.0.0.13:8008"}
+  - {name: ctl-1, address: 10.0.0.11, platform: proxmox, host: pve1, patroni_url: "https://10.0.0.11:8008"}
+  - {name: ctl-esxi, address: 10.0.0.13, platform: esxi, host: esxi-01, nofailover: true, patroni_url: "https://10.0.0.13:8008"}
 ```
 
 - The list only describes the VMs. Adding or removing an entry never touches a VM, etcd or Patroni; to retire a member, run

@@ -123,3 +123,11 @@ def test_the_client_accepts_a_private_address() -> None:
 async def test_the_client_refuses_before_connecting() -> None:
     with pytest.raises(PatroniError, match="may contact"):
         await HttpPatroni().cluster("http://127.0.0.1:1")
+
+
+def test_the_client_trusts_the_configured_ca(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SWITCHYARD_PATRONI_CA", "/run/switchyard/mtls/ca.crt")
+    assert HttpPatroni()._verify == "/run/switchyard/mtls/ca.crt"
+    assert HttpPatroni(ca_file="/x.pem")._verify == "/x.pem"
+    monkeypatch.delenv("SWITCHYARD_PATRONI_CA")
+    assert HttpPatroni()._verify is True
