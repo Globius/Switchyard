@@ -274,7 +274,12 @@ class TestBroker:
         ]
         listing = json.loads(files["dex/instances.json"])["instances"]
         assert listing == [
-            {"name": "acme-staff", "path": "/dex/acme/staff", "port": BROKER_PORT_BASE}
+            {
+                "name": "acme-staff",
+                "path": "/dex/acme/staff",
+                "port": BROKER_PORT_BASE,
+                "gate": False,
+            }
         ]
         routes = files["dex/routes.conf"]
         assert "location /dex/acme/staff/ {" in routes

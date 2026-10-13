@@ -54,6 +54,13 @@ ROUTES: dict[tuple[str, str], Any] = {
     ("GET", "/me"): ANY,
     ("GET", "/permissions"): ANY,
     ("POST", "/enroll"): PUBLIC,
+    ("POST", "/device/enroll"): PUBLIC,
+    ("POST", "/device/report"): PUBLIC,
+    ("POST", "/tenants/{t}/device-enrollments"): ("manage", "device"),
+    ("GET", "/tenants/{t}/devices"): ("read", "tenant_data"),
+    ("GET", "/tenants/{t}/devices/{device}"): ("read", "tenant_data"),
+    ("POST", "/tenants/{t}/devices/{device}/revoke"): ("manage", "device"),
+    ("DELETE", "/tenants/{t}/devices/{device}"): ("manage", "device"),
     ("GET", "/jobs/{job_id}"): ANY,
     ("GET", "/tenants"): ANY,
     ("POST", "/tenants"): ("manage", "tenant"),
@@ -268,6 +275,7 @@ ROUTES.pop(("GET", "/tenants/{t}/routing-profiles/{object_id}/rendered"), None)
 # valid request bodies, so the role check (not body validation) decides the status
 NOW = "2038-01-01T00:00:00+00:00"
 BODIES: dict[tuple[str, str], Any] = {
+    ("POST", "/tenants/{t}/device-enrollments"): {"policy_id": "{uuid}"},
     ("POST", "/tenants/{t}/engines/{engine}/captures"): {"interface": "any", "duration_s": 5},
     ("POST", "/tenants/{t}/health-monitors/{monitor_id}/test"): {
         "pool_id": "{uuid}",
@@ -443,6 +451,7 @@ def fill(path: str) -> str:
     for key in (
         "cs",
         "engine",
+        "device",
         "object_id",
         "job_id",
         "mapping",
@@ -534,6 +543,11 @@ TOKEN_MAKERS = {("POST", "/tenants/{t}/tokens"), ("POST", "/system/tokens")}
 NOT_REQUESTED = {("GET", "/tenants/{t}/status/stream")}
 #: Routes whose backing service is not wired in this test application (503 before any role check).
 NOT_CONFIGURED = {
+    ("POST", "/tenants/{t}/device-enrollments"),
+    ("GET", "/tenants/{t}/devices"),
+    ("GET", "/tenants/{t}/devices/{device}"),
+    ("POST", "/tenants/{t}/devices/{device}/revoke"),
+    ("DELETE", "/tenants/{t}/devices/{device}"),
     ("POST", "/tenants/{t}/engines/{engine}/enrollment-token"),
     ("POST", "/tenants/{t}/certificates/import"),
     ("POST", "/tenants/{t}/certificates/import-ca"),

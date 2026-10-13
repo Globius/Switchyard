@@ -6,11 +6,10 @@ bundle over mTLS (backend design, "Secrets"); they are never rendered into the H
 revision snapshots or the Git mirror.
 """
 
-import os
 from uuid import UUID
 
 from switchyard.adapters.secrets import SecretsReader
-from switchyard.config import BROKER_URL_ENV
+from switchyard.config import broker_url
 from switchyard.domain import models as dm
 from switchyard.domain.snapshot import Snapshot
 from switchyard.render import captcha
@@ -101,7 +100,7 @@ async def _auth_files(
         except LookupError as exc:
             raise BundleError(f"secret {ref} for an access policy set not found") from exc
     try:
-        return render_auth_files(snapshot, group.id, found, os.environ.get(BROKER_URL_ENV))
+        return render_auth_files(snapshot, group.id, found, broker_url())
     except RenderError as exc:
         raise BundleError(str(exc)) from exc
 

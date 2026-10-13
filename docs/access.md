@@ -140,10 +140,51 @@ oidc:
 - **Local users:** `connector: {type: local, users: [{username, email, password_hash_ref}]}`; store a bcrypt hash
   (`htpasswd -nbBC 10 "" 'password' | tr -d ':
 '`) in OpenBao. Local users have no groups, so use `login` or `email_domains` rules.
-- **RADIUS** is not offered (Dex has no connector); federate through an OIDC provider that has one.
+- **RADIUS:** see the next section.
 
 The broker needs `SWITCHYARD_AUTH_BROKER_URL` on the controller and the services in `deploy/prod/compose.broker.yaml`
 (`docs/runbooks/login-broker.md`).
+
+## RADIUS, second factors and step-up (`radius` connector)
+
+A `radius` directory checks the password (PAP) against your RADIUS server through the **login gate**, a small service that sits in
+front of the broker's Dex (ADR 0195). It also handles Access-Challenge replies, so an OTP server that asks for a code works.
+
+```yaml
+kind: directory
+name: corp-radius
+connector:
+  type: radius
+  servers:
+    - {name: main, host: radius.example.test, secret_ref: kv/tenants/acme/auth/radius}
+    - {name: otp,  host: otp.example.test,    secret_ref: kv/tenants/acme/auth/otp}
+  email_domain: example.test            # RADIUS has no address: users become <name>@example.test
+  group_attribute: filter_id            # or class; the values become groups
+  signing_secret_ref: kv/tenants/acme/auth/gate   # at least 16 characters; signs the gate's cookies
+flow:                                   # optional; without it there is one password step on the first server
+  steps:
+    - {name: password, server: main}
+    - name: otp
+      kind: code
+      server: otp
+      prompt: One-time code
+      when: {groups_any: [admins], source_not_in: [10.0.0.0/8]}   # only admins coming from outside the office
+```
+
+Steps run in order and a step whose `when` does not hold is skipped. After n passed factors a person holds the groups
+`sy-factors-1` to `sy-factors-n` (a group the RADIUS server sends with that prefix is dropped). To insist on a stronger login for
+part of a service, add `min_factors` to the rule:
+
+```yaml
+rules:
+  - match: {path_prefix: /admin}
+    mode: login
+    min_factors: 2          # a session with one factor is sent to the gate for the second, then back
+```
+
+`min_factors` works only with a directory that has a flow of at least that many steps. GET and HEAD requests are redirected, other
+methods get 403. The origin sees the `sy-factors-n` groups in the groups header. Run the gate with the broker
+(`deploy/prod/compose.broker.yaml`, service `broker-gate`); see `docs/runbooks/login-broker.md`.
 
 ## Device posture
 
@@ -161,3 +202,6 @@ rules:
 ```
 
 Claims come from the ID token and are re-read at each session refresh.
+
+To check the laptop itself (disk encryption, firewall, patches), enroll it with the `sy-posture` agent and require the certificate it
+earns; see [Device posture and device certificates](device-posture.md).

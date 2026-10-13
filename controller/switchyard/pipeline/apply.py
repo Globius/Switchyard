@@ -40,6 +40,7 @@ from switchyard.adapters.agent import AgentEngine, AgentError
 from switchyard.adapters.haproxy import HaproxyEngine, HaproxyError, ServerStatus
 from switchyard.adapters.sandbox import SandboxValidator, require_valid
 from switchyard.adapters.secrets import SecretsReader
+from switchyard.config import broker_url
 from switchyard.db import audit_log
 from switchyard.db import changesets as store
 from switchyard.db.repository import load_snapshot
@@ -380,7 +381,7 @@ class ApplyPipeline:
         group: SeGroup,
         opened: list[HaproxyEngine | AgentEngine],
     ) -> _Plan:
-        target = render_haproxy(base, group.id)
+        target = render_haproxy(base, group.id, broker_url())
         plan = _Plan(group=group, target=target, previous=None)
         records = [
             r
@@ -470,9 +471,11 @@ class ApplyPipeline:
     ) -> list[_Plan]:
         plans: list[_Plan] = []
         for group in sorted(draft.snapshot.se_groups, key=lambda g: g.name):
-            target = render_haproxy(draft.snapshot, group.id)
+            target = render_haproxy(draft.snapshot, group.id, broker_url())
             existed = any(g.id == group.id for g in base.se_groups)
-            previous: RenderResult | None = render_haproxy(base, group.id) if existed else None
+            previous: RenderResult | None = (
+                render_haproxy(base, group.id, broker_url()) if existed else None
+            )
             if not _renders_anything(target) and previous is None:
                 continue  # a brand-new group with no services needs no push yet
             plan = _Plan(group=group, target=target, previous=previous)

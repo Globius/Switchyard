@@ -1,4 +1,5 @@
-# Optional login broker (ADR 0137): Dex for directory logins (LDAP, SAML, local users).
+# Optional login broker (ADR 0137): Dex for directory logins (LDAP, SAML, local users, and RADIUS
+# behind the login gate, ADR 0195).
 #   docker compose --env-file node.env -f compose.yaml -f compose.broker.yaml up -d
 # Set AUTH_BROKER_URL to the public base URL, for example https://auth.example.test/dex, and route
 # that path to the `proxy` service (include the generated routes.conf; see docs/runbooks/login-broker.md).
@@ -28,5 +29,15 @@ services:
       - ./broker/run.sh:/run.sh:ro
       - broker-config:/broker:ro
       - broker-state:/var/lib/dex
+    depends_on: [proxy, broker-render]
+  # The login gate (ADR 0195): fronts the Dex instances of RADIUS directories. Harmless without any
+  # (it serves nothing); the proxy routes only RADIUS directories to it.
+  broker-gate:
+    image: ${CONTROLLER_IMAGE:-switchyard-controller:latest}
+    restart: unless-stopped
+    network_mode: "service:proxy"
+    command: ["syctl", "broker", "gate", "--dir", "/broker/gate"]
+    volumes:
+      - broker-config:/broker:ro
     depends_on: [proxy, broker-render]
 volumes: {broker-config: {}, broker-state: {}}

@@ -43,6 +43,11 @@ TAGS: list[dict[str, str]] = [
         "name": "alerts",
         "description": "Alert targets (webhook, chat, email), rules on events, metrics and certificate expiry, and what is firing.",
     },
+    {
+        "name": "devices",
+        "description": "Device posture: enrollment tokens, enrolled devices and the signed "
+        "reports of the device agent that turn into short-lived client certificates.",
+    },
     {"name": "pools", "description": "Backend pools and members; runtime member state."},
     {"name": "health-monitors", "description": "Active health checks for pools."},
     {"name": "certificates", "description": "Certificates: import, issue, renew."},
@@ -119,6 +124,7 @@ PARAMS: dict[str, str] = {
     "n": "Revision number.",
     "job_id": "Job id.",
     "engine": "Engine id.",
+    "device": "Device id.",
     "service": "Virtual service id.",
     "group": "SE group id.",
     "pool": "Pool id.",
@@ -296,6 +302,13 @@ ACCESS: list[tuple[str, str, str, bool]] = [
     ("GET", r"/auth/(providers|login/\{provider\}|callback/\{provider\}|saml/.*)", "public", True),
     ("POST", r"/auth/(break-glass|callback/\{provider\})", "public", True),
     ("POST", r"/enroll", "public", True),
+    ("POST", r"/device/(enroll|report)", "public", True),
+    (
+        "(POST|DELETE)",
+        r"/tenants/\{t\}/(device-enrollments|devices(/\{device\}(/revoke)?)?)",
+        "tenant-admin",
+        False,
+    ),
     ("POST", r"/auth/logout", "authenticated", False),
     ("GET", r"/me", "authenticated", False),
     ("(GET|POST)", r"/auth/refresh|/permissions", "authenticated", False),
@@ -472,6 +485,27 @@ REQUEST_EXAMPLES: dict[str, Any] = {
         "username": "breakglass",
         "password": "example-password",
         "totp": "123456",
+    },
+    "POST /tenants/{t}/device-enrollments": {
+        "policy_id": "0198b7c0-0000-7000-8000-000000000007",
+        "label": "Ana's laptop",
+    },
+    "POST /device/enroll": {
+        "token": "sydev_0123456789",
+        "name": "laptop-ana",
+        "public_key": "q0y0uUa3C5Qc4q2Ew2n7Fq0vXH1nDhI0zvY1m9eF8bA=",
+        "owner": "ana@example.test",
+    },
+    "POST /device/report": {
+        "facts": {
+            "os": "windows",
+            "os_version": "10.0.22631",
+            "disk_encrypted": True,
+            "firewall_enabled": True,
+            "days_since_update": 6,
+            "agent_version": "1.0.0",
+        },
+        "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIB...\n-----END CERTIFICATE REQUEST-----\n",
     },
     "POST /enroll": {
         "token": "sy_enroll_0123456789",
@@ -651,6 +685,9 @@ UNAVAILABLE: dict[str, str] = {
     "POST /tenants/{t}/certificates/import": "No secrets backend (OpenBao) is configured.",
     "POST /tenants/{t}/certificates/import-ca": "No secrets backend (OpenBao) is configured.",
     "POST /enroll": "Agent enrollment is not configured.",
+    "POST /device/enroll": "Device enrollment is not configured.",
+    "POST /device/report": "Device enrollment is not configured.",
+    "POST /tenants/{t}/device-enrollments": "Device enrollment is not configured.",
     "POST /tenants/{t}/engines/{engine}/enrollment-token": "Agent enrollment is not configured.",
 }
 

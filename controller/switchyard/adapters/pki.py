@@ -9,7 +9,7 @@ in-process CA for development and tests.
 import ipaddress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Literal, Protocol
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -42,8 +42,14 @@ class PkiSigner(Protocol):
         common_name: str,
         ip_sans: tuple[str, ...],
         ttl: timedelta,
+        usage: Literal["server", "client"] = "server",
+        uri_sans: tuple[str, ...] = (),
     ) -> SignedCert:
-        """Return a certificate for the CSR's public key with exactly the given names."""
+        """Return a certificate for the CSR's public key with exactly the given names.
+
+        ``usage`` ``client`` makes a client-authentication certificate (a device, ADR 0196); its
+        only name is ``common_name`` plus the ``uri_sans``.
+        """
         ...
 
 
@@ -107,11 +113,24 @@ class LocalCa:
         common_name: str,
         ip_sans: tuple[str, ...],
         ttl: timedelta,
+        usage: Literal["server", "client"] = "server",
+        uri_sans: tuple[str, ...] = (),
     ) -> SignedCert:
-        """Sign for the CSR's public key with the given names (server authentication)."""
+        """Sign for the CSR's public key with the given names (server or client authentication)."""
         csr = load_csr(csr_pem)
         now = datetime.now(UTC)
-        cert = (
+        names: list[x509.GeneralName] = (
+            [x509.DNSName(common_name)] + [x509.IPAddress(ipaddress.ip_address(i)) for i in ip_sans]
+            if usage == "server"
+            else []
+        )
+        names += [x509.UniformResourceIdentifier(u) for u in uri_sans]
+        usages = [
+            ExtendedKeyUsageOID.SERVER_AUTH
+            if usage == "server"
+            else ExtendedKeyUsageOID.CLIENT_AUTH
+        ]
+        builder = (
             x509.CertificateBuilder()
             .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)]))
             .issuer_name(self._cert.subject)
@@ -119,16 +138,11 @@ class LocalCa:
             .serial_number(x509.random_serial_number())
             .not_valid_before(now - timedelta(minutes=5))
             .not_valid_after(now + ttl)
-            .add_extension(
-                x509.SubjectAlternativeName(
-                    [x509.DNSName(common_name)]
-                    + [x509.IPAddress(ipaddress.ip_address(i)) for i in ip_sans]
-                ),
-                critical=False,
-            )
-            .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-            .sign(self._key, hashes.SHA256())
+            .add_extension(x509.ExtendedKeyUsage(usages), critical=False)
         )
+        if names:
+            builder = builder.add_extension(x509.SubjectAlternativeName(names), critical=False)
+        cert = builder.sign(self._key, hashes.SHA256())
         return SignedCert(
             cert.public_bytes(serialization.Encoding.PEM).decode(),
             self.ca_pem,
@@ -151,21 +165,23 @@ class OpenBaoPki:
         common_name: str,
         ip_sans: tuple[str, ...],
         ttl: timedelta,
+        usage: Literal["server", "client"] = "server",
+        uri_sans: tuple[str, ...] = (),
     ) -> SignedCert:
-        """Ask OpenBao to sign the CSR."""
+        """Ask OpenBao to sign the CSR (a client certificate needs a role with ``client_flag``)."""
         load_csr(csr_pem)
+        request: dict[str, object] = {
+            "csr": csr_pem,
+            "common_name": common_name,
+            "ttl": f"{int(ttl.total_seconds())}s",
+            "format": "pem",
+        }
+        if usage == "server":
+            request |= {"alt_names": common_name, "ip_sans": ",".join(ip_sans)}
+        if uri_sans:
+            request["uri_sans"] = ",".join(uri_sans)
         try:
-            data = await self._bao.call(
-                self._path,
-                {
-                    "csr": csr_pem,
-                    "common_name": common_name,
-                    "alt_names": common_name,
-                    "ip_sans": ",".join(ip_sans),
-                    "ttl": f"{int(ttl.total_seconds())}s",
-                    "format": "pem",
-                },
-            )
+            data = await self._bao.call(self._path, request)
         except SecretBackendError as exc:
             raise PkiError(str(exc)) from exc
         cert, ca = data.get("certificate"), data.get("issuing_ca")

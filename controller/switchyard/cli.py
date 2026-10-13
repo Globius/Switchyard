@@ -192,6 +192,7 @@ def serve(
         gslb=runtime.gslb_service(db),
         autoscaler=runtime.autoscaler(db, runtime.directory(db), secrets),
         email_configured=runtime.smtp_settings() is not None,
+        devices=runtime.devices(db, secrets),
     )
     public_url = os.environ.get("SWITCHYARD_PUBLIC_URL")
     app = create_app(
@@ -391,7 +392,7 @@ def create_system_token(
 
 
 broker_app = typer.Typer(
-    help="The login broker for LDAP, SAML and local users.", no_args_is_help=True
+    help="The login broker for LDAP, SAML, RADIUS and local users.", no_args_is_help=True
 )
 app.add_typer(broker_app, name="broker")
 
@@ -431,6 +432,24 @@ def broker_render(
         typer.echo(rel)
 
 
+@broker_app.command("gate")
+def broker_gate(
+    directory: Annotated[
+        Path,
+        typer.Option("--dir", help="Directory with the gate/*.json files.", file_okay=False),
+    ],
+    port: Annotated[
+        int, typer.Option(help="Loopback port (the proxy routes RADIUS logins here).")
+    ] = 5599,
+) -> None:
+    """Run the login gate for RADIUS directories (ADR 0195); it follows changes to its files."""
+    import uvicorn
+
+    from switchyard.gate.app import build_app
+
+    uvicorn.run(build_app(directory), host="127.0.0.1", port=port, log_level="info")
+
+
 jwks_app = typer.Typer(help="Work with JSON Web Key Sets (JWT policy sets).", no_args_is_help=True)
 app.add_typer(jwks_app, name="jwks")
 
@@ -449,6 +468,51 @@ def jwks_convert(
     except JwksError as exc:
         raise fail(str(exc), 2) from exc
     typer.echo(json.dumps(keys, indent=2))
+
+
+waf_app = typer.Typer(help="Web application firewall helpers.", no_args_is_help=True)
+app.add_typer(waf_app, name="waf")
+
+
+@waf_app.command("api-schema")
+def waf_api_schema(
+    file: Annotated[
+        Path, typer.Argument(help="An OpenAPI 3.x or Swagger 2.0 file (YAML or JSON).")
+    ],
+    mode: Annotated[str, typer.Option(help="detect (log only) or block.")] = "detect",
+    base_path: Annotated[
+        str | None, typer.Option(help="Prefix of every path; default: from the file.")
+    ] = None,
+    allow_unknown_query: Annotated[
+        bool, typer.Option(help="Accept query parameters the file does not list.")
+    ] = False,
+    max_body_bytes: Annotated[
+        int | None, typer.Option(help="Largest request body for operations that set none.")
+    ] = None,
+) -> None:
+    """Print the ``api`` part of a ``waf`` policy set made from an OpenAPI file (ADR 0197).
+
+    Operations the schema cannot hold are listed on stderr and left out; start in detect mode.
+    """
+    import json
+
+    from switchyard.importers.openapi import OpenApiError, api_schema_from_openapi
+
+    if mode not in ("detect", "block"):
+        raise fail("--mode must be detect or block", 2)
+    try:
+        schema, warnings = api_schema_from_openapi(
+            file.read_text("utf-8"),
+            mode=mode,
+            base_path=base_path,
+            allow_unknown_query=allow_unknown_query,
+            max_body_bytes=max_body_bytes,
+        )
+    except (OpenApiError, OSError) as exc:
+        raise fail(str(exc), 2) from exc
+    for warning in warnings:
+        typer.secho(f"warning: {warning}", fg=typer.colors.YELLOW, err=True)
+    typer.echo(json.dumps({"api": schema.model_dump(mode="json", exclude_defaults=True)}, indent=2))
 
 
 idp_app = typer.Typer(help="Identity providers for user login (OIDC).", no_args_is_help=True)

@@ -2,6 +2,7 @@
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from switchyard.config import broker_url
 from switchyard.db.repository import find_se_group_id, find_tenant_id, load_snapshot
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.render.haproxy import RenderResult, render_haproxy
@@ -40,4 +41,4 @@ async def render_se_group(
         if group_id is None:
             raise NotFoundError(f"SE group {se_group_name!r} not found in tenant {tenant_name!r}")
         snapshot = await load_snapshot(session)
-    return render_haproxy(snapshot, group_id)
+    return render_haproxy(snapshot, group_id, broker_url())

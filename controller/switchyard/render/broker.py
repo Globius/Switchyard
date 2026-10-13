@@ -28,9 +28,12 @@ from switchyard.render.escape import RenderError
 
 #: First loopback port of the broker instances.
 BROKER_PORT_BASE = 5600
+#: Loopback port of the login gate (one process serves every RADIUS directory, ADR 0195).
+GATE_PORT = 5599
 MAX_INSTANCES = 1000
 _BCRYPT = re.compile(r"^\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}$")
 _SECRET = re.compile(r"[A-Za-z0-9._~+/=-]{8,512}")
+_RADIUS_SECRET = re.compile(r"[!-~]{8,128}")
 _NAMESPACE = uuid.UUID("5b3c6e9e-0f0a-4e5b-9a55-0c0d5a3f7a11")
 
 
@@ -43,6 +46,8 @@ class Client:
     client_secret_ref: str
     redirect_uris: tuple[str, ...]
     lifetime_s: int
+    hosts: tuple[str, ...] = ()
+    auth_path: str = "/oauth2"
 
 
 @dataclass(frozen=True)
@@ -109,7 +114,13 @@ def broker_instances(snapshot: Snapshot) -> list[BrokerInstance]:
                 )
             )
             client = Client(
-                ps.name, oidc.client_id, oidc.client_secret_ref, uris, oidc.cookie_expire_s
+                ps.name,
+                oidc.client_id,
+                oidc.client_secret_ref,
+                uris,
+                oidc.cookie_expire_s,
+                tuple(sorted(esc.hostname(h) for h in oidc.redirect_hosts)),
+                esc.arg(ps.auth_path),
             )
             clients.setdefault(oidc.directory_id, []).append(client)  # type: ignore[arg-type]
     ordered = sorted(
@@ -138,6 +149,9 @@ def broker_secret_refs(snapshot: Snapshot) -> list[str]:
             refs.add(conn.bind_password_ref)
         elif isinstance(conn, dm.LocalConnector):
             refs |= {u.password_hash_ref for u in conn.users}
+        elif isinstance(conn, dm.RadiusConnector):
+            refs.add(conn.signing_secret_ref)
+            refs |= {srv.secret_ref for srv in conn.servers}
     return sorted(refs)
 
 
@@ -193,6 +207,19 @@ def _connector(inst: BrokerInstance, secrets: Mapping[str, str], issuer: str) ->
         if conn.groups_attr:
             config["groupsAttr"] = conn.groups_attr
         return {"type": "saml", "id": "saml", "name": name, "config": config}
+    if isinstance(conn, dm.RadiusConnector):
+        # Dex trusts these headers from whoever fronts /callback: that is the login gate, which
+        # sets them after RADIUS accepted the person and removes them from outside requests.
+        return {
+            "type": "authproxy",
+            "id": "radius",
+            "name": name,
+            "config": {
+                "userHeader": "X-Remote-User",
+                "emailHeader": "X-Remote-User-Email",
+                "groupHeader": "X-Remote-Group",
+            },
+        }
     raise RenderError("local users have no connector")  # pragma: no cover - handled by caller
 
 
@@ -265,12 +292,95 @@ def render_dex_config(inst: BrokerInstance, secrets: Mapping[str, str], broker_u
     return header + yaml.safe_dump(config, sort_keys=True, default_flow_style=False)
 
 
+def render_gate_config(inst: BrokerInstance, secrets: Mapping[str, str], broker_url: str) -> str:
+    """The login gate configuration (JSON, secrets included) of one RADIUS directory.
+
+    Raises:
+        RenderError: If a secret is missing or unusable, or the directory is not a RADIUS one.
+
+    Example:
+        >>> render_gate_config.__name__
+        'render_gate_config'
+    """
+    conn = inst.directory.connector
+    if not isinstance(conn, dm.RadiusConnector):
+        raise RenderError("only RADIUS directories have a gate")
+    base = check_broker_url(broker_url)
+    prefix = urlsplit(base).path.rstrip("/")
+    name = f"{esc.ident(inst.tenant)}-{esc.ident(inst.directory.name)}"
+    servers: dict[str, dict[str, object]] = {}
+    for srv in conn.servers:
+        value = secrets.get(srv.secret_ref)
+        if value is None:
+            raise RenderError(f"missing secret {srv.secret_ref} for directory {name}")
+        if not _RADIUS_SECRET.fullmatch(value):
+            raise RenderError(
+                f"the RADIUS secret of server {srv.name} must be 8 to 128 printable characters"
+            )
+        servers[esc.ident(srv.name)] = {
+            "host": esc.hostname(srv.host),
+            "port": srv.port,
+            "secret": value,
+            "timeout_s": srv.timeout_s,
+            "retries": srv.retries,
+            "require_message_authenticator": srv.require_message_authenticator,
+        }
+    signing = _secret(secrets, conn.signing_secret_ref, f"directory {name}")
+    if len(signing) < 16:
+        raise RenderError("the gate signing secret must be at least 16 characters")
+    first = esc.ident(conn.servers[0].name)
+    steps: list[dict[str, object]]
+    if inst.directory.flow is None:
+        steps = [{"name": "password", "kind": "password", "server": first, "prompt": "Password"}]
+    else:
+        steps = []
+        for st in inst.directory.flow.steps:
+            when: dict[str, list[str]] = {}
+            if st.when is not None:
+                if st.when.groups_any:
+                    when["groups_any"] = [esc.group_label(g) for g in st.when.groups_any]
+                if st.when.source_in:
+                    when["source_in"] = [str(n) for n in st.when.source_in]
+                if st.when.source_not_in:
+                    when["source_not_in"] = [str(n) for n in st.when.source_not_in]
+            steps.append(
+                {
+                    "name": esc.ident(st.name),
+                    "kind": st.kind,
+                    "server": esc.ident(st.server) if st.server else first,
+                    "prompt": st.prompt,
+                    **({"when": when} if when else {}),
+                }
+            )
+    hosts: dict[str, list[str]] = {}
+    for client in inst.clients:
+        for host in client.hosts:
+            hosts.setdefault(host, [])
+            if client.auth_path not in hosts[host]:
+                hosts[host].append(client.auth_path)
+    document = {
+        "name": name,
+        "path": f"{prefix}/{esc.ident(inst.tenant)}/{esc.ident(inst.directory.name)}",
+        "dex_port": inst.port,
+        "servers": servers,
+        "steps": steps,
+        "nas_identifier": conn.nas_identifier,
+        "group_attribute": conn.group_attribute,
+        "email_domain": esc.hostname(conn.email_domain),
+        "signing_secret": signing,
+        "login_timeout_s": conn.login_timeout_s,
+        "hosts": {h: sorted(p) for h, p in sorted(hosts.items())},
+    }
+    return json.dumps(document, indent=2, sort_keys=True) + "\n"
+
+
 def render_broker_files(
     snapshot: Snapshot, secrets: Mapping[str, str], broker_url: str
 ) -> dict[str, str]:
     """All broker files: ``dex/<tenant>-<directory>.yaml``, ``instances.json`` and ``routes.conf``.
 
-    ``instances.json`` lists the instances (name, public path, port) for the supervisor.
+    ``instances.json`` lists the instances (name, public path, port, ``gate``) for the supervisor,
+    and ``gate/<name>.json`` configures the login gate of each RADIUS directory (ADR 0195).
     ``routes.conf`` is an nginx snippet for the controller's public proxy: one ``location`` per
     instance that passes the request, path unchanged, to the instance on the loopback.
     """
@@ -282,10 +392,14 @@ def render_broker_files(
     for inst in broker_instances(snapshot):
         files[f"dex/{inst.name}.yaml"] = render_dex_config(inst, secrets, base)
         path = f"{prefix}/{esc.ident(inst.tenant)}/{esc.ident(inst.directory.name)}"
-        listing.append({"name": inst.name, "path": path, "port": inst.port})
+        gated = isinstance(inst.directory.connector, dm.RadiusConnector)
+        if gated:
+            files[f"gate/{inst.name}.json"] = render_gate_config(inst, secrets, base)
+        listing.append({"name": inst.name, "path": path, "port": inst.port, "gate": gated})
+        # RADIUS directories are reached through the login gate, which forwards to Dex
         routes.append(
             f"location {esc.arg(path)}/ {{\n"
-            f"    proxy_pass http://127.0.0.1:{inst.port};\n"
+            f"    proxy_pass http://127.0.0.1:{GATE_PORT if gated else inst.port};\n"
             "    proxy_set_header Host $host;\n"
             "    proxy_set_header X-Forwarded-Proto $scheme;\n"
             "    proxy_set_header X-Forwarded-For $remote_addr;\n"

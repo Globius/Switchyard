@@ -76,6 +76,37 @@ def validate_hostname(value: str) -> str:
     raise ValueError("hostname must not be an IP address")
 
 
+def validate_server_address(value: str) -> str:
+    """Validate the address of a server the broker host will contact: a hostname or a routable IP.
+
+    Loopback, link-local, unspecified, multicast and reserved addresses are refused, so a tenant
+    cannot aim the login gate at services on the broker host or at the metadata address.
+
+    Example:
+        >>> validate_server_address("radius.example.test")
+        'radius.example.test'
+        >>> validate_server_address("10.0.0.5")
+        '10.0.0.5'
+        >>> validate_server_address("127.0.0.1")
+        Traceback (most recent call last):
+            ...
+        ValueError: server address must be routable, not loopback, link-local or reserved
+    """
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return validate_hostname(value)
+    if (
+        address.is_loopback
+        or address.is_link_local
+        or address.is_unspecified
+        or address.is_multicast
+        or address.is_reserved
+    ):
+        raise ValueError("server address must be routable, not loopback, link-local or reserved")
+    return str(address)
+
+
 def validate_host_pattern(value: str) -> str:
     """Validate a hostname or a single-label wildcard such as ``*.example.com``.
 

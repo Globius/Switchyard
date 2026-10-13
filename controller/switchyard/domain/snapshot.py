@@ -43,8 +43,10 @@ from switchyard.domain.models import (
     NetworkRole,
     PolicySet,
     Pool,
+    PosturePolicySet,
     ProtectionPolicySet,
     Protocol,
+    RadiusConnector,
     RateLimitPolicySet,
     RateLimitRule,
     RoutingProfile,
@@ -178,6 +180,10 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
       namespace and out of the platform's (ADR 0071).
     - ``wrong_certificate_purpose``: ``certificate_ids`` hold server certificates and a port's
       ``client_ca_id`` a client CA.
+    - ``step_up_needs_flow`` and ``step_up_too_deep``: an access rule's ``min_factors`` needs a
+      directory whose login flow has at least that many steps (ADR 0195).
+    - ``pki_role_not_allowed``: a posture set's PKI role starts with its tenant's name and a dash
+      (ADR 0196).
     - ``needs_health_monitor`` and ``passive_check_layer7_needs_http``: passive checks and slow
       start build on a health monitor, and ``layer7`` observation needs an HTTP-only pool.
 
@@ -216,6 +222,7 @@ def validate_snapshot(snapshot: Snapshot) -> list[Problem]:
     _check_secret_scopes(snapshot, problems)
     _check_discovery_scopes(snapshot, problems)
     _check_directories(snapshot, problems)
+    _check_posture_roles(snapshot, problems)
 
     for kind, items in _tenant_owned(snapshot).items():
         for item in items:
@@ -495,6 +502,16 @@ def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
     """Access sets name a directory of their own tenant; local users have no groups."""
     directories = {p.id: p for p in snapshot.policy_sets if isinstance(p, DirectoryPolicySet)}
     for ps in snapshot.policy_sets:
+        if isinstance(ps, AccessPolicySet) and ps.oidc.directory_id is None:
+            if any(r.min_factors for r in ps.rules):
+                problems.append(
+                    Problem(
+                        f"policy_sets.{ps.name}.rules",
+                        "step_up_needs_flow",
+                        "min_factors needs a directory with a login flow, not an OIDC issuer",
+                    )
+                )
+            continue
         if not isinstance(ps, AccessPolicySet) or ps.oidc.directory_id is None:
             continue
         base = f"policy_sets.{ps.name}.oidc.directory_id"
@@ -508,6 +525,25 @@ def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
             problems.append(
                 Problem(base, "wrong_tenant", "directory belongs to a different tenant")
             )
+        wants = max((r.min_factors or 0 for r in ps.rules), default=0)
+        have = len(directory.flow.steps) if directory.flow else 0
+        if wants and not have:
+            problems.append(
+                Problem(
+                    f"policy_sets.{ps.name}.rules",
+                    "step_up_needs_flow",
+                    f"min_factors needs directory {directory.name} to have a login flow",
+                )
+            )
+        elif wants > have:
+            problems.append(
+                Problem(
+                    f"policy_sets.{ps.name}.rules",
+                    "step_up_too_deep",
+                    f"min_factors {wants} is more than the {have} steps of directory "
+                    f"{directory.name}",
+                )
+            )
         if isinstance(directory.connector, LocalConnector) and any(
             r.mode == "groups" for r in ps.rules
         ):
@@ -518,6 +554,26 @@ def _check_directories(snapshot: Snapshot, problems: list[Problem]) -> None:
                     f"directory {directory.name} holds local users, who have no groups",
                 )
             )
+
+
+def _check_posture_roles(snapshot: Snapshot, problems: list[Problem]) -> None:
+    """A posture set's PKI role starts with its tenant's name and a dash (``pki_role_not_allowed``).
+
+    Each tenant's devices are signed by a role (and so a CA) of their own; a shared role would
+    make one tenant's device certificates acceptable to every other tenant's ports.
+    """
+    names = {t.id: t.name for t in snapshot.tenants}
+    for ps in snapshot.policy_sets:
+        if isinstance(ps, PosturePolicySet) and ps.tenant_id in names:
+            prefix = f"{names[ps.tenant_id]}-"
+            if not ps.pki_role.startswith(prefix):
+                problems.append(
+                    Problem(
+                        f"policy_sets.{ps.name}.pki_role",
+                        "pki_role_not_allowed",
+                        f"the PKI role of tenant {names[ps.tenant_id]} must start with {prefix!r}",
+                    )
+                )
 
 
 def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
@@ -534,6 +590,10 @@ def _check_secret_scopes(snapshot: Snapshot, problems: list[Problem]) -> None:
             where = f"policy_sets.{ps.name}.connector"
             if isinstance(conn, LdapConnector):
                 refs.append((f"{where}.bind_password_ref", ps.tenant_id, conn.bind_password_ref))
+            if isinstance(conn, RadiusConnector):
+                refs.append((f"{where}.signing_secret_ref", ps.tenant_id, conn.signing_secret_ref))
+                for i, srv in enumerate(conn.servers):
+                    refs.append((f"{where}.servers[{i}].secret_ref", ps.tenant_id, srv.secret_ref))
             if isinstance(conn, LocalConnector):
                 for i, user in enumerate(conn.users):
                     refs.append(
