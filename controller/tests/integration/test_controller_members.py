@@ -265,5 +265,5 @@ async def test_adopt_records_the_members(pg_url: str) -> None:
     assert set(by_name) == {"ctl-1", "ctl-2", "ctl-esxi"}
     assert by_name["ctl-esxi"].external and by_name["ctl-esxi"].nofailover
     assert not by_name["ctl-1"].external
-    assert by_name["ctl-esxi"].patroni_url == "http://10.0.0.13:8008"
+    assert by_name["ctl-esxi"].patroni_url == "https://10.0.0.13:8008"  # the example uses TLS
     assert by_name["ctl-esxi"].created_by == "syctl adopt"
