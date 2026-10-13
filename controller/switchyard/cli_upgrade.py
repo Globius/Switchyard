@@ -228,3 +228,85 @@ def plan(bundle: Path, trust: Trust = []) -> None:  # noqa: B006
     if blockers:
         typer.echo("errors above should be resolved first")
         raise typer.Exit(2)
+
+
+#: Replaced in tests; real use runs commands with subprocess.
+APPLY_RUNNER: Any = None
+
+
+@upgrade_app.command("apply")
+def apply_cmd(
+    bundle: Path,
+    compose_file: Annotated[Path, typer.Option(help="This node's Compose file.")],
+    env_file: Annotated[
+        Path, typer.Option(help="This node's env file (CONTROLLER_IMAGE, PROXY_IMAGE).")
+    ],
+    health_url: Annotated[
+        str, typer.Option(help="This node's API, for the health check.")
+    ] = "http://127.0.0.1:8000",
+    workdir: Annotated[Path, typer.Option(help="Where to unpack the bundle (must be new).")] = Path(
+        "sy-upgrade"
+    ),
+    backup_target: Annotated[str | None, typer.Option(help="Back up to this target first.")] = None,
+    no_backup: Annotated[
+        bool, typer.Option(help="Upgrade without a configuration backup.")
+    ] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="Do not ask for confirmation.")] = False,
+    trust: Trust = [],  # noqa: B006
+) -> None:
+    """Upgrade THIS Docker Compose controller node. Run it on one node at a time.
+
+    Verifies the bundle, takes a configuration backup (or `--no-backup`), loads the images,
+    runs the migration, recreates api, worker and proxy, and waits until the node is healthy. If it
+    does not become healthy the node goes back to its old images.
+    """
+    import asyncio
+
+    import httpx
+
+    from switchyard.services.upgrade_apply import ApplyError, SubprocessRunner, apply_compose
+
+    if backup_target is None and not no_backup:
+        typer.echo("error: give --backup-target NAME, or --no-backup to go without", err=True)
+        raise typer.Exit(1)
+    try:
+        manifest = verify(bundle, _trusted(trust))
+    except BundleError as exc:
+        typer.echo(f"REFUSED: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(f"upgrading this node to switchyard {manifest.version}")
+    for line in manifest.notes.breaking + manifest.notes.action_required:
+        typer.echo(f"  note: {line}")
+    if not yes and not typer.confirm("continue?"):
+        raise typer.Exit(1)
+    if backup_target is not None:
+        run_ = _call("POST", "/system/backups", {"target": backup_target, "reason": "pre-upgrade"})
+        typer.echo(f"backup written: {run_['archive']}")
+
+    async def healthy() -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                return (
+                    await client.get(f"{health_url.rstrip('/')}/api/v1/healthz")
+                ).status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    try:
+        _, report = asyncio.run(
+            apply_compose(
+                bundle,
+                _trusted(trust),
+                compose_file=compose_file,
+                env_file=env_file,
+                workdir=workdir,
+                healthy=healthy,
+                run=APPLY_RUNNER or SubprocessRunner(),
+            )
+        )
+    except (ApplyError, BundleError) as exc:
+        typer.echo(f"FAILED: {exc}", err=True)
+        raise typer.Exit(3 if isinstance(exc, ApplyError) and not exc.rolled_back else 1) from exc
+    for step in report.steps:
+        typer.echo(f"  ok: {step}")
+    typer.echo("done. Next node, then the engines (runbooks/rolling-upgrade.md).")

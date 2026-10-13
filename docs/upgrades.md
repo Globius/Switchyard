@@ -100,7 +100,21 @@ syctl upgrade plan  switchyard-0.2.0.sybundle --trust release=<...>   # dry run 
 
 Air-gapped sites need nothing but the file and the public key.
 
+### Applying a bundle to a Compose node
+
+```sh
+syctl upgrade apply switchyard-0.2.0.sybundle --trust release=<key> \
+  --compose-file deploy/prod/compose.yaml --env-file node.env --backup-target nightly
+```
+
+Run it on **one controller node at a time**; that is the canary. It verifies the bundle, writes a pre-upgrade configuration backup (or
+needs `--no-backup`), loads the images, points `CONTROLLER_IMAGE` and `PROXY_IMAGE` in the env file at them, runs the migration once, recreates
+`api`, `worker` and `proxy`, and waits for `/api/v1/healthz`. If the node does not come back healthy, the env file gets its old image names back and
+the services are recreated on the old images, so a node is never left half-way. A failed migration changes nothing: migrations are additive by
+rule (ADR 0205), so the old code keeps working on whatever the migration did. If a node is bad, leave the others on the old version, which is the
+rollback. Not yet run on a real node: rehearse it in the lab first. Helm sites use `helm upgrade` with the chart from the bundle
+([deploy-kubernetes.md](deploy-kubernetes.md)); the migration Job and `wait-schema` init container do the same ordering.
+
 ## Planned (ADR 0205)
 
-Signed upgrade bundles, a dry-run plan, the
-engine roll as a job with a health gate and pause, and the Upgrades page in the UI.
+The engine roll as a job with a health gate, pause and abort, scheduled windows, and the Upgrades page in the UI.
