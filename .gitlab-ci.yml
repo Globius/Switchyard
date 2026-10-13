@@ -216,6 +216,7 @@ gitleaks:
     entrypoint: [""]
   variables:
     GIT_DEPTH: "0"
+    GIT_STRATEGY: clone   # a reused checkout can still hold refs from before the history rewrite
   script:
     - git config --global --add safe.directory "$CI_PROJECT_DIR"
     - gitleaks detect --source . --config .gitleaks.toml --redact --no-banner -v
