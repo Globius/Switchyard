@@ -18,7 +18,7 @@ from urllib.parse import parse_qsl, urlencode
 
 import httpx
 from fastapi import Request
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
 from switchyard.api.problems import ApiError
@@ -62,6 +62,9 @@ _RESPONSE_DROP = _HOP_BY_HOP | {"set-cookie", "set-cookie2"}
 
 #: Grafana paths that manage Grafana itself. A Viewer cannot use them anyway; refusing them here
 #: keeps that true if a role is ever wrong.
+#: The call Grafana's front end makes to renew its own session token.
+_ROTATE_PATH = "api/user/auth-tokens/rotate"
+
 _DENIED_PREFIXES = (
     "api/admin",
     "api/orgs",
@@ -146,6 +149,21 @@ class GrafanaProxy:
                 raise ApiError(413, "request body too large")
         return body
 
+    @staticmethod
+    def _rotate_answer() -> Response:
+        """Answer Grafana's session-token rotation ourselves.
+
+        The proxy owns the session (the ``sy_grafana`` cookie) and strips Grafana's own session
+        cookies, so Grafana has no token to rotate and answers 401. Its front end reloads the page
+        on that 401, and a browser that holds a ``grafana_session_expiry`` cookie from an earlier
+        direct visit to Grafana (cookies ignore the port) then reloads in a tight loop. The call
+        succeeds here, and the stale expiry cookie is cleared.
+        """
+        response = JSONResponse({"message": "The session is managed by Switchyard"})
+        for cookie_path in ("/", "/grafana", "/grafana/"):
+            response.delete_cookie("grafana_session_expiry", path=cookie_path)
+        return response
+
     # -- browser -> Grafana -----------------------------------------------------------------------
 
     async def forward(self, request: Request, path: str, grant: GrantInfo) -> Response:
@@ -153,6 +171,8 @@ class GrafanaProxy:
         path = _clean_path(path)
         if _denied(path):
             raise ApiError(403, "this part of Grafana is not available through Switchyard")
+        if request.method == "POST" and path.strip("/") == _ROTATE_PATH:
+            return self._rotate_answer()
         headers = {
             k: v
             for k, v in request.headers.items()

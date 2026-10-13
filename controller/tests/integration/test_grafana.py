@@ -211,6 +211,21 @@ async def test_the_proxy_needs_the_cookie_and_sets_the_identity_itself(env: Env)
     assert r.headers["location"] == "/grafana/next"
 
 
+async def test_grafanas_session_rotation_is_answered_by_the_proxy(env: Env) -> None:
+    """Grafana's front end reloads the page when the rotation call fails (401), which looped for a
+    browser that had a stale ``grafana_session_expiry`` cookie from a direct visit to Grafana."""
+    cookies = await env.session()
+    before = len(env.upstream.requests)
+    r = await env.client.post("/grafana/api/user/auth-tokens/rotate", cookies=cookies)
+    assert r.status_code == 200
+    assert len(env.upstream.requests) == before, "never forwarded: Grafana has no token to rotate"
+    cleared = r.headers.get_list("set-cookie")
+    assert any("grafana_session_expiry=" in c and "max-age=0" in c.lower() for c in cleared)
+    # still needs the proxy session like every other path
+    env.client.cookies.clear()
+    assert (await env.client.post("/grafana/api/user/auth-tokens/rotate")).status_code == 401
+
+
 async def test_grafana_administration_is_not_reachable(env: Env) -> None:
     cookies = await env.session()
     for path in (

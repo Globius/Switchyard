@@ -21,7 +21,9 @@ max_prefixes: 10
 - Static routes in the routing profile cover networks that are not directly attached.
 
 **Limits.** Engines accept no routes from their neighbours; `max_prefixes` is a guard against a broken upstream, not a table
-size. VRRP failover takes a few seconds (4 to 5 s in the lab); BGP failover depends on BFD and timers. The lab results are in
+size. FRR counts the prefixes it *accepts*, and the engines' inbound policy accepts none, so in the lab an upstream that
+announced four prefixes did not trip a limit of two (the session stayed up with "0 accepted prefixes"): treat the limit as
+not protecting you yet (see the lab pass of 2026-10-13). VRRP failover takes a few seconds (4 to 5 s in the lab); BGP failover depends on BFD and timers. The lab results are in
 [docs/lab](../lab/2026-10-12-full-pass.md).
 
 **Decisions:** [0008](../adr/0008-agent-routing-and-status.md), [0065](../adr/0065-bgp-prefix-limits.md),

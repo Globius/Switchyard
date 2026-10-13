@@ -21,8 +21,10 @@ Environment: SY_TOKEN (admin API token), TEMPLATE_VMID, LAB_TENANT (default lab)
 """
 
 import asyncio
+import base64
 import json
 import os
+import re
 import ssl
 import sys
 
@@ -215,7 +217,42 @@ async def lastapply(lab: Lab) -> dict:
     return {"job": job, "log": await lab.get(f"/jobs/{job['id']}/log")}
 
 
-COMMANDS = {"repair": repair, "engines": engines, "retire": retire, "health": health, "cert": cert, "vstls": vstls, "deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
+async def raw(lab: Lab, method: str, path: str, body: str = "", apply: str = "") -> dict:
+    """Any API call: raw METHOD PATH [JSON [apply]]. PATH is under /tenants/<tenant> unless it starts with /system or "root:" (then the rest is the whole path, e.g. root:/quota-requests).
+    In the JSON, "@pool:NAME", "@group:NAME", "@vip-pool:NAME", "@network:NAME", "@cert:NAME", "@vs:NAME", "@ps:NAME" (policy set), "@rp:NAME" (routing profile), "@hm:NAME" and "@engine:NAME" become ids.
+    Waits for the job when the answer carries a job_id."""
+    kinds = {"pool": "pools", "group": "se-groups", "vip-pool": "vip-pools", "network": "networks", "cert": "certificates",
+             "vs": "virtual-services", "engine": "engines", "ps": "policy-sets", "hm": "health-monitors", "rp": "routing-profiles"}
+    text = body or "null"
+    if text.startswith("b64:"):   # a JSON body survives ssh and shell quoting as base64
+        text = base64.b64decode(text[4:]).decode() or "null"
+    for kind, name in sorted(set(re.findall(r"@([a-z-]+):([A-Za-z0-9._-]+)", text + path))):
+        if kind in kinds:
+            ident = (await lab.find(kinds[kind], name))["id"]
+            text = text.replace(f"@{kind}:{name}", ident)
+            path = path.replace(f"@{kind}:{name}", ident)
+    path = path.replace("~", "&")   # "&" does not survive the ssh hops, so a query joins its parameters with "~"
+    path = "" if path == "." else path   # "." is the tenant itself
+    full = path[5:] if path.startswith("root:") else path if path.startswith("/system") else f"/tenants/{TENANT}{path}"
+    headers = None
+    if method.upper() in {"PATCH", "PUT", "DELETE"}:   # optimistic concurrency: send the current version
+        try:
+            current = await lab.request("GET", full)
+        except ApiClientError:   # no GET for one item: look it up in the list
+            parent, _, ident = full.rpartition("/")
+            listing = await lab.request("GET", parent)
+            rows = next((v for v in listing.values() if isinstance(v, list)), []) if isinstance(listing, dict) else listing
+            current = next((r for r in rows if r.get("id") == ident), None)
+        if isinstance(current, dict) and "version" in current:
+            headers = {"If-Match": f'"{current["version"]}"'}
+    out = await lab.request(method.upper(), full, json_body=json.loads(text), params={"apply": "true"} if apply else None, headers=headers)
+    if isinstance(out, dict) and out.get("job_id"):
+        job = await lab.wait_job(out["job_id"], timeout_s=300)
+        out["job"] = job if isinstance(job, dict) else str(job)
+    return out
+
+
+COMMANDS = {"raw": raw, "repair": repair, "engines": engines, "retire": retire, "health": health, "cert": cert, "vstls": vstls, "deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
 
 
 async def main() -> None:

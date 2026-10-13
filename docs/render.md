@@ -60,8 +60,10 @@ when the members' effective weights differ `wrr` / `wlc` (`sh` stays). Members: 
 0, `disabled` is omitted. A pool monitor of type `udp` renders `UDP_CHECK` per real server:
 `delay_loop` is the interval, `retry` is `fall`, `connect_timeout` the timeout, `connect_port` the
 monitor port, `payload` the hex payload and `require_reply` when set (`rise` has no UDP_CHECK
-equivalent). A pool without a monitor has no check. A member in another address family than the VIP is
-a render error.
+equivalent). A pool without a monitor has no check. The check runs from the engine to the member's own
+address and monitor port, so a `dr` or `tunnel` member must also listen there (not only on the VIP): when nothing
+answers on that address the real server is removed from IPVS (found in the lab, 2026-10-13). A member in another
+address family than the VIP is a render error.
 
 | Group mode | Files |
 | --- | --- |
