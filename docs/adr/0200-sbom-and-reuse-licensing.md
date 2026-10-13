@@ -1,6 +1,6 @@
 # ADR 0200: SBOMs in CI and REUSE licensing
 
-Status: Accepted
+Status: Accepted (licence confirmed by Miguel, 2026-10-13)
 
 ## Context
 
@@ -9,8 +9,8 @@ materials (SBOM). Operators in regulated environments ask for both, in SPDX form
 
 ## Decision
 
-- **Licence: Apache-2.0** as the default, because none had been chosen. It is permissive, carries a patent grant, and
-  suits an NSX ALB replacement that others will deploy. Miguel can change it: replace `LICENSE`, `LICENSES/`,
+- **Licence: Apache-2.0.** None had been chosen; Apache-2.0 was proposed as the default and Miguel confirmed it. It is permissive, carries a patent grant, and
+  suits an NSX ALB replacement that others will deploy. To change it, replace `LICENSE`, `LICENSES/`,
   the identifier in `REUSE.toml` and in the file headers (`reuse annotate --merge-copyrights` or a scripted rewrite).
 - **Per-file information with REUSE** (fsfe). Source files (`.py`, `.go`, `.ts`, `.tsx`, `.sh`) carry
   `SPDX-FileCopyrightText` and `SPDX-License-Identifier` headers. Everything else (docs, golden files, lock
