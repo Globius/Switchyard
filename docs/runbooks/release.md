@@ -111,3 +111,23 @@ RELEASE_SIGNING_KEY="$(cat nightly.pem)" RELEASE_KEY_ID=nightly-2026 sh tools/re
 RELEASE_SIGNING_KEY="$(cat nightly.pem)" RELEASE_KEY_ID=nightly-2026 \
   sh tools/release/feed.sh dist/switchyard-0.2.0-nightly.20261014.sybundle https://example.com/b.sybundle dist/nightly.json
 ```
+
+## Build on GitLab, publish to GitHub Releases
+
+When the GitLab project is private, its Package Registry cannot be read without a login, but controllers must fetch the feed and bundles
+anonymously. So GitLab can build and sign as usual and copy the result to the public GitHub repository. Set two GitLab CI variables
+(Settings > CI/CD > Variables):
+
+| Key | Value |
+| --- | --- |
+| `GITHUB_REPO` | `<org>/<repo>` on GitHub, for example `Globius/Switchyard` |
+| `GITHUB_RELEASE_TOKEN` | a fine-grained token limited to that repository with *Contents: Read and write*; protected and masked |
+
+With both set, `release-build` puts the bundle in the rolling release `nightly` (newest 14 kept) or in the release for the tag, and the signed
+feed (`nightly.json`, `releases.json`) in the rolling release `feed`. The feed then points at
+`https://github.com/<org>/<repo>/releases/download/feed/<file>`; that is the one place to point controllers at. The signing keys stay in GitLab and
+GitHub's `release.yml` stays off (`RELEASE_HOST` unset). GitLab still keeps a private copy of each bundle in its Package Registry. Without
+`GITHUB_REPO` the job publishes to the Package Registry as described above.
+
+A tag must reach GitHub through the push mirror before its release can be created; the job waits up to five minutes for it. The rolling
+releases create the tags `nightly` and `feed` on GitHub only: check once that a mirror update does not remove them.
