@@ -138,8 +138,8 @@ Roles are `viewer < operator < tenant-admin < system-admin`. They **nest**: each
 | runtime | import, issue, renew certificates | – | ✅ | ✅ | ✅ |
 | runtime | retry or cancel a job | – | own action only (see note) | ✅ | ✅ |
 | infrastructure | register, enable, disable, retire, remove engine; enrollment token; deploy SE group; apply SDN; manage the tenant's DNS credentials and Kubernetes clusters; enrollment tokens and revocation for posture devices | – | – | ✅ | ✅ |
-| tenant settings | turn `require_approval` on | – | – | ✅ | ✅ |
-| tenant settings | turn `require_approval` off; change quotas | – | – | – | ✅ |
+| tenant settings | turn `require_approval` on; ask for a higher quota (a quota request) | – | – | ✅ | ✅ |
+| tenant settings | turn `require_approval` off; change quotas; decide quota requests | – | – | – | ✅ |
 | access | list, create, revoke tenant API tokens (never above own role; a token cannot create tokens) | – | – | ✅ | ✅ |
 | access | role mappings of own tenant, for roles `viewer` and `operator` | – | – | ✅ | ✅ |
 | access | role mappings for `tenant-admin` or `system-admin`; any other tenant's | – | – | – | ✅ |

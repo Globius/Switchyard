@@ -562,6 +562,94 @@ def validate_body(value: str) -> str:
     return value
 
 
+_LABEL_TOKEN = re.compile(r"^[a-z0-9]([a-z0-9_.-]{0,61}[a-z0-9])?$")
+#: Most labels one object may carry (ADR 0198).
+MAX_LABELS = 20
+
+
+def validate_labels(value: dict[str, str]) -> dict[str, str]:
+    """Validate the labels of an object (ADR 0198).
+
+    A key is 1 to 63 characters of ``a-z``, ``0-9``, ``-``, ``_`` and ``.``, starting and ending
+    with a letter or digit. A value follows the same rule but may be empty. At most 20 labels.
+    Labels are only for finding objects; they never reach a rendered configuration file.
+
+    Example:
+        >>> validate_labels({"env": "prod", "team": "payments"})
+        {'env': 'prod', 'team': 'payments'}
+        >>> validate_labels({"Env": "prod"})
+        Traceback (most recent call last):
+            ...
+        ValueError: label key 'Env' must be 1-63 characters of a-z, 0-9, '-', '_', '.'
+    """
+    if len(value) > MAX_LABELS:
+        raise ValueError(f"at most {MAX_LABELS} labels")
+    for key, val in value.items():
+        if not _LABEL_TOKEN.fullmatch(key):
+            raise ValueError(
+                f"label key {key!r} must be 1-63 characters of a-z, 0-9, '-', '_', '.'"
+            )
+        if val and not _LABEL_TOKEN.fullmatch(val):
+            raise ValueError(
+                f"label value {val!r} must be empty or 1-63 characters of a-z, 0-9, '-', '_', '.'"
+            )
+    return value
+
+
+def parse_label_selector(text: str) -> tuple[str, str, str | None]:
+    """Parse one ``?label=`` selector into ``(key, operator, value)``.
+
+    ``key`` matches objects that have the label, ``!key`` those that do not, ``key=value`` those
+    where it equals the value and ``key!=value`` those where it is absent or different. The
+    operator is one of ``has``, ``not``, ``eq`` and ``ne``.
+
+    Example:
+        >>> parse_label_selector("env=prod")
+        ('env', 'eq', 'prod')
+        >>> parse_label_selector("!legacy")
+        ('legacy', 'not', None)
+        >>> parse_label_selector("Env=prod")
+        Traceback (most recent call last):
+            ...
+        ValueError: label key 'Env' must be 1-63 characters of a-z, 0-9, '-', '_', '.'
+    """
+    if "!=" in text:
+        key, _, value = text.partition("!=")
+        op = "ne"
+    elif "=" in text:
+        key, _, value = text.partition("=")
+        op = "eq"
+    elif text.startswith("!"):
+        key, value, op = text[1:], None, "not"
+    else:
+        key, value, op = text, None, "has"
+    validate_labels({key: value or ""})
+    return key, op, value
+
+
+def labels_match(labels: dict[str, str], selectors: list[str]) -> bool:
+    """Whether ``labels`` satisfy every selector (see :func:`parse_label_selector`).
+
+    Example:
+        >>> labels_match({"env": "prod", "team": "pay"}, ["env=prod", "team"])
+        True
+        >>> labels_match({"env": "prod"}, ["env!=prod"])
+        False
+    """
+    for text in selectors:
+        key, op, value = parse_label_selector(text)
+        present = key in labels
+        ok = {
+            "has": present,
+            "not": not present,
+            "eq": present and labels[key] == value,
+            "ne": not present or labels[key] != value,
+        }[op]
+        if not ok:
+            return False
+    return True
+
+
 _COUNTRY = re.compile(r"^[A-Z]{2}$")
 _DISCOVERY_TAG = re.compile(r"^[a-z0-9_][a-z0-9_+.-]{0,63}$")
 

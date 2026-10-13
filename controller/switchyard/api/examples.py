@@ -1342,6 +1342,55 @@ AVI_IMPORT = {
 }
 
 
+CONTROLLER_MEMBER = {
+    "id": "0192f1a2-0000-7000-8000-00000000e701",
+    "name": "ctl-esxi",
+    "address": "10.0.0.13",
+    "platform": "esxi",
+    "host": "esxi-01",
+    "external": True,
+    "nofailover": True,
+    "patroni_url": "http://10.0.0.13:8008",
+    "created_by": "user:miguel@example.test",
+    "created_at": "2026-10-12T09:00:00Z",
+    "version": 1,
+    "status": {
+        "database_role": "replica",
+        "database_state": "streaming",
+        "lag_bytes": 0,
+        "timeline": 4,
+        "nofailover": True,
+    },
+    "in_cluster": True,
+}
+
+
+CONTROLLER_MEMBERS = {
+    "members": [CONTROLLER_MEMBER],
+    "cluster_reachable": True,
+    "cluster_error": None,
+    "leader": "ctl-1",
+}
+
+
+QUOTA_REQUEST = {
+    "id": "0192f1a2-0000-7000-8000-00000000d701",
+    "tenant_id": "0192f1a2-0000-7000-8000-000000000001",
+    "tenant": "acme",
+    "resource": "virtual_service",
+    "current_limit": 20,
+    "requested_limit": 50,
+    "reason": "Two product teams move onto the platform in November.",
+    "state": "pending",
+    "requested_by": "user:miguel@example.test",
+    "requested_at": "2026-10-12T09:00:00Z",
+    "granted_limit": None,
+    "decided_by": None,
+    "decided_at": None,
+    "decision_note": None,
+}
+
+
 KUBERNETES_CLUSTER = {
     "id": "0192f1a2-0000-7000-8000-00000000b701",
     "name": "prod",

@@ -813,6 +813,41 @@ async def test_list_filters_and_sort(api: Api) -> None:
     assert pools["items"] == []
 
 
+async def test_label_filter_selects_by_key_and_value(api: Api) -> None:
+    h = await api.token()
+    vs_url = f"{V1}/tenants/acme/virtual-services"
+    pool_url = f"{V1}/tenants/acme/pools"
+    pool = (await api.client.get(f"{pool_url}/{POOL}", headers=h)).json()
+    assert pool["labels"] == {}
+    patched = await api.client.patch(
+        f"{pool_url}/{POOL}?apply=true",
+        json={"labels": {"env": "prod", "tier": "web"}},
+        headers={**h, "If-Match": f'"{pool["version"]}"'},
+    )
+    assert patched.status_code == 202, patched.text
+    await api.run_jobs()
+
+    def names(r: httpx.Response) -> list[str]:
+        assert r.status_code == 200, r.text
+        return [o["name"] for o in r.json()["items"]]
+
+    assert names(await api.client.get(f"{pool_url}?label=env=prod", headers=h)) == ["web"]
+    assert names(await api.client.get(f"{pool_url}?label=env&label=tier=web", headers=h)) == ["web"]
+    assert names(await api.client.get(f"{pool_url}?label=env=dev", headers=h)) == []
+    assert names(await api.client.get(f"{pool_url}?label=!env", headers=h)) == []
+    assert names(await api.client.get(f"{pool_url}?label=env!=dev", headers=h)) == ["web"]
+    assert names(await api.client.get(f"{vs_url}?label=env", headers=h)) == []
+    assert len(names(await api.client.get(f"{vs_url}?label=!env", headers=h))) >= 1
+    bad = await api.client.get(f"{pool_url}?label=Env", headers=h)
+    assert bad.status_code == 422
+    too_many = await api.client.patch(
+        f"{pool_url}/{POOL}?apply=true",
+        json={"labels": {f"k{i}": "v" for i in range(21)}},
+        headers={**h, "If-Match": '"2"'},
+    )
+    assert too_many.status_code == 422
+
+
 async def test_stale_operation_reports_the_conflict_and_the_diff_has_impact(api: Api) -> None:
     h = await api.token()
     cs = (

@@ -736,6 +736,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quota-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List quota requests of every tenant
+         * @description The queue a system administrator works, oldest first.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_quota_requests_api_v1_quota_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quota-requests/{request}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a quota request
+         * @description Raise the tenant's quota to the requested limit, or to `granted_limit` if lower.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["approve_quota_request_api_v1_quota_requests__request__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quota-requests/{request}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deny a quota request
+         * @description Refuse it; `note` is required and is shown to the tenant.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["deny_quota_request_api_v1_quota_requests__request__deny_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/role-mappings": {
         parameters: {
             query?: never;
@@ -953,6 +1019,65 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The controller's cluster members
+         * @description The controller VMs, including the external one on ESXi, with what Patroni reports.
+         *
+         *     The state comes from the first member whose `patroni_url` answers. A member Patroni does
+         *     not list has `in_cluster: false`.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        get: operations["list_controller_members_api_v1_system_controller_members_get"];
+        put?: never;
+        /**
+         * List a controller cluster member
+         * @description Record a controller VM. This only describes it; nothing is deployed or joined.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        post: operations["create_controller_member_api_v1_system_controller_members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/system/controller/members/{controller_member}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Forget a controller cluster member
+         * @description Remove it from the list. The VM, etcd and Patroni are not touched.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        delete: operations["delete_controller_member_api_v1_system_controller_members__controller_member__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a controller cluster member
+         * @description Change the listed fields; omitted ones stay.
+         *
+         *     **Access:** `system-admin` only.
+         */
+        patch: operations["patch_controller_member_api_v1_system_controller_members__controller_member__patch"];
         trace?: never;
     };
     "/api/v1/system/controller/pending": {
@@ -3280,6 +3405,59 @@ export interface paths {
         get: operations["tenant_principals_api_v1_tenants__t__principals_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/quota-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tenant's quota requests
+         * @description Newest first. Anyone who can read the tenant can read its requests.
+         *
+         *     **Access:** Any role in the tenant (`viewer` or higher).
+         */
+        get: operations["list_tenant_quota_requests_api_v1_tenants__t__quota_requests_get"];
+        put?: never;
+        /**
+         * Ask for a higher quota
+         * @description File a request for a higher limit on one resource (tenant administrators).
+         *
+         *     The tenant must already have a limit for the resource, the new limit must be higher, and
+         *     only one request per resource can be pending. A system administrator decides it.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["create_quota_request_api_v1_tenants__t__quota_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tenants/{t}/quota-requests/{request}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw a quota request
+         * @description Take back a pending request. A request that was already decided answers `409`.
+         *
+         *     **Access:** `tenant-admin` or higher in the tenant.
+         */
+        post: operations["withdraw_quota_request_api_v1_tenants__t__quota_requests__request__withdraw_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7158,6 +7336,136 @@ export interface components {
             vip: string;
         };
         /**
+         * ControllerMemberIn
+         * @description A controller VM to list.
+         */
+        ControllerMemberIn: {
+            /**
+             * Address
+             * @description The VM's IP address or host name.
+             */
+            address: string;
+            /**
+             * External
+             * @description Not managed by this platform. Default: true unless `platform` is `proxmox`.
+             */
+            external?: boolean | null;
+            /**
+             * Host
+             * @description A label for the hypervisor host, for example `esxi-01`.
+             */
+            host?: string | null;
+            /**
+             * Name
+             * @description The Patroni member name (`PATRONI_NAME`). Status is matched on it.
+             */
+            name: string;
+            /**
+             * Nofailover
+             * @description The member never becomes the primary (Patroni tag `nofailover`). Patroni's own report wins when it is reachable.
+             * @default false
+             */
+            nofailover: boolean;
+            /**
+             * Patroni Url
+             * @description Patroni's REST API, for example `http://10.0.0.13:8008`. Status is read from the first listed member that answers.
+             */
+            patroni_url?: string | null;
+            /**
+             * Platform
+             * @description What the VM runs on.
+             * @enum {string}
+             */
+            platform: "proxmox" | "esxi" | "other";
+        };
+        /**
+         * ControllerMemberPatch
+         * @description Fields to change; `name` is fixed. Send the `ETag` in `If-Match`.
+         */
+        ControllerMemberPatch: {
+            /** Address */
+            address?: string | null;
+            /** External */
+            external?: boolean | null;
+            /** Host */
+            host?: string | null;
+            /** Nofailover */
+            nofailover?: boolean | null;
+            /** Patroni Url */
+            patroni_url?: string | null;
+            /** Platform */
+            platform?: ("proxmox" | "esxi" | "other") | null;
+        };
+        /**
+         * ControllerMemberRead
+         * @description A controller cluster member.
+         */
+        ControllerMemberRead: {
+            /** Address */
+            address: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /**
+             * External
+             * @description Not managed by the platform (for example on ESXi).
+             */
+            external: boolean;
+            /** Host */
+            host: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * In Cluster
+             * @description Whether Patroni lists it; null when no cluster view could be read.
+             */
+            in_cluster: boolean | null;
+            /** Name */
+            name: string;
+            /** Nofailover */
+            nofailover: boolean;
+            /** Patroni Url */
+            patroni_url: string | null;
+            /**
+             * Platform
+             * @enum {string}
+             */
+            platform: "proxmox" | "esxi" | "other";
+            status: components["schemas"]["MemberStatusRead"];
+            /** Version */
+            version: number;
+        };
+        /**
+         * ControllerMembersRead
+         * @description The members and the cluster view they were matched with.
+         */
+        ControllerMembersRead: {
+            /**
+             * Cluster Error
+             * @description Why no Patroni answered.
+             */
+            cluster_error: string | null;
+            /**
+             * Cluster Reachable
+             * @description Whether a Patroni answered; null when no member has a `patroni_url`.
+             */
+            cluster_reachable: boolean | null;
+            /**
+             * Leader
+             * @description The member that holds the primary role.
+             */
+            leader: string | null;
+            /** Members */
+            members: components["schemas"]["ControllerMemberRead"][];
+        };
+        /**
          * ControllerPortRead
          * @description A port of the `controller` service.
          */
@@ -10237,6 +10545,34 @@ export interface components {
             status: string;
         };
         /**
+         * MemberStatusRead
+         * @description What Patroni reports; every field is null when it could not be read.
+         */
+        MemberStatusRead: {
+            /**
+             * Database Role
+             * @description `leader`, `standby_leader`, `sync_standby` or `replica`.
+             */
+            database_role: string | null;
+            /**
+             * Database State
+             * @description For example `running` or `streaming`.
+             */
+            database_state: string | null;
+            /**
+             * Lag Bytes
+             * @description Replication lag; null for the leader or unknown.
+             */
+            lag_bytes: number | null;
+            /**
+             * Nofailover
+             * @description Patroni's `nofailover` tag.
+             */
+            nofailover: boolean | null;
+            /** Timeline */
+            timeline: number | null;
+        };
+        /**
          * MetricPoint
          * @description One sample of a series.
          */
@@ -11022,12 +11358,12 @@ export interface components {
              * Object
              * @enum {string}
              */
-            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "device" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "kubernetes_cluster" | "member" | "quota" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
+            object: "acme_provider" | "application" | "break_glass" | "certificate" | "change_set" | "controller" | "device" | "dns_provider" | "draft" | "engine" | "enrollment_token" | "identity_provider" | "infrastructure" | "job" | "job_own" | "kubernetes_cluster" | "member" | "quota" | "quota_request" | "require_approval" | "revision" | "role_mapping" | "role_mapping_privileged" | "sdn" | "se_group" | "system_token" | "tenant" | "tenant_data" | "tenant_user" | "token" | "user";
             /**
              * Verb
              * @enum {string}
              */
-            verb: "apply" | "apply_bypass" | "approve" | "cancel" | "change" | "create" | "deploy" | "disable" | "edit" | "enable" | "list" | "manage" | "read" | "reject" | "request_approval" | "retry" | "rollback" | "set_state" | "write";
+            verb: "apply" | "apply_bypass" | "approve" | "cancel" | "change" | "create" | "decide" | "deploy" | "disable" | "edit" | "enable" | "list" | "manage" | "read" | "reject" | "request" | "request_approval" | "retry" | "rollback" | "set_state" | "write";
         };
         /**
          * PersistenceCookie
@@ -11203,6 +11539,7 @@ export interface components {
          *             mutual TLS). Needs ``tls``.
          *         discovery: Fill ``members`` from tagged Proxmox guests instead of by hand.
          *         members: Backend servers, unique by name. With ``discovery`` the job owns this list.
+         *         labels: Free key/value tags for finding the pool (``?label=``; ADR 0198). Never rendered.
          */
         Pool: {
             /** @default roundrobin */
@@ -11223,6 +11560,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /**
              * Members
              * @default []
@@ -11275,6 +11616,10 @@ export interface components {
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /**
              * Members
              * @default []
@@ -11396,6 +11741,10 @@ export interface components {
             discovery?: components["schemas"]["PoolDiscovery"] | null;
             /** Health Monitor Id */
             health_monitor_id?: string | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            } | null;
             /** Members */
             members?: components["schemas"]["PoolMember"][] | null;
             /** Name */
@@ -11444,6 +11793,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /**
              * Members
              * @default []
@@ -12149,6 +12502,104 @@ export interface components {
          * @enum {string}
          */
         QueryOp: "present" | "equals";
+        /**
+         * QuotaDecisionIn
+         * @description The decision on a quota request.
+         */
+        QuotaDecisionIn: {
+            /**
+             * Granted Limit
+             * @description Approve only: the new limit, between the current limit and the requested one. Default: the requested limit.
+             */
+            granted_limit?: number | null;
+            /**
+             * Note
+             * @description Shown to the tenant. Required when the request is denied.
+             */
+            note?: string | null;
+        };
+        /**
+         * QuotaRequestIn
+         * @description A request for a higher limit.
+         */
+        QuotaRequestIn: {
+            /**
+             * Reason
+             * @description Why the tenant needs it.
+             */
+            reason: string;
+            /**
+             * Requested Limit
+             * @description The limit the tenant wants. It must be higher than the current one.
+             */
+            requested_limit: number;
+            /**
+             * Resource
+             * @description The quota key, an object type such as `virtual_service`, or `stick_table_entries`. The tenant must already have a limit for it.
+             */
+            resource: string;
+        };
+        /**
+         * QuotaRequestRead
+         * @description A quota request.
+         */
+        QuotaRequestRead: {
+            /**
+             * Current Limit
+             * @description The tenant's limit when the request was filed.
+             */
+            current_limit: number;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * Decided By
+             * @description The decider, or the requester who withdrew it.
+             */
+            decided_by: string | null;
+            /** Decision Note */
+            decision_note: string | null;
+            /**
+             * Granted Limit
+             * @description Set when the request was approved.
+             */
+            granted_limit: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested By */
+            requested_by: string;
+            /** Requested Limit */
+            requested_limit: number;
+            /** Resource */
+            resource: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "pending" | "approved" | "denied" | "withdrawn";
+            /** Tenant */
+            tenant: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+        };
+        /**
+         * QuotaRequestState
+         * @description Where a quota request stands.
+         * @enum {string}
+         */
+        QuotaRequestState: "pending" | "approved" | "denied" | "withdrawn";
         /**
          * RadiusConnector
          * @description Sign in against RADIUS servers through the login gate (ADR 0195).
@@ -14453,6 +14904,7 @@ export interface components {
          *             client address; honoured only when the connection source is in the allow list.
          *         compression: Response compression (``http`` only; ADR 0117).
          *         cache: Response cache (``http`` only; ADR 0117).
+         *         labels: Free key/value tags for finding the service (``?label=``; ADR 0198). Never rendered.
          *         forward_mode: IPVS forwarding method (``udp`` only): ``nat`` (default), ``dr`` or
          *             ``tunnel`` (ADR 0192). The last two need every member on the service port.
          *         dns: DNS address records the controller keeps pointing at the VIP (ADR 0193).
@@ -14489,6 +14941,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /** Name */
             name: string;
             /**
@@ -14554,6 +15010,10 @@ export interface components {
             enforce_allow_list: boolean;
             /** @default nat */
             forward_mode: components["schemas"]["IpvsForward"];
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /** Name */
             name: string;
             /**
@@ -14660,6 +15120,10 @@ export interface components {
             /** Enforce Allow List */
             enforce_allow_list?: boolean | null;
             forward_mode?: components["schemas"]["IpvsForward"] | null;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            } | null;
             /** Name */
             name?: string | null;
             /** Policy Set Ids */
@@ -14721,6 +15185,10 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Labels */
+            labels?: {
+                [key: string]: string;
+            };
             /** Name */
             name: string;
             /**
@@ -18524,6 +18992,258 @@ export interface operations {
             };
         };
     };
+    list_quota_requests_api_v1_quota_requests_get: {
+        parameters: {
+            query?: {
+                /** @description Only requests in this state; default `pending`. */
+                state?: components["schemas"]["QuotaRequestState"] | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "current_limit": 20,
+                     *         "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *         "reason": "Two product teams move onto the platform in November.",
+                     *         "requested_at": "2026-10-12T09:00:00Z",
+                     *         "requested_by": "user:miguel@example.test",
+                     *         "requested_limit": 50,
+                     *         "resource": "virtual_service",
+                     *         "state": "pending",
+                     *         "tenant": "acme",
+                     *         "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    approve_quota_request_api_v1_quota_requests__request__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Quota request id. */
+                request: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "granted_limit": 40,
+                 *       "note": "40 for now."
+                 *     }
+                 */
+                "application/json": components["schemas"]["QuotaDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "current_limit": 20,
+                     *       "granted_limit": 40,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *       "reason": "Two product teams move onto the platform in November.",
+                     *       "requested_at": "2026-10-12T09:00:00Z",
+                     *       "requested_by": "user:miguel@example.test",
+                     *       "requested_limit": 50,
+                     *       "resource": "virtual_service",
+                     *       "state": "approved",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    deny_quota_request_api_v1_quota_requests__request__deny_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Quota request id. */
+                request: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "note": "Delete unused services first."
+                 *     }
+                 */
+                "application/json": components["schemas"]["QuotaDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "current_limit": 20,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *       "reason": "Two product teams move onto the platform in November.",
+                     *       "requested_at": "2026-10-12T09:00:00Z",
+                     *       "requested_by": "user:miguel@example.test",
+                     *       "requested_limit": 50,
+                     *       "resource": "virtual_service",
+                     *       "state": "denied",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     list_role_mappings_api_v1_role_mappings_get: {
         parameters: {
             query?: {
@@ -19639,6 +20359,386 @@ export interface operations {
             };
             /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_controller_members_api_v1_system_controller_members_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "cluster_reachable": true,
+                     *       "leader": "ctl-1",
+                     *       "members": [
+                     *         {
+                     *           "address": "10.0.0.13",
+                     *           "created_at": "2026-10-12T09:00:00Z",
+                     *           "created_by": "user:miguel@example.test",
+                     *           "external": true,
+                     *           "host": "esxi-01",
+                     *           "id": "0192f1a2-0000-7000-8000-00000000e701",
+                     *           "in_cluster": true,
+                     *           "name": "ctl-esxi",
+                     *           "nofailover": true,
+                     *           "patroni_url": "http://10.0.0.13:8008",
+                     *           "platform": "esxi",
+                     *           "status": {
+                     *             "database_role": "replica",
+                     *             "database_state": "streaming",
+                     *             "lag_bytes": 0,
+                     *             "nofailover": true,
+                     *             "timeline": 4
+                     *           },
+                     *           "version": 1
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerMembersRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_controller_member_api_v1_system_controller_members_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "address": "10.0.0.13",
+                 *       "host": "esxi-01",
+                 *       "name": "ctl-esxi",
+                 *       "nofailover": true,
+                 *       "patroni_url": "http://10.0.0.13:8008",
+                 *       "platform": "esxi"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ControllerMemberIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "address": "10.0.0.13",
+                     *       "created_at": "2026-10-12T09:00:00Z",
+                     *       "created_by": "user:miguel@example.test",
+                     *       "external": true,
+                     *       "host": "esxi-01",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000e701",
+                     *       "in_cluster": true,
+                     *       "name": "ctl-esxi",
+                     *       "nofailover": true,
+                     *       "patroni_url": "http://10.0.0.13:8008",
+                     *       "platform": "esxi",
+                     *       "status": {
+                     *         "database_role": "replica",
+                     *         "database_state": "streaming",
+                     *         "lag_bytes": 0,
+                     *         "nofailover": true,
+                     *         "timeline": 4
+                     *       },
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerMemberRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    delete_controller_member_api_v1_system_controller_members__controller_member__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Controller cluster member id. */
+                controller_member: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant, object or provider does not exist (or the caller cannot see it). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patch_controller_member_api_v1_system_controller_members__controller_member__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The object's version as a quoted integer (the `ETag` of a read), for example `"3"`. */
+                "if-match"?: string | null;
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Controller cluster member id. */
+                controller_member: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "host": "esxi-02"
+                 *     }
+                 */
+                "application/json": components["schemas"]["ControllerMemberPatch"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    /** @description The object's version as a quoted integer, for example `"3"`. Send it back as `If-Match` on PATCH and DELETE. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "address": "10.0.0.13",
+                     *       "created_at": "2026-10-12T09:00:00Z",
+                     *       "created_by": "user:miguel@example.test",
+                     *       "external": true,
+                     *       "host": "esxi-01",
+                     *       "id": "0192f1a2-0000-7000-8000-00000000e701",
+                     *       "in_cluster": true,
+                     *       "name": "ctl-esxi",
+                     *       "nofailover": true,
+                     *       "patroni_url": "http://10.0.0.13:8008",
+                     *       "platform": "esxi",
+                     *       "status": {
+                     *         "database_role": "replica",
+                     *         "database_state": "streaming",
+                     *         "lag_bytes": 0,
+                     *         "nofailover": true,
+                     *         "timeline": 4
+                     *       },
+                     *       "version": 1
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ControllerMemberRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` does not match the object's current version (stale write). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description `If-Match` is required for this request. */
+            428: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -30979,6 +32079,8 @@ export interface operations {
                 q?: string | null;
                 /** @description Order by name, ascending or descending. */
                 sort?: "name" | "-name";
+                /** @description Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels. */
+                label?: string[] | null;
                 /** @description Checked by this monitor. */
                 health_monitor?: string | null;
             };
@@ -31738,6 +32840,272 @@ export interface operations {
             };
             /** @description The tenant or object does not exist. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    list_tenant_quota_requests_api_v1_tenants__t__quota_requests_get: {
+        parameters: {
+            query?: {
+                /** @description Only requests in this state. */
+                state?: components["schemas"]["QuotaRequestState"] | null;
+                /** @description Page size. */
+                limit?: number;
+            };
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "current_limit": 20,
+                     *         "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *         "reason": "Two product teams move onto the platform in November.",
+                     *         "requested_at": "2026-10-12T09:00:00Z",
+                     *         "requested_by": "user:miguel@example.test",
+                     *         "requested_limit": 50,
+                     *         "resource": "virtual_service",
+                     *         "state": "pending",
+                     *         "tenant": "acme",
+                     *         "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *       }
+                     *     ]
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"][];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    create_quota_request_api_v1_tenants__t__quota_requests_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "reason": "Two product teams move onto the platform in November.",
+                 *       "requested_limit": 50,
+                 *       "resource": "virtual_service"
+                 *     }
+                 */
+                "application/json": components["schemas"]["QuotaRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "current_limit": 20,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *       "reason": "Two product teams move onto the platform in November.",
+                     *       "requested_at": "2026-10-12T09:00:00Z",
+                     *       "requested_by": "user:miguel@example.test",
+                     *       "requested_limit": 50,
+                     *       "resource": "virtual_service",
+                     *       "state": "pending",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The request or the resulting state breaks a rule; see `errors[].path`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    withdraw_quota_request_api_v1_tenants__t__quota_requests__request__withdraw_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description `Bearer <API token>`. Browsers send the session cookie instead. */
+                authorization?: string | null;
+            };
+            path: {
+                /** @description Quota request id. */
+                request: string;
+                /** @description Tenant name or id. */
+                t: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "current_limit": 20,
+                     *       "id": "0192f1a2-0000-7000-8000-00000000d701",
+                     *       "reason": "Two product teams move onto the platform in November.",
+                     *       "requested_at": "2026-10-12T09:00:00Z",
+                     *       "requested_by": "user:miguel@example.test",
+                     *       "requested_limit": 50,
+                     *       "resource": "virtual_service",
+                     *       "state": "withdrawn",
+                     *       "tenant": "acme",
+                     *       "tenant_id": "0192f1a2-0000-7000-8000-000000000001"
+                     *     }
+                     */
+                    "application/json": components["schemas"]["QuotaRequestRead"];
+                };
+            };
+            /** @description Missing, invalid or expired credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The caller's role does not allow this. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The tenant or object does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description The resource is in a state that does not allow this, or the name is already taken. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -35696,6 +37064,8 @@ export interface operations {
                 pool?: string | null;
                 /** @description Uses this certificate. */
                 certificate?: string | null;
+                /** @description Label selector, repeatable (all must match): `key`, `!key`, `key=value` or `key!=value`. Only virtual services and pools have labels. */
+                label?: string[] | null;
             };
             header?: {
                 /** @description `Bearer <API token>`. Browsers send the session cookie instead. */

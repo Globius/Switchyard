@@ -57,7 +57,8 @@ Lists are `{items, next_cursor}` ordered by name.
 List filters (all lists): `name` (exact), `q` (substring), `sort=name|-name`, `change_set`, `cursor`, `limit`
 (1–200). Extra filters: virtual services `se_group`, `protocol`, `enabled`, `pool`, `certificate`; pools
 `health_monitor`; policy sets and routing profiles `kind`; SE groups `ha_mode`; certificates `source`,
-`expires_within_days`.
+`expires_within_days`. Virtual services and pools also take `label`, repeatable, all must match: `key`, `!key`,
+`key=value` or `key!=value` ([labels](features/pools.md#labels), ADR 0198).
 
 Policy sets and routing profiles are unions on `kind`:
 

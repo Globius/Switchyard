@@ -144,3 +144,5 @@ Date: YYYY-MM-DD
 | [0195](0195-radius-login-and-step-up-flows.md) | RADIUS logins, a login gate, and multi-step (nFactor style) flows | Accepted |
 | [0196](0196-device-posture-agent-and-device-certificates.md) | Device posture from an agent, short-lived device certificates, and a TCP tunnel | Accepted |
 | [0197](0197-waf-api-schema-protection.md) | API schema protection in the WAF policy | Accepted |
+| [0198](0198-object-labels.md) | Object labels on virtual services and pools, and the `?label=` filter | Accepted |
+| [0199](0199-tenant-portal-and-quota-requests.md) | Tenant portal: usage, limits and quota requests | Accepted |

@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tip } from "@/components/ui/tooltip";
 import { useEnsureDraft } from "@/features/shell/draft-write";
 import { useDraft } from "@/features/shell/draft";
+import { chipsToLabels, labelChips, validateLabelChip } from "@/lib/labels";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { usePools, useVs } from "./detail-queries";
@@ -643,6 +644,23 @@ function SettingsForm({
                 {t("Disabled services are not rendered")}
               </span>
             </div>
+          </Field>
+          <Field
+            label={t("Labels")}
+            name="labels"
+            changed={changed("labels")}
+            live={liveText("labels")}
+            onRevert={revert("labels")}
+            errors={er("labels")}
+          >
+            <ChipInput
+              label={t("Labels")}
+              value={labelChips(form.labels)}
+              onChange={(chips) => set("labels", chipsToLabels(chips))}
+              freeText={{ validate: (x) => validateLabelChip(x) && t(validateLabelChip(x)!) }}
+              placeholder="env=prod"
+              disabled={disabled}
+            />
           </Field>
         </div>
       </SettingsCard>

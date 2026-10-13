@@ -9,6 +9,7 @@ function parseSearch(s: Record<string, unknown>): VsFilters {
     q: str(s.q),
     sort: s.sort === "-name" ? "-name" : s.sort === "name" ? "name" : undefined,
     se_group: str(s.se_group),
+    label: str(s.label),
     protocol:
       s.protocol === "http" || s.protocol === "tcp" || s.protocol === "udp"
         ? s.protocol

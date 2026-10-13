@@ -17,7 +17,8 @@ says where something has **not** been proven yet. Read [design/02-backend-design
   `controller` service and its SE group cannot be deleted or disabled ([adr/0051](adr/0051-management-tenant-lock-and-adopt.md)).
   Bring the first VMs in with `syctl adopt` (`deploy/prod/adopt/management.example.yaml`).
 - **Two Proxmox hosts today:** put controller VMs 1 and 2 on different hosts and the third on another platform with its
-  Patroni member tagged `nofailover`, as described in the backend design.
+  Patroni member tagged `nofailover`, as described in the backend design. List it under `controller_members` in the adoption
+  file so the UI shows it as an external member ([controller settings](controller-settings.md#cluster-members-including-the-one-on-esxi)).
 - **Engines:** HAProxy SEs cloned from the template in `se-image/`, placed by VRRP or BGP per SE group. SEs keep serving and
   failing over when the controller is down; tests in [adr/0056](adr/0056-end-to-end-lab.md) show a VIP surviving both the
   controller being stopped and the engines rebooting.

@@ -88,7 +88,7 @@ The `.p12` upload and the conflict view were never verified live; `deploy/lab/ch
 | SE scale-out (automatic) | missing | *deferred*: v3; manual deploy and retire exist | |
 | GSLB, PowerDNS | missing | *deferred*: phase 3 | |
 | Packet capture job | missing | *deferred*: phase 3 | |
-| Tenant self-service portal | missing | *deferred*: phase 3 | |
+| Tenant self-service portal | done | "Usage and requests" page and quota requests (ADR 0199) | Billing is out of scope (usage only) |
 
 ## 2. Operations and deployment (02 "HA and deployment", "Repo layout")
 
@@ -99,7 +99,7 @@ The `.p12` upload and the conflict view were never verified live; `deploy/lab/ch
 | Controller container image (`api` and `worker` entrypoints) | missing | *not started*: no Dockerfile except the test image `controller/tests/images/se-tools` | Dockerfile and release job |
 | `se-image/` (cloud-init, OpenTofu, packages) | missing | *not started*; deploy clones a template by `template_vmid` | Template recipe and a runbook |
 | Management tenant lock, `adopt` import, OpenTofu bootstrap | missing | *not started* | ADR, pipeline rule, import command |
-| External (ESXi) controller member shown in UI | missing | *not started*; depends on adopt | Adopt design first |
+| External (ESXi) controller member shown in UI | done | Admin > Controller > Cluster members; adoption file `controller_members` (ADR 0051 update) | |
 | `docs/runbooks/` (restore DB, rotate CA, replace SE, emergency rollback) | missing | *not started*; the folder is absent | Four runbooks |
 | CI | partial | `.gitlab-ci.yml` paused ("while we build and test locally"); no UI lane | Re-enable; add `ui-check` and axe |
 | End-to-end lab test on Proxmox | missing | *not started* | Lab cluster plus a CI lane |

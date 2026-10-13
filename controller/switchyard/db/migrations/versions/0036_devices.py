@@ -8,7 +8,7 @@
 Both tables are tenant tables with forced row-level security like every other.
 
 Revision ID: 0036
-Revises: 0035
+Revises: 0041
 """
 
 from alembic import op
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = "0036"
-down_revision = "0035"
+down_revision = "0041"
 branch_labels = None
 depends_on = None
 
