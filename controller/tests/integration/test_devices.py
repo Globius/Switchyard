@@ -460,3 +460,16 @@ async def test_http_endpoints(pg_url: str) -> None:
                 "/api/v1/device/enroll", json={"token": "x", "name": "y", "public_key": "z"}
             )
             assert r.status_code == 503
+
+
+async def test_a_role_that_belongs_to_a_longer_tenant_name_signs_nothing(pg_url: str) -> None:
+    """Tenant ``acme`` must not sign with ``acme-corp-devices``, which starts with ``acme-`` too."""
+    d = data()
+    d["tenants"] = [*d["tenants"], {"id": "t-corp", "name": "acme-corp"}]
+    d["policy_sets"][-1]["pki_role"] = "acme-corp-devices"
+    async with world(pg_url, d) as w:
+        clock = Clock()
+        svc, _ = make(w, clock)
+        device = await enrolled(svc)
+        with pytest.raises(DeviceRequestError, match="another tenant"):
+            await report(svc, device, clock)

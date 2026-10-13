@@ -81,13 +81,26 @@ _DENIED_PREFIXES = (
 
 
 def _denied(path: str) -> bool:
-    path = path.strip("/")
+    path = path.strip("/").lower()
     return any(path == p or path.startswith(p + "/") for p in _DENIED_PREFIXES)
 
 
 def _clean_path(path: str) -> str:
+    """Refuse paths that Grafana could read differently from the deny list.
+
+    The path is percent-decoded before it gets here, so ``%3F`` arrives as ``?``. Left in, it turns
+    ``api/users?`` into a request for ``/api/users`` that the deny list (whole segments) does not
+    recognise. Dot segments, empty segments, ``?``, ``#``, ``;``, backslashes and control
+    characters are refused for the same reason.
+
+    Example:
+        >>> _clean_path("d/abc/slug")
+        'd/abc/slug'
+    """
     segments = path.split("/")
-    if any(s == ".." or "\\" in s or "\x00" in s for s in segments):
+    if any(s in {".", ".."} or any(c in s for c in "\\?#;") for s in segments):
+        raise ApiError(400, "invalid path")
+    if any(not s for s in segments[:-1]) or any(ord(c) < 0x20 or ord(c) == 0x7F for c in path):
         raise ApiError(400, "invalid path")
     return path
 

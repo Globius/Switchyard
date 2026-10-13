@@ -48,7 +48,7 @@ if ! BAO secrets list 2>/dev/null | grep -q '^pki/'; then
   BAO secrets tune -max-lease-ttl=87600h pki >/dev/null
   BAO write -field=certificate pki/root/generate/internal common_name="Switchyard test CA" ttl=87600h > "$T/ca.pem"
   echo >> "$T/ca.pem"
-  BAO write pki/roles/agents allow_any_name=true allow_ip_sans=true enforce_hostnames=false key_type=any \
+  BAO write pki/roles/agents allow_any_name=true allow_ip_sans=true enforce_hostnames=false key_type=any client_flag=false \
     use_csr_sans=false use_csr_common_name=false max_ttl=168h ttl=24h >/dev/null
   BAO write pki/roles/internal allow_any_name=true allow_ip_sans=true enforce_hostnames=false key_type=ec key_bits=256 \
     max_ttl=168h ttl=24h >/dev/null

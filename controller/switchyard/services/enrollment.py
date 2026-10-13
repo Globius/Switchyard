@@ -14,7 +14,9 @@ Tokens are random, stored only as SHA-256, work once, and expire. Using a token 
 next one happen in one transaction with the signing call: a signing failure leaves the token valid.
 """
 
+import logging
 import secrets
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
@@ -31,6 +33,10 @@ from switchyard.services.context import Clock, Databases, Principal, utcnow
 from switchyard.services.errors import NotFoundError, PermissionDeniedError
 from switchyard.services.tokens import hash_token
 
+log = logging.getLogger(__name__)
+
+#: Names no engine certificate carries: the controller's own (default ``controller_cn``).
+RESERVED_NAMES = ("switchyard-controller",)
 ENROLL_PREFIX = "syenr_"
 RENEW_PREFIX = "syren_"
 ENROLL_TTL = timedelta(hours=1)
@@ -68,6 +74,7 @@ class EnrollmentService:
         bundle_public_key: str,
         *,
         cert_ttl: timedelta = CERT_TTL,
+        reserved_names: Iterable[str] = (),
         clock: Clock = utcnow,
     ) -> None:
         """Create the service.
@@ -77,12 +84,18 @@ class EnrollmentService:
             pki: Signs the agent certificates.
             bundle_public_key: Base64 Ed25519 public key agents use to verify bundles.
             cert_ttl: Lifetime of issued certificates.
+            reserved_names: Names no engine certificate may carry, in addition to
+                :data:`RESERVED_NAMES`: the common names agents accept from the controller
+                (``sy-agent -controller-cn``). An engine is named by a tenant administrator, and a
+                certificate called ``switchyard-controller`` would be accepted by every agent as
+                the controller's.
             clock: Time source.
         """
         self._db = db
         self._pki = pki
         self._bundle_key = bundle_public_key
         self._cert_ttl = cert_ttl
+        self._reserved = {n.strip().lower() for n in (*RESERVED_NAMES, *reserved_names)}
         self._clock = clock
 
     async def create_token(
@@ -165,6 +178,9 @@ class EnrollmentService:
                 )
             ).scalar_one()
             if not engine.mgmt_ip:
+                raise EnrollmentError("invalid or expired token")
+            if engine.name.lower() in self._reserved:
+                log.warning("refusing to issue a certificate named %s to an engine", engine.name)
                 raise EnrollmentError("invalid or expired token")
             address = str(engine.mgmt_ip).split("/")[0]
             signed = await self._pki.sign(

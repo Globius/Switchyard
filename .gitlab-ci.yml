@@ -126,6 +126,33 @@ posture-agent:
     - GOOS=darwin GOARCH=arm64 go build -o /dev/null ./cmd/sy-posture
     - GOOS=linux GOARCH=amd64 go build -o /dev/null ./cmd/sy-posture
 
+# Known-vulnerability scans of the lock files (docs/security/2026-10-13-review.md). They warn instead of
+# failing the pipeline, so a new advisory never blocks an unrelated merge; make them blocking once a run is clean.
+audit-python:
+  stage: check
+  allow_failure: true
+  script:
+    - cd controller
+    - uv export --no-dev --no-hashes --frozen -o /tmp/requirements.txt > /dev/null
+    - uvx pip-audit -r /tmp/requirements.txt --no-deps --disable-pip
+
+audit-go:
+  stage: check
+  allow_failure: true
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/golang:1.26
+  script:
+    - go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+    - for d in agent posture-agent provider; do (cd $d && "$(go env GOPATH)/bin/govulncheck" ./...); done
+
+audit-ui:
+  stage: check
+  allow_failure: true
+  image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/node:22-slim
+  script:
+    - corepack enable
+    - cd ui
+    - pnpm audit --prod
+
 se-image:
   stage: check
   image: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:27

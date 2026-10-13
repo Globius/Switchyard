@@ -42,6 +42,7 @@ from switchyard.db.ops_models import DeviceEnrollmentRow, DeviceRow
 from switchyard.db.tenancy import admin_session, tenant_session
 from switchyard.domain.models import PosturePolicySet
 from switchyard.domain.posture import PostureFacts, evaluate
+from switchyard.domain.snapshot import pki_role_owner
 from switchyard.ids import uuid7
 from switchyard.services.changesets import require
 from switchyard.services.context import Clock, Databases, Principal, utcnow
@@ -373,12 +374,16 @@ class DeviceService:
             certificate = ca = None
             not_after = None
             if compliant and csr is not None:
-                signer = self._pki_for_role(policy.pki_role)
-                if signer is None:
-                    raise DeviceRequestError("device certificates are not configured")
                 tenant = (
                     await session.execute(select(TenantRow).where(TenantRow.id == device.tenant_id))
                 ).scalar_one()
+                # `acme-corp-devices` also starts with `acme-`: the longest tenant name owns it.
+                names = (await session.execute(select(TenantRow.name))).scalars().all()
+                if pki_role_owner(policy.pki_role, names) != tenant.name:
+                    raise DeviceRequestError("the PKI role of the policy belongs to another tenant")
+                signer = self._pki_for_role(policy.pki_role)
+                if signer is None:
+                    raise DeviceRequestError("device certificates are not configured")
                 ttl = timedelta(hours=policy.cert_ttl_h)
                 signed = await signer.sign(
                     csr,
