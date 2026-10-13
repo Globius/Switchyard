@@ -115,6 +115,23 @@ rule (ADR 0205), so the old code keeps working on whatever the migration did. If
 rollback. Not yet run on a real node: rehearse it in the lab first. Helm sites use `helm upgrade` with the chart from the bundle
 ([deploy-kubernetes.md](deploy-kubernetes.md)); the migration Job and `wait-schema` init container do the same ordering.
 
+
+## Engine roll (built, with fake actions only; lab run pending)
+
+`POST /tenants/{t}/se-groups/{group}/rolls {"template_vmid": 9770}` replaces every enabled engine of the group with one cloned from a new
+template, **one engine at a time**. For each engine: deploy a staged replacement, enroll it (the guest agent writes the enrollment files), enable it,
+reapply the group, wait until the group's health score is 80 or more and the new engine passes a smoke check, retire the old engine, wait for the
+score again, then the next engine.
+
+- A step that fails or takes too long **pauses** the roll with the old and the new engine both in place. That pause is the canary and the rollback
+  point: `POST /tenants/{t}/rolls/{roll} {"action":"resume"}` repeats the step, `"abort"` ends the roll (replaced engines stay replaced, the
+  current old engine keeps serving), `"pause"` stops it on request. `GET /tenants/{t}/rolls` shows each engine's phase and the log.
+- One roll per SE group at a time. Needs the group's `autoscale.deploy` and `autoscale.enroll` settings (autoscaling itself may be off) because that
+  is how replacements are created and enrolled; the replacement must be a QEMU guest. LXC engines still use `deploy/lab/hosts/upgrade.sh`
+  ([runbooks/rolling-upgrade.md](runbooks/rolling-upgrade.md)).
+- Everything is audited (`roll.started`, `roll.pause`, `roll.resume`, `roll.abort`, `roll.paused`, `roll.done`).
+- State is stored in the database and advanced every ten seconds by whichever worker runs the job, so a restart of the controller does not lose it.
+
 ## Planned (ADR 0205)
 
-The engine roll as a job with a health gate, pause and abort, scheduled windows, and the Upgrades page in the UI.
+Scheduled windows, a soak time between engines, and the Upgrades page in the UI.

@@ -466,3 +466,13 @@ class Autoscaler:
         await self._pve.guest_exec(
             engine.pve_node, engine.vmid, ["systemctl", "start", "sy-agent-enroll.service"]
         )
+
+    async def enroll_engine(
+        self, tenant_id: UUID, policy: Autoscale, engine: ServiceEngineRow
+    ) -> None:
+        """Write the enrollment files into the guest of ``engine`` (also used by engine rolls)."""
+        await self._enroll(tenant_id, policy, engine)
+
+    async def engine_answers(self, record: EngineRecord) -> bool:
+        """Whether the agent of ``record`` answers a status call, so it has enrolled."""
+        return await self._answers(record)

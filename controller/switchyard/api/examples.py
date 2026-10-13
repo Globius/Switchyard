@@ -1541,3 +1541,21 @@ RELEASE_FEED = {
         }
     ],
 }
+
+ROLL = {
+    "id": "0190a5f2-0000-7000-8000-000000000020",
+    "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+    "status": "paused",
+    "reason": "se-1: awaiting_enrollment took longer than 3600s",
+    "template_vmid": 9770,
+    "target_version": "0.2.0",
+    "steps": [
+        {"old": "se-1", "new": "se-1b", "phase": "awaiting_enrollment"},
+        {"old": "se-2", "new": None, "phase": "pending"},
+    ],
+    "log": ["se-1: deploying replacement", "se-1b: deployed"],
+    "created_by": "user:admin",
+    "created_at": "2026-10-13T04:00:00+00:00",
+    "updated_at": "2026-10-13T05:00:00+00:00",
+    "version": 3,
+}

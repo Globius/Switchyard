@@ -187,3 +187,43 @@ class ReleaseFeedRead(ReleaseFeedIn):
     releases: list[ReleaseRead] = Field(
         default_factory=list, description="Verified releases, with notes and upgrade paths."
     )
+
+
+class RollStartIn(ApiModel):
+    """Replace every enabled engine of an SE group with one cloned from a new template."""
+
+    template_vmid: int = Field(ge=100, description="The Proxmox template to clone.")
+    target_version: str | None = Field(
+        default=None, description="The release this template carries, for the record."
+    )
+
+
+class RollActionIn(ApiModel):
+    """What to do with a roll."""
+
+    action: Literal["pause", "resume", "abort"]
+
+
+class RollStepRead(ApiModel):
+    """One engine of a roll."""
+
+    old: str
+    new: str | None
+    phase: str
+
+
+class RollRead(ApiModel):
+    """A roll and where it is."""
+
+    id: str
+    se_group_id: str
+    status: Literal["running", "paused", "aborted", "done"]
+    reason: str = Field(description="Why it paused, when it did.")
+    template_vmid: int
+    target_version: str | None
+    steps: list[RollStepRead]
+    log: list[str]
+    created_by: str
+    created_at: str
+    updated_at: str
+    version: int

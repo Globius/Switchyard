@@ -206,6 +206,9 @@ from switchyard.api.upgrade_models import (
     BackupVerifyRead,
     ReleaseFeedIn,
     ReleaseFeedRead,
+    RollActionIn,
+    RollRead,
+    RollStartIn,
     UpgradeCheckRead,
 )
 from switchyard.config import broker_url
@@ -274,6 +277,7 @@ from switchyard.services.probes import MonitorTestService
 from switchyard.services.quota_requests import QuotaRequests
 from switchyard.services.release_feed import ReleaseFeedService
 from switchyard.services.role_mappings import RoleMappingRecord, RoleMappingService
+from switchyard.services.roll import RollService
 from switchyard.services.sessions import (
     LoginError,
     LoginResult,
@@ -337,6 +341,7 @@ class ApiServices:
     controller_members: ControllerMembers = None  # type: ignore[assignment]
     upgrade: UpgradeService = None  # type: ignore[assignment]
     release_feed: ReleaseFeedService = None  # type: ignore[assignment]
+    rolls: RollService = None  # type: ignore[assignment]
     backup: BackupService = None  # type: ignore[assignment]
     dns_records: DnsRecordSync | None = None
     autoscaler: Autoscaler | None = None
@@ -430,6 +435,7 @@ def build_services(
         controller_members=ControllerMembers(db),
         upgrade=UpgradeService(db, backup=backup, feed=release_feed),
         release_feed=release_feed,
+        rolls=RollService(db),
         backup=backup,
     )
 
@@ -3305,6 +3311,65 @@ def create_app(
     async def reapply_group(group: UUID, tenant: Tenant, who: Who, svc: Services) -> dict[str, str]:
         job = await svc.change_sets.reapply_group(who, tenant.id, group, request_id=_rid())
         return {"job_id": str(job)}
+
+    @router.post(
+        "/tenants/{t}/se-groups/{group}/rolls",
+        status_code=201,
+        tags=["se-groups"],
+        summary="Replace every engine of an SE group with one from a new template",
+        response_model=RollRead,
+        responses=_ok(ex.ROLL, 201) | VALIDATION_RESPONSE,
+    )
+    async def start_roll(
+        group: UUID, body: RollStartIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Roll the group's enabled engines to the template, one at a time.
+
+        For each engine: deploy a replacement, enroll it, reapply the group, wait for the group
+        health score (80 or more) and a smoke check, retire the old engine, wait again. A step
+        that fails or takes too long **pauses** the roll with both engines in place; resume it
+        or abort it. Needs the group's autoscale `deploy` and `enroll` settings (autoscaling
+        itself may be off). `404` when the group has no enabled engines, `409` when it already
+        has a roll in progress. Requires `tenant-admin`.
+        """
+        view = await svc.rolls.start(
+            who,
+            tenant.id,
+            group,
+            template_vmid=body.template_vmid,
+            target_version=body.target_version,
+            request_id=_rid(),
+        )
+        return _roll_json(view)
+
+    @router.get(
+        "/tenants/{t}/rolls",
+        tags=["se-groups"],
+        summary="Engine rolls, newest first",
+        response_model=list[RollRead],
+        responses=_ok([ex.ROLL]),
+    )
+    async def list_rolls(tenant: Tenant, who: Who, svc: Services) -> list[dict[str, Any]]:
+        """Running, paused and finished rolls with each engine's phase and the log."""
+        return [_roll_json(r) for r in await svc.rolls.list(who, tenant.id)]
+
+    @router.post(
+        "/tenants/{t}/rolls/{roll}",
+        tags=["se-groups"],
+        summary="Pause, resume or abort a roll",
+        response_model=RollRead,
+        responses=_ok(ex.ROLL) | VALIDATION_RESPONSE,
+    )
+    async def control_roll(
+        roll: UUID, body: RollActionIn, tenant: Tenant, who: Who, svc: Services
+    ) -> dict[str, Any]:
+        """Abort ends the roll: replaced engines stay replaced and the old one keeps serving.
+
+        Resuming a paused roll repeats the step that failed. `409` for a finished roll.
+        Requires `tenant-admin`.
+        """
+        view = await svc.rolls.control(who, tenant.id, roll, body.action, request_id=_rid())
+        return _roll_json(view)
 
     @router.post(
         "/tenants/{t}/change-sets/{cs}/discard",
@@ -6235,3 +6300,12 @@ def _backup_json(r: Any) -> dict[str, Any]:
 async def _release_feed_json(svc: ApiServices, who: Any) -> dict[str, Any]:
     cfg, state = await svc.release_feed.config(who), await svc.release_feed.state()
     return {**asdict(cfg), **asdict(state)}
+
+
+def _roll_json(view: Any) -> dict[str, Any]:
+    out = asdict(view)
+    out["id"], out["se_group_id"] = str(view.id), str(view.se_group_id)
+    out["created_at"], out["updated_at"] = view.created_at.isoformat(), view.updated_at.isoformat()
+    out.pop("tenant_id", None)
+    out["steps"] = [{k: s[k] for k in ("old", "new", "phase")} for s in view.steps]
+    return out

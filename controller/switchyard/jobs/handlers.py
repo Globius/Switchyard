@@ -51,6 +51,7 @@ from switchyard.services.jwks_sync import SYNC_JWKS_JOB, JwksSync
 from switchyard.services.kubernetes import KUBERNETES_SYNC_JOB, KubernetesClusters
 from switchyard.services.members import MemberService
 from switchyard.services.release_feed import CHECK_RELEASES_JOB, ReleaseFeedService
+from switchyard.services.roll import ADVANCE_ROLLS_JOB, RollService
 from switchyard.services.status import StatusService
 
 log = logging.getLogger("switchyard.jobs")
@@ -82,6 +83,7 @@ def build_handlers(
     autoscaler: Autoscaler | None = None,
     captures: PacketCaptures | None = None,
     release_feed: ReleaseFeedService | None = None,
+    rolls: RollService | None = None,
 ) -> dict[str, Handler]:
     """Return the handler table for a worker.
 
@@ -98,6 +100,7 @@ def build_handlers(
         discovery: Pool member discovery; ``None`` skips the ``discover_pool_members`` kind.
         gc: Hourly housekeeping; ``None`` skips the ``gc`` kind.
         release_feed: Checks the release feed daily; ``None`` skips the ``check_releases`` kind.
+        rolls: Advances running engine rolls; ``None`` skips the ``advance_rolls`` kind.
         kubernetes: Syncs the tenants' Kubernetes clusters; ``None`` skips the ``kubernetes_sync``
             kind.
         controller: Checks controller settings changes that wait for confirmation; ``None`` skips
@@ -151,6 +154,12 @@ def build_handlers(
             return {"disabled": await members.expire_drains()}
 
         handlers[EXPIRE_DRAINS_JOB] = expire_drains
+    if rolls is not None:
+
+        async def advance_rolls(job: Job) -> dict[str, Any]:
+            return {"rolls": await rolls.tick()}
+
+        handlers[ADVANCE_ROLLS_JOB] = advance_rolls
     if release_feed is not None:
 
         async def check_releases(job: Job) -> dict[str, Any]:

@@ -20175,6 +20175,177 @@
         "title": "RoleMappingRead",
         "type": "object"
       },
+      "RollActionIn": {
+        "additionalProperties": false,
+        "description": "What to do with a roll.",
+        "properties": {
+          "action": {
+            "enum": [
+              "pause",
+              "resume",
+              "abort"
+            ],
+            "title": "Action",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "RollActionIn",
+        "type": "object"
+      },
+      "RollRead": {
+        "additionalProperties": false,
+        "description": "A roll and where it is.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "log": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Log",
+            "type": "array"
+          },
+          "reason": {
+            "description": "Why it paused, when it did.",
+            "title": "Reason",
+            "type": "string"
+          },
+          "se_group_id": {
+            "title": "Se Group Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "paused",
+              "aborted",
+              "done"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/RollStepRead"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "target_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Version"
+          },
+          "template_vmid": {
+            "title": "Template Vmid",
+            "type": "integer"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "se_group_id",
+          "status",
+          "reason",
+          "template_vmid",
+          "target_version",
+          "steps",
+          "log",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "RollRead",
+        "type": "object"
+      },
+      "RollStartIn": {
+        "additionalProperties": false,
+        "description": "Replace every enabled engine of an SE group with one cloned from a new template.",
+        "properties": {
+          "target_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The release this template carries, for the record.",
+            "title": "Target Version"
+          },
+          "template_vmid": {
+            "description": "The Proxmox template to clone.",
+            "minimum": 100.0,
+            "title": "Template Vmid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "template_vmid"
+        ],
+        "title": "RollStartIn",
+        "type": "object"
+      },
+      "RollStepRead": {
+        "additionalProperties": false,
+        "description": "One engine of a roll.",
+        "properties": {
+          "new": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New"
+          },
+          "old": {
+            "title": "Old",
+            "type": "string"
+          },
+          "phase": {
+            "title": "Phase",
+            "type": "string"
+          }
+        },
+        "required": [
+          "old",
+          "new",
+          "phase"
+        ],
+        "title": "RollStepRead",
+        "type": "object"
+      },
       "RouteMatch": {
         "additionalProperties": false,
         "description": "Request match shared by routes and policy rules; every condition given must hold (AND).\n\nAttributes:\n    host: Exact host or single-label ``*.`` wildcard (the ``Host`` header, port removed).\n    path_prefix: Path starts with this.\n    path_exact: Path equals this. Not together with ``path_prefix``.\n    methods: Request method is one of these.\n    headers: Request header conditions, all of which must hold.\n    query: Query-string parameter conditions, all of which must hold.\n    source_cidrs: Client address is inside one of these networks (after client-IP restoration).\n    sni: TLS server name the client asked for (exact or ``*.`` wildcard); never true on a\n        port without TLS.\n\nExample:\n    >>> RouteMatch(methods=[\"GET\"], path_prefix=\"/api\").is_empty\n    False\n    >>> RouteMatch().is_empty\n    True",
@@ -54136,6 +54307,284 @@
         "x-required-role": "tenant-admin"
       }
     },
+    "/api/v1/tenants/{t}/rolls": {
+      "get": {
+        "description": "Running, paused and finished rolls with each engine's phase and the log.\n\n**Access:** Any role in the tenant (`viewer` or higher).",
+        "operationId": "list_rolls_api_v1_tenants__t__rolls_get",
+        "parameters": [
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": [
+                  {
+                    "created_at": "2026-10-13T04:00:00+00:00",
+                    "created_by": "user:admin",
+                    "id": "0190a5f2-0000-7000-8000-000000000020",
+                    "log": [
+                      "se-1: deploying replacement",
+                      "se-1b: deployed"
+                    ],
+                    "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                    "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                    "status": "paused",
+                    "steps": [
+                      {
+                        "new": "se-1b",
+                        "old": "se-1",
+                        "phase": "awaiting_enrollment"
+                      },
+                      {
+                        "old": "se-2",
+                        "phase": "pending"
+                      }
+                    ],
+                    "target_version": "0.2.0",
+                    "template_vmid": 9770,
+                    "updated_at": "2026-10-13T05:00:00+00:00",
+                    "version": 3
+                  }
+                ],
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RollRead"
+                  },
+                  "title": "Response List Rolls Api V1 Tenants  T  Rolls Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Engine rolls, newest first",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "viewer"
+      }
+    },
+    "/api/v1/tenants/{t}/rolls/{roll}": {
+      "post": {
+        "description": "Abort ends the roll: replaced engines stay replaced and the old one keeps serving.\n\nResuming a paused roll repeats the step that failed. `409` for a finished roll.\nRequires `tenant-admin`.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "control_roll_api_v1_tenants__t__rolls__roll__post",
+        "parameters": [
+          {
+            "description": "Engine roll id.",
+            "in": "path",
+            "name": "roll",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Roll",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "action": "pause"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RollActionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "created_by": "user:admin",
+                  "id": "0190a5f2-0000-7000-8000-000000000020",
+                  "log": [
+                    "se-1: deploying replacement",
+                    "se-1b: deployed"
+                  ],
+                  "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                  "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                  "status": "paused",
+                  "steps": [
+                    {
+                      "new": "se-1b",
+                      "old": "se-1",
+                      "phase": "awaiting_enrollment"
+                    },
+                    {
+                      "old": "se-2",
+                      "phase": "pending"
+                    }
+                  ],
+                  "target_version": "0.2.0",
+                  "template_vmid": 9770,
+                  "updated_at": "2026-10-13T05:00:00+00:00",
+                  "version": 3
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RollRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Pause, resume or abort a roll",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "operator"
+      }
+    },
     "/api/v1/tenants/{t}/routing-profiles": {
       "get": {
         "description": "List the tenant's objects of this type, by name; with ``change_set`` the draft view.\n\n**Access:** Any role in the tenant (`viewer` or higher).\n\n**Pagination:** `limit` and `cursor`; pass `next_cursor` back as `cursor` until it is null.",
@@ -56311,6 +56760,160 @@
           }
         },
         "summary": "Re-apply the desired state to an SE group (drift repair)",
+        "tags": [
+          "se-groups"
+        ],
+        "x-required-role": "operator"
+      }
+    },
+    "/api/v1/tenants/{t}/se-groups/{group}/rolls": {
+      "post": {
+        "description": "Roll the group's enabled engines to the template, one at a time.\n\nFor each engine: deploy a replacement, enroll it, reapply the group, wait for the group\nhealth score (80 or more) and a smoke check, retire the old engine, wait again. A step\nthat fails or takes too long **pauses** the roll with both engines in place; resume it\nor abort it. Needs the group's autoscale `deploy` and `enroll` settings (autoscaling\nitself may be off). `404` when the group has no enabled engines, `409` when it already\nhas a roll in progress. Requires `tenant-admin`.\n\n**Access:** `operator` or higher in the tenant.",
+        "operationId": "start_roll_api_v1_tenants__t__se_groups__group__rolls_post",
+        "parameters": [
+          {
+            "description": "SE group id.",
+            "in": "path",
+            "name": "group",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Group",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tenant name or id.",
+            "in": "path",
+            "name": "t",
+            "required": true,
+            "schema": {
+              "title": "T",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`Bearer <API token>`. Browsers send the session cookie instead.",
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "target_version": "0.2.0",
+                "template_vmid": 9770
+              },
+              "schema": {
+                "$ref": "#/components/schemas/RollStartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "created_by": "user:admin",
+                  "id": "0190a5f2-0000-7000-8000-000000000020",
+                  "log": [
+                    "se-1: deploying replacement",
+                    "se-1b: deployed"
+                  ],
+                  "reason": "se-1: awaiting_enrollment took longer than 3600s",
+                  "se_group_id": "0190a5f2-0000-7000-8000-000000000021",
+                  "status": "paused",
+                  "steps": [
+                    {
+                      "new": "se-1b",
+                      "old": "se-1",
+                      "phase": "awaiting_enrollment"
+                    },
+                    {
+                      "old": "se-2",
+                      "phase": "pending"
+                    }
+                  ],
+                  "target_version": "0.2.0",
+                  "template_vmid": 9770,
+                  "updated_at": "2026-10-13T05:00:00+00:00",
+                  "version": 3
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/RollRead"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Missing, invalid or expired credentials."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The caller's role does not allow this."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The tenant or object does not exist."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The resource is in a state that does not allow this, or the name is already taken."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "The request or the resulting state breaks a rule; see `errors[].path`."
+          }
+        },
+        "summary": "Replace every engine of an SE group with one from a new template",
         "tags": [
           "se-groups"
         ],

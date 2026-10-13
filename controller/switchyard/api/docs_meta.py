@@ -124,6 +124,7 @@ PARAMS: dict[str, str] = {
     "request": "Quota request id.",
     "controller_member": "Controller cluster member id.",
     "cs": "Change set id.",
+    "roll": "Engine roll id.",
     "index": "Position of the operation in the change set, starting at 0.",
     "n": "Revision number.",
     "job_id": "Job id.",
@@ -557,6 +558,8 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     },
     "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
     "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
+    "POST /tenants/{t}/se-groups/{group}/rolls": {"template_vmid": 9770, "target_version": "0.2.0"},
+    "POST /tenants/{t}/rolls/{roll}": {"action": "pause"},
     "PUT /system/releases": {
         "url": "https://git.example.test/switchyard/-/releases/permalink/latest/downloads/releases.json",
         "channel": "stable",
