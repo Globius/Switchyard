@@ -35,7 +35,11 @@ function config(api: string, devToken?: string): ViteUserConfig {
       environment: "jsdom",
       globals: true,
       include: ["tests/**/*.test.{ts,tsx}"],
-      testTimeout: 15000,
+      // The CI runners are small shared pods: 49 jsdom workers at once starved each other (about 17 s to start
+      // one, so tests hit the 15 s limit with no real failure). Fewer workers, longer limits there.
+      testTimeout: process.env.CI ? 60000 : 15000,
+      hookTimeout: process.env.CI ? 60000 : 10000,
+      ...(process.env.CI ? { maxWorkers: 2 } : {}),
       setupFiles: ["tests/setup.ts"],
       coverage: {
         provider: "v8",
