@@ -23,6 +23,9 @@ x-patroni-env: &patroni-env
   PGBACKREST_REPO1_S3_KEY: ${BACKUP_S3_KEY:-}
   PGBACKREST_REPO1_S3_KEY_SECRET: ${BACKUP_S3_SECRET:-}
   PGBACKREST_REPO1_S3_URI_STYLE: ${BACKUP_S3_URI_STYLE:-path}
+  # pgBackRest speaks only TLS to S3. A private CA or a self-signed endpoint: mount its certificate and set
+  # PGBACKREST_REPO1_STORAGE_CA_FILE in an override, or (labs only) BACKUP_S3_VERIFY_TLS=n.
+  PGBACKREST_REPO1_STORAGE_VERIFY_TLS: ${BACKUP_S3_VERIFY_TLS:-y}
   PGBACKREST_REPO1_RETENTION_FULL: "4"
   PGBACKREST_REPO1_CIPHER_TYPE: ${BACKUP_CIPHER_TYPE:-aes-256-cbc}
   PGBACKREST_REPO1_CIPHER_PASS: ${BACKUP_CIPHER_PASS}
@@ -117,3 +120,9 @@ services:
     command: ["worker", "--name", "${NODE_NAME}"]
     depends_on: {migrate: {condition: service_completed_successfully}}
 volumes: {etcd-data: {}, pgdata: {}, pgbackrest-repo: {}, pgbackrest-log: {}}
+# MTU of the stack's Docker network. Docker's default 1500 breaks TLS where the host's NIC or underlay is smaller (a Proxmox
+# VXLAN overlay, WireGuard, some clouds): the controller then cannot reach the engines' agents (mTLS handshakes are dropped
+# and the engines show "unreachable"). Set DOCKER_MTU in node.env to the host NIC's MTU or less.
+networks:
+  default:
+    driver_opts: {com.docker.network.driver.mtu: "${DOCKER_MTU:-1500}"}

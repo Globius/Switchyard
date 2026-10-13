@@ -217,6 +217,19 @@ async def lastapply(lab: Lab) -> dict:
     return {"job": job, "log": await lab.get(f"/jobs/{job['id']}/log")}
 
 
+async def csopen(lab: Lab, summary: str = "lab change") -> dict:
+    """Open a draft change set; prints its id (use it as ``cs:<id>`` in ``raw``)."""
+    return await lab.request("POST", f"/tenants/{TENANT}/change-sets", json_body={"summary": summary})
+
+
+async def csapply(lab: Lab, change_set: str, reason: str = "") -> dict:
+    """Apply a draft; ``reason`` is the break-glass reason a tenant that needs approval asks for."""
+    body = {"break_glass_reason": reason} if reason else {}
+    accepted = await lab.request("POST", f"/tenants/{TENANT}/change-sets/{change_set}/apply", json_body=body)
+    job = await lab.wait_job(accepted["job_id"], timeout_s=300)
+    return {"job": job if isinstance(job, dict) else str(job)}
+
+
 async def raw(lab: Lab, method: str, path: str, body: str = "", apply: str = "") -> dict:
     """Any API call: raw METHOD PATH [JSON [apply]]. PATH is under /tenants/<tenant> unless it starts with /system or "root:" (then the rest is the whole path, e.g. root:/quota-requests).
     In the JSON, "@pool:NAME", "@group:NAME", "@vip-pool:NAME", "@network:NAME", "@cert:NAME", "@vs:NAME", "@ps:NAME" (policy set), "@rp:NAME" (routing profile), "@hm:NAME" and "@engine:NAME" become ids.
@@ -234,6 +247,11 @@ async def raw(lab: Lab, method: str, path: str, body: str = "", apply: str = "")
     path = path.replace("~", "&")   # "&" does not survive the ssh hops, so a query joins its parameters with "~"
     path = "" if path == "." else path   # "." is the tenant itself
     full = path[5:] if path.startswith("root:") else path if path.startswith("/system") else f"/tenants/{TENANT}{path}"
+    params = None
+    if apply.startswith("cs:"):   # add to a draft change set (a tenant that needs approval refuses apply=true)
+        params = {"change_set": apply[3:]}
+    elif apply:
+        params = {"apply": "true"}
     headers = None
     if method.upper() in {"PATCH", "PUT", "DELETE"}:   # optimistic concurrency: send the current version
         try:
@@ -245,14 +263,14 @@ async def raw(lab: Lab, method: str, path: str, body: str = "", apply: str = "")
             current = next((r for r in rows if r.get("id") == ident), None)
         if isinstance(current, dict) and "version" in current:
             headers = {"If-Match": f'"{current["version"]}"'}
-    out = await lab.request(method.upper(), full, json_body=json.loads(text), params={"apply": "true"} if apply else None, headers=headers)
+    out = await lab.request(method.upper(), full, json_body=json.loads(text), params=params, headers=headers)
     if isinstance(out, dict) and out.get("job_id"):
         job = await lab.wait_job(out["job_id"], timeout_s=300)
         out["job"] = job if isinstance(job, dict) else str(job)
     return out
 
 
-COMMANDS = {"raw": raw, "repair": repair, "engines": engines, "retire": retire, "health": health, "cert": cert, "vstls": vstls, "deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
+COMMANDS = {"raw": raw, "csopen": csopen, "csapply": csapply, "repair": repair, "engines": engines, "retire": retire, "health": health, "cert": cert, "vstls": vstls, "deploy": deploy, "vs": vs, "status": status, "lastapply": lastapply, "reapply": reapply, "recreate": recreate}
 
 
 async def main() -> None:
