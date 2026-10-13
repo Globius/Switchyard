@@ -14,7 +14,11 @@ from collections.abc import Sequence
 
 
 def controller_policy(
-    shared_prefixes: Sequence[str] = (), *, mount: str = "kv", platform: Sequence[str] = ()
+    shared_prefixes: Sequence[str] = (),
+    *,
+    mount: str = "kv",
+    platform: Sequence[str] = (),
+    pki_sign: Sequence[str] = ("pki/sign/agents",),
 ) -> str:
     """Return the HCL policy for the controller's OpenBao token.
 
@@ -22,12 +26,16 @@ def controller_policy(
         shared_prefixes: Shared paths tenants may name (``kv/se/``), read-only for the controller.
         mount: The KV v2 mount (references are ``<mount>/<path>``).
         platform: Platform secrets the controller itself reads, for example ``kv/proxmox/token``.
+        pki_sign: PKI signing paths the controller may call: the agent role it signs engine
+            certificates with at enrollment (``pki/sign/agents``); without it enrollment fails.
 
     Example:
         >>> policy = controller_policy(["kv/se/"], platform=["kv/proxmox/token"])
         >>> 'path "kv/data/tenants/*"' in policy and 'path "kv/data/se/*"' in policy
         True
         >>> 'path "kv/data/proxmox/token"' in policy and 'deny' in policy
+        True
+        >>> 'path "pki/sign/agents"' in policy
         True
     """
     lines = [
@@ -60,6 +68,13 @@ def controller_policy(
             f"# Platform secret ({ref}); read-only, never named by tenant objects.",
             f'path "{mount}/data/{path}" {{',
             '  capabilities = ["read"]',
+            "}",
+        ]
+    for sign in pki_sign:
+        lines += [
+            f"# Signs engine agent certificates at enrollment ({sign}).",
+            f'path "{sign}" {{',
+            '  capabilities = ["update"]',
             "}",
         ]
     for path in ("break-glass", "switchyard/break-glass"):

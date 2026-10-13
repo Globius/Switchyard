@@ -264,11 +264,25 @@ def openbao_policy(
         typer.Option("--platform", help="A platform secret such as kv/proxmox/token."),
     ] = None,
     mount: Annotated[str, typer.Option(help="KV v2 mount.")] = "kv",
+    pki_sign: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--pki-sign", help="PKI signing path for agent certificates (default pki/sign/agents)."
+        ),
+    ] = None,
 ) -> None:
     """Print the OpenBao policy for the controller's token (matches the secret path rules)."""
     from switchyard.services.openbao_policy import controller_policy
 
-    typer.echo(controller_policy(shared or [], mount=mount, platform=platform or []), nl=False)
+    typer.echo(
+        controller_policy(
+            shared or [],
+            mount=mount,
+            platform=platform or [],
+            pki_sign=pki_sign or ["pki/sign/agents"],
+        ),
+        nl=False,
+    )
 
 
 @app.command("worker")
