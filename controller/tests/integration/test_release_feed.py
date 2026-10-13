@@ -72,9 +72,7 @@ async def rig(pg_url: str) -> AsyncIterator[Rig]:
             holder["rig"].requests.append(request)
             return httpx.Response(holder["rig"].status, content=holder["rig"].body)
 
-        services.release_feed._client = httpx.AsyncClient(
-            transport=httpx.MockTransport(handler)
-        )
+        services.release_feed._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
         transport = httpx.ASGITransport(app=create_app(services))
         async with httpx.AsyncClient(transport=transport, base_url="http://api") as client:
             holder["rig"] = Rig(w, services, client)

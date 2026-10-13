@@ -81,6 +81,25 @@ curl -X POST $URL/api/v1/system/releases/check     # look now; otherwise once a 
 signature is Ed25519 over the canonical JSON of `payload`. The project's public key goes into `PROJECT_KEYS`
 (`controller/switchyard/services/release_feed.py`) once it exists; until then operators add the key themselves.
 
+
+## Upgrade bundles (built; apply is new and not yet lab-tested)
+
+A bundle is one tar file holding a signed manifest and the release's files: controller and proxy images (`docker save`), the Helm chart, the
+Compose files, the `sy-agent` binary and the SE template. The manifest lists every file with its SHA-256; one Ed25519 signature covers
+the manifest and so the whole archive. Verifying extracts nothing and refuses links, extra members, a changed byte or an unknown key.
+
+```sh
+syctl release keygen release.pem --key-id release         # once; keep release.pem offline, publish the printed --trust value
+syctl release build switchyard-0.2.0.sybundle --key release.pem --version 0.2.0 \
+  --controller-image controller.tar --proxy-image proxy.tar --helm-chart switchyard-0.2.0.tgz \
+  --compose compose.yaml --agent sy-agent --se-template se-template.tar \
+  --upgrade-from 0.1.0 --notes notes.json                  # notes.json: {"new":[],"breaking":[],"action_required":[]}
+syctl release verify switchyard-0.2.0.sybundle --trust release=<base64 public key>
+syctl upgrade plan  switchyard-0.2.0.sybundle --trust release=<...>   # dry run against the running controller
+```
+
+Air-gapped sites need nothing but the file and the public key.
+
 ## Planned (ADR 0205)
 
 Signed upgrade bundles, a dry-run plan, the
