@@ -201,6 +201,7 @@ from switchyard.api.upgrade_models import (
     BackupRunRead,
     BackupTargetTestRead,
     BackupVerifyIn,
+    BackupVerifyRead,
     UpgradeCheckRead,
 )
 from switchyard.config import broker_url
@@ -4544,7 +4545,8 @@ def create_app(
         "/system/backups/verify",
         tags=["system"],
         summary="Open an archive and report what it holds",
-        responses=_ok({"controller_version": "0.1.0", "tenants": []}),
+        response_model=BackupVerifyRead,
+        responses=_ok(ex.BACKUP_VERIFY),
     )
     async def verify_backup(body: BackupVerifyIn, who: Who, svc: Services) -> dict[str, Any]:
         """Downloads, decrypts and counts the objects. Changes nothing."""

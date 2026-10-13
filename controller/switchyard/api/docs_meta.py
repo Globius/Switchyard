@@ -557,6 +557,23 @@ REQUEST_EXAMPLES: dict[str, Any] = {
     },
     "POST /quota-requests/{request}/approve": {"granted_limit": 40, "note": "40 for now."},
     "POST /quota-requests/{request}/deny": {"note": "Delete unused services first."},
+    "POST /system/backup-targets": {
+        "name": "nightly",
+        "passphrase_ref": "secret/backup/passphrase",
+        "target": {
+            "kind": "s3",
+            "endpoint": "https://s3.example.test",
+            "bucket": "sy-backups",
+            "access_key_ref": "secret/backup/access-key",
+            "secret_key_ref": "secret/backup/secret-key",
+        },
+        "keep": 14,
+    },
+    "POST /system/backups": {"target": "nightly", "reason": "pre-upgrade"},
+    "POST /system/backups/verify": {
+        "target": "nightly",
+        "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+    },
     "POST /system/controller/members": {
         "name": "ctl-esxi",
         "address": "10.0.0.13",

@@ -80,3 +80,22 @@ class BackupTargetTestRead(ApiModel):
     """The archives found at a destination."""
 
     archives: list[str]
+
+
+class BackupTenantSummary(ApiModel):
+    """Object counts of one tenant inside an archive."""
+
+    name: str
+    virtual_services: int
+    pools: int
+    se_groups: int
+    certificates: int
+
+
+class BackupVerifyRead(ApiModel):
+    """What a decrypted archive holds. Counts only; no object content is returned."""
+
+    controller_version: str
+    schema_revision: str | None
+    created_at: str
+    tenants: list[BackupTenantSummary]

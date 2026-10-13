@@ -1510,3 +1510,12 @@ BACKUP_RUN = {
     "actor": "user:admin",
     "created_at": "2026-10-13T04:00:00+00:00",
 }
+
+BACKUP_VERIFY = {
+    "controller_version": "0.1.0",
+    "schema_revision": "0046",
+    "created_at": "2026-10-13T04:00:00+00:00",
+    "tenants": [
+        {"name": "acme", "virtual_services": 12, "pools": 14, "se_groups": 2, "certificates": 5}
+    ],
+}

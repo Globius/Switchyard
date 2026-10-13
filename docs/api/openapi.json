@@ -3451,6 +3451,41 @@
         "title": "BackupTargetTestRead",
         "type": "object"
       },
+      "BackupTenantSummary": {
+        "additionalProperties": false,
+        "description": "Object counts of one tenant inside an archive.",
+        "properties": {
+          "certificates": {
+            "title": "Certificates",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "pools": {
+            "title": "Pools",
+            "type": "integer"
+          },
+          "se_groups": {
+            "title": "Se Groups",
+            "type": "integer"
+          },
+          "virtual_services": {
+            "title": "Virtual Services",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "virtual_services",
+          "pools",
+          "se_groups",
+          "certificates"
+        ],
+        "title": "BackupTenantSummary",
+        "type": "object"
+      },
       "BackupVerifyIn": {
         "additionalProperties": false,
         "description": "Which archive to open.",
@@ -3470,6 +3505,46 @@
           "archive"
         ],
         "title": "BackupVerifyIn",
+        "type": "object"
+      },
+      "BackupVerifyRead": {
+        "additionalProperties": false,
+        "description": "What a decrypted archive holds. Counts only; no object content is returned.",
+        "properties": {
+          "controller_version": {
+            "title": "Controller Version",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "schema_revision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Revision"
+          },
+          "tenants": {
+            "items": {
+              "$ref": "#/components/schemas/BackupTenantSummary"
+            },
+            "title": "Tenants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "controller_version",
+          "schema_revision",
+          "created_at",
+          "tenants"
+        ],
+        "title": "BackupVerifyRead",
         "type": "object"
       },
       "BgpPeer": {
@@ -31035,6 +31110,18 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "keep": 14,
+                "name": "nightly",
+                "passphrase_ref": "secret/backup/passphrase",
+                "target": {
+                  "access_key_ref": "secret/backup/access-key",
+                  "bucket": "sy-backups",
+                  "endpoint": "https://s3.example.test",
+                  "kind": "s3",
+                  "secret_key_ref": "secret/backup/secret-key"
+                }
+              },
               "schema": {
                 "$ref": "#/components/schemas/BackupTargetConfig"
               }
@@ -31423,6 +31510,10 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "reason": "pre-upgrade",
+                "target": "nightly"
+              },
               "schema": {
                 "$ref": "#/components/schemas/BackupRunIn"
               }
@@ -31529,6 +31620,10 @@
         "requestBody": {
           "content": {
             "application/json": {
+              "example": {
+                "archive": "switchyard-0.1.0-20261013T040000Z.syb",
+                "target": "nightly"
+              },
               "schema": {
                 "$ref": "#/components/schemas/BackupVerifyIn"
               }
@@ -31542,12 +31637,20 @@
               "application/json": {
                 "example": {
                   "controller_version": "0.1.0",
-                  "tenants": []
+                  "created_at": "2026-10-13T04:00:00+00:00",
+                  "schema_revision": "0046",
+                  "tenants": [
+                    {
+                      "certificates": 5,
+                      "name": "acme",
+                      "pools": 14,
+                      "se_groups": 2,
+                      "virtual_services": 12
+                    }
+                  ]
                 },
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Verify Backup Api V1 System Backups Verify Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/BackupVerifyRead"
                 }
               }
             },
